@@ -11,7 +11,9 @@ I decided to do this on Tuesday 8th November, US Election day 2016. The
 Trump's campaign to become American President, it seemed like a pretty good
 fit.
 
-As at time of authoring this document I have no idea if he'll win the election.
+~~As at time of authoring this document I have no idea if he'll win the election.~~
+
+This project will now forever remind me of the day that America shat the bed.
 
 ## Former band members
 
