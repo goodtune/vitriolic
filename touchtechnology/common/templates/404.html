@@ -1,0 +1,10 @@
+{% extends "http4xx.html" %}
+{% load i18n %}
+
+{% block code %}404{% endblock %}
+
+{% block page_title %}{% trans "Page Not Found" %}{% endblock %}
+
+{% block content %}
+	<p>{% trans "The page you have requested does not exist." %}</p>
+{% endblock %}

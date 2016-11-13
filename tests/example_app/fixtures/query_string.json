@@ -1,0 +1,86 @@
+[
+  {
+    "pk": 1,
+    "model": "example_app.testdatetimefield",
+    "fields": {
+      "datetime": "2013-01-01T07:45:00.000Z"
+    }
+  },
+  {
+    "pk": 2,
+    "model": "example_app.testdatetimefield",
+    "fields": {
+      "datetime": "2013-03-05T09:00:00.000Z"
+    }
+  },
+  {
+    "pk": 3,
+    "model": "example_app.testdatetimefield",
+    "fields": {
+      "datetime": "2013-02-07T17:15:00.000Z"
+    }
+  },
+  {
+    "pk": 4,
+    "model": "example_app.testdatetimefield",
+    "fields": {
+      "datetime": "2013-02-06T01:30:00.000Z"
+    }
+  },
+  {
+    "pk": 5,
+    "model": "example_app.testdatetimefield",
+    "fields": {
+      "datetime": "2013-08-18T05:45:00.000Z"
+    }
+  },
+  {
+    "pk": 6,
+    "model": "example_app.testdatetimefield",
+    "fields": {
+      "datetime": "1979-08-18T05:45:00.000Z"
+    }
+  },
+  {
+    "pk": 7,
+    "model": "example_app.testdatetimefield",
+    "fields": {
+      "datetime": "2014-01-30T16:00:00.000Z"
+    }
+  },
+  {
+    "pk": 8,
+    "model": "example_app.testdatetimefield",
+    "fields": {
+      "datetime": "2014-02-08T00:45:00.000Z"
+    }
+  },
+  {
+    "pk": 9,
+    "model": "example_app.testdatetimefield",
+    "fields": {
+      "datetime": "2013-03-24T14:45:00.000Z"
+    }
+  },
+  {
+    "pk": 10,
+    "model": "example_app.testdatetimefield",
+    "fields": {
+      "datetime": "2011-03-16T18:30:00.000Z"
+    }
+  },
+  {
+    "pk": 11,
+    "model": "example_app.testdatetimefield",
+    "fields": {
+      "datetime": "2008-12-03T09:00:00.000Z"
+    }
+  },
+  {
+    "pk": 12,
+    "model": "example_app.testdatetimefield",
+    "fields": {
+      "datetime": "2011-07-07T06:00:00.000Z"
+    }
+  }
+]

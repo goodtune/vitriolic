@@ -1,0 +1,17 @@
+<html>{% load common %}
+<head>
+	<title>pagination test</title>
+</head>
+<body>
+	{% for object in object_list %}
+		{% spaceless %}
+			<p>
+				<span id="{{ object.pk }}">{{ object.pk }}</span>
+				<em>{{ object.datetime|timesince }}</em>
+			</p>
+		{% endspaceless %}
+	{% endfor %}
+
+	{% pagination %}
+</body>
+</html>

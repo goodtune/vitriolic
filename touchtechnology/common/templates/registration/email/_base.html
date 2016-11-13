@@ -1,0 +1,21 @@
+<html>
+<head>
+	<title>{% block title %}{{ subject }}{% endblock %}</title>
+	{% block css %}{% endblock %}
+</head>
+<body>
+	<div id="wrapper">
+		<div id="header">
+			{% block header %}{% endblock %}
+		</div>
+		<div id="content">
+			{% block salutation %}{% endblock %}
+			{% block content %}{% endblock %}
+			{% block signed %}{% endblock %}
+		</div>
+		<div id="footer">
+			{% block footer %}{% endblock %}
+		</div>
+	</div>
+</body>
+</html>

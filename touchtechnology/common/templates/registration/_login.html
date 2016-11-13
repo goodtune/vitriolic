@@ -1,0 +1,55 @@
+{% extends "registration/base.html" %}
+{% load i18n %}
+{% load common %}
+
+{% block content %}
+	{% block heading %}
+		<h1>{% block page_title %}{% trans "Login Required" %}{% endblock %}</h1>
+	{% endblock %}
+
+	<div class="warning">
+		{% block warning %}
+			<p>{% trans "You are attempting to access a part of the site which is restricted." %}</p>
+		{% endblock %}
+	</div>
+
+	<form class="fields" action="" method="post">
+		{% csrf_token %}
+
+		{% if form.non_field_errors %}
+			<ul class="errors">
+				{% for e in form.non_field_errors %}
+					<li>{{ e }}</li>
+				{% endfor %}
+			</ul>
+		{% endif %}
+
+  		{% for f in form %}
+			{% field f %}
+		{% endfor %}
+
+		<input type="hidden" name="next" value="{{ next }}" />
+
+		<div class="btn-group">
+			{% block buttons %}
+				<button role="button">
+					<i class="fa fa-sign-in"></i>
+					{% trans "Login" %}
+				</button>
+				<a href="{% url 'accounts:password_reset' %}">
+					<i class="fa fa-key"></i>
+					{% trans "Reset Password" %}
+				</a>
+				{% block registration %}
+					{% url 'accounts:register' as register_url %}
+					{% if register_url %}
+						<a class="btn btn-default" role="button" href="{{ register_url }}">
+							<i class="fa fa-keyboard-o"></i>
+							{% trans "Register" %}
+						</a>
+					{% endif %}
+				{% endblock %}
+			{% endblock %}
+		</div>
+	</form>
+{% endblock %}

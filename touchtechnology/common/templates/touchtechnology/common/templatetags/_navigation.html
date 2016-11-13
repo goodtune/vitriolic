@@ -1,0 +1,23 @@
+{% load common mptt_tags %}
+{% block content %}
+{% spaceless %}
+	{% for node, structure in nodes|tree_info %}
+		{% if structure.new_level %}
+			<ul class="{% block list_class %}navigation{% endblock %}">
+			{% block new_level %}{% endblock %}
+		{% else %}
+			</li>
+		{% endif %}
+		<li id="{% block item_id %}node{{ node.id }}{% endblock %}" class="{% block itemclass %}{{ node.object|type }}{% endblock %} {% if structure.new_level %}first {% endif %}{% if structure.closed_levels %}last {% endif %}{% if not node.is_leaf_node %}has_children {% endif %}{% if node.lft == current_node.lft and node.tree_id == current_node.tree_id and node|type == current_node|type %}current {% endif %}{% if node.tree_id == current_node.tree_id and node.level < current_node.level and node.lft < current_node.lft and node.rght > current_node.rght %}parent {% endif %}{% if node.is_home_page %}root{% endif %}">
+
+		{% block link %}
+		<a href="{{ node.get_absolute_url }}">{% block link_text %}{{ node.short_title|default:node.title }}{% endblock %}</a>
+		{% endblock %}
+
+		{% for level in structure.closed_levels %}
+			{% block closed_level %}{% endblock %}
+			</li></ul>
+		{% endfor %}
+	{% endfor %}
+{% endspaceless %}
+{% endblock %}

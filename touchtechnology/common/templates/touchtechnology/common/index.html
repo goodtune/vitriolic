@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% comment %}
+
+	This is a default template that you will more than likely want to replace
+	with a more useful layout.
+
+{% endcomment %}
+
+{% block content %}
+	<h1>{{ object|default_if_none:"Home Page" }}</h1>
+{% endblock %}

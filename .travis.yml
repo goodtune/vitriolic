@@ -1,8 +1,12 @@
 language: python
+cache: pip
 
 python:
   - 2.7
   - 3.5
+  - 3.5-dev
+  - 3.6-dev
+  - nightly
 
 services:
   - mysql
@@ -15,14 +19,34 @@ install:
   - pip install tox
 
 before_script:
-  - psql -c "CREATE DATABASE dts_test_project;" -U postgres
+  - psql -c "CREATE DATABASE vitriolic;" -U postgres
 
 script:
-  - tox -e py${TRAVIS_PYTHON_VERSION/./}-dj${DJANGO/./}-sqlite
-        -e py${TRAVIS_PYTHON_VERSION/./}-dj${DJANGO/./}-mysql
-        -e py${TRAVIS_PYTHON_VERSION/./}-dj${DJANGO/./}-postgresql
+  - tox
 
 env:
-  - DJANGO=1.8
-  - DJANGO=1.9
-  - DJANGO=1.10
+  - DATABASE_URL=sqlite://
+  - DATABASE_URL=mysql://travis@localhost/travis
+  - DATABASE_URL=postgresql://postgres@localhost/travis
+
+matrix:
+  exclude:
+    # Python 3.5 and MySQL-python are (presently) incompatible
+    - python: 3.5
+      env:
+        - DATABASE_URL=mysql://travis@localhost/travis
+    - python: 3.5-dev
+      env:
+        - DATABASE_URL=mysql://travis@localhost/travis
+    - python: 3.6-dev
+      env:
+        - DATABASE_URL=mysql://travis@localhost/travis
+    - python: nightly
+      env:
+        - DATABASE_URL=mysql://travis@localhost/travis
+  allow_failures:
+    - python: 3.5
+    - python: 3.5-dev
+    - python: 3.6-dev
+    - python: nightly
+    - env: DATABASE_URL=mysql://travis@localhost/travis

@@ -1,0 +1,518 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: tournament-control\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2015-09-16 22:02+1000\n"
+"PO-Revision-Date: 2014-11-13 16:00-0500\n"
+"Last-Translator: Erick Acker <erick.acker@internationaltouch.org>\n"
+"Language-Team: French\n"
+"Language: fr_FR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+"X-Generator: crowdin.com\n"
+
+#: forms.py:116
+msgid "Yes"
+msgstr "Oui"
+
+#: forms.py:116
+msgid "No"
+msgstr "Non"
+
+#: forms.py:130
+msgid "Email Address"
+msgstr "Adresse électronique"
+
+#: forms.py:203
+msgid "Location"
+msgstr ""
+
+#: forms.py:244
+#, fuzzy
+#| msgid "Unversioned"
+msgid "Universal"
+msgstr "Non modifié"
+
+#: forms.py:245
+msgid "Coordinated Universal Time"
+msgstr ""
+
+#: forms.py:246
+msgid "Greenwich Mean Time"
+msgstr ""
+
+#: forms.py:557
+msgid "Default"
+msgstr "Par défaut"
+
+#: forms.py:624
+msgid "If left blank, this will be automatically set based on the title."
+msgstr "Si non renseigné, le titre sera automatiquement pris en compte."
+
+#: forms.py:658
+msgid "Password"
+msgstr "Mot de passe"
+
+#: forms.py:660
+msgid "Password (again)"
+msgstr "Mot de passe (encore)"
+
+#: forms.py:666 forms_lazy.py:14
+msgid ""
+"This email address is already in use. Please supply a different email "
+"address."
+msgstr ""
+"Cette adresse électronique est déjà utilisée. Veuillez fournir une adresse "
+"électronique différente."
+
+#: forms.py:676
+msgid "The two password fields didn't match."
+msgstr "Les champs des deux mots de passe sont différents."
+
+#: forms_lazy.py:30
+msgid ""
+"Your email address is also your username.<br />Please ensure you enter it "
+"correctly."
+msgstr ""
+"Votre adresse électronique est également votre nom d'utilisateur.<br/>\n"
+"Veuillez vous assurer que vous l'entrez correctement."
+
+#: models.py:47 templates/mvp/list.inc.html:63
+msgid "Title"
+msgstr "Titre"
+
+#: models.py:50
+msgid "Short title"
+msgstr "Titre abrégé"
+
+#: models.py:51
+msgid "This is used in navigation menus instead of the longer title value."
+msgstr ""
+"Elle est utilisée dans les menus de navigation à la place d'une plus longue "
+"valeur de titre. "
+
+#: models.py:55
+msgid "Slug"
+msgstr "Partie d'une URL"
+
+#: models.py:57
+msgid "Slug locked"
+msgstr "Partie d'une URL verrouillée"
+
+#: models.py:73
+msgid "Parent"
+msgstr "Parent"
+
+#: models.py:83
+msgid "HTTPS Required"
+msgstr "HTTPS requis"
+
+#: models.py:84
+msgid "Force this to be served via HTTPS."
+msgstr "Forcer à être diffusé via HTTPS."
+
+#: models.py:88
+msgid "Enabled"
+msgstr "Activé"
+
+#: models.py:89
+msgid "Set this to 'No' to disable this object and it's children on the site."
+msgstr ""
+"Le définir à \"Non\" pour désactiver cet objet et ses dépendances sur le "
+"site."
+
+#: models.py:93
+msgid "Hide from menus"
+msgstr "Masquer des menus"
+
+#: models.py:94
+msgid ""
+"When set to 'Yes' this object will still be available, but will not appear "
+"in menus."
+msgstr ""
+"Lorsqu'il est défini à \"Oui\" cet objet sera toujours disponible, mais il "
+"n'apparaitra pas dans les menus."
+
+#: models.py:98
+msgid "Hide from sitemap"
+msgstr "Cacher du plan du site"
+
+#: models.py:99
+msgid ""
+"When set to 'Yes' this object will not be listed in the auto-generated "
+"sitemap."
+msgstr ""
+"Lorsqu'il est défini à \"Oui\" cet objet ne figurera pas dans le plan du "
+"site généré automatiquement."
+
+#: models.py:103
+msgid "Hide from spiders"
+msgstr "Cacher des internautes"
+
+#: models.py:104
+msgid ""
+"Set this to 'Yes' to prevent search engines from indexing this part of the "
+"site.<br />\n"
+"<strong>Warning:</strong> this may affect your ranking in search engines."
+msgstr ""
+"Attribuer \"Oui\" pour empêcher les moteurs de recherche d'indexer cette "
+"partie du site..<br />\n"
+"<strong>Warning:</strong>  ce qui peut affecter votre classement dans les "
+"moteurs de recherche."
+
+#: models.py:110
+msgid "Restrict to Groups"
+msgstr "Limiter aux Groupes"
+
+#: models.py:111
+msgid ""
+"If you select one or more of these groups your visitors will need to be "
+"logged in and a member of an appropriate group to view this part of the site."
+msgstr ""
+"Si vous sélectionnez un ou plusieurs de ces Groupes, vos visiteurs devront "
+"être connectés et membres d'un groupe approprié pour afficher cette partie "
+"du site."
+
+#: models.py:165
+msgid "direction must be one of 'left' or 'right'"
+msgstr "La direction doit être soit \"gauche\" soit \"droite\""
+
+#: sites.py:340
+#, python-brace-format
+msgid "Your {model} has been saved."
+msgstr "Votre {model} a été enregistré."
+
+#: sites.py:344
+#, python-brace-format
+msgid "Your {model} was not changed."
+msgstr "Votre {model} n'a pas été changé."
+
+#: sites.py:472
+#, python-brace-format
+msgid "Your {models} have been saved."
+msgstr "Vos {models} ont été enregistrés."
+
+#: sites.py:635
+#, python-format
+msgid ""
+"Your %(model_verbose_name)s and %(related_verbose_name_plural)s have been "
+"saved."
+msgstr ""
+"Vos %(model_verbose_name)s and %(related_verbose_name_plural)s ont été "
+"enregistrés."
+
+#: sites.py:716
+#, python-format
+msgid "The %s has been deleted."
+msgstr "Les %s ont été supprimés."
+
+#: sites.py:866
+msgid "Your changes have been saved."
+msgstr "Vos modifications ont été enregistrées."
+
+#: sites.py:870
+msgid "You did not make any changes."
+msgstr "Vous n'avez fait aucune modification."
+
+#: templates/404.html:6
+msgid "Page Not Found"
+msgstr "Page non trouvée"
+
+#: templates/404.html:9
+msgid "The page you have requested does not exist."
+msgstr "La page que vous avez demandée n'existe pas."
+
+#: templates/500.html:6
+msgid "Server Error"
+msgstr "Erreur du serveur"
+
+#: templates/500.html:9
+msgid "An unexpected error has occurred."
+msgstr "Une erreur inattendue s'est produite."
+
+#: templates/500.html:11
+msgid ""
+"We've sent an email to our technical team and we will do our best to fix the "
+"problem."
+msgstr ""
+"Nous avons envoyé un courriel à notre équipe technique et nous ferons de "
+"notre mieux pour résoudre le problème."
+
+#: templates/_base.html:59
+msgid "Powered by"
+msgstr "Alimenté par"
+
+#: templates/mvp/list.inc.html:10
+msgid "Add"
+msgstr ""
+
+#: templates/mvp/list.inc.html:29 templates/mvp/list.inc.html.py:48
+#: templates/mvp/list.inc.html:115
+msgid "Delete"
+msgstr ""
+
+#: templates/mvp/list.inc.html:37
+msgid "Warning"
+msgstr ""
+
+#: templates/mvp/list.inc.html:40
+#, python-format
+msgid "You are about to delete the %(object_type)s <strong>OBJECT</strong>."
+msgstr ""
+
+#: templates/mvp/list.inc.html:41
+msgid "This will irreversibly remove it from the site."
+msgstr ""
+
+#: templates/mvp/list.inc.html:42
+msgid "Are you certain that you wish to continue?"
+msgstr ""
+
+#: templates/mvp/list.inc.html:47
+msgid "Cancel"
+msgstr ""
+
+#: templates/mvp/list.inc.html:97
+msgid "View"
+msgstr ""
+
+#: templates/mvp/list.inc.html:106
+msgid "Edit"
+msgstr ""
+
+#: templates/mvp/list.inc.html:124
+msgid "Security"
+msgstr ""
+
+#: templates/mvp/list.inc.html:140
+#, python-format
+msgid ""
+"\n"
+"\t\t\t\t\t\t\tAdd your first <a href=\"%(create)s\">%(type)s</a> now.\n"
+"\t\t\t\t\t\t"
+msgstr ""
+
+#: templates/registration/_logged_out.html:5
+msgid "Logged out"
+msgstr "Déconnecté"
+
+#: templates/registration/_logged_out.html:7
+msgid "You have successfully been logged out."
+msgstr "Vous avez été déconnecté avec succès."
+
+#: templates/registration/_logged_out.html:12
+msgid "Log in again"
+msgstr "Se connecter à nouveau"
+
+#: templates/registration/_login.html:7
+msgid "Login Required"
+msgstr "Connexion requise"
+
+#: templates/registration/_login.html:12
+msgid "You are attempting to access a part of the site which is restricted."
+msgstr "Vous essayez d'accéder à une partie du site qui a un accès restreint."
+
+#: templates/registration/_login.html:37
+#: templates/registration/_password_reset_complete.html:12
+msgid "Login"
+msgstr "Connexion"
+
+#: templates/registration/_login.html:41
+msgid "Reset Password"
+msgstr "Réinitialiser le mot de passe"
+
+#: templates/registration/_login.html:48
+msgid "Register"
+msgstr "Enregistrer"
+
+#: templates/registration/_password_change_done.html:5
+msgid "Password change successful"
+msgstr "Changement du mot de passe réussi"
+
+#: templates/registration/_password_change_done.html:7
+msgid "Your password was changed."
+msgstr "Votre mot de passe a été modifié."
+
+#: templates/registration/_password_change_done.html:12
+msgid "Return to site"
+msgstr "Retourner au site"
+
+#: templates/registration/_password_change_done.html:18
+#: templates/registration/_password_change_form.html:26
+msgid "Return to admin"
+msgstr "Retour à admin"
+
+#: templates/registration/_password_change_form.html:6
+msgid "Password change"
+msgstr "Changement de mot de passe"
+
+#: templates/registration/_password_change_form.html:8
+msgid ""
+"Please enter your old password, for security's sake, and then enter your new "
+"password twice so we can verify you typed it in correctly."
+msgstr ""
+"S'il vous plaît entrez votre ancien mot de passe, pour des raisons de "
+"sécurité, et ensuite entrez votre nouveau mot de passe deux fois afin de "
+"vérifier que vous l'avez saisi correctement."
+
+#: templates/registration/_password_change_form.html:20
+#: templates/registration/_password_reset_confirm.html:19
+msgid "Change my password"
+msgstr "Changer mon mot de passe"
+
+#: templates/registration/_password_reset_complete.html:5
+msgid "Password reset complete"
+msgstr "Réinitialisation du mot de passe terminée"
+
+#: templates/registration/_password_reset_complete.html:7
+msgid "Your password has been set. You may go ahead and log in now."
+msgstr ""
+"Votre mot de passe a été défini. Vous pouvez continuer maintenant et ouvrir "
+"une session."
+
+#: templates/registration/_password_reset_confirm.html:5
+msgid "Enter new password"
+msgstr "Entrez le nouveau mot de passe"
+
+#: templates/registration/_password_reset_confirm.html:5
+msgid "Password reset unsuccessful"
+msgstr "La réinitialisation du mot de passe a échoué"
+
+#: templates/registration/_password_reset_confirm.html:8
+msgid ""
+"Please enter your new password twice so we can verify you typed it in "
+"correctly."
+msgstr ""
+"S'il vous plaît, entrez votre nouveau mot de passe deux fois afin de "
+"vérifier que vous l'avez saisi correctement."
+
+#: templates/registration/_password_reset_confirm.html:24
+msgid ""
+"The password reset link was invalid, possibly because it has already been "
+"used. Please request a new password reset."
+msgstr ""
+"Le lien de réinitialisation de mot de passe était incorrect, peut-être parce "
+"qu'il a déjà été utilisé. S'il vous plaît, demandez de réinitialiser un "
+"nouveau mot de passe."
+
+#: templates/registration/_password_reset_done.html:5
+msgid "Password reset successful"
+msgstr "La réinitialisation du mot de passe a réussi"
+
+#: templates/registration/_password_reset_done.html:7
+msgid ""
+"We've e-mailed you instructions for setting your password to the e-mail "
+"address you submitted. You should be receiving it shortly."
+msgstr ""
+"Nous vous avons envoyé un courriel avec les instructions pour configurer "
+"votre votre mot de passe à l'adresse e-mail que vous avez remise. Vous "
+"devriez le recevoir bientôt."
+
+#: templates/registration/_password_reset_email.html:3
+#, python-format
+msgid ""
+"You're receiving this e-mail because you requested a password\n"
+"reset for your user account at \"%(site_name)s\"."
+msgstr ""
+"Vous recevez cet e-mail parce que vous avez demandé un password\n"
+"reset pour votre compte utilisateur à « %(site_name)s » ."
+
+#: templates/registration/_password_reset_email.html:6
+msgid "Please visit the following URL and set your new password."
+msgstr ""
+"Veuillez consulter l'URL suivante et définissez votre nouveau mot de passe."
+
+#: templates/registration/_password_reset_email.html:10
+#, python-format
+msgid "Just in case you've forgotten, your username is \"%(username)s\"."
+msgstr ""
+"Juste au cas où vous l'avez oublié, votre nom d'utilisateur est « "
+"%(username)s »."
+
+#: templates/registration/_password_reset_form.html:5
+msgid "Password reset"
+msgstr "Réinitialisation du mot de passe"
+
+#: templates/registration/_password_reset_form.html:7
+msgid ""
+"Forgotten your password? Enter your e-mail address below, and we'll e-mail "
+"instructions for setting a new one."
+msgstr ""
+"Vous avez oublié votre mot de passe ? Entrez votre adresse de courriel ci-"
+"dessous et nous allons y envoyer les instructions pour en configurer un "
+"nouveau."
+
+#: templates/registration/_password_reset_form.html:19
+msgid "Reset my password"
+msgstr "Réinitialiser mon mot de passe"
+
+#: templates/registration/_profile.html:7
+msgid "My Account"
+msgstr "Mon compte"
+
+#: templates/registration/_profile.html:13
+#, fuzzy, python-format
+#| msgid ""
+#| "\n"
+#| "\t\t\t<p>Welcome back %(user.first_name)s &ndash; this is your personal "
+#| "page on <strong>%(site.name)s</strong>.</p>\n"
+#| "\t\t"
+msgid ""
+"\n"
+"\t\t\t<p>Welcome back %(user.first_name)s &ndash; this is your personal page."
+"</p>\n"
+"\t\t"
+msgstr ""
+"\n"
+"\t\t\t <p>Bienvenue %(user.first_name)s &ndash; ceci est votre page "
+"personnelle sur <strong>%(site.name)s</strong>.</p>\n"
+"\t\t"
+
+#: templates/registration/_profile.html:31
+msgid "Save"
+msgstr "Enregistrer"
+
+#: templates/registration/_profile.html:36
+msgid "Change Password"
+msgstr "Changer le mot de passe"
+
+#: templates/registration/_profile.html:42
+msgid "Logout"
+msgstr "Déconnexion"
+
+#: templates/touchtechnology/common/templatetags/_pagination.html:5
+msgid "Page"
+msgstr "Page"
+
+#: templates/touchtechnology/common/templatetags/version.html:5
+msgid "Version"
+msgstr "Version"
+
+#: templates/touchtechnology/common/templatetags/version.html:7
+msgid "Build"
+msgstr "Construire"
+
+#: templates/touchtechnology/common/templatetags/version.html:12
+msgid "Unversioned"
+msgstr "Non modifié"
+
+#~ msgid "Home"
+#~ msgstr "Accueil"
+
+#~ msgid "Admin"
+#~ msgstr "Admin"
+
+#~ msgid "Change"
+#~ msgstr "Changement"
+
+#~ msgid "Step %(step_number)s of %(total_steps)s"
+#~ msgstr "Étape %(step_number)s de %(total_steps)s"
+
+#~ msgid "Back"
+#~ msgstr "Retour"
+
+#~ msgid "Next"
+#~ msgstr "Suivant"

@@ -1,0 +1,80 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+{% load i18n common static %}
+<head>
+	<title>{% block page_title %}Untitled{% endblock %}</title>
+
+	<meta name="google-site-verification" content="{% block google-site-verification %}{% endblock %}" />
+
+	<meta name="description" content="{% block meta_description %}{% endblock %}" />
+	<meta name="keywords" content="{% block meta_keywords %}{% endblock %}" />
+
+	<link rel="apple-touch-icon" type="image/png" href="{% get_static_prefix %}img/apple-touch-icon.png" />
+
+	{% block basecss %}
+		<link rel="stylesheet" href="{% get_static_prefix %}css/vi_core.css" media="screen" />{# deprecate in 2.1 #}
+		<link rel="stylesheet" href="{% get_static_prefix %}css/{% if not debug %}min/{% endif %}reset.css" />
+		<link rel="stylesheet" href="{% get_static_prefix %}css/{% if not debug %}min/{% endif %}text.css" />
+		<link rel="stylesheet" href="{% get_static_prefix %}css/{% if not debug %}min/{% endif %}960.css" />
+	{% endblock %}
+{% block extracss %}{% endblock %}
+{% block extrajs %}{% endblock %}
+{% block extrahead %}{% endblock %}
+</head>
+<body class="{% block body_class %}default{% endblock %}">
+
+	<div id="project" class="{% block project_class %}container_16{% endblock %}">
+
+		<div id="header" class="{% block header_class %}container_16{% endblock %}">
+			{% block header %}
+				<div class="application">
+					<h1>{{ site.name }}</h1>
+				</div>
+			{% endblock %}
+		</div>
+
+		<div id="tabs" class="application {% block tabs_class %}container_16{% endblock %}">
+			{% block tabs %}
+				{% navigation current_node=node stop_at=0 %}
+			{% endblock %}
+		</div>
+
+		{% block full_content %}
+			<div id="main">
+				{% block main_content %}
+					{% block content %}{% endblock %}
+				{% endblock %}
+			</div>
+		{% endblock %}
+
+		<div id="footer" class="application {% block footer_class %}container_16{% endblock %}">
+			{% block footer %}
+				{% block versions %}
+					{% spaceless %}{% version "django" %}{% endspaceless %}
+					{% spaceless %}{% version "python" %}{% endspaceless %}
+				{% endblock %}
+				{% block powered-by-outer %}
+					<ul>
+						<li class="first">{% trans "Powered by" %} {% block powered-by %}<a href="{% block powered-by-url %}http://www.touchtechnology.com.au/{% endblock %}" target="_blank">{% block powered-by-text %}Touch Technology{% endblock %}</a>{% endblock %}</li>
+					</ul>
+				{% endblock %}
+				{% block set-timezone %}
+					{% url 'set-timezone' as set_timezone_url %}
+					{% if set_timezone_url %}
+						<form action="{{ set_timezone_url }}" method="post">
+							{% csrf_token %}
+							{% for f in select_timezone_form %}
+								{% field f %}
+							{% endfor %}
+							<button type="submit">Go</button>
+						</form>
+					{% endif %}
+				{% endblock %}
+			{% endblock %}
+		</div>
+
+	</div>
+
+{% analytics %}
+</body>
+</html>

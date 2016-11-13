@@ -1,0 +1,15 @@
+{% extends "registration/base.html" %}
+{% load i18n %}
+
+{% block content %}
+	<h1>{% block page_title %}{% trans "Logged out" %}{% endblock %}</h1>
+
+	<p>{% trans "You have successfully been logged out." %}</p>
+
+	<div class="btn-group">
+		<a class="btn btn-default" role="button" href="{% url 'accounts:login' %}">
+			<i class="fa fa-user"></i>
+			{% trans "Log in again" %}
+		</a>
+	</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% load twitter %}
+
+{% autoescape off %}
+	<ul class="twitter">
+		{% for tweet in statuses %}
+			<li class="tweet {% if forloop.first %}first {% endif %}{% if forloop.last %} last{% endif %}">
+				<a href="http://twitter.com/{{ tweet.user.screen_name }}" target="_blank">
+					<img src="{{ tweet.user.profile_image_url }}" alt="{{ tweet.user.name }}" title="{{ tweet.user.name }}" />
+				</a>
+				{{ tweet.text|urlize|twitter_link }}
+			</li>
+		{% endfor %}
+	</ul>
+{% endautoescape %}

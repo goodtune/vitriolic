@@ -1,0 +1,21 @@
+{% load i18n %}
+{% block content %}
+	{% if is_paginated %}
+		{% block paginated %}
+			<h4 class="pagination">{% trans "Page" %}</h4>
+			<ul class="pagination">
+				{% for page_number in paginator.page_range %}
+					{% spaceless %}
+						<li class="{% if forloop.first %}first {% endif %}{% if forloop.last %} last {% endif %}{% if page_number == page %} current{% endif %}">
+							{% if page_number == page %}
+								<span>{{ page_number }}</span>
+							{% else %}
+								<a href="?{{ QUERY_STRING }}{{ QUERY_STRING|yesno:"&," }}page={{ page_number }}">{{ page_number }}</a>
+							{% endif %}
+						</li>
+					{% endspaceless %}
+				{% endfor %}
+			</ul>
+		{% endblock %}
+	{% endif %}
+{% endblock %}

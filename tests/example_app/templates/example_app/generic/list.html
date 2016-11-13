@@ -1,0 +1,26 @@
+<!DOCTYPE html>{% load common %}
+<html>
+<head lang="en">
+	<meta charset="UTF-8">
+	<title>{{ model|type }}</title>
+</head>
+<body>
+
+<ul class="messages">
+	{% for m in messages %}
+		<li>{{ m }}</li>
+	{% endfor %}
+</ul>
+
+<h1>{{ model|types }}</h1>
+
+<ul>
+	{% for obj in object_list %}
+		<li>{{ obj }}</li>
+	{% endfor %}
+</ul>
+
+{% pagination %}
+
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!DOCTYPE html>{% load common %}
+<html>
+<head lang="en">
+	<meta charset="UTF-8">
+	<title>{{ model|type }}</title>
+</head>
+<body>
+
+<ul class="messages">
+	{% for m in messages %}
+		<li>{{ m }}</li>
+	{% endfor %}
+</ul>
+
+<h1>{{ model|types }}</h1>
+
+<p>{{ object }}</p>
+
+<form>
+	{{ formset.management_form }}
+
+	{% for form in formset %}
+		<h2>{{ form.permission.codename }}</h2>
+
+		<p>
+			Control who <em>{{ form.permission.name|lower }}</em>
+			for the {{ form.instance|type }}
+			<strong>{{ form.instance }}</strong>.
+		</p>
+
+		<h3>Users</h3>
+		{% field form.users %}
+
+		<h3>Groups</h3>
+		{% field form.groups %}
+	{% endfor %}
+</form>
+
+</body>
+</html>

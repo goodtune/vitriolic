@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block body_class %}error{% endblock %}
+
+{% block main_content %}
+	<div class="code" id="http">
+		<h1>{% block code %}4xx{% endblock %}</h1>
+		<h2>{% block page_title %}HTTP 4xx{% endblock %}</h2>
+	</div>
+	{% block content %}{% endblock %}
+{% endblock %}

@@ -1,0 +1,29 @@
+<!DOCTYPE html>{% load common %}
+<html>
+<head lang="en">
+	<meta charset="UTF-8">
+	<title>Edit multiple {{ model|types }}</title>
+</head>
+<body>
+
+<ul class="messages">
+	{% for m in messages %}
+		<li>{{ m }}</li>
+	{% endfor %}
+</ul>
+
+<h1>Edit multiple {{ model|types }}</h1>
+
+<form action="" method="post">
+	{% csrf_token %}
+
+	{{ formset.errors }}
+
+	{{ formset.as_p }}
+	{{ formset.empty_form.as_p }}
+
+	<button type="submit">Save</button>
+</form>
+
+</body>
+</html>

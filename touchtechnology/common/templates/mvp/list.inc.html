@@ -1,0 +1,153 @@
+{% load i18n %}
+{% load common %}
+
+{% if manager %}
+	{% block heading %}
+	<div class="heading-block">
+		{% spaceless %}
+			<div class="actions fa-2x">
+				{% block actions %}
+					<a href="{{ create }}" title="{% trans "Add" %} {{ model|type }}" role="button">
+						<i class="fa fa-plus-square"></i>
+					</a>
+				{% endblock actions %}
+			</div>
+			<h3>{{ manager.all|types|capfirst }}</h3>
+		{% endspaceless %}
+	</div>
+	{% endblock %}
+{% endif %}
+
+{% block modal %}
+<div class="modal modal-styled fade in delete" id="deleteModal_{{ model|type|cut:" " }}" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel" aria-hidden="true">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-label="Close">
+					<span aria-hidden="true">&times;</span>
+				</button>
+				<h4 class="modal-title" id="deleteModalLabel_{{ model|type|cut:" " }}">{% trans "Delete" %}</h4>
+			</div>
+
+			<div class="form">
+				{% csrf_token %}
+
+				{% with object_type=model|type %}
+					<div class="modal-body">
+						<h4>{% trans "Warning" %}</h4>
+
+						{% block delete-warning %}
+							<p>{% blocktrans %}You are about to delete the {{ object_type }} <strong>OBJECT</strong>.{% endblocktrans %}</p>
+							<p>{% trans "This will irreversibly remove it from the site." %}</p>
+							<p>{% trans "Are you certain that you wish to continue?" %}</p>
+						{% endblock delete-warning %}
+					</div>
+
+					<div class="modal-footer">
+						<button type="button" class="btn btn-default" data-dismiss="modal">{% trans "Cancel" %}</button>
+						<button type="submit" class="btn btn-primary">{% trans "Delete" %} {% trans object_type %}</button>
+					</div>
+				{% endwith %}
+			</div>
+		</div>
+	</div>
+</div>
+{% endblock modal %}
+
+{% block table %}
+<table class="table table-striped table-condensed">
+	<thead>
+		{% block table-head %}
+		<tr>
+			{% block table-headings %}
+				<th>{% trans "Title" %}</th>
+			{% endblock %}
+			<th></th>
+		</tr>
+		{% endblock table-head %}
+	</thead>
+	<tbody>
+		{% for obj in object_list %}
+			{% block table-row %}
+				{% with object_perms=obj|hasperm:user %}
+					<tr>
+						{% block table-columns %}
+							<td>
+								{% if change_perm in object_perms %}
+									<a href="{{ obj.urls.edit }}">{{ obj }}</a>&nbsp;
+								{% else %}
+									<span>{{ obj }}</span>
+								{% endif %}
+							</td>
+						{% endblock table-columns %}
+
+						<td class="text-right">
+							{% block row-buttons %}
+								<div class="dropdown">
+									<button id="dropdown_menu_{{ model|type|cut:" " }}_{{ obj.pk }}" class="btn btn-default btn-sm dropdown-toggle" type="button" data-toggle="dropdown" aria-expanded="true">
+										<span class="caret"></span>
+									</button>
+
+									<ul class="dropdown-menu dropdown-menu-right" role="menu" aria-labelledby="dropdown_menu_{{ obj.pk }}">
+										{% block row-buttons-items %}
+											{% if obj.urls.detail %}
+												<li role="presentation">
+													<a role="button" href="{{ obj.urls.detail }}">
+														<i class="fa fa-eye fa-fw"></i>
+														{% trans "View" %}
+													</a>
+												</li>
+											{% endif %}
+
+											{% if obj.urls.edit and change_perm in object_perms %}
+												<li role="presentation">
+													<a role="button" href="{{ obj.urls.edit }}">
+														<i class="fa fa-pencil fa-fw"></i>
+														{% trans "Edit" %}
+													</a>
+												</li>
+											{% endif %}
+
+											{% if obj.urls.delete and delete_perm in object_perms %}
+												<li role="presentation">
+													<a role="button" href="{{ obj.urls.delete }}" data-toggle="modal" data-target="#deleteModal_{{ model|type|cut:" " }}" data-action="{{ obj.urls.delete }}" data-title="{% block delete-data-title %}{{ obj }}{% endblock %}">
+														<i class="fa fa-trash fa-fw"></i>
+														{% trans "Delete" %}
+													</a>
+												</li>
+											{% endif %}
+
+											{% if obj.urls.perms and add_perm in object_perms %}
+												<li role="presentation">
+													<a role="button" href="{{ obj.urls.perms }}">
+														<i class="fa fa-user-secret fa-fw"></i>
+														{% trans "Security" %}
+													</a>
+												</li>
+											{% endif %}
+										{% endblock row-buttons-items %}
+									</ul>
+								</div>
+							{% endblock %}
+						</td>
+					</tr>
+				{% endwith %}
+			{% endblock table-row %}
+		{% empty %}
+			{% block table-row-empty %}
+				<tr>
+					<td colspan="{% block empty-row-colspan %}2{% endblock %}">
+						{% blocktrans with type=model|type %}
+							Add your first <a href="{{ create }}">{{ type }}</a> now.
+						{% endblocktrans %}
+					</td>
+				</tr>
+			{% endblock table-row-empty %}
+		{% endfor %}
+	</tbody>
+</table>
+{% endblock table %}
+
+{% block pagination %}
+{% pagination %}
+{% endblock pagination %}

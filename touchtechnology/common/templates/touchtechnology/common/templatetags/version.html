@@ -1,0 +1,14 @@
+{% load i18n %}
+<div class="version" id="{% if root %}repo_{{ root }}{% elif name %}pkg_{{ name }}{% else %}unknown{% endif %}">
+	{% if root %}
+		{% if branch == "default" or branch == "master" and revision.tags and not revision.tags == "tip" %}
+			<span class="release">{% trans "Version" %} {{ revision.tags }} ({{ revision.node }})</span>
+		{% else %}
+			<span class="development">{% trans "Build" %} {{ revision.node }} [{{ branch }}] ({{ revision.date }})</span>
+		{% endif %}
+	{% elif name %}
+		<span class="{{ release|yesno:"development,release" }}">{% if url %}<a href="{{ url }}" target="_blank">{% endif %}{{ project }} {{ version }}{% if url %}</a>{% endif %}</span>
+	{% else %}
+		<span class="development">{% trans "Unversioned" %}</span>
+	{% endif %}
+</div>

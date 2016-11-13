@@ -1,0 +1,12 @@
+{% extends "http5xx.html" %}
+{% load i18n %}
+
+{% block code %}500{% endblock %}
+
+{% block page_title %}{% trans "Server Error" %}{% endblock %}
+
+{% block content %}
+	<p>{% trans "An unexpected error has occurred." %}</p>
+
+	<p>{% trans "We've sent an email to our technical team and we will do our best to fix the problem." %}</p>
+{% endblock %}

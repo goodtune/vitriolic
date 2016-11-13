@@ -1,0 +1,448 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2015-09-16 22:02+1000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: forms.py:116
+msgid "Yes"
+msgstr ""
+
+#: forms.py:116
+msgid "No"
+msgstr ""
+
+#: forms.py:130
+msgid "Email Address"
+msgstr ""
+
+#: forms.py:203
+msgid "Location"
+msgstr ""
+
+#: forms.py:244
+msgid "Universal"
+msgstr ""
+
+#: forms.py:245
+msgid "Coordinated Universal Time"
+msgstr ""
+
+#: forms.py:246
+msgid "Greenwich Mean Time"
+msgstr ""
+
+#: forms.py:557
+msgid "Default"
+msgstr ""
+
+#: forms.py:624
+msgid "If left blank, this will be automatically set based on the title."
+msgstr ""
+
+#: forms.py:658
+msgid "Password"
+msgstr ""
+
+#: forms.py:660
+msgid "Password (again)"
+msgstr ""
+
+#: forms.py:666 forms_lazy.py:14
+msgid ""
+"This email address is already in use. Please supply a different email "
+"address."
+msgstr ""
+
+#: forms.py:676
+msgid "The two password fields didn't match."
+msgstr ""
+
+#: forms_lazy.py:30
+msgid ""
+"Your email address is also your username.<br />Please ensure you enter it "
+"correctly."
+msgstr ""
+
+#: models.py:47 templates/mvp/list.inc.html:63
+msgid "Title"
+msgstr ""
+
+#: models.py:50
+msgid "Short title"
+msgstr ""
+
+#: models.py:51
+msgid "This is used in navigation menus instead of the longer title value."
+msgstr ""
+
+#: models.py:55
+msgid "Slug"
+msgstr ""
+
+#: models.py:57
+msgid "Slug locked"
+msgstr ""
+
+#: models.py:73
+msgid "Parent"
+msgstr ""
+
+#: models.py:83
+msgid "HTTPS Required"
+msgstr ""
+
+#: models.py:84
+msgid "Force this to be served via HTTPS."
+msgstr ""
+
+#: models.py:88
+msgid "Enabled"
+msgstr ""
+
+#: models.py:89
+msgid "Set this to 'No' to disable this object and it's children on the site."
+msgstr ""
+
+#: models.py:93
+msgid "Hide from menus"
+msgstr ""
+
+#: models.py:94
+msgid ""
+"When set to 'Yes' this object will still be available, but will not appear "
+"in menus."
+msgstr ""
+
+#: models.py:98
+msgid "Hide from sitemap"
+msgstr ""
+
+#: models.py:99
+msgid ""
+"When set to 'Yes' this object will not be listed in the auto-generated "
+"sitemap."
+msgstr ""
+
+#: models.py:103
+msgid "Hide from spiders"
+msgstr ""
+
+#: models.py:104
+msgid ""
+"Set this to 'Yes' to prevent search engines from indexing this part of the "
+"site.<br />\n"
+"<strong>Warning:</strong> this may affect your ranking in search engines."
+msgstr ""
+
+#: models.py:110
+msgid "Restrict to Groups"
+msgstr ""
+
+#: models.py:111
+msgid ""
+"If you select one or more of these groups your visitors will need to be "
+"logged in and a member of an appropriate group to view this part of the site."
+msgstr ""
+
+#: models.py:165
+msgid "direction must be one of 'left' or 'right'"
+msgstr ""
+
+#: sites.py:340
+#, python-brace-format
+msgid "Your {model} has been saved."
+msgstr ""
+
+#: sites.py:344
+#, python-brace-format
+msgid "Your {model} was not changed."
+msgstr ""
+
+#: sites.py:472
+#, python-brace-format
+msgid "Your {models} have been saved."
+msgstr ""
+
+#: sites.py:635
+#, python-format
+msgid ""
+"Your %(model_verbose_name)s and %(related_verbose_name_plural)s have been "
+"saved."
+msgstr ""
+
+#: sites.py:716
+#, python-format
+msgid "The %s has been deleted."
+msgstr ""
+
+#: sites.py:866
+msgid "Your changes have been saved."
+msgstr ""
+
+#: sites.py:870
+msgid "You did not make any changes."
+msgstr ""
+
+#: templates/404.html:6
+msgid "Page Not Found"
+msgstr ""
+
+#: templates/404.html:9
+msgid "The page you have requested does not exist."
+msgstr ""
+
+#: templates/500.html:6
+msgid "Server Error"
+msgstr ""
+
+#: templates/500.html:9
+msgid "An unexpected error has occurred."
+msgstr ""
+
+#: templates/500.html:11
+msgid ""
+"We've sent an email to our technical team and we will do our best to fix the "
+"problem."
+msgstr ""
+
+#: templates/_base.html:59
+msgid "Powered by"
+msgstr ""
+
+#: templates/mvp/list.inc.html:10
+msgid "Add"
+msgstr ""
+
+#: templates/mvp/list.inc.html:29 templates/mvp/list.inc.html.py:48
+#: templates/mvp/list.inc.html:115
+msgid "Delete"
+msgstr ""
+
+#: templates/mvp/list.inc.html:37
+msgid "Warning"
+msgstr ""
+
+#: templates/mvp/list.inc.html:40
+#, python-format
+msgid "You are about to delete the %(object_type)s <strong>OBJECT</strong>."
+msgstr ""
+
+#: templates/mvp/list.inc.html:41
+msgid "This will irreversibly remove it from the site."
+msgstr ""
+
+#: templates/mvp/list.inc.html:42
+msgid "Are you certain that you wish to continue?"
+msgstr ""
+
+#: templates/mvp/list.inc.html:47
+msgid "Cancel"
+msgstr ""
+
+#: templates/mvp/list.inc.html:97
+msgid "View"
+msgstr ""
+
+#: templates/mvp/list.inc.html:106
+msgid "Edit"
+msgstr ""
+
+#: templates/mvp/list.inc.html:124
+msgid "Security"
+msgstr ""
+
+#: templates/mvp/list.inc.html:140
+#, python-format
+msgid ""
+"\n"
+"\t\t\t\t\t\t\tAdd your first <a href=\"%(create)s\">%(type)s</a> now.\n"
+"\t\t\t\t\t\t"
+msgstr ""
+
+#: templates/registration/_logged_out.html:5
+msgid "Logged out"
+msgstr ""
+
+#: templates/registration/_logged_out.html:7
+msgid "You have successfully been logged out."
+msgstr ""
+
+#: templates/registration/_logged_out.html:12
+msgid "Log in again"
+msgstr ""
+
+#: templates/registration/_login.html:7
+msgid "Login Required"
+msgstr ""
+
+#: templates/registration/_login.html:12
+msgid "You are attempting to access a part of the site which is restricted."
+msgstr ""
+
+#: templates/registration/_login.html:37
+#: templates/registration/_password_reset_complete.html:12
+msgid "Login"
+msgstr ""
+
+#: templates/registration/_login.html:41
+msgid "Reset Password"
+msgstr ""
+
+#: templates/registration/_login.html:48
+msgid "Register"
+msgstr ""
+
+#: templates/registration/_password_change_done.html:5
+msgid "Password change successful"
+msgstr ""
+
+#: templates/registration/_password_change_done.html:7
+msgid "Your password was changed."
+msgstr ""
+
+#: templates/registration/_password_change_done.html:12
+msgid "Return to site"
+msgstr ""
+
+#: templates/registration/_password_change_done.html:18
+#: templates/registration/_password_change_form.html:26
+msgid "Return to admin"
+msgstr ""
+
+#: templates/registration/_password_change_form.html:6
+msgid "Password change"
+msgstr ""
+
+#: templates/registration/_password_change_form.html:8
+msgid ""
+"Please enter your old password, for security's sake, and then enter your new "
+"password twice so we can verify you typed it in correctly."
+msgstr ""
+
+#: templates/registration/_password_change_form.html:20
+#: templates/registration/_password_reset_confirm.html:19
+msgid "Change my password"
+msgstr ""
+
+#: templates/registration/_password_reset_complete.html:5
+msgid "Password reset complete"
+msgstr ""
+
+#: templates/registration/_password_reset_complete.html:7
+msgid "Your password has been set. You may go ahead and log in now."
+msgstr ""
+
+#: templates/registration/_password_reset_confirm.html:5
+msgid "Enter new password"
+msgstr ""
+
+#: templates/registration/_password_reset_confirm.html:5
+msgid "Password reset unsuccessful"
+msgstr ""
+
+#: templates/registration/_password_reset_confirm.html:8
+msgid ""
+"Please enter your new password twice so we can verify you typed it in "
+"correctly."
+msgstr ""
+
+#: templates/registration/_password_reset_confirm.html:24
+msgid ""
+"The password reset link was invalid, possibly because it has already been "
+"used. Please request a new password reset."
+msgstr ""
+
+#: templates/registration/_password_reset_done.html:5
+msgid "Password reset successful"
+msgstr ""
+
+#: templates/registration/_password_reset_done.html:7
+msgid ""
+"We've e-mailed you instructions for setting your password to the e-mail "
+"address you submitted. You should be receiving it shortly."
+msgstr ""
+
+#: templates/registration/_password_reset_email.html:3
+#, python-format
+msgid ""
+"You're receiving this e-mail because you requested a password\n"
+"reset for your user account at \"%(site_name)s\"."
+msgstr ""
+
+#: templates/registration/_password_reset_email.html:6
+msgid "Please visit the following URL and set your new password."
+msgstr ""
+
+#: templates/registration/_password_reset_email.html:10
+#, python-format
+msgid "Just in case you've forgotten, your username is \"%(username)s\"."
+msgstr ""
+
+#: templates/registration/_password_reset_form.html:5
+msgid "Password reset"
+msgstr ""
+
+#: templates/registration/_password_reset_form.html:7
+msgid ""
+"Forgotten your password? Enter your e-mail address below, and we'll e-mail "
+"instructions for setting a new one."
+msgstr ""
+
+#: templates/registration/_password_reset_form.html:19
+msgid "Reset my password"
+msgstr ""
+
+#: templates/registration/_profile.html:7
+msgid "My Account"
+msgstr ""
+
+#: templates/registration/_profile.html:13
+#, python-format
+msgid ""
+"\n"
+"\t\t\t<p>Welcome back %(user.first_name)s &ndash; this is your personal page."
+"</p>\n"
+"\t\t"
+msgstr ""
+
+#: templates/registration/_profile.html:31
+msgid "Save"
+msgstr ""
+
+#: templates/registration/_profile.html:36
+msgid "Change Password"
+msgstr ""
+
+#: templates/registration/_profile.html:42
+msgid "Logout"
+msgstr ""
+
+#: templates/touchtechnology/common/templatetags/_pagination.html:5
+msgid "Page"
+msgstr ""
+
+#: templates/touchtechnology/common/templatetags/version.html:5
+msgid "Version"
+msgstr ""
+
+#: templates/touchtechnology/common/templatetags/version.html:7
+msgid "Build"
+msgstr ""
+
+#: templates/touchtechnology/common/templatetags/version.html:12
+msgid "Unversioned"
+msgstr ""

@@ -1,0 +1,52 @@
+{% extends "registration/base.html" %}
+{% load i18n %}
+{% load common %}
+
+{% block content %}
+	{% block heading %}
+		<h1>{% block page_title %}{% trans "My Account" %}{% endblock %}</h1>
+	{% endblock %}
+
+	{% block before %}{% endblock %}
+
+	{% block profile_content %}
+		{% blocktrans %}
+			<p>Welcome back {{ user.first_name }} &ndash; this is your personal page.</p>
+		{% endblocktrans %}
+
+		{% block profile_form %}
+			<form class="fields" action="" method="post">
+				{% csrf_token %}
+
+				{% block form_content %}
+					{% for f in form %}
+						{% field f %}
+					{% endfor %}
+				{% endblock %}
+
+				<div class="btn-group">
+					{% block buttons %}
+						<button class="btn btn-default">
+							<i class="fa fa-save"></i>
+							{% trans "Save" %}
+						</button>
+
+						<a class="btn btn-default" role="button" href="{% url 'accounts:password_change' %}">
+							<i class="fa fa-key"></i>
+							{% trans "Change Password" %}
+						</a>
+
+						{% block logout-button %}
+							<a class="btn btn-default" role="button" href="{% url 'accounts:logout' %}">
+								<i class="fa fa-sign-out"></i>
+								{% trans "Logout" %}
+							</a>
+						{% endblock %}
+					{% endblock %}
+				</div>
+			</form>
+		{% endblock %}
+	{% endblock %}
+
+	{% block after %}{% endblock %}
+{% endblock %}
