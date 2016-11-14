@@ -27,5 +27,12 @@ The following modules are to be incorporated.
 -   tournamentcontrol.competition
 -   shuriken
 
+## Badges
+
+Got to have badges!
+
+[![Build Status](https://travis-ci.org/goodtune/vitriolic.svg?branch=master)](https://travis-ci.org/goodtune/vitriolic)
+[![Coverage Status](https://coveralls.io/repos/github/goodtune/vitriolic/badge.svg?branch=master)](https://coveralls.io/github/goodtune/vitriolic?branch=master)
+
 
 [w]: https://en.wiktionary.org/wiki/Wiktionary:Word_of_the_day
