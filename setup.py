@@ -17,5 +17,11 @@ setup(
         'python-dateutil~=2.5.3',
         'pytz',
     ],
+    extras_require={
+        'admin': [
+            'django-bootstrap3>=7.0,<8',
+            'django-gravatar2>=1.4,<2',
+        ],
+    },
     zip_safe=False,
 )

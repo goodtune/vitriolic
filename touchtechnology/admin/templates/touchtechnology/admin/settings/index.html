@@ -1,0 +1,16 @@
+{% extends "touchtechnology/admin/base.html" %}
+{% load url from future %}
+
+{% block content %}
+	<div class="box">
+		<h1>Site Settings</h1>
+
+		<table>
+			<tbody>
+				<tr class="first odd last">
+					<td class="actions"><a href="{% url 'admin:settings:site' %}">Domain Name</a></td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "40x.html" %}
+{% load i18n %}
+
+{% block error-code %}403{% endblock %}
+
+{% block error-details %}
+	<h4>{% blocktrans %}Oops, <span class="text-danger">You're not permitted</span>.{% endblocktrans %}</h4>
+
+	<p>{% trans "The requested resource is protected. You do not have the permissions necessary to see it." %}</p>
+{% endblock %}
+
+{% block search-form %}{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+{% load common %}
+
+{% block table-columns %}
+	<td>
+		{% if change_perm in object_perms %}
+			<a href="{% url 'admin:auth:groups:edit' obj.pk %}">{{ obj }}</a>
+		{% else %}
+			{{ obj }}
+		{% endif %}
+	</td>
+{% endblock %}
+
+{% block row-buttons-items %}
+	{% if change_perm in object_perms %}
+		<li role="presentation">
+			<a role="button" href="{% url 'admin:auth:groups:edit' obj.pk %}">
+				<i class="fa fa-pencil fa-fw"></i>
+				{% trans "Edit" %}
+			</a>
+		</li>
+	{% endif %}
+
+	{% if delete_perm in object_perms %}
+		<li role="presentation">
+			<a role="button" href="{% url 'admin:auth:groups:delete' obj.pk %}" data-toggle="modal" data-target="#deleteModal_{{ model|type|cut:" " }}" data-action="{% url 'admin:auth:groups:delete' obj.pk %}" data-title="{% block delete-data-title %}{{ obj }}{% endblock %}">
+				<i class="fa fa-trash fa-fw"></i>
+				{% trans "Delete" %}
+			</a>
+		</li>
+	{% endif %}
+
+	{% if add_perm in object_perms %}
+		<li role="presentation">
+			<a role="button" href="{% url 'admin:auth:groups:perms' obj.pk %}">
+				<i class="fa fa-user-secret fa-fw"></i>
+				{% trans "Security" %}
+			</a>
+		</li>
+	{% endif %}
+{% endblock %}

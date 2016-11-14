@@ -14,14 +14,19 @@ Including another URLconf
     2. Add a URL to urlpatterns:  url(r'^blog/', include('blog.urls'))
 """
 from django.conf.urls import include, url
+from django.contrib.admin import autodiscover
 from django.contrib.sitemaps.views import sitemap
 
+from touchtechnology.admin import sites as admin
 from touchtechnology.common.sitemaps import NodeSitemap
 from touchtechnology.common.sites import AccountsSite
+
+autodiscover()
 
 accounts = AccountsSite()
 
 urlpatterns = [
+    url(r'^admin/', include(admin.site.urls)),
     url(r'^accounts/', include(accounts.urls)),
     url(r'^sitemap\.xml$', sitemap,
         {'sitemaps': {'nodes': NodeSitemap}}, name='sitemap'),

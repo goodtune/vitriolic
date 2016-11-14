@@ -1,0 +1,30 @@
+{% extends "touchtechnology/admin/edit.html" %}
+{% load i18n %}
+{% load common mvp_tags %}
+{% load bootstrap3 guardian_tags %}
+
+{% block messages %}
+	{% bootstrap_messages %}
+{% endblock %}
+
+{% block content %}
+	<div class="row">
+		<div class="col-md-3 col-sm-3 col-md-push-9 col-sm-push-9">
+			<ul class="nav nav-pills nav-stacked">
+				{% with model_perms=model|hasperm:user %}
+					{% block nav-pills-list %}
+						<li class="active{% if add_perm not in model_perms %} disabled{% endif %}">
+							{% if add_perm in model_perms and create_url %}
+								<a href="{{ create_url }}">New {{ model|type }}</a>
+							{% endif %}
+						</li>
+					{% endblock nav-pills-list %}
+				{% endwith %}
+			</ul>
+		</div>
+
+		<div class="col-md-9 col-sm-9 col-md-pull-3 col-sm-pull-3">
+			{% include list_template|default:"mvp/list.inc.html" %}
+		</div>
+	</div>
+{% endblock %}

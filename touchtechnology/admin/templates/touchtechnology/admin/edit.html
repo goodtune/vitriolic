@@ -1,0 +1,136 @@
+{% extends "touchtechnology/admin/base.html" %}
+{% load i18n %}
+{% load common mvp_tags %}
+{% load bootstrap3 %}
+
+{% block messages %}{% endblock %}
+
+{% block content %}
+	<div class="layout layout-main-right layout-stack-sm">
+		<div class="col-md-3 col-sm-4 layout-sidebar">
+			<div class="nav-layout-sidebar-skip">
+				<strong>{% trans "Tab Navigation" %}</strong> /
+				<a href="#tab-content">{% trans "Skip to Content" %}</a>
+			</div>
+
+			<ul id="myTab" class="nav nav-layout-sidebar nav-stacked">
+				{% block tab-links %}
+					<li class="active">
+						<a href="#{{ model|type|slugify }}-tab" data-toggle="tab">
+							<i class="fa fa-chevron-right fa-fw"></i>
+							&nbsp;{% trans "Edit" %} {{ model|type }}
+						</a>
+					</li>
+
+					{% if object.pk %}
+						{% for manager, name in object|related:related %}
+							<li{% if not object.pk %} class="disabled"{% endif %}>
+								<a href={% if object.pk %}"#{{ name }}-tab" data-toggle="tab"{% else %}"#"{% endif %}>
+									<i class="fa fa-chevron-right fa-fw"></i>
+									&nbsp;{{ manager.all|types|capfirst }}
+								</a>
+							</li>
+						{% endfor %}
+					{% endif %}
+				{% endblock tab-links %}
+			</ul>
+		</div> <!-- /.col -->
+
+		<div class="col-md-9 col-sm-8 layout-main">
+			{% bootstrap_messages %}
+
+			<form class="{% block form-class %}form-horizontal{% endblock %}" action="" method="post" enctype="multipart/form-data">
+			{% csrf_token %}
+
+			<div id="tab-content" class="tab-content stacked-content">
+				{% block tab-panes %}
+					<div class="tab-pane active" id="{{ model|type|slugify }}-tab">
+							<div class="heading-block">
+								<h3>{{ model|type|capfirst }}</h3>
+							</div>
+
+							{% block form-fieldset %}
+								<fieldset>
+									{% for f in form %}
+										{% field f %}
+									{% endfor %}
+								</fieldset>
+							{% endblock form-fieldset %}
+
+							<div class="form-group">
+								<div class="text-center">
+									<button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
+									&nbsp;<a class="btn btn-default" href="{% block cancel-url %}{{ cancel_url }}{% endblock %}">{% trans "Cancel" %}</a>
+								</div> <!-- /.col -->
+							</div>
+					</div>
+
+					{% if object.pk %}
+						{% for manager, name in object|related:related %}
+							<div class="tab-pane" id="{{ name }}-tab">
+								<!-- mvp_list manager.all -->
+								{% block mvp-list %}
+									{% with table=templates|default:None %}
+										{% mvp_list manager.all template=manager|mvp_list_template:table %}
+									{% endwith %}
+								{% endblock %}
+								<!-- /mvp_list manager.all -->
+							</div>
+						{% endfor %}
+					{% endif %}
+				{% endblock tab-panes %}
+			</div>
+
+			</form>
+		</div> <!-- /.col -->
+	</div>
+{% endblock %}
+
+{% block extracss %}
+	{{ block.super }}
+	<style type="text/css">
+		.heading-block .actions { float: right; }
+		.heading-block .actions a { padding-right: 0.5em; }
+	</style>
+
+	<!-- form media -->
+	{{ form.media }}
+{% endblock %}
+
+{% block extrajs %}
+	{{ block.super }}
+
+	<!-- inline javascripts -->
+	<script type="text/javascript">
+		$(document).ready(function() {
+			$('div.icheck input').iCheck ({
+				checkboxClass: 'ui-icheck icheckbox_minimal-grey',
+				radioClass: 'ui-icheck iradio_minimal-grey'
+			}).on ('ifChanged', function (e) {
+				$(e.currentTarget).trigger ('change')
+			})
+
+			/* determine which tab should be active */
+
+			var uri = URI(document.location)
+			if (uri.hash()) {
+				$('a[href="' + uri.hash() + '"').tab('show')
+			}
+			else {
+				var referrer = URI(document.referrer)
+				$('a[role=button]').each(function(i, a) {
+					var rel = new URI(a.href)
+					if (rel.relativeTo(referrer).pathname() == "") {
+						var last_tab = $(a).closest('.tab-pane').attr('id')
+						$('a[href="#' + last_tab + '"').tab('show')
+					}
+				})
+			}
+
+			/* activate Select2 */
+			$('.form-group.select select, .form-group.select_multiple select').select2({
+				allowClear: true
+			})
+		})
+	</script>
+{% endblock %}

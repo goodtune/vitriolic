@@ -1,0 +1,81 @@
+.table {
+	tbody {
+		> tr {
+			> td {
+				vertical-align: middle;
+
+				.fa-ul {
+					margin-bottom: 0;
+				}
+			}
+		}
+	}
+}
+
+ol.breadcrumb:empty {
+    display: none;
+}
+
+.form-group {
+    margin-bottom: 15px;
+
+    &.select_date_widget,
+    &.select_date_time_widget {
+        div {
+            select {
+                display: inline-block;
+
+                &:nth-child(1) {
+                    width: 24%;
+                }
+
+                &:nth-child(2) {
+                    width: 49%;
+                }
+            }
+
+            input {
+                display: inline-block;
+                width: 24%;
+            }
+        }
+    }
+
+    &.select_date_time_widget {
+        .time_part {
+            display: block;
+            margin-top: 0.4em;
+
+            select {
+                &:nth-child(1) {
+                    width: 24%;
+                }
+
+                &:nth-child(2) {
+                    width: 24%;
+                }
+
+                &:nth-child(3) {
+                    width: 49%;
+                }
+            }
+        }
+    }
+}
+
+.form-group .icheck {
+    max-height: 15em;
+    overflow-y: scroll;
+}
+
+.form-group .icheck .ui-icheck .form-control {
+    height: auto;
+}
+
+.help-block {
+    margin-bottom: 5px;
+}
+
+.select2-search-choice {
+	width: 100%;
+}

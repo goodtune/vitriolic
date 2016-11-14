@@ -1,0 +1,136 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2015-09-16 22:56+1000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: forms.py:16
+msgid "Deity"
+msgstr ""
+
+#: forms.py:16
+msgid "Mortal"
+msgstr ""
+
+#: forms.py:17
+msgid "God mode"
+msgstr ""
+
+#: forms.py:18
+msgid "Should this user be all knowing and all powerful?"
+msgstr ""
+
+#: forms.py:25
+msgid "A disabled account cannot be used to login to the site."
+msgstr ""
+
+#: forms.py:27
+msgid "Content editor's have access to this administration interface."
+msgstr ""
+
+#: forms.py:31
+msgid "Enabled"
+msgstr ""
+
+#: forms.py:32
+msgid "Content editor"
+msgstr ""
+
+#: forms.py:45
+msgid "Members of this group will have these permissions."
+msgstr ""
+
+#: sites/admin.py:44
+#, python-format
+msgid "The component %s is already registered"
+msgstr ""
+
+#: sites/admin.py:55
+#, python-format
+msgid "The component %s is not registered"
+msgstr ""
+
+#: sites/auth.py:23
+msgid "Users & Groups"
+msgstr ""
+
+#: sites/auth.py:71
+msgid "Users"
+msgstr ""
+
+#: sites/auth.py:72 templates/touchtechnology/admin/permissions.html:51
+msgid "Groups"
+msgstr ""
+
+#: sites/settings.py:12 templates/touchtechnology/admin/base.html:79
+msgid "Settings"
+msgstr ""
+
+#: templates/touchtechnology/admin/base.html:77
+msgid "My Profile"
+msgstr ""
+
+#: templates/touchtechnology/admin/base.html:78
+msgid "Plans & Billing"
+msgstr ""
+
+#: templates/touchtechnology/admin/base.html:81
+msgid "Logout"
+msgstr ""
+
+#: templates/touchtechnology/admin/edit.html:12
+#: templates/touchtechnology/admin/permissions.html:13
+msgid "Tab Navigation"
+msgstr ""
+
+#: templates/touchtechnology/admin/edit.html:13
+#: templates/touchtechnology/admin/permissions.html:13
+msgid "Skip to Content"
+msgstr ""
+
+#: templates/touchtechnology/admin/edit.html:21
+msgid "Edit"
+msgstr ""
+
+#: templates/touchtechnology/admin/edit.html:62
+msgid "Save"
+msgstr ""
+
+#: templates/touchtechnology/admin/edit.html:63
+#: templates/touchtechnology/admin/permissions.html:62
+msgid "Cancel"
+msgstr ""
+
+#: templates/touchtechnology/admin/permissions.html:33
+msgid "Permission"
+msgstr ""
+
+#: templates/touchtechnology/admin/permissions.html:43
+msgid "Staff"
+msgstr ""
+
+#: templates/touchtechnology/admin/permissions.html:61
+msgid "Save Changes"
+msgstr ""
+
+#: user/list.html:7
+msgid "Name"
+msgstr ""
+
+#: user/list.html:8
+msgid "Email"
+msgstr ""

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]><!--> <html lang="en" class="no-js"> <!--<![endif]-->
+{% load i18n %}
+{% load admin %}
+{% load gravatar %}
+{% load bootstrap3 %}
+<head>
+	<title>{# request.tenant|default:request.hostname|default:"Admin" #}</title>
+
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="description" content="">
+	<meta name="author" content="">
+
+	<!-- Google Font: Open Sans -->
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400italic,600,600italic,800,800italic">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Oswald:400,300,700">
+
+	<!-- Font Awesome CSS -->
+	<link rel="stylesheet" href="{{ STATIC_URL }}fontawesome/css/font-awesome.min.css">
+
+	<!-- Bootstrap CSS -->
+	<link rel="stylesheet" href="{{ STATIC_URL }}bootstrap/dist/css/bootstrap.min.css">
+
+	<!-- Plugin CSS -->
+	<link rel="stylesheet" href="{{ STATIC_URL }}select2/select2.css">
+	<link rel="stylesheet" href="{{ STATIC_URL }}jquery-icheck/skins/minimal/_all.css">
+
+	<!-- App CSS -->
+	<link rel="stylesheet" href="{{ STATIC_URL }}css/mvpready-admin.css">
+	<link rel="stylesheet" href="{{ STATIC_URL }}css/custom.css">
+
+	<!-- Favicon -->
+	<link rel="shortcut icon" href="{{ STATIC_URL }}favicon.ico">
+
+	<!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+	<!--[if lt IE 9]>
+	<script src="//oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+	<script src="//oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+	<![endif]-->
+
+<!-- Bootstrap core JavaScript
+================================================== -->
+<!-- Core JS -->
+<script src="{{ STATIC_URL }}jquery/dist/jquery.js"></script>
+	<!-- Extra CSS -->
+	{% block extracss %}{% endblock %}
+</head>
+
+<body class=" ">
+
+<div id="wrapper">
+	<header class="navbar" role="banner">
+		<div class="container">
+			<div class="navbar-header">
+				<button class="navbar-toggle" type="button" data-toggle="collapse" data-target=".navbar-collapse">
+					<span class="sr-only">Toggle navigation</span>
+					<i class="fa fa-cog"></i>
+				</button>
+
+				<a href="{% url 'admin:index' %}" class="navbar-brand navbar-brand-img">
+					<img src="{{ STATIC_URL }}img/logo.png" alt="{# request.tenant|default:request.hostname #}">
+				</a>
+			</div> <!-- /.navbar-header -->
+
+			<nav class="collapse navbar-collapse" role="navigation">
+				<ul class="nav navbar-nav navbar-right">
+					{% block profile %}
+						<li class="dropdown navbar-profile">
+							<a class="dropdown-toggle" data-toggle="dropdown" href="javascript:;">
+								<img src="{% gravatar_url user.email 48 %}" class="navbar-profile-avatar" alt="{{ user.email }}">
+								<span class="visible-xs-inline">{{ user.get_full_name }} &nbsp;</span>
+								<i class="fa fa-caret-down"></i>
+							</a>
+
+							<ul class="dropdown-menu" role="menu">
+								<li><a href="#fixme"><i class="fa fa-fw fa-user"></i>&nbsp;&nbsp;{% trans "My Profile" %}</a></li>
+								<li><a href="#fixme"><i class="fa fa-fw fa-dollar"></i>&nbsp;&nbsp;{% trans "Plans & Billing" %}</a></li>
+								<li><a href="{% url 'admin:settings:index' %}"><i class="fa fa-fw fa-cogs"></i>&nbsp;&nbsp;{% trans "Settings" %}</a></li>
+								<li class="divider"></li>
+								<li><a href="{% url 'accounts:logout' %}"><i class="fa fa-fw fa-sign-out"></i>&nbsp;&nbsp;{% trans "Logout" %}</a></li>
+							</ul>
+
+						</li>
+					{% endblock profile %}
+				</ul>
+			</nav>
+		</div> <!-- /.container -->
+	</header>
+
+	{% block mainnav %}
+		<div class="mainnav ">
+			<div class="container">
+				<a class="mainnav-toggle" data-toggle="collapse" data-target=".mainnav-collapse">
+					<span class="sr-only">Toggle navigation</span>
+					<i class="fa fa-bars"></i>
+				</a>
+
+				<nav class="collapse mainnav-collapse" role="navigation">
+{% comment %}
+					<form class="mainnav-form" role="search">
+						<input type="text" class="form-control input-md mainnav-search-query" placeholder="{% trans "Search" %}">
+						<button class="btn btn-sm mainnav-form-btn"><i class="fa fa-search"></i></button>
+					</form>
+{% endcomment %}
+
+					<ul class="mainnav-menu">
+						{% for verbose_name, app_name, url, c, schemas in admin.get_components|allowed:request %}
+							{% if c.visible %}
+								{% if c.dropdowns %}
+									<li class="dropdown{% ifequal component c %} active{% endifequal %}">
+										<a href="{# url #}" class="dropdown-toggle" data-toggle="dropdown" data-hover="dropdown">{{ verbose_name }}</a>
+										<ul class="dropdown-menu" role="menu">
+											{% for label, url, fa in c.dropdowns %}
+												<li><a href="{{ url }}"><i class="fa fa-fw fa-{{ fa|default:"dashboard" }} dropdown-icon"></i> {{ label }}</a></li>
+											{% endfor %}
+										</ul>
+									</li>
+								{% else %}
+									<li class="{% ifequal component c %}active{% endifequal %}"><a href="{{ url }}">{{ verbose_name }}</a></li>
+								{% endif %}
+							{% endif %}
+						{% endfor %}
+					</ul>
+				</nav>
+			</div> <!-- /.container -->
+		</div> <!-- /.mainnav -->
+	{% endblock mainnav %}
+
+	<div class="content">
+		<div class="container">
+			{% block full_content %}
+				{% block messages %}
+					{% bootstrap_messages %}
+				{% endblock %}
+
+				{% block breadcrumbs_outer %}
+					<ol class="breadcrumb">{% block breadcrumbs %}{% endblock %}</ol>
+				{% endblock %}
+
+				{% block content %}
+					{% block main_content %}{% endblock main_content %}
+				{% endblock content %}
+			{% endblock full_content %}
+		</div> <!-- /.container -->
+	</div> <!-- .content -->
+</div> <!-- /#wrapper -->
+
+<footer class="footer">
+	<div class="container">
+		<p class="pull-left">Copyright &copy; 2008-{% now "Y" %} Touch Technology Pty Ltd.</p>
+		<p class="pull-right">{{ hostname }}</p>
+	</div>
+</footer>
+
+<!-- Bootstrap core JavaScript
+================================================== -->
+<!-- Core JS -->
+<script src="{{ STATIC_URL }}bootstrap/dist/js/bootstrap.min.js"></script>
+<script src="{{ STATIC_URL }}slimscroll/jquery.slimscroll.min.js"></script>
+
+<!-- Plugin JS -->
+<script src="{{ STATIC_URL }}select2/select2.min.js"></script>
+<script src="{{ STATIC_URL }}jquery-icheck/icheck.min.js"></script>
+<script src="{{ STATIC_URL }}flot/excanvas.min.js"></script>
+<script src="{{ STATIC_URL }}flot/jquery.flot.js"></script>
+<script src="{{ STATIC_URL }}flot/jquery.flot.pie.js"></script>
+<script src="{{ STATIC_URL }}flot/jquery.flot.resize.js"></script>
+<script src="{{ STATIC_URL }}flot/jquery.flot.time.js"></script>
+<script src="{{ STATIC_URL }}flot.tooltip/js/jquery.flot.tooltip.js"></script>
+<script src="{{ STATIC_URL }}js/URI.js"></script>
+
+<!-- App JS -->
+<script src="{{ STATIC_URL }}js/mvpready-core.js"></script>
+<script src="{{ STATIC_URL }}js/mvpready-helpers.js"></script>
+<script src="{{ STATIC_URL }}js/mvpready-admin.js"></script>
+
+<!-- Framework JS -->
+<script src="{{ STATIC_URL }}touchtechnology/admin/js/modal_delete.js"></script>
+
+{% block extrajs %}{% endblock %}
+</body>
+</html>

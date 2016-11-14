@@ -1,0 +1,78 @@
+{% extends "touchtechnology/admin/edit.html" %}
+{% load i18n %}
+{% load common %}
+
+{% block content %}
+	<form class="form-horizontal" action="" method="post">
+		{% csrf_token %}
+		{{ formset.management_form }}
+
+		<div class="layout layout-main-right layout-stack-sm">
+			<div class="col-md-3 col-sm-4 layout-sidebar">
+				<div class="nav-layout-sidebar-skip">
+					<strong>{% trans "Tab Navigation" %}</strong> / <a href="#permission-content">{% trans "Skip to Content" %}</a>
+				</div>
+
+				<ul id="myTab" class="nav nav-layout-sidebar nav-stacked">
+					{% for form in formset %}
+						<li{% if forloop.first %} class="active"{% endif %}>
+							<a href="#{{ form.permission.codename }}-tab" data-toggle="tab">
+								<i class="fa fa-chevron-right fa-fw"></i>
+								&nbsp;{% trans form.permission.name %}
+							</a>
+						</li>
+					{% endfor %}
+				</ul>
+			</div> <!-- /.col -->
+
+			<div class="col-md-9 col-sm-8 layout-main">
+				<div id="permission-content" class="tab-content stacked-content">
+					{% for form in formset %}
+						<div class="tab-pane{% if forloop.first %} active{% endif %}" id="{{ form.permission.codename }}-tab">
+							<div class="heading-block">
+								<h3>{% trans "Permission" %}</h3>
+							</div>
+
+							<p>Control who <em>{{ form.permission.name|lower }}</em> for the {{ form.instance|type }} <strong>{{ form.instance }}</strong>.</p>
+
+							<hr>
+
+							<div class="row">
+								<div class="col-md-6 col-sm-6">
+									{% field form.users %}
+								</div>
+								<div class="col-md-6 col-sm-6">
+									{% field form.groups %}
+								</div>
+							</div>
+
+							<div class="form-group">
+								<div class="text-center">
+									<button type="submit" class="btn btn-primary">{% trans "Save Changes" %}</button>
+									&nbsp;<a class="btn btn-default" href="../..">{% trans "Cancel" %}</a>
+								</div> <!-- /.col -->
+							</div>
+						</div>
+					{% endfor %}
+				</div>
+			</div> <!-- /.col -->
+		</div>
+	</form>
+{% endblock %}
+
+{% block extrajs %}
+	<script type="text/javascript">
+		$(document).ready(function() {
+			$('div.icheck input').iCheck ({
+				checkboxClass: 'ui-icheck icheckbox_minimal-grey',
+				radioClass: 'ui-icheck iradio_minimal-grey'
+			}).on ('ifChanged', function (e) {
+				$(e.currentTarget).trigger ('change')
+			})
+
+			$('.form-group.select select, .form-group.select_multiple select').select2({
+				allowClear: true
+			})
+		});
+	</script>
+{% endblock %}

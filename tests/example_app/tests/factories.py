@@ -14,3 +14,12 @@ class TestDateTimeFieldFactory(factory.DjangoModelFactory):
     datetime = factory.fuzzy.FuzzyDateTime(
         datetime.datetime(2013, 7, 15, tzinfo=timezone.utc),
         datetime.datetime(2015, 6, 15, tzinfo=timezone.utc))
+
+
+class RelativeFactory(factory.DjangoModelFactory):
+    class Meta:
+        model = models.Relative
+
+    name = factory.Sequence(lambda n: 'Sample %d' % n)
+
+    link = factory.SubFactory(TestDateTimeFieldFactory)

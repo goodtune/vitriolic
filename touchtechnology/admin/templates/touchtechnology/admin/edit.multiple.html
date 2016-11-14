@@ -1,0 +1,24 @@
+{% extends "touchtechnology/admin/edit.html" %}
+{% load common %}
+
+{% block extracss %}
+	{{ block.super }}
+
+	<!-- formset.media -->
+	{{ formset.media }}
+{% endblock extracss %}
+
+{% block form-fieldset %}
+	{{ block.super }}
+
+	<!-- formset -->
+	{{ formset.management_form }}
+
+	{% for form in formset.forms %}
+		<fieldset>
+			{% for f in form %}
+				{% field f %}
+			{% endfor %}
+		</fieldset>
+	{% endfor %}
+{% endblock %}

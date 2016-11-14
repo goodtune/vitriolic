@@ -1,0 +1,44 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+{% load common %}
+{% load gravatar %}
+
+{% block table-columns %}
+	<td>
+		<img src="{% gravatar_url obj.email 24 %}" class="img-circle" alt="{{ obj.email }}">&nbsp;
+		{% if change_perm in object_perms %}
+			<a href="{% url 'admin:auth:users:edit' obj.pk %}">{{ obj.get_full_name|default:obj.get_username }}</a>
+		{% else %}
+			{{ obj.get_full_name|default:obj.get_username }}
+		{% endif %}
+	</td>
+{% endblock %}
+
+{% block row-buttons-items %}
+	{% if change_perm in object_perms %}
+		<li role="presentation">
+			<a role="button" href="{% url 'admin:auth:users:edit' obj.pk %}">
+				<i class="fa fa-pencil fa-fw"></i>
+				{% trans "Edit" %}
+			</a>
+		</li>
+	{% endif %}
+
+	{% if delete_perm in object_perms %}
+		<li role="presentation">
+			<a role="button" href="{% url 'admin:auth:users:delete' obj.pk %}" data-toggle="modal" data-target="#deleteModal_{{ model|type|cut:" " }}" data-action="{% url 'admin:auth:users:delete' obj.pk %}" data-title="{% block delete-data-title %}{{ obj.get_full_name|default:obj.get_username }}{% endblock %}">
+				<i class="fa fa-trash fa-fw"></i>
+				{% trans "Delete" %}
+			</a>
+		</li>
+	{% endif %}
+
+	{% if add_perm in object_perms %}
+		<li role="presentation">
+			<a role="button" href="{% url 'admin:auth:users:perms' obj.pk %}">
+				<i class="fa fa-user-secret fa-fw"></i>
+				{% trans "Security" %}
+			</a>
+		</li>
+	{% endif %}
+{% endblock %}

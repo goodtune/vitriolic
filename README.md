@@ -21,6 +21,7 @@ The following modules are to be incorporated.
 
 -   touchtechnology.public
 -   touchtechnology.common
+-   touchtechnology.admin
 -   touchtechnology.content
 -   touchtechnology.news
 -   tournamentcontrol.competition

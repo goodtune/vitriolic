@@ -1,0 +1,12 @@
+{% extends "40x.html" %}
+{% load i18n %}
+
+{% block error-code %}404{% endblock %}
+
+{% block error-details %}
+	<h4>{% blocktrans %}Oops, <span class="text-warning">You're lost</span>.{% endblocktrans %}</h4>
+
+	<p>{% trans "We can not find the page you're looking for. Is there a typo in the url?" %}</p>
+{% endblock %}
+
+{% block search-form %}{% endblock %}
