@@ -25,6 +25,9 @@ setup(
         'content': [
             'django-json-field==0.5.8',
         ],
+        'news': [
+            'django-imagekit',
+        ],
     },
     zip_safe=False,
 )

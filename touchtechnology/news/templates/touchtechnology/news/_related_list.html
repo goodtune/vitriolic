@@ -1,0 +1,27 @@
+{% load url from future %}
+{% load i18n tz %}
+{% load common %}
+{% if article_list %}
+	<div class="related article">
+		<h3>{% trans "Related articles" %}</h3>
+		<ul>
+			{% for article in article_list|slice:slice %}
+				<li class="{% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last {% endif %}">
+					<a href="{% url 'news:article' year=article.published|utc|date:"Y" month=article.published|utc|date:"b" day=article.published|utc|date:"d" slug=article.slug %}">{{ article.headline }}</a>
+				</li>
+			{% endfor %}
+		</ul>
+	</div>
+{% endif %}
+{% if category_list %}
+	<div class="related category">
+		<h3>{% trans "Categories" %}</h3>
+		<ul>
+			{% for category in category_list %}
+				<li class="{% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last {% endif %}">
+					<a href="{% url 'news:category-index' category.slug %}">{{ category.short_title|default:category.title }}</a>
+				</li>
+			{% endfor %}
+		</ul>
+	</div>
+{% endif %}

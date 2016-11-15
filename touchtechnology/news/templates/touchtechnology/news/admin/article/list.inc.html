@@ -1,0 +1,27 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+{% load common %}
+
+{% block table-headings %}
+	<th>{% trans "Headline" %}</th>
+	<th class="hidden-xs hidden-sm">{% trans "Published" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td>
+		{% if change_perm in object_perms %}
+			<a href="{{ obj.urls.edit }}">{{ obj }}</a>&nbsp;
+		{% else %}
+			<span>{{ obj }}</span>
+		{% endif %}
+
+		{% for label in obj.categories.all %}
+			<span class="hidden-xs label label-default">{{ label }}</span>
+		{% endfor %}
+
+		{% if obj.categories.count %}
+			<span class="badge badge-default visible-xs-inline-block">{{ obj.categories.count }}</span>
+		{% endif %}
+	</td>
+	<td class="hidden-xs hidden-sm">{{ obj.published }}</td>
+{% endblock %}

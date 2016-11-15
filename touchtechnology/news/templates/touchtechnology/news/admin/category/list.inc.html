@@ -1,0 +1,21 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+{% load common %}
+
+{% block table-headings %}
+	<th>{% trans "Category" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td>
+		{% if change_perm in object_perms %}
+			<a href="{{ obj.urls.edit }}">{{ obj }}</a>&nbsp;
+		{% else %}
+			<span>{{ obj }}</span>
+		{% endif %}
+
+		{% if obj.article_set.count %}
+			<span class="badge badge-default">{{ obj.article_set.count }}</span>
+		{% endif %}
+	</td>
+{% endblock %}

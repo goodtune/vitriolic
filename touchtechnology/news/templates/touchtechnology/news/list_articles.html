@@ -1,0 +1,27 @@
+{% extends "touchtechnology/news/base.html" %}
+{% load url from future %}
+{% load i18n tz %}
+{% load common %}
+
+{% block news_content %}
+	<h1>{% block page_title %}{% if node %}{{ node.title }}{% else %}{% trans "Latest News" %}{% endif %}{% if category %} - {{ category.title }}{% endif %}{% endblock %}</h1>
+
+	{% for article in object_list %}
+		<div class="article {% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last {% endif %}" id="article_{{ article.id }}">
+			<h2>{{ article.headline }}</h2>
+			<p class="published" data-iso8601="{% timezone "UTC" %}{{ article.published|date:"c" }}{% endtimezone %}">
+				{{ article.published|date }} @ {{ article.published|date:"G:i e" }}
+			</p>
+			<div class="abstract">{{ article.abstract|linebreaks }}</div>
+			<p class="buttons">
+				<a class="button more" href="{% timezone "UTC" %}{% url 'news:article' year=article.published|date:"Y" month=article.published|date:"b" day=article.published|date:"j" slug=article.slug %}{% endtimezone %}">
+					{% block read_more %}{% trans "Read more" %}{% endblock %}
+				</a>
+			</p>
+		</div>
+	{% endfor %}
+
+	{% block pagination %}
+		{% pagination %}
+	{% endblock %}
+{% endblock %}

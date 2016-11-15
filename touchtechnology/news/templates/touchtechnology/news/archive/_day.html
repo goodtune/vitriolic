@@ -1,0 +1,9 @@
+{% extends "touchtechnology/news/archive/base.html" %}
+
+{% block page_title %}{{ block.super }}: {{ day|date:"jS F Y" }}{% endblock %}
+
+{% block archive_info %}
+	<h2>{{ day|date:"jS F Y" }}</h2>
+
+	{% include "touchtechnology/news/archive/_article_list.html" %}
+{% endblock %}

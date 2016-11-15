@@ -1,0 +1,9 @@
+{% extends "touchtechnology/news/list_articles.html" %}
+{% load url from future %}
+{% load i18n %}
+
+{% block pagination %}
+	<p class="buttons">
+		<a class="button" href="{% url 'news:archive' %}" title="Archive">{% trans "Visit the news archive." %}</a>
+	</p>
+{% endblock %}

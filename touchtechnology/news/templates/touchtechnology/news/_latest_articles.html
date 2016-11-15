@@ -1,0 +1,28 @@
+{% load url from future %}
+{% load i18n tz %}
+{% load common %}
+<div class="news latest">
+	{% block latest_articles %}{% block latest_article_title %}<h2>{{ title }}</h2>{% endblock %}{% endblock %}
+
+	{% for a in article_list %}
+		<div class="article {% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last {% endif %}">
+			{% block latest_article_headline %}
+				<h3>{{ a.headline }}</h3>
+			{% endblock %}
+			
+			<div class="abstract">
+				{% block latest_article_abstract %}
+					{{ a.abstract|linebreaks }}
+				{% endblock %}
+			</div>
+			
+			{% block latest_article_link %}
+				<p>
+					<a class="button more" href="{% timezone "UTC" %}{% url 'news:article' year=a.published|date:"Y" month=a.published|date:"b" day=a.published|date:"j" slug=a.slug %}{% endtimezone %}">{% trans "Read more" %}</a>
+				</p>
+			{% endblock %}
+		</div>
+	{% empty %}
+		{% block latest_article_empty %}<p>{% trans "Sorry, there are no recent news articles." %}</p>{% endblock %}
+	{% endfor %}
+</div>

@@ -1,9 +1,8 @@
 import datetime
+
 import factory
 import factory.fuzzy
-
 from django.utils import timezone
-
 from example_app import models
 
 

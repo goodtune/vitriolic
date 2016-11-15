@@ -1,0 +1,13 @@
+{% load url from future %}
+{% load i18n tz %}
+<ul>
+	{% for article in object_list %}
+		<li>
+			<a href="{% timezone "UTC" %}{% url 'news:article' year=article.published|date:"Y" month=article.published|date:"b" day=article.published|date:"d" slug=article.slug %}{% endtimezone %}">
+				{{ article.headline }}
+			</a>
+		</li>
+	{% empty %}
+		<li>{% trans "There were no news articles published in this period." %}</li>
+	{% endfor %}
+</ul>
