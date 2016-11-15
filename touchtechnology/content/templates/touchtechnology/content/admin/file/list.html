@@ -1,0 +1,23 @@
+{% extends "touchtechnology/admin/list.html" %}
+{% load i18n %}
+{% load common mvp_tags %}
+{% load bootstrap3 guardian_tags %}
+
+{% block content %}
+	<div class="row">
+		<div class="col-md-3 col-sm-3 col-md-push-9 col-sm-push-9">
+			<ul class="nav nav-pills nav-stacked">
+				<li class="active">
+					<a href="#" type="button" data-toggle="modal" data-target="#fileModal">{% trans "Upload file" %}</a>
+				</li>
+				<li>
+					<a href="#" type="button" data-toggle="modal" data-target="#folderModal">{% trans "New folder" %}</a>
+				</li>
+			</ul>
+		</div>
+
+		<div class="col-md-9 col-sm-9 col-md-pull-3 col-sm-pull-3">
+			{% include list_template|default:"mvp/list.inc.html" %}
+		</div>
+	</div>
+{% endblock %}

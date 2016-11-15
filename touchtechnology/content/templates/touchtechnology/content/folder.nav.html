@@ -1,0 +1,7 @@
+{% extends "touchtechnology/common/templatetags/navigation.html" %}
+
+{% block list_class %}children{% endblock %}
+
+{% block item_id %}folder_child_{{ node.pk }}{% endblock %}
+
+{% block itemclass %}{% if node == current_node or node.tree_id == current_node.tree_id and node.level < current_node.level and node.lft < current_node.lft and node.rght > current_node.rght %}active {% endif %}{% endblock %}

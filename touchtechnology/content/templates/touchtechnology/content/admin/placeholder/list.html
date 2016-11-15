@@ -1,0 +1,34 @@
+{% extends "touchtechnology/admin/list.html" %}
+{% load i18n %}
+{% load common %}
+
+{% block table-headings %}
+	<th>{% trans "Application" %}</th>
+	<th>{% trans "Version" %}</th>
+
+	{% if add_perm in model|hasperm:user %}
+		<th class="hidden-sm hidden-xs">{% trans "Import Path" %}</th>
+	{% endif %}
+{% endblock %}
+
+{% block table-columns %}
+	<td>
+		{% if change_perm in object_perms %}
+			<a href="{{ edit_url }}"{% if not obj.module %} class="text-danger"{% endif %}>{{ obj }}</a>&nbsp;
+		{% else %}
+			<span{% if not obj.module %} class="text-danger"{% endif %}>{{ obj }}</span>
+		{% endif %}
+		{% if obj.nodes.count %}
+			<span class="badge badge-default">{{ obj.nodes.count }}</span>
+		{% endif %}
+	</td>
+	{% with build=obj.module.VERSION.3 %}
+		<td class="text-{% if build == "dev" %}danger{% elif build == "alpha" %}warning{% elif build == "beta" %}info{% else %}default{% endif %}">
+			{{ obj.module.get_version|default:"-" }}
+		</td>
+	{% endwith %}
+
+	{% if add_perm in model|hasperm:user %}
+		<td class="hidden-sm hidden-xs">{{ obj.path }}</td>
+	{% endif %}
+{% endblock %}

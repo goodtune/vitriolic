@@ -1,0 +1,86 @@
+{% extends "touchtechnology/content/admin/base.html" %}
+{% load cycle from future %}
+{% load url from future %}
+{% load i18n %}
+{% load common %}
+
+{% block body_class %}{{ block.super }} files component{% endblock %}
+
+{% block extrahead %}{{ block.super }}
+	<script type="text/javascript" src="{{ STATIC_URL }}touchtechnology/admin/js/files.js"></script>
+{% endblock %}
+
+{% block content %}
+	<div class="box half odd">
+		<h1>{% trans "Folders" %}</h1>
+		<table>
+			<tbody>
+				{% for fullpath, d, listdir in directories %}
+					<tr class="{% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last {% endif %} directory">
+						<td><a href="{% url 'admin:files:listdir' path=fullpath %}">{{ d }}</a></td>
+						<td class="rm">
+							{% if listdir.0 or listdir.1 %}
+								<span>{% trans "Not empty" %}</span>
+							{% else %}
+								{% if writable %}
+									<a class="rmdir" href="{% url 'admin:files:rmdir' path=fullpath %}">{% trans "Delete" %}</a>
+								{% else %}
+									<span>{% trans "Protected" %}</span>
+								{% endif %}
+							{% endif %}
+						</td>
+					</tr>
+				{% empty %}
+					<tr class="first odd last">
+						<td class="no_results">{% blocktrans with in=path|default_if_none:"file store."|slice:"-1" %}No directories in <strong>{{ in }}</strong>.{% endblocktrans %}</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+
+		<div class="actions">
+			{% if path %}
+				<a class="button up" href="..">{% trans "Parent" %}</a>
+			{% endif %}
+			{% if writable %}
+				<a id="add_folder" class="button add folder" href="#">{% trans "Add folder" %}</a>
+			{% endif %}
+		</div>
+	</div>
+
+	<div class="box half even">
+		<h1>{% trans "Files" %}</h1>
+		<table>
+			<tbody>
+				{% for f in files %}
+					<tr class="{% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last {% endif %} file">
+						<td><a target="_blank" href="{{ base_url }}{{ path|default_if_none:"" }}{{ f }}">{{ f }}</a></td>
+						<td class="rm">
+							{% if writable %}
+								<a class="rm" href="{% url 'admin:files:rm' path=path|default_if_none:"" filename=f %}">{% trans "Delete" %}</a>
+							{% else %}
+								<span>{% trans "Protected" %}</span>
+							{% endif %}
+						</td>
+					</tr>
+				{% empty %}
+					<tr class="first odd last">
+						<td class="no_results">{% blocktrans with in=path|default_if_none:"file store."|slice:"-1" %}No files in <strong>{{ in }}</strong>.{% endblocktrans %}</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+
+		<div class="actions">
+			{% if writable %}
+				<a id="add_file" class="button add page" href="#">{% trans "Upload file" %}</a>
+			{% endif %}
+		</div>
+	</div>
+
+	<form id="action" action="" method="post" enctype="multipart/form-data">
+		{% csrf_token %}
+		<div class="folder">{% for f in folder_form %}{% field f %}{% endfor %}</div>
+		<div class="file">{% for f in file_form %}{% field f %}{% endfor %}</div>
+	</form>
+{% endblock %}

@@ -1,0 +1,388 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2016-10-10 16:58+1100\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1)\n"
+
+#: admin.py:49
+msgid "Content"
+msgstr ""
+
+#: admin.py:141
+msgid "Sitemap"
+msgstr ""
+
+#: admin.py:142
+msgid "Media"
+msgstr ""
+
+#: admin.py:143
+msgid "Chunks"
+msgstr ""
+
+#: admin.py:144
+msgid "Redirects"
+msgstr ""
+
+#: admin.py:145
+msgid "Applications"
+msgstr ""
+
+#: admin.py:458
+#, python-format
+msgid "Opened new folder \"%s\"."
+msgstr ""
+
+#: admin.py:465
+#, python-format
+msgid "Uploaded new file \"%s\""
+msgstr ""
+
+#: admin.py:469
+msgid "There were no changes to be saved."
+msgstr ""
+
+#: admin.py:592
+#, python-format
+msgid "The folder \"%s\" is not empty."
+msgstr ""
+
+#: forms.py:155 templates/touchtechnology/content/admin/placeholder/list.html:6
+msgid "Application"
+msgstr ""
+
+#: forms.py:283
+msgid "New folder name"
+msgstr ""
+
+#: forms.py:292
+msgid "Already exists."
+msgstr ""
+
+#: forms.py:302
+msgid "File to upload"
+msgstr ""
+
+#: models.py:65
+msgid "Template"
+msgstr ""
+
+#: models.py:70
+msgid "Keywords"
+msgstr ""
+
+#: models.py:71
+msgid ""
+"This should be a comma-separated list of terms that indicate the content of "
+"this page - used to assist Search Engines rank your page."
+msgstr ""
+
+#: models.py:76
+msgid "Description"
+msgstr ""
+
+#: models.py:77
+msgid ""
+"Search Engines may use this when determining the relevance of your page."
+msgstr ""
+
+#: models.py:104
+msgid "Page"
+msgstr ""
+
+#: models.py:107
+msgid "CSS class"
+msgstr ""
+
+#: models.py:108
+msgid "Sequence"
+msgstr ""
+
+#: models.py:109
+msgid "Copy"
+msgstr ""
+
+#: models.py:123
+msgid "Slug"
+msgstr ""
+
+#: models.py:124 models.py:134
+msgid "Page Copy"
+msgstr ""
+
+#: models.py:133 models.py:220
+msgid "Node"
+msgstr ""
+
+#: models.py:140
+msgid "Module path"
+msgstr ""
+
+#: models.py:142
+msgid "Namespace"
+msgstr ""
+
+#: models.py:145
+msgid "Nodes"
+msgstr ""
+
+#: models.py:154
+msgid "Not installed"
+msgstr ""
+
+#: models.py:221
+msgid "Key"
+msgstr ""
+
+#: models.py:222
+msgid "Value"
+msgstr ""
+
+#: models.py:232
+msgid "Source URL"
+msgstr ""
+
+#: models.py:233
+msgid "The path that will trigger the redirection."
+msgstr ""
+
+#: models.py:236
+msgid "Destination URL"
+msgstr ""
+
+#: models.py:237
+msgid "The URL or path that the browser will be sent to."
+msgstr ""
+
+#: models.py:240 templates/touchtechnology/content/admin/redirect/list.html:5
+msgid "Label"
+msgstr ""
+
+#: models.py:242
+msgid "Active"
+msgstr ""
+
+#: models.py:243
+msgid "Permanent"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/base.html:15
+#: templates/touchtechnology/content/admin/base.html:20
+msgid "Top Level"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/delete_confirm.html:8
+#, python-format
+msgid "Delete %(type)s"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/delete_confirm.html:11
+msgid "Warning"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/delete_confirm.html:13
+#, python-format
+msgid ""
+"You are about to delete the %(type)s <strong>%(object)s</strong>. This will "
+"permanently remove it from your site. Are you sure you want to continue?"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/delete_confirm.html:18
+#: templates/touchtechnology/content/admin/edit_page.html:37
+#: templates/touchtechnology/content/admin/file/list.inc.html:150
+#: templates/touchtechnology/content/admin/files.html:26
+#: templates/touchtechnology/content/admin/files.html:60
+msgid "Delete"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/delete_confirm.html:20
+#: templates/touchtechnology/content/admin/delete_confirm.html:30
+#: templates/touchtechnology/content/admin/edit_page.html:35
+#: templates/touchtechnology/content/admin/file/list.inc.html:34
+#: templates/touchtechnology/content/admin/file/list.inc.html:62
+msgid "Cancel"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/delete_confirm.html:25
+msgid "Error"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/delete_confirm.html:27
+#, python-format
+msgid ""
+"You are attempting to delete a %(type)s which has children in the site "
+"hierarchy, which is not possible."
+msgstr ""
+
+#: templates/touchtechnology/content/admin/edit_application.html:24
+#: templates/touchtechnology/content/admin/edit_application.html:41
+msgid "Configuration"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/edit_application.html:31
+#: templates/touchtechnology/content/admin/edit_application.html:69
+msgid "Optional copy"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/edit_folder.html:4
+msgid "Folder"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/edit_page.html:7
+msgid "Edit Page"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/edit_page.html:7
+msgid "Add Page"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/edit_page.html:25
+msgid "Appearance"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/edit_page.html:34
+msgid "Save"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/file/list.html:11
+#: templates/touchtechnology/content/admin/file/list.inc.html:49
+#: templates/touchtechnology/content/admin/file/list.inc.html:63
+#: templates/touchtechnology/content/admin/files.html:76
+msgid "Upload file"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/file/list.html:14
+#: templates/touchtechnology/content/admin/file/list.inc.html:21
+#: templates/touchtechnology/content/admin/sitemapnode/list.html:12
+msgid "New folder"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/file/list.inc.html:6
+msgid "You are about to delete <strong>OBJECT</strong>."
+msgstr ""
+
+#: templates/touchtechnology/content/admin/file/list.inc.html:7
+msgid "This will irreversibly remove it from the site."
+msgstr ""
+
+#: templates/touchtechnology/content/admin/file/list.inc.html:8
+msgid "Are you certain that you wish to continue?"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/file/list.inc.html:35
+msgid "Create folder"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/file/list.inc.html:84
+msgid "Add your first"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/file/list.inc.html:85
+msgid "file"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/file/list.inc.html:87
+msgid "folder"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/file/list.inc.html:88
+msgid "now"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/file/list.inc.html:132
+#: templates/touchtechnology/content/admin/sitemapnode/list.inc.html:7
+msgid "View"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/file/list.inc.html:141
+msgid "Edit"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/files.html:15
+msgid "Folders"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/files.html:23
+msgid "Not empty"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/files.html:28
+#: templates/touchtechnology/content/admin/files.html:62
+msgid "Protected"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/files.html:35
+#, python-format
+msgid "No directories in <strong>%(in)s</strong>."
+msgstr ""
+
+#: templates/touchtechnology/content/admin/files.html:43
+msgid "Parent"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/files.html:46
+msgid "Add folder"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/files.html:52
+msgid "Files"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/files.html:68
+#, python-format
+msgid "No files in <strong>%(in)s</strong>."
+msgstr ""
+
+#: templates/touchtechnology/content/admin/placeholder/list.html:7
+msgid "Version"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/placeholder/list.html:10
+msgid "Import Path"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/redirect/list.html:6
+msgid "Source"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/redirect/list.html:7
+msgid "Destination"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/sitemapnode/list.html:7
+msgid "New page"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/sitemapnode/list.html:18
+msgid "New application"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/sitemapnode/list.inc.html:29
+msgid "Open"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/sitemapnode/list.inc.html:34
+msgid "Up"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/sitemapnode/list.inc.html:38
+msgid "Down"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/sitemapnode/list.inc.html:48
+msgid "View on web"
+msgstr ""

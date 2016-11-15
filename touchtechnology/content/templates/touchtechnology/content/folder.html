@@ -1,0 +1,8 @@
+{% extends "touchtechnology/content/page.html" %}
+{% load common %}
+
+{% block content %}
+	{{ block.super }}
+
+	{% navigation root=node expand_all_nodes=1 start_at=node.level|add:1 template_name="touchtechnology/content/folder.nav.html" %}
+{% endblock %}

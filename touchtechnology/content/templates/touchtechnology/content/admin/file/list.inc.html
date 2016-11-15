@@ -1,0 +1,159 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+{% load common %}
+
+{% block delete-warning %}
+	<p>{% blocktrans %}You are about to delete <strong>OBJECT</strong>.{% endblocktrans %}</p>
+	<p>{% trans "This will irreversibly remove it from the site." %}</p>
+	<p>{% trans "Are you certain that you wish to continue?" %}</p>
+{% endblock delete-warning %}
+
+{% block modal %}
+{{ block.super }}<!-- /deleteModal -->
+
+<div class="modal modal-styled fade in" id="folderModal" tabindex="-1" role="dialog" aria-labelledby="folderModalLabel" aria-hidden="true">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-label="Close">
+					<span aria-hidden="true">&times;</span>
+				</button>
+				<h4 class="modal-title" id="folderModalLabel">{% trans "New folder" %}</h4>
+			</div>
+
+			<form action="" method="post">
+				{% csrf_token %}
+
+				<div class="modal-body">
+					{% for f in folder_form %}
+						{% field f %}
+					{% endfor %}
+				</div>
+
+				<div class="modal-footer">
+					<button type="button" class="btn btn-default" data-dismiss="modal">{% trans "Cancel" %}</button>
+					<button type="submit" class="btn btn-primary">{% trans "Create folder" %}</button>
+				</div>
+			</form>
+		</div>
+	</div>
+</div><!-- /folderModal -->
+
+<div class="modal modal-styled fade in" id="fileModal" tabindex="-1" role="dialog" aria-labelledby="fileModalLabel" aria-hidden="true">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-label="Close">
+					<span aria-hidden="true">&times;</span>
+				</button>
+				<h4 class="modal-title" id="fileModalLabel">{% trans "Upload file" %}</h4>
+			</div>
+
+			<form action="" method="post" enctype="multipart/form-data">
+				{% csrf_token %}
+
+				<div class="modal-body">
+					{% for f in file_form %}
+						{% field f %}
+					{% endfor %}
+				</div>
+
+				<div class="modal-footer">
+					<button type="button" class="btn btn-default" data-dismiss="modal">{% trans "Cancel" %}</button>
+					<button type="submit" class="btn btn-primary">{% trans "Upload file" %}</button>
+				</div>
+			</form>
+		</div>
+	</div>
+</div><!-- /fileModal -->
+{% endblock modal %}
+
+{% block table-row-empty %}
+	{% if path %}
+		<tr>
+			<td>
+				<i class="fa fa-fw fa-folder-open-o"></i>&nbsp;
+				<em><a href="..">{{ parent }}</a></em>
+			</td>
+			<td class="text-right">
+			</td>
+		</tr><!-- /up -->
+	{% endif %}
+	<tr>
+		<td colspan="{% block empty-row-colspan %}2{% endblock %}">
+			{% trans "Add your first" %}
+			<a href="#" type="button" data-toggle="modal" data-target="#fileModal">{% trans "file" %}</a>
+			or
+			<a href="#" type="button" data-toggle="modal" data-target="#folderModal">{% trans "folder" %}</a>
+			{% trans "now" %}.
+		</td>
+	</tr>
+{% endblock %}
+
+{% block table-row %}
+	{# This feels a bit hacky, but probably better than reimplementing list.inc.html entirely #}
+	{% if forloop.first and path %}
+		<tr>
+			<td>
+				<i class="fa fa-fw fa-folder-open-o"></i>&nbsp;
+				<em><a href="..">{{ parent }}</a></em>
+			</td>
+			<td class="text-right">
+			</td>
+		</tr><!-- /up -->
+	{% endif %}
+
+	<tr>
+		{% block table-columns %}
+			<td>
+				<i class="fa fa-fw fa-{{ obj.icon }}-o"></i>&nbsp;
+				{% if obj.urls.detail %}
+					<a href="{{ obj.urls.detail }}">{{ obj }}</a>
+				{% elif obj.urls.edit %}
+					<a href="{{ obj.urls.edit }}">{{ obj }}</a>
+				{% else %}
+					<span>{{ obj }}</span>
+				{% endif %}
+			</td>
+		{% endblock table-columns %}
+
+		<td class="text-right">
+			<div class="btn-group">
+				<button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-expanded="false">
+					<span class="caret"></span>
+				</button>
+
+				<ul class="dropdown-menu dropdown-menu-right" role="menu" aria-labelledby="dropdown_menu_{{ obj.pk }}">
+					{% block row-buttons-items %}
+						{% if obj.urls.detail %}
+							<li role="presentation">
+								<a role="button" href="{{ obj.urls.detail }}">
+									<i class="fa fa-eye fa-fw"></i>
+									{% trans "View" %}
+								</a>
+							</li>
+						{% endif %}
+
+						{% if obj.urls.edit %}
+							<li role="presentation">
+								<a role="button" href="{{ obj.urls.edit }}">
+									<i class="fa fa-pencil fa-fw"></i>
+									{% trans "Edit" %}
+								</a>
+							</li>
+						{% endif %}
+
+						{% if obj.urls.delete %}
+							<li role="presentation">
+								<a role="button" href="{{ obj.urls.delete }}" data-toggle="modal" data-target="#deleteModal_{{ model|type|cut:" " }}" data-action="{{ obj.urls.delete }}" data-title="{% block delete-data-title %}{{ obj }}{% endblock %}">
+									<i class="fa fa-trash fa-fw"></i>
+									{% trans "Delete" %}
+								</a>
+							</li>
+						{% endif %}
+					{% endblock row-buttons-items %}
+				</ul>
+			</div>
+		</td>
+	</tr>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends "mvp/list.split.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	<th></th>
+	{{ block.super }}
+	<th class="hidden-xs hidden-sm">{% trans "View" %}</th>
+{% endblock table-headings %}
+
+{% block table-columns %}
+	<td>
+		<i class="fa fa-fw {% if not obj.enabled %}fa-exclamation-circle{% endif %}"></i>
+		<i class="fa fa-fw {% if not obj.hidden_from_sitemap %}fa-sitemap{% endif %}"></i>
+		<i class="fa fa-fw {% if not obj.hidden_from_robots %}fa-rss{% endif %}"></i>
+	</td>
+
+	{{ block.super }}
+
+	<td class="hidden-xs hidden-sm">
+		<a href="{{ obj.get_absolute_url }}" class="hidden-sm hidden-xs" target="_blank">{{ obj.get_absolute_url }}</a>
+	</td>
+{% endblock table-columns %}
+
+{% block row-buttons-extra %}
+	<!-- min-width set so we don't wrap buttons on small screens -->
+	{% if not obj.is_leaf_node %}
+		<a class="btn btn-default btn-sm" href="?r={{ obj.pk }}" role="button">
+			<i class="fa fa-folder-open"></i>
+			<span class="hidden-xs hidden-sm">&nbsp;{% trans "Open" %}</span>
+		</a>
+	{% endif %}
+	<a class="btn btn-default btn-sm" href="{% url 'admin:reorder' obj.pk "up" %}" role="button">
+		<i class="fa fa-chevron-up"></i>
+		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Up" %}</span>
+	</a>
+	<a class="btn btn-default btn-sm" href="{% url 'admin:reorder' obj.pk "down" %}" role="button">
+		<i class="fa fa-chevron-down"></i>
+		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Down" %}</span>
+	</a>
+{% endblock row-buttons-extra %}
+
+{% block row-buttons-items %}
+	{{ block.super }}
+	<li class="divider visible-xs visible-sm"></li>
+	<li role="presentation" class="visible-xs visible-sm">
+		<a role="button" href="{{ obj.get_absolute_url }}" target="_blank">
+			<i class="fa fa-eye fa-fw"></i>
+			{% trans "View on web" %}
+		</a>
+	</li>
+{% endblock row-buttons-items %}

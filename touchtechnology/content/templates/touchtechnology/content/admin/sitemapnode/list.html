@@ -1,0 +1,37 @@
+{% extends "touchtechnology/admin/list.html" %}
+{% load i18n %}
+
+{% block nav-pills-list %}
+	<li class="active">
+		{% if add_perm in model_perms %}
+			<a href="{% url 'admin:content:page:add' %}">{% trans "New page" %}</a>
+		{% endif %}
+	</li>
+	<li>
+		{% if add_perm in model_perms %}
+			<a href="{% url 'admin:content:folder:add' %}">{% trans "New folder" %}</a>
+		{% endif %}
+	</li>
+	{# TODO would be good if we could make this a drop-down to let the user see applications before moving into next screen #}
+	<li>
+		{% if add_perm in model_perms %}
+			<a href="{% url 'admin:content:placeholder:add' %}">{% trans "New application" %}</a>
+		{% endif %}
+	</li>
+{% endblock nav-pills-list %}
+
+{% block extracss %}
+	{{ block.super }}
+
+	<style type="text/css">
+		/* iconography showing node options */
+		table tbody tr td:first-child {
+			min-width: 68px; /* don't be too small on small screens */
+			width: 68px; /* don't be too big on big screens */
+		}
+
+		table tbody tr td:last-child {
+			min-width: 136px; /* don't split on small screens */
+		}
+	</style>
+{% endblock extracss %}

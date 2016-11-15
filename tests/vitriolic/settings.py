@@ -50,6 +50,7 @@ INSTALLED_APPS = [
 
     'touchtechnology.common',
     'touchtechnology.admin',
+    'touchtechnology.content',
 
     'example_app',
 ]

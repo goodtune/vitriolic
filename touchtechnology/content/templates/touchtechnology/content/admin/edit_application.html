@@ -1,0 +1,80 @@
+{% extends "touchtechnology/content/admin/edit.html" %}
+{% load i18n %}
+{% load common %}
+{% load mvp_tags %}
+
+{% block extracss %}
+	{{ block.super }}
+	<!-- formset.media.css -->
+	{{ formset_media.css }}
+{% endblock %}
+
+{% block extrajs %}
+	{{ block.super }}
+	<!-- formset.media.js -->
+	{{ formset_media.js }}
+{% endblock %}
+
+{% block tab-links %}
+	{{ block.super }}
+
+	<li>
+		<a href="#kwargs-tab" data-toggle="tab">
+			<i class="fa fa-chevron-right fa-fw"></i>
+			&nbsp;{% trans "Configuration" %}
+		</a>
+	</li>
+
+	<li>
+		<a href="#copy-tab" data-toggle="tab">
+			<i class="fa fa-chevron-right fa-fw"></i>
+			&nbsp;{% trans "Optional copy" %}
+		</a>
+	</li>
+{% endblock tab-links %}
+
+{% block tab-panes %}
+	{{ block.super }}
+
+	<div class="tab-pane" id="kwargs-tab">
+		<div class="heading-block">
+			<h3>{% trans "Configuration" %}</h3>
+		</div>
+
+		{% if formsets.kwargs.forms %}
+			{{ formsets.kwargs.management_form }}
+
+			<fieldset>
+				{% for form in formsets.kwargs %}
+					{% for f in form %}
+						{% field f %}
+					{% endfor %}
+				{% endfor %}
+			</fieldset>
+
+			<p>FIXME: need to be able to dynamically add more forms</p>
+		{% else %}
+			<fieldset>
+				{% for f in formsets.kwargs %}
+					{% field f %}
+				{% endfor %}
+			</fieldset>
+		{% endif %}
+	</div>
+
+	{{ formsets.copy.management_form }}
+
+	<div class="tab-pane" id="copy-tab">
+		<div class="heading-block">
+			<h3>{% trans "Optional copy" %}</h3>
+		</div>
+
+		<fieldset>
+			{% for form in formsets.copy %}
+				{% for f in form %}
+					{% field f %}
+				{% endfor %}
+			{% endfor %}
+		</fieldset>
+	</div>
+{% endblock tab-panes %}

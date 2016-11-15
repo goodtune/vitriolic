@@ -1,6 +1,6 @@
 from django.conf.urls import include, url
-
 from example_app.models import TestDateTimeField, Relative
+
 from touchtechnology.common.sites import Application
 
 

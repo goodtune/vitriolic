@@ -1,0 +1,41 @@
+{% extends "touchtechnology/content/admin/base.html" %}
+{% load url from future %}
+{% load i18n %}
+{% load common %}
+
+{% block content %}
+	<h1>{% if pagenode.object_id %}{% blocktrans %}Edit Page{% endblocktrans %}{% else %}{% blocktrans %}Add Page{% endblocktrans %}{% endif %}</h1>
+
+	<form action="" method="post">
+		{% csrf_token %}
+		<div id="outer">
+			<fieldset class="node">
+				{% for f in forms.sitemapnode %}
+					{% field f %}
+				{% endfor %}
+			</fieldset>
+
+			{# FIXME this should be much better handled for multiple contents #}
+			<fieldset class="contents">
+				{% for section, content in contents %}
+					{% field content.copy "" %}
+				{% endfor %}
+			</fieldset>
+
+			<h1>{% trans "Appearance" %}</h1>
+			<fieldset class="page">
+				{% for f in forms.page %}
+					{% field f %}
+				{% endfor %}
+			</fieldset>
+		</div>
+
+		<div class="buttons">
+			<button type="submit">{% trans "Save" %}</button>
+			<a href="{% url 'admin:content:index' %}{% if pagenode.parent %}?r={{ pagenode.parent.pk }}{% endif %}" class="button">{% trans "Cancel" %}</a>
+			{% if pagenode.id and pagenode.is_leaf_node %}
+				<a href="{% url 'admin:content:delete-page' pagenode.id %}" class="button">{% trans "Delete" %}</a>
+			{% endif %}
+		</div>
+	</form>
+{% endblock %}

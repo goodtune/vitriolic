@@ -1,0 +1,4 @@
+{% extends "touchtechnology/content/admin/delete_confirm.html" %}
+{% load url from future %}
+
+{% block cancel_url %}{% url 'admin:files:listdir' parentdir %}{% endblock %}

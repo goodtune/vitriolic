@@ -1,0 +1,3 @@
+{% extends "touchtechnology/admin/edit.html" %}
+
+{% block cancel-url %}../../{% if object.parent %}?r={{ object.parent_id }}{% endif %}{% endblock %}

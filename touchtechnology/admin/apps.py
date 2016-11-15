@@ -17,7 +17,6 @@ def touchtechnology_assumptions(app_configs, **kwargs):
     don't shoot ourselves in the foot too often, these checks should be run to
     ensure we are following our conventions.
     """
-    print app_configs
     INSTALLED_APPS = [
         config.name
         for config in app_configs

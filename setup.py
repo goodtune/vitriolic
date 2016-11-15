@@ -22,6 +22,9 @@ setup(
             'django-bootstrap3>=7.0,<8',
             'django-gravatar2>=1.4,<2',
         ],
+        'content': [
+            'django-json-field==0.5.8',
+        ],
     },
     zip_safe=False,
 )

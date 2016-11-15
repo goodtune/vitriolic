@@ -1,0 +1,22 @@
+{% extends "touchtechnology/admin/base.html" %}
+{% load url from future %}
+{% load i18n %}
+
+{% block extracss %}{{ block.super }}
+	<link rel="stylesheet" href="{{ STATIC_URL }}touchtechnology/content/css/vi_admin.css">
+{% endblock %}
+
+{% block extrajs %}
+	{{ contents.0.1.media }}
+{% endblock %}
+
+{% block breadcrumbs %}
+	{% if root %}
+		<li><a href="{% url 'admin:content:index' %}">{% trans "Top Level" %}</a></li>
+		{% for n in root.get_ancestors %}
+			<li><a href="{% url 'admin:content:index' %}?r={{ n.pk }}">{{ n.title }}</a></li>
+		{% endfor %}
+	{% else %}
+		<li>{% trans "Top Level" %}</li>
+	{% endif %}
+{% endblock %}

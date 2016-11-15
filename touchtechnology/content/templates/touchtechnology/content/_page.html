@@ -1,0 +1,8 @@
+{% extends "touchtechnology/content/base.html" %}
+{% load common %}
+
+{% block page_title %}{% for parent in node.get_ancestors %}{{ parent.title }} - {% endfor %}{{ node.title }}{% endblock %}
+
+{% block content %}
+	{% include "touchtechnology/content/page_content.html" %}
+{% endblock %}

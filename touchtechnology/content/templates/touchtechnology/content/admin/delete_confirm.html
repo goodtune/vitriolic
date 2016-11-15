@@ -1,0 +1,34 @@
+{% extends "touchtechnology/admin/base.html" %}
+{% load url from future %}
+{% load i18n %}
+{% load common %}
+
+{% block content %}
+	{% with type=object|type %}
+		<h1>{% blocktrans %}Delete {{ type }}{% endblocktrans %}</h1>
+
+		{% if object.is_leaf_node %}
+			<h2>{% trans "Warning" %}</h2>
+
+			<p>{% blocktrans %}You are about to delete the {{ type }} <strong>{{ object }}</strong>. This will permanently remove it from your site. Are you sure you want to continue?{% endblocktrans %}</p>
+
+			<form action="" method="post">
+				{% csrf_token %}
+				<div class="buttons">
+					<button type="submit">{% trans "Delete" %}</button>
+					{% block cancel_button %}
+						<a href="{% block cancel_url %}{% url 'admin:content:index' %}{% if object.parent %}?r={{ object.parent.pk }}{% endif %}{% endblock %}" class="button">{% trans "Cancel" %}</a>
+					{% endblock %}
+				</div>
+			</form>
+		{% else %}
+			<h2>{% trans "Error" %}</h2>
+
+			<p>{% blocktrans %}You are attempting to delete a {{ type }} which has children in the site hierarchy, which is not possible.{% endblocktrans %}</p>
+
+			<div class="buttons">
+				<a href="{% url 'admin:content:index' %}{% if object.parent %}?r={{ object.parent.pk }}{% endif %}" class="button">{% trans "Cancel" %}</a>
+			</div>
+		{% endif %}
+	{% endwith %}
+{% endblock %}
