@@ -49,4 +49,3 @@ matrix:
     - python: 3.5-dev
     - python: 3.6-dev
     - python: nightly
-    - env: DATABASE_URL=mysql://travis@localhost/travis
