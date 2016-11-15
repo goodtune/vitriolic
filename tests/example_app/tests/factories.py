@@ -13,7 +13,9 @@ class TestDateTimeFieldFactory(factory.DjangoModelFactory):
 
     datetime = factory.fuzzy.FuzzyDateTime(
         datetime.datetime(2013, 7, 15, tzinfo=timezone.utc),
-        datetime.datetime(2015, 6, 15, tzinfo=timezone.utc))
+        datetime.datetime(2015, 6, 15, tzinfo=timezone.utc),
+        force_microsecond=0,
+    )
 
 
 class RelativeFactory(factory.DjangoModelFactory):
