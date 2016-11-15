@@ -122,9 +122,18 @@ class TestTimezoneMiddleware(TestCase):
     """
 
     def test_set_timezone(self):
+        "Ensure time zone is correct before, during and after a set request"
+        self.assertEqual(
+            timezone.get_current_timezone_name(),
+            timezone.get_default_timezone_name())
+
         data = {
             'timezone': 'Australia/Sydney',
         }
         self.post('set-timezone', data=data, follow=True)
         self.assertResponseContains(
             '<option value="Australia/Sydney" selected>Sydney</option>')
+
+        self.assertEqual(
+            timezone.get_current_timezone_name(),
+            timezone.get_default_timezone_name())

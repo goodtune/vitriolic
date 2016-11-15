@@ -27,9 +27,19 @@ class ServedByMiddleware(object):
 
 
 class TimezoneMiddleware(object):
+
     def process_request(self, request):
         tzinfo = get_timezone_from_request(request)
         if tzinfo is not None:
-            logger.debug('Activating user timezone "{0}" '
-                         'for this request.'.format(tzinfo))
+            logger.debug(
+                'Activating user timezone "%s" for this request.', tzinfo)
+            request.tzinfo = tzinfo
             timezone.activate(tzinfo)
+
+    def process_response(self, request, response):
+        if hasattr(request, 'tzinfo'):
+            logger.debug(
+                'Forcibly reset the timezone from "%s" back to "%s".',
+                request.tzinfo, timezone.get_default_timezone_name())
+            timezone.deactivate()
+        return response
