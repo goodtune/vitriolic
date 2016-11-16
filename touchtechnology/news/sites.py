@@ -1,13 +1,11 @@
 from dateutil.relativedelta import relativedelta
-
-from django.conf.urls import include, patterns, url
+from django.conf.urls import include, url
 from django.contrib.syndication.views import Feed
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed
 
 from touchtechnology.common.sites import Application
-
 from touchtechnology.news.app_settings import PAGINATE_BY
 from touchtechnology.news.decorators import (
     date_view,
@@ -31,52 +29,44 @@ class NewsSite(Application):
         super(NewsSite, self).__init__(name=name, app_name=app_name, **kwargs)
 
     def get_urls(self):
-        urls = patterns(
-            '',
+        urls = [
             url(r'^archive/$', self.archive_index, name='archive'),
-            url(r'^(?P<year>\d{4})/', include(patterns(
-                '',
+            url(r'^(?P<year>\d{4})/', include([
                 url(r'^$', self.archive_year, name='year'),
-                url(r'^(?P<month>[a-z]{3})/', include(patterns(
-                    '',
+                url(r'^(?P<month>[a-z]{3})/', include([
                     url(r'^$', self.archive_month, name='month'),
-                    url(r'^(?P<day>\d{1,2})/', include(patterns(
-                        '',
+                    url(r'^(?P<day>\d{1,2})/', include([
                         url(r'^$', self.archive_day, name='day'),
                         url(r'^(?P<slug>[^/]+)/$',
                             self.article, name='article'),
-                    ))),
-                ))),
-            ))),
-        )
+                    ])),
+                ])),
+            ])),
+        ]
 
-        feeds = patterns(
-            '',
-            (r'^feeds/', include(patterns(
-                '',
+        feeds = [
+            url(r'^feeds/', include([
                 url(r'^$', self.feeds, name='feeds'),
                 url(r'^(?P<format>(atom|rss))/$',
                     self.feed, name='feed'),
-            ))),
-        )
+            ])),
+        ]
 
         if self.kwargs:
-            urlpatterns = patterns(
-                '',
+            urlpatterns = [
                 url(r'^$', self.list_articles, kwargs=self.kwargs,
                     name='category-index'),
                 url(r'^', include(urls), kwargs=self.kwargs),
                 url(r'^', include(feeds)),
-            )
+            ]
         else:
-            urlpatterns = patterns(
-                '',
+            urlpatterns = [
                 url(r'^$', self.index, name='index'),
                 url(r'^', include(urls)),
                 url(r'^', include(feeds)),
                 url(r'^(?P<category>[-\w]+)/$', self.list_articles,
                     name='category-index'),
-            )
+            ]
 
         return urlpatterns
 

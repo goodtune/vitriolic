@@ -1,6 +1,6 @@
 import urlparse
 
-from django.conf.urls import include, patterns, url
+from django.conf.urls import include, url
 from django.utils.translation import ugettext_lazy as _
 
 from touchtechnology.admin.base import AdminComponent
@@ -8,7 +8,6 @@ from touchtechnology.admin.sites import site
 from touchtechnology.common.decorators import (
     staff_login_required_m,
 )
-
 from touchtechnology.news.forms import (
     ArticleForm,
     ArticleContentFormset,
@@ -25,14 +24,12 @@ class NewsAdminComponent(AdminComponent):
         super(NewsAdminComponent, self).__init__(app, name, app_name)
 
     def get_urls(self):
-        urlpatterns = patterns(
-            '',
+        urlpatterns = [
             url(r'^$', self.index, name='index'),
 
             # Article
 
-            (r'^article/', include(patterns(
-                '',
+            url(r'^article/', include([
                 url(r'^$', self.list_articles, name='list'),
                 url(r'^add/$', self.edit_article, name='add'),
                 url(r'^(?P<pk>\d+)/$', self.edit_article, name='edit'),
@@ -40,12 +37,11 @@ class NewsAdminComponent(AdminComponent):
                     self.delete_article, name='delete'),
                 url(r'^(?P<pk>\d+)/permission/$',
                     self.perms_article, name='perms'),
-            ), namespace='article')),
+            ], namespace='article')),
 
             # Category
 
-            (r'^category/', include(patterns(
-                '',
+            url(r'^category/', include([
                 url(r'^$', self.list_categories, name='list'),
                 url(r'^add/$', self.edit_category, name='add'),
                 url(r'^(?P<pk>\d+)/$', self.edit_category, name='edit'),
@@ -53,8 +49,8 @@ class NewsAdminComponent(AdminComponent):
                     self.delete_category, name='delete'),
                 url(r'^(?P<pk>\d+)/permission/$',
                     self.perms_category, name='perms'),
-            ), namespace='category')),
-        )
+            ], namespace='category')),
+        ]
         return urlpatterns
 
     def dropdowns(self):
