@@ -59,3 +59,23 @@ matrix:
     - python: 3.5-dev
     - python: 3.6-dev
     - python: nightly
+
+deploy:
+  provider: pypi
+  user: goodtune
+  password:
+    secure: |
+      tPWpk2rnhSOQGm/+5PBO4iDnCXDHCKcE7/MF22lxU1zjNyFyaufIclLkc2ntv+32Jxq99YA
+      56Va9FUQZXH3Gi1BzRzCDoaYsllAqN3uGAMJouaBWoL8xlNLnTBR91zpU1aWpNLnmeukPDQ
+      eYiZje9cpkwXRrb/wGOhllBIgKt12LlwA1EXnVofvZBqtPLIW1AGYCCJ95HqS+PaDUg1YOQ
+      8MTgZxTOSvl38XxAefHxQCjQ/p2XrmS+CkgToCnPEMbNBxY8cOtYlfYpIXG20MyPqgR3e8p
+      wSf0BA6/O0zOxQExnoRHU1pE3mOofLrj+5BYZcvAmTedkTXOluqf72I6y4Icioasuzh7+14
+      ZEDsJ/dpKejxHG2cG0jjZK5NgXtGDiC0K9IDzA909oxPw+nq8OPwhJW2ud4CvbN8QJf2W+t
+      Ox4vJJTRDZS2lC3J2pY72M5WCoo42FndHmItnOiNI92PplwKNYF5/Cb0IDgISMDF7eVwtnl
+      jyfQahCKW0Ftpvp6mYIrTnchqMgaXEVYXfhqF36/B2lFjJAvIVwtMr6DDzHJ8cAXHLCuMWd
+      p1bkCVZb0etYPzwLilWq67xnvWIX0dDLUQxQMAni80ixgOVaFpiYrTxGbJY9/oXAiKa03Hn
+      j4znrYWGqc5W562T1ovMWvWx/l3TGEWjYKZcXPd7uPag=
+  on:
+    branch: master
+    tags: true
+    repo: goodtune/vitriolic
