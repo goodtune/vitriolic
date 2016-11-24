@@ -1,0 +1,80 @@
+{% extends "tournamentcontrol/competition/admin/base.html" %}
+{% load i18n %}
+{% load common %}
+
+{% block content %}
+	{% if date %}
+		<h1>{% trans "Progress Teams" %} - {{ date|date }}</h1>
+	{% else %}
+		<h1>{% trans "Progress Teams" %} - {{ stage.division.title }} ({{ stage.title }})</h1>
+	{% endif %}
+
+	<form action="" method="post">
+		{% csrf_token %}
+		{% regroup formset.forms by instance.stage_group as pools %}
+		{{ formset.management_form }}
+		<div class="col-md-6">
+			<table class="table table-striped">
+				{% for forms in pools %}
+					<thead>
+						<tr>
+							<th colspan="2">{{ forms.grouper.title }}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{% for form in forms.list %}
+							<tr>
+								<td class="team">{{ form.instance.title }}{% field form.id %}</td>
+								<td>{% field form.team "" %}</td>
+							</tr>
+						{% empty %}
+							<tr>
+								<td colspan="2" class="no_results">{% trans "There are no matches that require progression." %}</td>
+							</tr>
+						{% endfor %}
+					</tbody>
+				{% endfor %}
+			</table>
+		</div>
+
+		<div class="col-md-6 hidden-sm hidden-xs">
+			<table class="table table-striped table-condensed">
+				{% for pool, ladder_summary in ladders.items %}
+					<thead>
+						<tr>
+							<th class="team">{{ pool.title }}</th>
+							<th>{% trans "+" context "ladder: points score (for)" %}</th>
+							<th>{% trans "-" context "ladder: points conceded (against)" %}</th>
+							<th>{% trans "+/-" context "ladder: difference (for-against)" %}</th>
+							<th class="percentage">%</th>
+							{% if stage.division.bonus_points_formula %}
+								<th>{% trans "BP" context "ladder: bonus points" %}</th>
+							{% endif %}
+							<th>{% trans "Pts" context "ladder: points" %}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{% for ladder in ladder_summary %}
+							<tr>
+								<td class="team {{ ladder.team.club.slug|cssify }}">{{ ladder.team.title }}</td>
+								<td>{{ ladder.score_for }}</td>
+								<td>{{ ladder.score_against }}</td>
+								<td>{{ ladder.difference|stringformat:"g" }}</td>
+								<td class="percentage">{{ ladder.percentage|stringformat:"g"|default:"&#8734;" }}</td>
+								{% if stage.division.bonus_points_formula %}
+									<td>{{ ladder.bonus_points }}</td>
+								{% endif %}
+								<td>{{ ladder.points|stringformat:"g" }}</td>
+							</tr>
+						{% endfor %}
+					</tbody>
+				{% endfor %}
+			</table>
+		</div>
+
+		<div class="buttons">
+			<button type="submit">{% trans "Save" %}</button>
+			<a class="button" href="{% url 'admin:competition:competition:season:division:stage:edit' competition.pk season.pk division.pk stage.pk %}">{% trans "Cancel" %}</a>
+		</div>
+	</form>
+{% endblock %}

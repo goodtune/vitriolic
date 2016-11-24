@@ -1,0 +1,64 @@
+/* layout */
+
+h1, h2, h3 {
+	margin: 0.3em 0 0.5em;
+}
+
+table, p#timestamp {
+	margin: 1em auto;
+	width: 800px;
+}
+
+table th, table td {
+	padding: 0.15em 0.25em;
+}
+
+	/* column widths */
+
+	table .time { width: 10%; }
+	table .division { width: 15%; }
+	table .play_at { width: 15%; }
+	table .team { width: 30%; }
+
+	/* rows */
+
+	table tbody tr {
+		border-top: 1px solid #e5e5e5;
+	}
+
+	table tbody tr.group {
+		border-top-color: #ccc;
+	}
+
+	table tbody tr:last-child {
+		border-bottom: 1px solid #ccc;
+	}
+
+/* style */
+
+h1 {
+	font-size: 150%;
+}
+
+h2 {
+	font-size: 130%;
+}
+
+h1, h2 {
+	text-align: center;
+}
+
+th {
+	font-weight: bold;
+}
+
+p#timestamp {
+	font-size: 85%;
+	font-style: italic;
+	text-align: right;
+}
+
+p#timestamp::before {
+	content: "Printed: ";
+	font-weight: bold;
+}

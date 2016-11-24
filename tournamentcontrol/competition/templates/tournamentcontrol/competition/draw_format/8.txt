@@ -1,0 +1,35 @@
+ROUND
+1: 1 vs 8
+2: 4 vs 5
+3: 2 vs 7
+4: 3 vs 6
+ROUND
+5: 1 vs 4
+6: 5 vs 8
+7: 2 vs 3
+8: 6 vs 7
+ROUND
+9: 1 vs 5
+10: 4 vs 8
+11: 2 vs 6
+12: 3 vs 7
+ROUND
+13: 1 vs 2
+14: 4 vs 3
+15: 5 vs 6
+16: 8 vs 7
+ROUND
+17: 1 vs 3
+18: 4 vs 2
+19: 5 vs 7
+20: 8 vs 6
+ROUND
+21: 1 vs 6
+22: 4 vs 7
+23: 5 vs 2
+24: 8 vs 3
+ROUND
+25: 1 vs 7
+26: 4 vs 6
+27: 5 vs 3
+28: 8 vs 2

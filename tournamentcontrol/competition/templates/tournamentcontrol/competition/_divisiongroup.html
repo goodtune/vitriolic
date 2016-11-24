@@ -1,0 +1,11 @@
+{% extends "tournamentcontrol/competition/division.html" %}
+{% load i18n %}
+
+{% block page_title %}{{ block.super }} - {% trans stage.title %} - {% trans pool.title %}{% endblock %}
+
+{% block heading %}
+	{{ block.super }}
+	{% if stage %}
+		<h3>{% trans stage.title %}</h3>
+	{% endif %}
+{% endblock %}

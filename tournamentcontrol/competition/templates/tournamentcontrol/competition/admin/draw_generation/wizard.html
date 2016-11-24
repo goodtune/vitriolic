@@ -1,0 +1,16 @@
+{% extends "touchtechnology/admin/edit.html" %}
+{% load common %}
+
+{% block form-fieldset %}
+	{{ wizard.management_form }}
+	{{ wizard.form.management_form }}
+
+	{% for form in wizard.form %}
+		<fieldset>
+			<legend>{{ form.instance.descriptor|default:form.instance }}</legend>
+			{% for f in form %}
+				{% field f %}
+			{% endfor %}
+		</fieldset>
+	{% endfor %}
+{% endblock %}

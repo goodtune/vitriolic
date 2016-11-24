@@ -1,0 +1,58 @@
+{% extends "touchtechnology/admin/edit.html" %}
+{% load i18n %}
+{% load common %}
+
+{% block content %}
+	<div class="modal modal-styled fade in undo" id="undoModal_stage" tabindex="-1" role="dialog" aria-labelledby="undoModalLabel" aria-hidden="true">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close">
+						<span aria-hidden="true">&times;</span>
+					</button>
+					<h4 class="modal-title" id="undoModalLabel_stage }}">{% trans "Undo" %}</h4>
+				</div>
+	
+				<form id="list-inc-modal" method="post">
+					{% csrf_token %}
+	
+					<div class="modal-body">
+						<h4>{% trans "Warning" %}</h4>
+
+						{% block undo-warning %}
+							<p>{% blocktrans %}You are about to undo the stage <strong>OBJECT</strong>.{% endblocktrans %}</p>
+							<p>{% trans "This will irreversibly remove those related matches from the site." %}</p>
+							<p>{% trans "Are you certain that you wish to continue?" %}</p>
+						{% endblock undo-warning %}
+					</div>
+
+					<div class="modal-footer">
+						<button type="button" class="btn btn-default" data-dismiss="modal">{% trans "Cancel" %}</button>
+						<button type="submit" class="btn btn-primary">{% trans "Undo" %} {% trans "stage" %}</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+
+	{{ block.super }}
+{% endblock %}
+
+{% block extrajs %}
+	{{ block.super }}
+
+	<!-- "tournamentcontrol/competition/admin/division/edit.html" -->
+	<script type="text/javascript">
+		$('a[data-target^=#undoModal]').attr('href', '#')
+
+		$('.modal.undo').on('show.bs.modal', function (event) {
+			var button = $(event.relatedTarget)
+			var title = button.data('title')
+			var action = button.data('action')
+			var modal = $(this)
+			modal.find('.modal-title').text('Undo ' + title)
+			modal.find('.modal-body strong').text(title)
+			modal.find('form').attr('action', action)
+		})
+	</script>
+{% endblock %}

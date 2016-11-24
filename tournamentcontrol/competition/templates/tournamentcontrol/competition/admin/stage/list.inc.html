@@ -1,0 +1,31 @@
+{% extends "mvp/list.split.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	{{ block.super }}
+	<th>{% trans "Short title" %}</th>
+	<th>{% trans "Importance" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td>{{ obj.short_title|default:"-" }}</td>
+	<td>{{ obj.get_rank_importance|default:"-" }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}
+
+{% block row-buttons-extra %}
+	{% if obj.matches.exists %}
+		{% url 'admin:fixja:competition:season:division:stage:draw:undo' competition.pk season.pk division.pk obj.pk as undo_url %}
+		<a class="btn btn-default btn-sm" role="button" href="{{ undo_url }}" data-toggle="modal" data-target="#undoModal_stage" data-action="{{ undo_url }}" data-title="{{ obj }}">
+			<i class="fa fa-eject"></i>
+			&nbsp;{% trans "Undo" %} <span class="badge">{{ obj.matches.count }}</span>
+		</a>
+	{% else %}
+		<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:competition:season:division:stage:draw:build' competition.pk season.pk division.pk obj.pk %}" role="button">
+			<i class="fa fa-play"></i>
+			&nbsp;{% trans "Build" %}
+		</a>
+	{% endif %}
+{% endblock %}

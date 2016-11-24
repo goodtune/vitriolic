@@ -89,19 +89,24 @@ def related(instance, whitelist=None):
     ]
 
     for ro in related_objects:
-        name = ro.get_accessor_name()
-
         skip_log = 'filter="related", field="%s", reason="%s"'
+        try:
+            name = ro.get_accessor_name()
+        except AttributeError as e:
+            logger.debug(skip_log, name, e)
+            continue
+
         if whitelist is not None and name not in rel:
             logger.debug(skip_log, name, 'not in whitelist')
             continue
+
         if isinstance(ro.field, models.ManyToManyField):
             logger.debug(skip_log, name, 'm2m')
             continue
 
         rel[name] = getattr(instance, name)
 
-    for name, manager in rel.items():
+    for name, manager in rel.iteritems():
         yield (manager, name)
 
 

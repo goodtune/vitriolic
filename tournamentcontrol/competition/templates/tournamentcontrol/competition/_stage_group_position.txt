@@ -1,0 +1,1 @@
+{% load humanize %}{{ position|ordinal }} {% if stage.preceeds.count > 1 %}{{ stage.short_title|default:stage.title }}{% endif %} {% if group %}{{ group.title|safe }}{% endif %}

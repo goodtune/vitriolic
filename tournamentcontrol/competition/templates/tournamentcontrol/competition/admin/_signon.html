@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+{% load i18n static %}
+{% load common competition %}
+<head>
+	<title>{% trans "Sign-on Sheet" %}</title>
+
+	<link rel="stylesheet" type="text/css" media="print" href="http://yui.yahooapis.com/3.17.2/build/cssreset-context/cssreset-context-min.css">
+	<link rel="stylesheet" type="text/css" media="print" href="http://yui.yahooapis.com/3.17.2/build/cssbase-context/cssbase-context-min.css">
+	<link rel="stylesheet" href="{% get_static_prefix %}tournamentcontrol/competition/css/vi_signon.css" />
+
+	<meta name="author" content="{% block meta_author %}{{ site.name }}{% endblock %}" />
+	<meta name="subject" content="{% block meta_subject %}{% endblock %}" />
+	<meta name="keywords" content="{% block meta_keywords %}{% endblock %}" />
+	<meta name="date" content="{% block meta_date %}{% now "c" %}{% endblock %}" />
+</head>
+
+<body class="yui3-cssreset yui3-cssbase">
+	{% trans "TBA" as tba context "abbreviation: to be advised" %}
+	{% trans "TBC" as tbc context "abbreviation: to be confirmed" %}
+	
+	{% for match in matches %}
+		<div class="signon">
+			<table>
+				<thead>
+					<tr>
+						<th class="date">{{ match.date|date:"jS M Y"|default:tba }}</th>
+						<th class="time">{{ match.time|time:"G:i"|default:tbc }}</th>
+						<th class="field">{{ match.play_at.title|htmlentities }}</th>
+						<th class="division">
+							{{ match.stage.division.title|htmlentities }}<br>
+							{{ match.stage.title|htmlentities }}
+						</th>
+					</tr>
+					<tr>
+						<th colspan="2" class="team">{{ match.get_home_team.title|htmlentities }}</th>
+						<th colspan="2" class="team">{{ match.get_away_team.title|htmlentities }}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% with p1=match.get_home_team|players:14 p2=match.get_away_team|players:14 %}
+						{% for home, away in p1|pair:p2 %}
+							<tr>
+								<td>
+									{% if home %}
+										{{ home.person.first_name|htmlentities }} {{ home.person.last_name|htmlentities }}
+									{% else %}
+										&nbsp;
+									{% endif %}
+								</td>
+								<td></td>
+								<td>
+									{% if away %}
+										{{ away.person.first_name|htmlentities }} {{ away.person.last_name|htmlentities }}
+									{% else %}
+										&nbsp;
+									{% endif %}
+								</td>
+								<td></td>
+							</tr>
+						{% endfor %}
+					{% endwith %}
+				</tbody>
+			</table>
+		</div>
+	{% endfor %}
+</body>
+</html>

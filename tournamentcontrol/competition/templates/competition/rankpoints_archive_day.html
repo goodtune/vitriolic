@@ -1,0 +1,23 @@
+{% extends "competition/rankpoints_base.html" %}
+{% load i18n %}
+
+{% block content %}
+	{% trans "Ranking" as title %}
+	<h1>{{ node|default:title }}</h1>
+
+	<h2>{{ day|date:"jS F Y" }}</h2>
+
+	<div class="cms">
+		{% for content in node.contents.all %}
+			<div>
+				{{ content.copy|safe }}
+			</div>
+		{% endfor %}
+	</div>
+
+	<ul>
+		{% for division, slug in division_list %}
+			<li><a href="{% url 'ranking:rank' year=day.year month=day|date:"b" day=day|date:"j" slug=slug %}">{{ division }}</a></li>
+		{% endfor %}
+	</ul>
+{% endblock %}

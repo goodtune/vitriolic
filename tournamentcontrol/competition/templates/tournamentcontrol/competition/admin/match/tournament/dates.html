@@ -1,0 +1,8 @@
+{% extends "tournamentcontrol/competition/admin/match/dates.html" %}
+{% load i18n %}
+
+{% block buttons %}
+	<div class="buttons">
+		<a class="button right" href="{% url 'admin:competition:match-grid' competition.pk season.pk "pdf" %}">{% trans "Grid" %}</a>
+	</div>
+{% endblock %}

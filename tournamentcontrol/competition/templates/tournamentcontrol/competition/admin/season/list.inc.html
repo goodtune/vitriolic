@@ -1,0 +1,40 @@
+{% extends "mvp/list.split.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	{{ block.super }}
+	<th class="hidden-sm hidden-xs">{% trans "Mode" %}</th>
+	<th class="hidden-sm hidden-xs">{% trans "Start Date" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td class="hidden-sm hidden-xs">{{ obj.get_mode_display }}</td>
+	<td class="hidden-sm hidden-xs">{{ obj.start_date }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}
+
+{% block row-buttons-extra %}
+	<a class="btn btn-default btn-sm" href="#" role="button">
+		<i class="fa fa-star-o text-warning"></i>
+		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Favourite" %}</span>
+	</a>
+<!--
+	<a class="btn btn-default btn-sm active" href="#" role="button">
+		<i class="fa fa-star text-warning"></i>
+		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Favourite" %}</span>
+	</a>
+-->
+	<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:season-report' obj.competition.pk obj.pk %}" role="button">
+		<i class="fa fa-paperclip"></i>
+		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Report" %}</span>
+	</a>	<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:season-summary' obj.competition.pk obj.pk %}" role="button">
+		<i class="fa fa-certificate"></i>
+		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Registrations" %}</span>
+	</a>
+	<a class="btn btn-default btn-sm" href="{{ obj.urls.edit }}#schedule-tab" role="button">
+		<i class="fa fa-clock-o"></i>
+		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Schedule" %}</span>
+	</a>
+{% endblock %}

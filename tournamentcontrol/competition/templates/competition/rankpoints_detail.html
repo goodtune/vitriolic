@@ -1,0 +1,28 @@
+{% extends "competition/rankpoints_base.html" %}
+{% load i18n %}
+
+{% block content %}
+	{% trans "Ranking" as title %}
+	<h1>{{ node|default:title }}</h1>
+
+	<h2>{{ object }}</h2>
+	<h3>{{ day|date:"jS F Y" }}</h3>
+
+	<div class="cms">
+		{% for content in node.contents.all %}
+			<div>
+				{{ content.copy|safe }}
+			</div>
+		{% endfor %}
+	</div>
+
+	<table>
+		{% for rank in object_list %}
+			<tr>
+				<td>{% ifchanged forloop.counter %}{{ forloop.counter }}{% else %}={% endifchanged %}</td>
+				<td>{{ rank.team.club.title }}</td>
+				<td>{{ rank.points }}</td>
+			</tr>
+		{% endfor %}
+	</table>
+{% endblock %}

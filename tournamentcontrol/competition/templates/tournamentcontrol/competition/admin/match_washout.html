@@ -1,0 +1,50 @@
+{% extends "touchtechnology/admin/edit.html" %}
+{% load i18n %}
+
+{% block content %}
+	<form class="form-horizontal" action="" method="post">
+		<div class="heading-block">
+			<h3>{% trans "Wet weather" %}</h3>
+		</div>
+
+		{% csrf_token %}
+
+		{{ formset.management_form }}
+
+		{% regroup formset.forms by instance.stage.division as grouped %}
+
+		<div class="tab-pane active" id="washout-tab">
+			<p>{% blocktrans %}Mark all matches that have been cancelled due to ground closures.{% endblocktrans %}</p>
+
+			{% for group in grouped %}
+				<fieldset>
+					<legend>{{ group.grouper }}</legend>
+
+					{% for form in group.list %}
+						{% with match=form.instance %}
+							{% with home=match.get_home_team away=match.get_away_team %}
+								<div class="col-sm-6">
+									{{ form.id }}
+									<div class="form-group">
+										<label class="control-label col-md-7">{{ match|safe }}</label>
+										<div class="col-md-5">
+											{{ form.is_washout }}
+										</div>
+									</div>
+								</div>
+							{% endwith %}
+						{% endwith %}
+					{% endfor %}
+				</fieldset>
+			{% endfor %}
+		</div>
+		<div class="clearfix"></div>
+
+		<div class="form-group">
+			<div class="text-center">
+				<button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
+				&nbsp;<a class="btn btn-default" href="{{ season.urls.edit }}">{% trans "Cancel" %}</a>
+			</div> <!-- /.col -->
+		</div>
+	</form>
+{% endblock %}

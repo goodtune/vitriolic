@@ -1,0 +1,25 @@
+{% extends "mvp/list.split.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	{{ block.super }}
+	<th>{% trans "Short title" %}</th>
+	<th>{% trans "Rank" %}</th>
+	<th>{% trans "Importance" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td>{{ obj.short_title|default:"-" }}</td>
+	<td>{{ obj.get_rank_division|default:"-" }}</td>
+	<td>{{ obj.get_rank_importance|default:"-" }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}5{% endblock %}
+
+{% block row-buttons-extra %}
+		<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:competition:season:division:scorers' competition.pk season.pk obj.pk %}" role="button">
+			<i class="fa fa-bar-chart"></i>
+			&nbsp;{% trans "Leaders" %}
+		</a>
+{% endblock %}

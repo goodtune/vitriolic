@@ -1,0 +1,48 @@
+{% extends "mvp/list.split.inc.html" %}
+{% load i18n %}
+{% load competition %}
+
+{% block table-headings %}
+	<th>{% trans "Name" %}</th>
+	<th>{% trans "Age" %}</th>
+	<th>{% trans "Played" %}</th>
+	<th class="hidden-xs">{% trans "Scored" %}</th>
+	<th class="hidden-xs hidden-sm">{% trans "Debut" %}</td>
+{% endblock %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td>{{ obj.age|default_if_none:"-" }}</td>
+	<td data-order="{{ obj.stats.played|default_if_none:0 }}">{{ obj.stats.played|default_if_none:"-" }} / {{ obj.teams.count }}</td>
+	<td class="hidden-xs" data-order="{{ obj.stats.points|default_if_none:0 }}">{{ obj.stats.points|default_if_none:"-" }}</td>
+	{% with appearance=obj.statistics.played.earliest links=obj.teams.count %}
+		<td class="hidden-xs hidden-sm" data-order="{{ appearance.match.datetime|date:"U" }}">
+			{% if appearance.team %}
+				{{ appearance.match.date }}
+			{% else %}
+				-
+			{% endif %}
+		</td>
+	{% endwith %}
+{% endblock %}
+
+{% block row-buttons-items %}
+	<li role="presentation">
+		<a role="button" href="{% url 'admin:fixja:club:person:merge' club.pk obj.pk %}">
+			<i class="fa fa-code-fork fa-fw"></i>
+			{% trans "Merge" %}
+		</a>
+	</li>
+	{{ block.super }}
+{% endblock %}
+
+{% block row-buttons-extra %}
+	{% if obj.user %}
+		<a class="btn btn-default btn-sm" role="button" href="{% url 'admin:auth:users:edit' obj.user.pk %}">
+			<i class="fa fa-user"></i>
+			<span class="hidden-xs">&nbsp;{% trans "User" %}</span>
+		</a>
+	{% endif %}
+{% endblock %}
+
+{% block empty-row-colspan %}6{% endblock %}

@@ -1,0 +1,12 @@
+{% load i18n %}
+{% load common %}
+<td class="team {{ opponent.club.slug|cssify }}">
+	{% if opponent.slug %}
+		{% url 'competition:team' competition=competition.slug season=season.slug division=division.slug team=opponent.slug as url1 %}
+		{% url 'competition:team' season=season.slug division=division.slug team=opponent.slug as url2 %}
+		{% url 'competition:team' division=division.slug team=opponent.slug as url3 %}
+		<a href="{{ url1|default:url2|default:url3 }}">{% trans opponent.title %}</a>
+	{% else %}
+		{% trans opponent.title %}
+	{% endif %}
+</td>

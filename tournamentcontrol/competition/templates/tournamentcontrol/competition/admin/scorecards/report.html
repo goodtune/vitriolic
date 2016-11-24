@@ -1,0 +1,28 @@
+{% extends "tournamentcontrol/competition/admin/base.html" %}
+{% load i18n common %}
+
+{% block main_content %}
+<div class="box">
+	<h1>{% blocktrans with step=wizard.steps.step1 count=wizard.steps.count %}Produce Scorecards: Step {{ step }} of {{ count }}{% endblocktrans %}</h1>
+
+	{% if wizard.form.non_field_errors %}
+		{{ wizard.form.non_field_errors }}
+	{% endif %}
+
+	<form action="" method="post">{% csrf_token %}
+		{{ wizard.management_form }}
+		<fieldset>
+			{% for f in wizard.form %}
+				{% field f %}
+			{% endfor %}
+		</fieldset>
+
+		<div class="buttons">
+			<button class="default" type="submit">{% if wizard.steps.current == wizard.steps.last %}{% trans "Generate" %}{% else %}{% trans "Next" %}{% endif %}</button>
+			{% if wizard.steps.prev %}
+				<button name="wizard_prev_step" value="{{ wizard.steps.prev }}">{% trans "Back" %}</button>
+			{% endif %}
+		</div>
+	</form>
+</div>
+{% endblock %}

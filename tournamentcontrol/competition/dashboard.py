@@ -1,0 +1,278 @@
+import collections
+import operator
+
+from django.conf import settings
+from django.db.models import Count, Q
+from django.utils import timezone
+from django.utils.functional import lazy
+from django.utils.translation import ugettext_lazy as _
+from touchtechnology.admin.base import DashboardWidget
+
+from tournamentcontrol.competition.models import Match, Stage, Team
+from tournamentcontrol.competition.utils import (
+    legitimate_bye_match,
+    team_needs_progressing,
+)
+
+
+def matches_require_basic_results(now=None):
+    if now is None:
+        now = timezone.now()
+        now = now.replace(second=0, microsecond=0)
+
+    if settings.USE_TZ and timezone.is_naive(now):
+        timezone.make_aware(now, timezone.get_default_timezone())
+
+    # All matches must happen either today or in the past
+    matches = Match.objects.filter(date__lte=now.date())
+
+    # We want games with no score, or byes that have not been processed.
+    # Do not include any matches that have been marked as a washout.
+    base = Q(home_team_score__isnull=True, away_team_score__isnull=True)
+    bye_kwargs = matches.filter(is_bye=True, bye_processed=False) \
+                        .values('stage', 'round')
+    no_score_or_byes = reduce(operator.or_,
+                              map(lambda kw: Q(**kw), bye_kwargs), base)
+
+    matches = matches.filter(no_score_or_byes)
+    matches = matches.exclude(is_bye=True, bye_processed=True)
+    matches = matches.exclude(is_washout=True)
+    matches = matches.filter(
+        Q(home_team__isnull=False) | Q(away_team__isnull=False))
+
+    past_days = matches.filter(date__lt=now.date())
+    earlier_today = matches.filter(datetime__lte=now)
+    matches = past_days | earlier_today
+
+    return matches.select_related('home_team', 'away_team')
+
+
+def matches_require_details_results():
+    matches = Match.objects.exclude(home_team_score__isnull=True,
+                                    away_team_score__isnull=True) \
+                           .filter(stage__division__season__statistics=True,
+                                   statistics__isnull=True)
+    return matches
+
+
+def matches_require_progression():
+    matches = Match.objects.filter(team_needs_progressing) \
+                           .exclude(legitimate_bye_match)
+    matches = matches.order_by('stage__division', 'stage')
+
+    return matches
+
+
+def matches_progression_possible():
+    matches = matches_require_progression()
+
+    # cache which stages have all their matches played or byes marked played
+    stages = Stage.objects.filter(matches__in=matches).distinct()
+    score_entered = Q(home_team_score__isnull=False, away_team_score__isnull=False)
+    played_bye = Q(is_bye=True, bye_processed=True)
+    is_washout = Q(is_washout=True)
+    _stage_cache = {}
+    for stage in stages:
+        f = stage.comes_after
+        try:
+            _stage_cache[stage.pk] = f.matches.exclude(score_entered | played_bye | is_washout).count()
+        except AttributeError:
+            _stage_cache[stage.pk] = 0
+
+    def _can_evaluate(match):
+        """
+        If we can actually evaluate a Team instance for assignment into
+        the `home_team` OR `away_team` field, then this is a match we
+        want to know about. Not possible to do directly in a QuerySet as
+        there is too much logic on the models, so we need to attempt this
+        for every match that could possibly be progressed.
+        """
+        # If there are any unplayed or unprocessed matches in the preceding
+        # stage, then we do not want to consider this match as viable for
+        # progression.
+        if _stage_cache[match.stage_id]:
+            return False
+
+        # If the home or away team can be determined we would want to progress
+        # the match. This should only catch Px, GxPx, Wx, Lx - for
+        # UndecidedTeam cases we need to catch them all together.
+        home_team, away_team = match.eval()
+        if match.home_team is None and isinstance(home_team, Team):
+            return True
+        elif match.away_team is None and isinstance(away_team, Team):
+            return True
+
+        if match.stage.undecided_teams.exists() and _stage_cache[match.stage_id] == 0:
+            return True
+
+        return False
+
+    matches = filter(_can_evaluate, matches)
+
+    return matches
+
+
+def stages_require_progression():
+    matches = matches_progression_possible()
+
+    # Turn the list of matches with progressions into a nested OrderedDict
+    # for use in the template. Use of OrderedDict means our ordering set
+    # above will not be lost.
+    stages = collections.OrderedDict()
+    for m in matches:
+        stages.setdefault(m.stage.division, collections.OrderedDict()).setdefault(m.stage, []).append(m)
+
+    return stages
+
+lazy_stages_require_progression = lazy(stages_require_progression, dict)
+
+
+#
+# Dashboard Widgets
+#
+
+class BasicResultWidget(DashboardWidget):
+    verbose_name = _('Awaiting Scores')
+    template = 'tournamentcontrol/competition/admin/widgets/results/basic.html'
+
+    def _get_context(self):
+        matches = matches_require_basic_results()
+        matches = matches.order_by('date', 'time')
+
+        dates = matches.values_list('stage__division__season__competition', 'stage__division__season', 'date').distinct()
+        times = matches.values_list('stage__division__season__competition', 'stage__division__season', 'date', 'time').distinct()
+
+        # Construct an interim data structure
+        data = collections.OrderedDict()
+        for competition, season, date, time in times:
+            key = (competition, season, date)
+            data.setdefault(key, []).append(time)
+
+        # Remove any None values from the list of times if there are any
+        # real times in the list. If not, we'll keep it so our template
+        # can iterate the "loop" at least once.
+        dates_times = []
+        for key, time_list in data.items():
+            if filter(None, time_list) and None in time_list:
+                time_list.remove(None)
+            for time in time_list:
+                dates_times.append(key + (time,))
+
+        context = {
+            'matches': matches,
+            'dates': dates,
+            'dates_times': dates_times,
+        }
+        return context
+
+
+class ProgressStageWidget(DashboardWidget):
+    verbose_name = _('Progress Teams')
+    template = \
+        'tournamentcontrol/competition/admin/widgets/progress/stages.html'
+
+    def _get_context(self):
+        stages = lazy_stages_require_progression()
+
+        context = {
+            'stages': stages,
+        }
+        return context
+
+
+class DetailResultWidget(DashboardWidget):
+    verbose_name = _('Awaiting Detailed Results')
+    template = \
+        'tournamentcontrol/competition/admin/widgets/results/detailed.html'
+
+    @classmethod
+    def show(cls):
+        matches = matches_require_details_results()
+        return bool(matches.count())
+
+    @property
+    def matches(self):
+        if not hasattr(self, '_matches'):
+            self._matches = matches_require_details_results()
+        return self._matches
+
+    def _get_context(self):
+        context = {
+            'matches': self.matches,
+        }
+        return context
+
+
+class MostValuableWidget(DashboardWidget):
+    verbose_name = _('Awaiting MVP Points')
+    template = \
+        'tournamentcontrol/competition/admin/widgets/results/detailed.html'
+
+    @property
+    def matches(self):
+        sql = """
+            SELECT DISTINCT
+                m.id, m.home_team_id, m.away_team_id, m.stage_id, m.date,
+                m.datetime, m.label, m.round
+            FROM
+                competition_simplescorematchstatistic s
+            JOIN
+                competition_teamassociation t ON (s.player_id = t.person_id)
+            JOIN
+                  competition_match m
+                ON (
+                    m.id = s.match_id
+                  AND (
+                      m.home_team_id = t.team_id
+                    OR
+                      m.away_team_id = t.team_id
+                  )
+                )
+            JOIN
+                competition_stage g ON (m.stage_id = g.id)
+            JOIN
+                competition_division d ON (g.division_id = d.id)
+            JOIN
+                competition_season se ON (d.season_id = se.id)
+            WHERE
+                  t.is_player
+                AND
+                  g.keep_mvp
+                AND
+                  (NOT se.complete OR se.mvp_results_public IS NULL)
+            GROUP BY
+                m.id, team_id, m.home_team_id, m.away_team_id, m.stage_id,
+                m.date, m.datetime, m.label, m.round
+            HAVING
+                SUM(mvp) < %s
+        """
+        # FIXME should not be a static value
+        return Match.objects.raw(sql, params=(1,))
+
+    def _get_context(self):
+        context = {
+            'matches': self.matches,
+        }
+        return context
+
+
+class ScoresheetWidget(DashboardWidget):
+    verbose_name = _('Season Reports')
+    template = 'tournamentcontrol/competition/admin/widgets/scoresheets.html'
+
+    def _get_context(self):
+        stages = Stage.objects.annotate(p=Count('matches_needing_printing')) \
+                              .filter(p__gt=0)
+        context = {
+            'stages': stages,
+        }
+        return context
+
+
+class ReportWidget(DashboardWidget):
+    verbose_name = _('Reports')
+    template = 'tournamentcontrol/competition/admin/widgets/reports.html'
+
+    def _get_context(self):
+        context = {}
+        return context

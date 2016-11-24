@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+{% load static %}
+{% load common content %}
+<head>
+	<title>Registration Forms - {{ competition.title }} {{ season.title }} ({{ club.title }})</title>
+
+	<base href="http://{{ site.domain }}/" />
+
+	<link rel="stylesheet" type="text/css" media="print" href="http://yui.yahooapis.com/3.17.2/build/cssreset-context/cssreset-context-min.css">
+	<link rel="stylesheet" type="text/css" media="print" href="http://yui.yahooapis.com/3.17.2/build/cssbase-context/cssbase-context-min.css">
+
+	<style type="text/css" media="print">
+		@page {
+			size: A4 landscape;
+			margin: 1cm 1cm 3cm;
+			position: relative;
+		}
+
+		body {
+			font-family: Arial;
+		}
+
+		td, th {
+			padding: 6px;
+			text-align: left;
+		}
+
+		.logos {
+			position: absolute;
+		}
+
+		.team,
+		.division,
+		.players,
+		.staff {
+			font-size: 10pt;
+			position: absolute;
+		}
+
+		.team,
+		.division {
+			font-size: 16pt;
+			left: 10cm;
+		}
+
+		.team {
+			top: 1cm;
+		}
+
+		.division {
+			page-break-before: always;
+		}
+
+		.staff {
+			right: 0;
+			top: 0;
+		}
+
+		.players {
+			top: 4cm;
+			width: 100%;
+		}
+
+		.players td:nth-child(1) { text-align: center; width: 1cm; }
+		.players td:nth-child(2),
+		.players td:nth-child(3) {
+			width: 5cm;
+		}
+		.players td:nth-child(4) { text-align: center; width: 3cm; }
+		.players td:last-child { width: 6cm; }
+
+		.staff th { vertical-align: top; width: 4cm; }
+		.staff td { width: 5cm; }
+	</style>
+</head>
+<body class="yui3-cssreset yui3-cssbase">
+
+{% chunk "registration-form-disclaimer" %}
+
+{% for team, data in teams.items %}
+	<div class="division">{{ team.division.title }}</div>
+
+	<div class="team">{{ team.title }}</div>
+
+	{% block logos_outer %}
+		<div class="logos">
+			{% block logos_img %}
+				<img src="{% get_static_prefix %}img/logo-horizontal.png" alt="{{ site.name }}" />
+			{% endblock %}
+		</div>
+	{% endblock %}
+
+	<table class="staff">
+		<tbody>
+			{% for role, people in data.staff.items %}
+				{% for first_name, last_name, date_of_birth, email in people %}
+					<tr>
+						{% if forloop.first %}
+							<th rowspan="{{ people|length }}">{{ role }}</th>
+						{% endif %}
+						<td>{{ first_name|htmlentities }} {{ last_name|htmlentities }}</td>
+					</tr>
+				{% endfor %}
+			{% endfor %}
+		</tbody>
+	</table>
+
+	<table class="players">
+		<thead>
+			<tr>
+				<th>No.</th>
+				<th>First name</th>
+				<th>Last name</th>
+				<th>Date of birth</th>
+				<th>Email address</th>
+				<th>Signature</th>
+			</tr>
+		</thead>
+
+		<tbody>
+			{% for number, first_name, last_name, date_of_birth, email in data.players %}
+				<tr>
+					<td>{{ number }}</td>
+					<td>{{ first_name|htmlentities }}</td>
+					<td>{{ last_name|htmlentities }}</td>
+					<td>{{ date_of_birth|date:"d/m/Y" }}</td>
+					<td>{{ email }}</td>
+					<td class="signature"></td>
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+{% endfor %}
+</body>
+</html>

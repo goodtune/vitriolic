@@ -1,0 +1,62 @@
+@page {
+	size: A2 landscape;
+	margin: 1cm;
+}
+
+body #grid {
+	font-family: Arial;
+}
+
+#grid {
+    page-break-inside: avoid;
+	width: 100%;
+}
+
+#grid thead,
+#grid tfoot {
+	background: #ccc;
+}
+
+#grid tbody .first td,
+#grid tbody .first th {
+	border-top-width: 3px;
+}
+
+#grid tbody .last td,
+#grid tbody .last th {
+	border-bottom-width: 3px;
+}
+
+#grid tbody th {
+	background: #eee;
+}
+
+#grid th {
+	width: 9%;
+}
+
+#grid td {
+	padding: 0;
+	text-align: center;
+	vertical-align: top;
+}
+
+#grid h1,
+#grid h2 {
+	text-align: center;
+}
+
+#grid h4,
+#grid h5 {
+	prince-bookmark-level: none;
+	margin: 3px 0;
+}
+
+#grid .match {
+	margin: 1px;
+	padding: 6px 3px;
+}
+
+#grid .match p {
+	margin: 0;
+}

@@ -1,0 +1,13 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+
+
+{% block table-headings %}
+	{{ block.super }}
+	<th>{% trans "Roles" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td>{{ obj.person }}</td>
+	<td>{% for role in obj.roles.all %}{{ role }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+{% endblock %}

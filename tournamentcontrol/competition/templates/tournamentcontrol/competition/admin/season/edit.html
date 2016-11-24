@@ -1,0 +1,85 @@
+{% extends "touchtechnology/admin/edit.html" %}
+{% load i18n %}
+
+{% block tab-links %}
+	{{ block.super }}
+
+	{% if object.pk %}
+		<li>
+			<a href={% if object.pk %}"#schedule-tab" data-toggle="tab"{% else %}"#"{% endif %}>
+				<i class="fa fa-chevron-right fa-fw"></i>
+				&nbsp;{% trans "Schedule" %}
+			</a>
+		</li>
+	{% endif %}
+{% endblock %}
+
+{% block tab-panes %}
+	{{ block.super }}
+
+	{% if object.pk %}
+		<div class="tab-pane" id="schedule-tab">
+			<div class="heading-block">
+				<h3>Schedule</h3>
+			</div>
+
+			<table class="table table-striped">
+				<thead>
+					<tr>
+						<th>{% trans "Date" %}</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for date in dates %}
+						<tr>
+							<td>
+								<a href="{% url 'admin:fixja:match-results' object.competition.pk object.pk date|date:"Ymd" %}" role="button">
+									{{ date }}
+								</a>
+							</td>
+							<td class="text-right">
+								<div class="btn-group" role="group" aria-label="...">
+									<a href="{% url 'admin:fixja:match-schedule' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
+										<i class="fa fa-asterisk fa-fw"></i>
+										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Allocate" %}</span>
+									</a>
+									<a href="{% url 'admin:fixja:match-results' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
+										<i class="fa fa-asterisk fa-fw"></i>
+										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Results" %}</span>
+									</a>
+									<a href="{% url 'admin:fixja:match-runsheet' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
+										<i class="fa fa-clock-o fa-fw"></i>
+										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Run Sheet" %}</span>
+									</a>
+									<a href="{% url 'admin:fixja:match-grid' object.competition.pk object.pk date|date:"Ymd" "pdf" %}" class="btn btn-default btn-sm" role="button">
+										<i class="fa fa-table fa-fw"></i>
+										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Matrix" %}</span>
+									</a>
+									<a href="{% url 'admin:competition:match-washout' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
+										<i class="fa fa-umbrella fa-fw"></i>
+										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Washout" %}</span>
+									</a>
+									<a href="{% url 'admin:fixja:scorecards' object.competition.pk object.pk date|date:"Ymd" "pdf" %}" class="btn btn-default btn-sm" role="button">
+										<i class="fa fa-print fa-fw"></i>
+										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Scorecards" %}</span>
+									</a>
+								</div>
+							</td>
+						</tr>
+					{% empty %}
+						<tr>
+							<td colspan="2">{% blocktrans %}No stages have been generated yet.{% endblocktrans %}</td>
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+
+			<div class="form-group">
+				<div class="text-center">
+					<a class="btn btn-default" href="{% url 'admin:fixja:competition:season:reschedule' competition.pk season.pk %}">{% trans "Reschedule" %}</a>
+				</div> <!-- /.col -->
+			</div>
+		</div>
+	{% endif %}
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+
+{% block table-columns %}
+	<td>
+		{% if change_perm in object_perms %}
+			<a href="{{ obj.urls.edit }}">{{ obj.date }}</a>
+		{% else %}
+			<span>{% block delete-data-title %}{{ obj.date }}{% endblock %}</span>
+		{% endif %}
+	</td>
+{% endblock %}

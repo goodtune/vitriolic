@@ -1,0 +1,15 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+{% load oembed_tags %}
+
+{% block table-headings %}
+	<th>{% trans "URL" %}</th>
+	<th>{% trans "Preview" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td>{% oembed 160x120 %}{{ obj.url }}{% endoembed %}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}3{% endblock %}

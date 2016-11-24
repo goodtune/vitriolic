@@ -1,0 +1,127 @@
+{% extends "touchtechnology/admin/edit.html" %}
+{% load i18n %}
+{% load common %}
+
+{% block tab-links %}
+	{% for form in match_formset.forms %}
+		{% with match=form.instance %}
+			{% ifchanged match.datetime %}
+				<li class="{% if forloop.first %}active{% endif %}">
+					<a href="#time-{{ match.datetime|date:"Hi" }}-tab" data-toggle="tab">
+						<i class="fa fa-chevron-right fa-fw"></i>
+						&nbsp;{{ match.datetime }}
+					</a>
+				</li>
+			{% endifchanged %}
+		{% endwith %}
+	{% endfor %}
+
+	{% if bye_formset.forms %}
+		<li>
+			<a href="#bye-tab" data-toggle="tab">
+				<i class="fa fa-chevron-right fa-fw"></i>
+				&nbsp;{% trans "Byes" %}
+			</a>
+		</li>
+	{% endif %}
+{% endblock %}
+
+{% block tab-panes %}
+	<div class="heading-block">
+		<h3>{% trans "Results" %}</h3>
+	</div>
+
+	{{ match_formset.management_form }}
+	{{ bye_formset.management_form }}
+
+	{% regroup match_formset.forms by instance.datetime as match_forms %}
+
+	{% for tab in match_forms %}
+		<div class="tab-pane {% if forloop.first %}active{% endif %}" id="time-{{ tab.grouper|date:"Hi" }}-tab">
+			{% for form in tab.list %}
+				{% with match=form.instance %}
+					{% with home=match.get_home_team away=match.get_away_team %}
+						<fieldset>
+							<legend>{{ match }}</legend>
+
+							{{ form.id }}
+
+							<div class="col-md-4 hidden-sm hidden-xs">
+								<div class="form-group">
+									<label class="control-label col-md-4">{% trans "Play at" %}</label>
+									<div class="col-md-8">
+										<p class="form-control-static">{{ match.play_at.title }}</p>
+									</div>
+								</div>
+								<div class="form-group">
+									<label class="control-label col-md-4">{% trans "Division" %}</label>
+									<div class="col-md-8">
+										<p class="form-control-static">{{ match.stage.division.title }}</p>
+									</div>
+								</div>
+							</div>
+
+							<div class="col-md-8 col-sm-6 col-xs-6">
+								{% if form.home_team_score %}
+									{% field form.home_team_score %}
+								{% endif %}
+							</div>
+							<div class="col-md-8 col-sm-6 col-xs-6">
+								{% if form.away_team_score %}
+									{% field form.away_team_score %}
+								{% endif %}
+							</div>
+
+							<div class="clearfix"></div>
+
+							{% if form.is_forfeit %}
+								<div class="col-md-8 col-md-offset-4 col-sm-6 col-sm-offset-0 col-xs-6">
+										{% field form.is_forfeit %}
+								</div>
+								<div class="col-md-8 col-md-offset-4 col-sm-6 col-xs-6">
+									{% field form.forfeit_winner %}
+								</div>
+							{% endif %}
+						</fieldset>
+					{% endwith %}
+				{% endwith %}
+			{% endfor %}
+		</div>
+	{% endfor %}
+
+	<div class="tab-pane" id="bye-tab">
+		<fieldset>
+			<legend>{% blocktrans %}Process byes for {{ date }}{% endblocktrans %}</legend>
+			<p>{% blocktrans %}Process byes to update the ladder as configured.{% endblocktrans %}</p>
+			{% for form in bye_formset.forms %}
+				{% with match=form.instance %}
+					{% with home=match.get_home_team away=match.get_away_team %}
+						{% with team=away|default:home %}
+							{{ form.id }}
+							<div class="col-md-6 col-sm-6">
+								<div class="form-group">
+									<label class="control-label col-md-6">{{ team }}</label>
+									<div class="col-md-6">
+										{{ form.bye_processed }}
+										<p class="help-block">
+											{{ match.stage.division.title }}
+										</p>
+									</div>
+								</div>
+							</div>
+						{% endwith %}
+					{% endwith %}
+				{% endwith %}
+			{% endfor %}
+		</fieldset>
+	</div>
+
+	<div class="clearfix"></div>
+
+	<div class="form-group">
+		<div class="text-center">
+			<button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
+			&nbsp;<a class="btn btn-default" href="{{ season.urls.edit }}">{% trans "Cancel" %}</a>
+		</div> <!-- /.col -->
+	</div>
+{% endblock %}

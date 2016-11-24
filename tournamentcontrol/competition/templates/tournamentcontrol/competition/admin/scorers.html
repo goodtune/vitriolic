@@ -1,0 +1,88 @@
+{% extends "touchtechnology/admin/base.html" %}
+{% load i18n %}
+
+{% block extracss %}
+	{{ block.super }}
+	<link rel="stylesheet" href="//cdn.datatables.net/1.10.12/css/dataTables.bootstrap.min.css">
+{% endblock %}
+
+{% block extrajs %}
+	{{ block.super }}
+	<script src="//cdn.datatables.net/1.10.12/js/jquery.dataTables.min.js"></script>
+	<script src="//cdn.datatables.net/1.10.12/js/dataTables.bootstrap.min.js"></script>
+	<script>
+		$(document).ready(function() {
+			$('table').DataTable({
+				order: [[3, 'desc']],
+				pagingType: 'full',
+				searching: false
+			});
+		} );
+	</script>
+{% endblock %}
+
+{% block content %}
+	<div class="heading-block">
+		<h3>{% trans "Division Leaders" %} <span class="pull-right">{{ division }}</span></h3>
+	</div>
+
+	<div class="row">
+		<div class="col-md-6 col-lg-6">
+			<h4>{% trans "Point Scorers" %}</h4>
+
+			<table class="table table-striped">
+				<thead>
+					<tr>
+						<th data-sortable="false">{% trans "Player" %}</th>
+						<th data-sortable="false">{% trans "Team" %}</th>
+						<th data-sortable="false">{% trans "Played" %}</th>
+						<th>{% trans "Points" %}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for person in scorers %}
+						<tr>
+							<td>{{ person.first_name }} {{ person.last_name }}</td>
+							<td>{{ person.team_title }}</td>
+							<td>{{ person.played|default:0 }}</td>
+							<td>{{ person.points|default:0 }}</td>
+						</tr>
+					{% empty %}
+						<tr class="first odd last">
+							<td colspan="3" class="no_results">{% trans "No points scored yet." %}</td>
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+
+		<div class="col-md-6 col-lg-6">
+			<h4>{% trans "Most Valuable Players" %}</h4>
+
+			<table class="table table-striped">
+				<thead>
+					<tr>
+						<th data-sortable="false">{% trans "Player" %}</th>
+						<th data-sortable="false">{% trans "Team" %}</th>
+						<th data-sortable="false">{% trans "Played" %}</th>
+						<th>{% trans "Points" %}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for person in mvp %}
+						<tr>
+							<td>{{ person.first_name }} {{ person.last_name }}</td>
+							<td>{{ person.team_title }}</td>
+							<td>{{ person.played|default:0 }}</td>
+							<td>{{ person.mvp|default:0 }}</td>
+						</tr>
+					{% empty %}
+						<tr class="first odd last">
+							<td colspan="3" class="no_results">{% trans "No points awarded yet." %}</td>
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</div>
+{% endblock %}

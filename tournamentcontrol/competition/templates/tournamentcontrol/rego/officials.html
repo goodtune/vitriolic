@@ -1,0 +1,15 @@
+{% extends "tournamentcontrol/competition/admin/_officials.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+	{{ block.super }}
+	<li><a href="{% url 'rego:club:list' %}">{% trans "Clubs" %}</a></li>
+	<li><a href="{% url 'rego:club:edit' club.pk %}">{{ club.title }}</a></li>
+	<li><a href="{% url 'rego:club-teams' club.pk %}">{% trans "Teams" %}</a></li>
+	<li><span>{% trans "Officials" %}</span></li>
+{% endblock %}
+
+{% block buttons %}
+	{{ block.super }}
+	<a class="button" href="{% url 'rego:club-teams' club.pk %}">{% trans "Cancel" %}</a>
+{% endblock %}

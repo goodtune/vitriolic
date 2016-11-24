@@ -1,0 +1,1 @@
+{% load competition %}{{ position }} {{ match.label }}

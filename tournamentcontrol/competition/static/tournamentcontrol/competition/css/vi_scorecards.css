@@ -1,0 +1,96 @@
+@page {
+	margin: 0.4cm 0;
+	size: 30cm 21cm;
+}
+
+.scorecard {
+	border: 2px solid;
+	float: left;
+	height: 8.7cm;
+	margin: 0.7cm 0.7cm;
+	padding: 0;
+	page-break-inside: avoid;
+	position: relative;
+	width: 13.5cm;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+thead th {
+	font-weight: normal;
+	padding: 3px;
+}
+
+thead tr:first-child th {
+	border-left: 0;
+	border-right: 0;
+    text-align: center;
+}
+
+.division {
+	font-weight: bold;
+}
+
+.team {
+	border-top-width: 2px;
+	border-left-width: 2px;
+	height: 0.5cm;
+    text-align: center;
+}
+
+td,
+th {
+	padding: 0;
+}
+
+td {
+	width: 10%;
+}
+
+tbody tr:first-child td {
+	border-top-width: 2px;
+}
+
+tbody tr:last-child td {
+	border-bottom-width: 2px;
+}
+
+tbody tr td:nth-child(6) {
+	border-left-width: 2px;
+}
+
+tbody tr td {
+	border: 1px solid;
+}
+
+.score {
+    border: 2px solid;
+	border-width: 2px;
+    border-left-width: 1px;
+	font-size: 90%;
+	font-style: italic;
+	padding: 5px;
+	vertical-align: top;
+}
+
+.captain {
+	border-bottom: 0;
+	font-size: 90%;
+	font-style: italic;
+	padding: 5px;
+	vertical-align: top;
+}
+
+.signature {
+	border-top: 0;
+	height: 2em;
+}
+
+.referees {
+    border-top: 2px solid;
+	font-size: 90%;
+	font-style: italic;
+	padding: 5px;
+}

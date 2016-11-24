@@ -1,0 +1,10 @@
+.field_wrapper .field.html5_number_widget input,
+.field_wrapper .field.select_date_widget input,
+.field_wrapper .field.select_date_time_widget input,
+.field_wrapper .field.select_date_widget select,
+.field_wrapper .field.select_date_time_widget select,
+.field_wrapper .field.select select,
+.field_wrapper .field.number_input input,
+.field_wrapper .field.text_input input {
+    width: 250px;
+}

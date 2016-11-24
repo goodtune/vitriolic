@@ -1,0 +1,115 @@
+{% extends "tournamentcontrol/competition/base.html" %}
+{% load cycle from future %}
+{% load i18n %}
+{% load common competition %}
+
+{% block body_class %}{{ block.super }} team{% endblock %}
+
+{% block page_title %}{% trans competition.title %} - {% trans season.title %} - {% trans division.title %} - {% trans team.title %}{% endblock %}
+
+{% block content %}
+	{% trans "TBA" as tba context "abbreviation: to be advised" %}
+	{% trans "TBC" as tbc context "abbreviation: to be confirmed" %}
+
+	{% block calendar %}
+		{% url 'competition:calendar' competition=competition.slug season=season.slug division=division.slug team=team.slug as url1 %}
+		{% url 'competition:calendar' season=season.slug division=division.slug team=team.slug as url2 %}
+		{% url 'competition:calendar' division=division.slug team=team.slug as url3 %}
+		<a class="calendar" title="Calendar"{% if debug %} target="_blank"{% endif %} href="{% if not debug %}webcal:{% endif %}//{{ request.get_host }}{{ url1|default:url2|default:url3 }}">&#128197;</a>
+	{% endblock %}
+
+	{% block heading %}
+		<h1>{% trans competition.title %} - {% trans season.title %}</h1>
+		<h2>{% trans division.title %}</h2>
+		<h3>{% trans team.title %}</h3>
+	{% endblock %}
+
+	<table class="team draw">
+		<thead>
+			<tr>
+				<th>{% trans "Date" %}</th>
+				<th>{% trans "Time" %}</th>
+				<th>{% trans "Venue" %}</th>
+				<th>{% trans "Opponent" %}</th>
+				<th>{% trans "Result" %}</th>
+				<th></th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for date, matches in team.matches_by_date.items %}
+			{% for match in matches %}
+				{% with home=match.get_home_team away=match.get_away_team %}
+					<tr class="{% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last{% endif %}">
+						<td class="date">{{ date }}</td>
+						<td class="time">{{ match.datetime|time|default:tba }}</td>
+						<td class="venue">{{ match.play_at.title|default:tba }}</td>
+						{% with match|opponent:team as opponent %}
+							{% include "tournamentcontrol/competition/_team_opponent.html" %}
+						{% endwith %}
+						<td>{% score match team %}</td>
+						{% if match.statistics.count %}
+							<td class="report">
+								{% url 'competition:match' competition=competition.slug season=season.slug division=division.slug match=match.pk as url1 %}
+								{% url 'competition:match' season=season.slug division=division.slug match=match.pk as url2 %}
+								{% url 'competition:match' division=division.slug match=match.pk as url3 %}
+								<a href="{{ url1|default:url2|default:url3 }}">{% trans "Detail" %}</a>
+							</td>
+						{% else %}
+							<td></td>
+						{% endif %}
+					</tr>
+				{% endwith %}
+			{% endfor %}
+			{% endfor %}
+		</tbody>
+	</table>
+
+	{% block statistics %}
+		{% if players.count %}
+			<h3>{% trans "Player Statistics" %}</h3>
+
+			<table id="players">
+				<thead>
+					<tr>
+						<th class="number">#</th>
+						<th class="player">{% trans "Players" %}</th>
+						<th class="statistic">{% trans "Played" %}</th>
+						<th class="statistic">{% trans "Scores" %}</th>
+						{% if not team.division.season.mvp_results_public|future %}
+							<th class="statistic">{% trans "MVP" context "abbreviation: most valuable player" %}</td>
+						{% endif %}
+					</tr>
+				</thead>
+				<tbody>
+					{% for link in players %}
+						<tr class="{% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last{% endif %}">
+							<td class="number">{{ link.number|default_if_none:"-" }}</td>
+							<td class="player">{{ link.person.first_name }} {{ link.person.last_name }}</td>
+							{% with stats=link.statistics %}
+								<td class="statistic played">{{ stats.played|default:"-" }}</td>
+								<td class="statistic touchdowns">{{ stats.points|default:"-" }}</td>
+								{% if not team.division.season.mvp_results_public|future %}
+									<td class="statistic mvp">{{ stats.mvp|default:"-" }}</td>
+								{% endif %}
+							{% endwith %}
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		{% endif %}
+	{% endblock %}
+
+	{% block ladder %}
+		{% for stage, pools in team.ladders.items %}
+			{% if stage.ladder_summary.count %}
+				<div id="stage_{{ stage.pk }}" class="stage">
+					{% if stage.pools.count %}
+						{% include "tournamentcontrol/competition/ladder/pool.html" %}
+					{% else %}
+						{% include "tournamentcontrol/competition/ladder/standard.html" %}
+					{% endif %}
+				</div>
+			{% endif %}
+		{% endfor %}
+	{% endblock %}
+{% endblock %}

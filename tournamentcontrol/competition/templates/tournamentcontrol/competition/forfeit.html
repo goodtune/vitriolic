@@ -1,0 +1,36 @@
+{% extends "tournamentcontrol/competition/season.html" %}
+{% load i18n %}
+{% load content competition %}
+
+{% block body_class %}{{ block.super }} forfeit{% endblock %}
+
+{% block breadcrumbs %}
+	{{ block.super }}
+	<li><a href="{% url 'competition:forfeit-list' competition=competition.slug season=season.slug %}">{% trans "Forfeits" %}</a></li>
+{% endblock %}
+
+{% block content %}
+	<h1>{{ competition.title }}</h1>
+	<h2>{{ season.title }}</h2>
+	<h3>{% trans "Forfeit notifications" %}</h3>
+
+	<h5>{% trans "Warning" %}</h5>
+
+	{% blocktrans with against=match|opponent:team %}
+		<p>You are about to register a forfeit by <strong>{{ team }}</strong> against {{ against }}.</p>
+	{% endblocktrans %}
+
+	<form action="" method="post">
+		{% csrf_token %}
+
+		<div class="btn-group">
+			<button role="button">
+				<i class="fa fa-sign-in"></i>
+				{% trans "Login" %}
+			</button>
+			<a href="{% url 'competition:forfeit-list' competition=competition.slug season=season.slug %}">
+				{% trans "Cancel" %}
+			</a>
+		</div>
+	</form>
+{% endblock %}
