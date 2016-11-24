@@ -107,7 +107,7 @@
 					{% for form in formset.forms %}
 						{% with match=form.instance %}
 							{% with home=match.get_home_team away=match.get_away_team %}
-								<tr class="division {{ match.division.slug|cssify }} {% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last{% endif %}">
+								<tr class="division {{ match.division.slug|cssify }} {% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
 									{% if not division %}<td>{{ match.stage.division.title }}{% if match.stage_group %} - {{ match.stage_group.title }}{% endif %}</td>{% endif %}
 									{% if not round %}<td>{{ match.round }}</td>{% endif %}
 									<td class="team {{ home.club.slug|cssify }}">{{ home.title }}</td>

@@ -1,4 +1,3 @@
-{% load cycle from future %}
 {% load i18n %}
 {% load common %}
 
@@ -17,7 +16,7 @@
 			<tbody>
 				{% for match in matches %}
 					{% with stage=match.stage division=match.stage.division pool=match.stage_group home=match.get_home_team away=match.get_away_team %}
-						<tr class="{% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last{% endif %}">
+						<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
 							<td class="label">
 								<a href="{# url 'competition:division' competition=division.season.competition.slug season=division.season.slug division=division.slug #}">{% trans division.title %}</a>
 							</td>

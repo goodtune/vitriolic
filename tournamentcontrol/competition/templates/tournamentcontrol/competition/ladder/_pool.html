@@ -1,4 +1,3 @@
-{% load cycle from future %}
 {% load i18n %}
 {% load common %}
 {% if stage %}
@@ -11,7 +10,7 @@
 		{% endif %}
 
 		{% for pool, summary in pools.items %}
-			<table class="ladder" data-cycle="{% cycle odd,even as tr %}">
+			<table class="ladder" data-cycle="{% cycle "odd" "even" as tr %}">
 				{% if summary %}
 					{% block thead %}
 						<thead>

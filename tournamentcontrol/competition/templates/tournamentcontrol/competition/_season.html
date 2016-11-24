@@ -1,5 +1,4 @@
 {% extends "tournamentcontrol/competition/base.html" %}
-{% load cycle from future %}
 {% load i18n humanize %}
 {% load common competition %}
 
@@ -23,7 +22,7 @@
 		<h2>{% trans "Divisions" %}</h2>
 		<ul id="divisions">
 			{% for d in season.divisions.public %}
-				<li class="{{ d.slug }} {% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last{% endif %}">
+				<li class="{{ d.slug }} {% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
 					{% spaceless %}
 						{% url 'competition:division' competition=d.season.competition.slug season=d.season.slug division=d.slug as url1 %}
 						{% url 'competition:division' season=d.season.slug division=d.slug as url2 %}
@@ -32,7 +31,7 @@
 						{% if d.pools.count %}
 							<ul class="pools">
 								{% for p in d.pools.all %}
-									<li class="{{ p.slug }} {% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last{% endif %}">
+									<li class="{{ p.slug }} {% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
 										{% url 'competition:pool' competition=p.division.season.competition.slug season=p.division.season.slug division=p.division.slug pool=pool.slug as url1 %}
 										{% url 'competition:pool' season=p.division.season.slug division=p.division.slug pool=pool.slug as url2 %}
 										{% url 'competition:pool' division=p.division.slug pool=pool.slug as url3 %}
@@ -54,7 +53,7 @@
 	{% block clubs %}
 		{% if clubs.count %}
 			<h2>{% block clubs-label %}{% trans "Clubs" %}{% endblock %}</h2>
-	
+
 			<ul id="clubs">
 				{% for club in clubs %}
 					{% url 'competition:club' competition=competition.slug season=season.slug club=club.slug as url1 %}

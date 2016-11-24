@@ -1,7 +1,6 @@
-{% load cycle from future %}
 {% load i18n common %}
 {% for home, away in lines %}
-	<tr class="{% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last{% endif %}">
+	<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
 		<td class="number">{{ home.number }}</td>
 		<td class="player">{{ home.player.first_name }} {{ home.player.last_name }}</td>
 		<td class="points">{{ home.points|default:"-" }}</td>

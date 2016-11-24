@@ -1,5 +1,4 @@
 {% extends "tournamentcontrol/competition/admin/base.html" %}
-{% load cycle from future %}
 {% load i18n static %}
 
 {% block main_content %}
@@ -18,7 +17,7 @@
 			</thead>
 			<tbody>
 				{% for date in dates %}
-					<tr class="{% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last{% endif %}">
+					<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
 						<td>
 							{% spaceless %}
 							<a target="_blank" href="{% url 'admin:competition:match-runsheet' competition.pk season.pk date|date:"Ymd" %}">
@@ -78,7 +77,7 @@
 				</thead>
 				<tbody>
 					{% for division, stage, round, date, pools in unscheduled %}
-						<tr class="{% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last{% endif %}">
+						<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
 							<td>{% ifchanged %}{{ division.title }}{% endifchanged %}</td>
 							<td>{% ifchanged division stage %}{{ stage.title }}{% endifchanged %}</td>
 							<td>{% ifchanged division stage date %}{{ date }}{% endifchanged %}</td>

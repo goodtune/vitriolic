@@ -1,5 +1,4 @@
 {% extends "tournamentcontrol/competition/base.html" %}
-{% load cycle from future %}
 {% load i18n %}
 {% load common competition %}
 
@@ -39,7 +38,7 @@
 			{% for date, matches in team.matches_by_date.items %}
 			{% for match in matches %}
 				{% with home=match.get_home_team away=match.get_away_team %}
-					<tr class="{% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last{% endif %}">
+					<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
 						<td class="date">{{ date }}</td>
 						<td class="time">{{ match.datetime|time|default:tba }}</td>
 						<td class="venue">{{ match.play_at.title|default:tba }}</td>
@@ -82,7 +81,7 @@
 				</thead>
 				<tbody>
 					{% for link in players %}
-						<tr class="{% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last{% endif %}">
+						<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
 							<td class="number">{{ link.number|default_if_none:"-" }}</td>
 							<td class="player">{{ link.person.first_name }} {{ link.person.last_name }}</td>
 							{% with stats=link.statistics %}

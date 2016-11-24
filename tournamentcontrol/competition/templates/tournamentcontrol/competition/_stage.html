@@ -1,5 +1,4 @@
 {% extends "tournamentcontrol/competition/base.html" %}
-{% load cycle from future %}
 {% load i18n %}
 {% load common competition %}
 
@@ -42,7 +41,7 @@
 				<table class="draw">
 					<tbody>
 						{% for match in matches %}
-							<tr class="{% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last{% endif %}{% ifchanged match.round %} group{% endifchanged %}">
+							<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}{% ifchanged match.round %} group{% endifchanged %}">
 								<td class="label">
 									{% ifchanged %}
 										{% if match.label %}

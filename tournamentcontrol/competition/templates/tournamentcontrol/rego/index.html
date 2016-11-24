@@ -1,5 +1,4 @@
 {% extends base %}
-{% load cycle from future %}
 {% load i18n %}
 
 {% block content %}
@@ -13,7 +12,7 @@
 			</thead>
 			<tbody>
 				{% for competition in competitions %}
-					<tr class="{% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last{% endif %}">
+					<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
 						<td>{{ competition.title }}</td>
 						<td><a href="{% url 'rego:club:list' competition.pk %}">{% trans "Clubs" %}</a></td>
 					</tr>

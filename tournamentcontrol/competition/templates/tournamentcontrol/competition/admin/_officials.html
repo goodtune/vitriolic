@@ -1,5 +1,4 @@
 {% extends base %}
-{% load cycle from future %}
 {% load i18n %}
 {% load common %}
 
@@ -22,7 +21,7 @@
 			<table>
 				<tbody>
 					{% for form in formset %}
-						<tr class="{% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last{% endif %}">
+						<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
 							<td>{{ form.id }}{% field form.person "" %}</td>
 							<td>{% field form.roles "" %}</td>
 							<td>{% field form.DELETE %}</td>
