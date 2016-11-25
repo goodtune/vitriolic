@@ -155,10 +155,9 @@ def score(match, team,
         'forfeit': match.is_forfeit,
     }
 
-    c = template.Context(context)
     t = template.loader.get_template(template_name)
 
-    return t.render(c)
+    return t.render(context)
 
 
 @register.filter
