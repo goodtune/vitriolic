@@ -538,7 +538,7 @@ class StageGroupForm(SuperUserSlugMixin, forms.ModelForm):
             self.fields.pop('teams', None)
 
     def save(self, *args, **kwargs):
-        if 'teams' in self.fields:
+        if self.instance.pk and 'teams' in self.fields:
             if self._undecided:
                 self.instance.undecided_teams = self.cleaned_data.get('teams')
             else:
