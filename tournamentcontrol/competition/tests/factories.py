@@ -169,7 +169,7 @@ class UndecidedTeamFactory(factory.DjangoModelFactory):
     class Meta:
         model = models.UndecidedTeam
 
-    label = factory.Faker('sentence')
+    label = factory.Faker('text', max_nb_chars=30)
     stage = factory.SubFactory(StageFactory)
 
 
