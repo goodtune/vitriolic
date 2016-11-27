@@ -18,7 +18,11 @@ from tournamentcontrol.competition.signals.teams import delete_team  # noqa
 
 
 def delete_related(sender, instance, *args, **kwargs):
-    for ro, __ in instance._meta.get_all_related_objects_with_model():
+    for ro, __ in [
+            (f, f.model)
+            for f in instance._meta.get_fields()
+            if (f.one_to_many or f.one_to_one)
+            and f.auto_created and not f.concrete]:
         name = ro.get_accessor_name()
         if isinstance(ro.field, models.ManyToManyField):
             continue
