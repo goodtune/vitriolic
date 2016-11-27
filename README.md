@@ -20,11 +20,11 @@ This project will now forever remind me of the day that America shat the bed.
 The following modules are to be incorporated.
 
 -   touchtechnology.public
--   touchtechnology.common
--   touchtechnology.admin
--   touchtechnology.content
--   touchtechnology.news
--   tournamentcontrol.competition
+-   [touchtechnology.common](https://bitbucket.org/touchtechnology/common)
+-   [touchtechnology.admin](https://bitbucket.org/touchtechnology/admin)
+-   [touchtechnology.content](https://bitbucket.org/touchtechnology/content)
+-   [touchtechnology.news](https://bitbucket.org/touchtechnology/news)
+-   [tournamentcontrol.competition](https://bitbucket.org/tournamentcontrol/competition)
 -   shuriken
 
 ## Badges
