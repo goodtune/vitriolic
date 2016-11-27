@@ -1,0 +1,43 @@
+{% extends base %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+	{{ block.super }}
+	<li><a href="{% url 'rego:club:list' %}">{% trans "Clubs" %}</a></li>
+	<li><a href="{% url 'rego:club:edit' club.pk %}">{{ club.title }}</a></li>
+	<li><a href="{% url 'rego:club-teams' club.pk %}">{% trans "Teams" %}</a></li>
+	<li><span>{{ team.division.title }} ({{ team.division.season.short_title|default:team.division.season.title }})</span></li>
+{% endblock %}
+
+{% block main_content %}
+	<div class="box">
+		<h1>{{ team.title }}</h1>
+
+		<table>
+			<thead>
+				<th>#</th>
+				<th>{% trans "Person" %}</th>
+				<th>{% trans "Player" %}</th>
+				<th>{% trans "Roles" %}</th>
+			</thead>
+			<tbody>
+				{% for player in team.people.select_related %}
+					<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
+						<td>{{ player.number|default_if_none:"-" }}</td>
+						<td>{{ player.person.get_full_name }}</td>
+						<td>{{ player.is_player|yesno|title }}</td>
+						<td>{% for role in player.roles.all %}{{ role.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+					</tr>
+				{% empty %}
+					<tr class="first odd last">
+						<td colspan="4" class="no_results">{% trans "There are no members of this team." %}</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+
+		<div class="buttons">
+			<a class="button" href="{% url 'rego:club-teams' club.pk %}">{% trans "Cancel" %}</a>
+		</div>
+	</div>
+{% endblock %}

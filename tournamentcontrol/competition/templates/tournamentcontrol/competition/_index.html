@@ -1,0 +1,26 @@
+{% extends "tournamentcontrol/competition/base.html" %}
+{% load i18n %}
+
+{% block content %}
+	<h1>{% block page_title %}{% trans node.title %}{% endblock %}</h1>
+
+	{% block chunk %}{% endblock %}
+
+	{% for competition in object_list %}
+		<div class="competition {% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
+			<h2><a href="{% url 'competition:competition' competition=competition.slug %}">{% trans competition.title %}</a></h2>
+
+			{{ competition.copy|safe }}
+
+			{% block seasons %}
+				<ul class="seasons">
+					{% for season in competition.seasons.all %}
+						<li>
+							<a href="{% url 'competition:season' competition=competition.slug season=season.slug %}">{% trans season.title %}</a>
+						</li>
+					{% endfor %}
+				</ul>
+			{% endblock %}
+		</div>
+	{% endfor %}
+{% endblock %}

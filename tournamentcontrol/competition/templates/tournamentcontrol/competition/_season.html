@@ -1,0 +1,67 @@
+{% extends "tournamentcontrol/competition/base.html" %}
+{% load i18n humanize %}
+{% load common competition %}
+
+{% block extrajs %}
+	{{ block.super }}
+	<script type="text/javascript" src="//maps.google.com/maps/api/js?v=3.2&amp;sensor=true"></script>
+	<script type="text/javascript" src="{{ STATIC_URL }}touchtechnology/common/js/auto_map.js"></script>
+{% endblock %}
+
+{% block extracss %}
+	{{ block.super }}
+	<link rel="stylesheet" href="{{ STATIC_URL }}touchtechnology/common/css/auto_map.css"></script>
+{% endblock %}
+
+{% block content %}
+	{% block heading %}
+		<h1>{% block page_title %}{% trans season.competition.title %} - {% trans season.title %}{% endblock %}</h1>
+	{% endblock %}
+
+	{% block divisions %}
+		<h2>{% trans "Divisions" %}</h2>
+		<ul id="divisions">
+			{% for d in season.divisions.public %}
+				<li class="{{ d.slug }} {% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
+					{% spaceless %}
+						{% url 'competition:division' competition=d.season.competition.slug season=d.season.slug division=d.slug as url1 %}
+						{% url 'competition:division' season=d.season.slug division=d.slug as url2 %}
+						{% url 'competition:division' division=d.slug as url3 %}
+						<a href="{{ url1|default:url2|default:url3 }}">{% trans d.title %}</a>
+						{% if d.pools.count %}
+							<ul class="pools">
+								{% for p in d.pools.all %}
+									<li class="{{ p.slug }} {% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
+										{% url 'competition:pool' competition=p.division.season.competition.slug season=p.division.season.slug division=p.division.slug pool=pool.slug as url1 %}
+										{% url 'competition:pool' season=p.division.season.slug division=p.division.slug pool=pool.slug as url2 %}
+										{% url 'competition:pool' division=p.division.slug pool=pool.slug as url3 %}
+										<a href="{{ url1|default:url2|default:url3 }}">{% trans p.title %}</a>
+									</li>
+								{% endfor %}
+							</ul>
+						{% endif %}
+					{% endspaceless %}
+				</li>
+			{% endfor %}
+		</ul>
+	{% endblock %}
+
+	{% block upcoming %}
+		{% next_date season 15 %}
+	{% endblock %}
+
+	{% block clubs %}
+		{% if clubs.count %}
+			<h2>{% block clubs-label %}{% trans "Clubs" %}{% endblock %}</h2>
+
+			<ul id="clubs">
+				{% for club in clubs %}
+					{% url 'competition:club' competition=competition.slug season=season.slug club=club.slug as url1 %}
+					{% url 'competition:club' season=season.slug club=club.slug as url2 %}
+					{% url 'competition:club' club=club.slug as url3 %}
+					<li class="team {{ club.slug|cssify }}"><a href="{{ url1|default:url2|default:url3 }}">{% trans club.title %}</a></li>
+				{% endfor %}
+			</ul>
+		{% endif %}
+	{% endblock %}
+{% endblock %}

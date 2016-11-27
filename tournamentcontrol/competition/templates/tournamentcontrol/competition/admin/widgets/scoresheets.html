@@ -1,0 +1,36 @@
+{% load i18n %}
+<div class="col-lg-4 col-md-4 col-sm-4">
+	<div class="portlet portlet-table">
+		<div class="portlet-header">
+			<h4 class="portlet-title">{{ widget.verbose_name }}</h4>
+		</div>
+		<table class="table table-striped table-condensed">
+			<thead>
+				<tr>
+					<th>{% trans "Division" %}</th>
+					<th>{% trans "Stage" %}</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for stage in stages %}
+					{% with competition=stage.division.season.competition season=stage.division.season division=stage.division %}
+						<tr>
+							<td>{{ division.title }}</td>
+							<td><a target="_blank" href="{% url 'admin:competition:competition:season:division:stage:scorecards' competition.pk season.pk division.pk stage.pk "pdf" %}">{{ stage.title }}</a></td>
+						</tr>
+					{% endwith %}
+				{% empty %}
+					<tr class="first odd last">
+						<td colspan="2" class="no_results">{% trans "There are no pending scoresheets." %}</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+		<div class="btn-group">
+			<a class="btn btn-default btn-sm" href="{% url 'admin:competition:scorecard-report' %}">
+				<i class="fa fa-print"></i>
+				&nbsp;{% trans "Report" %}
+			</a>
+		</div>
+	</div>
+</div>

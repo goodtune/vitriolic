@@ -1,0 +1,57 @@
+{% extends base %}
+{% load i18n %}
+{% load common %}
+
+{% block body_class %}{{ block.super }} rego team{% endblock %}
+
+{% block extrajs %}
+	{{ block.super }}
+	<script type="text/javascript" src="{{ STATIC_URL }}tournamentcontrol/competition/js/formset.js"></script>
+{% endblock %}
+
+{% block main_content %}
+	<div class="box">
+		<h1>{{ season.competition.title }} - {{ season.title }}</h1>
+
+		<form class="formset" action="" method="post">
+			{% csrf_token %}
+
+			{{ formset.management_form }}
+
+			<table>
+				<tbody>
+					{% for form in formset %}
+						<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
+							<td>{{ form.id }}{% field form.person "" %}</td>
+							<td>{% field form.roles "" %}</td>
+							<td>{% field form.DELETE %}</td>
+						</tr>
+					{% empty %}
+						<tr class="first odd last">
+							<td colspan="3" class="no_results">{% trans "There are no officials of this club." %}</td>
+						</tr>
+					{% endfor %}
+				</tbody>
+
+				{% with formset.empty_form as form %}
+					<tfoot class="hidden">
+						<tr class="empty">
+							<td>{{ form.id }}{% field form.person "" %}</td>
+							<td>{% field form.roles "" %}</td>
+							<td>{% field form.DELETE %}</td>
+						</tr>
+					</tfoot>
+				{% endwith %}
+			</table>
+
+			<div id="actions" class="actions">
+				<a class="button add" href="#add">{% trans "Add row" %}</a>
+			</div>
+
+			<div class="buttons">
+				<button type="submit">{% trans "Save" %}</button>
+				{% block buttons %}{% endblock %}
+			</div>
+		</form>
+	</div>
+{% endblock %}

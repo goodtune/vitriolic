@@ -1,0 +1,1769 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2014-10-03 08:24+1000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: admin.py:128
+#: templates/tournamentcontrol/competition/admin/clubrole/edit.html:6
+#: templates/tournamentcontrol/competition/admin/competition/edit.html:7
+#: templates/tournamentcontrol/competition/admin/division/edit.html:8
+#: templates/tournamentcontrol/competition/admin/draw_generation/base.html:8
+#: templates/tournamentcontrol/competition/admin/edit_team.html:7
+#: templates/tournamentcontrol/competition/admin/ground/edit.html:7
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:7
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:45
+#: templates/tournamentcontrol/competition/admin/list_divisions.html:7
+#: templates/tournamentcontrol/competition/admin/list_matches.html:8
+#: templates/tournamentcontrol/competition/admin/list_roles.html:8
+#: templates/tournamentcontrol/competition/admin/list_seasons.html:8
+#: templates/tournamentcontrol/competition/admin/list_teams.html:8
+#: templates/tournamentcontrol/competition/admin/list_venues.html:7
+#: templates/tournamentcontrol/competition/admin/match/dates.html:7
+#: templates/tournamentcontrol/competition/admin/match/edit.html:7
+#: templates/tournamentcontrol/competition/admin/match/schedule.html:8
+#: templates/tournamentcontrol/competition/admin/match_detail.html:8
+#: templates/tournamentcontrol/competition/admin/match_results.html:7
+#: templates/tournamentcontrol/competition/admin/match_washout.html:6
+#: templates/tournamentcontrol/competition/admin/progress_matches.html:8
+#: templates/tournamentcontrol/competition/admin/progress_teams.html:8
+#: templates/tournamentcontrol/competition/admin/reschedule.html:8
+#: templates/tournamentcontrol/competition/admin/scorers.html:7
+#: templates/tournamentcontrol/competition/admin/season/edit.html:8
+#: templates/tournamentcontrol/competition/admin/season/timeslots.html:8
+#: templates/tournamentcontrol/competition/admin/stage/delete.html:6
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:8
+#: templates/tournamentcontrol/competition/admin/stage/edit_team.html:7
+#: templates/tournamentcontrol/competition/admin/stage/list_teams.html:8
+#: templates/tournamentcontrol/competition/admin/stagegroup/edit.html:7
+#: templates/tournamentcontrol/competition/admin/team/edit_multiple.html:8
+#: templates/tournamentcontrol/competition/admin/teamrole/edit.html:6
+#: templates/tournamentcontrol/competition/admin/venue/edit.html:8
+#: templates/tournamentcontrol/rego/index.html:8
+msgid "Competitions"
+msgstr ""
+
+#: admin.py:265
+#, python-format
+msgid "The %(model)s \"%(title)s\" has been reordered %(direction)s the list."
+msgstr ""
+
+#: admin.py:680
+msgid "Your draw has been undone."
+msgstr ""
+
+#: admin.py:755 admin.py:1010
+msgid "Your changes have been saved."
+msgstr ""
+
+#: admin.py:875
+msgid "This stage has already been progressed."
+msgstr ""
+
+#: admin.py:929
+#, python-format
+msgid "Your change to %(count)d match has been saved."
+msgid_plural "Your changes to %(count)d matches have been saved."
+msgstr[0] ""
+msgstr[1] ""
+
+#: admin.py:934
+msgid "No matches were rescheduled."
+msgstr ""
+
+#: constants.py:6
+msgid "Male"
+msgstr ""
+
+#: constants.py:7
+msgid "Female"
+msgstr ""
+
+#: constants.py:11 forms.py:213
+#: templates/tournamentcontrol/competition/admin/list_seasons.html:66
+msgid "Season"
+msgstr ""
+
+#: constants.py:12
+msgid "Tournament"
+msgstr ""
+
+#: constants.py:16
+msgid "Winner"
+msgstr ""
+
+#: constants.py:17
+msgid "Loser"
+msgstr ""
+
+#: dashboard.py:118
+msgid "Awaiting Scores"
+msgstr ""
+
+#: dashboard.py:153
+#: templates/tournamentcontrol/competition/admin/progress_matches.html:20
+#: templates/tournamentcontrol/competition/admin/progress_matches.html:27
+#: templates/tournamentcontrol/competition/admin/progress_matches.html:29
+#: templates/tournamentcontrol/competition/admin/progress_teams.html:20
+#: templates/tournamentcontrol/competition/admin/progress_teams.html:27
+#: templates/tournamentcontrol/competition/admin/progress_teams.html:29
+msgid "Progress Teams"
+msgstr ""
+
+#: dashboard.py:166
+msgid "Awaiting Detailed Results"
+msgstr ""
+
+#: dashboard.py:188
+msgid "Awaiting MVP Points"
+msgstr ""
+
+#: dashboard.py:227
+msgid "Generate Score Sheets"
+msgstr ""
+
+#: dashboard.py:238
+#: templates/tournamentcontrol/competition/admin/season/edit.html:75
+msgid "Reports"
+msgstr ""
+
+#: forms.py:209 forms.py:232 forms.py:246
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:83
+#: templates/tournamentcontrol/rego/index.html:12
+msgid "Competition"
+msgstr ""
+
+#: forms.py:219 test_forms.py:50
+msgid "You can't select a season without a competition."
+msgstr ""
+
+#: forms.py:221 test_forms.py:61
+msgid "Invalid season for this competition."
+msgstr ""
+
+#: forms.py:263
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:89
+msgid "Description"
+msgstr ""
+
+#: forms.py:382 forms.py:400
+msgid "Map"
+msgstr ""
+
+#: forms.py:438
+msgid "Forfeit win score"
+msgstr ""
+
+#: forms.py:439
+msgid "Forfeit loss score"
+msgstr ""
+
+#: forms.py:440
+msgid "Add forfeits to played"
+msgstr ""
+
+#: forms.py:453
+msgid "Syntax of this points formula is invalid."
+msgstr ""
+
+#: forms.py:471
+msgid "Default"
+msgstr ""
+
+#: forms.py:515
+msgid ""
+"Teams can only belong to one pool per stage. Once selected in any pool a "
+"team will no longer appear for selection here."
+msgstr ""
+
+#: forms.py:578
+msgid ""
+"If left blank you will need to manually progress a team and the <em>label</"
+"em> below will be required for display in the draw."
+msgstr ""
+
+#: forms.py:580
+msgid ""
+"Required if formula above is left blank. If formula is set this value will "
+"be ignored and not saved."
+msgstr ""
+
+#: forms.py:589
+msgid "This is not a valid team formula."
+msgstr ""
+
+#: forms.py:598
+msgid "You must specify a label when formula is blank."
+msgstr ""
+
+#: forms.py:658 forms.py:684
+#: templates/tournamentcontrol/competition/admin/_club_teams.html:14
+#: templates/tournamentcontrol/competition/admin/_club_teams.html:39
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:17
+#: templates/tournamentcontrol/competition/admin/list_roles.html:20
+#: templates/tournamentcontrol/competition/admin/team/edit_multiple.html:39
+msgid "Name"
+msgstr ""
+
+#: forms.py:660 forms.py:686
+#: templates/tournamentcontrol/competition/admin/list_divisions.html:21
+#: templates/tournamentcontrol/competition/admin/list_teams.html:24
+#: templates/tournamentcontrol/competition/admin/list_venues.html:21
+#: templates/tournamentcontrol/competition/admin/team/edit_multiple.html:40
+msgid "Abbreviation"
+msgstr ""
+
+#: forms.py:661
+msgid "The abbreviated version will be used in draws to save space."
+msgstr ""
+
+#: forms.py:662
+msgid "Name is locked"
+msgstr ""
+
+#: forms.py:781
+msgid "This date is before the start of the season."
+msgstr ""
+
+#: forms.py:783
+msgid "This date has been excluded for this season."
+msgstr ""
+
+#: forms.py:785
+msgid "This date has been excluded for this division."
+msgstr ""
+
+#: forms.py:826
+msgid "This pool is not in the selected division"
+msgstr ""
+
+#: forms.py:833 forms.py:843 forms.py:854 forms.py:864
+#, python-format
+msgid "Team \"%(team)s\" is not in pool \"%(pool)s\"."
+msgstr ""
+
+#: forms.py:835 forms.py:845 forms.py:856 forms.py:866
+msgid "This team is not in this division."
+msgstr ""
+
+#: forms.py:847 forms.py:868
+msgid "Teams cannot be scheduled to play against itself."
+msgstr ""
+
+#: forms.py:901
+#: templates/tournamentcontrol/competition/admin/match/schedule.html:55
+#: templates/tournamentcontrol/competition/admin/match_results.html:40
+#: templates/tournamentcontrol/competition/admin/match_results.html:61
+#: templates/tournamentcontrol/competition/admin/match_washout.html:29
+#: templates/tournamentcontrol/competition/admin/progress_matches.html:41
+msgid "Home team"
+msgstr ""
+
+#: forms.py:902
+#: templates/tournamentcontrol/competition/admin/match/schedule.html:56
+#: templates/tournamentcontrol/competition/admin/match_results.html:41
+#: templates/tournamentcontrol/competition/admin/match_results.html:62
+#: templates/tournamentcontrol/competition/admin/match_washout.html:30
+#: templates/tournamentcontrol/competition/admin/progress_matches.html:42
+msgid "Away team"
+msgstr ""
+
+#: forms.py:972
+msgid "Double forfeit"
+msgstr ""
+
+#: forms.py:973
+msgid "Select the winning team."
+msgstr ""
+
+#: forms.py:990 forms.py:992
+msgid "Both scores are required."
+msgstr ""
+
+#: forms.py:1096
+msgid "Another match is already scheduled for this time & place."
+msgstr ""
+
+#: forms.py:1109
+#, python-format
+msgid "%(team)s must play after %(time)s."
+msgstr ""
+
+#: forms.py:1111
+#, python-format
+msgid "%(team)s must play before %(time)s."
+msgstr ""
+
+#: forms.py:1196
+#, python-format
+msgid "%(team1)s & %(team2)s at %(time)s"
+msgstr ""
+
+#: forms.py:1199
+#, python-format
+msgid "Check for clashes between the following pairs of teams: %(errors)s."
+msgstr ""
+
+#: forms.py:1209
+#, python-format
+msgid "You have %(count)d match with a conflicting time & ground allocation."
+msgid_plural ""
+"You have %(count)d matches with conflicting time & ground allocations."
+msgstr[0] ""
+msgstr[1] ""
+
+#: forms.py:1360
+msgid "You can only progress a team into one position."
+msgstr ""
+
+#: forms.py:1430
+msgid "File"
+msgstr ""
+
+#: forms.py:1430
+msgid "Any columns in your data file that are unknown will be discarded."
+msgstr ""
+
+#: forms.py:1440
+msgid "You must submit a comma separated file."
+msgstr ""
+
+#: forms.py:1566
+msgid "A person who did not play cannot score points."
+msgstr ""
+
+#: forms.py:1573
+msgid "A person who did not play cannot earn MVP points."
+msgstr ""
+
+#: forms.py:1580
+msgid "A person who played must have a shirt number."
+msgstr ""
+
+#: forms.py:1599
+msgid "There are errors you must fix before we can verify the scores."
+msgstr ""
+
+#: forms.py:1602
+#, python-format
+msgid ""
+"Total number of points (%(points)d) does not equal total number of scores "
+"(%(scores)d) for this team."
+msgstr ""
+
+#: forms.py:1608
+#, python-format
+msgid ""
+"A maximum of %(max)d players may participate in a match, there is %(count)d "
+"selected."
+msgid_plural ""
+"A maximum of %(max)d players may participate in a match, there are %(count)d "
+"selected."
+msgstr[0] ""
+msgstr[1] ""
+
+#: models.py:285
+msgid "Points system"
+msgstr ""
+
+#: sites.py:324
+msgid "Multiple Competitions"
+msgstr ""
+
+#: sites.py:529
+msgid "This season is now read-only to club administrators."
+msgstr ""
+
+#: sites.py:534
+#, python-format
+msgid ""
+"This season will become read-only to club administrators at %(time)s on "
+"%(date)s."
+msgstr ""
+
+#: sites.py:583
+msgid "This team is now read-only to club administrators."
+msgstr ""
+
+#: sites.py:588
+#, python-format
+msgid ""
+"This team will become read-only to club administrators at %(time)s on "
+"%(date)s."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_base.html:16
+#, python-format
+msgid ""
+"All dates &amp; times below have been adjusted to <strong>%(TIME_ZONE)s</"
+"strong> timezone."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_club.html:25
+#: templates/tournamentcontrol/competition/admin/_list_clubs.html:15
+msgid "Website"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_club.html:26
+#: templates/tournamentcontrol/competition/admin/_list_clubs.html:16
+msgid "Twitter"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_club.html:32
+#: templates/tournamentcontrol/competition/admin/club_teams.html:8
+#: templates/tournamentcontrol/competition/admin/division/edit.html:137
+#: templates/tournamentcontrol/competition/admin/edit_club.html:15
+#: templates/tournamentcontrol/competition/admin/edit_team.html:13
+#: templates/tournamentcontrol/competition/admin/edit_team_members.html:9
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:18
+#: templates/tournamentcontrol/competition/admin/list_divisions.html:47
+#: templates/tournamentcontrol/competition/admin/list_teams.html:14
+#: templates/tournamentcontrol/competition/admin/list_teams.html:19
+#: templates/tournamentcontrol/competition/admin/officials.html:9
+#: templates/tournamentcontrol/competition/admin/officials_list.html:9
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:83
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:122
+#: templates/tournamentcontrol/competition/admin/stage/edit_team.html:14
+#: templates/tournamentcontrol/competition/admin/stage/list_teams.html:15
+#: templates/tournamentcontrol/competition/admin/team/edit_multiple.html:14
+#: templates/tournamentcontrol/competition/admin/team_members.html:9
+#: templates/tournamentcontrol/rego/club_teams.html:9
+#: templates/tournamentcontrol/rego/edit_club.html:15
+#: templates/tournamentcontrol/rego/edit_team_members.html:9
+#: templates/tournamentcontrol/rego/officials.html:9
+#: templates/tournamentcontrol/rego/officials_list.html:9
+#: templates/tournamentcontrol/rego/team_members.html:10
+msgid "Teams"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_club.html:37
+#: templates/tournamentcontrol/competition/admin/_club_teams.html:15
+#: templates/tournamentcontrol/competition/admin/_club_teams.html:40
+#: templates/tournamentcontrol/competition/admin/list_divisions.html:60
+#: templates/tournamentcontrol/competition/admin/match/dates.html:77
+#: templates/tournamentcontrol/competition/admin/match/schedule.html:53
+#: templates/tournamentcontrol/competition/admin/match_results.html:39
+#: templates/tournamentcontrol/competition/admin/match_results.html:60
+#: templates/tournamentcontrol/competition/admin/match_washout.html:28
+#: templates/tournamentcontrol/competition/admin/progress_matches.html:39
+#: templates/tournamentcontrol/competition/admin/widgets/progress/stages.html:7
+#: templates/tournamentcontrol/competition/admin/widgets/scoresheets.html:7
+msgid "Division"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_club.html:38
+#: templates/tournamentcontrol/competition/admin/scorers.html:23
+#: templates/tournamentcontrol/competition/admin/scorers.html:49
+#: templates/tournamentcontrol/competition/admin/stage/list_teams.html:54
+msgid "Team"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_club.html:39
+msgid "Next/Latest Match"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_competition.html:23
+#, python-format
+msgid ""
+"This season runs from <em>%(start_date)s</em> to <em>%(finish_date)s.</em>"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_competition.html:29
+msgid "Details"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_division.html:10
+#: templates/tournamentcontrol/competition/_next_date.html:7
+#: templates/tournamentcontrol/competition/_stage.html:10
+#: templates/tournamentcontrol/competition/_team.html:12
+#: templates/tournamentcontrol/competition/admin/_scorecards.html:19
+msgctxt "abbreviation: to be advised"
+msgid "TBA"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_division.html:11
+#: templates/tournamentcontrol/competition/_next_date.html:8
+#: templates/tournamentcontrol/competition/_stage.html:11
+#: templates/tournamentcontrol/competition/_team.html:13
+#: templates/tournamentcontrol/competition/admin/_scorecards.html:20
+#: templates/tournamentcontrol/competition/admin/list_matches.html:19
+msgctxt "abbreviation: to be confirmed"
+msgid "TBC"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_division.html:55
+#: templates/tournamentcontrol/competition/_match.html:14
+#: templates/tournamentcontrol/competition/_stage.html:53
+#: templates/tournamentcontrol/competition/admin/progress_matches.html:50
+#: templates/tournamentcontrol/competition/admin/widgets/results/detailed.html:23
+#, python-format
+msgid "Round %(num)s"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_division.html:68
+#: templates/tournamentcontrol/competition/_stage.html:66
+#: templates/tournamentcontrol/competition/admin/match_results.html:42
+msgid "Forfeit"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_division.html:81
+#: templates/tournamentcontrol/competition/_next_date.html:48
+#: templates/tournamentcontrol/competition/_stage.html:79
+msgctxt "abbreviation: versus"
+msgid "vs"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_division.html:94
+#: templates/tournamentcontrol/competition/_stage.html:92
+#: templates/tournamentcontrol/competition/_team.html:53
+#: templates/tournamentcontrol/competition/admin/venue/edit.html:62
+msgid "Detail"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_next_date.html:12
+msgid "Upcoming Matches"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_season.html:24
+#: templates/tournamentcontrol/competition/admin/division/edit.html:12
+#: templates/tournamentcontrol/competition/admin/draw_generation/base.html:12
+#: templates/tournamentcontrol/competition/admin/edit_team.html:11
+#: templates/tournamentcontrol/competition/admin/list_divisions.html:11
+#: templates/tournamentcontrol/competition/admin/list_divisions.html:16
+#: templates/tournamentcontrol/competition/admin/list_matches.html:12
+#: templates/tournamentcontrol/competition/admin/list_seasons.html:50
+#: templates/tournamentcontrol/competition/admin/list_teams.html:12
+#: templates/tournamentcontrol/competition/admin/match/edit.html:11
+#: templates/tournamentcontrol/competition/admin/match_detail.html:12
+#: templates/tournamentcontrol/competition/admin/progress_matches.html:16
+#: templates/tournamentcontrol/competition/admin/progress_teams.html:16
+#: templates/tournamentcontrol/competition/admin/scorers.html:11
+#: templates/tournamentcontrol/competition/admin/season/edit.html:110
+#: templates/tournamentcontrol/competition/admin/stage/delete.html:10
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:12
+#: templates/tournamentcontrol/competition/admin/stage/edit_team.html:11
+#: templates/tournamentcontrol/competition/admin/stage/list_teams.html:12
+#: templates/tournamentcontrol/competition/admin/stagegroup/edit.html:11
+#: templates/tournamentcontrol/competition/admin/team/edit_multiple.html:12
+msgid "Divisions"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_season.html:51
+#: templates/tournamentcontrol/competition/admin/_list_clubs.html:8
+#: templates/tournamentcontrol/competition/admin/club_members.html:7
+#: templates/tournamentcontrol/competition/admin/club_teams.html:6
+#: templates/tournamentcontrol/competition/admin/edit_club.html:7
+#: templates/tournamentcontrol/competition/admin/edit_person.html:7
+#: templates/tournamentcontrol/competition/admin/edit_team_members.html:7
+#: templates/tournamentcontrol/competition/admin/list_clubs.html:7
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:88
+#: templates/tournamentcontrol/competition/admin/officials.html:7
+#: templates/tournamentcontrol/competition/admin/officials_list.html:7
+#: templates/tournamentcontrol/competition/admin/team_members.html:7
+#: templates/tournamentcontrol/rego/club_members.html:7
+#: templates/tournamentcontrol/rego/club_teams.html:7
+#: templates/tournamentcontrol/rego/edit_club.html:7
+#: templates/tournamentcontrol/rego/edit_person.html:7
+#: templates/tournamentcontrol/rego/edit_team_members.html:7
+#: templates/tournamentcontrol/rego/index.html:19
+#: templates/tournamentcontrol/rego/list_clubs.html:7
+#: templates/tournamentcontrol/rego/officials.html:7
+#: templates/tournamentcontrol/rego/officials_list.html:7
+#: templates/tournamentcontrol/rego/team_members.html:8
+msgid "Clubs"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_team.html:28
+#: templates/tournamentcontrol/competition/admin/draw_generation/step2.html:21
+#: templates/tournamentcontrol/competition/admin/list_matches.html:31
+#: templates/tournamentcontrol/competition/admin/match/dates.html:21
+#: templates/tournamentcontrol/competition/admin/match/dates.html:79
+#: templates/tournamentcontrol/competition/admin/widgets/results/basic.html:8
+msgid "Date"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_team.html:29
+#: templates/tournamentcontrol/competition/admin/list_matches.html:32
+#: templates/tournamentcontrol/competition/admin/match/schedule.html:57
+#: templates/tournamentcontrol/competition/admin/match_results.html:37
+#: templates/tournamentcontrol/competition/admin/match_results.html:58
+#: templates/tournamentcontrol/competition/admin/match_washout.html:26
+#: templates/tournamentcontrol/competition/admin/runsheet.html:20
+#: templates/tournamentcontrol/competition/admin/widgets/results/basic.html:9
+msgid "Time"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_team.html:30
+#: templates/tournamentcontrol/competition/admin/list_venues.html:50
+msgid "Venue"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_team.html:31
+msgid "Opponent"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_team.html:32
+msgid "Result"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_team.html:66
+msgid "Player Statistics"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_team.html:72
+msgid "Players"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_team.html:73
+#: templates/tournamentcontrol/competition/admin/match_detail.html:45
+msgid "Played"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_team.html:74
+msgid "Scores"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/_team.html:76
+msgctxt "abbreviation: most valuable player"
+msgid "MVP"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_club_members.html:8
+#: templates/tournamentcontrol/competition/admin/club_members.html:9
+#: templates/tournamentcontrol/competition/admin/club_teams.html:12
+#: templates/tournamentcontrol/competition/admin/edit_club.html:14
+#: templates/tournamentcontrol/competition/admin/edit_person.html:9
+#: templates/tournamentcontrol/rego/club_members.html:9
+#: templates/tournamentcontrol/rego/club_teams.html:13
+#: templates/tournamentcontrol/rego/edit_club.html:14
+#: templates/tournamentcontrol/rego/edit_person.html:9
+msgid "Members"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_club_members.html:13
+msgid "First name"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_club_members.html:14
+msgid "Last name"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_club_members.html:15
+#: templates/tournamentcontrol/competition/admin/_edit_person.html:34
+msgid "Gender"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_club_members.html:16
+msgid "Date of birth"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_club_members.html:17
+msgid "Email"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_club_members.html:18
+#: templates/tournamentcontrol/competition/admin/_club_teams.html:17
+#: templates/tournamentcontrol/competition/admin/_club_teams.html:42
+#: templates/tournamentcontrol/competition/admin/_edit_team_members.html:28
+#: templates/tournamentcontrol/competition/admin/_list_clubs.html:17
+#: templates/tournamentcontrol/competition/admin/division/edit.html:81
+#: templates/tournamentcontrol/competition/admin/draw_generation/step2.html:23
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:19
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:52
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:94
+#: templates/tournamentcontrol/competition/admin/list_divisions.html:23
+#: templates/tournamentcontrol/competition/admin/list_matches.html:34
+#: templates/tournamentcontrol/competition/admin/list_roles.html:21
+#: templates/tournamentcontrol/competition/admin/list_seasons.html:24
+#: templates/tournamentcontrol/competition/admin/list_teams.html:26
+#: templates/tournamentcontrol/competition/admin/list_venues.html:23
+#: templates/tournamentcontrol/competition/admin/season/edit.html:81
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:46
+#: templates/tournamentcontrol/competition/admin/stage/list_teams.html:27
+#: templates/tournamentcontrol/competition/admin/venue/edit.html:52
+msgid "Actions"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_club_members.html:35
+msgid "There are no members."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_club_teams.html:16
+#: templates/tournamentcontrol/competition/admin/_club_teams.html:41
+#: templates/tournamentcontrol/competition/admin/list_matches.html:27
+msgid "Pool"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_club_teams.html:47
+msgid "There are no teams."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_edit_club.html:17
+msgid "Edit Club"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_edit_club.html:17
+#: templates/tournamentcontrol/competition/admin/edit_club.html:8
+#: templates/tournamentcontrol/rego/edit_club.html:8
+msgid "New Club"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_edit_club.html:26
+#: templates/tournamentcontrol/competition/admin/_edit_person.html:56
+#: templates/tournamentcontrol/competition/admin/_edit_team_members.html:63
+#: templates/tournamentcontrol/competition/admin/_officials.html:53
+#: templates/tournamentcontrol/competition/admin/competition/edit.html:23
+#: templates/tournamentcontrol/competition/admin/division/edit.html:134
+#: templates/tournamentcontrol/competition/admin/edit_team.html:29
+#: templates/tournamentcontrol/competition/admin/ground/edit.html:28
+#: templates/tournamentcontrol/competition/admin/match/edit.html:30
+#: templates/tournamentcontrol/competition/admin/match/schedule.html:81
+#: templates/tournamentcontrol/competition/admin/match_detail.html:78
+#: templates/tournamentcontrol/competition/admin/match_results.html:79
+#: templates/tournamentcontrol/competition/admin/match_washout.html:50
+#: templates/tournamentcontrol/competition/admin/progress_matches.html:69
+#: templates/tournamentcontrol/competition/admin/progress_teams.html:96
+#: templates/tournamentcontrol/competition/admin/reschedule.html:57
+#: templates/tournamentcontrol/competition/admin/season/edit.html:107
+#: templates/tournamentcontrol/competition/admin/season/timeslots.html:76
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:112
+#: templates/tournamentcontrol/competition/admin/stage/edit_team.html:30
+#: templates/tournamentcontrol/competition/admin/stagegroup/edit.html:29
+#: templates/tournamentcontrol/competition/admin/team/edit_multiple.html:75
+msgid "Save"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_edit_person.html:6
+msgid "Edit Person"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_edit_person.html:6
+#: templates/tournamentcontrol/competition/admin/edit_person.html:10
+#: templates/tournamentcontrol/rego/edit_person.html:10
+msgid "New Person"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_edit_person.html:16
+msgid "First Name"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_edit_person.html:25
+msgid "Last Name"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_edit_person.html:43
+msgid "Date of Birth"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_edit_team_members.html:25
+#: templates/tournamentcontrol/competition/admin/_officials_list.html:11
+#: templates/tournamentcontrol/competition/admin/_team_members.html:14
+#: templates/tournamentcontrol/rego/team_members.html:21
+msgid "Person"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_edit_team_members.html:26
+#: templates/tournamentcontrol/competition/admin/_team_members.html:15
+#: templates/tournamentcontrol/competition/admin/match_detail.html:44
+#: templates/tournamentcontrol/competition/admin/scorers.html:22
+#: templates/tournamentcontrol/competition/admin/scorers.html:48
+#: templates/tournamentcontrol/rego/team_members.html:22
+msgid "Player"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_edit_team_members.html:27
+#: templates/tournamentcontrol/competition/admin/_officials_list.html:12
+#: templates/tournamentcontrol/competition/admin/_team_members.html:16
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:70
+#: templates/tournamentcontrol/competition/admin/list_roles.html:10
+#: templates/tournamentcontrol/rego/team_members.html:23
+msgid "Roles"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_edit_team_members.html:41
+#: templates/tournamentcontrol/competition/admin/_team_members.html:28
+#: templates/tournamentcontrol/rego/team_members.html:35
+msgid "There are no members of this team."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_edit_team_members.html:59
+#: templates/tournamentcontrol/competition/admin/_officials.html:49
+msgid "Add row"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_list_clubs.html:13
+#: templates/tournamentcontrol/competition/admin/division/edit.html:77
+#: templates/tournamentcontrol/competition/admin/list_divisions.html:20
+#: templates/tournamentcontrol/competition/admin/list_seasons.html:20
+#: templates/tournamentcontrol/competition/admin/list_teams.html:23
+#: templates/tournamentcontrol/competition/admin/list_venues.html:20
+#: templates/tournamentcontrol/competition/admin/season/edit.html:80
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:44
+#: templates/tournamentcontrol/competition/admin/stage/list_teams.html:26
+#: templates/tournamentcontrol/competition/admin/venue/edit.html:49
+msgid "Title"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_list_clubs.html:14
+msgid "Contact"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_list_clubs.html:40
+msgid "There are no clubs configured."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_officials.html:32
+msgid "There are no officials of this club."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_officials_list.html:22
+msgid "There are no club officials for this season."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_scorecards.html:6
+#: templates/tournamentcontrol/competition/admin/division/edit.html:113
+#: templates/tournamentcontrol/competition/admin/match/dates.html:25
+#: templates/tournamentcontrol/competition/admin/match/dates.html:51
+msgid "Scorecards"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/_scorecards.html:62
+#: templates/tournamentcontrol/competition/admin/_scorecards.html:64
+msgid "Captain:"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/club_members.html:13
+#: templates/tournamentcontrol/competition/admin/list_clubs.html:11
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:28
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:103
+#: templates/tournamentcontrol/competition/admin/list_roles.html:29
+#: templates/tournamentcontrol/competition/admin/list_roles.html:62
+#: templates/tournamentcontrol/competition/admin/list_teams.html:42
+#: templates/tournamentcontrol/competition/admin/list_venues.html:39
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:55
+#: templates/tournamentcontrol/competition/admin/stage/list_teams.html:42
+#: templates/tournamentcontrol/competition/admin/widgets/results/detailed.html:19
+#: templates/tournamentcontrol/rego/club_members.html:13
+#: templates/tournamentcontrol/rego/list_clubs.html:11
+msgid "Edit"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/club_members.html:17
+#: templates/tournamentcontrol/rego/club_members.html:17
+msgid "Member"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/club_teams.html:17
+#: templates/tournamentcontrol/competition/admin/officials.html:10
+#: templates/tournamentcontrol/competition/admin/officials_list.html:10
+#: templates/tournamentcontrol/rego/club_teams.html:18
+#: templates/tournamentcontrol/rego/officials.html:10
+#: templates/tournamentcontrol/rego/officials_list.html:10
+msgid "Officials"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/club_teams.html:18
+#: templates/tournamentcontrol/rego/club_teams.html:19
+msgid "Form"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/clubrole/edit.html:8
+msgid "Club Roles"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/clubrole/edit.html:9
+msgid "New Club Role"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/competition/edit.html:12
+msgid "Edit Competition"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/competition/edit.html:12
+msgid "New Competition"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/competition/edit.html:24
+#: templates/tournamentcontrol/competition/admin/division/edit.html:135
+#: templates/tournamentcontrol/competition/admin/draw_generation/undo.html:20
+#: templates/tournamentcontrol/competition/admin/edit_club.html:12
+#: templates/tournamentcontrol/competition/admin/edit_person.html:14
+#: templates/tournamentcontrol/competition/admin/edit_team.html:30
+#: templates/tournamentcontrol/competition/admin/edit_team_members.html:14
+#: templates/tournamentcontrol/competition/admin/ground/edit.html:29
+#: templates/tournamentcontrol/competition/admin/list_roles.html:81
+#: templates/tournamentcontrol/competition/admin/match/edit.html:31
+#: templates/tournamentcontrol/competition/admin/match/schedule.html:82
+#: templates/tournamentcontrol/competition/admin/match_detail.html:79
+#: templates/tournamentcontrol/competition/admin/match_results.html:80
+#: templates/tournamentcontrol/competition/admin/match_washout.html:51
+#: templates/tournamentcontrol/competition/admin/officials.html:15
+#: templates/tournamentcontrol/competition/admin/officials_list.html:15
+#: templates/tournamentcontrol/competition/admin/progress_matches.html:70
+#: templates/tournamentcontrol/competition/admin/progress_teams.html:97
+#: templates/tournamentcontrol/competition/admin/reschedule.html:58
+#: templates/tournamentcontrol/competition/admin/season/edit.html:108
+#: templates/tournamentcontrol/competition/admin/season/timeslots.html:77
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:113
+#: templates/tournamentcontrol/competition/admin/stage/edit_team.html:31
+#: templates/tournamentcontrol/competition/admin/stagegroup/edit.html:30
+#: templates/tournamentcontrol/competition/admin/team/edit_multiple.html:76
+#: templates/tournamentcontrol/competition/admin/team_members.html:14
+#: templates/tournamentcontrol/competition/admin/venue/edit.html:39
+#: templates/tournamentcontrol/rego/edit_club.html:12
+#: templates/tournamentcontrol/rego/edit_person.html:14
+#: templates/tournamentcontrol/rego/edit_team_members.html:14
+#: templates/tournamentcontrol/rego/officials.html:15
+#: templates/tournamentcontrol/rego/officials_list.html:15
+#: templates/tournamentcontrol/rego/team_members.html:42
+msgid "Cancel"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/competition/edit.html:26
+#: templates/tournamentcontrol/competition/admin/division/edit.html:10
+#: templates/tournamentcontrol/competition/admin/draw_generation/base.html:10
+#: templates/tournamentcontrol/competition/admin/edit_team.html:9
+#: templates/tournamentcontrol/competition/admin/ground/edit.html:9
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:71
+#: templates/tournamentcontrol/competition/admin/list_divisions.html:9
+#: templates/tournamentcontrol/competition/admin/list_matches.html:10
+#: templates/tournamentcontrol/competition/admin/list_seasons.html:10
+#: templates/tournamentcontrol/competition/admin/list_seasons.html:15
+#: templates/tournamentcontrol/competition/admin/list_teams.html:10
+#: templates/tournamentcontrol/competition/admin/list_venues.html:9
+#: templates/tournamentcontrol/competition/admin/match/dates.html:9
+#: templates/tournamentcontrol/competition/admin/match/edit.html:9
+#: templates/tournamentcontrol/competition/admin/match/schedule.html:10
+#: templates/tournamentcontrol/competition/admin/match_detail.html:10
+#: templates/tournamentcontrol/competition/admin/match_results.html:9
+#: templates/tournamentcontrol/competition/admin/match_washout.html:8
+#: templates/tournamentcontrol/competition/admin/progress_matches.html:10
+#: templates/tournamentcontrol/competition/admin/progress_teams.html:10
+#: templates/tournamentcontrol/competition/admin/reschedule.html:10
+#: templates/tournamentcontrol/competition/admin/scorers.html:9
+#: templates/tournamentcontrol/competition/admin/season/edit.html:10
+#: templates/tournamentcontrol/competition/admin/season/timeslots.html:10
+#: templates/tournamentcontrol/competition/admin/stage/delete.html:8
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:10
+#: templates/tournamentcontrol/competition/admin/stage/edit_team.html:9
+#: templates/tournamentcontrol/competition/admin/stage/list_teams.html:10
+#: templates/tournamentcontrol/competition/admin/stagegroup/edit.html:9
+#: templates/tournamentcontrol/competition/admin/team/edit_multiple.html:10
+#: templates/tournamentcontrol/competition/admin/venue/edit.html:10
+msgid "Seasons"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/division/edit.html:13
+#: templates/tournamentcontrol/competition/admin/division/edit.html:27
+msgid "New Division"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/division/edit.html:27
+msgid "Edit Division"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/division/edit.html:38
+#: templates/tournamentcontrol/competition/admin/division/edit.html:43
+#: templates/tournamentcontrol/competition/admin/season/edit.html:39
+#: templates/tournamentcontrol/competition/admin/season/edit.html:44
+msgid "Exclusion dates"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/division/edit.html:54
+msgid "There are no exclusion dates for this division."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/division/edit.html:67
+#: templates/tournamentcontrol/competition/admin/season/edit.html:68
+msgid "Add date"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/division/edit.html:72
+msgid "Stages"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/division/edit.html:78
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:51
+#: templates/tournamentcontrol/competition/admin/list_divisions.html:22
+#: templates/tournamentcontrol/competition/admin/list_seasons.html:21
+#: templates/tournamentcontrol/competition/admin/list_teams.html:25
+#: templates/tournamentcontrol/competition/admin/list_venues.html:22
+msgid "Reorder"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/division/edit.html:79
+msgid "Ladder"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/division/edit.html:80
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:39
+msgid "Pools"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/division/edit.html:90
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:63
+#: templates/tournamentcontrol/competition/admin/list_divisions.html:40
+#: templates/tournamentcontrol/competition/admin/list_seasons.html:35
+#: templates/tournamentcontrol/competition/admin/list_teams.html:36
+#: templates/tournamentcontrol/competition/admin/list_venues.html:33
+msgid "Up"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/division/edit.html:93
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:66
+#: templates/tournamentcontrol/competition/admin/list_divisions.html:43
+#: templates/tournamentcontrol/competition/admin/list_seasons.html:38
+#: templates/tournamentcontrol/competition/admin/list_teams.html:39
+#: templates/tournamentcontrol/competition/admin/list_venues.html:36
+msgid "Down"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/division/edit.html:101
+#: templates/tournamentcontrol/competition/admin/list_matches.html:15
+#: templates/tournamentcontrol/competition/admin/list_matches.html:22
+#: templates/tournamentcontrol/competition/admin/list_seasons.html:54
+#: templates/tournamentcontrol/competition/admin/match/edit.html:14
+#: templates/tournamentcontrol/competition/admin/match_detail.html:15
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:116
+msgid "Matches"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/division/edit.html:104
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:119
+msgid "Build Draw"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/division/edit.html:121
+msgid "There are no stages for this division."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/division/edit.html:128
+msgid "Add stage"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/base.html:15
+msgid "Draw Generator"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/complete.html:6
+msgid "Complete"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/complete.html:8
+msgid "You have successfully created the fixtures for this competition."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/complete.html:11
+#: templates/tournamentcontrol/competition/admin/draw_generation/failed.html:11
+msgid "Schedule Matches"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/failed.html:6
+msgid "Matches already scheduled"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/failed.html:8
+msgid "You can only use this wizard when there are no matches scheduled."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/step1.html:19
+#: templates/tournamentcontrol/competition/admin/list_seasons.html:22
+msgid "Start Date"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/step1.html:20
+msgid "Rounds"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/step1.html:21
+msgid "Format"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/step1.html:38
+#: templates/tournamentcontrol/competition/admin/draw_generation/step2.html:62
+#: templates/tournamentcontrol/competition/admin/scorecards/report.html:23
+msgid "Back"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/step1.html:40
+#: templates/tournamentcontrol/competition/admin/draw_generation/step2.html:64
+#: templates/tournamentcontrol/competition/admin/scorecards/report.html:21
+msgid "Next"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/step2.html:7
+msgid "Confirm Matches"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/step2.html:18
+#: templates/tournamentcontrol/competition/admin/list_matches.html:29
+#: templates/tournamentcontrol/competition/admin/match/dates.html:80
+#: templates/tournamentcontrol/competition/admin/match/schedule.html:54
+msgid "Round"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/step2.html:19
+msgid "Home"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/step2.html:20
+msgid "Away"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/step2.html:22
+msgid "Bye"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/step2.html:54
+msgid "Skip"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/undo.html:6
+#: templates/tournamentcontrol/competition/admin/draw_generation/undo.html:19
+#: templates/tournamentcontrol/competition/admin/list_matches.html:68
+msgid "Undo Draw"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/undo.html:9
+#, python-format
+msgid ""
+"Are you sure you wish to undo the draw for <strong>%(stage)s</strong> of "
+"<strong>%(division)s</strong>?"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/undo.html:11
+#, python-format
+msgid ""
+"This will remove %(match_count)s matches from the system. You will not be "
+"able to recover them."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/draw_generation/undo.html:14
+#, python-format
+msgid "This includes %(result_count)s matches with results recorded."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/edit_person.html:16
+#: templates/tournamentcontrol/competition/admin/edit_team.html:32
+#: templates/tournamentcontrol/competition/admin/stage/delete.html:13
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:118
+#: templates/tournamentcontrol/competition/admin/stage/edit_team.html:33
+#: templates/tournamentcontrol/rego/edit_person.html:16
+msgid "Delete"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/edit_team.html:14
+#: templates/tournamentcontrol/competition/admin/edit_team.html:18
+msgid "New Team"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/ground/edit.html:11
+#: templates/tournamentcontrol/competition/admin/list_seasons.html:47
+#: templates/tournamentcontrol/competition/admin/list_venues.html:11
+#: templates/tournamentcontrol/competition/admin/list_venues.html:16
+#: templates/tournamentcontrol/competition/admin/season/edit.html:111
+#: templates/tournamentcontrol/competition/admin/venue/edit.html:12
+msgid "Venues"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/ground/edit.html:13
+#: templates/tournamentcontrol/competition/admin/ground/edit.html:17
+msgid "New Ground"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/ground/edit.html:17
+msgid "Edit Ground"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_clubs.html:15
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:115
+#: templates/tournamentcontrol/competition/admin/team/edit_multiple.html:37
+msgid "Club"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:12
+msgid "Draw Formats"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:33
+msgid "There are no draw formats."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:40
+msgid "Draw Format"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:50
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:93
+msgid "Full title"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:76
+#: templates/tournamentcontrol/competition/admin/list_competitions.html:108
+#: templates/tournamentcontrol/rego/index.html:23
+msgid "There are no competitions."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_divisions.html:48
+#: templates/tournamentcontrol/competition/admin/scorers.html:13
+msgid "Scorers"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_divisions.html:53
+msgid "There are no divisions configured for this season."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_matches.html:30
+#: templates/tournamentcontrol/competition/admin/list_matches.html:69
+#: templates/tournamentcontrol/competition/admin/widgets/results/detailed.html:9
+msgid "Match"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_matches.html:33
+#: templates/tournamentcontrol/competition/admin/match/schedule.html:58
+msgid "Play at"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_matches.html:61
+#, python-format
+msgid "There are no matches configured for this %(type)s."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_roles.html:34
+msgid "There are no club roles yet."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_roles.html:42
+msgid "Add club role"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_roles.html:67
+msgid "There are no team roles yet."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_roles.html:75
+msgid "Add team role"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_seasons.html:23
+msgid "Mode"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_seasons.html:44
+#: templates/tournamentcontrol/competition/admin/season/edit.html:112
+#: templates/tournamentcontrol/competition/admin/season/timeslots.html:12
+msgid "Timeslots"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_seasons.html:60
+msgid "There are no seasons configured."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_teams.html:46
+#: templates/tournamentcontrol/competition/admin/stage/list_teams.html:47
+msgid "There are no teams in this division."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_teams.html:53
+msgid "Bulk add"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_teams.html:54
+#: templates/tournamentcontrol/competition/admin/team/edit_multiple.html:71
+msgid "Add team"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/list_venues.html:43
+msgid "There are no venues configured for this season."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match/dates.html:11
+#: templates/tournamentcontrol/competition/admin/match/schedule.html:12
+#: templates/tournamentcontrol/competition/admin/match_results.html:11
+#: templates/tournamentcontrol/competition/admin/match_washout.html:10
+#: templates/tournamentcontrol/competition/admin/progress_matches.html:13
+#: templates/tournamentcontrol/competition/admin/progress_teams.html:13
+#: templates/tournamentcontrol/competition/admin/reschedule.html:12
+msgid "Match Dates"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match/dates.html:16
+msgid "Matches by date"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match/dates.html:22
+#: templates/tournamentcontrol/competition/admin/match/dates.html:81
+msgid "Allocation"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match/dates.html:23
+msgid "Matrix"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match/dates.html:24
+msgid "Results"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match/dates.html:32
+#: templates/tournamentcontrol/competition/admin/runsheet.html:13
+msgid "Run Sheet"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match/dates.html:37
+#: templates/tournamentcontrol/competition/admin/match/dates.html:94
+msgid "List"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match/dates.html:42
+#: wizards.py:94
+msgid "HTML"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match/dates.html:43
+#: wizards.py:93
+msgid "PDF"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match/dates.html:47
+msgid "Enter Results"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match/dates.html:56
+msgid "There are no matches scheduled yet."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match/dates.html:65
+#: templates/tournamentcontrol/competition/admin/reschedule.html:13
+#: templates/tournamentcontrol/competition/admin/reschedule.html:28
+msgid "Reschedule"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match/dates.html:66
+#: templates/tournamentcontrol/competition/admin/match/tournament/dates.html:7
+msgid "Grid"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match/dates.html:72
+msgid "Unscheduled Rounds"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match/dates.html:78
+#: templates/tournamentcontrol/competition/admin/widgets/progress/stages.html:8
+#: templates/tournamentcontrol/competition/admin/widgets/scoresheets.html:8
+msgid "Stage"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match/edit.html:15
+#: templates/tournamentcontrol/competition/admin/match/edit.html:19
+msgid "Edit Match"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match/edit.html:15
+#: templates/tournamentcontrol/competition/admin/match/edit.html:19
+msgid "New Match"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match_detail.html:16
+msgid "Statistics"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match_detail.html:46
+#: templates/tournamentcontrol/competition/admin/scorers.html:24
+#: templates/tournamentcontrol/competition/admin/scorers.html:50
+msgid "Points"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match_detail.html:47
+msgid "MVP"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match_detail.html:67
+msgid "There are no registered players in this team."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match_results.html:25
+msgid "Match Results"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match_results.html:38
+#: templates/tournamentcontrol/competition/admin/match_results.html:59
+#: templates/tournamentcontrol/competition/admin/match_washout.html:27
+msgid "Field"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match_results.html:63
+msgid "Process byes"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match_results.html:82
+#: templates/tournamentcontrol/competition/admin/match_results.html:84
+#: templates/tournamentcontrol/competition/admin/match_washout.html:31
+msgid "Washout"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match_washout.html:16
+msgid "Match Washout"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/match_washout.html:43
+msgid "Sorry, there are no matches."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/mvp.html:4
+msgid "Most Valuable Player"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/mvp.html:16
+msgid "Please provide a custom template."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/progress_matches.html:40
+msgid "Label"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/progress_matches.html:61
+#: templates/tournamentcontrol/competition/admin/progress_teams.html:52
+msgid "There are no matches that require progression."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/progress_teams.html:66
+#: templates/tournamentcontrol/competition/ladder/_pool.html:26
+#: templates/tournamentcontrol/competition/ladder/_standard.html:25
+msgctxt "ladder: points score (for)"
+msgid "+"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/progress_teams.html:67
+#: templates/tournamentcontrol/competition/ladder/_pool.html:27
+#: templates/tournamentcontrol/competition/ladder/_standard.html:26
+msgctxt "ladder: points conceded (against)"
+msgid "-"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/progress_teams.html:68
+#: templates/tournamentcontrol/competition/ladder/_pool.html:28
+#: templates/tournamentcontrol/competition/ladder/_standard.html:27
+msgctxt "ladder: difference (for-against)"
+msgid "+/-"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/progress_teams.html:71
+#: templates/tournamentcontrol/competition/ladder/_pool.html:31
+#: templates/tournamentcontrol/competition/ladder/_standard.html:30
+msgctxt "ladder: bonus points"
+msgid "BP"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/progress_teams.html:73
+#: templates/tournamentcontrol/competition/ladder/_pool.html:33
+#: templates/tournamentcontrol/competition/ladder/_standard.html:32
+msgctxt "ladder: points"
+msgid "Pts"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/reschedule.html:39
+msgid "Original Date"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/reschedule.html:40
+msgid "Affected Matches"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/reschedule.html:41
+msgid "New Date"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/runsheet.html:4
+#, python-format
+msgid "Daily Runsheet - %(date)s"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/runsheet.html:21
+msgid "Place"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/runsheet.html:22
+msgid "Team 1"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/runsheet.html:23
+msgid "Team 2"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/scorecards/report.html:6
+#, python-format
+msgid "Produce Scorecards: Step %(step)s of %(count)s"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/scorecards/report.html:21
+msgid "Generate"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/scorecards/wait.html:4
+msgid "Your scorecards will finish generating shortly."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/scorers.html:18
+msgid "Leading Point Scorer"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/scorers.html:36
+msgid "No points scored yet."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/scorers.html:44
+msgid "Most Valuable"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/scorers.html:62
+msgid "No points awarded yet."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/season/edit.html:11
+#: templates/tournamentcontrol/competition/admin/season/edit.html:25
+msgid "New Season"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/season/edit.html:25
+msgid "Edit Season"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/season/edit.html:55
+msgid "There are no exclusion dates for this season."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/season/timeslots.html:33
+msgid "Timeslot Rules"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/season/timeslots.html:38
+msgid "Start date &amp; time"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/season/timeslots.html:39
+msgid "Interval"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/season/timeslots.html:40
+msgid "Max per day"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/season/timeslots.html:55
+#, python-format
+msgid "There are no date &amp; time rules for %(title)s."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/season/timeslots.html:72
+msgid "Add rule"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/season_report.html:109
+msgid "TBA"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:14
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:28
+#: templates/tournamentcontrol/competition/admin/stage/edit_team.html:15
+#: templates/tournamentcontrol/competition/admin/stage/edit_team.html:19
+msgid "New Stage"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:28
+#: templates/tournamentcontrol/competition/admin/stage/edit_team.html:19
+msgid "Edit Stage"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:60
+msgid "There are no pools for this stage."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:75
+msgid "Add pool"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:88
+#: templates/tournamentcontrol/competition/admin/stage/list_teams.html:25
+#: templates/tournamentcontrol/competition/admin/venue/edit.html:50
+msgid "Code"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/stage/edit.html:100
+msgid "There are no undecided teams."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/stage/list_teams.html:20
+msgid "Undecided Teams"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/stagegroup/edit.html:14
+#: templates/tournamentcontrol/competition/admin/stagegroup/edit.html:18
+msgid "New Pool"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/stagegroup/edit.html:18
+msgid "Edit Pool"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/team/edit_multiple.html:15
+msgid "Bulk Edit"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/team/edit_multiple.html:26
+msgid "Bulk team add"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/team/edit_multiple.html:54
+msgid "There are no teams for this division."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/teamrole/edit.html:8
+msgid "Team Roles"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/teamrole/edit.html:9
+msgid "New Team Role"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/venue/edit.html:13
+#: templates/tournamentcontrol/competition/admin/venue/edit.html:29
+msgid "New Venue"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/venue/edit.html:29
+msgid "Edit Venue"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/venue/edit.html:45
+msgid "Grounds"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/venue/edit.html:67
+msgid "There are no grounds configured for this venue."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/venue/edit.html:82
+msgid "Ground"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/wait.html:5
+msgid "Please wait..."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/widgets/progress/stages.html:27
+msgid "No stages require progression."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/widgets/results/basic.html:22
+#: templates/tournamentcontrol/competition/admin/widgets/results/detailed.html:30
+msgid "No matches awaiting result entry."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/widgets/results/detailed.html:8
+msgid "Date/Time"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/widgets/scoresheets.html:21
+msgid "There are no pending scoresheets."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/admin/widgets/scoresheets.html:28
+msgid "Report"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/ladder/_pool.html:19
+#: templates/tournamentcontrol/competition/ladder/_standard.html:18
+msgctxt "ladder: games played"
+msgid "P"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/ladder/_pool.html:20
+#: templates/tournamentcontrol/competition/ladder/_standard.html:19
+msgctxt "ladder: games won"
+msgid "W"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/ladder/_pool.html:21
+#: templates/tournamentcontrol/competition/ladder/_standard.html:20
+msgctxt "ladder: games lost"
+msgid "L"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/ladder/_pool.html:22
+#: templates/tournamentcontrol/competition/ladder/_standard.html:21
+msgctxt "ladder: games drawn"
+msgid "D"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/ladder/_pool.html:23
+#: templates/tournamentcontrol/competition/ladder/_standard.html:22
+msgctxt "ladder: byes"
+msgid "B"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/ladder/_pool.html:24
+#: templates/tournamentcontrol/competition/ladder/_standard.html:23
+msgctxt "ladder: forfeit wins"
+msgid "FW"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/ladder/_pool.html:25
+#: templates/tournamentcontrol/competition/ladder/_standard.html:24
+msgctxt "ladder: forfeit losses"
+msgid "FL"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/ladder/_pool.html:29
+#: templates/tournamentcontrol/competition/ladder/_standard.html:28
+#, python-format
+msgctxt "ladder: percentage (for/against*100)"
+msgid "%%"
+msgstr ""
+
+#: templates/tournamentcontrol/competition/ladder/_pool.html:69
+#, python-format
+msgid ""
+"Matches played in <strong>%(previous)s</strong> between teams in this pool "
+"contribute to this ladder."
+msgstr ""
+
+#: templates/tournamentcontrol/competition/templatetags/statistics.html:15
+msgid "There are no match statistics available yet."
+msgstr ""
+
+#: templates/tournamentcontrol/rego/_base.html:14
+msgid "Registration"
+msgstr ""
+
+#: wizards.py:82
+msgid "Choose a report template..."
+msgstr ""
+
+#: wizards.py:88
+msgid "Template"
+msgstr ""
+
+#: wizards.py:92
+msgid "Choose an output format..."
+msgstr ""
+
+#: wizards.py:98
+msgid "Output as"
+msgstr ""
+
+#: wizards.py:120
+msgid "There are no matches that satisfy your criteria."
+msgstr ""

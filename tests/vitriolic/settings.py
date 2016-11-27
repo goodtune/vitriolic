@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/1.10/ref/settings/
 import environ
 import os
 
+from django.core.urlresolvers import reverse_lazy
+
 env = environ.Env()
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
@@ -38,6 +40,7 @@ SITE_ID = 1
 INSTALLED_APPS = [
     'django.contrib.auth',
     'django.contrib.contenttypes',
+    'django.contrib.humanize',
     'django.contrib.sessions',
     'django.contrib.sites',
     'django.contrib.messages',
@@ -47,11 +50,14 @@ INSTALLED_APPS = [
     'guardian',
     'bootstrap3',
     'django_gravatar',
+    'oembed',
 
     'touchtechnology.common',
     'touchtechnology.admin',
     'touchtechnology.content',
     'touchtechnology.news',
+
+    'tournamentcontrol.competition',
 
     'example_app',
 ]
@@ -125,6 +131,8 @@ AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',  # this is default
     'guardian.backends.ObjectPermissionBackend',
 )
+
+LOGIN_URL = reverse_lazy('accounts:login')
 
 ANONYMOUS_USER_NAME = 'anonymous'
 

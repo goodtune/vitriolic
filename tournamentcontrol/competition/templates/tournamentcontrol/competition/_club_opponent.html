@@ -1,0 +1,20 @@
+{% load i18n %}
+{% load common competition %}
+<td class="datetime">{{ match.datetime|date }} {{ match.datetime|time }}</td>
+<td class="team {{ opponent.club.slug|cssify }}">
+	<span class="versus">vs </span>
+	{% if opponent.club %}
+		{% url 'competition:club' competition=competition.slug season=season.slug club=opponent.club.slug as url1 %}
+		{% url 'competition:club' season=season.slug club=opponent.club.slug as url2 %}
+		{% url 'competition:club' club=opponent.club.slug as url3 %}
+		<a href="{{ url1|default:url2|default:url3 }}">{% trans opponent.title %}</a>
+	{% elif opponent.slug %}
+		{% url 'competition:team' competition=competition.slug season=season.slug division=opponent.division.slug team=opponent.slug as url1 %}
+		{% url 'competition:team' season=season.slug division=opponent.division.slug team=opponent.slug as url2 %}
+		{% url 'competition:team' division=opponent.division.slug team=opponent.slug as url3 %}
+		<a href="{{ url1|default:url2|default:url3 }}">{% trans opponent.title %}</a>
+	{% else %}
+		{% trans opponent.title %}
+	{% endif %}
+</td>
+<td>{% score match team %}</td>

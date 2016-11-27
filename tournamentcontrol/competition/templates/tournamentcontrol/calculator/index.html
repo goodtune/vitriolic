@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+{% load i18n %}
+{% load common mathfilters %}
+<head>
+	<meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>{{ node|default:"Model Draw Generator" }}</title>
+	<link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" rel="stylesheet" integrity="sha256-7s5uDGW3AHqw6xtJmNNtr+OBRJUlgkNJEo78P4b0yRw= sha512-nNo+yCHEyn0smMxSswnf/OnX6/KwJuZTlNZBjauKhTK0c+zT+q5JOCx0UFhXQ6rJR9jg6Es8gPuD2uZcYDLqSw==" crossorigin="anonymous">
+	<link rel="stylesheet" href="{{ STATIC_URL }}fontawesome/css/font-awesome.min.css">
+	<style type="text/css">
+		.form-group {
+			clear: both;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="container">
+		<div class="row">
+			<div>
+				<h1>{{ node|default:"Model Draw Generator" }}</h1>
+			</div>
+
+			<div class="col-lg-3 col-lg-push-9 col-md-12">
+				<div class="well">
+					<p>Using this tool you can produce a <em>model</em> draw, designed to be fair and provide best value to participants.</p>
+					<p>You can always tweak the to suit your individual needs, however this will give you a great base from which to start.</p>
+				</div>
+			</div>
+
+			<div class="col-lg-9 col-lg-pull-3 col-md-12">
+				<form class="form-horizontal" action="" method="get" enctype="application/x-www-form-urlencoded">
+					<fieldset>
+						{% for f in form %}
+							{% field f %}
+						{% endfor %}
+					</fieldset>
+
+					<div class="col-md-5 col-md-offset-7">
+						<button type="submit" class="btn btn-primary">
+							<i class="fa fa-fw fa-calculator"></i>&nbsp;
+							Calculate
+						</button>
+						<a class="btn btn-default" href="{% block switch-url %}{% url 'calculator:division' %}{% endblock %}">
+							<i class="fa fa-fw fa-exchange"></i>&nbsp;
+							{% block switch %}Live data mode{% endblock %}
+						</a>
+					</div>
+				</form>
+			</div>
+		</div>
+
+		{% if data %}
+			<div class="row">
+				<div class="col-md-12">
+					<h1>Pools</h1>
+				</div>
+				{# two layers of with to build up the divisor for columns #}
+				{% for pool in data.pools %}
+					<div class="col-md-{% if data.pools|length > 2 %}3{% else %}6{% endif %} col-sm-6 col-xs-12">
+						<div class="list-group">
+							<h4 class="list-group-item active">Pool {{ forloop.counter }}</h4>
+							{% for team in pool %}
+								<p class="list-group-item">
+									{{ team }}
+									{% if team.order %}<span class="badge">{{ team.order }}</span>{% endif %}
+								</p>
+							{% endfor %}
+						</div>
+					</div>
+				{% endfor %}
+			</div>
+
+			{% if form.get_absolute_url %}
+				<div class="alert alert-info" role="alert">This is an actual division, you may like to <a href="{{ form.get_absolute_url }}">see how it <em>was</em> played</a> out.</div>
+			{% endif %}
+
+			<div class="row">
+				<div class="col-md-12">
+					<h1>Draw Formats</h1>
+				</div>
+
+				{% with n=data.draw_formats|length %}
+					{% for format in data.draw_formats %}
+						<div class="col-md-{{ 12|intdiv:n }}">
+							<div class="list-group">
+								<h4 class="list-group-item active">{{ format.label }}</h4>
+								{% if forloop.last %}
+									<p class="list-group-item">
+										{% for round in format.format %}
+											{{ round|stringformat:"s"|linebreaksbr }}<br>
+										{% endfor %}
+									</p>
+								{% else %}
+									<p class="list-group-item">
+										{{ format.format|linebreaksbr }}
+									</p>
+								{% endif %}
+							</div>
+						</div>
+					{% endfor %}
+				{% endwith %}
+			</div>
+		{% endif %}
+	</div>
+
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha256-KXn5puMvxCw+dAYznun+drMdG1IFl3agK0p/pqT9KAo= sha512-2e8qq0ETcfWRI4HJBzQiA3UoyFk6tbNyG+qSaIBZLyW9Xf3sWZHN/lxe9fTh1U45DpPf07yj94KsUHHWe4Yk1A==" crossorigin="anonymous"></script>
+
+	<script type="text/javascript">
+		$(document).ready(function(){
+			$('form label.col-md-3').each(function(idx, elem) {
+				$(elem).removeClass('col-md-3').addClass('col-md-7')
+			})
+			$('form div.col-md-7').each(function(idx, elem) {
+				$(elem).removeClass('col-md-7').addClass('col-md-5')
+			})
+		})
+	</script>
+</body>
+</html>

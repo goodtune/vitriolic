@@ -333,7 +333,7 @@ class Application(object):
             })
 
         context.update(extra_context)
-        return self.render(request, templates, context)
+        return self.render(request, templates, context, *args, **kwargs)
 
     def generic_detail(self, request, model_or_manager,
                        templates=None,
@@ -792,7 +792,7 @@ class Application(object):
         context_instance = self.context_instance(request)
         return render_to_string(templates, context, context_instance, **kwargs)
 
-    def render(self, request, templates, context, **kwargs):
+    def render(self, request, templates, context, tz=None, **kwargs):
         logger.debug('{app}.render: {request.path}'.format(
             app=self.__class__.__name__, request=request))
         context.update({'application': self})
@@ -800,6 +800,11 @@ class Application(object):
 
         response = TemplateResponse(request, templates, **kwargs)
         response.current_app = self.current_app
+
+        if tz is not None:
+            with timezone.override(tz):
+                response.render()
+
         if not request.user.is_anonymous():
             patch_cache_control(response, private=True)
         return response

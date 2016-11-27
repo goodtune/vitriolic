@@ -1,0 +1,73 @@
+{% extends "tournamentcontrol/competition/admin/base.html" %}
+{% load i18n %}
+{% load common %}
+
+{% block extracss %}
+	{{ block.super }}
+	<style type="text/css">
+		.field_wrapper .field.text_input input { width: 80px; }
+	</style>
+{% endblock %}
+
+{% block extrajs %}
+	{{ block.super }}
+	<script type="text/javascript" src="{{ STATIC_URL }}tournamentcontrol/competition/js/formset.js"></script>
+{% endblock %}
+
+{% block body_class %}{{ block.super }} timeslots{% endblock %}
+
+{% block content %}
+	<form class="formset" action="" method="POST">
+		{% csrf_token %}
+		{{ formset.management_form }}
+
+		<div class="box">
+			<h1>{% trans "Timeslot Rules" %}</h1>
+
+			<table>
+				<thead>
+					<tr>
+						<th colspan="3">{% trans "Start date &amp; time" %}</th>
+						<th>{% trans "Interval" %}</th>
+						<th>{% trans "Max per day" %}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for form in formset %}
+						<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
+							<td>{% field form.start_date "" %}</td>
+							<td>{% field form.end_date "" %}</td>
+							<td>{% field form.start "" %}</td>
+							<td>{% field form.interval "" %}</td>
+							<td>{% field form.count "" %}</td>
+							<td>{% field form.DELETE %}{{ form.id }}</td>
+						</tr>
+					{% empty %}
+						<tr class="first odd last">
+							<td colspan="5" class="no_results">{% blocktrans with title=season.title %}There are no date &amp; time rules for {{ title }}.{% endblocktrans %}</td>
+						</tr>
+					{% endfor %}
+				</tbody>
+				<tfoot class="hidden">
+					<tr class="empty">
+						<td>{% field formset.empty_form.start_date "" %}</td>
+						<td>{% field formset.empty_form.end_date "" %}</td>
+						<td>{% field formset.empty_form.start "" %}</td>
+						<td>{% field formset.empty_form.interval "" %}</td>
+						<td>{% field formset.empty_form.count "" %}</td>
+						<td>{% field formset.empty_form.DELETE %}{{ formset.empty_form.id }}</td>
+					</tr>
+				</tfoot>
+			</table>
+
+			<div id="actions" class="actions">
+				<a class="button add" href="#add">{% trans "Add rule" %}</a>
+			</div>
+
+			<div class="buttons">
+				<button type="submit">{% trans "Save" %}</button>
+				<a class="button" href="..">{% trans "Cancel" %}</a>
+			</div>
+		</div>
+	</form>
+{% endblock %}

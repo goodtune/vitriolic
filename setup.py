@@ -29,6 +29,18 @@ setup(
         'news': [
             'django-imagekit',
         ],
+        'competition': [
+            'beautifulsoup4>=4.4,<5',
+            'django-celery>=3.1.0',
+            'django-formtools>=1.0',
+            'django-mathfilters',
+            'touchtechnology-oembed',
+            'icalendar>=3.9.0,<4',
+            'numpy',
+            'pygraphviz>=1.2,<1.3',
+            'pyparsing>=2.0.3,<3',
+            'requests>=2.7,<3',
+        ],
     },
     zip_safe=False,
 )

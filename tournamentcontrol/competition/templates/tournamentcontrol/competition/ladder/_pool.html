@@ -1,0 +1,82 @@
+{% load i18n %}
+{% load common %}
+{% if stage %}
+	<div class="stage">
+		{% if not forloop.first or not forloop.last %}
+			{% url 'competition:stage' competition=competition.slug season=season.slug division=division.slug stage=stage.slug as url1 %}
+			{% url 'competition:stage' season=season.slug division=division.slug stage=stage.slug as url2 %}
+			{% url 'competition:stage' division=division.slug stage=stage.slug as url3 %}
+			<h3><a href="{{ url1|default:url2|default:url3 }}">{{ stage.title }}</a></h3>
+		{% endif %}
+
+		{% for pool, summary in pools.items %}
+			<table class="ladder" data-cycle="{% cycle "odd" "even" as tr %}">
+				{% if summary %}
+					{% block thead %}
+						<thead>
+							<tr class="{% cycle tr %}">
+								{% url 'competition:pool' competition=competition.slug season=season.slug division=division.slug stage=stage.slug pool=pool.slug as url1 %}
+								{% url 'competition:pool' season=season.slug division=division.slug stage=stage.slug pool=pool.slug as url2 %}
+								{% url 'competition:pool' division=division.slug stage=stage.slug pool=pool.slug as url3 %}
+								<th class="team"><a href="{{ url1|default:url2|default:url3 }}">{% trans pool.title %}</a></th>
+								<th>{% trans "P" context "ladder: games played" %}</th>
+								<th>{% trans "W" context "ladder: games won" %}</th>
+								<th>{% trans "L" context "ladder: games lost" %}</th>
+								<th>{% trans "D" context "ladder: games drawn" %}</th>
+								<th>{% trans "B" context "ladder: byes" %}</th>
+								<th>{% trans "FW" context "ladder: forfeit wins" %}</th>
+								<th>{% trans "FL" context "ladder: forfeit losses" %}</th>
+								<th>{% trans "+" context "ladder: points score (for)" %}</th>
+								<th>{% trans "-" context "ladder: points conceded (against)" %}</th>
+								<th>{% trans "+/-" context "ladder: difference (for-against)" %}</th>
+								<th class="percentage">{% trans "%" context "ladder: percentage (for/against*100)" %}</th>
+								{% if stage.division.bonus_points_formula %}
+									<th>{% trans "BP" context "ladder: bonus points" %}</th>
+								{% endif %}
+								<th>{% trans "Pts" context "ladder: points" %}</th>
+							</tr>
+						</thead>
+					{% endblock %}
+
+					{% block tbody %}
+						<tbody>
+							{% for ladder in summary %}
+								<tr class="{% if forloop.first %}first {% endif %}{% cycle tr %}{% if forloop.last %} last{% endif %}{% if team == ladder.team %} current{% endif %}">
+									<td class="team {{ ladder.team.club.slug|cssify }}">
+										{% url 'competition:team' competition=competition.slug season=season.slug division=division.slug team=ladder.team.slug as url1 %}
+										{% url 'competition:team' season=season.slug division=division.slug team=ladder.team.slug as url2 %}
+										{% url 'competition:team' division=division.slug team=ladder.team.slug as url3 %}
+										<a href="{{ url1|default:url2|default:url3 }}">{% trans ladder.team.title %}</a>
+									</td>
+									<td>{{ ladder.played }}</td>
+									<td>{{ ladder.win }}</td>
+									<td>{{ ladder.loss }}</td>
+									<td>{{ ladder.draw }}</td>
+									<td>{{ ladder.bye }}</td>
+									<td>{{ ladder.forfeit_for }}</td>
+									<td>{{ ladder.forfeit_against }}</td>
+									<td>{{ ladder.score_for }}</td>
+									<td>{{ ladder.score_against }}</td>
+									<td>{{ ladder.difference|stringformat:"g" }}</td>
+									<td class="percentage">{{ ladder.percentage|stringformat:"g"|default:"&#8734;" }}</td>
+									{% if stage.division.bonus_points_formula %}
+										<td>{{ ladder.bonus_points }}</td>
+									{% endif %}
+									<td>{{ ladder.points|stringformat:"g" }}</td>
+								</tr>
+							{% endfor %}
+						</tbody>
+					{% endblock %}
+				{% endif %}
+
+				{% if pool.carry_ladder and summary %}
+					<caption>
+						{% with previous=stage.comes_after %}
+							{% blocktrans %}Matches played in <strong>{{ previous }}</strong> between teams in this pool contribute to this ladder.{% endblocktrans %}
+						{% endwith %}
+					</caption>
+				{% endif %}
+			</table>
+		{% endfor %}
+	</div>
+{% endif %}

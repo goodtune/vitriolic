@@ -1,0 +1,86 @@
+{% extends "tournamentcontrol/competition/base.html" %}
+{% load i18n %}
+{% load common competition %}
+
+{% block page_title %}{% trans competition.title %} - {% trans season.title %}  - {% trans club.title %}{% endblock %}
+
+{% block body_class %}{{ block.super }} club{% endblock %}
+
+{% block content %}
+	{% block calendar %}
+		{% url 'competition:calendar' competition=competition.slug season=season.slug club=club.slug as url1 %}
+		{% url 'competition:calendar' season=season.slug club=club.slug as url2 %}
+		{% url 'competition:calendar' club=club.slug as url3 %}
+		<a class="calendar" title="Calendar"{% if debug %} target="_blank"{% endif %} href="{% if not debug %}webcal:{% endif %}//{{ request.get_host }}{{ url1|default:url2|default:url3 }}">&#128197;</a>
+	{% endblock %}
+
+	{% block heading %}
+		<h1>{% trans competition.title %} - {% trans season.title %}</h1>
+		<h2 class="team big {{ club.slug|cssify }}">{% trans club.title %}</h2>
+	{% endblock %}
+
+	{% block official %}
+		<table id="official">
+			<tbody>
+				{% block official_content %}
+					<tr><th>{% trans "Website" %}</th><td>{{ club.website|urlize|default:"-" }}</td></tr>
+					<tr><th>{% trans "Twitter" %}</th><td>{{ club.twitter|twittify|default:"-" }}</td></tr>
+				{% endblock %}
+			</tbody>
+		</table>
+	{% endblock %}
+
+	<h3>{% trans "Teams" %}</h3>
+
+	<table id="teams" class="draw">
+		<thead>
+			<tr>
+				<th class="division" colspan="2">{% trans "Division" %}</th>
+				<th class="team">{% trans "Team" %}</th>
+				<th colspan="3" class="match">{% trans "Next/Latest Match" %}</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for team in teams %}
+				<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
+					{% with match=team.next_match|default:team.last_match %}
+						<td class="division">
+							{% ifchanged match.stage match.stage_group %}
+								{% url 'competition:division' competition=competition.slug season=season.slug division=team.division.slug as url1 %}
+								{% url 'competition:division' season=season.slug division=team.division.slug as url2 %}
+								{% url 'competition:division' division=team.division.slug as url3 %}
+								<a href="{{ url1|default:url2|default:url3 }}">{% trans team.division.title %}</a>
+							{% endifchanged %}
+						</td>
+						<td class="pool">
+							{% if match.stage_group %}
+								{% url 'competition:pool' competition=competition.slug season=season.slug division=team.division.slug stage=match.stage.slug pool=match.stage_group.slug as url1 %}
+								{% url 'competition:pool' season=season.slug division=team.division.slug stage=match.stage.slug pool=match.stage_group.slug as url2 %}
+								{% url 'competition:pool' division=team.division.slug stage=match.stage.slug pool=match.stage_group.slug as url3 %}
+								<a href="{{ url1|default:url2|default:url3 }}">{% trans match.stage_group.title %}</a>
+							{% elif match.stage %}
+								{% url 'competition:stage' competition=competition.slug season=season.slug division=team.division.slug stage=match.stage.slug as url1 %}
+								{% url 'competition:stage' season=season.slug division=team.division.slug stage=match.stage.slug as url2 %}
+								{% url 'competition:stage' division=team.division.slug stage=match.stage.slug as url3 %}
+								<a href="{{ url1|default:url2|default:url3 }}">{% trans match.stage.title %}</a>
+							{% endif %}
+						</td>
+						<td class="team {{ club.slug|cssify }}">
+							{% url 'competition:team' competition=competition.slug season=season.slug division=team.division.slug team=team.slug as url1 %}
+							{% url 'competition:team' season=season.slug division=team.division.slug team=team.slug as url2 %}
+							{% url 'competition:team' division=team.division.slug team=team.slug as url3 %}
+							<a href="{{ url1|default:url2|default:url3 }}">{% trans team.title %}</a>
+						</td>
+						{% if match %}
+							{% with opponent=match|opponent:team %}
+								{% include "tournamentcontrol/competition/_club_opponent.html" %}
+							{% endwith %}
+						{% else %}
+							<td colspan="3"></td>
+						{% endif %}
+					{% endwith %}
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "tournamentcontrol/competition/admin/_grid.html" %}
+{% load common %}
+
+{% block division %}
+	{{ division.title|htmlentities }}<br />
+	<small>{{ stage.title|htmlentities }}</small>
+{% endblock %}
+
+{% block teams %}
+	{{ home.title|htmlentities }}<br />
+	{{ away.title|htmlentities }}
+{% endblock %}
+
+
+{# These blocks are not defined in _grid.html but demonstrates how to do abbreviations #}
+
+{% block division_short %}
+	{{ division.short_title|default:division.title|htmlentities }}<br />
+	<small>{{ stage.short_title|default:stage.title|htmlentities }}</small>
+{% endblock %}
+
+{% block teams_short %}
+	{{ home.short_title|default:home.club.abbreviation|default:home.title|htmlentities }}<br />
+	{{ away.short_title|default:away.club.abbreviation|default:away.title|htmlentities }}
+{% endblock %}
+

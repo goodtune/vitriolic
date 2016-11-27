@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+
+	<title>{{ competition.title }} - {{ season.title }}</title>
+
+	<!-- Latest compiled and minified CSS -->
+	<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+	<!-- Optional theme -->
+	<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap-theme.min.css">
+	<!-- Latest compiled and minified JavaScript -->
+	<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
+
+	<link rel="stylesheet" type="text/css" href="//cdn.jsdelivr.net/jquery.slick/1.3.6/slick.css">
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+	<script type="text/javascript" src="//cdn.jsdelivr.net/jquery.slick/1.3.6/slick.min.js"></script>
+</head>
+<body>
+{% load i18n %}
+	<div class="container-fluid">
+		<div class="page-header">
+			<h1>
+				Season Report
+				<small>{{ competition.title }} - {{ season.title }}</small>
+			</h1>
+		</div>
+
+		<h2>Club Officials</h2>
+
+		{% regroup season.officials.all by club as officials %}
+		<table class="table table-striped table-condensed">
+			<thead>
+				<th>Club</th>
+				<th>Contact</th>
+				<th>Roles</th>
+				<th>Email</th>
+				<th>Phone</th>
+			</thead>
+			{% for group in officials %}
+				<tbody>
+					{% for official in group.list %}
+						<tr>
+							<th>
+								{% ifchanged group.grouper %}
+									<a href="#{{ group.grouper.slug }}">
+										{{ group.grouper.title }}
+									</a>
+								{% endifchanged %}
+							</th>
+							<td>{{ official.person.get_full_name }}</td>
+							<td>
+								{% for role in official.roles.all %}
+									{{ role.name }}{% if not forloop.last %}, {% endif %}
+								{% endfor %}
+							</td>
+							<td>{{ official.person.email|urlize }}</td>
+							<td>{{ official.person.mobile_phone }}</td>
+						</tr>
+					{% endfor %}
+				</tbody>
+			{% empty %}
+				<tr>
+					<td colspan="5">
+						No clubs have registered their officials yet.
+					</td>
+				</tr>
+			{% endfor %}
+		</table>
+
+		<h2>Club Reports</h2>
+
+		{% regroup object_list by club as clubs %}
+		{% for group in clubs %}
+			<h3 id="{{ group.grouper.slug|default:"no" }}">
+				{{ group.grouper.title|default:"No Club" }}
+			</h3>
+
+			<table class="table table-striped table-condensed">
+				<thead>
+					<tr>
+						<th>Division</th>
+						<th>Team</th>
+						<th>Person</th>
+						<th>Birthdate</th>
+						<th>Mobile</th>
+						<th>Work Phone</th>
+						<th>Email</th>
+						<th>Player</th>
+						<th>Roles</th>
+					</tr>
+				</thead>
+				{% for team in group.list %}
+					<tbody>
+						{% for object in team.people.select_related %}
+							<tr>
+								<th>{% ifchanged team.division %}{{ team.division.title }}{% endifchanged %}</th>
+								<td>{{ team.title }}</td>
+								<td>{{ object.person.get_full_name }}</td>
+								<td>{{ object.person.date_of_birth|default_if_none:"-" }}</td>
+								<td>{{ object.person.mobile_telephone }}</td>
+								<td>{{ object.person.work_telephone }}</td>
+								<td>{{ object.person.email|urlize }}</td>
+								<td>
+									{% if object.is_player %}
+										{% if object.number %}
+											#{{ object.number }}
+										{% else %}
+											{% trans "TBA" %}
+										{% endif %}
+									{% endif %}
+								<td>
+									{% for role in object.roles.all %}
+										{{ role.name }}{% if not forloop.last %}, {% endif %}
+									{% endfor %}
+								</td>
+							</tr>
+						{% empty %}
+							<tr>
+								<th>{{ team.division.title }}</th>
+								<td>{{ team.title }}</td>
+								<td colspan="7">
+									Club has not yet provided registration details.
+								</td>
+							</tr>
+						{% endfor %}
+					</tbody>
+				{% endfor %}
+			</table>
+		{% endfor %}
+	</div>
+</body>
+</html>

@@ -1,0 +1,97 @@
+{% extends "tournamentcontrol/competition/admin/base.html" %}
+{% load i18n static %}
+
+{% block main_content %}
+	<div class="box">
+		<h1>{% trans "Matches by date" %}</h1>
+
+		<table>
+			<thead>
+				<tr>
+					<th>{% trans "Date" %}</th>
+					<th>{% trans "Allocation" %}</th>
+					<th>{% trans "Matrix" %}</th>
+					<th>{% trans "Results" %}</th>
+					<th>{% trans "Scorecards" %}</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for date in dates %}
+					<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
+						<td>
+							{% spaceless %}
+							<a target="_blank" href="{% url 'admin:competition:match-runsheet' competition.pk season.pk date|date:"Ymd" %}">
+								<i class="fa fa-clock-o"></i>
+							</a>
+							{% endspaceless %}
+							{{ date|date }}
+						</td>
+						<td>
+							{% if date >= today or user.is_superuser %}
+								<a href="{% url 'admin:competition:match-schedule' competition.pk season.pk date|date:"Ymd" %}">{% trans "List" %}</a>
+								{#<a href="#">{% trans "Grid" %}</a>#}
+							{% endif %}
+						</td>
+						<td>
+							<a rel="facebox" data-title="Match grid for {{ date|date }}" data-width="700" href="{% url 'admin:competition:match-grid' competition.pk season.pk date|date:"Ymd" "html" %}">{% trans "HTML" %}</a>
+							<a href="{% url 'admin:competition:match-grid' competition.pk season.pk date|date:"Ymd" "pdf" %}">{% trans "PDF" %}</a>
+						</td>
+						<td>
+							{% if date <= today or user.is_superuser %}
+								<a href="{% url 'admin:competition:match-results' competition.pk season.pk date|date:"Ymd" %}">{% trans "Enter Results" %}</a>
+							{% endif %}
+						</td>
+						<td>
+							<a href="{% url 'admin:competition:scorecards' competition.pk season.pk date|date:"Ymd" "pdf" %}">{% trans "Scorecards" %}</a>
+						</td>
+					</tr>
+				{% empty %}
+					<tr class="first odd last">
+						<td colspan="5" class="no_results">{% trans "There are no matches scheduled yet." %}</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+
+	{% block buttons %}
+		<div class="buttons">
+			<a class="button" href="{% url 'admin:competition:match-reschedule' competition.pk season.pk %}">{% trans "Reschedule" %}</a>
+			<a class="button right" href="{% url 'admin:competition:match-grid' competition.pk season.pk "pdf" %}">{% trans "Grid" %}</a>
+		</div>
+	{% endblock %}
+
+	{% if unscheduled %}
+		<div class="box">
+			<h1>{% trans "Unscheduled Rounds" %}</h1>
+
+			<table>
+				<thead>
+					<tr>
+						<th>{% trans "Division" %}</th>
+						<th>{% trans "Stage" %}</th>
+						<th>{% trans "Date" %}</th>
+						<th>{% trans "Round" %}</th>
+						<th>{% trans "Allocation" %}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for division, stage, round, date, pools in unscheduled %}
+						<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
+							<td>{% ifchanged %}{{ division.title }}{% endifchanged %}</td>
+							<td>{% ifchanged division stage %}{{ stage.title }}{% endifchanged %}</td>
+							<td>{% ifchanged division stage date %}{{ date }}{% endifchanged %}</td>
+							<td>{{ round|default_if_none:"-" }}{% if pools %} ({% for pool in pools %}{{ pool.short_title|default:pool.title }}{% if not forloop.last %}, {% endif %}{% endfor %}){% endif %}</td>
+							<td>
+								{% url 'admin:competition:match-schedule' competition.pk season.pk date|date:"Ymd" division.pk stage.pk round as round_url %}
+								{% url 'admin:competition:match-schedule' competition.pk season.pk date|date:"Ymd" division.pk stage.pk as stage_url %}
+								<a href="{{ round_url|default:stage_url }}">{% trans "List" %}</a>
+								{#<a href="#">{% trans "Grid" %}</a>#}
+							</td>
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	{% endif %}
+{% endblock %}

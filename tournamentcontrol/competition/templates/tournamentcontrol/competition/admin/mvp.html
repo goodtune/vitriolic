@@ -1,0 +1,21 @@
+<!DOCTYPE html>{% load i18n static %}
+<html>
+<head>
+	<title>{% trans "Most Valuable Player" %}</title>
+
+	<link rel="stylesheet" href="{% get_static_prefix %}css/reset.css">
+	<link rel="stylesheet" href="{% get_static_prefix %}css/base.css">
+
+	<meta name="author" content="{% block meta_author %}{{ site.name }}{% endblock %}">
+	<meta name="subject" content="{% block meta_subject %}{% endblock %}">
+	<meta name="keywords" content="{% block meta_keywords %}{% endblock %}">
+	<meta name="date" content="{% block meta_date %}{% now "c" %}{% endblock %}">
+</head>
+<body>
+
+<p>{% trans "Please provide a custom template." %}</p>
+
+<xmp>tournamentcontrol/competition/admin/mvp.html</xmp>
+
+</body>
+</html>

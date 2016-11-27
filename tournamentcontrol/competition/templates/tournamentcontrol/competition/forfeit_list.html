@@ -1,0 +1,47 @@
+{% extends "tournamentcontrol/competition/season.html" %}
+{% load i18n %}
+{% load content competition %}
+
+{% block body_class %}{{ block.super }} forfeit{% endblock %}
+
+{% block breadcrumbs %}
+	{{ block.super }}
+	<li><a href="{% url 'competition:forfeit-list' competition=competition.slug season=season.slug %}">{% trans "Forfeits" %}</a></li>
+{% endblock %}
+
+{% block content %}
+	<h1>{{ competition.title }}</h1>
+	<h2>{{ season.title }}</h2>
+	<h3>{% trans "Forfeit notifications" %}</h3>
+
+	{% block copy %}
+		{% chunk "forfeit-notification-copy" %}
+	{% endblock %}
+
+	{% if messages %}
+		<ul class="messages">
+			{% for message in messages %}
+				<li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+			{% endfor %}
+		</ul>
+	{% endif %}
+
+	<div class="columns">
+		{% for team in user.person.teams|teams_in_season:season %}
+			<div class="col">
+				<h3>{{ team }}</h3>
+
+				<dl>
+					{% for match in team.matches.future.playable %}
+						<dt>{{ match.datetime|default:match.date }}</dt>
+						{% if match.is_forfeit %}
+							<dd class="{% if match.forfeit_winner == team %}win{% else %}loss{% endif %}">{{ match|opponent:team }}</dd>
+						{% else %}
+							<dd><a href="{% url 'competition:forfeit' competition=competition.slug season=season.slug match=match.pk %}">{{ match|opponent:team }}</a></dd>
+						{% endif %}
+					{% endfor %}
+				</dl>
+			</div>
+		{% endfor %}
+	</div>
+{% endblock %}

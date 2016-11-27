@@ -1,0 +1,20 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	<th>{% trans "Start" %}</th>
+	<th>{% trans "End" %}</th>
+	<th>{% trans "Time" %}</th>
+	<th>{% trans "Duration" %}</th>
+	<th>{% trans "Count" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td>{{ obj.start_date|default_if_none:"-" }}</td>
+	<td>{{ obj.end_date|default_if_none:"-" }}</td>
+	<td>{{ obj.start }}</td>
+	<td>{{ obj.interval }}</td>
+	<td>{{ obj.count }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}6{% endblock %}

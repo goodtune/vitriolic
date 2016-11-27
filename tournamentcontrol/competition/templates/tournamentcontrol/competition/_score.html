@@ -1,0 +1,1 @@
+{% if result %}{{ result|title }} {% if forfeit %}(forfeit) {% endif %}{{ team_score }}-{% ifequal team_score opponent_score %}all{% else %}{{ opponent_score }}{% endifequal %}{% else %}-{% endif %}

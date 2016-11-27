@@ -1,0 +1,16 @@
+{% load i18n common %}
+{% for home, away in lines %}
+	<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
+		<td class="number">{{ home.number }}</td>
+		<td class="player">{{ home.player.first_name }} {{ home.player.last_name }}</td>
+		<td class="points">{{ home.points|default:"-" }}</td>
+
+		<td class="number">{{ away.number }}</td>
+		<td class="player">{{ away.player.first_name }} {{ away.player.last_name }}</td>
+		<td class="points">{{ away.points|default:"-" }}</td>
+	</tr>
+{% empty %}
+	<tr class="first odd last">
+		<td colspan="6" class="no_results">{% trans "There are no match statistics available yet." %}</td>
+	</tr>
+{% endfor %}

@@ -1,0 +1,31 @@
+{% extends "touchtechnology/admin/edit.multiple.html" %}
+{% load i18n %}
+{% load common %}
+
+{% block form-fieldset %}
+	<!-- formset -->
+	{{ formset.management_form }}
+
+	<table class="table table-condensed table-striped">
+		<thead>
+			<tr>
+				<th>{% trans "Original Date" %}</th>
+				<th>{% trans "Affected Matches" %}</th>
+				<th>{% trans "New Date" %}</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for form in formset.forms %}
+				<tr>
+					<td>{{ form.original }}</td>
+					<td>{{ form.matches.count }}</td>
+					<td>{% field form.date "" %}</td>
+				</tr>
+			{% empty %}
+				<tr>
+					<td colspan="3">{% trans "There are no unplayed matches to be rescheduled." %}</td>
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+{% endblock %}

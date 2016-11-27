@@ -1,0 +1,23 @@
+@page {
+	size: A4 landscape;
+	margin: 1cm;
+	position: relative;
+}
+
+.signon {
+	font-family: Verdana, sans-serif;
+	font-size: 90%;
+	page-break-after: always;
+}
+
+table {
+	width: 100%;
+}
+
+thead th.team {
+	text-transform: uppercase;
+}
+
+tbody td {
+	width: 25%;
+}

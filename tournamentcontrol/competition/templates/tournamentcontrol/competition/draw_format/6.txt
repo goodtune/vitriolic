@@ -1,0 +1,24 @@
+ROUND
+1 vs 2
+3 vs 6
+4 vs 5
+
+ROUND
+1 vs 4
+2 vs 3
+5 vs 6
+
+ROUND
+1 vs 5
+2 vs 6
+3 vs 4
+
+ROUND
+1 vs 3
+2 vs 4
+5 vs 6
+
+ROUND
+1 vs 6
+2 vs 5
+3 vs 4

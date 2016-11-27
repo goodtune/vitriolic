@@ -1,0 +1,9 @@
+ROUND
+1: 1 vs 4
+2: 2 vs 3
+ROUND
+3: 1 vs 2
+4: 3 vs 4
+ROUND
+5: 1 vs 3
+6: 2 vs 4

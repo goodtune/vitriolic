@@ -1,0 +1,14 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	{{ block.super }}
+	<th>{% trans "Abbreviation" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td>{{ obj.abbreviation|default:"-" }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}3{% endblock %}

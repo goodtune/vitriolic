@@ -1,0 +1,27 @@
+{% extends base %}
+{% load i18n %}
+
+{% block content %}
+	<div class="box">
+		<h1>{% block page_title %}{% trans "Competitions" %}{% endblock %}</h1>
+		<table>
+			<thead>
+				<tr>
+					<th>{% trans "Competition" %}</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for competition in competitions %}
+					<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
+						<td>{{ competition.title }}</td>
+						<td><a href="{% url 'rego:club:list' competition.pk %}">{% trans "Clubs" %}</a></td>
+					</tr>
+				{% empty %}
+					<tr class="first odd last">
+						<td class="no_results">{% trans "There are no competitions." %}</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+{% endblock %}

@@ -43,7 +43,7 @@ class AdminComponentMixin(object):
 
     @never_cache_m
     @staff_login_required_m
-    def render(self, request, templates, context, **kwargs):
+    def render(self, request, templates, context, *args, **kwargs):
         """
         If the site has HTTPS enabled, then we should ensure that this view
         is being served securely; otherwise we can carry on as normal.
@@ -67,7 +67,7 @@ class AdminComponentMixin(object):
             return HttpResponseRedirect(redirect_to)
 
         return super(AdminComponentMixin, self).render(
-            request, templates, context, **kwargs)
+            request, templates, context, *args, **kwargs)
 
     def reverse(self, name, args=(), kwargs={}, prefix=None):
         if prefix is None:

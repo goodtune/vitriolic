@@ -1,0 +1,53 @@
+{% extends "tournamentcontrol/competition/admin/base.html" %}
+{% load i18n %}
+{% load common %}
+
+{% block content %}
+	<div class="heading-block">
+		{% if date %}
+			<h3>{% trans "Progress Teams" %} <span class="pull-right">{{ date|date }}</span></h3>
+		{% else %}
+			<h3>{% trans "Progress Teams" %} <span class="pull-right">{{ stage.division.title }}</span></h3>
+		{% endif %}
+	</div>
+
+	<form action="" method="post">
+		{% csrf_token %}
+		{{ formset.management_form }}
+		<table class="table table-striped">
+			<thead>
+				<tr class="left">
+					<th class="hidden-xs">{% trans "Stage" %}</th>
+					<th>{% trans "Match" %}</th>
+					<th>{% trans "Home team" %}</th>
+					<th>{% trans "Away team" %}</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for form in formset.forms %}
+						{% with form.instance as match %}
+							<tr>
+								<td class="hidden-xs">{{ form.id }}{{ match.stage.title }}</td>
+								<td>{% if match.label %}{{ match.label }}{% else %}{% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}{% endif %}</td>
+								{% with match.get_home_team.title|default:match.get_home_team_plain as home_team %}
+									<td class="team {{ match.home_team.club.slug|cssify|default:"tba" }}">{% if form.home_team %}{{ form.home_team }}{% else %}{{ match.get_home_team.title }}{% endif %}</td>
+								{% endwith %}
+								{% with match.get_away_team.title|default:match.get_away_team_plain as away_team %}
+									<td class="team {{ match.away_team.club.slug|cssify|default:"tba" }}">{% if form.away_team %}{{ form.away_team }}{% else %}{{ match.get_away_team.title }}{% endif %}</td>
+								{% endwith %}
+							</tr>
+						{% endwith %}
+				{% empty %}
+					<tr>
+						<td colspan="4" class="no_results">{% trans "There are no matches that require progression." %}</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+
+		<div class="buttons">
+			<button type="submit">{% trans "Save" %}</button>
+			<a class="button" href="{% url 'admin:competition:competition:season:division:stage:edit' competition.pk season.pk division.pk stage.pk %}">{% trans "Cancel" %}</a>
+		</div>
+	</form>
+{% endblock %}

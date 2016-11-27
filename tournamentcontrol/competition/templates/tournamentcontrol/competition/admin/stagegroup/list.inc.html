@@ -1,0 +1,16 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	{{ block.super }}
+	<th>{% trans "Short title" %}</th>
+	<th>{% trans "Importance" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td>{{ obj.short_title|default:"-" }}</td>
+	<td>{{ obj.get_rank_importance|default:"-" }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}

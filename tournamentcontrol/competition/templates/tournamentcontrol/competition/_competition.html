@@ -1,0 +1,35 @@
+{% extends "tournamentcontrol/competition/base.html" %}
+{% load i18n %}
+
+{% block content %}
+	<h1>{% block page_title %}{% trans competition.title %}{% endblock %}</h1>
+
+	{% if competition.copy %}
+		<div class="competition">
+			<div class="copy">
+				{{ competition.copy|safe }}
+			</div>
+		</div>
+	{% endif %}
+
+	{% for season in competition.seasons.all %}
+		<div class="season">
+			<h2>{% trans season.title %}</h2>
+
+			{% block season_dates %}
+				{% if season.datetimes|length %}
+					{% with start_date=season.dates|first finish_date=season.dates|last %}
+						<p class="dates">{% blocktrans %}This season runs from <em>{{ start_date }}</em> to <em>{{ finish_date }}.</em>{% endblocktrans %}</p>
+					{% endwith %}
+				{% endif %}
+			{% endblock %}
+
+			<p>
+				<a class="button more" href="{% url 'competition:season' competition=competition.slug season=season.slug %}">{% trans "Details" %}</a>
+				{% for division in season.divisions.public %}
+					<a class="button" href="{% url 'competition:division' competition=competition.slug season=season.slug division=division.slug %}">{% trans division.title %}</a>
+				{% endfor %}
+			</p>
+		</div>
+	{% endfor %}
+{% endblock %}

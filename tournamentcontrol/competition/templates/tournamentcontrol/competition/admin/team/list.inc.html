@@ -1,0 +1,27 @@
+{% extends "mvp/list.split.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	{{ block.super }}
+	<th>{% trans "Slug" %}</th>
+	<th>{% trans "Rank" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td>{{ obj.slug|default:"-" }}</td>
+	<td>{{ obj.get_rank_division }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}
+
+{% block row-buttons-extra %}
+	<a class="btn btn-default btn-sm up" href="{% url 'admin:competition:reorder' model="team" parent="division" pk=obj.pk direction="up" %}">
+		<i class="fa fa-chevron-up"></i>
+		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Up" %}</span>
+	</a>
+	<a class="btn btn-default btn-sm down" href="{% url 'admin:competition:reorder' model="team" parent="division" pk=obj.pk direction="down" %}">
+		<i class="fa fa-chevron-down"></i>
+		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Down" %}</span>
+	</a>
+{% endblock %}

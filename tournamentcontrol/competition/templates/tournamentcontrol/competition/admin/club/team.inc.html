@@ -1,0 +1,29 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+
+{% block actions %}{% endblock %}
+
+{% block table-headings %}
+	<th>{% trans "Team" %}</th>
+	<th>{% trans "Competition" %}</th>
+	<th>{% trans "Season" %}</th>
+	<th>{% trans "Division" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td data-order="{{ forloop.counter }}">{{ obj.title }}</td>
+	<td data-order="{{ obj.division.season.competition.order }}">
+		<span class="hidden-xs hidden-sm">{{ obj.division.season.competition.title }}</span>
+		<span class="hidden-md hidden-lg">{{ obj.division.season.competition.short_title|default:obj.division.season.competition.title }}</span>
+	</td>
+	<td data-order="{{ obj.division.season.start_date|date:"U" }}">
+		<span class="hidden-xs hidden-sm">{{ obj.division.season.title }}</span>
+		<span class="hidden-md hidden-lg">{{ obj.division.season.short_title|default:obj.division.season.title }}</span>
+	</td>
+	<td>
+		<span class="hidden-xs hidden-sm">{{ obj.division.title }}</span>
+		<span class="hidden-md hidden-lg">{{ obj.division.short_title|default:obj.division.title }}</span>
+	</td>
+{% endblock table-columns %}
+
+{% block empty-row-colspan %}5{% endblock %}

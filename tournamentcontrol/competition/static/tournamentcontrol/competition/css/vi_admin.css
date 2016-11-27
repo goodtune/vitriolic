@@ -1,0 +1,321 @@
+/*** Groups of rows can be easily split visually ***/
+
+tr.group {
+	border-top-width: 2px !important;
+}
+
+tr.group.first {
+	border-top-width: 1px !important;
+}
+
+/*** This element really should be in admin ***/
+
+
+body.tc.competition #content .inner_wrapper {
+	padding: 10px;
+}
+
+body.tc.competition #content ul.breadcrumbs {
+	display: inline-block;
+	margin: 0;
+	margin-bottom: 5px;
+}
+
+body.tc.competition #content ul.breadcrumbs li {
+	float: left;
+	list-style: none;
+	padding-left: 8px;
+}
+
+body.tc.competition #content ul.breadcrumbs li.root {
+	padding-left: 0;
+}
+
+body.tc.competition #content h1 {
+	background-color: transparent;
+	color: inherit;
+	font-size: 120%;
+	margin: 0 0 12px;
+	padding: 0;
+	text-transform: capitalize;
+}
+
+body.tc.competition #content .box {
+	position: relative;
+}
+
+body.tc.competition #content .box div.actions {
+	position: absolute;
+	right: 0;
+	top: 0;
+}
+
+body.tc.competition #content .box table { width: 100%; }
+
+body.tc.competition #content .box table th,
+body.tc.competition #content .box table td {
+	border-width: 0;
+	padding: 0.4em 0.25em;
+}
+
+body.tc.competition #content .box table th.title { text-align: left; width: 40%; }
+body.tc.competition #content .box table th.short_title { text-align: left; width: 30%; }
+body.tc.competition #content .box table th.reorder { width: 15%; }
+
+body.tc.competition #content .box table td.reorder,
+body.tc.competition #content .box table td.actions {
+	text-align: center;
+}
+
+body.tc.competition #content .box table td span {
+	background-color: #ddd;
+	border: 1px solid #999;
+	float: right;
+	font-size: 90%;
+	margin-right: 4px;
+	margin-top: -3px;
+	margin-bottom: -3px;
+	min-width: 24px;
+	padding: 2px 1px;
+	text-align: center;
+	-moz-border-radius: 4px;
+	-webkit-border-radius: 4px;
+}
+
+.box table tbody tr { border-top: 1px solid #bbb; }
+.box table .first { border-top-color: #999; }
+.box table .last { border-bottom: 1px solid #999; }
+.box table .odd { background-color: #eee; }
+.box table .even { background-color: #f9f9f9; }
+.box table .inactive { color: #aaa; }
+.box table .no_results { font-style: italic; text-align: center; }
+
+body.match_schedule .field_wrapper.no_label .field,
+body.match_schedule .field_wrapper.no_label p.help_text,
+body.match_results .field_wrapper.no_label .field,
+body.match_results .field_wrapper.no_label p.help_text {
+	margin-left: 0;
+	padding-left: 0;
+}
+
+body.match_results .field_wrapper.no_label .help_text {
+    padding-left: 0;
+}
+
+body.match_results .field_wrapper .field.html5_number_widget input {
+	width: 40px;
+}
+
+body.match_results .field_wrapper,
+body.competition.stats .field_wrapper {
+	padding: 3px;
+}
+
+body.match_results .field_wrapper .boolean_select ul,
+body.competition.stats .field_wrapper .boolean_select ul {
+	margin: 0;
+}
+
+body.match_results #wrapper #content .box table td,
+body.competition.stats #wrapper #content .box table td {
+	padding: 0;
+}
+
+table.stats input[type=number] {
+	text-align: center;
+	width: 40px;
+}
+
+table.stats input[type=number]::-webkit-inner-spin-button,
+table.stats input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+body.competition.stats table .player {
+	text-align: left;
+	padding-left: 5px !important;
+}
+
+body.match_results #content .box table td,
+body.match_results #content .box table th,
+body.competition.stats #content .box table td,
+body.competition.stats #content .box table th {
+	font-size: 90%;
+}
+
+body.competition.stats .field_wrapper .field.boolean_select ul li {
+	margin-left: 0;
+}
+
+body.competition.stats .field_wrapper .field.number_input input,
+body.competition.stats .field_wrapper .field.text_input input {
+	width: 22px;
+	text-align: center;
+}
+
+body.competition.timeslots .field_wrapper .field.number_input input {
+	width: 50px;
+	text-align: center;
+}
+
+.field_wrapper .field_wrapper .field.text_input.short input {
+	width: 115px;
+	text-align: center;
+}
+
+body.match_results .field_wrapper .field.html5_number_widget input {
+	text-align: center;
+	width: 40px;
+}
+
+body.competition.stats .field_wrapper.field_errors .errorlist {
+	display: none;
+}
+
+body.competition.stats .field_wrapper.field_errors .field.number_input input,
+body.competition.stats .field_wrapper.field_errors .field.text_input input {
+	border-color: red;
+}
+
+body.grid .field_wrapper .field.select select,
+body.match_results .field_wrapper .field select {
+    min-width: 180px;
+    width: auto;
+}
+body.grid .field_wrapper .field.boolean_select li,
+body.grid .field_wrapper .field.text_input input[name$=rounds],
+body.grid .field_wrapper .field.number_input input[name$=rounds],
+body.grid .field_wrapper .field.text_input input[name$=offset],
+body.grid .field_wrapper .field.number_input input[name$=offset] {
+	width: 50px;
+}
+
+body.match_progress td.team {
+	width: 250px;
+}
+
+body.match_progress .ladder td,
+body.match_progress .ladder th {
+       text-align: center;
+}
+
+body.match_progress .ladder td.team {
+	text-align: left;
+	width: 180px;
+}
+
+body.match_progress .progress th {
+	text-align: center;
+}
+
+body.match_progress .progress td.team {
+	width: 140px;
+}
+
+body.match_progress .field_wrapper {
+	padding-top: 0;
+	padding-bottom: 0;
+}
+
+body.match_progress .field_wrapper .field {
+	margin-left: 0;
+}
+
+body.match_progress .field_wrapper label {
+	display: block;
+	float: none;
+	margin-bottom: 6px;
+	padding-top: 0;
+}
+
+body.match_progress .field_wrapper .field select,
+body.match_schedule .field_wrapper .field select {
+	width: 230px;
+}
+body.match_schedule .field_wrapper .select_time_widget select {
+    width: 50px;
+}
+body.match_schedule .field_wrapper .field select[name$=time] {
+    width: 100px;
+}
+
+body.match_schedule fieldset.errorlist {
+    background: #ffc7d5;
+    border-color: #ff94af;
+    border-style: solid;
+    border-width: 1px;
+    color: #fa003e;
+    padding: 0 1em 0.5em;
+}
+
+body.venues #grounds .title .field_wrapper .field input { width: 160px; }
+body.venues #grounds .abbreviation .field_wrapper .field input { width: 50px; }
+
+body.team.rego .formset .field_wrapper .field.number_input input,
+body.team.rego .formset .field_wrapper .field.text_input input {
+	text-align: center;
+	width: 30px;
+}
+body.team.rego .formset .field_wrapper .field.number_input input {
+	width: 40px;
+}
+
+body.team.rego .formset .field_wrapper .checkbox_select_multiple {
+	min-height: 20px;
+	width: auto;
+}
+body.team.rego .formset .field_wrapper .field.select select { width: 220px; }
+body.team.rego .formset .field_wrapper .field.boolean_select li { width: 50px; }
+
+table tbody td .field_wrapper .field.checkbox_input {
+	margin-left: 60px;
+}
+
+.half.box table tbody td.title .field_wrapper .field.text_input input {
+	width: 255px;
+}
+
+/* conflict graph */
+
+div.conflict-graph img {
+    width: 100%;
+}
+
+.actions .button.chart {
+    background-image: url('../../../touchtechnology/admin/img/icons/chart_organisation.png');
+}
+
+/* draft division indicator */
+
+td.division {
+	padding-left: 32px !important;
+	background-repeat: no-repeat;
+	background-position: 8px center;
+}
+
+td.division.draft {
+	background-image: url(../../../touchtechnology/admin/img/icons/wrench.png);
+}
+
+/* should probably be in touchtechnology.admin, but I am impatient */
+
+.buttons button.right {
+	float: right;
+}
+
+.field_wrapper.no_label p.help_text {
+    padding-left: 0;
+}
+
+.box table tbody tr.errors.odd {
+	background-color: #fcc;
+}
+.box table tbody tr.errors.even {
+	background-color: #ffe6e6;
+}
+
+.oembed-rich .oembed-rich-url,
+.oembed-video .oembed-video-url {
+  display: none;
+}

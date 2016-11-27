@@ -1,0 +1,77 @@
+{% load i18n static %}
+{% load common %}
+<html>
+<head>
+	<title>{% trans "Scorecards" %}</title>
+
+	<link rel="stylesheet" href="{% get_static_prefix %}css/reset.css" />
+	<link rel="stylesheet" href="{% get_static_prefix %}css/base.css" />
+	<link rel="stylesheet" href="{% get_static_prefix %}tournamentcontrol/competition/css/vi_scorecards.css" />
+
+	<meta name="author" content="{% block meta_author %}{{ site.name }}{% endblock %}" />
+	<meta name="subject" content="{% block meta_subject %}{% endblock %}" />
+	<meta name="keywords" content="{% block meta_keywords %}{% endblock %}" />
+	<meta name="date" content="{% block meta_date %}{% now "c" %}{% endblock %}" />
+
+</head>
+<body>
+	{% trans "TBA" as tba context "abbreviation: to be advised" %}
+	{% trans "TBC" as tbc context "abbreviation: to be confirmed" %}
+
+	{% for match in matches %}
+		<table class="scorecard {% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
+			<thead>
+				<tr>
+					<th colspan="3" class="division">
+						{{ match.stage.division.short_title|default:match.stage.division.title }}
+						{% if match.stage_group %}
+							<br />{{ match.stage_group.short_title|default:match.stage_group.title }}
+						{% else %}
+							{% if match.is_final %}
+								<br />{{ match.label }}
+							{% endif %}
+						{% endif %}
+					</th>
+					<th colspan="2" class="field">
+						{% if match.play_at %}
+							{{ match.play_at.content_object.abbreviation|default:match.play_at.title }}
+						{% else %}
+							{{ tba }}
+						{% endif %}
+					</th>
+
+					{# The date and time should always be local time for a scorecard, these are used at the game! #}
+					<th colspan="2" class="time">{{ match.time|time:"G:i"|default:tbc }}</th>
+					<th colspan="3" class="date">{{ match.date|date:"jS M Y"|default:tba }}</th>
+				</tr>
+				<tr>
+					<th colspan="5" class="team">{{ match.get_home_team.title }}</th>
+					<th colspan="5" class="team">{{ match.get_away_team.title }}</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+				<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+				<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+				<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+				<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+			</tbody>
+			<tfoot>
+				<tr>
+					<td colspan="3" class="captain">{% trans "Captain:" %}</td>
+					<td colspan="2" rowspan="2" class="score">{% trans "Score:" %}</td>
+					<td colspan="3" class="captain">{% trans "Captain:" %}</td>
+					<td colspan="2" rowspan="2" class="score">{% trans "Score:" %}</td>
+				</tr>
+				<tr>
+					<td colspan="3" class="signature"></td>
+					<td colspan="3" class="signature"></td>
+				</tr>
+				<tr>
+					<td colspan="10" class="referees">{% trans "Referees:" %}</td>
+				</tr>
+			</tfoot>
+		</table>
+	{% endfor %}
+</body>
+</html>

@@ -1,0 +1,83 @@
+{% load i18n %}
+{% load common %}
+<html>
+<head>
+	<title>{% block page_title %}{{ competition.title }} - {{ season.title }} • {{ date|date }}{% endblock %}</title>
+	{% if not request.is_ajax %}
+		<link rel="stylesheet" href="{{ STATIC_URL }}css/reset-min.css" />
+		<link rel="stylesheet" href="{{ STATIC_URL }}css/base-min.css" />
+	{% endif %}
+
+	<link rel="stylesheet" href="{{ STATIC_URL }}tournamentcontrol/competition/css/vi_grid.css" />
+
+	<style type="text/css">
+		/* timestamp and version number */
+		@page {
+			@bottom-right {
+				content: "{% now "Y-m-d H:i T" %}{% if ver %} (v{{ ver }}){% endif %}";
+				font-size: 1.5em;
+				font-style: italic;
+			}
+		}
+	</style>
+
+	{% block customcss %}
+		<link rel="stylesheet" href="{{ STATIC_URL }}css/vi_grid.css" />
+	{% endblock %}
+</head>
+<body>
+	{% for venue in season.venues.all %}
+		{% for date, matrix in matrices.items %}
+			{% if not request.is_ajax %}
+				<h1>{{ date|date }} @ {{ venue }}</h1>
+			{% endif %}
+			<table id="grid">
+				<thead>
+					<tr>
+						<th>&nbsp;</th>
+						{% for place in columns %}
+							{% ifequal place.ground.venue venue %}
+								<th>{% with title=place.abbreviation|default:place.title %}{% trans title %}{% endwith %}</th>
+							{% endifequal %}
+						{% endfor %}
+					</tr>
+				</thead>
+				<tfoot>
+					<tr>
+						<td>&nbsp;</td>
+						{% for place in columns %}
+							{% ifequal place.ground.venue venue %}
+								<th>{% with title=place.abbreviation|default:place.title %}{% trans title %}{% endwith %}</th>
+							{% endifequal %}
+						{% endfor %}
+					</tr>
+				</tfoot>
+				<tbody>
+					{% for time, data in matrix.items %}
+						<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
+							<th>{{ time|time }}</th>
+							{% for place, matches in data.items %}
+								{% ifequal place.ground.venue venue %}
+									<td>
+										{% for match in matches %}
+											{% with division=match.stage.division stage=match.stage home=match.get_home_team away=match.get_away_team %}
+												<div class="match {{ division.slug|cssify }}" data-match="{{ match.pk }}" data-stage="{{ stage.pk }}" data-division="{{ division.pk }}">
+													<h4>{% block division %}{% endblock %}</h4>
+													{% if match.label %}
+														<h5>{% trans match.label %}</h5>
+													{% endif %}
+													<p>{% block teams %}{% endblock %}</p>
+												</div>
+											{% endwith %}
+										{% endfor %}
+									</td>
+								{% endifequal %}
+							{% endfor %}
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		{% endfor %}
+	{% endfor %}
+</body>
+</html>

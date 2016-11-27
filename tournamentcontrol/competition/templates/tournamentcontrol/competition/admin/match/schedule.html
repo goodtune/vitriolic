@@ -1,0 +1,130 @@
+{% extends "touchtechnology/admin/edit.html" %}
+{% load i18n %}
+{% load common %}
+
+
+{% block messages %}
+	{{ block.super }}
+	{% if formset.non_form_errors %}
+		<ol class="messages errors">
+			{{ formset.non_form_errors|unordered_list }}
+		</ol>
+	{% endif %}
+{% endblock %}
+
+
+{% block content %}
+	<form class="form-horizontal" action="" method="post">
+		<div class="heading-block">
+			<h3>{% trans "Schedule" %}</h3>
+		</div>
+
+		{% csrf_token %}
+
+		{{ formset.management_form }}
+
+		{% regroup formset.forms by instance.stage.division as grouped %}
+
+		<div class="tab-pane active" id="washout-tab">
+			{% for group in grouped %}
+				<fieldset>
+					<legend>{{ group.grouper }}</legend>
+
+					{% for form in group.list %}
+						{% with match=form.instance %}
+							{% with home=match.get_home_team away=match.get_away_team %}
+								<div class="row">
+									{{ form.id }}
+									<div class="col-xs-12 visible-xs">
+										<h5>{{ match }}</h5>
+									</div>
+									<div class="col-sm-6 hidden-xs">
+										<div class="form-group">
+											<label class="control-label col-md-3">{% trans "Match" %}</label>
+											<div class="col-md-9">
+												<p class="form-control-static">{{ match }}</p>
+											</div>
+										</div>
+									</div>
+									<div class="col-sm-3 col-xs-6">
+										{% field form.time %}
+									</div>
+									<div class="col-sm-3 col-xs-6">
+										{% field form.play_at %}
+									</div>
+								</div>
+							{% endwith %}
+						{% endwith %}
+					{% endfor %}
+				</fieldset>
+			{% endfor %}
+		</div>
+		<div class="clearfix"></div>
+
+		<div class="form-group">
+			<div class="text-center">
+				<button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
+				&nbsp;<a class="btn btn-default" href="{{ season.urls.edit }}">{% trans "Cancel" %}</a>
+			</div> <!-- /.col -->
+		</div>
+	</form>
+{% endblock %}
+
+{% block main_content %}
+	<form class="box" action="" method="post">
+		{# FIXME: better construction of this heading to allow for translation #}
+		<h1>Schedule{% if division %} {{ division.title }}{% if stage %} ({{ stage.title }}){% endif %}{% endif %} - {{ date|date }}</h1>
+
+		{% csrf_token %}
+		{{ formset.non_form_errors }}
+
+		{% if formset.errors %}
+			{# We are only here if it was not possible to validate the formset #}
+			<fieldset class="errorlist">
+				{% for f in formset.management_form %}
+					{% field f %}
+				{% endfor %}
+			</fieldset>
+		{% else %}
+			{% for f in formset.management_form %}
+				{{ f.as_hidden }}
+			{% endfor %}
+		{% endif %}
+
+		<div>
+			<table id="schedule">
+				<thead>
+					<tr class="left">
+						{% if not division %}<th>{% trans "Division" %}</th>{% endif %}
+						{% if not round %}<th>{% trans "Round" %}</th>{% endif %}
+						<th>{% trans "Home team" %}</th>
+						<th>{% trans "Away team" %}</th>
+						<th>{% trans "Time" %}</th>
+						<th>{% trans "Play at" %}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for form in formset.forms %}
+						{% with match=form.instance %}
+							{% with home=match.get_home_team away=match.get_away_team %}
+								<tr class="division {{ match.division.slug|cssify }} {% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
+									{% if not division %}<td>{{ match.stage.division.title }}{% if match.stage_group %} - {{ match.stage_group.title }}{% endif %}</td>{% endif %}
+									{% if not round %}<td>{{ match.round }}</td>{% endif %}
+									<td class="team {{ home.club.slug|cssify }}">{{ home.title }}</td>
+									<td class="team {{ away.club.slug|cssify }}">{{ away.title }}</td>
+									<td>{{ form.id }}{% field form.time "" %}</td>
+									<td>{% field form.play_at "" %}</td>
+								</tr>
+							{% endwith %}
+						{% endwith %}
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+
+		<div class="buttons">
+			<button type="submit">{% trans "Save" %}</button>
+			<a class="button" href="{{ season.urls.edit }}">{% trans "Cancel" %}</a>
+		</div>
+	</form>
+{% endblock %}

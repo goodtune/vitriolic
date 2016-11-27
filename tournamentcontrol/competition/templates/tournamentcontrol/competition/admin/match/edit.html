@@ -1,0 +1,7 @@
+{% extends "touchtechnology/admin/edit.html" %}
+{% load static %}
+
+{% block extracss %}
+	{{ block.super }}
+	<link rel="stylesheet" href="{% get_static_prefix %}tournamentcontrol/competition/css/vi_admin.css" media="screen" />
+{% endblock %}

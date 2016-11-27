@@ -1,0 +1,15 @@
+{% extends "touchtechnology/admin/base.html" %}
+{% load i18n %}
+
+{% block extracss %}
+	{{ block.super }}
+	<link rel="stylesheet" href="{{ STATIC_URL }}tournamentcontrol/competition/css/vi_admin.css" media="screen" />
+{% endblock %}
+
+{% block components %}{% endblock %}
+
+{% block breadcrumbs %}
+	{% if index_url %}
+		<li><a href="{% url 'rego:index' %}">{% trans "Registration" %}</a></li>
+	{% endif %}
+{% endblock %}

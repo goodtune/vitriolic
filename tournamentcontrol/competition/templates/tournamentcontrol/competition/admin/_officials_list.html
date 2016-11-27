@@ -1,0 +1,31 @@
+{% extends base %}
+{% load i18n %}
+
+{% block main_content %}
+	<div class="box">
+		<h1>{{ season.competition.title }} - {{ season.title }}</h1>
+
+		<table>
+			<thead>
+				<th>{% trans "Person" %}</th>
+				<th>{% trans "Roles" %}</th>
+			</thead>
+			<tbody>
+				{% for player in people.select_related %}
+					<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
+						<td>{{ player.person.get_full_name }}</td>
+						<td>{% for role in player.roles.all %}{{ role.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+					</tr>
+				{% empty %}
+					<tr class="first odd last">
+						<td colspan="2" class="no_results">{% trans "There are no club officials for this season." %}</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+
+		<div class="buttons">
+			{% block buttons %}{% endblock %}
+		</div>
+	</div>
+{% endblock %}

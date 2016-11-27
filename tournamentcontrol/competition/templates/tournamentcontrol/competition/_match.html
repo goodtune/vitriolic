@@ -1,0 +1,50 @@
+{% extends "tournamentcontrol/competition/base.html" %}
+{% load i18n %}
+{% load common competition %}
+
+{% block page_title %}{% trans match.title %} - {{ match.datetime|date:"jS F, Y @ G:i" }} [{% trans competition.title %} - {% trans season.title %} - {% trans division.title %}]{% endblock %}
+
+{% block body_class %}{{ block.super }} match{% endblock %}
+
+{% block content %}
+	{% block heading %}
+		<h1>{% trans competition.title %} - {% trans season.title %}</h1>
+		{% if match.label or not match.is_final %}
+			<h2>{% trans division.title %} - {% if match.label %}{% trans match.label %}{% else %}{% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}{% endif %}</h2>
+		{% endif %}
+	{% endblock %}
+
+	{% with home=match.get_home_team away=match.get_away_team %}
+	{% block head-to-head %}
+		<table id="match">
+			<thead>
+				<tr>
+					<th colspan="3" class="team big {{ home.club.slug|cssify }}">
+						{% url 'competition:team' competition=competition.slug season=season.slug division=division.slug team=home.slug as url1 %}
+						{% url 'competition:team' season=season.slug division=division.slug team=home.slug as url2 %}
+						{% url 'competition:team' division=division.slug team=home.slug as url3 %}
+						<a href="{{ url1|default:url2|default:url3 }}">{% trans home.title %}</a>
+					</th>
+					<th colspan="3" class="team big {{ away.club.slug|cssify }}">
+						{% url 'competition:team' competition=competition.slug season=season.slug division=division.slug team=away.slug as url1 %}
+						{% url 'competition:team' season=season.slug division=division.slug team=away.slug as url2 %}
+						{% url 'competition:team' division=division.slug team=away.slug as url3 %}
+						<a href="{{ url1|default:url2|default:url3 }}">{% trans away.title %}</a>
+					</th>
+				</tr>
+			</thead>
+			<tfoot>
+				<tr>
+					<td colspan="2"></td>
+					<td class="points">{{ match.home_team_score }}</td>
+					<td colspan="2"></td>
+					<td class="points">{{ match.away_team_score }}</td>
+				</tr>
+			</tfoot>
+			<tbody>
+				{% statistics match %}
+			</tbody>
+		</table>
+	{% endblock %}
+	{% endwith %}
+{% endblock %}

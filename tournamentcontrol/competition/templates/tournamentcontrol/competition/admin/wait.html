@@ -1,0 +1,10 @@
+{% extends "tournamentcontrol/competition/admin/base.html" %}
+{% load i18n %}
+
+{% block content %}
+	<h1>{% trans "Please wait..." %}</h1>
+
+	<fieldset>
+		<p>{% block waitfor %}{% endblock %}</p>
+	</fieldset>
+{% endblock %}

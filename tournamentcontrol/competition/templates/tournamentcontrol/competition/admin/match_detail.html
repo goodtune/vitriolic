@@ -1,0 +1,90 @@
+{% extends "tournamentcontrol/competition/admin/base.html" %}
+{% load i18n tz %}
+{% load common %}
+
+{% block body_class %}{{ block.super }} stats{% endblock %}
+
+{% block main_content %}
+	<div class="heading-block">
+		<h3>
+			{{ match.stage.division }}: {{ match }}
+			<span class="pull-right hidden-xs">{{ match.datetime|timezone:match.play_at.timezone|date:"l jS F Y, g:i a e" }}</span>
+		</h3>
+	</div>
+
+	<form action="" method="post">
+		{% csrf_token %}
+
+		<div class="row">
+			{% for formset in formsets %}
+				{{ formset.management_form }}
+
+				<div class="col-md-6">
+					{% with team=formset.queryset.team %}
+						<h4>{{ team.title }}</h4>
+
+						{% if not formset.is_valid and formset.non_form_errors %}
+							<ul class="list-group">
+								{% for error in formset.non_form_errors %}
+									<li class="list-group-item list-group-item-danger">{{ error }}</li>
+								{% endfor %}
+							</ul>
+						{% endif %}
+
+						<table class="table table-striped table-condensed stats">
+							<thead>
+								<tr>
+									<th>#</th>
+									<th>{% trans "Player" %}</th>
+									<th>{% trans "Played" %}</th>
+									<th>{% trans "Points" %}</th>
+									<th>{% trans "MVP" %}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{% for form in formset %}
+									{% with player=form.instance.player errors=form.errors.items %}
+										<tr class="{% if errors %}danger has-error{% endif %}">
+											<td>{{ form.number }}</td>
+											<td>
+												{{ player.first_name }} {{ player.last_name }}
+												{% if errors %}
+													<ul class="list-unstyled text-danger">
+														{% for field, error_list in errors %}
+															{% for msg in error_list %}
+																<li>{{ msg }}</li>
+															{% endfor %}
+														{% endfor %}
+													</ul>
+												{% endif %}
+											</td>
+											<td>{{ form.played }}</td>
+											<td>{{ form.points }}</td>
+											<td>{{ form.id }}{% if form.mvp %}{{ form.mvp }}{% else %}-{% endif %}</td>
+										</tr>
+									{% endwith %}
+								{% empty %}
+									<tr>
+										<td colspan="5" class="no_results">
+											{% trans "There are no registered players in this team." %}
+										</td>
+									</tr>
+								{% endfor %}
+							</tbody>
+						</table>
+					{% endwith %}
+				</div>
+			{% endfor %}
+		</div>
+
+		<div class="row">
+			<div class="col-md-12">
+				<div class="text-center">
+					<button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
+					<a class="btn btn-default" href="{% url 'admin:index' %}">{% trans "Cancel" %}</a>
+				</div>
+			</div>
+		</div>
+
+	</form>
+{% endblock %}

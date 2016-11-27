@@ -1,0 +1,68 @@
+{% load i18n %}
+{% load common %}
+
+{% block content %}
+	{% trans "TBA" as tba context "abbreviation: to be advised" %}
+	{% trans "TBC" as tbc context "abbreviation: to be confirmed" %}
+
+	{% if matches %}
+		{% block heading %}
+			<h2>{% block heading-label %}{% trans "Upcoming Matches" %}{% endblock %}</h2>
+		{% endblock %}
+
+		{% block next-game-date %}<h3>{% block next-game-date-label %}{{ next_game_date|date }}{% endblock %}</h3>{% endblock %}
+
+		<table class="draw">
+			<tbody>
+				{% for match in matches %}
+					{% with stage=match.stage division=match.stage.division pool=match.stage_group home=match.get_home_team away=match.get_away_team %}
+						<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
+							<td class="label">
+								<a href="{# url 'competition:division' competition=division.season.competition.slug season=division.season.slug division=division.slug #}">{% trans division.title %}</a>
+							</td>
+							{% if stage or pool %}
+								<td class="{% if pool %}pool{% else %}stage{% endif %}">
+									{% if stage %}
+										{% if pool %}
+											{% with title=stage.short_title|default:stage.title %}{% trans title %}{% endwith %}
+										{% else %}
+											{% trans stage.title %}
+										{% endif %}
+									{% endif %}
+									{% if pool %}{% with title=pool.short_title|default:pool.title %}{% trans title %}{% endwith %}{% endif %}
+								</td>
+							{% endif %}
+							<td class="time">{{ match.datetime|time|default:tba }}</td>
+							<td class="field">{{ match.play_at.title|default:tba }}</td>
+							{% spaceless %}
+								<td class="right team {{ home.club.slug|cssify }}">
+									{% if home.slug %}
+										{% url 'competition:team' competition=home.division.season.competition.slug season=home.division.season.slug division=home.division.slug team=home.slug as url1 %}
+										{% url 'competition:team' season=home.division.season.slug division=home.division.slug team=home.slug as url2 %}
+										{% url 'competition:team' division=home.division.slug team=home.slug as url3 %}
+										<a href="{{ url1|default:url2|default:url3 }}">{% trans home.title %}</a>
+									{% else %}
+										<span>{% trans home.title %}</span>
+									{% endif %}
+								</td>
+							{% endspaceless %}
+							<td class="versus center">{% trans "vs" context "abbreviation: versus" %}</td>
+							{% spaceless %}
+								<td class="team {{ away.club.slug|cssify }}">
+									{% if away.slug %}
+										{% url 'competition:team' competition=away.division.season.competition.slug season=away.division.season.slug division=away.division.slug team=away.slug as url1 %}
+										{% url 'competition:team' season=away.division.season.slug division=away.division.slug team=away.slug as url2 %}
+										{% url 'competition:team' division=away.division.slug team=away.slug as url3 %}
+										<a href="{{ url1|default:url2|default:url3 }}">{% trans away.title %}</a>
+									{% else %}
+										<span>{% trans away.title %}</span>
+									{% endif %}
+								</td>
+							{% endspaceless %}
+						</tr>
+					{% endwith %}
+				{% endfor %}
+			</tbody>
+		</table>
+	{% endif %}
+{% endblock content %}

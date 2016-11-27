@@ -1,0 +1,32 @@
+{% load i18n %}
+<div class="col-lg-4 col-md-4 col-sm-4">
+	<div class="portlet portlet-table">
+		<div class="portlet-header">
+			<h4 class="portlet-title">{{ widget.verbose_name }}</h4>
+		</div>
+		<div class="portlet-body">
+			<table class="table table-striped table-condensed">
+				<thead>
+					<tr>
+						<th>{% trans "Date" %}</th>
+						<th>{% trans "Time" %}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for competition, season, date, time in dates_times %}
+						<tr>
+							{% url 'admin:competition:match-results' competition_id=competition season_id=season datestr=date|date:"Ymd" as edit_date %}
+							{% url 'admin:competition:match-results' competition_id=competition season_id=season datestr=date|date:"Ymd" timestr=time|time:"Hi" as edit_time %}
+							<td>{% ifchanged %}<a href="{{ edit_date }}">{{ date }}</a>{% endifchanged %}</td>
+							<td>{% if time %}<a href="{{ edit_time }}">{{ time|time }}</a>{% endif %}</td>
+						</tr>
+					{% empty %}
+						<tr>
+							<td colspan="2">{% trans "No matches awaiting result entry." %}</td>
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>

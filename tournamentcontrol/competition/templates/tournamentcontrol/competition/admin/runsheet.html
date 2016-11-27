@@ -1,0 +1,43 @@
+{% load i18n static %}
+<html>
+<head>
+	<title>{% blocktrans %}Daily Runsheet - {{ date }}{% endblocktrans %}</title>
+	{% if not request.is_ajax %}
+		<link rel="stylesheet" href="{% get_static_prefix %}css/reset{% if not debug %}-min{% endif %}.css" />
+		<link rel="stylesheet" href="{% get_static_prefix %}css/base{% if not debug %}-min{% endif %}.css" />
+	{% endif %}
+	<link rel="stylesheet" href="{% get_static_prefix %}tournamentcontrol/competition/css/vi_runsheet.css" />
+</head>
+<body>
+
+<h1>{% trans "Run Sheet" %}</h1>
+
+<h2>{{ date|date:"l, jS F Y" }}</h2>
+
+<table id="match_list">
+	<thead>
+		<tr>
+			<th class="time">{% trans "Time" %}</th>
+			<th class="division">{% trans "Division" %}</th>
+			<th class="play_at">{% trans "Place" %}</th>
+			<th class="team">{% trans "Team 1" %}</th>
+			<th class="team">{% trans "Team 2" %}</th>
+		</tr>
+	</thead>
+	<tbody>
+		{% for match in object_list %}
+			<tr{% ifchanged match.datetime %} class="group"{% endifchanged %}>
+				<td class="time">{% ifchanged match.datetime %}{{ match.datetime|time }}{% endifchanged %}</td>
+				<td class="division">{{ match.stage.division.short_title|default:match.stage.division.title }}</td>
+				<td class="play_at">{{ match.play_at.title }}</td>
+				<td class="team">{{ match.get_home_team|safe }}</td>
+				<td class="team">{{ match.get_away_team|safe }}</td>
+			</tr>
+		{% endfor %}
+	</tbody>
+</table>
+
+<p id="timestamp">{% now "D, j M Y H:i:s e" %} by {{ user.get_full_name|default:user.email }}</p>
+
+</body>
+</html>
