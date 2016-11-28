@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2014-10-25 18:19+1100\n"
+"POT-Creation-Date: 2016-11-28 17:11+1100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,175 +17,147 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: admin.py:13
+#: touchtechnology/news/admin.py:20
 msgid "News"
 msgstr ""
 
-#: app_settings.py:17 models.py:83
-msgid "Copy"
+#: touchtechnology/news/admin.py:58
+msgid "Articles"
 msgstr ""
 
-#: forms.py:18
-msgid "Please select..."
-msgstr ""
-
-#: models.py:27 templates/touchtechnology/news/admin/index.html:11
-msgid "Headline"
-msgstr ""
-
-#: models.py:28
-msgid "Abstract"
-msgstr ""
-
-#: models.py:30 templates/touchtechnology/news/admin/index.html:12
-msgid "Published"
-msgstr ""
-
-#: models.py:31
-msgid "Set a date & time in the future to schedule an announcement."
-msgstr ""
-
-#: models.py:33 models.py:100
-msgid "Slug"
-msgstr ""
-
-#: models.py:34 models.py:101
-msgid "Locked Slug"
-msgstr ""
-
-#: models.py:37
-msgid "Byline"
-msgstr ""
-
-#: models.py:39
-msgid "Keywords"
-msgstr ""
-
-#: models.py:41 templates/touchtechnology/news/_related_list.html:18
-#: templates/touchtechnology/news/admin/index.html:40
+#: touchtechnology/news/admin.py:59 touchtechnology/news/models.py:60
+#: touchtechnology/news/templates/touchtechnology/news/_related_list.html:17
 msgid "Categories"
 msgstr ""
 
-#: models.py:43
-msgid "Enabled"
+#: touchtechnology/news/app_settings.py:17 touchtechnology/news/models.py:105
+msgid "Copy"
 msgstr ""
 
-#: models.py:47
+#: touchtechnology/news/forms.py:19
+msgid "Please select..."
+msgstr ""
+
+#: touchtechnology/news/models.py:41
+#: touchtechnology/news/templates/touchtechnology/news/admin/article/list.inc.html:6
+msgid "Headline"
+msgstr ""
+
+#: touchtechnology/news/models.py:42 touchtechnology/news/models.py:122
+msgid "Slug"
+msgstr ""
+
+#: touchtechnology/news/models.py:43 touchtechnology/news/models.py:123
+msgid "Locked Slug"
+msgstr ""
+
+#: touchtechnology/news/models.py:46
 msgid "Image"
 msgstr ""
 
-#: models.py:78
+#: touchtechnology/news/models.py:48
+msgid "Abstract"
+msgstr ""
+
+#: touchtechnology/news/models.py:51
+#: touchtechnology/news/templates/touchtechnology/news/admin/article/list.inc.html:7
+msgid "Published"
+msgstr ""
+
+#: touchtechnology/news/models.py:52
+msgid "Set a date & time in the future to schedule an announcement."
+msgstr ""
+
+#: touchtechnology/news/models.py:56
+msgid "Byline"
+msgstr ""
+
+#: touchtechnology/news/models.py:58
+msgid "Keywords"
+msgstr ""
+
+#: touchtechnology/news/models.py:62
+msgid "Enabled"
+msgstr ""
+
+#: touchtechnology/news/models.py:100
 msgid "Article"
 msgstr ""
 
-#: models.py:81
+#: touchtechnology/news/models.py:103
 msgid "CSS class"
 msgstr ""
 
-#: models.py:82
+#: touchtechnology/news/models.py:104
 msgid "Sequence"
 msgstr ""
 
-#: models.py:95 templates/touchtechnology/news/admin/index.html:44
+#: touchtechnology/news/models.py:117
 msgid "Title"
 msgstr ""
 
-#: models.py:97
+#: touchtechnology/news/models.py:119
 msgid "Short Title"
 msgstr ""
 
-#: models.py:98
+#: touchtechnology/news/models.py:120
 msgid "Used in navigation, a shorter alternative to the main title."
 msgstr ""
 
-#: models.py:106
+#: touchtechnology/news/models.py:128
 msgid "Hide from menus"
 msgstr ""
 
-#: models.py:107
+#: touchtechnology/news/models.py:129
 msgid ""
 "When set to 'Yes' this object will still be available, but will not appear "
 "in menus."
 msgstr ""
 
-#: templates/touchtechnology/news/_feeds.html:9
+#: touchtechnology/news/templates/touchtechnology/news/_feeds.html:8
 msgid "Feeds"
 msgstr ""
 
-#: templates/touchtechnology/news/_latest_articles.html:21
-#: templates/touchtechnology/news/list_articles.html:18
+#: touchtechnology/news/templates/touchtechnology/news/_latest_articles.html:20
+#: touchtechnology/news/templates/touchtechnology/news/list_articles.html:17
 msgid "Read more"
 msgstr ""
 
-#: templates/touchtechnology/news/_latest_articles.html:26
+#: touchtechnology/news/templates/touchtechnology/news/_latest_articles.html:25
 msgid "Sorry, there are no recent news articles."
 msgstr ""
 
-#: templates/touchtechnology/news/_related_list.html:6
+#: touchtechnology/news/templates/touchtechnology/news/_related_list.html:5
 msgid "Related articles"
 msgstr ""
 
-#: templates/touchtechnology/news/admin/index.html:7
-msgid "Articles"
+#: touchtechnology/news/templates/touchtechnology/news/admin/category/list.inc.html:6
+msgid "Category"
 msgstr ""
 
-#: templates/touchtechnology/news/admin/index.html:13
-#: templates/touchtechnology/news/admin/index.html:46
-msgid "Actions"
-msgstr ""
-
-#: templates/touchtechnology/news/admin/index.html:22
-#: templates/touchtechnology/news/admin/index.html:55
-msgid "Edit"
-msgstr ""
-
-#: templates/touchtechnology/news/admin/index.html:23
-#: templates/touchtechnology/news/admin/index.html:56
-msgid "Delete"
-msgstr ""
-
-#: templates/touchtechnology/news/admin/index.html:28
-msgid "There are no articles defined."
-msgstr ""
-
-#: templates/touchtechnology/news/admin/index.html:35
-msgid "Add article"
-msgstr ""
-
-#: templates/touchtechnology/news/admin/index.html:45
-msgid "Abbreviation"
-msgstr ""
-
-#: templates/touchtechnology/news/admin/index.html:61
-msgid "There are no categories defined."
-msgstr ""
-
-#: templates/touchtechnology/news/admin/index.html:68
-msgid "Add category"
-msgstr ""
-
-#: templates/touchtechnology/news/archive/_article_list.html:11
+#: touchtechnology/news/templates/touchtechnology/news/archive/_article_list.html:10
 msgid "There were no news articles published in this period."
 msgstr ""
 
-#: templates/touchtechnology/news/archive/_base.html:4
-#: templates/touchtechnology/news/archive/_base.html:7
+#: touchtechnology/news/templates/touchtechnology/news/archive/_base.html:4
+#: touchtechnology/news/templates/touchtechnology/news/archive/_base.html:7
 msgid "News archive"
 msgstr ""
 
-#: templates/touchtechnology/news/archive/_index.html:5
-#: templates/touchtechnology/news/archive/_index.html:8
+#: touchtechnology/news/templates/touchtechnology/news/archive/_index.html:4
+#: touchtechnology/news/templates/touchtechnology/news/archive/_index.html:7
 msgid "Archive"
 msgstr ""
 
-#: templates/touchtechnology/news/archive/_index.html:16
+#: touchtechnology/news/templates/touchtechnology/news/archive/_index.html:15
 msgid "Latest"
 msgstr ""
 
-#: templates/touchtechnology/news/index.html:7
+#: touchtechnology/news/templates/touchtechnology/news/index.html:6
 msgid "Visit the news archive."
 msgstr ""
 
-#: templates/touchtechnology/news/list_articles.html:7 templatetags/news.py:42
+#: touchtechnology/news/templates/touchtechnology/news/list_articles.html:6
+#: touchtechnology/news/templatetags/news.py:49
 msgid "Latest News"
 msgstr ""
