@@ -1,0 +1,18 @@
+include LICENSE
+recursive-include touchtechnology/admin/locale *
+recursive-include touchtechnology/admin/static *
+recursive-include touchtechnology/admin/templates *
+recursive-include touchtechnology/common/locale *
+recursive-include touchtechnology/common/static *
+recursive-include touchtechnology/common/templates *
+recursive-include touchtechnology/content/locale *
+recursive-include touchtechnology/content/static *
+recursive-include touchtechnology/content/templates *
+recursive-include touchtechnology/news/locale *
+recursive-include touchtechnology/news/static *
+recursive-include touchtechnology/news/templates *
+recursive-include tournamentcontrol/competition/locale *
+recursive-include tournamentcontrol/competition/static *
+recursive-include tournamentcontrol/competition/templates *
+recursive-exclude * *.py[co]
+exclude .tox
