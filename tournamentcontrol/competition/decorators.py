@@ -232,12 +232,12 @@ def competition_by_slug(f, *a, **kw):
                             kwargs['parent'] = pool
 
                     if team_slug:
-                        team = get_object_or_404(division.teams,
+                        team = get_object_or_404(division.teams.select_related('club'),
                                                  slug=team_slug)
                         kwargs['team'] = team
 
                         # List of players for this team.
-                        players = team.people.filter(is_player=True)
+                        players = team.people.select_related('person').filter(is_player=True)
                         players = players.extra(
                             select={'has_number': 'number IS NULL'},
                             order_by=('has_number', 'number',

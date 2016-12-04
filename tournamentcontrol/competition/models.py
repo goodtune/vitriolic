@@ -666,7 +666,14 @@ class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     def matches_by_date(self):
         tzinfo = timezone.get_current_timezone()
         res = collections.OrderedDict()
-        for match in self.matches.select_related('home_team', 'away_team'):
+        for match in self.matches.select_related(
+                    'play_at', 'stage__division',
+                    'home_team__club', 'home_team__division',
+                    'away_team__club', 'away_team__division',
+                ).annotate(
+                    statistics_count=Count('statistics'),
+                    videos_count=Count('videos'),
+                ):
             res.setdefault(self, collections.OrderedDict()) \
                .setdefault(match.get_date(tzinfo), []) \
                .append(match)
@@ -723,7 +730,14 @@ class StageGroup(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     def matches_by_date(self):
         tzinfo = timezone.get_current_timezone()
         res = collections.OrderedDict()
-        for match in self.matches.select_related('home_team', 'away_team'):
+        for match in self.matches.select_related(
+                    'play_at', 'stage__division',
+                    'home_team__club', 'home_team__division',
+                    'away_team__club', 'away_team__division',
+                ).annotate(
+                    statistics_count=Count('statistics'),
+                    video_count=Count('videos'),
+                ):
             res.setdefault(self, collections.OrderedDict()) \
                .setdefault(match.get_date(tzinfo), []) \
                .append(match)
@@ -820,8 +834,14 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
 
     @property
     def matches(self):
-        home = self.home_games.select_related('home_team', 'away_team')
-        away = self.away_games.select_related('home_team', 'away_team')
+        related = (
+            'stage__division',
+            'stage_group',
+            'home_team__club',
+            'away_team__club',
+        )
+        home = self.home_games.select_related(*related)
+        away = self.away_games.select_related(*related)
         return home | away
 
     def future(self, offset=None):
@@ -861,18 +881,27 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
                                          .annotate(pool_count=Count('pools')):
             if stage.pool_count:
                 for pool in stage.pools.filter(ladder_summary__team=self):
-                    summary = pool.ladder_summary.select_related('team')
+                    summary = pool.ladder_summary.select_related(
+                        'team__club', 'team__division')
                     res.setdefault(stage, collections.OrderedDict()) \
                        .setdefault(pool, summary)
             else:
-                summary = stage.ladder_summary.select_related('team')
+                summary = stage.ladder_summary.select_related(
+                    'team__club', 'team__division')
                 res.setdefault(stage, summary)
         return res
 
     def matches_by_date(self):
         tzinfo = timezone.get_current_timezone()
         res = collections.OrderedDict()
-        for m in self.matches.select_related('home_team', 'away_team'):
+        for m in self.matches.select_related(
+                    'play_at', 'stage__division', 'stage_group',
+                    'home_team__club', 'home_team__division',
+                    'away_team__club', 'away_team__division',
+                ).annotate(
+                    statistics_count=Count('statistics'),
+                    videos_count=Count('videos'),
+                ):
             res.setdefault(m.get_date(tzinfo), []).append(m)
             # res.setdefault(self, collections.OrderedDict()) \
             #    .setdefault(match.get_date(tzinfo), []) \

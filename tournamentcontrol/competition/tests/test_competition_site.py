@@ -173,8 +173,7 @@ class FrontEndTests(TestCase):
             size=10)
         self.assertGoodView('competition:season',
                             division.season.competition.slug,
-                            division.season.slug,
-                            test_query_count=150)  # FIXME
+                            division.season.slug)
         self.assertResponseContains('Nov. 22, 2013', html=False)
 
     def test_division_match_list(self):
@@ -183,8 +182,7 @@ class FrontEndTests(TestCase):
         self.assertGoodView('competition:division',
                             division.season.competition.slug,
                             division.season.slug,
-                            division.slug,
-                            test_query_count=100)  # FIXME
+                            division.slug)
         for team in division.teams.all():
             href = self.reverse('competition:team',
                                 division.season.competition.slug,

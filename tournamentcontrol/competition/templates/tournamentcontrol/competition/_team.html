@@ -46,7 +46,7 @@
 							{% include "tournamentcontrol/competition/_team_opponent.html" %}
 						{% endwith %}
 						<td>{% score match team %}</td>
-						{% if match.statistics.count %}
+						{% if match.statistics_count %}
 							<td class="report">
 								{% url 'competition:match' competition=competition.slug season=season.slug division=division.slug match=match.pk as url1 %}
 								{% url 'competition:match' season=season.slug division=division.slug match=match.pk as url2 %}

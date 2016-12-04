@@ -99,8 +99,8 @@
 									{% endif %}
 								</td>
 
-								<td class="report{% if not match.statistics.count %} none{% endif %}">
-									{% if match.statistics.count %}
+								<td class="report{% if not match.statistics_count %} none{% endif %}">
+									{% if match.statistics_count %}
 										{% url 'competition:match' competition=competition.slug season=season.slug division=division.slug match=match.pk as url1 %}
 										{% url 'competition:match' season=season.slug division=division.slug match=match.pk as url2 %}
 										{% url 'competition:match' division=division.slug match=match.pk as url3 %}

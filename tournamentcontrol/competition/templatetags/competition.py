@@ -51,9 +51,16 @@ def next_date(context, season, offset=0, datestr=None):
     now = now.replace(second=0, microsecond=0)
 
     # start with just matches for this season (and by definition competition)
-    matches = Match.objects.filter(stage__division__draft=False,
-                                   stage__division__season=season) \
-        .select_related('stage__division__season__competition')
+    matches = (
+        Match.objects
+        .filter(stage__division__draft=False, stage__division__season=season)
+        .select_related(
+            'play_at',
+            'home_team__club', 'away_team__club',
+            'home_team__division__season__competition',
+            'away_team__division__season__competition',
+            'stage__division__season__competition')
+    )
 
     # restrict to matches starting after "now"
     later_today = Q(date__exact=now.date(), time__gte=now.time())

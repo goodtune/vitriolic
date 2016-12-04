@@ -160,7 +160,7 @@ class CompetitionSite(Application):
 
     @property
     def competitions(self):
-        return self._competitions
+        return self._competitions.prefetch_related('seasons')
 
     def index(self, request, **kwargs):
         return self.generic_list(request, self._competitions,
