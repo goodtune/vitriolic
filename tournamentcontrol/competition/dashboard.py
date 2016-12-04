@@ -44,7 +44,10 @@ def matches_require_basic_results(now=None):
     earlier_today = matches.filter(datetime__lte=now)
     matches = past_days | earlier_today
 
-    return matches.select_related('home_team', 'away_team')
+    return matches.select_related(
+        'stage__division__season__competition', 'play_at',
+        'home_team__club', 'home_team__division',
+        'away_team__club', 'away_team__division')
 
 
 def matches_require_details_results():
@@ -52,7 +55,10 @@ def matches_require_details_results():
                                     away_team_score__isnull=True) \
                            .filter(stage__division__season__statistics=True,
                                    statistics__isnull=True)
-    return matches
+    return matches.select_related(
+        'stage__division__season__competition', 'play_at',
+        'home_team__club', 'home_team__division',
+        'away_team__club', 'away_team__division')
 
 
 def matches_require_progression():
@@ -60,7 +66,10 @@ def matches_require_progression():
                            .exclude(legitimate_bye_match)
     matches = matches.order_by('stage__division', 'stage')
 
-    return matches
+    return matches.select_related(
+        'stage__division__season__competition', 'play_at',
+        'home_team__club', 'home_team__division',
+        'away_team__club', 'away_team__division')
 
 
 def matches_progression_possible():
