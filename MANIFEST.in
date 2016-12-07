@@ -1,4 +1,4 @@
-include LICENSE
+include LICENSE README.md
 recursive-include touchtechnology/admin/locale *
 recursive-include touchtechnology/admin/static *
 recursive-include touchtechnology/admin/templates *
