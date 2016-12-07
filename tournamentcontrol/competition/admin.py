@@ -17,8 +17,7 @@ from django.http import (
     HttpResponseGone,
 )
 from django.shortcuts import get_object_or_404
-from django.template import RequestContext
-from django.template.loader import select_template
+from django.template.response import TemplateResponse
 from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _, ungettext
 from touchtechnology.admin.base import AdminComponent
@@ -1802,15 +1801,14 @@ ORDER BY
                 competition.slug,),
             'tournamentcontrol/rego/registration_form.html',
         ]
-        template = select_template(templates)
 
-        html = template.render(RequestContext(request, extra_context))
+        res = TemplateResponse(request, templates, extra_context)
 
         if mode == 'pdf':
-            pdf = prince(html)
+            pdf = prince(res.render().content)
             return HttpResponse(pdf, content_type="application/pdf")
 
-        return HttpResponse(html)
+        return res
 
 
 site.register(CompetitionAdminComponent)
