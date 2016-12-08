@@ -1,7 +1,7 @@
 from setuptools import find_packages, setup
 
 try:
-    with open('README.md') as fp:
+    with open('README.rst') as fp:
         long_description = fp.read()
 except IOError:
     long_description = None
