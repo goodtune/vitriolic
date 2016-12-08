@@ -43,8 +43,10 @@ Badges
 
 Got to have badges!
 
-|Build Status| |Coverage Status|
+|PyPi Version| |Build Status| |Coverage Status|
 
+.. |PyPi Version| image:: https://img.shields.io/pypi/v/vitriolic.svg
+   :target: https://pypi.python.org/pypi/vitriolic
 .. |Build Status| image:: https://travis-ci.org/goodtune/vitriolic.svg?branch=master
    :target: https://travis-ci.org/goodtune/vitriolic
 .. |Coverage Status| image:: https://coveralls.io/repos/github/goodtune/vitriolic/badge.svg?branch=master
