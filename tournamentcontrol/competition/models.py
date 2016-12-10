@@ -196,7 +196,7 @@ class Competition(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     copy = HTMLField(blank=True)
     enabled = BooleanField(default=True)
     clubs = ManyToManyField(
-        'Club', blank=True, null=True, related_name='competitions',
+        'Club', blank=True, related_name='competitions',
         label_from_instance='title')
 
     def _get_admin_namespace(self):
