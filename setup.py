@@ -30,6 +30,9 @@ setup(
         'pytz',
     ],
     extras_require={
+        'redis': [
+            'django-redis-cache>=1.5.0,<2',
+        ],
         'admin': [
             'django-bootstrap3>=7.0,<8',
             'django-gravatar2>=1.4,<2',
