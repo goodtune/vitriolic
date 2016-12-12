@@ -6,7 +6,7 @@
 	<h1>{% block page_title %}{% if node %}{{ node.title }}{% else %}{% trans "Latest News" %}{% endif %}{% if category %} - {{ category.title }}{% endif %}{% endblock %}</h1>
 
 	{% for article in object_list %}
-		<div class="article {% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last {% endif %}" id="article_{{ article.id }}">
+		<div class="article {% if forloop.first %}first {% endif %}{% if forloop.last %} last {% endif %}" id="article_{{ article.id }}">
 			<h2>{{ article.headline }}</h2>
 			<p class="published" data-iso8601="{% timezone "UTC" %}{{ article.published|date:"c" }}{% endtimezone %}">
 				{{ article.published|date }} @ {{ article.published|date:"G:i e" }}

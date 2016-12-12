@@ -4,7 +4,7 @@
 	{% block latest_articles %}{% block latest_article_title %}<h2>{{ title }}</h2>{% endblock %}{% endblock %}
 
 	{% for a in article_list %}
-		<div class="article {% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last {% endif %}">
+		<div class="article {% if forloop.first %}first {% endif %}{% if forloop.last %} last {% endif %}">
 			{% block latest_article_headline %}
 				<h3>{{ a.headline }}</h3>
 			{% endblock %}
