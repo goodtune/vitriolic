@@ -839,6 +839,8 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
             'stage_group',
             'home_team__club',
             'away_team__club',
+            'home_team__division',
+            'away_team__division',
         )
         home = self.home_games.select_related(*related)
         away = self.away_games.select_related(*related)

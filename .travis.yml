@@ -76,6 +76,6 @@ deploy:
       M0FrurUkz9dnXKRegoL+tuObRxHBAaA90SHooSbF8x6RzhtoRG5yzjUNTwt1Y54cRushO0T
       oIoigKvKkIM4gpVthmwi6qm6xOQUN818YLXAQRVZhtxY=
   on:
-    branch: master
     tags: true
     repo: goodtune/vitriolic
+    env: DATABASE_URL=sqlite://
