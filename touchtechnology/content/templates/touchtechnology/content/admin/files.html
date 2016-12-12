@@ -14,7 +14,7 @@
 		<table>
 			<tbody>
 				{% for fullpath, d, listdir in directories %}
-					<tr class="{% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last {% endif %} directory">
+					<tr class="{% if forloop.first %}first {% endif %}{% if forloop.last %} last {% endif %} directory">
 						<td><a href="{% url 'admin:files:listdir' path=fullpath %}">{{ d }}</a></td>
 						<td class="rm">
 							{% if listdir.0 or listdir.1 %}
@@ -51,7 +51,7 @@
 		<table>
 			<tbody>
 				{% for f in files %}
-					<tr class="{% if forloop.first %}first {% endif %}{% cycle odd,even %}{% if forloop.last %} last {% endif %} file">
+					<tr class="{% if forloop.first %}first {% endif %}{% if forloop.last %} last {% endif %} file">
 						<td><a target="_blank" href="{{ base_url }}{{ path|default_if_none:"" }}{{ f }}">{{ f }}</a></td>
 						<td class="rm">
 							{% if writable %}
