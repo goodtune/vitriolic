@@ -14,7 +14,7 @@ from django.conf import settings
 from django.core import validators
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Min, Q, Sum
 from django.db.models.deletion import SET_NULL
 from django.template import Context, Template
 from django.template.loader import get_template
@@ -228,6 +228,30 @@ class Club(AdminUrlMixin, SitemapNodeBase):
 
     class Meta:
         ordering = ('title',)
+
+    @cached_property
+    def _mvp_annotate(self):
+        res = {
+            'members': {
+                'debut': Min('statistics__match__date'),
+                'stats_played': Sum('statistics__played'),
+                'stats_points': Sum('statistics__points'),
+                'teams_count': Count('teamassociation'),
+            },
+        }
+        return res
+
+    @cached_property
+    def _mvp_select_related(self):
+        res = {
+            'members': [
+                'user',
+            ],
+            'teams': [
+                'division__season__competition',
+            ],
+        }
+        return res
 
     def _get_admin_namespace(self):
         return 'admin:fixja:club'

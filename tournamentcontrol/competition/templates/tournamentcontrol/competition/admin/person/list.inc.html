@@ -13,17 +13,11 @@
 {% block table-columns %}
 	{{ block.super }}
 	<td>{{ obj.age|default_if_none:"-" }}</td>
-	<td data-order="{{ obj.stats.played|default_if_none:0 }}">{{ obj.stats.played|default_if_none:"-" }} / {{ obj.teams.count }}</td>
-	<td class="hidden-xs" data-order="{{ obj.stats.points|default_if_none:0 }}">{{ obj.stats.points|default_if_none:"-" }}</td>
-	{% with appearance=obj.statistics.played.earliest links=obj.teams.count %}
-		<td class="hidden-xs hidden-sm" data-order="{{ appearance.match.datetime|date:"U" }}">
-			{% if appearance.team %}
-				{{ appearance.match.date }}
-			{% else %}
-				-
-			{% endif %}
-		</td>
-	{% endwith %}
+	<td data-order="{{ obj.stats_played|default_if_none:0 }}">{{ obj.stats_played|default_if_none:"-" }} / {{ obj.teams_count }}</td>
+	<td class="hidden-xs" data-order="{{ obj.stats_points|default_if_none:0 }}">{{ obj.stats_points|default_if_none:"-" }}</td>
+	<td class="hidden-xs hidden-sm" data-order="{{ obj.debut|date:"U" }}">
+		{{ obj.debut|default_if_none:"-" }}
+	</td>
 {% endblock %}
 
 {% block row-buttons-items %}

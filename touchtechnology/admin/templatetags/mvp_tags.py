@@ -106,7 +106,15 @@ def related(instance, whitelist=None):
 
         rel[name] = getattr(instance, name)
 
+    # improve performance of related queries
+    annotate = getattr(instance, '_mvp_annotate', {})
+    select_related = getattr(instance, '_mvp_select_related', {})
+
     for name, manager in rel.iteritems():
+        if name in select_related:
+            manager = manager.select_related(*select_related[name])
+        if name in annotate:
+            manager = manager.annotate(**annotate[name])
         yield (manager, name)
 
 
