@@ -520,8 +520,7 @@ def has_permission(obj, user):
             perms.update(group_model_perms)
 
     # Log the resulting set of permissions for this user for this object.
-    logger.debug('user="%s", permissions="%s"',
-                 user.get_username(), ", ".join(perms))
+    logger.debug('user="%s", permissions=%r', user.get_username(), perms)
 
     return perms
 
