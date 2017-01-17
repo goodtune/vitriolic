@@ -7,7 +7,7 @@ from django.db import models
 from django.template import loader
 from six.moves import zip_longest
 from touchtechnology.common.utils import (
-    get_all_perms_for_model,
+    get_all_perms_for_model_cached,
     get_objects_for_user,
     model_and_manager,
 )
@@ -44,7 +44,7 @@ def mvp_list(context, queryset, scope=None, template=None):
     if match.namespace.rsplit(':', 1)[1] != scope:
         namespace = '%s:%s' % (match.namespace, scope)
 
-    perms = get_all_perms_for_model(model)
+    perms = get_all_perms_for_model_cached(model)
     global_perms = any([request.user.has_perm(p) for p in perms])
 
     # If the user does not have any global permissions then adjust the
@@ -62,16 +62,17 @@ def mvp_list(context, queryset, scope=None, template=None):
     context.update({
         'model': model,
         'template': template,
+        'queryset': queryset,
         'object_list': queryset,
 
         'create': reverse_lazy('%s:add' % namespace, kwargs=kw),
 
         # Pass to template the name permissions so we can re-use template
         # code to generically list and add/change/delete objects
-        'add_perm': 'add_%s' % model._meta.model_name,
-        'view_perm': 'view_%s' % model._meta.model_name,
-        'change_perm': 'change_%s' % model._meta.model_name,
-        'delete_perm': 'delete_%s' % model._meta.model_name,
+        'add_perm': '%s.add_%s' % (model._meta.app_label, model._meta.model_name),
+        'view_perm': '%s.view_%s' % (model._meta.app_label, model._meta.model_name),
+        'change_perm': '%s.change_%s' % (model._meta.app_label, model._meta.model_name),
+        'delete_perm': '%s.delete_%s' % (model._meta.app_label, model._meta.model_name),
     })
     return context
 

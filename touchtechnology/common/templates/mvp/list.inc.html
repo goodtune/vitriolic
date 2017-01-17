@@ -67,7 +67,7 @@
 		{% endblock table-head %}
 	</thead>
 	<tbody>
-		{% with checker=object_list|permchecker:user %}
+		{% with checker=queryset|permchecker:user %}
 		{% for obj in object_list %}
 			{% block table-row %}
 				{% with object_perms=obj|checkperm:checker %}

@@ -8,6 +8,7 @@ from django.apps import apps
 from django.conf import settings
 from django.contrib.auth import REDIRECT_FIELD_NAME
 from django.contrib.auth.views import redirect_to_login
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import connection
@@ -19,6 +20,7 @@ from django.template import RequestContext, TemplateDoesNotExist
 from django.template.loader import select_template
 from first import first
 from guardian.conf import settings as guardian_settings
+from guardian.shortcuts import get_perms_for_model
 from six.moves import reduce
 
 from touchtechnology.common.exceptions import NotModelManager
@@ -361,3 +363,20 @@ def get_base_url(scheme='http'):
         'hostname': hostname,
     }
     return '%(scheme)s://%(hostname)s/' % context
+
+
+def get_all_perms_for_model_cached(model, ttl=60, **extra):
+    """
+    Private function to cache and return the list of permissions that can be
+    set on a given model.
+    """
+    # What are the permissions that this model accepts?
+    cache_key = 'model_perms.%s.%s' % (
+        model._meta.app_label, model._meta.model_name)
+    model_perms = cache.get(cache_key)
+    logger.debug(
+        'model_perms_cache=%s', 'MISS' if model_perms is None else 'HIT')
+    if model_perms is None:
+        model_perms = get_all_perms_for_model(model, **extra)
+        cache.set(cache_key, model_perms, timeout=ttl)
+    return model_perms
