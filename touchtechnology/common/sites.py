@@ -42,7 +42,7 @@ from touchtechnology.common.default_settings import (
 from touchtechnology.common.forms import permissionformset_factory
 from touchtechnology.common.utils import (
     get_403_or_None,
-    get_all_perms_for_model,
+    get_all_perms_for_model_cached,
     get_objects_for_user,
     get_perms_for_model,
     model_and_manager,
@@ -226,7 +226,7 @@ class Application(object):
         # throw a HTTP 403 for no permission.
         if permission_required:
             if perms is None:
-                perms = get_all_perms_for_model(model)
+                perms = get_all_perms_for_model_cached(model)
 
             # Determine the user's permission to see the list using the
             # get_403_or_None - saves decorating view method with
@@ -283,6 +283,7 @@ class Application(object):
             create_url = None
 
         context = {
+            'queryset': queryset,
             object_list_name: queryset,
             'object_list': queryset,
             'is_paginated': False,
@@ -295,10 +296,10 @@ class Application(object):
 
             # Pass to template the name permissions so we can re-use template
             # code to generically list and add/change/delete objects
-            'add_perm': 'add_%s' % model._meta.model_name,
-            'view_perm': 'view_%s' % model._meta.model_name,
-            'change_perm': 'change_%s' % model._meta.model_name,
-            'delete_perm': 'delete_%s' % model._meta.model_name,
+            'add_perm': '%s.add_%s' % (model._meta.app_label, model._meta.model_name),
+            'view_perm': '%s.view_%s' % (model._meta.app_label, model._meta.model_name),
+            'change_perm': '%s.change_%s' % (model._meta.app_label, model._meta.model_name),
+            'delete_perm': '%s.delete_%s' % (model._meta.app_label, model._meta.model_name),
 
             'create_url': create_url,
         }
@@ -542,7 +543,7 @@ class Application(object):
         # throw a HTTP 403 for no permission.
         if permission_required:
             if perms is None:
-                perms = get_all_perms_for_model(model)
+                perms = get_all_perms_for_model_cached(model)
 
             # Determine the user's permission to see the list using the
             # get_403_or_None - saves decorating view method with

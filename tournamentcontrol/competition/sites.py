@@ -17,11 +17,12 @@ from django.http import (
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.module_loading import import_string
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import ugettext, ugettext_lazy as _
 from icalendar import Calendar, Event
+
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
-
+from tournamentcontrol.competition import rank
 from tournamentcontrol.competition.decorators import (
     competition_slug,
 )
@@ -33,7 +34,6 @@ from tournamentcontrol.competition.models import (
     Competition,
     Person,
 )
-from tournamentcontrol.competition import rank
 from tournamentcontrol.competition.sitemaps import (
     SeasonSitemap,
     DivisionSitemap,
@@ -447,7 +447,7 @@ class MultiCompetitionSite(CompetitionSite):
 
     @classmethod
     def verbose_name(cls):
-        return _("Multiple Competitions")
+        return ugettext("Multiple Competitions")
 
     def __init__(self, name='competition', app_name='competition', **kwargs):
         self.node = kwargs.get('node')  # store the node for future reference
