@@ -29,6 +29,7 @@ from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
 from django.utils.six.moves.urllib.parse import parse_qsl
 from django.utils.text import slugify
+from guardian.core import ObjectPermissionChecker
 from guardian.shortcuts import get_perms_for_model
 from six.moves import zip_longest
 
@@ -61,6 +62,23 @@ FORM_FIELD_TEMPLATE = get_template(
     "touchtechnology/common/templatetags/field.html")
 
 register = Library()
+
+
+def _cached_perms_for_model(model, ttl=60):
+    """
+    Private function to cache and return the list of permissions that can be
+    set on a given model.
+    """
+    # What are the permissions that this model accepts?
+    cache_key = 'model_perms.%s.%s' % (
+        model._meta.app_label, model._meta.model_name)
+    model_perms = cache.get(cache_key)
+    logger.debug(
+        'model_perms_cache=%s', 'MISS' if model_perms is None else 'HIT')
+    if model_perms is None:
+        model_perms = get_perms_for_model(model)
+        cache.set(cache_key, model_perms, timeout=ttl)
+    return model_perms
 
 
 @register.filter
@@ -455,6 +473,33 @@ def version(package, url=None):
     return context
 
 
+@register.filter('permchecker')
+def create_permission_checker(model_or_manager, user):
+    """
+    Create an :class:`ObjectPermissionChecker` for optimal permission checking
+    of related objects.
+
+    http://django-guardian.readthedocs.io/en/stable/userguide/performance.html
+    """
+    model, manager = model_and_manager(model_or_manager)
+    checker = ObjectPermissionChecker(user)
+    checker.prefetch_perms(manager)
+    return checker
+
+
+@register.filter('checkperm')
+def check_permission(obj, checker):
+    """
+    For a given model instance and a :class:`ObjectPermissionChecker` return
+    which permissions the associated user has.
+    """
+    return [
+        model_perm.codename
+        for model_perm in _cached_perms_for_model(obj._meta.model)
+        if checker.has_perm(model_perm, obj)
+    ]
+
+
 @register.filter('hasperm')
 def has_permission(obj, user):
     try:
@@ -473,14 +518,7 @@ def has_permission(obj, user):
     perms |= user.get_group_permissions(obj)
 
     # What are the permissions that this model accepts?
-    model_perms_cache_key = 'model_perms.%s.%s' % (
-        model._meta.app_label, model._meta.model_name)
-    model_perms = cache.get(model_perms_cache_key)
-    logger.debug(
-        'model_perms_cache=%s', 'MISS' if model_perms is None else 'HIT')
-    if model_perms is None:
-        model_perms = get_perms_for_model(model)
-        cache.set(model_perms_cache_key, model_perms, timeout=3600)
+    model_perms = _cached_perms_for_model(model, ttl=300)
 
     # Superusers have all permissions, so add each permission that the model
     # accepts for this user to the set that has been explicitly cast.

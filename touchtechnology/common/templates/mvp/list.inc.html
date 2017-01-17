@@ -67,9 +67,10 @@
 		{% endblock table-head %}
 	</thead>
 	<tbody>
+		{% with checker=object_list|permchecker:user %}
 		{% for obj in object_list %}
 			{% block table-row %}
-				{% with object_perms=obj|hasperm:user %}
+				{% with object_perms=obj|checkperm:checker %}
 					<tr>
 						{% block table-columns %}
 							<td>
@@ -144,6 +145,7 @@
 				</tr>
 			{% endblock table-row-empty %}
 		{% endfor %}
+		{% endwith %}
 	</tbody>
 </table>
 {% endblock table %}
