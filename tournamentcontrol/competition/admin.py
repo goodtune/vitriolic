@@ -630,7 +630,7 @@ class CompetitionAdminComponent(AdminComponent):
             LEFT JOIN
                 competition_teamassociation ta ON (ta.team_id = t.id)
             LEFT JOIN
-                competition_person p ON (ta.person_id = p.id)
+                competition_person p ON (ta.person_id = p.uuid)
             WHERE
                 d.season_id = %s
             GROUP BY
@@ -1534,7 +1534,7 @@ JOIN
 JOIN
     competition_team t ON (ta.team_id = t.id)
 JOIN
-    competition_person p ON (p.id = ta.person_id)
+    competition_person p ON (p.uuid = ta.person_id)
 JOIN
     competition_match m ON (
         m.id = s.match_id AND (m.home_team_id = t.id OR m.away_team_id = t.id))
@@ -1547,7 +1547,7 @@ WHERE
     AND
         (points > 0 OR mvp > 0)
 GROUP BY
-    team_id, p.id, t.title
+    team_id, p.uuid, t.title
 ORDER BY
     {} DESC
         """
