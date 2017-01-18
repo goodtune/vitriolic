@@ -28,6 +28,7 @@ setup(
         'Pillow~=3.0',
         'python-dateutil~=2.5.3',
         'pytz',
+        'sqlparse',
     ],
     extras_require={
         'redis': [
