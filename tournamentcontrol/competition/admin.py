@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.urlresolvers import reverse
 from django.db import models
-from django.db.models import Case, Q, Sum, When
+from django.db.models import Case, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
 from django.http import (
     Http404,
@@ -1496,42 +1496,30 @@ class CompetitionAdminComponent(AdminComponent):
     @competition
     @staff_login_required_m
     def highest_point_scorer(self, request, division, extra_context, **kwargs):
-        sql = """
-SELECT DISTINCT
-    p.*,
-    t.title AS team_title,
-    SUM(s.points) AS points,
-    SUM(s.mvp) AS mvp,
-    SUM(s.played) AS played
-FROM
-    competition_simplescorematchstatistic s
-JOIN
-    competition_teamassociation ta ON (s.player_id = ta.person_id)
-JOIN
-    competition_team t ON (ta.team_id = t.id)
-JOIN
-    competition_person p ON (p.uuid = ta.person_id)
-JOIN
-    competition_match m ON (
-        m.id = s.match_id AND (m.home_team_id = t.id OR m.away_team_id = t.id))
-JOIN
-    competition_stage g ON (g.id = m.stage_id)
-WHERE
-        is_player = %s
-    AND
-        t.division_id = %s
-    AND
-        (points > 0 OR mvp > 0)
-GROUP BY
-    team_id, p.uuid, t.title
-ORDER BY
-    {} DESC
-        """
+        def _get_clause(field, aggregate=Sum):
+            """
+            Local function to produce a Aggregate(Case(When())) instance which
+            can be used to extract individual totals for the division.
+            """
+            return aggregate(
+                Case(
+                    When(
+                        statistics__match__stage__division=division,
+                        then=F(field))))
 
-        scorers = Person.objects.raw(
-            sql.format('points'), params=(True, division.pk))
-        mvp = Person.objects.raw(
-            sql.format('mvp'), params=(True, division.pk))
+        people = (
+            Person.objects
+            .select_related('club')
+            .annotate(
+                played=_get_clause('statistics__played'),
+                points=_get_clause('statistics__points'),
+                mvp=_get_clause('statistics__mvp'),
+            )
+            .exclude(played=None)
+        )
+
+        scorers = people.order_by('-points', 'played')
+        mvp = people.order_by('-mvp', 'played')
 
         context = {
             'scorers': scorers,
