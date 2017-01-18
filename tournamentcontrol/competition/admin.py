@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.urlresolvers import reverse
 from django.db import models
-from django.db.models import Q
+from django.db.models import Case, Q, Sum, When
 from django.forms.models import _get_foreign_key
 from django.http import (
     Http404,
@@ -600,46 +600,22 @@ class CompetitionAdminComponent(AdminComponent):
     @staff_login_required_m
     def season_summary(self, request, competition, season, extra_context,
                        **kwargs):
-        sql = """
-            SELECT
-                t.*,
-                c.title AS club_title,
-                d.title AS division_title,
-            """
-
-        if "postgresql" in settings.DATABASES['default']['ENGINE']:
-            sql += """
-                d.order AS division_order,
-                SUM((ta.is_player=true)::int) AS player_count,
-                SUM((ta.is_player=false)::int) AS non_player_count
-            """
-        else:
-            sql += """
-                'd.order' AS division_order,
-                SUM(ta.is_player=1) AS player_count,
-                SUM(ta.is_player=0) AS non_player_count
-            """
-
-        sql += """
-            FROM
-                competition_team t
-            LEFT JOIN
-                competition_club c ON (t.club_id = c.id)
-            LEFT JOIN
-                competition_division d ON (t.division_id = d.id)
-            LEFT JOIN
-                competition_teamassociation ta ON (ta.team_id = t.id)
-            LEFT JOIN
-                competition_person p ON (ta.person_id = p.uuid)
-            WHERE
-                d.season_id = %s
-            GROUP BY
-                t.id, c.title, d.title, division_order
-            ORDER BY
-                t.title, division_order;
-        """
-
-        teams = Team.objects.raw(sql, params=(season.pk,))
+        teams = (
+            Team.objects
+            .select_related('club', 'division')
+            .filter(division__season=season)
+            .order_by('club__title', 'division__order')
+            .annotate(
+                player_count=Sum(
+                    Case(
+                        When(people__is_player=True, then=1),
+                        output_field=models.IntegerField())),
+                non_player_count=Sum(
+                    Case(
+                        When(people__is_player=False, then=1),
+                        output_field=models.IntegerField())),
+            )
+        )
 
         context = {
             'teams': teams,
