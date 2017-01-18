@@ -57,6 +57,19 @@ class Migration(migrations.Migration):
         # model
 
         migrations.AddField(
+            model_name='club',
+            name='primary_uuid',
+            field=touchtechnology.common.db.models.ForeignKey(
+                to='competition.Person',
+                to_field=b'uuid',
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name='+',
+                blank=True,
+                null=True,
+            ),
+        ),
+
+        migrations.AddField(
             model_name='clubassociation',
             name='person_uuid',
             field=touchtechnology.common.db.models.ForeignKey(
