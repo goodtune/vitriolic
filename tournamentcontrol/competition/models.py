@@ -213,8 +213,7 @@ class Club(AdminUrlMixin, SitemapNodeBase):
                                        'social "mentions"'))
     facebook = models.URLField(max_length=255, blank=True)
     youtube = models.URLField(max_length=255, blank=True)
-    primary = ForeignKey('Person',
-                         blank=True, null=True, related_name='+',
+    primary = ForeignKey('Person', blank=True, null=True, related_name='+',
                          verbose_name=_('Primary contact'),
                          label_from_instance='get_full_name',
                          help_text=_("Appears on the front-end with other "
