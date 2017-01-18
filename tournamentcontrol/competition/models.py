@@ -2,6 +2,7 @@
 
 import collections
 import logging
+import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from operator import attrgetter
@@ -226,6 +227,13 @@ class Club(AdminUrlMixin, SitemapNodeBase):
                                                 'abbreviation to be used on '
                                                 'scoreboards.'))
 
+    # Add a temporary second ForeignKey to Person model. Will be populated via
+    # data migration and then replace the "primary" field above.
+    primary_uuid = ForeignKey(
+        'Person', to_field='uuid', blank=True, null=True, related_name='+',
+        verbose_name=_('Primary contact'), label_from_instance='get_full_name',
+        help_text=_("Appears on the front-end with other club information.")),
+
     class Meta:
         ordering = ('title',)
 
@@ -311,6 +319,11 @@ class Person(AdminUrlMixin, models.Model):
     We should however make it easy to clone a `Person` into a `User` at some
     point - not just now though.
     """
+    # Initially this cannot be the primary key as we need to perfom a data
+    # migration of any existing ForeignKey relationships.
+    uuid = models.UUIDField(
+        primary_key=False, unique=True, default=uuid.uuid4, editable=False)
+
     club = ForeignKey('competition.Club', related_name='members',
                       label_from_instance='title')
 
@@ -1038,6 +1051,12 @@ class ClubAssociation(AdminUrlMixin, models.Model):
     person = ForeignKey(Person, label_from_instance='get_full_name')
     roles = ManyToManyField(ClubRole, label_from_instance='name')
 
+    # Add a temporary second ForeignKey to Person model. Will be populated via
+    # data migration and then replace the "person" field above.
+    person_uuid = ForeignKey(
+        Person, to_field='uuid', label_from_instance='get_full_name',
+        related_name='+', blank=True, null=True)
+
     class Meta:
         ordering = ('person__last_name', 'person__first_name')
         unique_together = ('club', 'person')
@@ -1075,6 +1094,12 @@ class TeamAssociation(AdminUrlMixin, models.Model):
     roles = ManyToManyField(TeamRole, blank=True, label_from_instance='name')
     number = models.IntegerField(blank=True, null=True)
     is_player = BooleanField(default=True)
+
+    # Add a temporary second ForeignKey to Person model. Will be populated via
+    # data migration and then replace the "person" field above.
+    person_uuid = ForeignKey(
+        Person, to_field='uuid', null=True, label_from_instance='get_full_name',
+        related_name='+', blank=True)
 
     def __unicode__(self):
         return unicode(self.person)
@@ -1117,6 +1142,12 @@ class SeasonAssociation(models.Model):
     season = models.ForeignKey(Season, related_name='officials')
     person = ForeignKey(Person, label_from_instance='get_full_name')
     roles = ManyToManyField(ClubRole, label_from_instance='name')
+
+    # Add a temporary second ForeignKey to Person model. Will be populated via
+    # data migration and then replace the "person" field above.
+    person_uuid = ForeignKey(
+        Person, to_field='uuid', label_from_instance='get_full_name',
+        related_name='+', blank=True, null=True)
 
     class Meta:
         ordering = (
@@ -1697,6 +1728,12 @@ class MatchStatisticBase(models.Model):
     match = ForeignKey('Match', related_name='statistics')
     player = ForeignKey('Person', related_name='statistics')
     number = models.IntegerField(blank=True, null=True)
+
+    # Add a temporary second ForeignKey to Person model. Will be populated via
+    # data migration and then replace the "player" field above.
+    player_uuid = ForeignKey(
+        'Person', to_field='uuid',
+        related_name='+', blank=True, null=True)
 
     def team(self):
         if self.match.home_team.people.filter(person=self.player):
