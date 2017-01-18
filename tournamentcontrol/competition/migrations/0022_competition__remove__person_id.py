@@ -71,8 +71,8 @@ class Migration(migrations.Migration):
         ),
 
         migrations.RunSQL(
-            "ALTER TABLE competition_person ADD PRIMARY KEY(uuid);",
-            "ALTER TABLE competition_person DROP PRIMARY KEY;",
+            "SELECT 1;",
+            "SELECT 1;",
             state_operations=[
                 migrations.AlterField(
                     model_name='person',
