@@ -344,9 +344,9 @@ class CompetitionAdminComponent(AdminComponent):
                 url(r'^(?P<club_id>\d+)/', include([
                     url(r'^person/', include([
                         url(r'^add/$', self.edit_person, name='add'),
-                        url(r'^(?P<person_id>\d+)/$', self.edit_person, name='edit'),
-                        url(r'^(?P<person_id>\d+)/delete/$', self.delete_person, name='delete'),
-                        url(r'^(?P<person_id>\d+)/merge/$', self.merge_person, name='merge'),
+                        url(r'^(?P<person_id>[^/]+)/$', self.edit_person, name='edit'),
+                        url(r'^(?P<person_id>[^/]+)/delete/$', self.delete_person, name='delete'),
+                        url(r'^(?P<person_id>[^/]+)/merge/$', self.merge_person, name='merge'),
                     ], namespace='person')),
                     # From RegistrationBase
                     url(r'officials/(?P<season_id>\d+)/$', self.officials, name='officials'),
