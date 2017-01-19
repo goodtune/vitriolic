@@ -20,6 +20,8 @@ env = environ.Env()
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+SILENCED_SYSTEM_CHECKS = env.list('SILENCED_SYSTEM_CHECKS', default=[])
+SILENCED_SYSTEM_CHECKS.append('models.E006')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/1.10/howto/deployment/checklist/

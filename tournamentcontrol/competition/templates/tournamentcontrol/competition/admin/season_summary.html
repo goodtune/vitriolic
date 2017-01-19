@@ -43,11 +43,11 @@
 							<tr>
 								<th>
 									{% ifchanged team.club_id %}
-										{{ team.club_title }}
+										{{ team.club.title }}
 									{% endifchanged %}
 								</th>
 								<th>{{ team.title }}</th>
-								<td>{{ team.division_title }}</td>
+								<td>{{ team.division.title }}</td>
 								<td>{{ team.player_count|default_if_none:0 }}</td>
 								<td>{{ team.non_player_count|default_if_none:0 }}</td>
 							</tr>

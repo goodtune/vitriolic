@@ -2,6 +2,7 @@
 
 import collections
 import logging
+import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from operator import attrgetter
@@ -311,6 +312,9 @@ class Person(AdminUrlMixin, models.Model):
     We should however make it easy to clone a `Person` into a `User` at some
     point - not just now though.
     """
+    uuid = models.UUIDField(
+        primary_key=True, default=uuid.uuid4, editable=False)
+
     club = ForeignKey('competition.Club', related_name='members',
                       label_from_instance='title')
 

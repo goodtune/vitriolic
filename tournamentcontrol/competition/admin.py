@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.urlresolvers import reverse
 from django.db import models
-from django.db.models import Q
+from django.db.models import Case, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
 from django.http import (
     Http404,
@@ -344,9 +344,9 @@ class CompetitionAdminComponent(AdminComponent):
                 url(r'^(?P<club_id>\d+)/', include([
                     url(r'^person/', include([
                         url(r'^add/$', self.edit_person, name='add'),
-                        url(r'^(?P<person_id>\d+)/$', self.edit_person, name='edit'),
-                        url(r'^(?P<person_id>\d+)/delete/$', self.delete_person, name='delete'),
-                        url(r'^(?P<person_id>\d+)/merge/$', self.merge_person, name='merge'),
+                        url(r'^(?P<person_id>[^/]+)/$', self.edit_person, name='edit'),
+                        url(r'^(?P<person_id>[^/]+)/delete/$', self.delete_person, name='delete'),
+                        url(r'^(?P<person_id>[^/]+)/merge/$', self.merge_person, name='merge'),
                     ], namespace='person')),
                     # From RegistrationBase
                     url(r'officials/(?P<season_id>\d+)/$', self.officials, name='officials'),
@@ -600,46 +600,22 @@ class CompetitionAdminComponent(AdminComponent):
     @staff_login_required_m
     def season_summary(self, request, competition, season, extra_context,
                        **kwargs):
-        sql = """
-            SELECT
-                t.*,
-                c.title AS club_title,
-                d.title AS division_title,
-            """
-
-        if "postgresql" in settings.DATABASES['default']['ENGINE']:
-            sql += """
-                d.order AS division_order,
-                SUM((ta.is_player=true)::int) AS player_count,
-                SUM((ta.is_player=false)::int) AS non_player_count
-            """
-        else:
-            sql += """
-                'd.order' AS division_order,
-                SUM(ta.is_player=1) AS player_count,
-                SUM(ta.is_player=0) AS non_player_count
-            """
-
-        sql += """
-            FROM
-                competition_team t
-            LEFT JOIN
-                competition_club c ON (t.club_id = c.id)
-            LEFT JOIN
-                competition_division d ON (t.division_id = d.id)
-            LEFT JOIN
-                competition_teamassociation ta ON (ta.team_id = t.id)
-            LEFT JOIN
-                competition_person p ON (ta.person_id = p.id)
-            WHERE
-                d.season_id = %s
-            GROUP BY
-                t.id, c.title, d.title, division_order
-            ORDER BY
-                t.title, division_order;
-        """
-
-        teams = Team.objects.raw(sql, params=(season.pk,))
+        teams = (
+            Team.objects
+            .select_related('club', 'division')
+            .filter(division__season=season)
+            .order_by('club__title', 'division__order')
+            .annotate(
+                player_count=Sum(
+                    Case(
+                        When(people__is_player=True, then=1),
+                        output_field=models.IntegerField())),
+                non_player_count=Sum(
+                    Case(
+                        When(people__is_player=False, then=1),
+                        output_field=models.IntegerField())),
+            )
+        )
 
         context = {
             'teams': teams,
@@ -1520,42 +1496,30 @@ class CompetitionAdminComponent(AdminComponent):
     @competition
     @staff_login_required_m
     def highest_point_scorer(self, request, division, extra_context, **kwargs):
-        sql = """
-SELECT DISTINCT
-    p.*,
-    t.title AS team_title,
-    SUM(s.points) AS points,
-    SUM(s.mvp) AS mvp,
-    SUM(s.played) AS played
-FROM
-    competition_simplescorematchstatistic s
-JOIN
-    competition_teamassociation ta ON (s.player_id = ta.person_id)
-JOIN
-    competition_team t ON (ta.team_id = t.id)
-JOIN
-    competition_person p ON (p.id = ta.person_id)
-JOIN
-    competition_match m ON (
-        m.id = s.match_id AND (m.home_team_id = t.id OR m.away_team_id = t.id))
-JOIN
-    competition_stage g ON (g.id = m.stage_id)
-WHERE
-        is_player = %s
-    AND
-        t.division_id = %s
-    AND
-        (points > 0 OR mvp > 0)
-GROUP BY
-    team_id, p.id, t.title
-ORDER BY
-    {} DESC
-        """
+        def _get_clause(field, aggregate=Sum):
+            """
+            Local function to produce a Aggregate(Case(When())) instance which
+            can be used to extract individual totals for the division.
+            """
+            return aggregate(
+                Case(
+                    When(
+                        statistics__match__stage__division=division,
+                        then=F(field))))
 
-        scorers = Person.objects.raw(
-            sql.format('points'), params=(True, division.pk))
-        mvp = Person.objects.raw(
-            sql.format('mvp'), params=(True, division.pk))
+        people = (
+            Person.objects
+            .select_related('club')
+            .annotate(
+                played=_get_clause('statistics__played'),
+                points=_get_clause('statistics__points'),
+                mvp=_get_clause('statistics__mvp'),
+            )
+            .exclude(played=None)
+        )
+
+        scorers = people.order_by('-points', 'played')
+        mvp = people.order_by('-mvp', 'played')
 
         context = {
             'scorers': scorers,
