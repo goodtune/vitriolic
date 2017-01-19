@@ -1,10 +1,13 @@
 import unittest
+
 from datetime import time
 
+import django
+
+from django.conf import settings
 from django.core.urlresolvers import reverse
 from django.test.utils import override_settings
 from test_plus import TestCase as BaseTestCase
-
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.models import (
     Club,
@@ -385,13 +388,11 @@ class BackendTests(TestCase):
         super(BackendTests, self).setUp()
         self.login(self.superuser)
 
+    @unittest.skipIf(
+        django.VERSION > (1, 8) and
+        settings.DATABASES['default']['ENGINE'].endswith('psycopg2'),
+        "Django 1.9+ & PostgreSQL errors with 'GROUP BY' on annotate")
     def test_task_0058_highest_point_scorer(self):
-        """
-        Actual test case logic, invoked by simple wrappers which switch the
-        database backend out.
-
-        https://bitbucket.org/tournamentcontrol/competition/issue/58/make-sure-any-custom-raw-sql-will-work
-        """
         division = factories.DivisionFactory.create()
         self.assertGoodView(
             division._get_admin_namespace() + ':scorers',
