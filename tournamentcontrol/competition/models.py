@@ -12,6 +12,7 @@ from operator import attrgetter
 import django
 import pytz
 import six
+from channels.binding.websockets import WebsocketBindingWithMembers
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
 from django import forms
@@ -30,11 +31,14 @@ from django.utils.encoding import python_2_unicode_compatible
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
+from first import first
+from guardian.core import ObjectPermissionChecker
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
 from touchtechnology.common.db.models import (
     BooleanField, ForeignKey, HTMLField, LocationField, ManyToManyField,
 )
 from touchtechnology.common.models import SitemapNodeBase
+from touchtechnology.common.utils import get_perms_for_model, model_and_manager
 from tournamentcontrol.competition.constants import (
     GENDER_CHOICES, PYTZ_TIME_ZONE_CHOICES, SEASON_MODE_CHOICES, WIN_LOSE,
 )
@@ -1826,3 +1830,52 @@ class SimpleScoreMatchStatistic(MatchStatisticBase):
     def __repr__(self):
         return '<Stat #%s: %s, %s, number=%s, played=%s>' % (
             self.pk, self.match, self.player, self.number, self.played)
+
+
+## Channels
+
+class GuardianPermissionMixin(object):
+
+    def has_permission(self, user, action, pk):
+        # Create an ObjectPermissionChecker and warm it with permissions for
+        # full set of objects.
+        checker = ObjectPermissionChecker(user)
+        checker.prefetch_perms(self.model._default_manager.all())
+
+        # Retrieve the single object from the database.
+        obj = None if action == 'create' else self.model.objects.get(pk=pk)
+
+        # The value of `action` can only be one of create/update/delete and
+        # they can each be singularly mapped onto add/change/delete standard
+        # permissions for a model.
+        perms = get_perms_for_model(
+            self.model,
+            add=action == 'create',
+            change=action == 'update',
+            delete=action == 'delete')
+
+        return checker.has_perm(first(perms), obj)
+
+
+class MatchBinding(GuardianPermissionMixin, WebsocketBindingWithMembers):
+
+    model = Match
+    stream = 'match'
+    fields = ['home_team_score', 'away_team_score']
+    send_members = ['title', 'uid']
+
+    @classmethod
+    def group_names(cls, instance):
+        return ['match-updates']
+
+
+class PersonBinding(GuardianPermissionMixin, WebsocketBindingWithMembers):
+
+    model = Person
+    stream = 'person'
+    fields = ['first_name', 'last_name']
+    send_members = ['get_full_name', 'age', 'stats']
+
+    @classmethod
+    def group_names(cls, instance):
+        return ['person-updates']

@@ -139,6 +139,16 @@ if DATABASES['default']['ENGINE'].startswith('django.db.backends.postgresql'):
         time.sleep(4)
 
 
+# Channels
+# http://channels.readthedocs.io/en/stable/getting-started.html#first-consumers
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "asgiref.inmemory.ChannelLayer",
+        "ROUTING": "vitriolic.routing.channel_routing",
+    },
+}
+
 # Password validation
 # https://docs.djangoproject.com/en/1.10/ref/settings/#auth-password-validators
 

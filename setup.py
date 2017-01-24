@@ -57,6 +57,8 @@ setup(
             'python-magic',
         ],
         'competition': [
+            'beautifulsoup4>=4.4,<5',
+            'channels>=1.0,<1.2',
             'django-celery>=3.1.0',
             'django-embed-video',
             'django-formtools>=2.1',
