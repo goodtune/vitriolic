@@ -1,5 +1,4 @@
 import logging
-
 from calendar import timegm
 
 from django.conf import settings
@@ -9,9 +8,7 @@ from django.template.response import TemplateResponse
 from django.utils.http import http_date, parse_http_date_safe
 from django.views.decorators.cache import patch_cache_control
 from django.views.decorators.http import last_modified
-
 from touchtechnology.common.models import SitemapNode
-
 from touchtechnology.content.models import Page
 from touchtechnology.content.utils import template_path
 

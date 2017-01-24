@@ -20,7 +20,6 @@ from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.sitemaps import NodeSitemap
 from touchtechnology.common.sites import AccountsSite
 from touchtechnology.common.views import login
-
 from touchtechnology.content.models import Redirect
 from touchtechnology.content.views import dispatch
 

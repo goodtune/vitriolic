@@ -14,17 +14,10 @@ from first import first
 from json_field import JSONField
 from touchtechnology.admin.mixins import AdminUrlMixin
 from touchtechnology.common.db.models import (
-    BooleanField,
-    DateTimeField,
-    HTMLField,
-    TemplatePathField,
+    BooleanField, DateTimeField, HTMLField, TemplatePathField,
 )
-
 from touchtechnology.content.app_settings import (
-    NODE_CACHE,
-    PAGE_CONTENT_CLASSES,
-    PAGE_TEMPLATE_BASE,
-    PAGE_TEMPLATE_FOLDER,
+    NODE_CACHE, PAGE_CONTENT_CLASSES, PAGE_TEMPLATE_BASE, PAGE_TEMPLATE_FOLDER,
     PAGE_TEMPLATE_REGEX,
 )
 

@@ -1,7 +1,6 @@
 import logging
 
 from django.template import Library
-
 from touchtechnology.content.models import Chunk
 
 logger = logging.getLogger(__name__)

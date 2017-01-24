@@ -8,7 +8,6 @@ from django.db.models.signals import post_save
 from django.db.utils import DatabaseError
 from django.utils.module_loading import import_string
 from touchtechnology.common.models import SitemapNode
-
 from touchtechnology.content.app_settings import TENANT_MEDIA_PUBLIC
 from touchtechnology.content.models import Placeholder
 

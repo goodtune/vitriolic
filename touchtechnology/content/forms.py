@@ -7,23 +7,15 @@ from django.forms.models import inlineformset_factory
 from django.utils.module_loading import import_string
 from django.utils.translation import ugettext_lazy as _
 from touchtechnology.common.default_settings import (
-    SITEMAP_EDIT_PARENT,
-    SITEMAP_HTTPS_OPTION,
-    SITEMAP_ROOT,
+    SITEMAP_EDIT_PARENT, SITEMAP_HTTPS_OPTION, SITEMAP_ROOT,
 )
 from touchtechnology.common.forms import SuperUserSlugMixin
 from touchtechnology.common.mixins import BootstrapFormControlMixin
 from touchtechnology.common.models import SitemapNode
-
 from touchtechnology.content.app_settings import PAGE_CONTENT_BLOCKS
 from touchtechnology.content.models import (
-    Content,
-    NodeContent,
-    Page,
-    PageContent,
-    Placeholder,
-    PlaceholderKeywordArgument,
-    Redirect,
+    Content, NodeContent, Page, PageContent, Placeholder,
+    PlaceholderKeywordArgument, Redirect,
 )
 
 
