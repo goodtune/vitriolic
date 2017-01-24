@@ -1,0 +1,17 @@
+{% extends "touchtechnology/admin/edit.html" %}
+
+{% block extracss %}
+	<link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}/DataTables-1.10.12/css/dataTables.bootstrap.min.css"/>
+	{{ block.super }}
+{% endblock %}
+
+{% block extrajs %}
+	<script type="text/javascript" src="{{ STATIC_URL }}/DataTables-1.10.12/js/jquery.dataTables.min.js"></script>
+	<script type="text/javascript" src="{{ STATIC_URL }}/DataTables-1.10.12/js/dataTables.bootstrap.min.js"></script>
+	<script>
+		$(document).ready(function() {
+			$('table.table').DataTable();
+		});
+	</script>
+	{{ block.super }}
+{% endblock %}

@@ -1594,7 +1594,7 @@ class CompetitionAdminComponent(AdminComponent):
             instance=person,
             form_class=PersonEditForm,
             related=(
-                # 'statistics',
+                'statistics',
             ),
             post_save_redirect=self.redirect(person.club.urls['edit']),
             permission_required=True,
