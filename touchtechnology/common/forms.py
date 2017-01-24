@@ -16,11 +16,8 @@ from django.contrib.contenttypes.models import ContentType
 from django.forms.formsets import formset_factory
 from django.forms.utils import flatatt
 from django.forms.widgets import (
-    CheckboxSelectMultiple,
-    CheckboxFieldRenderer,
-    ChoiceFieldRenderer,
-    SelectMultiple,
-    MultiWidget as MWB,
+    CheckboxFieldRenderer, CheckboxSelectMultiple, ChoiceFieldRenderer,
+    MultiWidget as MWB, SelectMultiple,
 )
 from django.utils import timezone
 from django.utils.encoding import smart_str
@@ -31,11 +28,7 @@ from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
 from froala_editor.widgets import FroalaEditor
 from guardian.models import GroupObjectPermission, UserObjectPermission
-from guardian.shortcuts import (
-    assign_perm,
-    remove_perm,
-)
-
+from guardian.shortcuts import assign_perm, remove_perm
 from touchtechnology.common.mixins import BootstrapFormControlMixin
 from touchtechnology.common.utils import timezone_choices
 

@@ -3,7 +3,6 @@ from unittest import skipIf
 
 import six
 from test_plus import TestCase
-
 from touchtechnology.common.forms import boolean_choice_field_coerce
 from touchtechnology.common.utils import average, get_mod_func, timezone_choice
 

@@ -1,19 +1,19 @@
 import logging
 import os.path
-from PIL import Image
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import \
     FileSystemStorage as FileSystemStorageBase
 from django.db.models.fields.files import ImageFieldFile
 from django.utils.six.moves.urllib.parse import urljoin
+from PIL import Image
+from touchtechnology.common.default_settings import STORAGE_FOLDER, STORAGE_URL
 
 try:
     from tenant_schemas.storage import TenantStorageMixin
 except ImportError:
     TenantStorageMixin = type('TenantStorageMixin', (), {})
 
-from touchtechnology.common.default_settings import STORAGE_FOLDER, STORAGE_URL
 
 logger = logging.getLogger(__name__)
 

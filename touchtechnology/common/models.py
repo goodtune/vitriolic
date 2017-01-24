@@ -14,12 +14,8 @@ from django.utils.encoding import python_2_unicode_compatible
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from django.utils.translation import ugettext_lazy as _
-
 from touchtechnology.common.db.models import (
-    BooleanField,
-    DateTimeField,
-    ManyToManyField,
-    TreeField,
+    BooleanField, DateTimeField, ManyToManyField, TreeField,
 )
 from touchtechnology.common.default_settings import SITEMAP_ROOT
 from touchtechnology.common.mixins import NodeRelationMixin

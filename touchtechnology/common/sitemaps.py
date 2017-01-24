@@ -1,6 +1,5 @@
 from django.contrib.sitemaps import Sitemap
 from django.db.models import Q
-
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.utils import create_exclude_filter
 

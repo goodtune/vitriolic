@@ -5,7 +5,6 @@ import sys
 import django
 import pytz
 from django.utils import timezone
-
 from touchtechnology.common.utils import get_timezone_from_request
 
 logger = logging.getLogger(__name__)

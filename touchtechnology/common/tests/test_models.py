@@ -1,6 +1,5 @@
 from django.utils.encoding import smart_str
 from test_plus import TestCase
-
 from touchtechnology.common.tests import factories
 
 

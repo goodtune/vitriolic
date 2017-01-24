@@ -5,7 +5,6 @@ from django.test.utils import modify_settings, override_settings
 from django.utils import timezone
 from django.utils.encoding import smart_str
 from test_plus import TestCase
-
 from touchtechnology.common.tests.test_timezone_forms import TestForm1
 
 

@@ -12,9 +12,8 @@ from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import connection
-from django.db.models import Model
-from django.db.models import Q
-from django.http import Http404, HttpResponseForbidden, HttpRequest
+from django.db.models import Model, Q
+from django.http import Http404, HttpRequest, HttpResponseForbidden
 from django.shortcuts import render_to_response
 from django.template import RequestContext, TemplateDoesNotExist
 from django.template.loader import select_template
@@ -22,7 +21,6 @@ from first import first
 from guardian.conf import settings as guardian_settings
 from guardian.shortcuts import get_perms_for_model
 from six.moves import reduce
-
 from touchtechnology.common.exceptions import NotModelManager
 from touchtechnology.common.mixins import NodeRelationMixin
 

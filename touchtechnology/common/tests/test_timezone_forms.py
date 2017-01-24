@@ -1,5 +1,4 @@
 from django import forms
-
 from touchtechnology.common.forms import SelectDateTimeField
 
 

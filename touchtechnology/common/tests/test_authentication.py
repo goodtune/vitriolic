@@ -5,8 +5,8 @@ import re
 from django.core import mail
 from django.utils.six.moves.urllib.parse import urlparse
 from test_plus import TestCase
-
 from touchtechnology.common.tests import factories
+
 
 # Based on regular expression found at https://gist.github.com/gruber/8891611
 url_re = re.compile(r"""# noqa
