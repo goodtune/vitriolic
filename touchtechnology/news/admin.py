@@ -2,16 +2,11 @@ import urlparse
 
 from django.conf.urls import include, url
 from django.utils.translation import ugettext_lazy as _
-
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.sites import site
-from touchtechnology.common.decorators import (
-    staff_login_required_m,
-)
+from touchtechnology.common.decorators import staff_login_required_m
 from touchtechnology.news.forms import (
-    ArticleForm,
-    ArticleContentFormset,
-    CategoryForm,
+    ArticleContentFormset, ArticleForm, CategoryForm,
 )
 from touchtechnology.news.models import Article, ArticleContent, Category
 

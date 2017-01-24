@@ -1,6 +1,5 @@
 from dateutil.parser import parse as parse_datetime
 from dateutil.relativedelta import relativedelta
-
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import Http404
@@ -8,7 +7,6 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.functional import wraps
 from django.views.decorators.http import last_modified
-
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.news.models import Article, Category
 

@@ -5,7 +5,6 @@ from dateutil.parser import parse as parse_datetime
 from django.test.utils import modify_settings, override_settings
 from django.utils import timezone
 from test_plus import TestCase
-
 from touchtechnology.common.tests.factories import UserFactory
 from touchtechnology.news.tests.factories import ArticleFactory
 

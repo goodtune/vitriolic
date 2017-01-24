@@ -1,7 +1,6 @@
 from django.core.paginator import Paginator
 from django.template import Library
 from django.utils.translation import ugettext_lazy as _
-
 from touchtechnology.news.models import Article, Category
 
 register = Library()

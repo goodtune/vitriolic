@@ -3,11 +3,9 @@ import operator
 from django import forms
 from django.forms.models import inlineformset_factory
 from django.utils.translation import ugettext_lazy as _
-
 from touchtechnology.common.forms import SuperUserSlugMixin
 from touchtechnology.common.mixins import BootstrapFormControlMixin
 from touchtechnology.content.forms import PlaceholderConfigurationBase
-
 from touchtechnology.news.app_settings import NEWS_CONTENT_BLOCKS
 from touchtechnology.news.models import Article, ArticleContent, Category
 
