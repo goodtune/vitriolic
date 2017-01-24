@@ -6,10 +6,9 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.forms.models import modelform_factory
 from django.utils.translation import ugettext_lazy as _
-from touchtechnology.common.decorators import staff_login_required_m
-
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.forms import GroupEditForm, UserEditForm
+from touchtechnology.common.decorators import staff_login_required_m
 
 ANONYMOUS_USER_ID = getattr(settings, 'ANONYMOUS_USER_ID', None)
 

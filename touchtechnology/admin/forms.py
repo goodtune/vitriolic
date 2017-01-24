@@ -2,11 +2,8 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.utils.translation import ugettext_lazy as _
-
 from touchtechnology.common.forms import (
-    BooleanChoiceField,
-    iCheckSelectMultiple,
-    UserMixin,
+    BooleanChoiceField, UserMixin, iCheckSelectMultiple,
 )
 
 UserModel = get_user_model()

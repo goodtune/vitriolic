@@ -7,9 +7,7 @@ from django.db import models
 from django.template import loader
 from six.moves import zip_longest
 from touchtechnology.common.utils import (
-    get_all_perms_for_model_cached,
-    get_objects_for_user,
-    model_and_manager,
+    get_all_perms_for_model_cached, get_objects_for_user, model_and_manager,
 )
 
 logger = logging.getLogger(__name__)

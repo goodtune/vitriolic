@@ -2,9 +2,8 @@ from django.conf import settings
 from django.conf.urls import url
 from django.contrib.sites.models import Site
 from django.utils.translation import ugettext_lazy as _
-from touchtechnology.common.decorators import superuser_login_required_m
-
 from touchtechnology.admin.base import AdminComponent
+from touchtechnology.common.decorators import superuser_login_required_m
 
 
 class Settings(AdminComponent):

@@ -1,5 +1,4 @@
 from test_plus import TestCase
-
 from touchtechnology.common.tests.factories import UserFactory
 
 
