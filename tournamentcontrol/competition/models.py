@@ -1133,6 +1133,10 @@ class SeasonAssociation(models.Model):
 
 
 class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
+    uuid = models.UUIDField(
+        primary_key=False, default=uuid.uuid4, editable=False,
+        unique=True, db_index=True)
+
     rank_importance_parent_attr = ('stage_group', 'stage')
 
     stage = ForeignKey(Stage, label_from_instance='title', null=True,
@@ -1486,14 +1490,6 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                             pass
                 res[index] = team
         return tuple(res)
-
-    def uid(self):
-        fmt = {
-            'division': self.stage.division.pk,
-            'stage': self.stage.pk,
-            'match': self.pk,
-        }
-        return u'%(division)04x:%(stage)04x:%(match)04x' % fmt
 
     def __unicode__(self):
         return unicode(self.title)
