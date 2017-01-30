@@ -1,6 +1,7 @@
 from django.apps import AppConfig, apps
 from django.conf import settings
 from django.core import checks
+from django.utils.module_loading import import_string
 from first import first
 
 
@@ -43,9 +44,10 @@ def touchtechnology_assumptions(app_configs, **kwargs):
     first_middleware = first(settings.MIDDLEWARE_CLASSES)
 
     if MULTITENANT:
-        if first_middleware not in (
-                'tenant_schemas.middleware.TenantMiddleware',
-                'tenant_schemas.middleware.SuspiciousTenantMiddleware'):
+        TenantMiddleware = import_string(
+            'tenant_schemas.middleware.TenantMiddleware')
+        FirstMiddleware = import_string(first_middleware)
+        if not issubclass(FirstMiddleware, TenantMiddleware):
             errors.append(checks.Critical(
                 "touchtechnology.admin requires a 'django-tenant-schemas' "
                 "middleware to be listed first.",
