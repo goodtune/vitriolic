@@ -1,7 +1,6 @@
 from django.template import Context, Template
-from test_plus import TestCase
-
 from example_app.tests.factories import RelativeFactory
+from test_plus import TestCase
 
 
 class RelatedFilterTest(TestCase):

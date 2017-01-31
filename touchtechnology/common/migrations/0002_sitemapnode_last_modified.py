@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
-from django.db import models, migrations
 import touchtechnology.common.db.models
+from django.db import migrations, models
 from django.utils import timezone
 
 

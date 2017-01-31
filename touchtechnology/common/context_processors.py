@@ -2,7 +2,6 @@ import os
 import socket
 
 from django.utils import timezone
-
 from touchtechnology.common.forms import SelectTimezoneForm
 
 

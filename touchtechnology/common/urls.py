@@ -1,6 +1,5 @@
 from django.conf.urls import url
 from django.views.i18n import set_language
-
 from touchtechnology.common.views import set_timezone
 
 urlpatterns = [

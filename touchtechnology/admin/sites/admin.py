@@ -5,8 +5,9 @@ import warnings
 import django
 from django.conf import settings
 from django.conf.urls import include, url
-from django.contrib.admin.sites import \
-    AdminSite as DjangoAdminSite, AlreadyRegistered, NotRegistered
+from django.contrib.admin.sites import (
+    AdminSite as DjangoAdminSite, AlreadyRegistered, NotRegistered,
+)
 from django.core.urlresolvers import reverse_lazy
 from django.db import connection
 from django.http import HttpResponseRedirect

@@ -4,16 +4,14 @@ import os.path
 from django.conf import settings
 from django.conf.urls import url
 from django.contrib import messages
-from django.contrib.auth import get_user_model, forms, views
+from django.contrib.auth import forms, get_user_model, views
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
-from django.core.paginator import Paginator, EmptyPage
+from django.core.paginator import EmptyPage, Paginator
 from django.core.urlresolvers import NoReverseMatch, reverse, reverse_lazy
 from django.db import transaction
 from django.forms.models import (
-    inlineformset_factory,
-    modelformset_factory,
-    ModelForm,
+    ModelForm, inlineformset_factory, modelformset_factory,
 )
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -29,24 +27,16 @@ from django.utils.six.moves.urllib.parse import urljoin
 from django.utils.translation import ugettext_lazy as _
 from django.views.decorators.cache import patch_cache_control
 from six.moves import xrange
-
 from touchtechnology.common.decorators import (
-    login_required_m,
-    node2extracontext,
-    require_POST_m,
+    login_required_m, node2extracontext, require_POST_m,
 )
 from touchtechnology.common.default_settings import (
-    AUTH_FORM_CLASS,
-    PAGINATE_BY,
+    AUTH_FORM_CLASS, PAGINATE_BY,
 )
 from touchtechnology.common.forms import permissionformset_factory
 from touchtechnology.common.utils import (
-    get_403_or_None,
-    get_all_perms_for_model_cached,
-    get_objects_for_user,
-    get_perms_for_model,
-    model_and_manager,
-    select_template_name,
+    get_403_or_None, get_all_perms_for_model_cached, get_objects_for_user,
+    get_perms_for_model, model_and_manager, select_template_name,
 )
 
 logger = logging.getLogger(__name__)

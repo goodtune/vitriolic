@@ -1,7 +1,6 @@
 import logging
 
 from django.core.cache.backends.base import DEFAULT_TIMEOUT
-
 from redis.exceptions import ConnectionError
 from redis_cache.cache import RedisCache as BaseRedisCache
 

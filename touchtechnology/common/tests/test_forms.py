@@ -1,6 +1,6 @@
 # coding=UTF-8
 
-from datetime import date, time, datetime
+from datetime import date, datetime, time
 
 import pytz
 from django.contrib.auth import get_user_model
@@ -10,16 +10,10 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.utils import timezone
-
 from touchtechnology.common.forms import (
-    BooleanChoiceField,
-    EmailField,
-    HTMLField,
-    iCheckSelectMultiple,
+    BooleanChoiceField, EmailField, HTMLField, SelectDateField,
+    SelectDateTimeField, SelectTimeField, iCheckSelectMultiple,
     permissionformset_factory,
-    SelectDateField,
-    SelectTimeField,
-    SelectDateTimeField,
 )
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.tests import factories

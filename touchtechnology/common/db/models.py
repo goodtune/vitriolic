@@ -4,19 +4,11 @@ from django.db import models
 from django.db.models import Min
 from django.utils.encoding import smart_str
 from mptt.forms import TreeNodeChoiceField
-
 from touchtechnology.common.forms import (
-    BooleanChoiceField,
-    EmailField as EmailFormField,
-    GoogleMapsField,
-    HTMLField as HTMLFormField,
-    ModelChoiceField,
-    iCheckModelMultipleChoiceField,
-    SelectDateField,
-    SelectDateTimeField,
-    SelectTimeField,
-    SitemapNodeModelChoiceField,
-    TemplatePathFormField,
+    BooleanChoiceField, EmailField as EmailFormField, GoogleMapsField,
+    HTMLField as HTMLFormField, ModelChoiceField, SelectDateField,
+    SelectDateTimeField, SelectTimeField, SitemapNodeModelChoiceField,
+    TemplatePathFormField, iCheckModelMultipleChoiceField,
 )
 
 

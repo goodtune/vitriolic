@@ -16,30 +16,17 @@ from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.mixins import AdminUrlMixin
 from touchtechnology.admin.sites import site
 from touchtechnology.common.decorators import (
-    require_POST_m,
-    staff_login_required_m,
+    require_POST_m, staff_login_required_m,
 )
 from touchtechnology.common.models import SitemapNode
-
 from touchtechnology.content.forms import (
-    FileUploadForm,
-    NewFolderForm,
-    NewPlaceholderSitemapNodeForm,
-    NewSitemapNodeForm,
-    Page,
-    PageContentFormset,
-    PageForm,
-    PlaceholderContentFormset,
-    PlaceholderKeywordArgumentsFormset,
-    PlaceholderSitemapNodeForm,
-    RedirectEditForm,
-    SitemapNodeForm,
+    FileUploadForm, NewFolderForm, NewPlaceholderSitemapNodeForm,
+    NewSitemapNodeForm, Page, PageContentFormset, PageForm,
+    PlaceholderContentFormset, PlaceholderKeywordArgumentsFormset,
+    PlaceholderSitemapNodeForm, RedirectEditForm, SitemapNodeForm,
 )
 from touchtechnology.content.models import (
-    Chunk,
-    PageContent,
-    Placeholder,
-    Redirect,
+    Chunk, PageContent, Placeholder, Redirect,
 )
 
 logger = logging.getLogger(__name__)

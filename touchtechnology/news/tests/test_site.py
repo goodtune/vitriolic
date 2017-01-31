@@ -1,5 +1,5 @@
-from test_plus import TestCase
 from django.test.utils import override_settings
+from test_plus import TestCase
 
 
 @override_settings(ROOT_URLCONF='example_app.urls')

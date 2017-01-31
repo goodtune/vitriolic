@@ -4,7 +4,6 @@ from django.test.utils import override_settings
 from example_app.models import TestDateTimeField
 from example_app.tests.factories import TestDateTimeFieldFactory
 from test_plus import TestCase as BTC
-
 from touchtechnology.common.tests import factories
 
 

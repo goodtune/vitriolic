@@ -12,13 +12,14 @@ from classytags.arguments import Argument
 from classytags.core import Options
 from classytags.helpers import AsTag
 from django.conf import settings
-from django.core.urlresolvers import resolve, reverse, Resolver404
+from django.core.urlresolvers import Resolver404, resolve, reverse
 from django.db.models import Model, Q
 from django.db.models.query import QuerySet
 from django.forms.forms import BoundField
-from django.forms.widgets import \
-    CheckboxInput, CheckboxSelectMultiple, FileInput, MultiWidget, \
-    PasswordInput, RadioSelect, Select, Textarea, TextInput
+from django.forms.widgets import (
+    CheckboxInput, CheckboxSelectMultiple, FileInput, MultiWidget,
+    PasswordInput, RadioSelect, Select, Textarea, TextInput,
+)
 from django.template import Library, Node
 from django.template.loader import get_template, render_to_string
 from django.utils import timezone
@@ -30,14 +31,11 @@ from django.utils.six.moves.urllib.parse import parse_qsl
 from django.utils.text import slugify
 from guardian.core import ObjectPermissionChecker
 from six.moves import zip_longest
-
 from touchtechnology.common.default_settings import CURRENCY_SYMBOL
 from touchtechnology.common.exceptions import NotModelManager
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.utils import (
-    create_exclude_filter,
-    get_all_perms_for_model_cached,
-    model_and_manager,
+    create_exclude_filter, get_all_perms_for_model_cached, model_and_manager,
     tree_for_node,
 )
 

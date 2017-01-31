@@ -3,7 +3,6 @@ from os.path import dirname, join
 from django.apps import apps
 from django.contrib.auth.models import Permission
 from test_plus.test import TestCase
-
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.tests.factories import UserFactory
 from touchtechnology.content.models import Placeholder

@@ -8,8 +8,7 @@ from django.http import HttpResponseRedirect
 from django.utils.encoding import smart_str
 from django.utils.six.moves.urllib.parse import urlunparse
 from touchtechnology.common.decorators import (
-    never_cache_m,
-    staff_login_required_m,
+    never_cache_m, staff_login_required_m,
 )
 from touchtechnology.common.default_settings import SITEMAP_HTTPS_OPTION
 from touchtechnology.common.mixins import BootstrapFormControlMixin

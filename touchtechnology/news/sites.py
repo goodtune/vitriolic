@@ -4,13 +4,10 @@ from django.contrib.syndication.views import Feed
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed
-
 from touchtechnology.common.sites import Application
 from touchtechnology.news.app_settings import PAGINATE_BY
 from touchtechnology.news.decorators import (
-    date_view,
-    last_modified_article,
-    news_last_modified,
+    date_view, last_modified_article, news_last_modified,
 )
 from touchtechnology.news.forms import ConfigurationForm
 from touchtechnology.news.models import Article, Category

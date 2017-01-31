@@ -1,10 +1,9 @@
 import pytz
-from django.http import HttpResponseRedirect, Http404
+from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.utils.http import is_safe_url, urlencode
 from django.utils.six.moves.urllib.parse import parse_qsl, urlsplit, urlunsplit
 from django.views.decorators.http import require_POST
-
 from touchtechnology.common.forms import SelectTimezoneForm
 
 

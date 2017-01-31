@@ -1,0 +1,25 @@
+{% extends "mvp/list.split.inc.html" %}
+{% load i18n %}
+{% load competition %}
+
+{% block table-headings %}
+	<th>{% trans "Date" %}</th>
+	<th>{% trans "Competition" %}</th>
+	<th>{% trans "Division" %}</th>
+	<th>{% trans "Match" %}</th>
+	<th>{% trans "Played" %}</th>
+	<th>{% trans "Pts" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td data-order="{{ obj.match.datetime|time:"YmdHi" }}">{{ obj.match.datetime }}</td>
+	<td>{{ obj.match.stage.division.season.competition }}</td>
+	<td>{{ obj.match.stage.division }}</td>
+	<td>{{ obj.match }}</td>
+	<td>{{ obj.played|yesno|title }}</td>
+	<td>{{ obj.points|default:0 }}</td>
+{% endblock %}
+
+{% block actions %}{% endblock %}
+{% block row-buttons-items %}{% endblock %}
+{% block table-row-empty %}{% endblock %}

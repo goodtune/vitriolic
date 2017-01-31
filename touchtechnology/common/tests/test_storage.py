@@ -2,7 +2,6 @@ import os.path
 import tempfile
 
 from django.test import TestCase
-
 from touchtechnology.common.storage import FileSystemStorage
 
 
