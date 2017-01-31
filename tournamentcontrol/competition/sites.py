@@ -8,7 +8,7 @@ from django.conf import settings
 from django.conf.urls import include, url
 from django.contrib import messages
 from django.contrib.sitemaps import views as sitemaps_views
-from django.db.models import Q
+from django.db.models import Count, Q, Sum, Case, When, F
 from django.http import (
     Http404,
     HttpResponse,
@@ -180,6 +180,20 @@ class CompetitionSite(Application):
     def season(self, request, competition, season, extra_context, **kwargs):
         templates = self.template_path(
             'season.html', competition.slug, season.slug)
+        extra_context.update(season.matches.exclude(is_bye=True).aggregate(
+            timeslot_count=Count('datetime', distinct=True),
+            match_count=Count('pk', distinct=True),
+            points_scored=Sum(
+                Case(
+                    When(
+                        statistics__match__stage__division__season=season,
+                        then=F('statistics__points')))),
+            caps_awarded=Sum(
+                Case(
+                    When(
+                        statistics__match__stage__division__season=season,
+                        then=F('statistics__played')))),
+        ))
         return self.generic_detail(request, competition.seasons,
                                    slug=season.slug,
                                    templates=templates,
@@ -209,6 +223,20 @@ class CompetitionSite(Application):
                  **kwargs):
         templates = self.template_path(
             'division.html', competition.slug, season.slug, division.slug)
+        extra_context.update(division.matches.exclude(is_bye=True).aggregate(
+            timeslot_count=Count('datetime', distinct=True),
+            match_count=Count('pk', distinct=True),
+            points_scored=Sum(
+                Case(
+                    When(
+                        statistics__match__stage__division=division,
+                        then=F('statistics__points')))),
+            caps_awarded=Sum(
+                Case(
+                    When(
+                        statistics__match__stage__division=division,
+                        then=F('statistics__played')))),
+        ))
         return self.generic_detail(request, season.divisions,
                                    slug=division.slug,
                                    templates=templates,
@@ -221,6 +249,20 @@ class CompetitionSite(Application):
             'stage.html',
             competition.slug, season.slug, division.slug, stage.slug)
         extra_context['parent'] = stage
+        extra_context.update(stage.matches.exclude(is_bye=True).aggregate(
+            timeslot_count=Count('datetime', distinct=True),
+            match_count=Count('pk', distinct=True),
+            points_scored=Sum(
+                Case(
+                    When(
+                        statistics__match__stage=stage,
+                        then=F('statistics__points')))),
+            caps_awarded=Sum(
+                Case(
+                    When(
+                        statistics__match__stage=stage,
+                        then=F('statistics__played')))),
+        ))
         return self.generic_detail(request, division.stages,
                                    slug=stage.slug,
                                    templates=templates,
@@ -234,6 +276,20 @@ class CompetitionSite(Application):
         templates = self.template_path(
             'divisiongroup.html', competition.slug, season.slug, division.slug,
             stage.slug, pool.slug)
+        extra_context.update(pool.matches.exclude(is_bye=True).aggregate(
+            timeslot_count=Count('datetime', distinct=True),
+            match_count=Count('pk', distinct=True),
+            points_scored=Sum(
+                Case(
+                    When(
+                        statistics__match__stage_group=pool,
+                        then=F('statistics__points')))),
+            caps_awarded=Sum(
+                Case(
+                    When(
+                        statistics__match__stage=pool,
+                        then=F('statistics__played')))),
+        ))
         return self.generic_detail(request, stage.pools,
                                    slug=pool.slug,
                                    templates=templates,
@@ -245,6 +301,21 @@ class CompetitionSite(Application):
         templates = self.template_path(
             'team.html', competition.slug, season.slug, division.slug,
             team.slug)
+
+        extra_context.update(team.matches.exclude(is_bye=True).aggregate(
+            timeslot_count=Count('datetime', distinct=True),
+            match_count=Count('pk', distinct=True),
+            points_scored=Sum(
+                Case(
+                    When(
+                        statistics__player__teamassociation__team=team,
+                        then=F('statistics__points')))),
+            caps_awarded=Sum(
+                Case(
+                    When(
+                        statistics__player__teamassociation__team=team,
+                        then=F('statistics__played')))),
+        ))
         return self.generic_detail(request, division.teams,
                                    slug=team.slug,
                                    templates=templates,
