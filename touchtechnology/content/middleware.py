@@ -92,7 +92,7 @@ class SitemapNodeMiddleware(object):
                         # root url is not clobbered by the patterns of the
                         # parent application. In these cases, force them to the
                         # top of the map.
-                        if node.parent and \
+                        if node.parent and node.parent.content_type and \
                                 node.parent.content_type.name == 'placeholder':
                             dehydrated.insert(0, pattern)
                         else:
