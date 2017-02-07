@@ -1,6 +1,7 @@
 import datetime
 import logging
 import time
+from urlparse import ParseResult
 
 from dateutil.parser import parse
 from django.conf import settings
@@ -9,7 +10,6 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.functional import wraps
-
 from tournamentcontrol.competition.models import Club, Competition, Season
 
 logger = logging.getLogger(__name__)
@@ -62,7 +62,7 @@ def registration(f, *a, **kw):
 
 def competition_by_pk(f, *a, **kw):
     @wraps(f)
-    def _decorated(*args, **kwargs):
+    def _decorated(request, *args, **kwargs):
         competition_id = kwargs.pop('competition_id', None)
         division_id = kwargs.pop('division_id', None)
         season_id = kwargs.pop('season_id', None)
@@ -133,11 +133,15 @@ def competition_by_pk(f, *a, **kw):
                 kwargs['time'] = datetime.time(
                     *time.strptime(timestr, '%H%M')[3:5])
 
+        kwargs['base_url'] = ParseResult(
+            'https' if request.is_secure() else 'http',
+            request.get_host(), '/', '', '', '').geturl()
+
         extra_context = kwargs.pop('extra_context', {})
         extra_context.update(kwargs)
         kwargs['extra_context'] = extra_context
 
-        return f(*args, **kwargs)
+        return f(request, *args, **kwargs)
     return _decorated
 competition = method_decorator(competition_by_pk)
 
