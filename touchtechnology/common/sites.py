@@ -20,7 +20,6 @@ from django.template.loader import render_to_string
 from django.template.response import TemplateResponse
 from django.utils import timezone
 from django.utils.encoding import smart_str
-from django.utils.functional import cached_property
 from django.utils.http import urlencode
 from django.utils.module_loading import import_string
 from django.utils.six.moves.urllib.parse import urljoin
@@ -810,7 +809,7 @@ class AccountsSite(Application):
             'touchtechnology.common.forms_lazy.ProfileForm')
         self.user_model = get_user_model()
 
-    @cached_property
+    @property
     def set_password_form(self):
         class SetPasswordForm(forms.SetPasswordForm):
             def __init__(slf, user, *a, **kw):
@@ -828,7 +827,7 @@ class AccountsSite(Application):
                     slf.user = self.user_model.objects.get(pk=user.pk)
         return PasswordChangeForm
 
-    @cached_property
+    @property
     def template_base(self):
         return 'registration'
 
