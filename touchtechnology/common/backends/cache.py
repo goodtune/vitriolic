@@ -53,3 +53,25 @@ class RedisCache(BaseRedisCache):
         else:
             logger.debug('redis="set", key="%s", version="%s", timeout="%s", '
                          'result="hit"', key, version, timeout)
+
+    def delete(self, key, version=None):
+        """
+        Wrap the underlying ``delete``, silently passing when the backend is
+        unavailable.
+        """
+        try:
+            super(RedisCache, self).delete(key, version=version)
+        except ConnectionError as exc:
+            logger.error('redis="delete", key="%s", version="%s", '
+                         'result="miss", exception="%s"',
+                         key, version, exc)
+
+    def clear(self):
+        """
+        Wrap the underlying ``clear``, silently passing when the backend is
+        unavailable.
+        """
+        try:
+            super(RedisCache, self).clear()
+        except ConnectionError as exc:
+            logger.error('redis="clear", result="miss", exception="%s"', exc)
