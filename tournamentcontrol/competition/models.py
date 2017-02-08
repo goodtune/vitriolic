@@ -203,6 +203,9 @@ class Competition(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     def _get_admin_namespace(self):
         return 'admin:fixja:competition'
 
+    class Meta(OrderedSitemapNode.Meta):
+        pass
+
 
 class Club(AdminUrlMixin, SitemapNodeBase):
 
@@ -272,6 +275,9 @@ class Club(AdminUrlMixin, SitemapNodeBase):
 class RankDivision(AdminUrlMixin, OrderedSitemapNode):
 
     enabled = BooleanField(default=True)
+
+    class Meta(OrderedSitemapNode.Meta):
+        pass
 
 
 class RankTeam(models.Model):
@@ -417,6 +423,9 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         help_text=_("When a team advises they are forfeiting, notify the "
                     "opposition team plus these people."))
 
+    class Meta(OrderedSitemapNode.Meta):
+        pass
+
     def _get_admin_namespace(self):
         return 'admin:fixja:competition:season'
 
@@ -484,6 +493,9 @@ class Place(AdminUrlMixin, OrderedSitemapNode):
     abbreviation = models.CharField(max_length=20, blank=True, null=True)
     latlng = LocationField(max_length=100)
     timezone = TimeZoneField(max_length=50, blank=True, null=True)
+
+    class Meta(OrderedSitemapNode.Meta):
+        pass
 
     @property
     def location(self):
@@ -574,6 +586,9 @@ class Division(AdminUrlMixin, ModelDiffMixin, RankDivisionMixin,
 
     objects = DivisionQuerySet.as_manager()
 
+    class Meta(OrderedSitemapNode.Meta):
+        pass
+
     def _get_admin_namespace(self):
         return 'admin:fixja:competition:season:division'
 
@@ -644,8 +659,7 @@ class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 
     objects = StageQuerySet.as_manager()
 
-    class Meta:
-        ordering = ('order',)
+    class Meta(OrderedSitemapNode.Meta):
         unique_together = (
             ('division', 'slug'),
         )
@@ -726,9 +740,8 @@ class StageGroup(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
                                             "played against teams that are "
                                             "now in this group."))
 
-    class Meta:
+    class Meta(OrderedSitemapNode.Meta):
         verbose_name = 'pool'
-        ordering = ('order',)
         unique_together = ('stage', 'order')
 
     def _get_admin_namespace(self):
