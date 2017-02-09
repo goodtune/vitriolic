@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from operator import attrgetter
 
+import django
 import pytz
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
@@ -25,35 +26,20 @@ from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
 from touchtechnology.common.db.models import (
-    BooleanField,
-    DateField,
-    DateTimeField,
-    ForeignKey,
-    HTMLField,
-    LocationField,
-    ManyToManyField,
-    TimeField,
+    BooleanField, DateField, DateTimeField, ForeignKey, HTMLField,
+    LocationField, ManyToManyField, TimeField,
 )
 from touchtechnology.common.models import SitemapNodeBase
-
 from tournamentcontrol.competition.constants import (
-    GENDER_CHOICES,
-    PYTZ_TIME_ZONE_CHOICES,
-    SEASON_MODE_CHOICES,
-    WIN_LOSE,
+    GENDER_CHOICES, PYTZ_TIME_ZONE_CHOICES, SEASON_MODE_CHOICES, WIN_LOSE,
 )
 from tournamentcontrol.competition.mixins import ModelDiffMixin
 from tournamentcontrol.competition.query import (
-    DivisionQuerySet,
-    MatchQuerySet,
-    StageQuerySet,
-    StatisticQuerySet,
+    DivisionQuerySet, MatchQuerySet, StageQuerySet, StatisticQuerySet,
 )
 from tournamentcontrol.competition.signals import match_forfeit
 from tournamentcontrol.competition.utils import (
-    combine_and_localize,
-    stage_group_position,
-    stage_group_position_re,
+    combine_and_localize, stage_group_position, stage_group_position_re,
     team_and_division,
 )
 from tournamentcontrol.competition.validators import validate_hashtag
@@ -133,6 +119,8 @@ class TimeZoneChoiceField(forms.ChoiceField):
     """
     def __init__(self, max_length=None, *args, **kwargs):
         choices = kwargs.pop('choices', PYTZ_TIME_ZONE_CHOICES)
+        if django.VERSION[:2] >= (1, 11):
+            kwargs.pop('empty_value', None)
         super(TimeZoneChoiceField, self).__init__(
             choices=choices, *args, **kwargs)
 
@@ -1374,10 +1362,10 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
 
     @cached_property
     def title(self):
-        context = Context({
+        context = {
             'home': self.get_home_team(),
             'away': self.get_away_team(),
-        })
+        }
         return match_title_tpl.render(context)
 
     def _get_team(self, field, plain=False):
@@ -1425,8 +1413,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                         'title': mark_safe('<span class="error">ERROR</span>'),
                     }
                     context.setdefault('errors', []).append('Invalid group.')
-        c = Context(context)
-        return {'title': template.render(c)}
+        return {'title': template.render(context)}
 
     def get_home_team(self):
         return self._get_team('home_team')

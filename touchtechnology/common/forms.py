@@ -14,11 +14,6 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import Group
 from django.contrib.contenttypes.models import ContentType
 from django.forms.formsets import formset_factory
-from django.forms.utils import flatatt
-from django.forms.widgets import (
-    CheckboxFieldRenderer, CheckboxSelectMultiple, ChoiceFieldRenderer,
-    MultiWidget as MWB, SelectMultiple,
-)
 from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.utils.functional import cached_property
@@ -31,6 +26,7 @@ from guardian.models import GroupObjectPermission, UserObjectPermission
 from guardian.shortcuts import assign_perm, remove_perm
 from modelforms.forms import ModelForm
 from touchtechnology.common.mixins import BootstrapFormControlMixin
+from touchtechnology.common.shim import utils, widgets
 from touchtechnology.common.utils import timezone_choices
 
 logger = logging.getLogger(__name__)
@@ -40,7 +36,7 @@ def groups_widget(f):
     return forms.CheckboxSelectMultiple(choices=f.choices)
 
 
-class MultiWidget(MWB):
+class MultiWidget(widgets.MultiWidget):
 
     def build_attrs(self, *args, **kwargs):
         """
@@ -61,7 +57,7 @@ class MultiWidget(MWB):
         return attrs
 
 
-class RadioChoiceInput(forms.widgets.RadioChoiceInput):
+class RadioChoiceInput(widgets.RadioChoiceInput):
     def render(self, name=None, value=None, attrs=None, choices=()):
         if self.id_for_label:
             label_for = format_html(' for="{0}"', self.id_for_label)
@@ -79,10 +75,10 @@ class RadioChoiceInput(forms.widgets.RadioChoiceInput):
                            name=self.name, value=self.choice_value)
         if self.is_checked():
             final_attrs['checked'] = 'checked'
-        return format_html('<input{0} />', flatatt(final_attrs))
+        return format_html('<input{0} />', utils.flatatt(final_attrs))
 
 
-class RadioFieldRenderer(forms.widgets.RadioFieldRenderer):
+class RadioFieldRenderer(widgets.RadioFieldRenderer):
     choice_input_class = RadioChoiceInput
 
     def render(self):
@@ -745,7 +741,7 @@ class RegistrationForm(forms.Form):
 # django-guardian #
 ###################
 
-class iCheckFieldRenderer(CheckboxFieldRenderer):
+class iCheckFieldRenderer(widgets.CheckboxFieldRenderer):
     def render(self):
         """
         Outputs a <div> for this set of choice fields.
@@ -764,10 +760,9 @@ class iCheckFieldRenderer(CheckboxFieldRenderer):
                 attrs_plus = self.attrs.copy()
                 if id_:
                     attrs_plus['id'] += '_{0}'.format(i)
-                sub_ul_renderer = ChoiceFieldRenderer(name=self.name,
-                                                      value=self.value,
-                                                      attrs=attrs_plus,
-                                                      choices=choice_label)
+                sub_ul_renderer = widgets.ChoiceFieldRenderer(
+                    name=self.name, value=self.value,
+                    attrs=attrs_plus, choices=choice_label)
                 sub_ul_renderer.choice_input_class = self.choice_input_class
                 output.append(
                     format_html('<div class="checkbox">{0}{1}</div>',
@@ -785,7 +780,7 @@ class iCheckFieldRenderer(CheckboxFieldRenderer):
         return mark_safe('\n'.join(output))
 
 
-class iCheckSelectMultiple(CheckboxSelectMultiple):
+class iCheckSelectMultiple(widgets.CheckboxSelectMultiple):
     renderer = iCheckFieldRenderer
 
 
@@ -814,14 +809,14 @@ class PermissionForm(ModelForm):
         if user_queryset.count() <= self.max_checkboxes:
             user_widget = self.widget
         else:
-            user_widget = SelectMultiple
+            user_widget = widgets.SelectMultiple
 
         group_queryset = Group.objects.all()
 
         if group_queryset.count() <= self.max_checkboxes:
             group_widget = self.widget
         else:
-            group_widget = SelectMultiple
+            group_widget = widgets.SelectMultiple
 
         self.fields['users'] = ModelMultipleChoiceField(
             queryset=user_queryset,
