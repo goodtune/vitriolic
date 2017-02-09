@@ -36,7 +36,7 @@ setup(
             'django-redis-cache>=1.5.0,<2',
         ],
         'admin': [
-            'django-bootstrap3>=7.0,<8',
+            'django-bootstrap3>=8.2,<9',
             'django-gravatar2>=1.4,<2',
         ],
         'content': [
