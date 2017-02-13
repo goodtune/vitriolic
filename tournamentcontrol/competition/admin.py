@@ -681,10 +681,9 @@ class CompetitionAdminComponent(AdminComponent):
     @staff_login_required_m
     def timeslots(self, request, competition, season, extra_context, **kwargs):
         return self.generic_edit_multiple(
-            request,
+            request, SeasonMatchTime,
             formset_class=SeasonMatchTimeFormSet,
             formset_kwargs={'instance': season},
-            model=SeasonMatchTime,
             post_save_redirect_args=(competition.pk, season.pk),
             post_save_redirect='competition:season:edit',
             templates=self.template_path('timeslots.html', 'season'),
@@ -1228,7 +1227,6 @@ class CompetitionAdminComponent(AdminComponent):
             extra_context=extra_context,
             **generic_edit_kwargs)
 
-    # FIXME
     @competition
     @staff_login_required_m
     def match_reschedule(self, request, competition, season, extra_context,
@@ -1295,13 +1293,12 @@ class CompetitionAdminComponent(AdminComponent):
                                     'datetime', 'play_at')
 
         return self.generic_edit_multiple(
-            request, queryset=queryset,
+            request, queryset,
             formset_class=MatchScheduleFormSet,
             post_save_redirect=self.redirect(season.urls['edit']),
             templates=self.template_path('match/schedule.html'),
             extra_context=extra_context)
 
-    # FIXME
     @competition
     @staff_login_required_m
     def match_results(self, request, competition, season, date, extra_context,
@@ -1400,7 +1397,7 @@ class CompetitionAdminComponent(AdminComponent):
             matches = matches.filter(time_or_byes)
 
         return self.generic_edit_multiple(
-            request, queryset=matches,
+            request, matches,
             formset_class=MatchWashoutFormSet,
             templates=self.template_path('match_washout.html'),
             post_save_redirect=self.redirect(season.urls['edit']),
@@ -1671,8 +1668,7 @@ class CompetitionAdminComponent(AdminComponent):
 
         templates = self.template_path('officials.html')
         return self.generic_edit_multiple(
-            request,
-            model=SeasonAssociation,
+            request, SeasonAssociation,
             queryset=season.officials.filter(club=club),
             formset_class=SeasonAssociationFormSet,
             formset_kwargs={
@@ -1718,8 +1714,7 @@ class CompetitionAdminComponent(AdminComponent):
             return self.render(request, templates, extra_context)
 
         return self.generic_edit_multiple(
-            request,
-            model=TeamAssociation,
+            request, TeamAssociation,
             formset_class=TeamAssociationFormSet,
             formset_kwargs={'user': request.user, 'instance': team},
             post_save_redirect='club-teams',
