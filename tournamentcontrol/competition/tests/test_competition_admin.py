@@ -226,6 +226,24 @@ class GoodViewTests(TestCase):
             self.assertGoodView(
                 'admin:fixja:season-summary', season.competition_id, season.pk)
 
+    def test_match_schedule_season(self):
+        season = factories.SeasonFactory.create()
+        self.assertLoginRequired(
+            'admin:fixja:match-schedule', season.competition_id, season.pk, '20170213')
+        with self.login(self.superuser):
+            self.assertGoodView(
+                'admin:fixja:match-schedule', season.competition_id, season.pk, '20170213')
+
+    def test_match_schedule_division(self):
+        division = factories.DivisionFactory.create()
+        self.assertLoginRequired(
+            'admin:fixja:match-schedule',
+            division.season.competition_id, division.season_id, '20170213', division.pk)
+        with self.login(self.superuser):
+            self.assertGoodView(
+                'admin:fixja:match-schedule',
+                division.season.competition_id, division.season_id, '20170213', division.pk)
+
     def test_progress_teams(self):
         division = factories.DivisionFactory.create()
         teams = factories.TeamFactory.create_batch(division=division, size=6)
