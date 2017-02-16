@@ -287,7 +287,7 @@ class CompetitionSite(Application):
             caps_awarded=Sum(
                 Case(
                     When(
-                        statistics__match__stage=pool,
+                        statistics__match__stage_group=pool,
                         then=F('statistics__played')))),
         ))
         return self.generic_detail(request, stage.pools,
