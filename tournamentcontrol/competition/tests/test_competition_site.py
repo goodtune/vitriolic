@@ -82,6 +82,15 @@ class GoodViewTests(TestCase):
                             stage.division.slug,
                             stage.slug)
 
+    def test_stage_group(self):
+        pool = factories.StageGroupFactory.create()
+        self.assertGoodView('competition:pool',
+                            pool.stage.division.season.competition.slug,
+                            pool.stage.division.season.slug,
+                            pool.stage.division.slug,
+                            pool.stage.slug,
+                            pool.slug)
+
     def test_match(self):
         match = factories.MatchFactory.create()
         self.assertGoodView('competition:match',
