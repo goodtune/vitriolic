@@ -10,9 +10,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.paginator import EmptyPage, Paginator
 from django.core.urlresolvers import NoReverseMatch, reverse, reverse_lazy
 from django.db import transaction
-from django.forms.models import (
-    ModelForm, inlineformset_factory, modelformset_factory,
-)
+from django.forms.models import inlineformset_factory, modelformset_factory
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.template import RequestContext
@@ -25,6 +23,7 @@ from django.utils.module_loading import import_string
 from django.utils.six.moves.urllib.parse import urljoin
 from django.utils.translation import ugettext_lazy as _
 from django.views.decorators.cache import patch_cache_control
+from modelforms.forms import ModelForm
 from six.moves import xrange
 from touchtechnology.common.decorators import (
     login_required_m, node2extracontext, require_POST_m,

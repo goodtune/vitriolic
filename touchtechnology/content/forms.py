@@ -6,6 +6,7 @@ from django.core.files.storage import default_storage
 from django.forms.models import inlineformset_factory
 from django.utils.module_loading import import_string
 from django.utils.translation import ugettext_lazy as _
+from modelforms.forms import ModelForm
 from touchtechnology.common.default_settings import (
     SITEMAP_EDIT_PARENT, SITEMAP_HTTPS_OPTION, SITEMAP_ROOT,
 )
@@ -31,7 +32,7 @@ class PlaceholderChoiceField(forms.ModelChoiceField):
         return cls.verbose_name()
 
 
-class ParentChildModelForm(BootstrapFormControlMixin, forms.ModelForm):
+class ParentChildModelForm(BootstrapFormControlMixin, ModelForm):
     """
     ``ModelForm`` subclass that can be used to tie together the editing of a
     parent/child relationship in a single form.
@@ -94,7 +95,7 @@ class ParentChildModelForm(BootstrapFormControlMixin, forms.ModelForm):
     media = property(_get_media)
 
 
-class BaseSitemapNodeForm(SuperUserSlugMixin, forms.ModelForm):
+class BaseSitemapNodeForm(SuperUserSlugMixin, ModelForm):
     def __init__(self, *args, **kwargs):
         super(BaseSitemapNodeForm, self).__init__(*args, **kwargs)
         if not self.instance.level and self.instance.slug == SITEMAP_ROOT:
@@ -164,7 +165,7 @@ class NewPlaceholderSitemapNodeForm(PlaceholderSitemapNodeForm):
 
 
 class PlaceholderKeywordArgumentsForm(
-        BootstrapFormControlMixin, forms.ModelForm):
+        BootstrapFormControlMixin, ModelForm):
     class Meta:
         model = PlaceholderKeywordArgument
         fields = ('key', 'value')
@@ -215,7 +216,7 @@ class PageForm(ParentChildModelForm):
         fields = ('template', 'keywords', 'description')
 
 
-class PageContentForm(BootstrapFormControlMixin, forms.ModelForm):
+class PageContentForm(BootstrapFormControlMixin, ModelForm):
     class Meta:
         model = PageContent
         fields = ('copy', 'label', 'sequence')
@@ -245,13 +246,13 @@ class PageContentFormset(BasePageContentFormset):
             i, empty_permitted=False, initial={'sequence': i + 1})
 
 
-class ContentForm(BootstrapFormControlMixin, forms.ModelForm):
+class ContentForm(BootstrapFormControlMixin, ModelForm):
     class Meta:
         model = Content
         fields = ('copy',)
 
 
-class RedirectEditForm(BootstrapFormControlMixin, forms.ModelForm):
+class RedirectEditForm(BootstrapFormControlMixin, ModelForm):
     class Meta:
         model = Redirect
         fields = (

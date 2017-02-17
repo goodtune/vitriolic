@@ -3,6 +3,7 @@ import operator
 from django import forms
 from django.forms.models import inlineformset_factory
 from django.utils.translation import ugettext_lazy as _
+from modelforms.forms import ModelForm
 from touchtechnology.common.forms import SuperUserSlugMixin
 from touchtechnology.common.mixins import BootstrapFormControlMixin
 from touchtechnology.content.forms import PlaceholderConfigurationBase
@@ -22,7 +23,7 @@ class ConfigurationForm(PlaceholderConfigurationBase):
             {'class': 'form-control'})
 
 
-class ArticleForm(SuperUserSlugMixin, forms.ModelForm):
+class ArticleForm(SuperUserSlugMixin, ModelForm):
     def __init__(self, *args, **kwargs):
         super(ArticleForm, self).__init__(*args, **kwargs)
         if not self.fields['categories'].queryset.count():
@@ -44,7 +45,7 @@ class ArticleForm(SuperUserSlugMixin, forms.ModelForm):
         )
 
 
-class ArticleContentForm(BootstrapFormControlMixin, forms.ModelForm):
+class ArticleContentForm(BootstrapFormControlMixin, ModelForm):
     def __init__(self, *args, **kwargs):
         super(ArticleContentForm, self).__init__(*args, **kwargs)
         # hide the label field if it may only contain one value
@@ -76,7 +77,7 @@ class ArticleContentFormset(BaseArticleContentFormset):
             i, empty_permitted=False, initial={'sequence': i + 1})
 
 
-class CategoryForm(SuperUserSlugMixin, forms.ModelForm):
+class CategoryForm(SuperUserSlugMixin, ModelForm):
     class Meta:
         model = Category
         fields = (

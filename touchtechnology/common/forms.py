@@ -29,6 +29,7 @@ from django.utils.translation import ugettext_lazy as _
 from froala_editor.widgets import FroalaEditor
 from guardian.models import GroupObjectPermission, UserObjectPermission
 from guardian.shortcuts import assign_perm, remove_perm
+from modelforms.forms import ModelForm
 from touchtechnology.common.mixins import BootstrapFormControlMixin
 from touchtechnology.common.utils import timezone_choices
 
@@ -684,7 +685,7 @@ class SuperUserSlugMixin(UserMixin):
                                               "on the title.")
 
 
-class RedefineModelForm(forms.ModelForm):
+class RedefineModelForm(ModelForm):
     def __init__(self, *args, **kwargs):
         super(RedefineModelForm, self).__init__(*args, **kwargs)
         for field, _kw in self.Meta.redefine:
@@ -792,7 +793,7 @@ class iCheckModelMultipleChoiceField(ModelMultipleChoiceField):
     widget = iCheckSelectMultiple
 
 
-class PermissionForm(forms.ModelForm):
+class PermissionForm(ModelForm):
     """
     Generic form to be used to assign row-level permissions to an object.
     """

@@ -2,6 +2,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.utils.translation import ugettext_lazy as _
+from modelforms.forms import ModelForm
 from touchtechnology.common.forms import (
     BooleanChoiceField, UserMixin, iCheckSelectMultiple,
 )
@@ -9,7 +10,7 @@ from touchtechnology.common.forms import (
 UserModel = get_user_model()
 
 
-class UserEditForm(UserMixin, forms.ModelForm):
+class UserEditForm(UserMixin, ModelForm):
     is_superuser = BooleanChoiceField(_("Deity"), _("Mortal"),
                                       label=_("God mode"),
                                       help_text=_("Should this user be all "
@@ -34,7 +35,7 @@ class UserEditForm(UserMixin, forms.ModelForm):
         }
 
 
-class GroupEditForm(UserMixin, forms.ModelForm):
+class GroupEditForm(UserMixin, ModelForm):
 
     def __init__(self, *args, **kwargs):
         super(GroupEditForm, self).__init__(*args, **kwargs)

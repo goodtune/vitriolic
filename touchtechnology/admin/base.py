@@ -3,10 +3,10 @@ import os.path
 from django.conf.urls import url
 from django.contrib import messages
 from django.core.urlresolvers import reverse
-from django.forms import ModelForm
 from django.http import HttpResponseRedirect
 from django.utils.encoding import smart_str
 from django.utils.six.moves.urllib.parse import urlunparse
+from modelforms.forms import ModelForm
 from touchtechnology.common.decorators import (
     never_cache_m, staff_login_required_m,
 )
