@@ -760,12 +760,11 @@ class BackendTests(TestCase):
         data = {
             'title': team.title,
         }
-        # print self.reverse(team._get_admin_namespace() + ':add',
-        #                    *team._get_url_args()[:-1])
         self.post(team._get_admin_namespace() + ':add',
                   *team._get_url_args()[:-1], data=data)
-        self.assertResponseContains(
-            "Team name must be unique in this division.", html=False)
+        self.assertFormError(
+            self.last_response, 'form', 'title',
+            ["Team with this Title already exists."])
 
     def test_team_add(self):
         division = factories.DivisionFactory.create()
@@ -819,3 +818,19 @@ class BackendTests(TestCase):
         self.assertEqual(team.pk, magenta.pk)
         self.assertEqual(magenta.slug, 'magenta')
         self.assertEqual(magenta.timeslots_after, time(19, 20))
+
+    def test_add_stage_duplicate_slug(self):
+        """
+        When adding a new stage to a division it should not be possible to add
+        a second stage with a slug already used because of database integrity
+        constraints.
+        """
+        stage = factories.StageFactory.create()
+        data = {
+            'title': stage.title,
+        }
+        self.post(stage._get_admin_namespace() + ':add',
+                  *stage._get_url_args()[:-1], data=data)
+        self.assertFormError(
+            self.last_response, 'form', 'title',
+            ["Stage with this Title already exists."])
