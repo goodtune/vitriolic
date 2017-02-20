@@ -27,6 +27,7 @@ from django.forms.models import (
 from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _, ungettext
 from first import first
+from modelforms.forms import ModelForm
 from pyparsing import ParseException
 from touchtechnology.common.forms import (
     BooleanChoiceField,
@@ -41,7 +42,6 @@ from touchtechnology.common.forms import (
 from touchtechnology.common.mixins import BootstrapFormControlMixin
 from touchtechnology.common.utils import timezone_choice
 from touchtechnology.content.forms import PlaceholderConfigurationBase
-
 from tournamentcontrol.competition.calc import (
     BonusPointCalculator,
     Calculator,
@@ -271,7 +271,7 @@ class MultiConfigurationForm(PlaceholderConfigurationBase):
             widget=forms.CheckboxSelectMultiple)
 
 
-class PersonEditForm(BootstrapFormControlMixin, forms.ModelForm):
+class PersonEditForm(BootstrapFormControlMixin, ModelForm):
 
     class Meta:
         model = Person
@@ -314,7 +314,7 @@ class PersonMergeForm(PersonEditForm):
             self.cleaned_data['keep_old'])
 
 
-class CompetitionForm(SuperUserSlugMixin, forms.ModelForm):
+class CompetitionForm(SuperUserSlugMixin, ModelForm):
 
     class Meta:
         model = Competition
@@ -344,7 +344,7 @@ class TimezoneMixin(object):
             self.fields.pop('timezone', None)
 
 
-class SeasonForm(SuperUserSlugMixin, TimezoneMixin, BootstrapFormControlMixin, forms.ModelForm):
+class SeasonForm(SuperUserSlugMixin, TimezoneMixin, BootstrapFormControlMixin, ModelForm):
 
     class Meta:
         model = Season
@@ -365,7 +365,7 @@ class SeasonForm(SuperUserSlugMixin, TimezoneMixin, BootstrapFormControlMixin, f
         )
 
 
-class VenueForm(SuperUserSlugMixin, TimezoneMixin, forms.ModelForm):
+class VenueForm(SuperUserSlugMixin, TimezoneMixin, ModelForm):
 
     class Meta:
         model = Venue
@@ -383,7 +383,7 @@ class VenueForm(SuperUserSlugMixin, TimezoneMixin, forms.ModelForm):
         }
 
 
-class GroundForm(SuperUserSlugMixin, TimezoneMixin, forms.ModelForm):
+class GroundForm(SuperUserSlugMixin, TimezoneMixin, ModelForm):
 
     class Meta:
         model = Ground
@@ -412,7 +412,7 @@ class GroundFormSet(BaseGroundFormSet):
         return super(GroundFormSet, self)._construct_form(i, **kwargs)
 
 
-class DivisionForm(SuperUserSlugMixin, forms.ModelForm):
+class DivisionForm(SuperUserSlugMixin, ModelForm):
 
     def __init__(self, *args, **kwargs):
         super(DivisionForm, self).__init__(*args, **kwargs)
@@ -471,7 +471,7 @@ class DivisionForm(SuperUserSlugMixin, forms.ModelForm):
             'bonus_points_formula', BonusPointCalculator)
 
 
-class StageForm(SuperUserSlugMixin, forms.ModelForm):
+class StageForm(SuperUserSlugMixin, ModelForm):
 
     def __init__(self, *args, **kwargs):
         super(StageForm, self).__init__(*args, **kwargs)
@@ -500,7 +500,7 @@ class StageForm(SuperUserSlugMixin, forms.ModelForm):
         )
 
 
-class StageGroupForm(SuperUserSlugMixin, forms.ModelForm):
+class StageGroupForm(SuperUserSlugMixin, ModelForm):
 
     teams = ModelMultipleChoiceField(queryset=None)
 
@@ -558,7 +558,7 @@ class StageGroupForm(SuperUserSlugMixin, forms.ModelForm):
         )
 
 
-class StageGroupFormSetForm(forms.ModelForm):
+class StageGroupFormSetForm(ModelForm):
     def __init__(self, stage, *args, **kwargs):
         super(StageGroupFormSetForm, self).__init__(*args, **kwargs)
 
@@ -588,7 +588,7 @@ class StageGroupFormSet(ConstructFormMixin, BaseStageGroupFormSet):
         return super(StageGroupFormSet, self)._construct_form(i, **kwargs)
 
 
-class UndecidedTeamForm(UserMixin, forms.ModelForm):
+class UndecidedTeamForm(UserMixin, ModelForm):
     class Meta:
         model = UndecidedTeam
         fields = (
@@ -624,7 +624,7 @@ class UndecidedTeamForm(UserMixin, forms.ModelForm):
         return label
 
 
-class TeamForm(SuperUserSlugMixin, forms.ModelForm):
+class TeamForm(SuperUserSlugMixin, ModelForm):
 
     def __init__(self, division, *args, **kwargs):
         super(TeamForm, self).__init__(*args, **kwargs)
@@ -706,7 +706,7 @@ class TeamForm(SuperUserSlugMixin, forms.ModelForm):
         )
 
 
-class DrawFormatForm(BootstrapFormControlMixin, forms.ModelForm):
+class DrawFormatForm(BootstrapFormControlMixin, ModelForm):
 
     def clean_text(self):
         from tournamentcontrol.competition.draw import DrawGenerator
@@ -792,7 +792,7 @@ class BaseMatchFormMixin(BootstrapFormControlMixin):
                     .widget.attrs.setdefault('class', 'form-control')
 
 
-class MatchEditForm(BaseMatchFormMixin, forms.ModelForm):
+class MatchEditForm(BaseMatchFormMixin, ModelForm):
     """
     Use this form to make sure that the data validates:
 
@@ -986,7 +986,7 @@ class DrawGenerationMatchFormSet(BaseDrawGenerationMatchFormSet):
         return matches
 
 
-class MatchResultForm(BootstrapFormControlMixin, forms.ModelForm):
+class MatchResultForm(BootstrapFormControlMixin, ModelForm):
     """
     This form is used to make it easy to enter results for a match.
     """
@@ -1074,7 +1074,7 @@ MatchResultFormSet = modelformset_factory(
     Match, extra=0, form=MatchResultForm)
 
 
-class MatchWashoutForm(BootstrapFormControlMixin, forms.ModelForm):
+class MatchWashoutForm(BootstrapFormControlMixin, ModelForm):
 
     class Meta:
         model = Match
@@ -1087,7 +1087,7 @@ MatchWashoutFormSet = modelformset_factory(
     Match, extra=0, form=MatchWashoutForm)
 
 
-class MatchScheduleForm(BaseMatchFormMixin, forms.ModelForm):
+class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
 
     def __init__(self, ignore_clashes=False, *args, **kwargs):
         super(MatchScheduleForm, self).__init__(*args, **kwargs)
@@ -1334,7 +1334,7 @@ class RescheduleDateFormSet(ConstructFormMixin, RescheduleDateFormSetBase):
         return count
 
 
-class ProgressMatchesForm(BaseMatchFormMixin, forms.ModelForm):
+class ProgressMatchesForm(BaseMatchFormMixin, ModelForm):
 
     def __init__(self, instance, *args, **kwargs):
         super(ProgressMatchesForm, self).__init__(
@@ -1390,7 +1390,7 @@ ProgressMatchesFormSet = modelformset_factory(
     Match, form=ProgressMatchesForm, extra=0)
 
 
-class ProgressTeamsForm(forms.ModelForm):
+class ProgressTeamsForm(ModelForm):
 
     def __init__(self, *args, **kwargs):
         super(ProgressTeamsForm, self).__init__(*args, **kwargs)
@@ -1575,7 +1575,7 @@ class BaseSeasonAssociationFormSet(
         return {'user': self.user, 'club': self.club, 'season': self.season}
 
 
-class ClubAssociationForm(UserMixin, forms.ModelForm):
+class ClubAssociationForm(UserMixin, ModelForm):
     def __init__(self, club, *args, **kwargs):
         super(ClubAssociationForm, self).__init__(*args, **kwargs)
         self.fields['person'].queryset = club.members.all()
@@ -1590,7 +1590,7 @@ class ClubAssociationForm(UserMixin, forms.ModelForm):
         )
 
 
-class TeamAssociationForm(UserMixin, forms.ModelForm):
+class TeamAssociationForm(UserMixin, ModelForm):
     def __init__(self, team, *args, **kwargs):
         super(TeamAssociationForm, self).__init__(*args, **kwargs)
         self.fields['person'].queryset = team.club.members.all()
@@ -1607,7 +1607,7 @@ class TeamAssociationForm(UserMixin, forms.ModelForm):
         )
 
 
-class SeasonAssociationForm(UserMixin, forms.ModelForm):
+class SeasonAssociationForm(UserMixin, ModelForm):
 
     def __init__(self, club, season, *args, **kwargs):
         super(SeasonAssociationForm, self).__init__(*args, **kwargs)
@@ -1677,7 +1677,7 @@ DivisionExclusionFormSet = inlineformset_factory(
 )
 
 
-class ClubRoleForm(BootstrapFormControlMixin, forms.ModelForm):
+class ClubRoleForm(BootstrapFormControlMixin, ModelForm):
     class Meta:
         model = ClubRole
         fields = (
@@ -1685,7 +1685,7 @@ class ClubRoleForm(BootstrapFormControlMixin, forms.ModelForm):
         )
 
 
-class TeamRoleForm(BootstrapFormControlMixin, forms.ModelForm):
+class TeamRoleForm(BootstrapFormControlMixin, ModelForm):
     class Meta:
         model = TeamRole
         fields = (
@@ -1693,7 +1693,7 @@ class TeamRoleForm(BootstrapFormControlMixin, forms.ModelForm):
         )
 
 
-class SimpleScoreMatchStatisticForm(forms.ModelForm):
+class SimpleScoreMatchStatisticForm(ModelForm):
 
     class Meta:
         model = SimpleScoreMatchStatistic

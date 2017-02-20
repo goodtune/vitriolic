@@ -8,7 +8,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('competition', '0023_competition__add__match_uuid'),
+        ('competition', '0023_competition__add__match_uuid_finalize'),
     ]
 
     operations = [

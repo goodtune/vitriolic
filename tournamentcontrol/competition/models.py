@@ -424,7 +424,10 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
                     "opposition team plus these people."))
 
     class Meta(OrderedSitemapNode.Meta):
-        pass
+        unique_together = (
+            ('title', 'competition'),
+            ('slug', 'competition'),
+        )
 
     def _get_admin_namespace(self):
         return 'admin:fixja:competition:season'
@@ -587,7 +590,10 @@ class Division(AdminUrlMixin, ModelDiffMixin, RankDivisionMixin,
     objects = DivisionQuerySet.as_manager()
 
     class Meta(OrderedSitemapNode.Meta):
-        pass
+        unique_together = (
+            ('title', 'season'),
+            ('slug', 'season'),
+        )
 
     def _get_admin_namespace(self):
         return 'admin:fixja:competition:season:division'
@@ -661,7 +667,8 @@ class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 
     class Meta(OrderedSitemapNode.Meta):
         unique_together = (
-            ('division', 'slug'),
+            ('title', 'division'),
+            ('slug', 'division'),
         )
 
     def _get_admin_namespace(self):
@@ -839,7 +846,9 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
         permissions = (
             ('view_team', _("Can view team")),
         )
-        unique_together = ('title', 'division')
+        unique_together = (
+            ('title', 'division'),
+        )
 
     def clean(self):
         errors = {}

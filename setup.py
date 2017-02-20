@@ -23,6 +23,7 @@ setup(
         'django-classy-tags~=0.7.2',
         'django-froala-editor~=2.0',
         'django-guardian~=1.4.5,!=1.4.6',
+        'django-modelforms',
         'django-mptt~=0.8.6',
         'first~=2.0.1',
         'Pillow~=3.0',
