@@ -43,6 +43,7 @@ setup(
         ],
         'news': [
             'django-imagekit',
+            'python-magic',
         ],
         'competition': [
             'beautifulsoup4>=4.4,<5',
