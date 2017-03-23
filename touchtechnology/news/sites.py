@@ -1,9 +1,10 @@
+import magic
 from dateutil.relativedelta import relativedelta
 from django.conf.urls import include, url
 from django.contrib.syndication.views import Feed
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed
+from django.utils.feedgenerator import Atom1Feed, Enclosure, Rss201rev2Feed
 from touchtechnology.common.sites import Application
 from touchtechnology.news.app_settings import PAGINATE_BY
 from touchtechnology.news.decorators import (
@@ -222,6 +223,25 @@ class NewsSite(Application):
 
             def item_pubdate(slf, item):
                 return item.published
+
+            def item_enclosure_url(slf, item):
+                try:
+                    return item.image.url
+                except Exception:
+                    pass
+
+            def item_enclosure_length(slf, item):
+                try:
+                    return item.image.size
+                except Exception:
+                    pass
+
+            def item_enclosure_mime_type(slf, item):
+                try:
+                    return magic.from_file(item.image.path, mime=True)
+                except Exception:
+                    pass
+
 
         class AtomNewsFeed(NewsFeed):
             feed_type = Atom1Feed
