@@ -17,7 +17,7 @@
 
 			{% block latest_article_link %}
 				<p>
-					<a class="button more" href="{% timezone "UTC" %}{% url 'news:article' year=a.published|date:"Y" month=a.published|date:"b" day=a.published|date:"j" slug=a.slug %}{% endtimezone %}">{% trans "Read more" %}</a>
+					<a class="button more" href="{% timezone "UTC" %}{% url application.name|add:":article" year=a.published|date:"Y" month=a.published|date:"b" day=a.published|date:"j" slug=a.slug %}{% endtimezone %}">{% trans "Read more" %}</a>
 				</p>
 			{% endblock %}
 		</div>
