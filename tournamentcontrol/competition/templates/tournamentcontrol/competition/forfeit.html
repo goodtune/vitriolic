@@ -6,7 +6,7 @@
 
 {% block breadcrumbs %}
 	{{ block.super }}
-	<li><a href="{% url 'competition:forfeit-list' competition=competition.slug season=season.slug %}">{% trans "Forfeits" %}</a></li>
+	<li><a href="{% url application.name|add:":forfeit-list" competition=competition.slug season=season.slug %}">{% trans "Forfeits" %}</a></li>
 {% endblock %}
 
 {% block content %}
@@ -28,7 +28,7 @@
 				<i class="fa fa-sign-in"></i>
 				{% trans "Login" %}
 			</button>
-			<a href="{% url 'competition:forfeit-list' competition=competition.slug season=season.slug %}">
+			<a href="{% url application.name|add:":forfeit-list" competition=competition.slug season=season.slug %}">
 				{% trans "Cancel" %}
 			</a>
 		</div>

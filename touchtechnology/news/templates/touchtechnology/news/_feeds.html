@@ -17,7 +17,7 @@
 
 	<ul>
 		{% for name, feed in feeds.items %}
-			<li><a href="{% url 'news:feed' feed %}">{{ node.title }} ({{ name }})</a></li>
+			<li><a href="{% url application.name|add:":feed" feed %}">{{ node.title }} ({{ name }})</a></li>
 		{% endfor %}
 	</ul>
 {% endblock %}

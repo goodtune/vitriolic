@@ -25,9 +25,9 @@
 			{% endblock %}
 
 			<p>
-				<a class="button more" href="{% url 'competition:season' competition=competition.slug season=season.slug %}">{% trans "Details" %}</a>
+				<a class="button more" href="{% url application.name|add:":season" competition=competition.slug season=season.slug %}">{% trans "Details" %}</a>
 				{% for division in season.divisions.public %}
-					<a class="button" href="{% url 'competition:division' competition=competition.slug season=season.slug division=division.slug %}">{% trans division.title %}</a>
+					<a class="button" href="{% url application.name|add:":division" competition=competition.slug season=season.slug division=division.slug %}">{% trans division.title %}</a>
 				{% endfor %}
 			</p>
 		</div>

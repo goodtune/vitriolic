@@ -6,7 +6,7 @@
 
 {% block breadcrumbs %}
 	{{ block.super }}
-	<li><a href="{% url 'competition:forfeit-list' competition=competition.slug season=season.slug %}">{% trans "Forfeits" %}</a></li>
+	<li><a href="{% url application.name|add:":forfeit-list" competition=competition.slug season=season.slug %}">{% trans "Forfeits" %}</a></li>
 {% endblock %}
 
 {% block content %}
@@ -37,7 +37,7 @@
 						{% if match.is_forfeit %}
 							<dd class="{% if match.forfeit_winner == team %}win{% else %}loss{% endif %}">{{ match|opponent:team }}</dd>
 						{% else %}
-							<dd><a href="{% url 'competition:forfeit' competition=competition.slug season=season.slug match=match.pk %}">{{ match|opponent:team }}</a></dd>
+							<dd><a href="{% url application.name|add:":forfeit" competition=competition.slug season=season.slug match=match.pk %}">{{ match|opponent:team }}</a></dd>
 						{% endif %}
 					{% endfor %}
 				</dl>

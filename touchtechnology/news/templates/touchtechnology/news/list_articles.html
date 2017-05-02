@@ -13,7 +13,7 @@
 			</p>
 			<div class="abstract">{{ article.abstract|linebreaks }}</div>
 			<p class="buttons">
-				<a class="button more" href="{% timezone "UTC" %}{% url 'news:article' year=article.published|date:"Y" month=article.published|date:"b" day=article.published|date:"j" slug=article.slug %}{% endtimezone %}">
+				<a class="button more" href="{% timezone "UTC" %}{% url application.name|add:":article" year=article.published|date:"Y" month=article.published|date:"b" day=article.published|date:"j" slug=article.slug %}{% endtimezone %}">
 					{% block read_more %}{% trans "Read more" %}{% endblock %}
 				</a>
 			</p>

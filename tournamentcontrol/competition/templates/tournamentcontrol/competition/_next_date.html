@@ -18,7 +18,7 @@
 					{% with stage=match.stage division=match.stage.division pool=match.stage_group home=match.get_home_team away=match.get_away_team %}
 						<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
 							<td class="label">
-								<a href="{# url 'competition:division' competition=division.season.competition.slug season=division.season.slug division=division.slug #}">{% trans division.title %}</a>
+								<a href="{# url application.name|add:":division" competition=division.season.competition.slug season=division.season.slug division=division.slug #}">{% trans division.title %}</a>
 							</td>
 							{% if stage or pool %}
 								<td class="{% if pool %}pool{% else %}stage{% endif %}">
@@ -37,9 +37,9 @@
 							{% spaceless %}
 								<td class="right team {{ home.club.slug|cssify }}">
 									{% if home.slug %}
-										{% url 'competition:team' competition=home.division.season.competition.slug season=home.division.season.slug division=home.division.slug team=home.slug as url1 %}
-										{% url 'competition:team' season=home.division.season.slug division=home.division.slug team=home.slug as url2 %}
-										{% url 'competition:team' division=home.division.slug team=home.slug as url3 %}
+										{% url application.name|add:":team" competition=home.division.season.competition.slug season=home.division.season.slug division=home.division.slug team=home.slug as url1 %}
+										{% url application.name|add:":team" season=home.division.season.slug division=home.division.slug team=home.slug as url2 %}
+										{% url application.name|add:":team" division=home.division.slug team=home.slug as url3 %}
 										<a href="{{ url1|default:url2|default:url3 }}">{% trans home.title %}</a>
 									{% else %}
 										<span>{% trans home.title %}</span>
@@ -50,9 +50,9 @@
 							{% spaceless %}
 								<td class="team {{ away.club.slug|cssify }}">
 									{% if away.slug %}
-										{% url 'competition:team' competition=away.division.season.competition.slug season=away.division.season.slug division=away.division.slug team=away.slug as url1 %}
-										{% url 'competition:team' season=away.division.season.slug division=away.division.slug team=away.slug as url2 %}
-										{% url 'competition:team' division=away.division.slug team=away.slug as url3 %}
+										{% url application.name|add:":team" competition=away.division.season.competition.slug season=away.division.season.slug division=away.division.slug team=away.slug as url1 %}
+										{% url application.name|add:":team" season=away.division.season.slug division=away.division.slug team=away.slug as url2 %}
+										{% url application.name|add:":team" division=away.division.slug team=away.slug as url3 %}
 										<a href="{{ url1|default:url2|default:url3 }}">{% trans away.title %}</a>
 									{% else %}
 										<span>{% trans away.title %}</span>

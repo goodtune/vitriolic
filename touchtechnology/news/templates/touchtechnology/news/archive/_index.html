@@ -8,7 +8,7 @@
 
 	<ul>
 		{% for year in date_list %}
-			<li><a href="{% url 'news:year' year=year|date:"Y" %}">{{ year|date:"Y" }}</a></li>
+			<li><a href="{% url application.name|add:":year" year=year|date:"Y" %}">{{ year|date:"Y" }}</a></li>
 		{% endfor %}
 	</ul>
 
@@ -16,7 +16,7 @@
 
 	<ul>
 		{% for article in latest %}
-			<li><a href="{% timezone "UTC" %}{% url 'news:article' year=article.published|date:"Y" month=article.published|date:"b" day=article.published|date:"j" slug=article.slug %}{% endtimezone %}">{{ article.headline }}</a></li>
+			<li><a href="{% timezone "UTC" %}{% url application.name|add:":article" year=article.published|date:"Y" month=article.published|date:"b" day=article.published|date:"j" slug=article.slug %}{% endtimezone %}">{{ article.headline }}</a></li>
 		{% endfor %}
 	</ul>
 {% endblock %}

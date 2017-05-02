@@ -3,6 +3,6 @@
 
 {% block pagination %}
 	<p class="buttons">
-		<a class="button" href="{% url 'news:archive' %}" title="Archive">{% trans "Visit the news archive." %}</a>
+		<a class="button" href="{% url application.name|add:":archive" %}" title="Archive">{% trans "Visit the news archive." %}</a>
 	</p>
 {% endblock %}

@@ -11,9 +11,9 @@
 	{% trans "TBC" as tbc context "abbreviation: to be confirmed" %}
 
 	{% block calendar %}
-		{% url 'competition:calendar' competition=competition.slug season=season.slug division=division.slug team=team.slug as url1 %}
-		{% url 'competition:calendar' season=season.slug division=division.slug team=team.slug as url2 %}
-		{% url 'competition:calendar' division=division.slug team=team.slug as url3 %}
+		{% url application.name|add:":calendar" competition=competition.slug season=season.slug division=division.slug team=team.slug as url1 %}
+		{% url application.name|add:":calendar" season=season.slug division=division.slug team=team.slug as url2 %}
+		{% url application.name|add:":calendar" division=division.slug team=team.slug as url3 %}
 		<a class="calendar" title="Calendar"{% if debug %} target="_blank"{% endif %} href="{% if not debug %}webcal:{% endif %}//{{ request.get_host }}{{ url1|default:url2|default:url3 }}">&#128197;</a>
 	{% endblock %}
 
@@ -48,9 +48,9 @@
 						<td>{% score match team %}</td>
 						{% if match.statistics_count %}
 							<td class="report">
-								{% url 'competition:match' competition=competition.slug season=season.slug division=division.slug match=match.pk as url1 %}
-								{% url 'competition:match' season=season.slug division=division.slug match=match.pk as url2 %}
-								{% url 'competition:match' division=division.slug match=match.pk as url3 %}
+								{% url application.name|add:":match" competition=competition.slug season=season.slug division=division.slug match=match.pk as url1 %}
+								{% url application.name|add:":match" season=season.slug division=division.slug match=match.pk as url2 %}
+								{% url application.name|add:":match" division=division.slug match=match.pk as url3 %}
 								<a href="{{ url1|default:url2|default:url3 }}">{% trans "Detail" %}</a>
 							</td>
 						{% else %}
