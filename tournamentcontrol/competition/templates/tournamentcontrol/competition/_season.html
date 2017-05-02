@@ -24,17 +24,17 @@
 			{% for d in season.divisions.public %}
 				<li class="{{ d.slug }} {% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
 					{% spaceless %}
-						{% url 'competition:division' competition=d.season.competition.slug season=d.season.slug division=d.slug as url1 %}
-						{% url 'competition:division' season=d.season.slug division=d.slug as url2 %}
-						{% url 'competition:division' division=d.slug as url3 %}
+						{% url application.name|add:":division" competition=d.season.competition.slug season=d.season.slug division=d.slug as url1 %}
+						{% url application.name|add:":division" season=d.season.slug division=d.slug as url2 %}
+						{% url application.name|add:":division" division=d.slug as url3 %}
 						<a href="{{ url1|default:url2|default:url3 }}">{% trans d.title %}</a>
 						{% if d.pools.count %}
 							<ul class="pools">
 								{% for p in d.pools.all %}
 									<li class="{{ p.slug }} {% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
-										{% url 'competition:pool' competition=p.division.season.competition.slug season=p.division.season.slug division=p.division.slug pool=pool.slug as url1 %}
-										{% url 'competition:pool' season=p.division.season.slug division=p.division.slug pool=pool.slug as url2 %}
-										{% url 'competition:pool' division=p.division.slug pool=pool.slug as url3 %}
+										{% url application.name|add:":pool" competition=p.division.season.competition.slug season=p.division.season.slug division=p.division.slug pool=pool.slug as url1 %}
+										{% url application.name|add:":pool" season=p.division.season.slug division=p.division.slug pool=pool.slug as url2 %}
+										{% url application.name|add:":pool" division=p.division.slug pool=pool.slug as url3 %}
 										<a href="{{ url1|default:url2|default:url3 }}">{% trans p.title %}</a>
 									</li>
 								{% endfor %}
@@ -56,9 +56,9 @@
 
 			<ul id="clubs">
 				{% for club in clubs %}
-					{% url 'competition:club' competition=competition.slug season=season.slug club=club.slug as url1 %}
-					{% url 'competition:club' season=season.slug club=club.slug as url2 %}
-					{% url 'competition:club' club=club.slug as url3 %}
+					{% url application.name|add:":club" competition=competition.slug season=season.slug club=club.slug as url1 %}
+					{% url application.name|add:":club" season=season.slug club=club.slug as url2 %}
+					{% url application.name|add:":club" club=club.slug as url3 %}
 					<li class="team {{ club.slug|cssify }}"><a href="{{ url1|default:url2|default:url3 }}">{% trans club.title %}</a></li>
 				{% endfor %}
 			</ul>

@@ -67,9 +67,9 @@
 
 								<td class="team right {{ match.home_team.club.slug|cssify }}">
 									{% if match.home_team %}
-										{% url 'competition:team' competition=competition.slug season=season.slug division=division.slug team=match.home_team.slug as url1 %}
-										{% url 'competition:team' season=season.slug division=division.slug team=match.home_team.slug as url2 %}
-										{% url 'competition:team' division=division.slug team=match.home_team.slug as url3 %}
+										{% url application.name|add:":team" competition=competition.slug season=season.slug division=division.slug team=match.home_team.slug as url1 %}
+										{% url application.name|add:":team" season=season.slug division=division.slug team=match.home_team.slug as url2 %}
+										{% url application.name|add:":team" division=division.slug team=match.home_team.slug as url3 %}
 										<a href="{{ url1|default:url2|default:url3 }}">{% trans match.home_team.title %}</a>
 									{% else %}
 										{% trans match.get_home_team.title %}
@@ -82,9 +82,9 @@
 
 								<td class="team {{ match.away_team.club.slug|cssify }}">
 									{% if match.away_team %}
-										{% url 'competition:team' competition=competition.slug season=season.slug division=division.slug team=match.away_team.slug as url1 %}
-										{% url 'competition:team' season=season.slug division=division.slug team=match.away_team.slug as url2 %}
-										{% url 'competition:team' division=division.slug team=match.away_team.slug as url3 %}
+										{% url application.name|add:":team" competition=competition.slug season=season.slug division=division.slug team=match.away_team.slug as url1 %}
+										{% url application.name|add:":team" season=season.slug division=division.slug team=match.away_team.slug as url2 %}
+										{% url application.name|add:":team" division=division.slug team=match.away_team.slug as url3 %}
 										<a href="{{ url1|default:url2|default:url3 }}">{% trans match.away_team.title %}</a>
 									{% else %}
 										{% trans match.get_away_team.title %}
@@ -93,9 +93,9 @@
 
 								{% if match.statistics_count %}
 									<td class="report">
-										{% url 'competition:match' competition=competition.slug season=season.slug division=division.slug match=match.pk as url1 %}
-										{% url 'competition:match' season=season.slug division=division.slug match=match.pk as url2 %}
-										{% url 'competition:match' division=division.slug match=match.pk as url3 %}
+										{% url application.name|add:":match" competition=competition.slug season=season.slug division=division.slug match=match.pk as url1 %}
+										{% url application.name|add:":match" season=season.slug division=division.slug match=match.pk as url2 %}
+										{% url application.name|add:":match" division=division.slug match=match.pk as url3 %}
 										<a href="{{ url1|default:url2|default:url3 }}">{% trans "Detail" %}</a>
 									</td>
 								{% else %}

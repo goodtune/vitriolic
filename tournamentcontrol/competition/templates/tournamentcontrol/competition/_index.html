@@ -8,7 +8,7 @@
 
 	{% for competition in object_list %}
 		<div class="competition {% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
-			<h2><a href="{% url 'competition:competition' competition=competition.slug %}">{% trans competition.title %}</a></h2>
+			<h2><a href="{% url application.name|add:":competition" competition=competition.slug %}">{% trans competition.title %}</a></h2>
 
 			{{ competition.copy|safe }}
 
@@ -16,7 +16,7 @@
 				<ul class="seasons">
 					{% for season in competition.seasons.all %}
 						<li>
-							<a href="{% url 'competition:season' competition=competition.slug season=season.slug %}">{% trans season.title %}</a>
+							<a href="{% url application.name|add:":season" competition=competition.slug season=season.slug %}">{% trans season.title %}</a>
 						</li>
 					{% endfor %}
 				</ul>

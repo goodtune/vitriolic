@@ -3,9 +3,9 @@
 {% if stage %}
 	<div class="stage">
 		{% if not forloop.first or not forloop.last %}
-			{% url 'competition:stage' competition=competition.slug season=season.slug division=division.slug stage=stage.slug as url1 %}
-			{% url 'competition:stage' season=season.slug division=division.slug stage=stage.slug as url2 %}
-			{% url 'competition:stage' division=division.slug stage=stage.slug as url3 %}
+			{% url application.name|add:":stage" competition=competition.slug season=season.slug division=division.slug stage=stage.slug as url1 %}
+			{% url application.name|add:":stage" season=season.slug division=division.slug stage=stage.slug as url2 %}
+			{% url application.name|add:":stage" division=division.slug stage=stage.slug as url3 %}
 			<h3><a href="{{ url1|default:url2|default:url3 }}">{{ stage.title }}</a></h3>
 		{% endif %}
 
@@ -15,9 +15,9 @@
 					{% block thead %}
 						<thead>
 							<tr class="{% cycle tr %}">
-								{% url 'competition:pool' competition=competition.slug season=season.slug division=division.slug stage=stage.slug pool=pool.slug as url1 %}
-								{% url 'competition:pool' season=season.slug division=division.slug stage=stage.slug pool=pool.slug as url2 %}
-								{% url 'competition:pool' division=division.slug stage=stage.slug pool=pool.slug as url3 %}
+								{% url application.name|add:":pool" competition=competition.slug season=season.slug division=division.slug stage=stage.slug pool=pool.slug as url1 %}
+								{% url application.name|add:":pool" season=season.slug division=division.slug stage=stage.slug pool=pool.slug as url2 %}
+								{% url application.name|add:":pool" division=division.slug stage=stage.slug pool=pool.slug as url3 %}
 								<th class="team"><a href="{{ url1|default:url2|default:url3 }}">{% trans pool.title %}</a></th>
 								<th>{% trans "P" context "ladder: games played" %}</th>
 								<th>{% trans "W" context "ladder: games won" %}</th>
@@ -43,9 +43,9 @@
 							{% for ladder in summary %}
 								<tr class="{% if forloop.first %}first {% endif %}{% cycle tr %}{% if forloop.last %} last{% endif %}{% if team == ladder.team %} current{% endif %}">
 									<td class="team {{ ladder.team.club.slug|cssify }}">
-										{% url 'competition:team' competition=competition.slug season=season.slug division=division.slug team=ladder.team.slug as url1 %}
-										{% url 'competition:team' season=season.slug division=division.slug team=ladder.team.slug as url2 %}
-										{% url 'competition:team' division=division.slug team=ladder.team.slug as url3 %}
+										{% url application.name|add:":team" competition=competition.slug season=season.slug division=division.slug team=ladder.team.slug as url1 %}
+										{% url application.name|add:":team" season=season.slug division=division.slug team=ladder.team.slug as url2 %}
+										{% url application.name|add:":team" division=division.slug team=ladder.team.slug as url3 %}
 										<a href="{{ url1|default:url2|default:url3 }}">{% trans ladder.team.title %}</a>
 									</td>
 									<td>{{ ladder.played }}</td>

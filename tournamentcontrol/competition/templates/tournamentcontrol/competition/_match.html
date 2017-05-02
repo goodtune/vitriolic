@@ -20,15 +20,15 @@
 			<thead>
 				<tr>
 					<th colspan="3" class="team big {{ home.club.slug|cssify }}">
-						{% url 'competition:team' competition=competition.slug season=season.slug division=division.slug team=home.slug as url1 %}
-						{% url 'competition:team' season=season.slug division=division.slug team=home.slug as url2 %}
-						{% url 'competition:team' division=division.slug team=home.slug as url3 %}
+						{% url application.name|add:":team" competition=competition.slug season=season.slug division=division.slug team=home.slug as url1 %}
+						{% url application.name|add:":team" season=season.slug division=division.slug team=home.slug as url2 %}
+						{% url application.name|add:":team" division=division.slug team=home.slug as url3 %}
 						<a href="{{ url1|default:url2|default:url3 }}">{% trans home.title %}</a>
 					</th>
 					<th colspan="3" class="team big {{ away.club.slug|cssify }}">
-						{% url 'competition:team' competition=competition.slug season=season.slug division=division.slug team=away.slug as url1 %}
-						{% url 'competition:team' season=season.slug division=division.slug team=away.slug as url2 %}
-						{% url 'competition:team' division=division.slug team=away.slug as url3 %}
+						{% url application.name|add:":team" competition=competition.slug season=season.slug division=division.slug team=away.slug as url1 %}
+						{% url application.name|add:":team" season=season.slug division=division.slug team=away.slug as url2 %}
+						{% url application.name|add:":team" division=division.slug team=away.slug as url3 %}
 						<a href="{{ url1|default:url2|default:url3 }}">{% trans away.title %}</a>
 					</th>
 				</tr>
