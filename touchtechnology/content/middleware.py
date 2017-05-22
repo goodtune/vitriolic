@@ -178,10 +178,15 @@ class SitemapNodeMiddleware(MiddlewareMixin):
 
         # For development, add the MEDIA_URL and STATIC_URL to the project
         if settings.DEBUG:
-            urlpatterns += static(
-                settings.MEDIA_URL,
-                document_root=default_storage.path(''),
-                show_indexes=True)
+            try:
+                document_root = default_storage.path('')
+            except NotImplementedError as exc:
+                logger.debug('Unable to configure MEDIA_URL: %s', exc)
+            else:
+                urlpatterns += static(
+                    settings.MEDIA_URL,
+                    document_root=document_root,
+                    show_indexes=True)
 
             urlpatterns += staticfiles_urlpatterns()
 
