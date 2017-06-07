@@ -503,7 +503,6 @@ class ContentAdminComponent(AdminComponent):
         )
         from collections import namedtuple
         context = {
-            'base_url': default_storage.base_url,
             'path': path,
             'parent': parentdir,
             'directories': directories,
