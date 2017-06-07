@@ -187,8 +187,7 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                     settings.MEDIA_URL,
                     document_root=document_root,
                     show_indexes=True)
-
-            urlpatterns += staticfiles_urlpatterns()
+                urlpatterns += staticfiles_urlpatterns()
 
         # Create a new module on the fly and attach the rehydrated urlpatterns
         dynamic_urls = imp.new_module('dynamic_urls')
