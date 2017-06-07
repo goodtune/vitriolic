@@ -146,6 +146,7 @@ def _rank(decay=no_decay, start=None, at=None, debug=None):
             team.setdefault('importance', []).append(importance)
             team.setdefault('points', []).append(points)
             team.setdefault('points_decay', []).append(points_decay)
+            team.setdefault('matches', []).append(ladder_entry.match)
             if debug_re.match(obj.club.title):
                 logger.debug(
                     u'%r\t%-20s\t%-20s\twin=%s\tmargin=%s\t%s → %s\t%s',
