@@ -149,9 +149,10 @@ def _rank(decay=no_decay, start=None, at=None, debug=None):
             team.setdefault('matches', []).append(ladder_entry.match)
             if debug_re.match(obj.club.title):
                 logger.debug(
-                    u'%r\t%-20s\t%-20s\twin=%s\tmargin=%s\t%s → %s\t%s',
+                    u'%r\t%-20s\t%-20s\t%-20s\twin=%s\tmargin=%s\t%s → %s\t%s',
                     ladder_entry.match,
                     ladder_entry.team,
+                    division,
                     ladder_entry.opponent,
                     ladder_entry.win,
                     ladder_entry.margin,
