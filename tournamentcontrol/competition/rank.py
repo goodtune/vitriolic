@@ -112,6 +112,55 @@ def no_decay(ladder_entry, at):
     return Constants.ONE
 
 
+def _rank(decay=no_decay, start=None, at=None, debug=None):
+    if start is None:
+        start = LadderEntry.objects.earliest('match').match.date
+
+    if at is None:
+        at = timezone.now() + relativedelta(day=1)
+
+    if isinstance(at, datetime):
+        at = at.date()
+
+    if debug is None:
+        debug = r'^$'
+    debug_re = re.compile(debug, re.I)
+
+    ladder_entry_q = Q(match__date__gte=start, match__date__lt=at,
+                       forfeit_for=0)
+    ladder_entries = LadderEntry.objects.select_related(
+        'match__stage__division__season__competition').order_by('match')
+
+    table = {}
+
+    for ladder_entry in ladder_entries.filter(ladder_entry_q):
+        importance = ladder_entry.match.get_rank_importance()
+        division = ladder_entry.team.get_rank_division()
+        if importance is None or division is None:
+            continue
+        obj, __ = RankTeam.objects.get_or_create(club=ladder_entry.team.club, division=division)
+        points = base(ladder_entry) * importance
+        points_decay = points * decay(ladder_entry, at)
+        if points_decay:
+            team = table.setdefault(division, {}).setdefault(obj, {})
+            team.setdefault('importance', []).append(importance)
+            team.setdefault('points', []).append(points)
+            team.setdefault('points_decay', []).append(points_decay)
+            if debug_re.match(obj.club.title):
+                logger.debug(
+                    u'%r\t%-20s\t%-20s\twin=%s\tmargin=%s\t%s → %s\t%s',
+                    ladder_entry.match,
+                    ladder_entry.team,
+                    ladder_entry.opponent,
+                    ladder_entry.win,
+                    ladder_entry.margin,
+                    points,
+                    points_decay,
+                    importance)
+
+    return table
+
+
 def rank(decay=no_decay, start=None, at=None, debug=None):
     """
     Return an `OrderedDict` of key values, where the key is a `RankDivision`
@@ -142,49 +191,7 @@ def rank(decay=no_decay, start=None, at=None, debug=None):
     :param debug:
     :return:
     """
-    if start is None:
-        start = LadderEntry.objects.earliest('match').match.date
-
-    if at is None:
-        at = timezone.now() + relativedelta(day=1)
-
-    if isinstance(at, datetime):
-        at = at.date()
-
-    if debug is None:
-        debug = r'^$'
-    debug_re = re.compile(debug, re.I)
-
-    ladder_entry_q = Q(match__date__gte=start, match__date__lt=at,
-                       forfeit_for=0)
-    ladder_entries = LadderEntry.objects.select_related(
-        'match__stage__division__season__competition').order_by('match')
-
-    table = {}
-    for ladder_entry in ladder_entries.filter(ladder_entry_q):
-        importance = ladder_entry.match.get_rank_importance()
-        division = ladder_entry.team.get_rank_division()
-        if importance is None or division is None:
-            continue
-        obj, __ = RankTeam.objects.get_or_create(club=ladder_entry.team.club, division=division)
-        points = base(ladder_entry) * importance
-        points_decay = points * decay(ladder_entry, at)
-        if points_decay:
-            team = table.setdefault(division, {}).setdefault(obj, {})
-            team.setdefault('importance', []).append(importance)
-            team.setdefault('points', []).append(points)
-            team.setdefault('points_decay', []).append(points_decay)
-            if debug_re.match(obj.club.title):
-                logger.debug(
-                    u'%r\t%-20s\t%-20s\twin=%s\tmargin=%s\t%s → %s\t%s',
-                    ladder_entry.match,
-                    ladder_entry.team,
-                    ladder_entry.opponent,
-                    ladder_entry.win,
-                    ladder_entry.margin,
-                    points,
-                    points_decay,
-                    importance)
+    table = _rank(decay=decay, start=start, at=at, debug=debug)
 
     RankPoints.objects.filter(date__year=at.year, date__month=at.month).delete()
 
