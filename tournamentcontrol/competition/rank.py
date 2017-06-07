@@ -56,6 +56,7 @@ class DayView(NodeToContextMixin, dates.DayArchiveView):
         data = super(DayView, self).get_context_data(**kwargs)
         division_list = (
             data['object_list']
+            .order_by('team__division')
             .values_list('team__division__title', 'team__division__slug')
             .distinct()
         )

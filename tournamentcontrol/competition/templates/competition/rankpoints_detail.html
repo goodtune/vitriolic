@@ -19,7 +19,7 @@
 	<table>
 		{% for rank in object_list %}
 			<tr>
-				<td>{% ifchanged forloop.counter %}{{ forloop.counter }}{% else %}={% endifchanged %}</td>
+				<td>{% ifchanged rank.points %}{{ forloop.counter }}{% else %}={% endifchanged %}</td>
 				<td>{{ rank.team.club.title }}</td>
 				<td>{{ rank.points }}</td>
 			</tr>
