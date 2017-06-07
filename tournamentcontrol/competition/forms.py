@@ -632,6 +632,7 @@ class TeamForm(SuperUserSlugMixin, ModelForm):
             self.fields.pop('club')
         else:
             self.fields['club'].queryset = division.season.competition.clubs
+            self.fields['title'].required = False
 
         timeslot_fields = ('timeslots_after', 'timeslots_before')
 
@@ -704,6 +705,14 @@ class TeamForm(SuperUserSlugMixin, ModelForm):
         js = (
             'tournamentcontrol/competition/js/team.js',
         )
+
+    def clean_title(self):
+        club = self.cleaned_data.get('club')
+        title = self.cleaned_data.get('title')
+        if not title and club:
+            self.data['title'] = club.title
+            return club.title
+        return title
 
 
 class DrawFormatForm(BootstrapFormControlMixin, ModelForm):
