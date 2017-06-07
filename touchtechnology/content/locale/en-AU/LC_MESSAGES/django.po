@@ -203,8 +203,6 @@ msgstr ""
 #: templates/touchtechnology/content/admin/delete_confirm.html:18
 #: templates/touchtechnology/content/admin/edit_page.html:37
 #: templates/touchtechnology/content/admin/file/list.inc.html:150
-#: templates/touchtechnology/content/admin/files.html:26
-#: templates/touchtechnology/content/admin/files.html:60
 msgid "Delete"
 msgstr ""
 
@@ -260,7 +258,6 @@ msgstr ""
 #: templates/touchtechnology/content/admin/file/list.html:11
 #: templates/touchtechnology/content/admin/file/list.inc.html:49
 #: templates/touchtechnology/content/admin/file/list.inc.html:63
-#: templates/touchtechnology/content/admin/files.html:76
 msgid "Upload file"
 msgstr ""
 
@@ -309,41 +306,6 @@ msgstr ""
 
 #: templates/touchtechnology/content/admin/file/list.inc.html:141
 msgid "Edit"
-msgstr ""
-
-#: templates/touchtechnology/content/admin/files.html:15
-msgid "Folders"
-msgstr ""
-
-#: templates/touchtechnology/content/admin/files.html:23
-msgid "Not empty"
-msgstr ""
-
-#: templates/touchtechnology/content/admin/files.html:28
-#: templates/touchtechnology/content/admin/files.html:62
-msgid "Protected"
-msgstr ""
-
-#: templates/touchtechnology/content/admin/files.html:35
-#, python-format
-msgid "No directories in <strong>%(in)s</strong>."
-msgstr ""
-
-#: templates/touchtechnology/content/admin/files.html:43
-msgid "Parent"
-msgstr ""
-
-#: templates/touchtechnology/content/admin/files.html:46
-msgid "Add folder"
-msgstr ""
-
-#: templates/touchtechnology/content/admin/files.html:52
-msgid "Files"
-msgstr ""
-
-#: templates/touchtechnology/content/admin/files.html:68
-#, python-format
-msgid "No files in <strong>%(in)s</strong>."
 msgstr ""
 
 #: templates/touchtechnology/content/admin/placeholder/list.html:7
