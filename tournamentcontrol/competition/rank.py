@@ -2,18 +2,23 @@
 
 import logging
 import re
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 import numpy
+from dateutil.parser import parse as date_parse
 from dateutil.relativedelta import relativedelta
+from django.core.cache import caches
 from django.core.serializers import get_serializer
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.module_loading import import_string
 from django.views.generic import dates
-
-from tournamentcontrol.competition.models import LadderEntry, RankPoints, RankTeam, RankDivision
+from first import first
+from tournamentcontrol.competition.models import (
+    LadderEntry, RankDivision, RankPoints, RankTeam,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +85,52 @@ class DivisionView(NodeToContextMixin, dates.DayArchiveView):
         data = super(DivisionView, self).get_context_data(**kwargs)
         slug = self.kwargs['slug']
         data['object'] = get_object_or_404(RankDivision, slug=slug)
+        return data
+
+
+class TeamView(DivisionView):
+    template_name_suffix = '_team'
+
+    def get_context_data(self, **kwargs):
+        data = super(TeamView, self).get_context_data(**kwargs)
+
+        cache = self.kwargs.get('cache', 'default')
+        decay = self.kwargs.get('decay', 'tournamentcontrol.competition.rank.no_decay')
+        start = self.kwargs.get('start') or None
+
+        # Try and retrieve the table from the cache, but if it's not available
+        # we'll have to pay the price of generating it.
+        version = "%(year)s-%(month)s-%(day)s" % self.kwargs
+        table = caches[cache].get('rank_table', version=version)
+
+        if table is None:
+            at = date_parse(version)
+            decay = import_string(decay)
+            table = _rank(start=start, at=at, decay=decay)
+
+            # Using a timeout of None will make the key persist indefinitely.
+            # In the interim this can serve as a poor mans persistence model.
+            caches[cache].set('rank_table', table, version=version, timeout=None)
+
+        # Find the RankTeam instance from the computed table.
+        division = data['object']
+        team = first(
+            team for team in table[division]
+            if team.club.slug == self.kwargs['team']
+        )
+
+        # Transform the data for template consumption.
+        rows = zip(
+            table[division][team]['matches'],
+            table[division][team]['points'],
+            table[division][team]['points_decay'],
+        )
+
+        # Punch this into the context to display in the front end.
+        data['team'] = team
+        data['table'] = rows
+        data['points'] = numpy.mean(table[division][team]['points_decay'])
+
         return data
 
 

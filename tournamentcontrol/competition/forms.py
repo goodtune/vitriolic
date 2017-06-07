@@ -271,6 +271,14 @@ class MultiConfigurationForm(PlaceholderConfigurationBase):
             widget=forms.CheckboxSelectMultiple)
 
 
+class RankingConfigurationForm(PlaceholderConfigurationBase):
+
+    def __init__(self, *args, **kwargs):
+        super(RankingConfigurationForm, self).__init__(*args, **kwargs)
+        self.fields['start'] = forms.CharField(required=False)
+        self.fields['decay'] = forms.CharField(required=False)
+
+
 class PersonEditForm(BootstrapFormControlMixin, ModelForm):
 
     class Meta:
