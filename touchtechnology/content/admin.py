@@ -2,6 +2,7 @@ from __future__ import unicode_literals
 
 import logging
 import os
+from collections import namedtuple
 
 from django.conf import settings
 from django.conf.urls import include, url
@@ -485,7 +486,7 @@ class ContentAdminComponent(AdminComponent):
                 namespace = s._get_admin_namespace()
                 args = s._get_url_args()
                 crud = {
-                    'detail': os.path.join(settings.MEDIA_URL, *args),
+                    'detail': default_storage.url(os.path.join(*args)),
                     'delete': reverse(
                         '%s:delete' % namespace, args=args),
                 }
@@ -501,7 +502,7 @@ class ContentAdminComponent(AdminComponent):
             [Folder(d[0], d[1]) for d in directories] +
             [File(f, f) for f in files]
         )
-        from collections import namedtuple
+
         context = {
             'path': path,
             'parent': parentdir,

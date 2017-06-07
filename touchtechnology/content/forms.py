@@ -263,8 +263,16 @@ class NewFolderForm(FileFormMixin, forms.Form):
         return name
 
     def save(self, *args, **kwargs):
-        return default_storage.mkdir(
-            name=self.cleaned_data['name'], path=self.path)
+        directory = self.cleaned_data['name']
+        try:
+            path = default_storage.mkdir(
+                name=directory, path=self.path)
+        except AttributeError as exc:
+            if self.path is not None:
+                path = os.path.join(self.path, directory)
+            else:
+                path = directory
+        return path
 
 
 class FileUploadForm(FileFormMixin, forms.Form):
