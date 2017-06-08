@@ -29,6 +29,7 @@ from tournamentcontrol.competition.decorators import (
 from tournamentcontrol.competition.forms import (
     ConfigurationForm,
     MultiConfigurationForm,
+    RankingConfigurationForm,
 )
 from tournamentcontrol.competition.models import (
     Competition,
@@ -589,6 +590,8 @@ class TournamentCalculatorSite(Application):
 
 class RankingSite(Application):
 
+    kwargs_form_class = RankingConfigurationForm
+
     def __init__(self, name='ranking', app_name='ranking', **kwargs):
         super(RankingSite, self).__init__(
             name=name, app_name=app_name, **kwargs)
@@ -603,8 +606,10 @@ class RankingSite(Application):
                     url(r'^$', rank.MonthView.as_view(), name='month'),
                     url(r'^(?P<day>\d{1,2})/', include([
                         url(r'^$', rank.DayView.as_view(), name='day'),
-                        url(r'^(?P<slug>[^/]+)/$',
-                            rank.DivisionView.as_view(), name='rank'),
+                        url(r'^(?P<slug>[^/]+)/', include([
+                            url(r'^$', rank.DivisionView.as_view(), name='rank'),
+                            url(r'^(?P<team>[^/]+)/$', rank.TeamView.as_view(), name='team'),
+                        ])),
                     ])),
                 ])),
             ])),

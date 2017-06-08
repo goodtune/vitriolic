@@ -1,0 +1,47 @@
+{% extends "competition/rankpoints_base.html" %}
+{% load i18n %}
+
+{% block content %}
+	{% trans "Ranking" as title %}
+	<h1>{{ node|default:title }}</h1>
+
+	<h2>{{ object }}</h2>
+	<h3>{{ day|date:"jS F Y" }}</h3>
+
+	<div class="cms">
+		{% for content in node.contents.all %}
+			<div>
+				{{ content.copy|safe }}
+			</div>
+		{% endfor %}
+	</div>
+
+	<table>
+		<thead>
+			<tr>
+				<th>{% trans "Competition" %}</th>
+				<th>{% trans "Season" %}</th>
+				<th>{% trans "Date" %}</th>
+				<th>{% trans "Opponent" %}</th>
+				<th>{% trans "Points" %}</th>
+			</tr>
+		</thead>
+
+		{% for match, points, points_decay in table reversed %}
+			<tr>
+				<td>{{ match.stage.division.season.competition }}</td>
+				<td>{{ match.stage.division.season }}</td>
+				<td>{{ match.date }}</td>
+				{% if match.home_team.club == team.club %}
+					<td><a href="{% url 'ranking:team' year=day.year month=day|date:"b" day=day|date:"j" slug=object.slug team=match.away_team.club.slug %}">{{ match.away_team }}</a></td>
+				{% else %}
+					<td><a href="{% url 'ranking:team' year=day.year month=day|date:"b" day=day|date:"j" slug=object.slug team=match.home_team.club.slug %}">{{ match.home_team }}</a></td>
+				{% endif %}
+				<td>
+					{% ifnotequal points_decay points %}{{ points|stringformat:".1f" }} →{% endifnotequal %}
+					{{ points_decay|stringformat:".3f" }}
+				</td>
+			</tr>
+		{% endfor %}
+	</table>
+{% endblock %}

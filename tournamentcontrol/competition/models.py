@@ -278,6 +278,9 @@ class RankTeam(models.Model):
         unique_together = ('club', 'division')
 
     def __str__(self):
+        return '%s (%s)' % (self.club, self.division)
+
+    def __repr__(self):
         return '%r, %r' % (self.club, self.division)
 
     def natural_key(self):

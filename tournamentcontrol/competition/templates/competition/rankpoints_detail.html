@@ -21,7 +21,7 @@
 			<tr>
 				<td>{% ifchanged rank.points %}{{ forloop.counter }}{% else %}={% endifchanged %}</td>
 				<td>{{ rank.team.club.title }}</td>
-				<td>{{ rank.points }}</td>
+				<td><a href="{% url 'ranking:team' year=day.year month=day|date:"b" day=day|date:"j" slug=object.slug team=rank.team.club.slug %}">{{ rank.points }}</a></td>
 			</tr>
 		{% endfor %}
 	</table>
