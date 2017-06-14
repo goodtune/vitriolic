@@ -32,16 +32,16 @@ var mvpready_admin = function () {
     init: function () {
       // Layouts
       mvpready_core.navEnhancedInit ()
-      mvpready_core.navHoverInit ({ delay: { show: 250, hide: 350 } })      
+      mvpready_core.navHoverInit ({ delay: { show: 250, hide: 350 } })
 
-      initNavbarNotifications ()
+      // initNavbarNotifications ()
       mvpready_core.initLayoutToggles ()
-      mvpready_core.initBackToTop ()  
+      mvpready_core.initBackToTop ()
 
       // Components
-      mvpready_helpers.initAccordions ()		
+      mvpready_helpers.initAccordions ()
       mvpready_helpers.initFormValidation ()
-      mvpready_helpers.initTooltips ()	
+      mvpready_helpers.initTooltips ()
       mvpready_helpers.initLightbox ()
       mvpready_helpers.initSelect ()
       mvpready_helpers.initIcheck ()
