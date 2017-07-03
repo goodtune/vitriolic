@@ -5,6 +5,7 @@ import re
 from datetime import date, datetime, time
 from operator import itemgetter
 
+import django
 import pytz
 import six
 from django import forms
@@ -234,6 +235,8 @@ class GoogleMapsWidget(MultiWidget):
         return ('', '', '')
 
     def render(self, *args, **kwargs):
+        if django.VERSION >= (1, 11):
+            kwargs.pop('renderer', None)
         res = super(GoogleMapsWidget, self).render(*args, **kwargs)
         return u'<div class="mapwidget">' + res + u'</div>'
 
