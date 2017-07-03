@@ -1462,8 +1462,8 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         try:
             stage = self.stage.comes_after
         except Stage.DoesNotExist:
-            logger.warn(
-                "Stage is first, should not be attempting to be evaluated.")
+            logger.warn("Stage is first, %r should not be attempting to be "
+                        "evaluated.", self)
             return (self.home_team, self.away_team)
 
         positions = dict(

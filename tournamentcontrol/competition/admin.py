@@ -1210,18 +1210,21 @@ class CompetitionAdminComponent(AdminComponent):
                 'formset_kwargs': {
                     'stage': stage,
                 },
-                'queryset': teams,
+                'model_or_manager': teams.model,
                 'templates': self.template_path('progress_teams.html'),
             }
         else:
             generic_edit_kwargs = {
                 'formset_class': ProgressMatchesFormSet,
-                'queryset': matches,
+                'formset_kwargs': {
+                    'queryset': matches,
+                },
+                'model_or_manager': matches.model,
                 'templates': self.template_path('progress_matches.html'),
             }
 
         return self.generic_edit_multiple(
-            request, generic_edit_kwargs['queryset'].model,
+            request,
             post_save_redirect=self.redirect(season.urls['edit']),
             permission_required=False,
             extra_context=extra_context,
