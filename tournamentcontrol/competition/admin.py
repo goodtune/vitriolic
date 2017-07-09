@@ -92,7 +92,6 @@ from tournamentcontrol.competition.models import (
     SeasonAssociation, TeamAssociation)
 from tournamentcontrol.competition.tasks import (
     generate_pdf_scorecards,
-    synchronise_with_sportingpulse,
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
@@ -293,7 +292,6 @@ class CompetitionAdminComponent(AdminComponent):
                                         ])),
                                     ], namespace='team')),
 
-                                    url(r'^sync/$', self.division_sportingpulse_sync, name='sync'),
                                     url(r'^scorers/$', self.highest_point_scorer, name='scorers'),
 
                                     # FIXME
@@ -1061,18 +1059,6 @@ class CompetitionAdminComponent(AdminComponent):
         return self.generic_delete(request, match.videos, pk=pk,
                                    permission_required=True,
                                    post_delete_redirect=post_delete_redirect)
-
-    @competition
-    @staff_login_required_m
-    def division_sportingpulse_sync(self, request, competition, season,
-                                    division, **kwargs):
-        if not division.sportingpulse_url:
-            raise Http404("Division.sportingpulse_url must be set.")
-        synchronise_with_sportingpulse.delay(season)
-        messages.info(request,
-                      _('Synchronisation with SportingPulse has been queued.'))
-        return self.redirect(self.reverse(
-            'competition:season:division:edit', args=(competition.pk, season.pk, division.pk)))
 
     @competition
     @staff_login_required_m

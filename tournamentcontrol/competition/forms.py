@@ -426,9 +426,6 @@ class DivisionForm(SuperUserSlugMixin, ModelForm):
         super(DivisionForm, self).__init__(*args, **kwargs)
         if self.instance.season.mode != DAILY:
             self.fields.pop('games_per_day', None)
-        # Here be dragons!
-        if not self.user.is_superuser:
-            self.fields.pop('sportingpulse_url', None)
 
     class Meta:
         model = Division
@@ -436,7 +433,6 @@ class DivisionForm(SuperUserSlugMixin, ModelForm):
             'title',
             'short_title',
             'rank_division',
-            'sportingpulse_url',
             'draft',
             'points_formula',
             'bonus_points_formula',
@@ -451,7 +447,6 @@ class DivisionForm(SuperUserSlugMixin, ModelForm):
             'forfeit_for_score': _('Forfeit win score'),
             'forfeit_against_score': _('Forfeit loss score'),
             'include_forfeits_in_played': _('Add forfeits to played'),
-            'sportingpulse_url': _('SportingPulse URL'),
         }
         widgets = {
             'bonus_points_formula': forms.TextInput,

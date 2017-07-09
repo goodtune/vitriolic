@@ -586,8 +586,7 @@ class Division(AdminUrlMixin, ModelDiffMixin, RankDivisionMixin,
     # to construct the minimum data for a division.
     sportingpulse_url = models.URLField(max_length=1024,
                                         blank=True, null=True,
-                                        help_text=_("Here be dragons! "
-                                                    "Enter at own risk!"))
+                                        editable=False)
 
     objects = DivisionQuerySet.as_manager()
 
