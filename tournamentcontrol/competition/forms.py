@@ -1436,6 +1436,10 @@ class ProgressTeamsFormSet(BaseProgressTeamsFormSet):
         self.stage = stage
         super(ProgressTeamsFormSet, self).__init__(*args, **kwargs)
 
+    def get_queryset(self):
+        qs = super(ProgressTeamsFormSet, self).get_queryset()
+        return qs.filter(stage=self.stage)
+
     def clean(self):
         teams = {}
 
