@@ -11,17 +11,11 @@ from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.urlresolvers import reverse_lazy
 from django.db.models import Q
 from django.forms.formsets import (
-    formset_factory,
-    ManagementForm,
-    TOTAL_FORM_COUNT,
-    INITIAL_FORM_COUNT,
-    MAX_NUM_FORM_COUNT,
-    DELETION_FIELD_NAME,
+    DELETION_FIELD_NAME, INITIAL_FORM_COUNT, MAX_NUM_FORM_COUNT,
+    TOTAL_FORM_COUNT, ManagementForm, formset_factory,
 )
 from django.forms.models import (
-    BaseModelFormSet,
-    BaseInlineFormSet,
-    inlineformset_factory,
+    BaseInlineFormSet, BaseModelFormSet, inlineformset_factory,
     modelformset_factory,
 )
 from django.utils import timezone
@@ -30,57 +24,25 @@ from first import first
 from modelforms.forms import ModelForm
 from pyparsing import ParseException
 from touchtechnology.common.forms import (
-    BooleanChoiceField,
-    iCheckSelectMultiple,
-    ModelChoiceField,
-    ModelMultipleChoiceField,
-    SelectDateField,
-    SelectDateTimeWidget as SelectDateTimeWidgetBase,
-    SuperUserSlugMixin,
-    UserMixin,
+    BooleanChoiceField, ModelChoiceField, ModelMultipleChoiceField,
+    SelectDateField, SelectDateTimeWidget as SelectDateTimeWidgetBase,
+    SuperUserSlugMixin, UserMixin, iCheckSelectMultiple,
 )
 from touchtechnology.common.mixins import BootstrapFormControlMixin
 from touchtechnology.common.utils import timezone_choice
 from touchtechnology.content.forms import PlaceholderConfigurationBase
-from tournamentcontrol.competition.calc import (
-    BonusPointCalculator,
-    Calculator,
-)
+from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
 from tournamentcontrol.competition.draw import seeded_tournament
 from tournamentcontrol.competition.models import (
-    ByeTeam,
-    Club,
-    ClubAssociation,
-    ClubRole,
-    Competition,
-    Division,
-    DivisionExclusionDate,
-    DrawFormat,
-    Ground,
-    LadderEntry,
-    Match,
-    Person,
-    Place,
-    Season,
-    SeasonAssociation,
-    SeasonExclusionDate,
-    SeasonMatchTime,
-    SimpleScoreMatchStatistic,
-    Stage,
-    stage_group_position_re,
-    StageGroup,
-    Team,
-    TeamAssociation,
-    TeamRole,
-    UndecidedTeam,
-    Venue,
+    ByeTeam, Club, ClubAssociation, ClubRole, Competition, Division,
+    DivisionExclusionDate, DrawFormat, Ground, LadderEntry, Match, Person,
+    Place, Season, SeasonAssociation, SeasonExclusionDate, SeasonMatchTime,
+    SimpleScoreMatchStatistic, Stage, StageGroup, Team, TeamAssociation,
+    TeamRole, UndecidedTeam, Venue, stage_group_position_re,
 )
 from tournamentcontrol.competition.signals.custom import score_updated
 from tournamentcontrol.competition.utils import (
-    FauxQueryset,
-    legitimate_bye_match,
-    time_choice,
-    match_unplayed,
+    FauxQueryset, legitimate_bye_match, match_unplayed, time_choice,
 )
 
 logger = logging.getLogger(__name__)

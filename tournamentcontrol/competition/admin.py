@@ -11,11 +11,7 @@ from django.core.urlresolvers import reverse
 from django.db import models
 from django.db.models import Case, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
-from django.http import (
-    Http404,
-    HttpResponse,
-    HttpResponseGone,
-)
+from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.utils import timezone
@@ -23,84 +19,37 @@ from django.utils.translation import ugettext_lazy as _, ungettext
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.sites import site
 from touchtechnology.common.decorators import (
-    csrf_exempt_m,
-    staff_login_required_m,
+    csrf_exempt_m, staff_login_required_m,
 )
 from touchtechnology.common.prince import prince
-
 from tournamentcontrol.competition.dashboard import (
-    BasicResultWidget,
-    DetailResultWidget,
-    MostValuableWidget,
-    ProgressStageWidget,
-    ScoresheetWidget,
+    BasicResultWidget, DetailResultWidget, MostValuableWidget,
+    ProgressStageWidget, ScoresheetWidget,
 )
 from tournamentcontrol.competition.decorators import competition, registration
 from tournamentcontrol.competition.forms import (
-    ClubAssociationForm,
-    ClubRoleForm,
-    CompetitionForm,
-    DivisionForm,
-    DrawFormatForm,
-    DrawGenerationFormSet,
-    DrawGenerationMatchFormSet,
-    GroundForm,
-    MatchEditForm,
-    MatchResultFormSet,
-    MatchScheduleFormSet,
-    MatchStatisticFormset,
-    MatchWashoutFormSet,
-    PersonEditForm,
-    PersonMergeForm,
-    ProgressMatchesFormSet,
-    ProgressTeamsFormSet,
-    RescheduleDateFormSet,
-    SeasonForm,
-    SeasonMatchTimeFormSet,
-    StageForm,
-    StageGroupForm,
-    TeamAssociationForm,
-    TeamForm,
-    TeamRoleForm,
-    UndecidedTeamForm,
+    ClubAssociationForm, ClubRoleForm, CompetitionForm, DivisionForm,
+    DrawFormatForm, DrawGenerationFormSet, DrawGenerationMatchFormSet,
+    GroundForm, MatchEditForm, MatchResultFormSet, MatchScheduleFormSet,
+    MatchStatisticFormset, MatchWashoutFormSet, PersonEditForm,
+    PersonMergeForm, ProgressMatchesFormSet, ProgressTeamsFormSet,
+    RescheduleDateFormSet, SeasonAssociationFormSet, SeasonForm,
+    SeasonMatchTimeFormSet, StageForm, StageGroupForm, TeamAssociationForm,
+    TeamAssociationFormSet, TeamForm, TeamRoleForm, UndecidedTeamForm,
     VenueForm,
-    SeasonAssociationFormSet, TeamAssociationFormSet)
+)
 from tournamentcontrol.competition.models import (
-    Club,
-    ClubAssociation,
-    ClubRole,
-    Competition,
-    Division,
-    DivisionExclusionDate,
-    StageGroup,
-    DrawFormat,
-    Ground,
-    LadderEntry,
-    LadderSummary,
-    Match,
-    MatchVideo,
-    Person,
-    Season,
-    SeasonMatchTime,
-    SeasonExclusionDate,
-    SimpleScoreMatchStatistic,
-    Stage,
-    Team,
-    TeamRole,
-    UndecidedTeam,
-    Venue,
-    SeasonAssociation, TeamAssociation)
-from tournamentcontrol.competition.tasks import (
-    generate_pdf_scorecards,
+    Club, ClubAssociation, ClubRole, Competition, Division,
+    DivisionExclusionDate, DrawFormat, Ground, LadderEntry, LadderSummary,
+    Match, MatchVideo, Person, Season, SeasonAssociation, SeasonExclusionDate,
+    SeasonMatchTime, SimpleScoreMatchStatistic, Stage, StageGroup, Team,
+    TeamAssociation, TeamRole, UndecidedTeam, Venue,
 )
+from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.utils import (
-    FauxQueryset,
-    generate_scorecards,
-    legitimate_bye_match,
-    match_unplayed,
-    team_needs_progressing,
+    FauxQueryset, generate_fixture_grid, generate_scorecards,
+    legitimate_bye_match, match_unplayed, team_needs_progressing,
 )
-from tournamentcontrol.competition.utils import generate_fixture_grid
 from tournamentcontrol.competition.wizards import DrawGenerationWizard
 
 SCORECARD_PDF_WAIT = getattr(
