@@ -335,6 +335,17 @@ class Person(AdminUrlMixin, models.Model):
     def _get_url_args(self):
         return (self.club_id, self.pk)
 
+    @cached_property
+    def _mvp_select_related(self):
+        res = {
+            'statistics': [
+                'match__stage__division__season__competition',
+                'match__home_team',
+                'match__away_team',
+            ],
+        }
+        return res
+
     class Meta:
         ordering = ('last_name', 'first_name')
         verbose_name_plural = 'people'
