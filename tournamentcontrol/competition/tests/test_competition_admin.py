@@ -182,7 +182,6 @@ class GoodViewTests(TestCase):
         pool = factories.StageGroupFactory.create()
         self.assertGoodNamespace(pool)
 
-    @unittest.skip("Should not be, but is, failing.")
     def test_club(self):
         club = factories.ClubFactory.create()
         self.assertLoginRequired('admin:fixja:club:list')

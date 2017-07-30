@@ -352,10 +352,6 @@ class CompetitionAdminComponent(AdminComponent):
                     url(r'officials/(?P<season_id>\d+)/$', self.officials, name='officials'),
                     url(r'(?P<season_id>\d+)/registration.(?P<mode>html|pdf)$', self.registration_form, name='registration-form'),
 
-                    url(r'^person/', include([
-                        url(r'^add/$', self.edit_person, name='add'),
-                    ], namespace='person')),
-
                     # FIXME should have a 'season' namespace
                     url(r'^(?P<season_id>\d+)/team/(?P<team_id>\d+)/', include([
                         url(r'^$', self.edit_team_members, name='edit'),
