@@ -12,7 +12,13 @@ BASE_URL = getattr(settings, 'PRINCE_BASE_URL', None)
 logger = logging.getLogger(__name__)
 
 
-def prince(html, base_url=BASE_URL, ttl=300):
+def prince(html, base_url=BASE_URL, ttl=300, **kwargs):
+    # When celery and django-tenant-schemas are involved, this get's a bit
+    # weird. This has bitten once in production so lets log it and see else
+    # might cause grief.
+    for kw, arg in kwargs.items():
+        logger.warn('Unexpected keyword argument: %s=%r', kw, arg)
+
     logger.debug('base_url: %s', base_url)
     logger.debug('ttl: %s', ttl)
 
