@@ -1208,7 +1208,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_save_redirect=self.redirect(season.urls['edit']),
             extra_context=extra_context)
 
-    @staff_login_required_m
     def scorecard_report(self, request, **extra_context):
         from .wizards import scorecardwizard_factory, SeasonForm, FilterForm
         ScorecardWizard = scorecardwizard_factory(

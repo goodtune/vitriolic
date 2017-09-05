@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from operator import attrgetter
 
+from django_cloneable import CloneableMixin
+
 import django
 import pytz
 import six
@@ -170,7 +172,7 @@ class TwitterField(models.CharField):
 
 
 @python_2_unicode_compatible
-class OrderedSitemapNode(SitemapNodeBase):
+class OrderedSitemapNode(CloneableMixin, SitemapNodeBase):
 
     order = models.PositiveIntegerField(default=1)
 
@@ -710,6 +712,7 @@ class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     objects = StageQuerySet.as_manager()
 
     class Meta(OrderedSitemapNode.Meta):
+        get_latest_by = 'order'
         unique_together = (
             ('title', 'division'),
             ('slug', 'division'),
