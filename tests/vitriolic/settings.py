@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/1.10/ref/settings/
 
 import environ
 import os
+import time
 
 from django.core.urlresolvers import reverse_lazy
 
@@ -110,6 +111,12 @@ WSGI_APPLICATION = 'vitriolic.wsgi.application'
 DATABASES = {
     'default': env.db(default='sqlite://'),
 }
+
+if DATABASES['default']['ENGINE'].startswith('django.db.backends.postgresql'):
+    if os.getenv('POSTGRES_5432_TCP'):
+        DATABASES['default']['PORT'] = env.int('POSTGRES_5432_TCP')
+        # delay long enough to let the postgresql container startup
+        time.sleep(4)
 
 
 # Password validation
