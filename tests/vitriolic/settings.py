@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/1.10/ref/settings/
 """
 
+import django
 import environ
 import os
 import time
@@ -45,7 +46,7 @@ class DisableMigrations(object):
     def __contains__(self, item):
         return True
     def __getitem__(self, item):
-        return 'notmigrations'
+        return None if django.VERSION >= (1, 11) else 'notmigrations'
 
 MIGRATION_MODULES = DisableMigrations()
 
