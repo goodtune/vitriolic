@@ -661,10 +661,11 @@ class Application(object):
         # Vanilla form processing here, take the post data and files, create
         # an instance of form_class, save and redirect.
         if request.method == "POST":
+            sid = transaction.savepoint()
+
             form = form_class(data=request.POST, files=request.FILES,
                               instance=instance, **form_kwargs)
-            formset = formset_class(data=request.POST, files=request.FILES,
-                                    instance=instance, **formset_kwargs)
+
             if form.is_valid():
                 obj = form.save()
                 logger.debug('Saved %r to database.', obj)
@@ -681,6 +682,7 @@ class Application(object):
                     related = formset.save()
                     post_save_callback(obj)
                     map(post_save_related_callback, related)
+                    transaction.savepoint_commit(sid)
                     messages.add_message(
                         request, messages.SUCCESS,
                         _(u"Your %(model_verbose_name)s and "
@@ -696,8 +698,8 @@ class Application(object):
 
                 # if we've made it out without returning a HttpRedirect then
                 # we should not be persisting the result.
-                transaction.rollback()
                 logger.debug("ROLLBACK, we were not redirected.")
+                transaction.savepoint_rollback(sid)
 
             else:
                 formset = formset_class(

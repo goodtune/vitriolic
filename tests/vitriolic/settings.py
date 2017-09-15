@@ -37,6 +37,18 @@ ALLOWED_HOSTS = []
 
 SITE_ID = 1
 
+# Disable the database migrations machinery to speed up test suite.
+class DisableMigrations(object):
+    """
+    Trick learned at http://bit.ly/2vjVpNc
+    """
+    def __contains__(self, item):
+        return True
+    def __getitem__(self, item):
+        return 'notmigrations'
+
+MIGRATION_MODULES = DisableMigrations()
+
 
 # Application definition
 

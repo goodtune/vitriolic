@@ -1,6 +1,7 @@
 import operator
 
 from django import forms
+from django.conf import settings
 from django.forms.models import inlineformset_factory
 from django.utils.translation import ugettext_lazy as _
 from modelforms.forms import ModelForm
@@ -28,6 +29,8 @@ class ArticleForm(SuperUserSlugMixin, ModelForm):
         super(ArticleForm, self).__init__(*args, **kwargs)
         if not self.fields['categories'].queryset.count():
             self.fields.pop('categories', None)
+        self.fields['image'].required = \
+            getattr(settings, 'TOUCHTECHNOLOGY_NEWS_IMAGE_REQUIRED', True)
 
     class Meta:
         model = Article
