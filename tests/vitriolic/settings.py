@@ -121,7 +121,7 @@ WSGI_APPLICATION = 'vitriolic.wsgi.application'
 # https://docs.djangoproject.com/en/1.10/ref/settings/#databases
 
 DATABASES = {
-    'default': env.db(default='sqlite://'),
+    'default': env.db(default='psql://vitriolic:vitriolic@localhost/vitriolic'),
 }
 
 if DATABASES['default']['ENGINE'].startswith('django.db.backends.postgresql'):
