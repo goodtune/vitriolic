@@ -10,8 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/1.10/ref/settings/
 """
 
+import django
 import environ
 import os
+import time
 
 from django.core.urlresolvers import reverse_lazy
 
@@ -35,6 +37,18 @@ DEBUG = True
 ALLOWED_HOSTS = []
 
 SITE_ID = 1
+
+# Disable the database migrations machinery to speed up test suite.
+class DisableMigrations(object):
+    """
+    Trick learned at http://bit.ly/2vjVpNc
+    """
+    def __contains__(self, item):
+        return True
+    def __getitem__(self, item):
+        return None if django.VERSION >= (1, 11) else 'notmigrations'
+
+MIGRATION_MODULES = DisableMigrations()
 
 
 # Application definition
@@ -108,8 +122,14 @@ WSGI_APPLICATION = 'vitriolic.wsgi.application'
 # https://docs.djangoproject.com/en/1.10/ref/settings/#databases
 
 DATABASES = {
-    'default': env.db(default='sqlite://'),
+    'default': env.db(default='psql://vitriolic:vitriolic@localhost/vitriolic'),
 }
+
+if DATABASES['default']['ENGINE'].startswith('django.db.backends.postgresql'):
+    if os.getenv('POSTGRES_5432_TCP'):
+        DATABASES['default']['PORT'] = env.int('POSTGRES_5432_TCP')
+        # delay long enough to let the postgresql container startup
+        time.sleep(4)
 
 
 # Password validation

@@ -5,7 +5,6 @@ python:
   - 2.7
 
 services:
-  - mysql
   - postgresql
 
 addons:
@@ -23,7 +22,6 @@ script:
 env:
   matrix:
     - DATABASE_URL=sqlite://
-    - DATABASE_URL=mysql://travis@localhost/travis
     - DATABASE_URL=postgresql://postgres@localhost/travis
 
   global:
@@ -38,27 +36,6 @@ env:
       pSTAOIp9P7H6rT71y3VrgTpO3Gdx0NcCxAE+OdS7VvjyIDmn151KhTTyxOQFkc3n3GFSpMU
       ps9qPFOp+o6XaI452F6pbF4q5F+A+FeJhx5X9ip4E7u6a4bLx661+cp9mXsdqvYJ7n94ydy
       oe8UhCkmLRdL+m3A+vHoKgsHSr+fxmOU7eepBKHrsCYU=
-
-matrix:
-  exclude:
-    # Python 3.5 and MySQL-python are (presently) incompatible
-    - python: 3.5
-      env:
-        - DATABASE_URL=mysql://travis@localhost/travis
-    - python: 3.5-dev
-      env:
-        - DATABASE_URL=mysql://travis@localhost/travis
-    - python: 3.6-dev
-      env:
-        - DATABASE_URL=mysql://travis@localhost/travis
-    - python: nightly
-      env:
-        - DATABASE_URL=mysql://travis@localhost/travis
-  allow_failures:
-    - python: 3.5
-    - python: 3.5-dev
-    - python: 3.6-dev
-    - python: nightly
 
 deploy:
   provider: pypi
