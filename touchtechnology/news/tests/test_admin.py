@@ -73,6 +73,8 @@ class ImageFieldTestCase(TestCase):
             base64.decodestring("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABAQAAAAA3bvkk"
                                 "AAAACklEQVQImWNoAAAAggCByxOyYQAAAABJRU5ErkJg"
                                 "gg=="))
+        # From Django 1.11 the image field validates the filename.
+        self.data_with_image['form-image'].name = 'pixel.png'
 
     def test_image_required_no_image(self):
         with self.login(self.superuser):
