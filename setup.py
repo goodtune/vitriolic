@@ -53,7 +53,7 @@ setup(
             'touchtechnology-oembed',
             'icalendar>=3.9.0,<4',
             'numpy',
-            'pygraphviz>=1.2,<1.3',
+            'pygraphviz>=1.3',
             'pyparsing>=2.0.3,<3',
         ],
     },
