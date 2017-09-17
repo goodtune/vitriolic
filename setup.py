@@ -29,7 +29,6 @@ setup(
         'Pillow~=3.0',
         'python-dateutil~=2.5.3',
         'pytz',
-        'sqlparse',
     ],
     extras_require={
         'redis': [
@@ -53,7 +52,6 @@ setup(
             'touchtechnology-oembed',
             'icalendar>=3.9.0,<4',
             'numpy',
-            'pygraphviz>=1.3',
             'pyparsing>=2.0.3,<3',
         ],
     },
