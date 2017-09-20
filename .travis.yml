@@ -21,21 +21,26 @@ script:
 
 env:
   matrix:
-    - DATABASE_URL=sqlite://
-    - DATABASE_URL=postgresql://postgres@localhost/travis
+    - TOXENV=py27-django-1.8-pg94
+    - TOXENV=py27-django-1.8-pg96
+    - TOXENV=py27-django-1.10-pg94
+    - TOXENV=py27-django-1.10-pg96
+    - TOXENV=py27-django-1.11-pg94
+    - TOXENV=py27-django-1.11-pg96
 
   global:
-    secure: |
-      MlIb9De0pI5cjwaqPjpI01/XdjlSKf7oIT/yAKMWIxUPvNNewJAjfTR0DYgjX/gh0k7rYgw
-      XzkHRFY07yliGkruTMmIqfFMDJJ6XHUEyxY0upjmxd0EBpcCgkYAr8KF6tl+OZwpKFBH1gc
-      2x6i/+YjjZFlhozaodBnyk7M9QcaZDxmiRHu8E4sH/9t6JMV9Iu6uM8HeS37hQNV/WinEIZ
-      Uoaf8hzVdRn/LaEC6N/gL+g56P5k0d4JZRkPvEAi0Qq6NR7pXz3zhzOzSlQnOhfBC+h+xNL
-      t/wyJP+f4aLrc0YpJ31jkjZVzMl5eXjDka05zmT0mkVNBlIr+8rkDTRWmjm3riLmGIRQYhR
-      uPu35tz0I8VxBsZd8FDbFMptk4FXJmj/jrdlQFAUR6AN3aDz6huGVWyHBjMDyNcQjaHs8vp
-      pt3wOnm1MofE0tiCQZZW/DuX+AdpIkwjeLZqDA/2vq/jCWbPWxVpJVvxQrGrWkvVz0yVE1G
-      pSTAOIp9P7H6rT71y3VrgTpO3Gdx0NcCxAE+OdS7VvjyIDmn151KhTTyxOQFkc3n3GFSpMU
-      ps9qPFOp+o6XaI452F6pbF4q5F+A+FeJhx5X9ip4E7u6a4bLx661+cp9mXsdqvYJ7n94ydy
-      oe8UhCkmLRdL+m3A+vHoKgsHSr+fxmOU7eepBKHrsCYU=
+    - DATABASE_URL=postgresql://postgres@localhost/travis
+    - secure: |
+        MlIb9De0pI5cjwaqPjpI01/XdjlSKf7oIT/yAKMWIxUPvNNewJAjfTR0DYgjX/gh0k7rYgw
+        XzkHRFY07yliGkruTMmIqfFMDJJ6XHUEyxY0upjmxd0EBpcCgkYAr8KF6tl+OZwpKFBH1gc
+        2x6i/+YjjZFlhozaodBnyk7M9QcaZDxmiRHu8E4sH/9t6JMV9Iu6uM8HeS37hQNV/WinEIZ
+        Uoaf8hzVdRn/LaEC6N/gL+g56P5k0d4JZRkPvEAi0Qq6NR7pXz3zhzOzSlQnOhfBC+h+xNL
+        t/wyJP+f4aLrc0YpJ31jkjZVzMl5eXjDka05zmT0mkVNBlIr+8rkDTRWmjm3riLmGIRQYhR
+        uPu35tz0I8VxBsZd8FDbFMptk4FXJmj/jrdlQFAUR6AN3aDz6huGVWyHBjMDyNcQjaHs8vp
+        pt3wOnm1MofE0tiCQZZW/DuX+AdpIkwjeLZqDA/2vq/jCWbPWxVpJVvxQrGrWkvVz0yVE1G
+        pSTAOIp9P7H6rT71y3VrgTpO3Gdx0NcCxAE+OdS7VvjyIDmn151KhTTyxOQFkc3n3GFSpMU
+        ps9qPFOp+o6XaI452F6pbF4q5F+A+FeJhx5X9ip4E7u6a4bLx661+cp9mXsdqvYJ7n94ydy
+        oe8UhCkmLRdL+m3A+vHoKgsHSr+fxmOU7eepBKHrsCYU=
 
 deploy:
   provider: pypi
@@ -55,4 +60,3 @@ deploy:
   on:
     tags: true
     repo: goodtune/vitriolic
-    env: DATABASE_URL=sqlite://
