@@ -1,10 +1,13 @@
 from decimal import Decimal
 from unittest import skipIf
 
+import mock
 import six
 from test_plus import TestCase
 from touchtechnology.common.forms import boolean_choice_field_coerce
-from touchtechnology.common.utils import average, get_mod_func, timezone_choice
+from touchtechnology.common.utils import (
+    average, get_base_url, get_mod_func, timezone_choice,
+)
 
 
 class Average(TestCase):
@@ -88,3 +91,29 @@ class TimeZoneChoice(TestCase):
         self.assertEqual(
             timezone_choice(u'America/Indiana/Indianapolis'),
             (u'America/Indiana/Indianapolis', u'Indianapolis (Indiana)'))
+
+
+class GetBaseUrl(TestCase):
+
+    @mock.patch('touchtechnology.common.utils.connection')
+    def test_tenant_no_prepend_www(self, connection):
+        connection.tenant = mock.Mock(['domain_url'])
+        connection.tenant.domain_url = 'example.com'
+        self.assertEqual('http://example.com/', get_base_url())
+
+    @mock.patch('touchtechnology.common.utils.connection')
+    def test_tenant_prepend_www_true(self, connection):
+        connection.tenant = mock.Mock(['domain_url', 'prepend_www'])
+        connection.tenant.domain_url = 'example.com'
+        connection.tenant.prepend_www = True
+        self.assertEqual('http://www.example.com/', get_base_url())
+
+    @mock.patch('touchtechnology.common.utils.connection')
+    def test_tenant_prepend_www_false(self, connection):
+        connection.tenant = mock.Mock(['domain_url', 'prepend_www'])
+        connection.tenant.domain_url = 'example.com'
+        connection.tenant.prepend_www = False
+        self.assertEqual('http://example.com/', get_base_url())
+
+    def test_site(self):
+        self.assertEqual('http://example.com/', get_base_url())
