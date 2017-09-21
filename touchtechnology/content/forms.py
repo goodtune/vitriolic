@@ -10,8 +10,9 @@ from modelforms.forms import ModelForm
 from touchtechnology.common.default_settings import (
     SITEMAP_EDIT_PARENT, SITEMAP_HTTPS_OPTION, SITEMAP_ROOT,
 )
-from touchtechnology.common.forms import BootstrapFormControlMixin
-from touchtechnology.common.forms.mixins import SuperUserSlugMixin
+from touchtechnology.common.forms.mixins import (
+    BootstrapFormControlMixin, SuperUserSlugMixin,
+)
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.content.app_settings import PAGE_CONTENT_BLOCKS
 from touchtechnology.content.models import (

@@ -29,7 +29,6 @@ from touchtechnology.common.decorators import (
     login_required_m, node2extracontext, require_POST_m,
 )
 from touchtechnology.common.default_settings import PAGINATE_BY
-from touchtechnology.common.forms import permissionformset_factory
 from touchtechnology.common.utils import (
     get_403_or_None, get_all_perms_for_model_cached, get_objects_for_user,
     get_perms_for_model, model_and_manager, select_template_name,
@@ -144,6 +143,9 @@ class Application(object):
                             staff_only=None,
                             max_checkboxes=None,
                             **extra_context):
+        # avoid circular import
+        from touchtechnology.common.forms.auth import permissionformset_factory
+
         if instance is None:
             assert pk is not None
             instance = get_object_or_404(model, pk=pk)

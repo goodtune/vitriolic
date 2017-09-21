@@ -31,10 +31,10 @@ from touchtechnology.common.forms.icheck import iCheckSelectMultiple
 from touchtechnology.common.forms.mixins import (
     BootstrapFormControlMixin, SuperUserSlugMixin, UserMixin,
 )
+from touchtechnology.common.forms.tz import timezone_choice
 from touchtechnology.common.forms.widgets import (
     SelectDateTimeWidget as SelectDateTimeWidgetBase,
 )
-from touchtechnology.common.utils import timezone_choice
 from touchtechnology.content.forms import PlaceholderConfigurationBase
 from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
 from tournamentcontrol.competition.draw import seeded_tournament

@@ -9,7 +9,7 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
 from froala_editor.widgets import FroalaEditor
-from touchtechnology.common.forms.constants import (
+from touchtechnology.common.forms.tz import (
     DAY_CHOICES, HOUR_CHOICES, MINUTE_CHOICES, MONTH_CHOICES, TIMEZONE_CHOICES,
 )
 from touchtechnology.common.shim import utils, widgets
