@@ -28,9 +28,7 @@ from six.moves import xrange
 from touchtechnology.common.decorators import (
     login_required_m, node2extracontext, require_POST_m,
 )
-from touchtechnology.common.default_settings import (
-    AUTH_FORM_CLASS, PAGINATE_BY,
-)
+from touchtechnology.common.default_settings import PAGINATE_BY
 from touchtechnology.common.forms import permissionformset_factory
 from touchtechnology.common.utils import (
     get_403_or_None, get_all_perms_for_model_cached, get_objects_for_user,
@@ -856,8 +854,12 @@ class AccountsSite(Application):
 
     @node2extracontext
     def login(self, request, *args, **kwargs):
+        form_class = getattr(
+            settings, 'AUTHENTICATION_FORM_CLASS',
+            'django.contrib.auth.forms.AuthenticationForm')
+        authentication_form = import_string(form_class)
         return views.login(
-            request, authentication_form=AUTH_FORM_CLASS,
+            request, authentication_form=authentication_form,
             current_app=self.name, *args, **kwargs)
 
     @node2extracontext
