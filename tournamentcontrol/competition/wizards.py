@@ -7,15 +7,12 @@ from django.db.models import Q
 from django.http import HttpResponse, HttpResponseRedirect
 from django.utils.translation import ugettext_lazy as _
 from formtools.wizard.views import SessionWizardView
-from touchtechnology.common.forms import (
-    ModelChoiceField,
-    ModelMultipleChoiceField,
+from touchtechnology.common.forms.fields import (
+    ModelChoiceField, ModelMultipleChoiceField,
 )
-
 from tournamentcontrol.competition.models import Season
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.utils import generate_scorecards
-
 
 ##############################################################################
 # Scorecard Report

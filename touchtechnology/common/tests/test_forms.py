@@ -11,9 +11,11 @@ from django.test import TestCase
 from django.test.utils import override_settings
 from django.utils import timezone
 from touchtechnology.common.forms import (
-    BooleanChoiceField, EmailField, HTMLField, SelectDateField,
-    SelectDateTimeField, SelectTimeField, iCheckSelectMultiple,
-    permissionformset_factory,
+    EmailField, iCheckSelectMultiple, permissionformset_factory,
+)
+from touchtechnology.common.forms.fields import (
+    BooleanChoiceField, HTMLField, SelectDateField, SelectDateTimeField,
+    SelectTimeField,
 )
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.tests import factories

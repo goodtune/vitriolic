@@ -4,7 +4,7 @@ from unittest import skipIf
 import mock
 import six
 from test_plus import TestCase
-from touchtechnology.common.forms import boolean_choice_field_coerce
+from touchtechnology.common.forms.fields import boolean_choice_field_coerce
 from touchtechnology.common.utils import (
     average, get_base_url, get_mod_func, timezone_choice,
 )
