@@ -355,9 +355,8 @@ def get_base_url(scheme='http'):
         hostname = connection.tenant.domain_url
         # We have our own pattern of using the `prepend_www` attribute so lets
         # check for it and stick it on the front.
-        if hasattr(connection.tenant, 'prepend_www'):
-            if connection.tenant.prepend_www:
-                hostname = 'www.{}'.format(hostname)
+        if getattr(connection.tenant, 'prepend_www', False):
+            hostname = 'www.' + hostname
     else:
         site = apps.get_model('sites.Site').objects.get_current()
         hostname = site.domain
