@@ -22,7 +22,7 @@ from touchtechnology.common.models import SitemapNode
 from touchtechnology.content.forms import (
     FileUploadForm, NewFolderForm, NewPlaceholderSitemapNodeForm,
     NewSitemapNodeForm, Page, PageContentFormset, PageForm,
-    PlaceholderContentFormset, PlaceholderKeywordArgumentsFormset,
+    PlaceholderConfigurationBase, PlaceholderContentFormset,
     PlaceholderSitemapNodeForm, RedirectEditForm, SitemapNodeForm,
 )
 from touchtechnology.content.models import (
@@ -297,11 +297,7 @@ class ContentAdminComponent(AdminComponent):
 
     @staff_login_required_m
     def edit_application_node(self, request, pk=None, **extra_context):
-        # Allow for an application to provide it's own form or formset for
-        # editing the keyword arguments it will accept. For backwards
-        # compatibility, we'll continue to use the existing formset, but in
-        # a future release this should be deprecated.
-        kwargs_form_class = PlaceholderKeywordArgumentsFormset
+        kwargs_form_class = PlaceholderConfigurationBase
 
         if pk is None:
             instance = SitemapNode()

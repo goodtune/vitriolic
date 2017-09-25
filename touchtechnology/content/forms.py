@@ -16,8 +16,7 @@ from touchtechnology.common.forms.mixins import (
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.content.app_settings import PAGE_CONTENT_BLOCKS
 from touchtechnology.content.models import (
-    Content, NodeContent, Page, PageContent, Placeholder,
-    PlaceholderKeywordArgument, Redirect,
+    Content, NodeContent, Page, PageContent, Placeholder, Redirect,
 )
 
 
@@ -163,26 +162,6 @@ class NewPlaceholderSitemapNodeForm(PlaceholderSitemapNodeForm):
     class Meta(PlaceholderSitemapNodeForm.Meta):
         fields = ('parent',) + PlaceholderSitemapNodeForm.Meta.fields
         exclude = None
-
-
-class PlaceholderKeywordArgumentsForm(
-        BootstrapFormControlMixin, ModelForm):
-    class Meta:
-        model = PlaceholderKeywordArgument
-        fields = ('key', 'value')
-
-
-PlaceholderKeywordArgumentsFormsetBase = inlineformset_factory(
-    SitemapNode, PlaceholderKeywordArgument,
-    form=PlaceholderKeywordArgumentsForm, extra=1)
-
-
-class PlaceholderKeywordArgumentsFormset(
-        PlaceholderKeywordArgumentsFormsetBase):
-    def __init__(self, user, *args, **kwargs):
-        self.user = user
-        super(PlaceholderKeywordArgumentsFormset, self).__init__(*args,
-                                                                 **kwargs)
 
 
 class PlaceholderConfigurationBase(forms.Form):
