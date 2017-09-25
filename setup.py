@@ -39,7 +39,6 @@ setup(
             'django-gravatar2>=1.4,<2',
         ],
         'content': [
-            'django-json-field==0.5.8',
         ],
         'news': [
             'django-imagekit',
