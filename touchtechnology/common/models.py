@@ -7,6 +7,7 @@ from django.conf import settings
 from django.contrib.auth.models import Group
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.postgres.fields import JSONField
 from django.core.urlresolvers import reverse_lazy
 from django.db import models
 from django.db.models.signals import post_save
@@ -63,6 +64,9 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
     object_id = models.PositiveIntegerField(blank=True, null=True)
 
     object = GenericForeignKey('content_type', 'object_id')
+
+    # Migrate from related table in the content application.
+    kwargs = JSONField(default={})
 
     require_https = BooleanField(
         default=False, verbose_name=_(u"HTTPS Required"),
@@ -157,10 +161,6 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
     def move_down(self):
         self._move('right')
     move_down.alters_data = True
-
-    @cached_property
-    def kwargs(self):
-        return dict(map(attrgetter('key', 'value'), self.kw.all()))
 
     @cached_property
     def urls(self):
