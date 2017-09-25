@@ -196,13 +196,8 @@ class PlaceholderConfigurationBase(forms.Form):
             initial=initial, *args, **kwargs)
 
     def save(self, *args, **kwargs):
-        for key, value in self.cleaned_data.items():
-            kwarg, __ = self.instance.kw.get_or_create(key=key)
-            if not value:
-                kwarg.delete()
-            else:
-                kwarg.value = value
-                kwarg.save()
+        self.instance.kwargs = self.cleaned_data
+        self.instance.save()
         return self.instance.kwargs
 
 
