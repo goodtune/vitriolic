@@ -3,6 +3,7 @@ from django.db import models
 from django.template.defaultfilters import slugify
 from django.utils.translation import ugettext_lazy as _
 from imagekit.models import ImageSpecField
+from django.contrib.postgres import fields as PG
 from touchtechnology.admin.mixins import AdminUrlMixin
 from touchtechnology.common.db.models import (
     BooleanField, DateTimeField, HTMLField, ManyToManyField,
@@ -63,6 +64,15 @@ class Article(AdminUrlModel):
         **DETAIL_IMAGE_KWARGS)
 
     last_modified = DateTimeField(auto_now=True)
+
+    content_copy = PG.ArrayField(
+        HTMLField(blank=True),
+        null=True,
+    )
+    content_class = PG.ArrayField(
+        models.SlugField(max_length=50, choices=CONTENT_LABEL_CHOICES),
+        null=True,
+    )
 
     objects = ArticleQuerySet.as_manager()
 
