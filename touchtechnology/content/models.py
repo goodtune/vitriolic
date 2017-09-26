@@ -206,17 +206,6 @@ class Placeholder(models.Model):
     invalidate_cache.alters_data = True
 
 
-class PlaceholderKeywordArgument(models.Model):
-
-    node = models.ForeignKey(
-        'common.SitemapNode', related_name='kw', verbose_name=_("Node"))
-    key = models.CharField(_("Key"), max_length=200)
-    value = models.TextField(_("Value"), blank=True, default='null', help_text='Enter a valid JSON object')
-
-    class Meta:
-        unique_together = ('node', 'key')
-
-
 @python_2_unicode_compatible
 class Redirect(AdminUrlModel):
 

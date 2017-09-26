@@ -20,6 +20,7 @@ setup(
     long_description=long_description,
     packages=find_packages(),
     install_requires=[
+        'django>=1.10',
         'django-classy-tags~=0.7.2',
         'django-froala-editor~=2.0',
         'django-guardian~=1.4.5,!=1.4.6',
