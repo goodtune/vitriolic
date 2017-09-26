@@ -5,10 +5,8 @@ from django.utils.translation import ugettext_lazy as _
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.sites import site
 from touchtechnology.common.decorators import staff_login_required_m
-from touchtechnology.news.forms import (
-    ArticleContentFormset, ArticleForm, CategoryForm,
-)
-from touchtechnology.news.models import Article, ArticleContent, Category
+from touchtechnology.news.forms import ArticleForm, CategoryForm
+from touchtechnology.news.models import Article, Category
 
 
 class NewsAdminComponent(AdminComponent):
@@ -70,12 +68,11 @@ class NewsAdminComponent(AdminComponent):
 
     @staff_login_required_m
     def edit_article(self, request, pk=None, *args, **kwargs):
-        return self.generic_edit_related(
-            request, Article, ArticleContent,
+        return self.generic_edit(
+            request, Article,
             pk=pk,
             form_class=ArticleForm,
             form_kwargs={'user': request.user},
-            formset_class=ArticleContentFormset,
             # permission_required=True,
             post_save_redirect=self.redirect(
                 urlparse.urljoin(request.path, '..')),

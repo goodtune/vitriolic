@@ -1,19 +1,24 @@
+import collections
+
+from django.contrib.postgres import fields as PG
 from django.core.urlresolvers import reverse
 from django.db import models
 from django.template.defaultfilters import slugify
 from django.utils.translation import ugettext_lazy as _
 from imagekit.models import ImageSpecField
-from django.contrib.postgres import fields as PG
 from touchtechnology.admin.mixins import AdminUrlMixin
 from touchtechnology.common.db.models import (
     BooleanField, DateTimeField, HTMLField, ManyToManyField,
 )
+from touchtechnology.common.utils import FauxRelatedManager
 from touchtechnology.news.app_settings import (
     CONTENT_LABEL_CHOICES, DETAIL_IMAGE_KWARGS, DETAIL_IMAGE_PROCESSORS,
     THUMBNAIL_IMAGE_KWARGS, THUMBNAIL_IMAGE_PROCESSORS,
 )
 from touchtechnology.news.image_processors import processor_factory
 from touchtechnology.news.query import ArticleQuerySet, CategoryQuerySet
+
+ArticleContent = collections.namedtuple('ArticleContent', 'copy label')
 
 
 class AdminUrlModel(AdminUrlMixin, models.Model):
@@ -86,6 +91,12 @@ class Article(AdminUrlModel):
     def __unicode__(self):
         return self.headline
 
+    def content(self):
+        return FauxRelatedManager(
+            ArticleContent(*each)
+            for each in zip(self.content_copy, self.content_class)
+        )
+
     @property
     def copy(self):
         """
@@ -93,24 +104,6 @@ class Article(AdminUrlModel):
         into a single string and return this instead.
         """
         return ''.join(self.content.sections.values_list('copy', flat=True))
-
-
-class ArticleContent(models.Model):
-
-    article = models.ForeignKey(
-        Article, related_name='content', verbose_name=_('Article'))
-    label = models.SlugField(
-        max_length=20, choices=CONTENT_LABEL_CHOICES,
-        verbose_name=_('CSS class'))
-    sequence = models.PositiveIntegerField(verbose_name=_('Sequence'))
-    copy = HTMLField(_("Copy"), blank=True)
-
-    class Meta:
-        ordering = ('sequence',)
-
-    def __repr__(self):
-        return u'<ArticleContent: #%d, article=%d>' % (self.pk,
-                                                       self.article.pk)
 
 
 class Category(AdminUrlModel):

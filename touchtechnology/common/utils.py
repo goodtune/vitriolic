@@ -347,3 +347,11 @@ def get_all_perms_for_model_cached(model, ttl=60, **extra):
         model_perms = get_all_perms_for_model(model, **extra)
         cache.set(cache_key, model_perms, timeout=ttl)
     return model_perms
+
+
+class FauxRelatedManager(list):
+    """
+    Provide backwards compatibility while merging related models.
+    """
+    def all(self):
+        return self
