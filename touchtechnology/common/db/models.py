@@ -8,6 +8,8 @@ from touchtechnology.common.forms.fields import (
     SitemapNodeModelChoiceField, TemplatePathFormField,
     iCheckModelMultipleChoiceField,
 )
+from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.forms import SplitArrayField
 
 
 class TreeField(models.ForeignKey):

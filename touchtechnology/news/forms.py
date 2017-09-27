@@ -5,7 +5,8 @@ from modelforms.forms import ModelForm
 from touchtechnology.common.forms.mixins import SuperUserSlugMixin
 from touchtechnology.content.forms import PlaceholderConfigurationBase
 from touchtechnology.news.models import Article, Category
-
+from django.contrib.postgres.forms import SplitArrayField
+from touchtechnology.common.forms.fields import HTMLField
 
 class ConfigurationForm(PlaceholderConfigurationBase):
 
@@ -20,12 +21,17 @@ class ConfigurationForm(PlaceholderConfigurationBase):
 
 
 class ArticleForm(SuperUserSlugMixin, ModelForm):
+    content_copy = SplitArrayField(HTMLField, 2)
+
     def __init__(self, *args, **kwargs):
         super(ArticleForm, self).__init__(*args, **kwargs)
         if not self.fields['categories'].queryset.count():
             self.fields.pop('categories', None)
         self.fields['image'].required = \
             getattr(settings, 'TOUCHTECHNOLOGY_NEWS_IMAGE_REQUIRED', True)
+        print self.fields['content_copy'].widget.attrs
+        for widget in self.fields['content_copy'].widget.subwidgets:
+            print widget
 
     class Meta:
         model = Article
@@ -40,6 +46,8 @@ class ArticleForm(SuperUserSlugMixin, ModelForm):
             'keywords',
             'categories',
             'is_active',
+            'content_copy',
+            'content_class',
         )
 
 
