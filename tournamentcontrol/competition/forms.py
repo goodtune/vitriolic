@@ -7,6 +7,8 @@ from dateutil.parser import parse
 from dateutil.rrule import DAILY, WEEKLY
 from django import forms
 from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.forms import array as PGA
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.urlresolvers import reverse_lazy
 from django.db.models import Q
@@ -23,6 +25,7 @@ from django.utils.translation import ugettext_lazy as _, ungettext
 from first import first
 from modelforms.forms import ModelForm
 from pyparsing import ParseException
+
 from touchtechnology.common.forms.fields import (
     BooleanChoiceField, ModelChoiceField, ModelMultipleChoiceField,
     SelectDateField,
@@ -38,6 +41,7 @@ from touchtechnology.common.forms.widgets import (
 from touchtechnology.content.forms import PlaceholderConfigurationBase
 from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
 from tournamentcontrol.competition.draw import seeded_tournament
+from tournamentcontrol.competition.fields import URLField
 from tournamentcontrol.competition.models import (
     ByeTeam, Club, ClubAssociation, ClubRole, Competition, Division,
     DivisionExclusionDate, DrawFormat, Ground, LadderEntry, Match, Person,
@@ -771,6 +775,30 @@ class BaseMatchFormMixin(BootstrapFormControlMixin):
                     .widget.attrs.setdefault('class', 'form-control')
 
 
+def _match_edit_form_formfield_callback(field, **kwargs):
+    """
+    Customise fields in the :class:`MatchEditForm`
+
+    Set the size of the videos array with
+    `settings.TOURNAMENTCONTROL_COMPETITION_VIDEOS_ARRAY_SIZE` (default is 5)
+    """
+    if isinstance(field, ArrayField):
+        size = getattr(
+            settings, 'TOURNAMENTCONTROL_COMPETITION_VIDEOS_ARRAY_SIZE', 5)
+        formfield = PGA.SplitArrayField(
+            URLField(required=False), size,
+            remove_trailing_nulls=True,
+            required=False,
+            label=_("Video URLs"),
+            help_text=_("You can provide up to %(size)d videos per match. "
+                        "YouTube and Vimeo links are supported.") % {
+                'size': size,
+            },
+        )
+        return formfield
+    return field.formfield(**kwargs)
+
+
 class MatchEditForm(BaseMatchFormMixin, ModelForm):
     """
     Use this form to make sure that the data validates:
@@ -778,6 +806,8 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
      * that if the `stage_group` is set, it is a group of the `division`
      * that both the `home_team` and `away_team` are in the `division`
     """
+    formfield_callback = _match_edit_form_formfield_callback
+
     def __init__(self, *args, **kwargs):
         super(MatchEditForm, self).__init__(*args, **kwargs)
 
@@ -901,6 +931,7 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
             'round',
             'date',
             'include_in_ladder',
+            'videos',
         )
         labels = {
             'home_team_undecided': _('Home team'),

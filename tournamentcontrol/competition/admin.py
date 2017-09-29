@@ -41,7 +41,7 @@ from tournamentcontrol.competition.forms import (
 from tournamentcontrol.competition.models import (
     Club, ClubAssociation, ClubRole, Competition, Division,
     DivisionExclusionDate, DrawFormat, Ground, LadderEntry, LadderSummary,
-    Match, MatchVideo, Person, Season, SeasonAssociation, SeasonExclusionDate,
+    Match, Person, Season, SeasonAssociation, SeasonExclusionDate,
     SeasonMatchTime, SimpleScoreMatchStatistic, Stage, StageGroup, Team,
     TeamAssociation, TeamRole, UndecidedTeam, Venue,
 )
@@ -113,11 +113,6 @@ class CompetitionAdminComponent(AdminComponent):
                 url(r'^$', self.edit_match, name='edit'),
                 url(r'^delete/$', self.delete_match, name='delete'),
                 url(r'^detail/$', self.edit_match_detail, name='detail'),
-                url(r'^video/', include([
-                    url(r'^add/$', self.edit_matchvideo, name='add'),
-                    url(r'^(?P<pk>\d+)/$', self.edit_matchvideo, name='edit'),
-                    url(r'^(?P<pk>\d+)/delete/$', self.delete_matchvideo, name='delete'),
-                ], namespace='matchvideo')),
 
                 # FIXME
                 url(r'^ladder/', include([
@@ -965,9 +960,6 @@ class CompetitionAdminComponent(AdminComponent):
         return self.generic_edit(
             request, Match,
             instance=match,
-            related=(
-                'videos',
-            ),
             form_class=MatchEditForm,
             post_save_redirect=self.redirect(stage.urls['edit']),
             permission_required=True,
@@ -980,32 +972,6 @@ class CompetitionAdminComponent(AdminComponent):
             stage.urls['edit'] + '#matches-tab')
         return self.generic_delete(request, stage.matches,
                                    pk=match.pk,
-                                   permission_required=True,
-                                   post_delete_redirect=post_delete_redirect)
-
-    @competition
-    @staff_login_required_m
-    def edit_matchvideo(self, request, match, extra_context, pk=None, **kwargs):
-        try:
-            instance = match.videos.get(pk=pk)
-        except ObjectDoesNotExist:
-            instance = MatchVideo(match=match)
-        return self.generic_edit(request, MatchVideo,
-                                 instance=instance,
-                                 form_fields=(
-                                     'url',
-                                 ),
-                                 post_save_redirect=self.redirect(
-                                     match.urls['edit']),
-                                 permission_required=True,
-                                 extra_context=extra_context)
-
-    @competition
-    @staff_login_required_m
-    def delete_matchvideo(self, request, match, pk, **kwargs):
-        post_delete_redirect = self.redirect(
-            match.urls['edit'] + '#videos-tab')
-        return self.generic_delete(request, match.videos, pk=pk,
                                    permission_required=True,
                                    post_delete_redirect=post_delete_redirect)
 

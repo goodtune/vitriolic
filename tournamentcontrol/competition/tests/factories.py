@@ -4,7 +4,6 @@ import factory
 import factory.fuzzy
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-
 from tournamentcontrol.competition import models, utils
 
 
@@ -189,15 +188,6 @@ class MatchFactory(factory.DjangoModelFactory):
 
     date = factory.LazyAttribute(lambda o: o.datetime.date())
     time = factory.LazyAttribute(lambda o: o.datetime.time())
-
-
-class MatchVideoFactory(factory.DjangoModelFactory):
-    class Meta:
-        model = models.MatchVideo
-
-    match = factory.SubFactory(MatchFactory)
-
-    url = factory.Faker('uri')
 
 
 class UserFactory(factory.DjangoModelFactory):

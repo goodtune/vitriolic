@@ -7,6 +7,7 @@
 	<th>{% trans "Time" %}</th>
 	<th>{% trans "Home Team" %}</th>
 	<th>{% trans "Away Team" %}</th>
+	<th>{% trans "Videos" %}</th>
 {% endblock %}
 
 {% block table-columns %}
@@ -22,6 +23,7 @@
 	<td>{{ obj.time|default_if_none:tbc }}</td>
 	<td>{{ obj.get_home_team }}</td>
 	<td>{{ obj.get_away_team }}</td>
+	<td>{{ obj.videos|length }}</td>
 {% endblock %}
 
-{% block empty-row-colspan %}6{% endblock %}
+{% block empty-row-colspan %}7{% endblock %}

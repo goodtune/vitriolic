@@ -1,22 +1,14 @@
 import unittest
-
 from datetime import time
 
 import django
-
 from django.conf import settings
 from django.core.urlresolvers import reverse
 from django.test.utils import override_settings
 from test_plus import TestCase as BaseTestCase
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.models import (
-    Club,
-    Division,
-    Match,
-    Season,
-    StageGroup,
-    Team,
-    UndecidedTeam,
+    Club, Division, Match, Season, StageGroup, Team, UndecidedTeam,
 )
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin
@@ -173,10 +165,6 @@ class GoodViewTests(TestCase):
     def test_match(self):
         match = factories.MatchFactory.create()
         self.assertGoodNamespace(match)
-
-    def test_matchvideo(self):
-        video = factories.MatchVideoFactory.create()
-        self.assertGoodNamespace(video)
 
     def test_pool(self):
         pool = factories.StageGroupFactory.create()

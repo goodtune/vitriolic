@@ -13,6 +13,7 @@ from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
 from django import forms
 from django.conf import settings
+from django.contrib.postgres import fields as PG
 from django.core import validators
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -1226,6 +1227,11 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                                            blank=True, null=True, unique=True,
                                            db_index=True)
 
+    videos = PG.ArrayField(
+        models.URLField(),
+        null=True,
+    )
+
     objects = MatchQuerySet.as_manager()
 
     class Meta:
@@ -1518,29 +1524,6 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
 
     def __repr__(self):
         return '<Match: %s>' % self.id
-
-
-class MatchVideo(AdminUrlMixin, models.Model):
-
-    match = ForeignKey('Match', related_name='videos')
-    url = models.URLField(_("URL"), max_length=255)
-
-    class Meta:
-        verbose_name = 'video'
-
-    def __unicode__(self):
-        return self.url
-
-    def _get_admin_namespace(self):
-        return 'admin:fixja:competition:season:division:stage:match:matchvideo'
-
-    def _get_url_args(self):
-        return (self.match.stage.division.season.competition_id,
-                self.match.stage.division.season_id,
-                self.match.stage.division_id,
-                self.match.stage_id,
-                self.match_id,
-                self.pk)
 
 
 class LadderBase(models.Model):
