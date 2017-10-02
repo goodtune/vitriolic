@@ -34,9 +34,10 @@ from touchtechnology.common.models import SitemapNodeBase
 from tournamentcontrol.competition.constants import (
     GENDER_CHOICES, PYTZ_TIME_ZONE_CHOICES, SEASON_MODE_CHOICES, WIN_LOSE,
 )
+from tournamentcontrol.competition.managers import MatchManager
 from tournamentcontrol.competition.mixins import ModelDiffMixin
 from tournamentcontrol.competition.query import (
-    DivisionQuerySet, MatchQuerySet, StageQuerySet, StatisticQuerySet,
+    DivisionQuerySet, StageQuerySet, StatisticQuerySet,
 )
 from tournamentcontrol.competition.signals import match_forfeit
 from tournamentcontrol.competition.utils import (
@@ -1232,7 +1233,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         null=True,
     )
 
-    objects = MatchQuerySet.as_manager()
+    objects = MatchManager()
 
     class Meta:
         get_latest_by = 'datetime'
