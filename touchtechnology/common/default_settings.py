@@ -1,9 +1,7 @@
 from django.conf import settings
-from django.utils.module_loading import import_string
 
 __all__ = (
     'APP_ROUTING',
-    'AUTH_FORM_CLASS',
     'CURRENCY_ABBREVIATION',
     'CURRENCY_SYMBOL',
     'PAGINATE_BY',
@@ -16,12 +14,9 @@ __all__ = (
 )
 
 A = lambda n, d: getattr(settings, 'AUTHENTICATION_' + n, d)
-C = lambda n, d: import_string(A(n, d))
 S = lambda n, d=None: getattr(settings, 'TOUCHTECHNOLOGY_' + n, d)
 
 APP_ROUTING = S('APP_ROUTING', ())
-AUTH_FORM_CLASS = C('FORM_CLASS',
-                    'django.contrib.auth.forms.AuthenticationForm')
 CURRENCY_ABBREVIATION = S('CURRENCY_ABBREVIATION', 'AUD')
 CURRENCY_SYMBOL = S('CURRENCY_SYMBOL', '$')
 PAGINATE_BY = S('PAGINATE_BY', 5)

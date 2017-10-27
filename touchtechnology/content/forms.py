@@ -10,13 +10,13 @@ from modelforms.forms import ModelForm
 from touchtechnology.common.default_settings import (
     SITEMAP_EDIT_PARENT, SITEMAP_HTTPS_OPTION, SITEMAP_ROOT,
 )
-from touchtechnology.common.forms import SuperUserSlugMixin
-from touchtechnology.common.mixins import BootstrapFormControlMixin
+from touchtechnology.common.forms.mixins import (
+    BootstrapFormControlMixin, SuperUserSlugMixin,
+)
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.content.app_settings import PAGE_CONTENT_BLOCKS
 from touchtechnology.content.models import (
-    Content, NodeContent, Page, PageContent, Placeholder,
-    PlaceholderKeywordArgument, Redirect,
+    Content, NodeContent, Page, PageContent, Placeholder, Redirect,
 )
 
 
@@ -164,26 +164,6 @@ class NewPlaceholderSitemapNodeForm(PlaceholderSitemapNodeForm):
         exclude = None
 
 
-class PlaceholderKeywordArgumentsForm(
-        BootstrapFormControlMixin, ModelForm):
-    class Meta:
-        model = PlaceholderKeywordArgument
-        fields = ('key', 'value')
-
-
-PlaceholderKeywordArgumentsFormsetBase = inlineformset_factory(
-    SitemapNode, PlaceholderKeywordArgument,
-    form=PlaceholderKeywordArgumentsForm, extra=1)
-
-
-class PlaceholderKeywordArgumentsFormset(
-        PlaceholderKeywordArgumentsFormsetBase):
-    def __init__(self, user, *args, **kwargs):
-        self.user = user
-        super(PlaceholderKeywordArgumentsFormset, self).__init__(*args,
-                                                                 **kwargs)
-
-
 class PlaceholderConfigurationBase(forms.Form):
 
     def __init__(self, user, instance, *args, **kwargs):
@@ -195,13 +175,8 @@ class PlaceholderConfigurationBase(forms.Form):
             initial=initial, *args, **kwargs)
 
     def save(self, *args, **kwargs):
-        for key, value in self.cleaned_data.items():
-            kwarg, __ = self.instance.kw.get_or_create(key=key)
-            if not value:
-                kwarg.delete()
-            else:
-                kwarg.value = value
-                kwarg.save()
+        self.instance.kwargs = self.cleaned_data
+        self.instance.save()
         return self.instance.kwargs
 
 

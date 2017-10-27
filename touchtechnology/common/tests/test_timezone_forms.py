@@ -1,5 +1,5 @@
 from django import forms
-from touchtechnology.common.forms import SelectDateTimeField
+from touchtechnology.common.forms.fields import SelectDateTimeField
 
 
 class TestForm1(forms.Form):

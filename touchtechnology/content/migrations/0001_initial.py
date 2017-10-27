@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
-import json_field.fields
 import touchtechnology.common.db.models
 from django.db import migrations, models
 
@@ -87,7 +86,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
                 ('key', models.CharField(max_length=200, verbose_name='Key')),
-                ('value', json_field.fields.JSONField(default='null', help_text='Enter a valid JSON object', verbose_name='Value', blank=True)),
+                ('value', models.TextField(default='null', help_text='Enter a valid JSON object', verbose_name='Value', blank=True)),
                 ('node', models.ForeignKey(related_name=b'kw', verbose_name='Node', to='common.SitemapNode')),
             ],
             options={

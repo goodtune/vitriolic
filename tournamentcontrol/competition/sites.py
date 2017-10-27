@@ -8,37 +8,23 @@ from django.conf import settings
 from django.conf.urls import include, url
 from django.contrib import messages
 from django.contrib.sitemaps import views as sitemaps_views
-from django.db.models import Count, Q, Sum, Case, When, F
-from django.http import (
-    Http404,
-    HttpResponse,
-    HttpResponseGone,
-)
+from django.db.models import Case, Count, F, Q, Sum, When
+from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.module_loading import import_string
 from django.utils.translation import ugettext, ugettext_lazy as _
 from icalendar import Calendar, Event
-
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
 from tournamentcontrol.competition import rank
-from tournamentcontrol.competition.decorators import (
-    competition_slug,
-)
+from tournamentcontrol.competition.decorators import competition_slug
 from tournamentcontrol.competition.forms import (
-    ConfigurationForm,
-    MultiConfigurationForm,
-    RankingConfigurationForm,
+    ConfigurationForm, MultiConfigurationForm, RankingConfigurationForm,
 )
-from tournamentcontrol.competition.models import (
-    Competition,
-    Person,
-)
+from tournamentcontrol.competition.models import Competition, Person
 from tournamentcontrol.competition.sitemaps import (
-    SeasonSitemap,
-    DivisionSitemap,
-    MatchSitemap,
+    DivisionSitemap, MatchSitemap, SeasonSitemap,
 )
 
 

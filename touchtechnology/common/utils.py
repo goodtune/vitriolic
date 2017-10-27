@@ -298,41 +298,6 @@ def select_template_name(templates):
     return template_name
 
 
-def timezone_choice(tzname, country=None):
-    """
-    Given a timezone string, convert it to a two-tuple suitable
-    for a choice in a FormField.
-
-    >>> timezone_choice(u'UTC')
-    (u'UTC', u'UTC')
-    >>> timezone_choice(u'Australia/Sydney')
-    (u'Australia/Sydney', u'Sydney')
-    >>> timezone_choice(u'America/Indiana/Indianapolis')
-    (u'America/Indiana/Indianapolis', u'Indianapolis (Indiana)')
-    """
-    try:
-        base, rest = tzname.split('/', 1)
-    except ValueError:
-        base, rest = None, tzname
-    rest = rest.replace('_', ' ')
-    try:
-        mid, rest = rest.split('/')
-        if mid != base and mid != country:
-            rest = '{0} ({1})'.format(rest, mid)
-    except ValueError:
-        pass
-    return (tzname, rest)
-
-
-def timezone_choices(countries, timezones, key):
-    yield u'', u''
-    for iso3166, country in sorted(countries.items(), key=key):
-        zones = timezones.get(iso3166, [])
-        zones = [timezone_choice(zone, country) for zone in zones]
-        zones.sort(key=key)
-        yield country, zones
-
-
 def get_timezone_from_request(request):
     if hasattr(request, 'session'):
         tzname = request.session.get('django_timezone', None)

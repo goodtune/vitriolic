@@ -23,13 +23,18 @@ from django.utils.translation import ugettext_lazy as _, ungettext
 from first import first
 from modelforms.forms import ModelForm
 from pyparsing import ParseException
-from touchtechnology.common.forms import (
+from touchtechnology.common.forms.fields import (
     BooleanChoiceField, ModelChoiceField, ModelMultipleChoiceField,
-    SelectDateField, SelectDateTimeWidget as SelectDateTimeWidgetBase,
-    SuperUserSlugMixin, UserMixin, iCheckSelectMultiple,
+    SelectDateField,
 )
-from touchtechnology.common.mixins import BootstrapFormControlMixin
-from touchtechnology.common.utils import timezone_choice
+from touchtechnology.common.forms.icheck import iCheckSelectMultiple
+from touchtechnology.common.forms.mixins import (
+    BootstrapFormControlMixin, SuperUserSlugMixin, UserMixin,
+)
+from touchtechnology.common.forms.tz import timezone_choice
+from touchtechnology.common.forms.widgets import (
+    SelectDateTimeWidget as SelectDateTimeWidgetBase,
+)
 from touchtechnology.content.forms import PlaceholderConfigurationBase
 from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
 from tournamentcontrol.competition.draw import seeded_tournament

@@ -11,7 +11,7 @@ from touchtechnology.common.decorators import (
     never_cache_m, staff_login_required_m,
 )
 from touchtechnology.common.default_settings import SITEMAP_HTTPS_OPTION
-from touchtechnology.common.mixins import BootstrapFormControlMixin
+from touchtechnology.common.forms.mixins import BootstrapFormControlMixin
 from touchtechnology.common.sites import Application
 
 

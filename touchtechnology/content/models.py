@@ -11,7 +11,6 @@ from django.utils.module_loading import import_string
 from django.utils.text import slugify
 from django.utils.translation import ugettext, ugettext_lazy as _
 from first import first
-from json_field import JSONField
 from touchtechnology.admin.mixins import AdminUrlMixin
 from touchtechnology.common.db.models import (
     BooleanField, DateTimeField, HTMLField, TemplatePathField,
@@ -205,17 +204,6 @@ class Placeholder(models.Model):
         cache = caches[NODE_CACHE]
         return cache.clear()
     invalidate_cache.alters_data = True
-
-
-class PlaceholderKeywordArgument(models.Model):
-
-    node = models.ForeignKey(
-        'common.SitemapNode', related_name='kw', verbose_name=_("Node"))
-    key = models.CharField(_("Key"), max_length=200)
-    value = JSONField(_("Value"), blank=True)
-
-    class Meta:
-        unique_together = ('node', 'key')
 
 
 @python_2_unicode_compatible

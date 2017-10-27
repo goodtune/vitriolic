@@ -26,8 +26,8 @@ class AdminTests(TestCase):
             title='Simple Test',
             slug='home',
             object=placeholder,
+            kwargs={'key': 'value'},
         )
-        self.root_node.kw.create(key='key', value='value')
 
     def get_text(self, filename):
         with open(join(dirname(__file__), filename)) as fp:

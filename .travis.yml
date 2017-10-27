@@ -21,8 +21,6 @@ script:
 
 env:
   matrix:
-    - TOXENV=py27-django-1.8-pg94
-    - TOXENV=py27-django-1.8-pg96
     - TOXENV=py27-django-1.10-pg94
     - TOXENV=py27-django-1.10-pg96
     - TOXENV=py27-django-1.11-pg94
