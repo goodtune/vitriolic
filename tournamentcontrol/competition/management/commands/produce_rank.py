@@ -1,8 +1,6 @@
 import argparse
 
-from datetime import date
 from dateutil.parser import parse as date_parse
-
 from django.core.management import BaseCommand
 from django.utils.module_loading import import_string
 

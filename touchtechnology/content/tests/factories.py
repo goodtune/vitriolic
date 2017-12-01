@@ -1,5 +1,4 @@
 import factory
-from touchtechnology.common.models import SitemapNode
 from touchtechnology.content.models import Redirect
 
 

@@ -3,10 +3,10 @@ import logging
 import re
 from datetime import datetime
 from decimal import Decimal
-from itertools import izip_longest
 from operator import and_, attrgetter, or_
 
 import pytz
+import six
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.db.models import F, Q
@@ -15,6 +15,12 @@ from django.template import Context, RequestContext
 from django.template.loader import select_template
 from django.utils import timezone
 from touchtechnology.common.prince import prince
+
+try:
+    from itertools import zip_longest
+except ImportError:
+    from itertools import izip_longest as zip_longest
+
 
 logger = logging.getLogger(__name__)
 
@@ -170,11 +176,10 @@ def grouper(iterable, size, fill=None):
     :param iterable: thing to be broken into chunks
     :param size: size of each chunk
     :param fill: value to use to pad chunks of less than size
-    :return: itertools.izip_longest
+    :return: zip_longest
     """
-    #
     args = [iter(iterable)] * size
-    return izip_longest(fillvalue=fill, *args)
+    return zip_longest(fillvalue=fill, *args)
 
 
 #
@@ -189,7 +194,7 @@ def combine_and_localize(date, time, tz):
     local to tzinfo.
     """
     combined = datetime.combine(date, time)
-    if isinstance(tz, basestring):
+    if isinstance(tz, six.string_types):
         tz = pytz.timezone(tz)
     return timezone.make_aware(combined, tz)
 
@@ -212,7 +217,7 @@ def round_robin(teams, rounds=None):
         teams.append(0)
 
     count = len(teams)
-    half = count / 2
+    half = int(count / 2)
 
     # if the rounds is not set, we will produce one complete round
     if rounds is None:

@@ -1,16 +1,19 @@
 import datetime
 import logging
 import time
-from urlparse import ParseResult
 
 from dateutil.parser import parse
-from django.conf import settings
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.functional import wraps
 from tournamentcontrol.competition.models import Club, Competition, Season
+
+try:
+    from urllib.parse import ParseResult
+except ImportError:
+    from urlparse import ParseResult
+
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +155,10 @@ def competition_by_slug(f, *a, **kw):
         # deep dive into the object internals and fetch the Application
         # instance so we can call the sitemapnodes method.
         try:
-            manager = f.func_closure[1].cell_contents._competitions
+            manager = f.__closure__[1].cell_contents._competitions
+            # manager = f.func_closure[1].cell_contents._competitions
+        # except AttributeError:
+        #     manager = f.__closure__[1].cell_contents._competitions
         except TypeError:
             manager = Competition.objects
 

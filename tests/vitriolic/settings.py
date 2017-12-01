@@ -10,12 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/1.10/ref/settings/
 """
 
-import django
-import environ
 import os
 import time
 
-from django.core.urlresolvers import reverse_lazy
+import django
+import environ
+from django.urls import reverse_lazy
 
 env = environ.Env()
 
@@ -67,7 +67,7 @@ INSTALLED_APPS = [
     'guardian',
     'bootstrap3',
     'django_gravatar',
-    'oembed',
+    'embed_video',
 
     'touchtechnology.common',
     'touchtechnology.admin',
@@ -79,7 +79,7 @@ INSTALLED_APPS = [
     'example_app',
 ]
 
-MIDDLEWARE_CLASSES = [
+MIDDLEWARE = [
     'django.contrib.sites.middleware.CurrentSiteMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',

@@ -1,7 +1,7 @@
-import httplib
 import logging
 import subprocess
 
+import requests
 from django.conf import settings
 from django.utils.html import strip_spaces_between_tags
 
@@ -31,15 +31,19 @@ def prince(html, base_url=BASE_URL, ttl=300, **kwargs):
         if isinstance(html, unicode):
             html = html.encode('utf8')
 
-        conn = httplib.HTTPConnection(settings.PRINCE_SERVER)
         headers = {}
         if base_url:
             headers['base_url'] = base_url
         for key, value in headers.items():
             logger.debug('header: %s=%s', key, value)
-        conn.request('POST', '/', html, headers)
 
-        out = conn.getresponse().read()
+        res = requests.post(
+            "http://%s/" % settings.PRINCE_SERVER,
+            data=html,
+            headers=headers)
+        res.raise_for_status()
+
+        out = res.content
         logger.info('Remote PDF generation via %s complete.', SERVER)
 
     else:

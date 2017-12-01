@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
-import touchtechnology.common.db.models
-from django.db import migrations
+from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
@@ -15,7 +14,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='division',
             name='draft',
-            field=touchtechnology.common.db.models.BooleanField(default=True, help_text='Marking a division as draft will prevent matches from being visible in the front-end.'),
+            field=models.BooleanField(default=True, help_text='Marking a division as draft will prevent matches from being visible in the front-end.'),
             preserve_default=True,
         ),
     ]

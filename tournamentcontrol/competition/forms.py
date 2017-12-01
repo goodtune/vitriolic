@@ -1,7 +1,9 @@
+from __future__ import unicode_literals
+
 import collections
 import datetime
+import json
 import logging
-import operator
 
 from dateutil.parser import parse
 from dateutil.rrule import DAILY, WEEKLY
@@ -10,7 +12,6 @@ from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.forms import array as PGA
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
-from django.core.urlresolvers import reverse_lazy
 from django.db.models import Q
 from django.forms.formsets import (
     DELETION_FIELD_NAME, INITIAL_FORM_COUNT, MAX_NUM_FORM_COUNT,
@@ -20,17 +21,15 @@ from django.forms.models import (
     BaseInlineFormSet, BaseModelFormSet, inlineformset_factory,
     modelformset_factory,
 )
+from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _, ungettext
 from first import first
 from modelforms.forms import ModelForm
 from pyparsing import ParseException
-
 from touchtechnology.common.forms.fields import (
-    BooleanChoiceField, ModelChoiceField, ModelMultipleChoiceField,
-    SelectDateField,
+    ModelChoiceField, ModelMultipleChoiceField, SelectDateField,
 )
-from touchtechnology.common.forms.icheck import iCheckSelectMultiple
 from touchtechnology.common.forms.mixins import (
     BootstrapFormControlMixin, SuperUserSlugMixin, UserMixin,
 )
@@ -150,10 +149,12 @@ class LadderPointsField(forms.MultiValueField):
         super(LadderPointsField, self).__init__(fields, *args, **kwargs)
 
     def compress(self, data_list):
-        parts = filter(operator.itemgetter(0),
-                       zip(data_list, valid_ladder_identifiers))
-        return ' + '.join(map(unicode,
-                              map(lambda part: '%d*%s' % part, parts)))
+        parts = [
+            '{}*{}'.format(*each)
+            for each in zip(data_list, valid_ladder_identifiers)
+            if each[0]
+        ]
+        return ' + '.join(parts)
 
 
 class SelectDateTimeWidget(SelectDateTimeWidgetBase):
@@ -277,7 +278,9 @@ class PersonMergeForm(PersonEditForm):
         help_text=_('Select the duplicate members that are to be merged '
                     'into this retained record.'),
     )
-    keep_old = BooleanChoiceField()
+    keep_old = forms.TypedChoiceField(
+        choices=(('true', 'Yes'), ('false', 'No')),
+        coerce=json.loads, initial='false')
 
     def __init__(self, *args, **kwargs):
         super(PersonMergeForm, self).__init__(*args, **kwargs)
@@ -503,7 +506,6 @@ class StageGroupForm(SuperUserSlugMixin, ModelForm):
             initial=initial,
             required=False,
             label_from_instance=label_from_instance,
-            widget=iCheckSelectMultiple,
             help_text=_("Teams can only belong to one pool per stage. Once "
                         "selected in any pool a team will no longer appear "
                         "for selection here."))
@@ -696,7 +698,7 @@ class DrawFormatForm(BootstrapFormControlMixin, ModelForm):
         text = self.cleaned_data.get('text').strip()
         try:
             DrawGenerator.validate(text)
-        except ValueError, e:
+        except ValueError as e:
             raise forms.ValidationError(e.message)
         return text
 
@@ -1009,14 +1011,13 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
             self.fields.pop('away_team_score')
             self.fields.pop('is_forfeit')
             self.fields.pop('forfeit_winner')
-            self.fields['bye_processed'] \
-                .label = unicode(home_team or away_team)
+            self.fields['bye_processed'].label = str(home_team or away_team)
         else:
             if home_team and away_team:
-                self.fields['home_team_score'].label = unicode(home_team)
+                self.fields['home_team_score'].label = str(home_team)
                 self.fields['home_team_score'] \
                     .widget.attrs['placeholder'] = home_team
-                self.fields['away_team_score'].label = unicode(away_team)
+                self.fields['away_team_score'].label = str(away_team)
                 self.fields['away_team_score'] \
                     .widget.attrs['placeholder'] = away_team
                 self.fields['forfeit_winner'] = ModelChoiceField(
@@ -1182,7 +1183,7 @@ class MatchScheduleManagementForm(ManagementForm):
     When we want to skip the clash validation checking we can allow this - for
     example when it will be impossible to save the form otherwise.
     """
-    ignore_clashes = BooleanChoiceField(initial=0)
+    ignore_clashes = forms.BooleanField(initial=0)
 
 
 BaseMatchScheduleFormSet = modelformset_factory(
@@ -1287,7 +1288,7 @@ class RescheduleDateForm(forms.Form):
 
         try:
             super(RescheduleDateForm, self).clean()
-        except ValidationError, e:
+        except ValidationError as e:
             e.update_error_dict(errors)
 
         value = self.cleaned_data.get('date')

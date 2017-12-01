@@ -1,6 +1,4 @@
-from django.core.urlresolvers import reverse
 from test_plus import TestCase
-from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.tests import factories
 
 

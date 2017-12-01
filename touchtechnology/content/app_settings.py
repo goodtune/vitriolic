@@ -1,5 +1,3 @@
-import re
-
 from django.conf import settings
 from first import first
 

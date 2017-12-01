@@ -1,17 +1,15 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.forms import BooleanField as BooleanChoiceField
 from django.utils.translation import ugettext_lazy as _
 from modelforms.forms import ModelForm
-from touchtechnology.common.forms.fields import BooleanChoiceField
-from touchtechnology.common.forms.icheck import iCheckSelectMultiple
 from touchtechnology.common.forms.mixins import UserMixin
 
 UserModel = get_user_model()
 
 
 class UserEditForm(UserMixin, ModelForm):
-    is_superuser = BooleanChoiceField(_("Deity"), _("Mortal"),
-                                      label=_("God mode"),
+    is_superuser = BooleanChoiceField(label=_("God mode"),
                                       help_text=_("Should this user be all "
                                                   "knowing and all powerful?"))
 
@@ -27,10 +25,6 @@ class UserEditForm(UserMixin, ModelForm):
         labels = {
             'is_active': _("Enabled"),
             'is_staff': _("Content editor"),
-        }
-        widgets = {
-            'groups': iCheckSelectMultiple,
-            'user_permissions': iCheckSelectMultiple,
         }
 
 

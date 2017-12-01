@@ -100,8 +100,8 @@ class Migration(migrations.Migration):
                 ('source_url', models.CharField(help_text='The path that will trigger the redirection.', max_length=250, verbose_name='Source URL')),
                 ('destination_url', models.CharField(help_text='The URL or path that the browser will be sent to.', max_length=500, verbose_name='Destination URL')),
                 ('label', models.CharField(max_length=100, verbose_name='Label', blank=True)),
-                ('active', touchtechnology.common.db.models.BooleanField(default=True, verbose_name='Active')),
-                ('permanent', touchtechnology.common.db.models.BooleanField(default=False, verbose_name='Permanent')),
+                ('active', models.BooleanField(default=True, verbose_name='Active')),
+                ('permanent', models.BooleanField(default=False, verbose_name='Permanent')),
             ],
             options={
                 'ordering': ('destination_url',),

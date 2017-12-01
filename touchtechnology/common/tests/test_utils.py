@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 from decimal import Decimal
 from unittest import skipIf
 
@@ -78,18 +80,18 @@ class TimeZoneChoice(TestCase):
 
     def test_one_part(self):
         self.assertEqual(
-            timezone_choice(u'UTC'),
-            (u'UTC', u'UTC'))
+            timezone_choice('UTC'),
+            ('UTC', 'UTC'))
 
     def test_two_parts(self):
         self.assertEqual(
-            timezone_choice(u'Australia/Sydney'),
-            (u'Australia/Sydney', u'Sydney'))
+            timezone_choice('Australia/Sydney'),
+            ('Australia/Sydney', 'Sydney'))
 
     def test_three_parts(self):
         self.assertEqual(
-            timezone_choice(u'America/Indiana/Indianapolis'),
-            (u'America/Indiana/Indianapolis', u'Indianapolis (Indiana)'))
+            timezone_choice('America/Indiana/Indianapolis'),
+            ('America/Indiana/Indianapolis', 'Indianapolis (Indiana)'))
 
 
 class GetBaseUrl(TestCase):

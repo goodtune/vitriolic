@@ -1,5 +1,6 @@
+from __future__ import unicode_literals
+
 import logging
-from operator import attrgetter
 from os.path import join
 
 import mptt
@@ -8,16 +9,16 @@ from django.contrib.auth.models import Group
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import JSONField
-from django.core.urlresolvers import reverse_lazy
 from django.db import models
+from django.db.models import (
+    BooleanField, DateTimeField, ForeignKey as TreeField, ManyToManyField,
+)
 from django.db.models.signals import post_save
+from django.urls import reverse_lazy
 from django.utils.encoding import python_2_unicode_compatible
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from django.utils.translation import ugettext_lazy as _
-from touchtechnology.common.db.models import (
-    BooleanField, DateTimeField, ManyToManyField, TreeField,
-)
 from touchtechnology.common.default_settings import SITEMAP_ROOT
 from touchtechnology.common.mixins import NodeRelationMixin
 
@@ -27,17 +28,17 @@ logger = logging.getLogger(__name__)
 @python_2_unicode_compatible
 class SitemapNodeBase(models.Model):
 
-    title = models.CharField(max_length=255, verbose_name=_(u"Title"))
+    title = models.CharField(max_length=255, verbose_name=_("Title"))
 
     short_title = models.CharField(
-        max_length=100, blank=True, verbose_name=_(u"Short title"),
-        help_text=_(u"This is used in navigation menus instead of the longer "
-                    u"title value."))
+        max_length=100, blank=True, verbose_name=_("Short title"),
+        help_text=_("This is used in navigation menus instead of the longer "
+                    "title value."))
 
     slug = models.SlugField(
-        max_length=255, db_index=True, verbose_name=_(u"Slug"))
+        max_length=255, db_index=True, verbose_name=_("Slug"))
 
-    slug_locked = BooleanField(default=False, verbose_name=_(u"Slug locked"))
+    slug_locked = BooleanField(default=False, verbose_name=_("Slug locked"))
 
     class Meta:
         abstract = True
@@ -56,10 +57,11 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
     Base class which can be used to represent the structure of the site.
     """
     parent = TreeField(
-        'self', blank=True, null=True, verbose_name=_(u"Parent"),
-        related_name='children')
+        'self', blank=True, null=True, verbose_name=_("Parent"),
+        related_name='children', on_delete=models.PROTECT)
 
-    content_type = models.ForeignKey(ContentType, blank=True, null=True)
+    content_type = models.ForeignKey(
+        ContentType, blank=True, null=True, on_delete=models.PROTECT)
 
     object_id = models.PositiveIntegerField(blank=True, null=True)
 
@@ -69,42 +71,42 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
     kwargs = JSONField(default={})
 
     require_https = BooleanField(
-        default=False, verbose_name=_(u"HTTPS Required"),
-        help_text=_(u"Force this to be served via HTTPS."))
+        default=False, verbose_name=_("HTTPS Required"),
+        help_text=_("Force this to be served via HTTPS."))
 
     # visibility and access control
     enabled = BooleanField(
-        default=True, verbose_name=_(u"Enabled"),
-        help_text=_(u"Set this to 'No' to disable this object and it's "
-                    u"children on the site."))
+        default=True, verbose_name=_("Enabled"),
+        help_text=_("Set this to 'No' to disable this object and it's "
+                    "children on the site."))
 
     hidden_from_navigation = BooleanField(
-        default=False, verbose_name=_(u"Hide from menus"),
-        help_text=_(u"When set to 'Yes' this object will still be available, "
-                    u"but will not appear in menus."))
+        default=False, verbose_name=_("Hide from menus"),
+        help_text=_("When set to 'Yes' this object will still be available, "
+                    "but will not appear in menus."))
 
     hidden_from_sitemap = BooleanField(
-        default=False, verbose_name=_(u"Hide from sitemap"),
-        help_text=_(u"When set to 'Yes' this object will not be listed in "
-                    u"the auto-generated sitemap."))
+        default=False, verbose_name=_("Hide from sitemap"),
+        help_text=_("When set to 'Yes' this object will not be listed in "
+                    "the auto-generated sitemap."))
 
     hidden_from_robots = BooleanField(
-        default=False, verbose_name=_(u"Hide from spiders"),
-        help_text=_(u"Set this to 'Yes' to prevent search engines from "
-                    u"indexing this part of the site.<br />\n"
-                    u"<strong>Warning:</strong> this may affect your ranking "
-                    u"in search engines."))
+        default=False, verbose_name=_("Hide from spiders"),
+        help_text=_("Set this to 'Yes' to prevent search engines from "
+                    "indexing this part of the site.<br />\n"
+                    "<strong>Warning:</strong> this may affect your ranking "
+                    "in search engines."))
 
     restrict_to_groups = ManyToManyField(
-        to='auth.Group', blank=True, verbose_name=_(u"Restrict to Groups"),
-        help_text=_(u"If you select one or more of these groups your "
-                    u"visitors will need to be logged in and a member of an "
-                    u"appropriate group to view this part of the site."))
+        to='auth.Group', blank=True, verbose_name=_("Restrict to Groups"),
+        help_text=_("If you select one or more of these groups your "
+                    "visitors will need to be logged in and a member of an "
+                    "appropriate group to view this part of the site."))
 
     last_modified = DateTimeField(auto_now=True)
 
     def __repr__(self):
-        return u'<{0}: "{1}" ({2}:{3},{4})>'.format(
+        return '<{0}: "{1}" ({2}:{3},{4})>'.format(
             self.__class__.__name__, self.title,
             self.level, self.lft, self.rght)
 
@@ -149,7 +151,7 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         elif direction == 'right':
             target = self.get_next_sibling()
         else:
-            raise ValueError(_(u"direction must be one of 'left' or 'right'"))
+            raise ValueError(_("direction must be one of 'left' or 'right'"))
         if target is not None:
             self.move_to(target, direction)
             post_save.send(self.__class__, instance=self)

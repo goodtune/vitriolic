@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 import collections
 import logging
 import operator
@@ -7,15 +9,16 @@ from django.conf import settings
 from django.conf.urls import include, url
 from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist
-from django.core.urlresolvers import reverse
 from django.db import models
 from django.db.models import Case, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
 from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _, ungettext
+from six.moves import reduce
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.sites import site
 from touchtechnology.common.decorators import (
@@ -107,7 +110,7 @@ class CompetitionAdminComponent(AdminComponent):
             request, templates, context, *args, **kwargs)
 
     def get_urls(self):
-        match_urls = include([
+        match_urls = include(([
             url(r'^add/$', self.edit_match, name='add'),
             url(r'^(?P<match_id>\d+)/', include([
                 url(r'^$', self.edit_match, name='edit'),
@@ -115,27 +118,27 @@ class CompetitionAdminComponent(AdminComponent):
                 url(r'^detail/$', self.edit_match_detail, name='detail'),
 
                 # FIXME
-                url(r'^ladder/', include([
+                url(r'^ladder/', include(([
                     url(r'^add/$', self.index, name='add'),
-                ], namespace='ladderentry')),
-                url(r'^statistic/', include([
+                ], self.app_name), namespace='ladderentry')),
+                url(r'^statistic/', include(([
                     url(r'^add/$', self.index, name='add'),
-                ], namespace='simplescorematchstatistic')),
+                ], self.app_name), namespace='simplescorematchstatistic')),
             ])),
-        ], namespace='match')
+        ], self.app_name), namespace='match')
 
-        role_patterns = [
+        role_patterns = ([
             url(r'^add/$', self.edit_role, name='add'),
             url(r'^(?P<pk>\d+)/$',
                 self.edit_role, name='edit'),
             url(r'^(?P<pk>\d+)/delete/$',
                 self.delete_role, name='delete'),
-        ]
+        ], self.app_name)
 
         urlpatterns = [
             url(r'^$', self.index, name='index'),
 
-            url(r'^competition/', include([
+            url(r'^competition/', include(([
                 url(r'^$', self.list_competitions, name='list'),  # KEEP
                 url(r'^add/$', self.edit_competition, name='add'),
 
@@ -143,68 +146,68 @@ class CompetitionAdminComponent(AdminComponent):
                     url(r'^$', self.edit_competition, name='edit'),
                     url(r'^delete/$', self.delete_competition, name='delete'),
                     url(r'^permission/$', self.perms_competition, name='perms'),
-                    url(r'^seasons/', include([
+                    url(r'^seasons/', include(([
                         url(r'^add/$', self.edit_season, name='add'),
                         url(r'^(?P<season_id>\d+)/', include([
                             url(r'^$', self.edit_season, name='edit'),
                             url(r'^delete/$', self.delete_season, name='delete'),
                             url(r'^reschedule/$', self.match_reschedule, name='reschedule'),
-                            url(r'^timeslot/', include([
+                            url(r'^timeslot/', include(([
                                 url(r'^add/$', self.edit_timeslot, name='add'),
                                 url(r'^(?P<pk>\d+)/$', self.edit_timeslot, name='edit'),
                                 url(r'^(?P<pk>\d+)/delete/$', self.delete_timeslot, name='delete'),
-                            ], namespace='seasonmatchtime')),
+                            ], self.app_name), namespace='seasonmatchtime')),
 
                             url(r'^permission/$', self.perms_season, name='perms'),
 
-                            url(r'^venue/', include([
+                            url(r'^venue/', include(([
                                 url(r'^add/$', self.edit_venue, name='add'),
                                 url(r'^(?P<venue_id>\d+)/', include([
                                     url(r'^$', self.edit_venue, name='edit'),
                                     url(r'^delete/$', self.delete_venue, name='delete'),
-                                    url(r'^ground/', include([
+                                    url(r'^ground/', include(([
                                         url(r'^add/$', self.edit_ground, name='add'),
                                         url(r'^(?P<ground_id>\d+)/$', self.edit_ground, name='edit'),
                                         url(r'^(?P<ground_id>\d+)/delete/$', self.delete_ground, name='delete'),
-                                    ], namespace='ground')),
+                                    ], self.app_name), namespace='ground')),
                                 ])),
-                            ], namespace='venue')),
+                            ], self.app_name), namespace='venue')),
 
-                            url(r'^exclusion/', include([
+                            url(r'^exclusion/', include(([
                                 url(r'^add/$', self.edit_seasonexclusiondate, name='add'),
                                 url(r'^(?P<pk>\d+)/$', self.edit_seasonexclusiondate, name='edit'),
                                 url(r'^(?P<pk>\d+)/delete/$', self.delete_seasonexclusiondate, name='delete'),
-                            ], namespace='seasonexclusiondate')),
+                            ], self.app_name), namespace='seasonexclusiondate')),
 
-                            url(r'^division/', include([
+                            url(r'^division/', include(([
                                 url(r'^add/$', self.edit_division, name='add'),
                                 url(r'^(?P<division_id>\d+)/', include([
                                     url(r'^$', self.edit_division, name='edit'),
                                     url(r'^delete/$', self.delete_division, name='delete'),
-                                    url(r'^stage/', include([
+                                    url(r'^stage/', include(([
                                         url(r'^add/$', self.edit_stage, name='add'),
                                         url(r'^(?P<stage_id>\d+)/', include([
                                             url(r'^$', self.edit_stage, name='edit'),
                                             url(r'^delete/$', self.delete_stage, name='delete'),
                                             url(r'^match/', match_urls),  # is namespaces "match"
 
-                                            url(r'^', include([
+                                            url(r'^', include(([
                                                 # url(r'^draw/$', self.index, name='list'),
                                                 url(r'^draw/build/$', self.generate_draw, name='build'),
                                                 url(r'^draw/undo/$', self.undo_draw, name='undo'),
                                                 url(r'^progress/$', self.progress_teams, name='progress'),
-                                            ], namespace='draw')),
+                                            ], self.app_name), namespace='draw')),
 
-                                            url(r'^team/', include([
+                                            url(r'^team/', include(([
                                                 url(r'^add/$', self.edit_team, name='add'),
                                                 url(r'^(?P<team_id>\d+)/$', self.edit_team, name='edit'),
                                                 url(r'^(?P<team_id>\d+)/delete/$', self.delete_team, name='delete'),
                                                 url(r'^(?P<team_id>\d+)/match/', match_urls),  # is namespaces "match"
-                                            ], namespace='undecidedteam')),
+                                            ], self.app_name), namespace='undecidedteam')),
 
                                             url(r'^scorecards.(?P<mode>(pdf|html))$', self.scorecards, name='scorecards'),
 
-                                            url(r'^pool/', include([
+                                            url(r'^pool/', include(([
                                                 # url(r'^$', self.list_pools, name='list'),
                                                 url(r'^add/$', self.edit_pool, name='add'),
                                                 url(r'^(?P<pool_id>\d+)/', include([
@@ -213,11 +216,11 @@ class CompetitionAdminComponent(AdminComponent):
 
                                                     url(r'^match/', match_urls),
                                                 ])),
-                                            ], namespace='stagegroup')),
+                                            ], self.app_name), namespace='stagegroup')),
                                         ])),
-                                    ], namespace='stage')),
+                                    ], self.app_name), namespace='stage')),
 
-                                    url(r'^teams/', include([
+                                    url(r'^teams/', include(([
                                         url(r'^add/$', self.edit_team, name='add'),
                                         url(r'^(?P<team_id>\d+)/', include([
                                             url(r'^$', self.edit_team, name='edit'),
@@ -226,39 +229,39 @@ class CompetitionAdminComponent(AdminComponent):
 
                                             url(r'^match/', match_urls),
 
-                                            url(r'^association/', include([
+                                            url(r'^association/', include(([
                                                 url(r'^add/$', self.edit_teamassociation, name='add'),
                                                 url(r'^(?P<pk>\d+)/', include([
                                                     url(r'^$', self.edit_teamassociation, name='edit'),
                                                     url(r'^delete/$', self.delete_teamassociation, name='delete'),
                                                 ])),
-                                            ], namespace='teamassociation')),
+                                            ], self.app_name), namespace='teamassociation')),
                                         ])),
-                                    ], namespace='team')),
+                                    ], self.app_name), namespace='team')),
 
                                     url(r'^scorers/$', self.highest_point_scorer, name='scorers'),
 
                                     # FIXME
-                                    url(r'^exclusion/', include([
+                                    url(r'^exclusion/', include(([
                                         url(r'^add/$', self.edit_divisionexclusiondate, name='add'),
                                         url(r'^(?P<pk>\d+)/$', self.edit_divisionexclusiondate, name='edit'),
                                         url(r'^(?P<pk>\d+)/delete/$', self.delete_divisionexclusiondate, name='delete'),
-                                    ], namespace='divisionexclusiondate')),
+                                    ], self.app_name), namespace='divisionexclusiondate')),
 
                                 ])),
-                            ], namespace='division')),
+                            ], self.app_name), namespace='division')),
 
                             url(r'^scorecards/(?P<result_id>[^/]+)\.pdf$', self.scorecards_async, name='scorecards-async'),
                         ])),
 
-                    ], namespace='season')),
+                    ], self.app_name), namespace='season')),
 
                     url(r'^role-', include([
                         url(r'^club/', include(role_patterns, namespace='clubrole'), {'cls': 'club'}),
                         url(r'^team/', include(role_patterns, namespace='teamrole'), {'cls': 'team'}),
                     ])),
                 ])),
-            ], namespace='competition')),
+            ], self.app_name), namespace='competition')),
 
             url(r'^(?P<competition_id>\d+)/seasons/(?P<season_id>\d+)/report.html$', self.season_report, name='season-report'),
             url(r'^(?P<competition_id>\d+)/seasons/(?P<season_id>\d+)/summary.html$', self.season_summary, name='season-summary'),
@@ -278,42 +281,42 @@ class CompetitionAdminComponent(AdminComponent):
                 ]
             )),
 
-            url(r'^club/', include([
+            url(r'^club/', include(([
                 url(r'^$', self.list_clubs, name='list'),
                 url(r'^add/$', self.edit_club, name='add'),
                 url(r'^(?P<club_id>\d+)/$', self.edit_club, name='edit'),
                 url(r'^(?P<club_id>\d+)/delete/$', self.delete_club, name='delete'),
                 url(r'^(?P<club_id>\d+)/', include([
-                    url(r'^person/', include([
+                    url(r'^person/', include(([
                         url(r'^add/$', self.edit_person, name='add'),
                         url(r'^(?P<person_id>[^/]+)/$', self.edit_person, name='edit'),
                         url(r'^(?P<person_id>[^/]+)/delete/$', self.delete_person, name='delete'),
                         url(r'^(?P<person_id>[^/]+)/merge/$', self.merge_person, name='merge'),
-                    ], namespace='person')),
+                    ], self.app_name), namespace='person')),
                     # From RegistrationBase
                     url(r'officials/(?P<season_id>\d+)/$', self.officials, name='officials'),
                     url(r'(?P<season_id>\d+)/registration.(?P<mode>html|pdf)$', self.registration_form, name='registration-form'),
 
                     # FIXME should have a 'season' namespace
-                    url(r'^(?P<season_id>\d+)/team/(?P<team_id>\d+)/', include([
+                    url(r'^(?P<season_id>\d+)/team/(?P<team_id>\d+)/', include(([
                         url(r'^$', self.edit_team_members, name='edit'),
                         # url(r'^add/$', self.edit_team_members, name='add'),
-                    ], namespace='team')),
-                    url(r'^clubassociation/', include([
+                    ], self.app_name), namespace='team')),
+                    url(r'^clubassociation/', include(([
                         url(r'^add/$', self.edit_clubassociation, name='add'),
                         url(r'^(?P<clubassociation_id>\d+)/$', self.edit_clubassociation, name='edit'),
-                    ], namespace='clubassociation')),
+                    ], self.app_name), namespace='clubassociation')),
                 ])),
-            ], namespace='club')),
+            ], self.app_name), namespace='club')),
 
             url(r'^scorecards/$', self.scorecard_report, name='scorecard-report'),
 
-            url(r'^draw-format/', include([
+            url(r'^draw-format/', include(([
                 url(r'^$', self.list_drawformat, name='list'),
                 url(r'^add/$', self.edit_drawformat, name='add'),
                 url(r'^(?P<pk>\d+)/$', self.edit_drawformat, name='edit'),
                 url(r'^(?P<pk>\d+)/delete/$', self.delete_drawformat, name='delete'),
-            ], namespace='format')),
+            ], self.app_name), namespace='format')),
 
             url(r'^reorder/(?P<model>[^/:]+)(?::(?P<parent>[^/]+))?/(?P<pk>\d+)/(?P<direction>\w+)/$', self.reorder, name='reorder'),
         ]
@@ -1553,14 +1556,14 @@ class CompetitionAdminComponent(AdminComponent):
         if read_only:
             messages.add_message(
                 request, messages.INFO,
-                _(u'This season is now read-only to club administrators.'))
+                _('This season is now read-only to club administrators.'))
         elif scheduled_read_only:
             sro = {'time': scheduled_read_only.strftime('%H:%M'),
                    'date': scheduled_read_only.strftime('%d/%m/%Y')}
             messages.add_message(
                 request, messages.WARNING,
-                _(u'This season will become read-only to club administrators '
-                  u'at %(time)s on %(date)s.') % sro)
+                _('This season will become read-only to club administrators '
+                  'at %(time)s on %(date)s.') % sro)
 
         if read_only:
             templates = self.template_path('officials_list.html')
@@ -1600,14 +1603,14 @@ class CompetitionAdminComponent(AdminComponent):
         if read_only:
             messages.add_message(
                 request, messages.INFO,
-                _(u'This team is now read-only to club administrators.'))
+                _('This team is now read-only to club administrators.'))
         elif scheduled_read_only:
             sro = {'time': scheduled_read_only.strftime('%H:%M'),
                    'date': scheduled_read_only.strftime('%d/%m/%Y')}
             messages.add_message(
                 request, messages.WARNING,
-                _(u'This team will become read-only to club administrators at '
-                  u'%(time)s on %(date)s.') % sro)
+                _('This team will become read-only to club administrators at '
+                  '%(time)s on %(date)s.') % sro)
 
         if read_only and not request.user.is_superuser:
             templates = self.template_path('team_members.html')

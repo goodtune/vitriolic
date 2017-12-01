@@ -1,5 +1,4 @@
 from django.contrib.auth.models import Group
-from django.contrib.sites.models import Site
 from test_plus import TestCase as PlusTestCase
 from touchtechnology.common.tests import factories
 

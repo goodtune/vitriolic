@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 from datetime import datetime
 from os.path import dirname, join
 
@@ -9,6 +11,8 @@ from touchtechnology.common.tests.test_timezone_forms import TestForm1
 
 
 class TimeZoneTests(TestCase):
+
+    maxDiff = None
 
     def get_html(self, filename):
         with open(join(dirname(__file__), 'test_html', filename)) as fp:
@@ -29,7 +33,7 @@ class TimeZoneTests(TestCase):
         form = TestForm1(data=data)
         self.failIf(form.is_valid())
         self.assertEquals(form.errors['timestamp'],
-                          [u'Please enter a valid date and time.'])
+                          ['Please enter a valid date and time.'])
 
         data.update({
             'timestamp_3': '7',
@@ -60,7 +64,7 @@ class TimeZoneTests(TestCase):
         form = TestForm1(data=data)
         self.failIf(form.is_valid())
         self.assertEquals(form.errors['timestamp'],
-                          [u'Please enter a valid date and time.'])
+                          ['Please enter a valid date and time.'])
 
         data.update({
             'timestamp_3': '7',
@@ -111,14 +115,10 @@ class TimeZoneTests(TestCase):
 
 
 @override_settings(ROOT_URLCONF='example_app.urls')
-@modify_settings(MIDDLEWARE_CLASSES={
+@modify_settings(MIDDLEWARE={
     'append': 'touchtechnology.common.middleware.TimezoneMiddleware',
 })
 class TestTimezoneMiddleware(TestCase):
-    """
-    In Django 1.10 new-style middleware was added; this is still an old-style
-    middleware, so we are using the MIDDLEWARE_CLASSES setting.
-    """
 
     def test_set_timezone(self):
         "Ensure time zone is correct before, during and after a set request"

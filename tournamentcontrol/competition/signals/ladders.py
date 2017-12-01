@@ -3,8 +3,9 @@ from decimal import Decimal, DivisionByZero, InvalidOperation
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Count, Sum
-
-from tournamentcontrol.competition.signals.decorators import disable_for_loaddata
+from tournamentcontrol.competition.signals.decorators import (
+    disable_for_loaddata,
+)
 from tournamentcontrol.competition.utils import SumDict
 
 logger = logging.getLogger(__name__)
@@ -106,7 +107,7 @@ def team_ladder_entry_aggregation(sender, instance, created=None,
     try:
         instance.team.ladder_summary.filter(
             stage=instance.match.stage).delete()
-    except ObjectDoesNotExist, e:
+    except ObjectDoesNotExist as e:
         logger.debug(e)
 
     # if we are carrying points from the previous stage then we'll need to add

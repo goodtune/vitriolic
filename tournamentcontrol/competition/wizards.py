@@ -7,6 +7,7 @@ from django.db.models import Q
 from django.http import HttpResponse, HttpResponseRedirect
 from django.utils.translation import ugettext_lazy as _
 from formtools.wizard.views import SessionWizardView
+from six.moves import reduce
 from touchtechnology.common.forms.fields import (
     ModelChoiceField, ModelMultipleChoiceField,
 )

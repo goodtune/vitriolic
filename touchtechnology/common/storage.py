@@ -2,8 +2,9 @@ import logging
 import os.path
 
 from django.core.files.base import ContentFile
-from django.core.files.storage import \
-    FileSystemStorage as FileSystemStorageBase
+from django.core.files.storage import (
+    FileSystemStorage as FileSystemStorageBase,
+)
 from django.db.models.fields.files import ImageFieldFile
 from django.utils.six.moves.urllib.parse import urljoin
 from PIL import Image

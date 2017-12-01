@@ -5,12 +5,13 @@ import sys
 import django
 import pytz
 from django.utils import timezone
+from django.utils.deprecation import MiddlewareMixin
 from touchtechnology.common.utils import get_timezone_from_request
 
 logger = logging.getLogger(__name__)
 
 
-class ServedByMiddleware(object):
+class ServedByMiddleware(MiddlewareMixin):
     """
     Expose in our HTTP response headers a number of useful environment values
     that may be useful during debugging.
@@ -25,7 +26,7 @@ class ServedByMiddleware(object):
         return response
 
 
-class TimezoneMiddleware(object):
+class TimezoneMiddleware(MiddlewareMixin):
 
     def process_request(self, request):
         tzinfo = get_timezone_from_request(request)

@@ -114,12 +114,17 @@ class GoodViewTests(TestCase):
             self.response_410()
 
     def test_match_video(self):
-        match = factories.MatchFactory.create(videos=['https://youtu.be/abc'])
+        match = factories.MatchFactory.create(videos=['https://youtu.be/jNQXAC9IVRw'])
         self.assertGoodView('competition:match-video',
                             match.stage.division.season.competition.slug,
                             match.stage.division.season.slug,
                             match.stage.division.slug,
                             match.pk)
+        self.assertResponseContains(
+            '<iframe width="480" height="360" '
+            'src="http://www.youtube.com/embed/jNQXAC9IVRw?wmode=opaque" '
+            'frameborder="0" allowfullscreen>'
+            '</iframe>')
 
     def test_match_video_gone(self):
         opts = [

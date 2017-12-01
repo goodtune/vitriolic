@@ -1,18 +1,16 @@
+from __future__ import unicode_literals
+
 import logging
 
-import django
 from django import forms
 from django.conf import settings
+from django.forms import widgets
 from django.utils import timezone
-from django.utils.encoding import smart_str
-from django.utils.html import format_html
-from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
 from froala_editor.widgets import FroalaEditor
 from touchtechnology.common.forms.tz import (
     DAY_CHOICES, HOUR_CHOICES, MINUTE_CHOICES, MONTH_CHOICES, TIMEZONE_CHOICES,
 )
-from touchtechnology.common.shim import utils, widgets
 
 logger = logging.getLogger(__name__)
 
@@ -38,27 +36,6 @@ class MultiWidget(widgets.MultiWidget):
         return attrs
 
 
-class RadioChoiceInput(widgets.RadioChoiceInput):
-    def render(self, name=None, value=None, attrs=None, choices=()):
-        if self.id_for_label:
-            label_for = format_html(' for="{0}"', self.id_for_label)
-        else:
-            label_for = ''
-        # The special sauce is to use smart_str, on tracing it was found that
-        # format_html was returning SafeBytes whereas the implementation on the
-        # super class was returning SafeText.
-        return smart_str(
-            format_html('<label{0} class="radio-inline">{1} {2}</label>',
-                        label_for, self.tag(), self.choice_label))
-
-    def tag(self):
-        final_attrs = dict(self.attrs, type=self.input_type,
-                           name=self.name, value=self.choice_value)
-        if self.is_checked():
-            final_attrs['checked'] = 'checked'
-        return format_html('<input{0} />', utils.flatatt(final_attrs))
-
-
 class HTMLWidget(FroalaEditor):
 
     def trigger_froala(self, el_id, options):
@@ -67,7 +44,7 @@ class HTMLWidget(FroalaEditor):
         froala.js, so return an empty string to overload the base FroalaEditor
         implementation.
         """
-        return u''
+        return ''
 
     class Media:
         css = {
@@ -105,12 +82,6 @@ class GoogleMapsWidget(MultiWidget):
             return value.split(',')
         return ('', '', '')
 
-    def render(self, *args, **kwargs):
-        if django.VERSION >= (1, 11):
-            kwargs.pop('renderer', None)
-        res = super(GoogleMapsWidget, self).render(*args, **kwargs)
-        return u'<div class="mapwidget">' + res + u'</div>'
-
     class Media:
         css = {
             'all': ('touchtechnology/common/css/location_widget.css',)
@@ -124,7 +95,7 @@ class GoogleMapsWidget(MultiWidget):
 class BootstrapGoogleMapsWidget(GoogleMapsWidget):
     def render(self, *args, **kwargs):
         base = super(BootstrapGoogleMapsWidget, self).render(*args, **kwargs)
-        return u'''
+        return '''
             <div class="form-group">
                 <label class="control-label col-sm-3">%s</label>
                 <div class="col-sm-7">%s</div>
@@ -258,18 +229,3 @@ class SelectDateTimeHiddenWidget(SelectDateTimeWidget):
                 forms.HiddenInput(),
             )
         super(SelectDateTimeWidget, self).__init__(widgets, attrs)
-
-
-class RadioFieldRenderer(widgets.RadioFieldRenderer):
-    choice_input_class = RadioChoiceInput
-
-    def render(self):
-        self.attrs.setdefault('class', 'ui-icheck')
-        start_tag = '<div class="icheck">'
-        output = [start_tag]
-        for i, choice in enumerate(self.choices):
-            w = self.choice_input_class(self.name, self.value,
-                                        self.attrs.copy(), choice, i)
-            output.append(smart_str(w))
-        output.append('</div>')
-        return mark_safe('\n'.join(output))

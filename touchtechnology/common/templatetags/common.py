@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 import logging
 import operator
 import os
@@ -12,7 +14,6 @@ from classytags.arguments import Argument
 from classytags.core import Options
 from classytags.helpers import AsTag
 from django.conf import settings
-from django.core.urlresolvers import Resolver404, resolve, reverse
 from django.db.models import Model, Q
 from django.db.models.query import QuerySet
 from django.forms.forms import BoundField
@@ -22,6 +23,7 @@ from django.forms.widgets import (
 )
 from django.template import Library, Node
 from django.template.loader import get_template, render_to_string
+from django.urls import Resolver404, resolve, reverse
 from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.utils.html import escape
@@ -323,14 +325,14 @@ def field(bf, label=None):
            isinstance(widget, (CheckboxInput, RadioSelect,
                                CheckboxSelectMultiple, MultiWidget)):
             # Use a <label> tag
-            caption = bf.label_tag(label, attrs={u'class': u'field_name'})
+            caption = bf.label_tag(label, attrs={'class': 'field_name'})
         else:
             # Don't use a <label> tag
-            label_suffix = bf.form.label_suffix or u''
-            caption = u'<span class="field_name">' \
-                      u'%s%s</span>' % (label, label_suffix)
+            label_suffix = bf.form.label_suffix or ''
+            caption = '<span class="field_name">' \
+                      '%s%s</span>' % (label, label_suffix)
     else:
-        caption = u''
+        caption = ''
 
     context = {
         'f': bf,
@@ -413,7 +415,7 @@ def islice_(value, arg):
     """
     try:
         bits = []
-        for x in arg.split(u':'):
+        for x in arg.split(':'):
             if len(x) == 0:
                 bits.append(None)
             else:

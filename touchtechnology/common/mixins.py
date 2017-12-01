@@ -1,3 +1,6 @@
+from __future__ import unicode_literals
+
+
 class NodeRelationMixin(object):
     """
     A mixin to allow a Node subclass to determine the type of
@@ -63,5 +66,5 @@ class NodeRelationMixin(object):
         if isinstance(other, FauxNode):
             return 'FAUX'
 
-        raise ValueError(u'You must provide a "SitemapNode" or '
-                         u'"FauxNode" for comparison.')
+        raise ValueError('You must provide a "SitemapNode" or '
+                         '"FauxNode" for comparison.')

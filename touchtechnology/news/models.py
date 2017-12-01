@@ -1,12 +1,14 @@
-from django.core.urlresolvers import reverse
+from __future__ import unicode_literals
+
 from django.db import models
+from django.db.models import BooleanField, DateTimeField, ManyToManyField
 from django.template.defaultfilters import slugify
+from django.urls import reverse
+from django.utils.encoding import python_2_unicode_compatible
 from django.utils.translation import ugettext_lazy as _
 from imagekit.models import ImageSpecField
 from touchtechnology.admin.mixins import AdminUrlMixin
-from touchtechnology.common.db.models import (
-    BooleanField, DateTimeField, HTMLField, ManyToManyField,
-)
+from touchtechnology.common.db.models import HTMLField
 from touchtechnology.news.app_settings import (
     CONTENT_LABEL_CHOICES, DETAIL_IMAGE_KWARGS, DETAIL_IMAGE_PROCESSORS,
     THUMBNAIL_IMAGE_KWARGS, THUMBNAIL_IMAGE_PROCESSORS,
@@ -27,6 +29,7 @@ class AdminUrlModel(AdminUrlMixin, models.Model):
         return (self.pk,)
 
 
+@python_2_unicode_compatible
 class Article(AdminUrlModel):
 
     headline = models.CharField(max_length=150, verbose_name=_('Headline'))
@@ -73,7 +76,7 @@ class Article(AdminUrlModel):
         if not self.slug_locked or not self.slug:
             self.slug = slugify(self.headline)
 
-    def __unicode__(self):
+    def __str__(self):
         return self.headline
 
     @property
@@ -88,7 +91,8 @@ class Article(AdminUrlModel):
 class ArticleContent(models.Model):
 
     article = models.ForeignKey(
-        Article, related_name='content', verbose_name=_('Article'))
+        Article, related_name='content', verbose_name=_('Article'),
+        on_delete=models.PROTECT)
     label = models.SlugField(
         max_length=20, choices=CONTENT_LABEL_CHOICES,
         verbose_name=_('CSS class'))
@@ -99,10 +103,10 @@ class ArticleContent(models.Model):
         ordering = ('sequence',)
 
     def __repr__(self):
-        return u'<ArticleContent: #%d, article=%d>' % (self.pk,
-                                                       self.article.pk)
+        return '<ArticleContent: #%d, article=%d>' % (self.pk, self.article.pk)
 
 
+@python_2_unicode_compatible
 class Category(AdminUrlModel):
 
     title = models.CharField(max_length=75, verbose_name=_('Title'))
@@ -135,5 +139,5 @@ class Category(AdminUrlModel):
         kwargs = {'category': self.slug}
         return reverse('news:category-index', kwargs=kwargs)
 
-    def __unicode__(self):
+    def __str__(self):
         return self.title

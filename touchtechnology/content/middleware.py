@@ -9,10 +9,10 @@ from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.core.files.storage import default_storage
-from django.core.urlresolvers import reverse_lazy
 from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render_to_response
 from django.template import RequestContext, TemplateDoesNotExist
+from django.urls import reverse_lazy
 from django.utils.six.moves.urllib.parse import urlunparse
 from guardian.conf import settings as guardian_settings
 from touchtechnology.common.default_settings import SITEMAP_HTTPS_OPTION

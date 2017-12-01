@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
-import touchtechnology.common.db.models
-from django.db import migrations, models
-
 import tournamentcontrol.competition.models
+from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
@@ -51,9 +49,9 @@ class Migration(migrations.Migration):
                 ('title', models.CharField(verbose_name='Title', max_length=255)),
                 ('short_title', models.CharField(verbose_name='Short title', blank=True, help_text='This is used in navigation menus instead of the longer title value.', max_length=100)),
                 ('slug', models.SlugField(verbose_name='Slug', max_length=255)),
-                ('slug_locked', touchtechnology.common.db.models.BooleanField(verbose_name='Slug locked', default=False)),
+                ('slug_locked', models.BooleanField(verbose_name='Slug locked', default=False)),
                 ('order', models.PositiveIntegerField(default=1)),
-                ('enabled', touchtechnology.common.db.models.BooleanField(default=True)),
+                ('enabled', models.BooleanField(default=True)),
             ],
             options={
                 'ordering': ('order',),

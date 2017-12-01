@@ -4,7 +4,7 @@ from __future__ import unicode_literals
 import datetime
 
 import touchtechnology.common.db.models
-from django.db import migrations, models
+from django.db import migrations
 from django.utils.timezone import utc
 
 

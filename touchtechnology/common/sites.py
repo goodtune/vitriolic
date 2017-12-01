@@ -1,6 +1,9 @@
+from __future__ import unicode_literals
+
 import logging
 import os.path
 
+import django
 from django.conf import settings
 from django.conf.urls import url
 from django.contrib import messages
@@ -8,7 +11,6 @@ from django.contrib.auth import forms, get_user_model, views
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
 from django.core.paginator import EmptyPage, Paginator
-from django.core.urlresolvers import NoReverseMatch, reverse, reverse_lazy
 from django.db import transaction
 from django.forms.models import inlineformset_factory, modelformset_factory
 from django.http import HttpResponse
@@ -16,6 +18,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.template import RequestContext
 from django.template.loader import render_to_string
 from django.template.response import TemplateResponse
+from django.urls import NoReverseMatch, reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.utils.http import urlencode
@@ -55,10 +58,10 @@ class Application(object):
         self._spawned = timezone.now()
 
     def __repr__(self):
-        return u'<{0}: {1}/{2}/{3}?{4}>'.format(self.__class__.__name__,
-                                                self.name, self.app_name,
-                                                self.node or u'',
-                                                urlencode(self.kwargs))
+        return '<{0}: {1}/{2}/{3}?{4}>'.format(self.__class__.__name__,
+                                               self.name, self.app_name,
+                                               self.node or '',
+                                               urlencode(self.kwargs))
 
     def _get_namespace(self, cls=None):
         if cls is None:
@@ -89,7 +92,7 @@ class Application(object):
         module we look up the import path until we find the module level
         ``get_version`` function, to a maximum depth of 4 levels.
         """
-        ver = u''
+        ver = ''
         for depth in xrange(1, 5):
             parts = self.__module__.rsplit('.', depth)
             mod = parts[0]
@@ -103,7 +106,7 @@ class Application(object):
         name = self.verbose_name
         if callable(name):
             name = name()
-        return u'{name} {ver}'.format(name=_(name), ver=ver)
+        return '{name} {ver}'.format(name=_(name), ver=ver)
 
     @property
     def current_app(self):
@@ -204,7 +207,7 @@ class Application(object):
         # currently anonymous. If they are already identified, we can safely
         # return a HTTP 403 Forbidden.
         if return_403 is None:
-            return_403 = not request.user.is_anonymous()
+            return_403 = not request.user.is_anonymous
 
         if queryset is None:
             queryset = manager.all()
@@ -355,11 +358,11 @@ class Application(object):
                      post_save_redirect=None,
                      templates=None,
                      changed_messages=(
-                         (messages.SUCCESS, _(u"Your {model} has been "
-                                              u"saved.")),
+                         (messages.SUCCESS, _("Your {model} has been "
+                                              "saved.")),
                      ),
                      unchanged_messages=(
-                         (messages.INFO, _(u"Your {model} was not changed.")),
+                         (messages.INFO, _("Your {model} was not changed.")),
                      ),
                      permission_required=False,
                      perms=None,
@@ -374,7 +377,7 @@ class Application(object):
         # currently anonymous. If they are already identified, we can safely
         # return a HTTP 403 Forbidden.
         if return_403 is None:
-            return_403 = not request.user.is_anonymous()
+            return_403 = not request.user.is_anonymous
 
         if instance is None and pk is not None:
             instance = get_object_or_404(manager, pk=pk)
@@ -420,10 +423,10 @@ class Application(object):
         # If the developer has not provided a custom form, then dynamically
         # construct a default ModelForm for them.
         if form_class is None:
-            meta_class = type('Meta', (), {'model': model,
-                                           'fields': form_fields,
-                                           'widgets': form_widgets})
-            form_class = type('EditForm', self.model_form_bases,
+            meta_class = type(smart_str('Meta'), (), {'model': model,
+                                        'fields': form_fields,
+                                        'widgets': form_widgets})
+            form_class = type(smart_str('EditForm'), self.model_form_bases,
                               {'Meta': meta_class})
 
         # Whether we've dynamically constructed our form_class or not, check to
@@ -513,14 +516,14 @@ class Application(object):
 
         if changed_messages is None:
             changed_messages = (
-                (messages.SUCCESS, _(u"Your {models} have been saved.")),
+                (messages.SUCCESS, _("Your {models} have been saved.")),
             )
 
         # If not explicitly declared, redirect the user to login if they are
         # currently anonymous. If they are already identified, we can safely
         # return a HTTP 403 Forbidden.
         if return_403 is None:
-            return_403 = not request.user.is_anonymous()
+            return_403 = not request.user.is_anonymous
 
         # Try and introspect the model if possible.
         model, manager = model_and_manager(model_or_manager)
@@ -633,11 +636,8 @@ class Application(object):
         # If the developer has not provided a custom form, then dynamically
         # construct a default ModelForm for them.
         if form_class is None:
-            meta_class = type('Meta', (),
-                              {'model': model, 'fields': form_fields,
-                               'widgets': form_widgets})
-            form_class = type('EditForm', self.model_form_bases,
-                              {'Meta': meta_class})
+            meta_class = type(smart_str('Meta'), (), {'model': model, 'fields': form_fields, 'widgets': form_widgets})
+            form_class = type(smart_str('EditForm'), self.model_form_bases, {'Meta': meta_class})
 
         # If the developer has not provided a custom formset, then dynamically
         # construct a default one with inlineformset_factory.
@@ -685,9 +685,9 @@ class Application(object):
                     transaction.savepoint_commit(sid)
                     messages.add_message(
                         request, messages.SUCCESS,
-                        _(u"Your %(model_verbose_name)s and "
-                          u"%(related_verbose_name_plural)s "
-                          u"have been saved.") % verbose)
+                        _("Your %(model_verbose_name)s and "
+                          "%(related_verbose_name_plural)s "
+                          "have been saved.") % verbose)
                     if isinstance(post_save_redirect, HttpResponse):
                         return post_save_redirect
                     redirect_to = self.reverse(
@@ -742,7 +742,7 @@ class Application(object):
         # currently anonymous. If they are already identified, we can safely
         # return a HTTP 403 Forbidden.
         if return_403 is None:
-            return_403 = not request.user.is_anonymous()
+            return_403 = not request.user.is_anonymous
 
         # Implement permission checking for specified object instance, throw a
         # HTTP 403 (using django-guardian configuration) when the user is not
@@ -796,7 +796,7 @@ class Application(object):
             with timezone.override(tz):
                 response.render()
 
-        if not request.user.is_anonymous():
+        if not request.user.is_anonymous:
             patch_cache_control(response, private=True)
         return response
 
@@ -860,14 +860,16 @@ class AccountsSite(Application):
             settings, 'AUTHENTICATION_FORM_CLASS',
             'django.contrib.auth.forms.AuthenticationForm')
         authentication_form = import_string(form_class)
+        if django.VERSION[0] < 2:
+            kwargs.setdefault('current_app', self.name)
         return views.login(
-            request, authentication_form=authentication_form,
-            current_app=self.name, *args, **kwargs)
+            request, authentication_form=authentication_form, *args, **kwargs)
 
     @node2extracontext
     def logout(self, request, *args, **kwargs):
-        return views.logout(
-            request, current_app=self.name, *args, **kwargs)
+        if django.VERSION[0] < 2:
+            kwargs.setdefault('current_app', self.name)
+        return views.logout(request, *args, **kwargs)
 
     @node2extracontext
     def password_change(self, request, *args, **kwargs):
@@ -928,11 +930,11 @@ class AccountsSite(Application):
                     form.save()
                     messages.add_message(
                         request, messages.SUCCESS,
-                        _(u"Your changes have been saved."))
+                        _("Your changes have been saved."))
                 else:
                     messages.add_message(
                         request, messages.INFO,
-                        _(u"You did not make any changes."))
+                        _("You did not make any changes."))
                 return redirect('.')
         else:
             form = form_class(instance=request.user)

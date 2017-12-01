@@ -2,37 +2,11 @@ import uuid
 
 from django.db import models
 from touchtechnology.common.forms.fields import (
-    BooleanChoiceField, EmailField as EmailFormField, GoogleMapsField,
-    HTMLField as HTMLFormField, MinTreeNodeChoiceField, ModelChoiceField,
-    SelectDateField, SelectDateTimeField, SelectTimeField,
-    SitemapNodeModelChoiceField, TemplatePathFormField,
-    iCheckModelMultipleChoiceField,
+    EmailField as EmailFormField, GoogleMapsField, HTMLField as HTMLFormField,
+    ModelChoiceField, ModelMultipleChoiceField, SelectDateField,
+    SelectDateTimeField, SelectTimeField, SitemapNodeModelChoiceField,
+    TemplatePathFormField,
 )
-
-
-class TreeField(models.ForeignKey):
-    def formfield(self, form_class=MinTreeNodeChoiceField, **kwargs):
-        return super(TreeField, self).formfield(
-            form_class=form_class, **kwargs)
-
-
-class BooleanField(models.BooleanField):
-    """
-    Custom `BooleanField` which overrides the formfield to use the much
-    nicer `BooleanChoiceField` which presents two radio buttons rather
-    than a checkbox.
-    """
-    def __init__(self, *args, **kwargs):
-        # Custom `__init__` because the built-in BooleanField is expecting
-        # a checkbox input where "unticked" == False and "ticked" == True.
-        if 'default' not in kwargs and not kwargs.get('null'):
-            kwargs['default'] = False
-        kwargs.setdefault('blank', None)
-        super(BooleanField, self).__init__(*args, **kwargs)
-
-    def formfield(self, form_class=BooleanChoiceField, **kwargs):
-        return super(BooleanField, self).formfield(
-            form_class=form_class, **kwargs)
 
 
 class DateField(models.DateField):
@@ -125,7 +99,7 @@ class ManyToManyField(models.ManyToManyField):
         super(ManyToManyField, self).__init__(to, *args, **kwargs)
         self.label_from_instance = label_from_instance
 
-    def formfield(self, form_class=iCheckModelMultipleChoiceField, **kwargs):
+    def formfield(self, form_class=ModelMultipleChoiceField, **kwargs):
         kwargs.setdefault('label_from_instance', self.label_from_instance)
         return super(ManyToManyField, self).formfield(
             form_class=form_class, **kwargs)

@@ -1,5 +1,3 @@
-import operator
-
 from django import forms
 from django.conf import settings
 from django.forms.models import inlineformset_factory
@@ -53,11 +51,14 @@ class ArticleContentForm(BootstrapFormControlMixin, ModelForm):
     def __init__(self, *args, **kwargs):
         super(ArticleContentForm, self).__init__(*args, **kwargs)
         # hide the label field if it may only contain one value
-        first = operator.itemgetter(0)
-        choices = filter(None, map(first, self.fields['label'].choices))
+        choices = [
+            each[0]
+            for each in self.fields['label'].choices
+            if each[0]
+        ]
         if len(choices) < 2:
             self.fields['label'].widget = forms.HiddenInput()
-            self.initial['label'] = first(choices)
+            self.initial['label'] = choices[0]
 
     class Meta:
         model = ArticleContent

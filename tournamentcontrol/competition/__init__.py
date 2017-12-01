@@ -1,5 +1,4 @@
 import logging
-from os.path import abspath, dirname, join
 
 logger = logging.getLogger(__name__)
 

@@ -6,12 +6,11 @@ from django.db.models import Count, Q
 from django.utils import timezone
 from django.utils.functional import lazy
 from django.utils.translation import ugettext_lazy as _
+from six.moves import reduce
 from touchtechnology.admin.base import DashboardWidget
-
 from tournamentcontrol.competition.models import Match, Stage, Team
 from tournamentcontrol.competition.utils import (
-    legitimate_bye_match,
-    team_needs_progressing,
+    legitimate_bye_match, team_needs_progressing,
 )
 
 

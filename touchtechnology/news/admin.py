@@ -1,4 +1,7 @@
-import urlparse
+try:
+    from urllib.parse import urljoin
+except ImportError:
+    from urlparse import urljoin
 
 from django.conf.urls import include, url
 from django.utils.translation import ugettext_lazy as _
@@ -19,32 +22,30 @@ class NewsAdminComponent(AdminComponent):
         super(NewsAdminComponent, self).__init__(app, name, app_name)
 
     def get_urls(self):
+        article_patterns = ([
+            url(r'^$', self.list_articles, name='list'),
+            url(r'^add/$', self.edit_article, name='add'),
+            url(r'^(?P<pk>\d+)/$', self.edit_article, name='edit'),
+            url(r'^(?P<pk>\d+)/delete/$',
+                self.delete_article, name='delete'),
+            url(r'^(?P<pk>\d+)/permission/$',
+                self.perms_article, name='perms'),
+        ], self.app_name)
+
+        category_patterns = ([
+            url(r'^$', self.list_categories, name='list'),
+            url(r'^add/$', self.edit_category, name='add'),
+            url(r'^(?P<pk>\d+)/$', self.edit_category, name='edit'),
+            url(r'^(?P<pk>\d+)/delete/$',
+                self.delete_category, name='delete'),
+            url(r'^(?P<pk>\d+)/permission/$',
+                self.perms_category, name='perms'),
+        ], self.app_name)
+
         urlpatterns = [
             url(r'^$', self.index, name='index'),
-
-            # Article
-
-            url(r'^article/', include([
-                url(r'^$', self.list_articles, name='list'),
-                url(r'^add/$', self.edit_article, name='add'),
-                url(r'^(?P<pk>\d+)/$', self.edit_article, name='edit'),
-                url(r'^(?P<pk>\d+)/delete/$',
-                    self.delete_article, name='delete'),
-                url(r'^(?P<pk>\d+)/permission/$',
-                    self.perms_article, name='perms'),
-            ], namespace='article')),
-
-            # Category
-
-            url(r'^category/', include([
-                url(r'^$', self.list_categories, name='list'),
-                url(r'^add/$', self.edit_category, name='add'),
-                url(r'^(?P<pk>\d+)/$', self.edit_category, name='edit'),
-                url(r'^(?P<pk>\d+)/delete/$',
-                    self.delete_category, name='delete'),
-                url(r'^(?P<pk>\d+)/permission/$',
-                    self.perms_category, name='perms'),
-            ], namespace='category')),
+            url(r'^article/', include(article_patterns, namespace='article')),
+            url(r'^category/', include(category_patterns, namespace='category')),
         ]
         return urlpatterns
 
@@ -77,8 +78,7 @@ class NewsAdminComponent(AdminComponent):
             form_kwargs={'user': request.user},
             formset_class=ArticleContentFormset,
             # permission_required=True,
-            post_save_redirect=self.redirect(
-                urlparse.urljoin(request.path, '..')),
+            post_save_redirect=self.redirect(urljoin(request.path, '..')),
             extra_context=kwargs)
 
     @staff_login_required_m
@@ -107,7 +107,7 @@ class NewsAdminComponent(AdminComponent):
                                  form_kwargs={'user': request.user},
                                  permission_required=True,
                                  post_save_redirect=self.redirect(
-                                     urlparse.urljoin(request.path, '..')),
+                                     urljoin(request.path, '..')),
                                  extra_context=kwargs)
 
     @staff_login_required_m

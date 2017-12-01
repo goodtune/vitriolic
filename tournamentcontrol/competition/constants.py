@@ -1,5 +1,5 @@
+import pytz
 from dateutil.rrule import DAILY, WEEKLY
-
 from django.utils.translation import ugettext_lazy as _
 
 GENDER_CHOICES = (
@@ -33,7 +33,6 @@ be moved and better leveraged in future release.
 See https://bitbucket.org/touchtechnology/common/issue/16/
 """
 
-import pytz
 
 PYTZ_TIME_ZONE_CHOICES = [('\x20Standard', (('UTC', 'UTC'), ('GMT', 'GMT')))]
 for iso, name in pytz.country_names.items():
