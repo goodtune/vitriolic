@@ -256,7 +256,7 @@ class GoodViewTests(TestCase):
             stage=finals, label='Semi 2', round=6,
             home_team=None, home_team_eval='P2',
             away_team=None, away_team_eval='P3')
-        final = factories.MatchFactory.create(
+        factories.MatchFactory.create(
             stage=finals, label='Final', round=7,
             home_team=None, home_team_eval='W', home_team_eval_related=semi_1,
             away_team=None, away_team_eval='W', away_team_eval_related=semi_2)
@@ -316,7 +316,6 @@ class GoodViewTests(TestCase):
         # Not using the PersonFactory because it requires a User, we want a
         # bare Person instance without that relationship.
         member1 = club.members.create(first_name='Alice', last_name='User')
-        #member2 = club.members.create(first_name='Aliss', last_name='User')
 
         # Our second Person should have the User property, because we want to
         # transfer that to the first.

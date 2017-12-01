@@ -794,14 +794,12 @@ class StageGroup(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     def matches_by_date(self):
         tzinfo = timezone.get_current_timezone()
         res = collections.OrderedDict()
-        for match in self.matches.select_related(
-                    'play_at', 'stage__division',
-                    'home_team__club', 'home_team__division',
-                    'away_team__club', 'away_team__division',
-                ).annotate(
-                    statistics_count=Count('statistics'),
-                    video_count=Count('videos'),
-                ):
+        matches = self.matches.select_related(
+            'play_at', 'stage__division', 'home_team__club',
+            'home_team__division', 'away_team__club', 'away_team__division')
+        for match in matches.annotate(
+                statistics_count=Count('statistics'),
+                video_count=Count('videos')):
             res.setdefault(self, collections.OrderedDict()) \
                .setdefault(match.get_date(tzinfo), []) \
                .append(match)
@@ -964,18 +962,13 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
     def matches_by_date(self):
         tzinfo = timezone.get_current_timezone()
         res = collections.OrderedDict()
-        for m in self.matches.select_related(
-                    'play_at', 'stage__division', 'stage_group',
-                    'home_team__club', 'home_team__division',
-                    'away_team__club', 'away_team__division',
-                ).annotate(
-                    statistics_count=Count('statistics'),
-                    videos_count=Count('videos'),
-                ):
+        matches = self.matches.select_related(
+            'play_at', 'stage__division', 'stage_group', 'home_team__club',
+            'home_team__division', 'away_team__club', 'away_team__division')
+        for m in matches.annotate(
+                statistics_count=Count('statistics'),
+                videos_count=Count('videos')):
             res.setdefault(m.get_date(tzinfo), []).append(m)
-            # res.setdefault(self, collections.OrderedDict()) \
-            #    .setdefault(match.get_date(tzinfo), []) \
-            #    .append(match)
         return res
 
 
@@ -1382,7 +1375,6 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         if self.stage_group and self.stage_group not in self.stage.pools.all():
             errors.setdefault('stage_group', []).append(
                 _('This pool is not in the selected division'))
-
 
         if errors:
             raise ValidationError(errors)

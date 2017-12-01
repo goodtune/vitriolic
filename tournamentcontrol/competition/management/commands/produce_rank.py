@@ -25,6 +25,6 @@ class Command(BaseCommand):
         from tournamentcontrol.competition.rank import rank, json_rank
 
         if not json:
-            ranking_table = rank(start=start, at=at, decay=decay)
+            rank(start=start, at=at, decay=decay)
         else:
             json_rank(stream=json, start=start, at=at, decay=decay)

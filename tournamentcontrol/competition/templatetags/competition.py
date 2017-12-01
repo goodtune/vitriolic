@@ -15,9 +15,6 @@ try:
 except ImportError:
     from itertools import izip_longest as zip_longest
 
-
-
-
 register = template.Library()
 
 

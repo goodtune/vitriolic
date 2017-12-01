@@ -38,7 +38,7 @@ class RankingLadderEntryTests(TestCase):
             expected,
         )
 
-    ## Original Behaviour
+    # Original Behaviour
 
     @override_settings(TOURNAMENTCONTROL_RANK_POINTS_FUNC=ORIGINAL_BEHAVIOUR)
     def test_bug_win_no_margin_bonus(self):
@@ -65,7 +65,7 @@ class RankingLadderEntryTests(TestCase):
         "loss by <2"
         self.assertLadderEntries(2, 1, [(1, 1, 15), (1, -1, 7.5)])
 
-    ## Correct Behaviour
+    # Correct Behaviour
 
     @override_settings(TOURNAMENTCONTROL_RANK_POINTS_FUNC=CORRECT_BEHAVIOUR)
     def test_win_no_margin_bonus(self):

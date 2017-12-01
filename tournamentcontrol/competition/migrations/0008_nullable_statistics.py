@@ -12,6 +12,7 @@ def set_zero_to_none(apps, schema_editor):
     SimpleScoreMatchStatistic.objects.filter(points=0) \
                                      .update(points=None)
 
+
 def set_none_to_zero(apps, schema_editor):
     SimpleScoreMatchStatistic = apps.get_model(
         "competition", "SimpleScoreMatchStatistic")

@@ -19,6 +19,7 @@ from tournamentcontrol.competition.utils import generate_scorecards
 # Scorecard Report
 ##############################################################################
 
+
 def combine_date_time_tuple(t):
     return datetime.datetime.combine(*t)
 
@@ -29,6 +30,7 @@ def q_date_from_datetime(dt):
 
 def q_date_time_from_datetime(dt):
     return Q(date=dt.date(), time=dt.time())
+
 
 no_date_or_time = Q(date__isnull=True) | Q(time__isnull=True)
 

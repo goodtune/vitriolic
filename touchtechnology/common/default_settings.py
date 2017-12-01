@@ -13,8 +13,14 @@ __all__ = (
     'STORAGE_URL',
 )
 
-A = lambda n, d: getattr(settings, 'AUTHENTICATION_' + n, d)
-S = lambda n, d=None: getattr(settings, 'TOUCHTECHNOLOGY_' + n, d)
+
+def A(n, d):
+    return getattr(settings, 'AUTHENTICATION_' + n, d)
+
+
+def S(n, d=None):
+    return getattr(settings, 'TOUCHTECHNOLOGY_' + n, d)
+
 
 APP_ROUTING = S('APP_ROUTING', ())
 CURRENCY_ABBREVIATION = S('CURRENCY_ABBREVIATION', 'AUD')

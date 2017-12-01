@@ -526,6 +526,7 @@ class MultiCompetitionSite(CompetitionSite):
         ]
         return urlpatterns
 
+
 class RegistrationSite(Application):
 
     def __init__(self, name='rego', app_name='rego', **kwargs):
@@ -591,7 +592,6 @@ class RankingSite(Application):
             name=name, app_name=app_name, **kwargs)
 
     def get_urls(self):
-
         urlpatterns = [
             url(r'^$', rank.IndexView.as_view(), name='index'),
             url(r'^(?P<year>\d{4})/', include([
@@ -609,9 +609,6 @@ class RankingSite(Application):
             ])),
         ]
         return urlpatterns
-
-    def ranking(self, request, *args, **kwargs):
-        raise ValueError('STOP')
 
 
 competition = CompetitionSite()

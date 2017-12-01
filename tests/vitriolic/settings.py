@@ -38,6 +38,7 @@ ALLOWED_HOSTS = []
 
 SITE_ID = 1
 
+
 # Disable the database migrations machinery to speed up test suite.
 class DisableMigrations(object):
     """
@@ -45,8 +46,10 @@ class DisableMigrations(object):
     """
     def __contains__(self, item):
         return True
+
     def __getitem__(self, item):
         return None if django.VERSION >= (1, 11) else 'notmigrations'
+
 
 MIGRATION_MODULES = DisableMigrations()
 
