@@ -423,13 +423,11 @@ class Application(object):
         # If the developer has not provided a custom form, then dynamically
         # construct a default ModelForm for them.
         if form_class is None:
-            class EditForm(self.model_form_bases):
-                class Meta:
-                    model = model
-                    fields = form_fields
-                    widgets = form_widgets
-
-            form_class = EditForm
+            meta_class = type(smart_str('Meta'), (), {'model': model,
+                                        'fields': form_fields,
+                                        'widgets': form_widgets})
+            form_class = type(smart_str('EditForm'), self.model_form_bases,
+                              {'Meta': meta_class})
 
         # Whether we've dynamically constructed our form_class or not, check to
         # ensure that we've inherited from all the bases. Log when we haven't,
