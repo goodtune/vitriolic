@@ -25,7 +25,7 @@ setup(
         'django-froala-editor>=2.7.1',
         'django-guardian~=1.4.5,!=1.4.6',
         'django-modelforms~=0.2',
-        'django-mptt~=0.8.6',
+        'django-mptt~=0.9',
         'django>=1.11',
         'first~=2.0.1',
         'namedentities',

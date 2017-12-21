@@ -2,7 +2,12 @@ language: python
 cache: pip
 
 python:
-  - 2.7
+  - "2.7"
+  - "3.4"
+  - "3.5"
+  - "3.6"
+  - "pypy"
+  - "pypy3"
 
 services:
   - postgresql
@@ -11,7 +16,7 @@ addons:
   postgresql: "9.4"
 
 install:
-  - pip install tox
+  - pip install tox-travis
 
 before_script:
   - psql -c "CREATE DATABASE vitriolic;" -U postgres
@@ -20,12 +25,6 @@ script:
   - tox
 
 env:
-  matrix:
-    - TOXENV=py27-django-1.10-pg94
-    - TOXENV=py27-django-1.10-pg96
-    - TOXENV=py27-django-1.11-pg94
-    - TOXENV=py27-django-1.11-pg96
-
   global:
     - DATABASE_URL=postgresql://postgres@localhost/travis
     - secure: |
