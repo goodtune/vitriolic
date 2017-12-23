@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 from operator import itemgetter
 
 import pytz
@@ -11,12 +13,12 @@ def timezone_choice(tzname, country=None):
     Given a timezone string, convert it to a two-tuple suitable
     for a choice in a FormField.
 
-    >>> timezone_choice(u'UTC')
-    (u'UTC', u'UTC')
-    >>> timezone_choice(u'Australia/Sydney')
-    (u'Australia/Sydney', u'Sydney')
-    >>> timezone_choice(u'America/Indiana/Indianapolis')
-    (u'America/Indiana/Indianapolis', u'Indianapolis (Indiana)')
+    >>> timezone_choice('UTC')
+    ('UTC', 'UTC')
+    >>> timezone_choice('Australia/Sydney')
+    ('Australia/Sydney', 'Sydney')
+    >>> timezone_choice('America/Indiana/Indianapolis')
+    ('America/Indiana/Indianapolis', 'Indianapolis (Indiana)')
     """
     try:
         base, rest = tzname.split('/', 1)
@@ -33,7 +35,7 @@ def timezone_choice(tzname, country=None):
 
 
 def timezone_choices(countries, timezones, key):
-    yield u'', u''
+    yield '', ''
     for iso3166, country in sorted(countries.items(), key=key):
         zones = timezones.get(iso3166, [])
         zones = [timezone_choice(zone, country) for zone in zones]

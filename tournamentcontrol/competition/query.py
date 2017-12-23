@@ -1,5 +1,10 @@
+from django.conf import settings
+from django.db.models import (
+    Case, DecimalField, ExpressionWrapper, F, Func, When,
+)
 from django.db.models.query import QuerySet
 from django.utils import timezone
+from django.utils.module_loading import import_string
 
 
 class DivisionQuerySet(QuerySet):
@@ -29,6 +34,93 @@ class MatchQuerySet(QuerySet):
 
     def videos(self):
         return self.filter(videos__isnull=False).order_by('datetime').distinct()
+
+    def _rank_importance(self):
+        """
+        Find the rank_importance of a match based on the competition hierarchy.
+        """
+        return self.annotate(
+            importance=Case(
+                When(
+                    rank_importance__isnull=False,
+                    then=F('rank_importance')),
+                When(
+                    stage_group__rank_importance__isnull=False,
+                    then=F('stage_group__rank_importance')),
+                When(
+                    stage__rank_importance__isnull=False,
+                    then=F('stage__rank_importance')),
+                When(
+                    stage__division__rank_importance__isnull=False,
+                    then=F('stage__division__rank_importance')),
+                When(
+                    stage__division__season__rank_importance__isnull=False,
+                    then=F('stage__division__season__rank_importance')),
+                When(
+                    stage__division__season__competition__rank_importance__isnull=False,
+                    then=F('stage__division__season__competition__rank_importance')),
+            ),
+        )
+
+
+class LadderEntryQuerySet(QuerySet):
+
+    def _all(self):
+        qs = self.annotate(
+            diff=F('score_for') - F('score_against'),
+            margin=Func(F('score_for') - F('score_against'), function='ABS'),
+        )
+
+        qs = qs.select_related('team__club')
+
+        qs = qs.annotate(
+            division=Case(
+                When(
+                    team__rank_division__isnull=False,
+                    then=F('team__rank_division')),
+                When(
+                    team__division__rank_division__isnull=False,
+                    then=F('team__division__rank_division')),
+            ),
+        )
+
+        qs = qs.annotate(
+            importance=Case(
+                When(
+                    match__rank_importance__isnull=False,
+                    then=F('match__rank_importance')),
+                When(
+                    match__stage_group__rank_importance__isnull=False,
+                    then=F('match__stage_group__rank_importance')),
+                When(
+                    match__stage__rank_importance__isnull=False,
+                    then=F('match__stage__rank_importance')),
+                When(
+                    match__stage__division__rank_importance__isnull=False,
+                    then=F('match__stage__division__rank_importance')),
+                When(
+                    match__stage__division__season__rank_importance__isnull=False,
+                    then=F('match__stage__division__season__rank_importance')),
+                When(
+                    match__stage__division__season__competition__rank_importance__isnull=False,
+                    then=F(
+                        'match__stage__division__season__competition__rank_importance')),
+            ),
+        )
+
+        RANK_POINTS_FUNC = getattr(
+            settings, 'TOURNAMENTCONTROL_RANK_POINTS_FUNC',
+            'tournamentcontrol.competition.rank.points_func'
+        )
+        rank_points = import_string(RANK_POINTS_FUNC)
+        qs = qs.annotate(
+            rank_points=ExpressionWrapper(
+                rank_points() * F('importance'),
+                output_field=DecimalField(),
+            ),
+        )
+
+        return qs
 
 
 class StatisticQuerySet(QuerySet):

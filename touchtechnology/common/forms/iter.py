@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 import os.path
 
 
@@ -29,7 +31,7 @@ class TemplateChoiceIterator(object):
                 pass
 
         if not self.field.required:
-            yield (u"", self.field.empty_label)
+            yield ("", self.field.empty_label)
 
         if choices:
             yield ('Static template', choices)

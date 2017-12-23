@@ -1,23 +1,15 @@
-import unittest
+from __future__ import unicode_literals
 
-from datetime import time
+import unittest
+from datetime import date, time
 
 import django
-
+import six
 from django.conf import settings
-from django.core.urlresolvers import reverse
-from django.test.utils import override_settings
+from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 from touchtechnology.common.tests.factories import UserFactory
-from tournamentcontrol.competition.models import (
-    Club,
-    Division,
-    Match,
-    Season,
-    StageGroup,
-    Team,
-    UndecidedTeam,
-)
+from tournamentcontrol.competition.models import Match, Team
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin
 
@@ -174,10 +166,6 @@ class GoodViewTests(TestCase):
         match = factories.MatchFactory.create()
         self.assertGoodNamespace(match)
 
-    def test_matchvideo(self):
-        video = factories.MatchVideoFactory.create()
-        self.assertGoodNamespace(video)
-
     def test_pool(self):
         pool = factories.StageGroupFactory.create()
         self.assertGoodNamespace(pool)
@@ -268,7 +256,7 @@ class GoodViewTests(TestCase):
             stage=finals, label='Semi 2', round=6,
             home_team=None, home_team_eval='P2',
             away_team=None, away_team_eval='P3')
-        final = factories.MatchFactory.create(
+        factories.MatchFactory.create(
             stage=finals, label='Final', round=7,
             home_team=None, home_team_eval='W', home_team_eval_related=semi_1,
             away_team=None, away_team_eval='W', away_team_eval_related=semi_2)
@@ -320,6 +308,54 @@ class GoodViewTests(TestCase):
                 'admin:fixja:club:person:edit',
                 person.club.pk,
                 person.pk)
+
+    def test_merge_person(self):
+        "Create two people, destructively merge second into the first."
+        club = factories.ClubFactory.create()
+
+        # Not using the PersonFactory because it requires a User, we want a
+        # bare Person instance without that relationship.
+        member1 = club.members.create(first_name='Alice', last_name='User')
+
+        # Our second Person should have the User property, because we want to
+        # transfer that to the first.
+        member2 = factories.PersonFactory.create(club=club)
+
+        # Check our initial setup is as we expect.
+        six.assertCountEqual(
+            self,
+            [
+                ('Alice', 'User', None),
+                (member2.first_name, member2.last_name, member2.user.pk),
+            ],
+            club.members.values_list('first_name', 'last_name', 'user'))
+
+        # Exercise the merge view.
+        with self.login(self.superuser):
+            data = {
+                'first_name': 'Alice',
+                'last_name': 'User',
+                'gender': 'F',
+                'date_of_birth': '1983-04-27',
+                'email': '',
+                'home_phone': '',
+                'work_phone': '',
+                'mobile_phone': '',
+                'user': '',
+                'merge': member2.pk,
+                'keep_old': 'false',
+            }
+            self.post('admin:fixja:club:person:merge', club.pk, member1.pk, data=data)
+            self.response_302()
+
+        # Check the database state after the merge.
+        six.assertCountEqual(
+            self,
+            [
+                ('Alice', 'User', member2.user.pk, 'F', date(1983, 4, 27)),
+            ],
+            club.members.values_list(
+                'first_name', 'last_name', 'user', 'gender', 'date_of_birth'))
 
     def test_edit_clubassociation(self):
         association = factories.ClubAssociationFactory.create()
@@ -771,10 +807,8 @@ class BackendTests(TestCase):
             'title': 'New Team',  # current value
             'short_title': '',
             'names_locked': '0',
-            'timeslots_after_0': '',
-            'timeslots_after_1': '',
-            'timeslots_before_0': '',
-            'timeslots_before_1': '',
+            'timeslots_after': '',
+            'timeslots_before': '',
             'team_clashes': [],
         }
         self.post(division._get_admin_namespace() + ':team:add',
@@ -790,10 +824,8 @@ class BackendTests(TestCase):
             'title': 'Blue',
             'short_title': '',
             'names_locked': '0',
-            'timeslots_after_0': '19',  # new value
-            'timeslots_after_1': '20',  # new value
-            'timeslots_before_0': '',
-            'timeslots_before_1': '',
+            'timeslots_after': '19:20',  # new value
+            'timeslots_before': '',
             'team_clashes': [],
         }
 

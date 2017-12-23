@@ -1,21 +1,18 @@
 # -*- coding: utf-8 -*-
 
 import logging
-import re
-from datetime import date, datetime
+from datetime import datetime
 from decimal import Decimal
 
 import numpy
 from dateutil.parser import parse as date_parse
 from dateutil.relativedelta import relativedelta
-from django.core.cache import caches
 from django.core.serializers import get_serializer
-from django.db.models import Q
+from django.db.models import Case, DecimalField, ExpressionWrapper, F, Q, When
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.module_loading import import_string
 from django.views.generic import dates
-from first import first
 from tournamentcontrol.competition.models import (
     LadderEntry, RankDivision, RankPoints, RankTeam,
 )
@@ -94,42 +91,30 @@ class TeamView(DivisionView):
     def get_context_data(self, **kwargs):
         data = super(TeamView, self).get_context_data(**kwargs)
 
-        cache = self.kwargs.get('cache', 'default')
-        decay = self.kwargs.get('decay', 'tournamentcontrol.competition.rank.no_decay')
-        start = self.kwargs.get('start') or None
-
-        # Try and retrieve the table from the cache, but if it's not available
-        # we'll have to pay the price of generating it.
+        decay = import_string(self.kwargs.get(
+            'decay', 'tournamentcontrol.competition.rank.no_decay'))
         version = "%(year)s-%(month)s-%(day)s" % self.kwargs
-        table = caches[cache].get('rank_table', version=version)
+        at = date_parse(version).date()
 
-        if table is None:
-            at = date_parse(version)
-            decay = import_string(decay)
-            table = _rank(start=start, at=at, decay=decay)
-
-            # Using a timeout of None will make the key persist indefinitely.
-            # In the interim this can serve as a poor mans persistence model.
-            caches[cache].set('rank_table', table, version=version, timeout=None)
-
-        # Find the RankTeam instance from the computed table.
         division = data['object']
-        team = first(
-            team for team in table[division]
-            if team.club.slug == self.kwargs['team']
-        )
+        team = division.rankteam_set.get(club__slug=self.kwargs['team'])
 
         # Transform the data for template consumption.
-        rows = zip(
-            table[division][team]['matches'],
-            table[division][team]['points'],
-            table[division][team]['points_decay'],
-        )
+        rows = [
+            (each.match, each.rank_points, each.rank_points * decay(each, at=at))
+            for each in LadderEntry.objects.filter(
+                bye=0,
+                division=division.pk,
+                team__club__slug=self.kwargs['team'])
+        ]
 
         # Punch this into the context to display in the front end.
         data['team'] = team
         data['table'] = rows
-        data['points'] = numpy.mean(table[division][team]['points_decay'])
+        data['points'] = numpy.mean([
+            points_decay
+            for match, points, points_decay in rows
+        ])
 
         return data
 
@@ -159,11 +144,50 @@ def base(ladder_entry, win=15, draw=10, loss=5, forfeit_against=-20):
     ])
 
 
+def correct_points_func(win=15.0, draw=10.0, loss=5.0, forfeit_against=-20.0):
+    "This version resolves the bug from the original implementation."
+    return ExpressionWrapper(
+        F('win') * win +
+        F('draw') * draw +
+        F('loss') * loss +
+        F('forfeit_against') * forfeit_against +
+        Case(
+            When(Q(win=1, margin__gt=15), then=win * 2),
+            When(Q(win=1, margin__gt=10), then=win),
+            When(Q(win=1, margin__gt=5), then=win * 0.5),
+            When(Q(loss=1, margin__lt=2), then=loss * 0.5),
+            default=0,
+        ),
+        output_field=DecimalField(),
+    )
+
+
+def points_func(win=15.0, draw=10.0, loss=5.0, forfeit_against=-20.0):
+    "This version preserves the bug from the original implementation."
+    return ExpressionWrapper(
+        F('win') * win +
+        F('draw') * draw +
+        F('loss') * loss +
+        F('forfeit_against') * forfeit_against +
+        # The original implementation did not choose one of these, it applied
+        # all that were true. For the winning bonuses this meant a massive
+        # accumulator for blowout scores (1.5 times greater than was intended).
+        Case(
+            When(Q(win=1, margin__gt=15), then=win * 3.5),
+            When(Q(win=1, margin__gt=10), then=win * 1.5),
+            When(Q(win=1, margin__gt=5), then=win * 0.5),
+            When(Q(loss=1, margin__lt=2), then=loss * 0.5),
+            default=0,
+        ),
+        output_field=DecimalField(),
+    )
+
+
 def no_decay(ladder_entry, at):
     return Constants.ONE
 
 
-def _rank(decay=no_decay, start=None, at=None, debug=None):
+def _rank(decay=no_decay, start=None, at=None, **kwargs):
     if start is None:
         start = LadderEntry.objects.earliest('match').match.date
 
@@ -173,43 +197,23 @@ def _rank(decay=no_decay, start=None, at=None, debug=None):
     if isinstance(at, datetime):
         at = at.date()
 
-    if debug is None:
-        debug = r'^$'
-    debug_re = re.compile(debug, re.I)
-
     ladder_entry_q = Q(match__date__gte=start, match__date__lt=at,
-                       forfeit_for=0)
+                       forfeit_for=0, importance__isnull=False, division__isnull=False)
     ladder_entries = LadderEntry.objects.select_related(
         'match__stage__division__season__competition').order_by('match')
 
     table = {}
 
     for ladder_entry in ladder_entries.filter(ladder_entry_q):
-        importance = ladder_entry.match.get_rank_importance()
-        division = ladder_entry.team.get_rank_division()
-        if importance is None or division is None:
-            continue
-        obj, __ = RankTeam.objects.get_or_create(club=ladder_entry.team.club, division=division)
-        points = base(ladder_entry) * importance
+        obj, __ = RankTeam.objects.get_or_create(club=ladder_entry.team.club, division=ladder_entry.division)
+        points = ladder_entry.rank_points * ladder_entry.importance
         points_decay = points * decay(ladder_entry, at)
         if points_decay:
-            team = table.setdefault(division, {}).setdefault(obj, {})
-            team.setdefault('importance', []).append(importance)
+            team = table.setdefault(obj.division, {}).setdefault(obj, {})
+            team.setdefault('importance', []).append(ladder_entry.importance)
             team.setdefault('points', []).append(points)
             team.setdefault('points_decay', []).append(points_decay)
             team.setdefault('matches', []).append(ladder_entry.match)
-            if debug_re.match(obj.club.title):
-                logger.debug(
-                    u'%r\t%-20s\t%-20s\t%-20s\twin=%s\tmargin=%s\t%s → %s\t%s',
-                    ladder_entry.match,
-                    ladder_entry.team,
-                    division,
-                    ladder_entry.opponent,
-                    ladder_entry.win,
-                    ladder_entry.margin,
-                    points,
-                    points_decay,
-                    importance)
 
     return table
 

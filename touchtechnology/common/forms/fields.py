@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 import json
 import re
 from datetime import date, datetime, time
@@ -9,35 +11,17 @@ from django.conf import settings
 from django.db.models import Min
 from django.utils import timezone
 from django.utils.encoding import smart_str
+from django.utils.html import escape
 from django.utils.translation import ugettext_lazy as _
 from mptt.forms import TreeNodeChoiceField
-from touchtechnology.common.forms.icheck import iCheckSelectMultiple
+from namedentities import named_entities
 from touchtechnology.common.forms.iter import TemplateChoiceIterator
 from touchtechnology.common.forms.mixins import LabelFromInstanceMixin
 from touchtechnology.common.forms.widgets import (
-    BootstrapGoogleMapsWidget, HTMLWidget, RadioFieldRenderer,
-    SelectDateHiddenWidget, SelectDateTimeHiddenWidget, SelectDateTimeWidget,
-    SelectDateWidget, SelectTimeHiddenWidget, SelectTimeWidget,
+    BootstrapGoogleMapsWidget, HTMLWidget, SelectDateHiddenWidget,
+    SelectDateTimeHiddenWidget, SelectDateTimeWidget, SelectDateWidget,
+    SelectTimeHiddenWidget, SelectTimeWidget,
 )
-
-
-class BooleanSelect(forms.RadioSelect):
-    renderer = RadioFieldRenderer
-
-    def render(self, name, value, *args, **kwargs):
-        value = int(value or '0')
-        return super(BooleanSelect, self).render(name, value, *args, **kwargs)
-
-
-class BooleanChoiceField(forms.TypedChoiceField):
-    widget = BooleanSelect
-
-    def __init__(self, positive_label=_('Yes'), negative_label=_('No'),
-                 *args, **kwargs):
-        super(BooleanChoiceField, self).__init__(
-            choices=((1, positive_label), (0, negative_label)),
-            coerce=boolean_choice_field_coerce,
-            *args, **kwargs)
 
 
 class EmailField(forms.EmailField):
@@ -78,7 +62,7 @@ class HTMLField(forms.CharField):
 
     def clean(self, value):
         if isinstance(value, six.string_types):
-            value = value.encode('ascii', 'xmlcharrefreplace')
+            value = named_entities(escape(value))
         return super(HTMLField, self).clean(value)
 
 
@@ -243,7 +227,7 @@ class TemplatePathFormField(forms.ChoiceField):
     def __init__(self, template_base, template_folder, match=None,
                  recursive=False, required=True, widget=None, label=None,
                  initial=None, help_text=None, cache_choices=False,
-                 empty_label=_(u"Default"),
+                 empty_label=_("Default"),
                  # This will never be used, but it's now a CharField in the
                  # database so we need to pull it out of the keyword
                  # arguments.
@@ -288,10 +272,6 @@ class SitemapNodeModelChoiceField(ModelChoiceField):
             label_from_instance=label_from_instance, *args, **kwargs)
 
 
-class iCheckModelMultipleChoiceField(ModelMultipleChoiceField):
-    widget = iCheckSelectMultiple
-
-
 def boolean_choice_field_coerce(value):
     return bool(int(value))
 
@@ -306,4 +286,4 @@ class MinTreeNodeChoiceField(TreeNodeChoiceField):
 
     def label_from_instance(self, obj):
         level = obj.level - self.minimum_level
-        return u'%s %s' % (self.level_indicator * level, smart_str(obj))
+        return '%s %s' % (self.level_indicator * level, smart_str(obj))

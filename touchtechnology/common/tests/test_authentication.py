@@ -1,5 +1,7 @@
 # encoding=utf8
 
+from __future__ import unicode_literals
+
 import re
 
 from django.core import mail
@@ -88,4 +90,4 @@ class PasswordResetTests(TestCase):
         # check that the URL in the email body works
         link = url_re.findall(mail.outbox[0].body)[0]
         self.get(urlparse(link).path)
-        self.assertResponseContains(u"<h1>Enter new password</h1>")
+        self.assertResponseContains("<h1>Enter new password</h1>")

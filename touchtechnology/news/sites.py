@@ -1,10 +1,12 @@
+from __future__ import unicode_literals
+
 import magic
 from dateutil.relativedelta import relativedelta
 from django.conf.urls import include, url
 from django.contrib.syndication.views import Feed
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.utils.feedgenerator import Atom1Feed, Enclosure, Rss201rev2Feed
+from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed
 from touchtechnology.common.sites import Application
 from touchtechnology.news.app_settings import PAGINATE_BY
 from touchtechnology.news.decorators import (
@@ -163,7 +165,7 @@ class NewsSite(Application):
             date_list = queryset.dates('published', 'month')
 
         # compatibility with date_based.archive_year
-        year = unicode(date.year)
+        year = str(date.year)
 
         context = {
             'date_list': date_list,

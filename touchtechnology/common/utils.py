@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 import logging
 from decimal import Decimal
 from operator import attrgetter, or_
@@ -36,7 +38,7 @@ class FauxNodeMeta(object):
 
 class FauxNode(NodeRelationMixin):
 
-    REPR_FMT = u'<{class}: {title} ({tree_id}:{lft},{rght})>'
+    REPR_FMT = '<{class}: {title} ({tree_id}:{lft},{rght})>'
 
     def __init__(self, app, title, short_title, slug, level, tree_id,
                  lft=None, rght=None, parent=None,

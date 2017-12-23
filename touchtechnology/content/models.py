@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import unicode_literals
+
 import logging
 from importlib import import_module
 
 from django.contrib.contenttypes.fields import GenericRelation
 from django.core.cache import caches
 from django.db import models
+from django.db.models import BooleanField, DateTimeField
 from django.utils.encoding import python_2_unicode_compatible
 from django.utils.module_loading import import_string
 from django.utils.text import slugify
 from django.utils.translation import ugettext, ugettext_lazy as _
 from first import first
 from touchtechnology.admin.mixins import AdminUrlMixin
-from touchtechnology.common.db.models import (
-    BooleanField, DateTimeField, HTMLField, TemplatePathField,
-)
+from touchtechnology.common.db.models import HTMLField, TemplatePathField
 from touchtechnology.content.app_settings import (
     NODE_CACHE, PAGE_CONTENT_CLASSES, PAGE_TEMPLATE_BASE, PAGE_TEMPLATE_FOLDER,
     PAGE_TEMPLATE_REGEX,
@@ -87,13 +88,14 @@ class Content(models.Model):
     copy = HTMLField(blank=True)
 
     def __repr__(self):
-        return u'<Content: #%d>' % self.pk
+        return '<Content: #%d>' % self.pk
 
 
 class PageContent(models.Model):
 
     page = models.ForeignKey(
-        Page, related_name='content', verbose_name=_("Page"))
+        Page, related_name='content', verbose_name=_("Page"),
+        on_delete=models.PROTECT)
     label = models.SlugField(
         max_length=20, choices=PAGE_CONTENT_CLASS_CHOICES,
         default=PAGE_CONTENT_CLASS_DEFAULT, verbose_name=_("CSS class"))
@@ -106,7 +108,7 @@ class PageContent(models.Model):
         ordering = ('sequence',)
 
     def __repr__(self):
-        return u'<PageContent: #%d, page=%d>' % (self.pk, self.page.pk)
+        return '<PageContent: #%d, page=%d>' % (self.pk, self.page.pk)
 
 
 @python_2_unicode_compatible
@@ -122,7 +124,8 @@ class Chunk(AdminUrlModel):
 class NodeContent(models.Model):
 
     node = models.ForeignKey(
-        'common.SitemapNode', related_name='contents', verbose_name=_("Node"))
+        'common.SitemapNode', related_name='contents', verbose_name=_("Node"),
+        on_delete=models.PROTECT)
     copy = HTMLField(blank=True, verbose_name=_("Page Copy"))
 
 
@@ -229,5 +232,5 @@ class Redirect(AdminUrlModel):
     def __str__(self):
         if self.label:
             return self.label
-        return u'{src} → {dst}'.format(
+        return '{src} → {dst}'.format(
             src=self.source_url, dst=self.destination_url)

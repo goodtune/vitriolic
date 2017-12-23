@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 from django.template import Context, Template
 from django.test.utils import override_settings
 from django.utils.http import urlencode
@@ -16,7 +18,7 @@ class CssifyTest(TestCase):
         self.assertEqual('some_normal_slug', value)
 
     def test_cssify_unicode(self):
-        context = Context({'value': u'some-normal-slug'})
+        context = Context({'value': 'some-normal-slug'})
         value = CSSIFY_TEMPLATE.render(context)
         self.assertEqual('some_normal_slug', value)
 

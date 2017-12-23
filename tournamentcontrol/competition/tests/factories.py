@@ -1,10 +1,11 @@
+from __future__ import unicode_literals
+
 import datetime
 
 import factory
 import factory.fuzzy
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-
 from tournamentcontrol.competition import models, utils
 
 
@@ -32,7 +33,7 @@ class RankDivisionFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.RankDivision
 
-    title = factory.Sequence(lambda n: u"Division %d" % n)
+    title = factory.Sequence(lambda n: "Division %d" % n)
 
 
 class ClubFactory(SitemapNodeBaseFactory):
@@ -46,7 +47,7 @@ class CompetitionFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Competition
 
-    title = factory.Sequence(lambda n: u"Competition %d" % n)
+    title = factory.Sequence(lambda n: "Competition %d" % n)
 
 
 class ClubRoleFactory(SitemapNodeBaseFactory):
@@ -70,7 +71,7 @@ class SeasonFactory(OrderedSitemapNodeFactory):
         model = models.Season
 
     title = factory.Sequence(
-        lambda n: unicode(range(2015, 1900, -1)[n]))
+        lambda n: str(range(2015, 1900, -1)[n]))
     timezone = factory.Faker('timezone')
 
     competition = factory.SubFactory(CompetitionFactory)
@@ -99,7 +100,7 @@ class VenueFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Venue
 
-    title = factory.Sequence(lambda n: u"Venue %d" % (n + 1))
+    title = factory.Sequence(lambda n: "Venue %d" % (n + 1))
     timezone = factory.SelfAttribute('season.timezone')
 
     season = factory.SubFactory(SeasonFactory)
@@ -109,7 +110,7 @@ class GroundFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Ground
 
-    title = factory.Sequence(lambda n: u"Ground %d" % (n + 1))
+    title = factory.Sequence(lambda n: "Ground %d" % (n + 1))
     timezone = factory.SelfAttribute('venue.timezone')
 
     venue = factory.SubFactory(VenueFactory)
@@ -119,8 +120,8 @@ class DivisionFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Division
 
-    title = factory.Sequence(lambda n: u"Division %d" % (n + 1))
-    points_formula = u"3*win + 2*draw + 1*loss"
+    title = factory.Sequence(lambda n: "Division %d" % (n + 1))
+    points_formula = "3*win + 2*draw + 1*loss"
     forfeit_for_score = 5
     forfeit_against_score = 0
     include_forfeits_in_played = True
@@ -141,7 +142,7 @@ class TeamFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Team
 
-    title = factory.Sequence(lambda n: u"Team %d" % (n + 1))
+    title = factory.Sequence(lambda n: "Team %d" % (n + 1))
 
     club = factory.SubFactory(ClubFactory)
     division = factory.SubFactory(DivisionFactory)
@@ -151,7 +152,7 @@ class StageFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Stage
 
-    title = factory.Sequence(lambda n: u"Stage %d" % (n + 1))
+    title = factory.Sequence(lambda n: "Stage %d" % (n + 1))
 
     division = factory.SubFactory(DivisionFactory)
 
@@ -160,7 +161,7 @@ class StageGroupFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.StageGroup
 
-    title = factory.Sequence(lambda n: u"Pool %d" % (n + 1))
+    title = factory.Sequence(lambda n: "Pool %d" % (n + 1))
 
     stage = factory.SubFactory(StageFactory)
 
@@ -191,15 +192,6 @@ class MatchFactory(factory.DjangoModelFactory):
     time = factory.LazyAttribute(lambda o: o.datetime.time())
 
 
-class MatchVideoFactory(factory.DjangoModelFactory):
-    class Meta:
-        model = models.MatchVideo
-
-    match = factory.SubFactory(MatchFactory)
-
-    url = factory.Faker('uri')
-
-
 class UserFactory(factory.DjangoModelFactory):
     class Meta:
         model = get_user_model()
@@ -207,8 +199,8 @@ class UserFactory(factory.DjangoModelFactory):
     first_name = factory.Faker('first_name')
     last_name = factory.Faker('last_name')
 
-    username = factory.Sequence(lambda n: u'user%04d' % (n + 1))
-    email = factory.Sequence(lambda n: u"user%03d@example.com" % (n + 1))
+    username = factory.Sequence(lambda n: "user%04d" % (n + 1))
+    email = factory.Sequence(lambda n: "user%03d@example.com" % (n + 1))
 
     password = 'crypt$$azoV33FJ2h3AA'  # pre-crypted "password"
     is_active = True
@@ -253,4 +245,4 @@ class DrawFormatFactory(factory.DjangoModelFactory):
     name = factory.LazyAttribute(
         lambda a: 'Round Robin ({}/{} teams)'.format(a.teams - 1, a.teams))
     text = factory.LazyAttribute(
-        lambda a: utils.round_robin_format(range(a.teams + 1)))
+        lambda a: utils.round_robin_format([t for t in range(a.teams + 1)]))

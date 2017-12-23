@@ -1,17 +1,19 @@
 from datetime import timedelta
 
-from itertools import izip_longest
-
+import six
 from dateutil.parser import parse
 from dateutil.rrule import DAILY, WEEKLY
-
 from django import template
 from django.apps import apps
 from django.db.models import Q
 from django.template.loader import get_template
 from django.utils import timezone
-
 from first import first
+
+try:
+    from itertools import zip_longest
+except ImportError:
+    from itertools import izip_longest as zip_longest
 
 register = template.Library()
 
@@ -38,7 +40,7 @@ def opponent(match, team):
 def next_date(context, season, offset=0, datestr=None):
     from tournamentcontrol.competition.models import Match, Season
 
-    if isinstance(season, basestring):
+    if isinstance(season, six.string_types):
         season = Season.objects.get(pk=season)
 
     # TODO make the offset a value stored on the competition
@@ -193,7 +195,7 @@ def players(team, pad_to=None):
 
 @register.filter
 def pair(i1, i2):
-    return list(izip_longest(i1, i2))
+    return list(zip_longest(i1, i2))
 
 
 @register.inclusion_tag(
@@ -213,7 +215,7 @@ def statistics(match):
 
     context = {
         'match': match,
-        'lines': list(izip_longest(home_stats, away_stats)),
+        'lines': list(zip_longest(home_stats, away_stats)),
         'home_stats': home_stats,
         'away_stats': away_stats,
     }

@@ -32,27 +32,29 @@ class UsersGroups(AdminComponent):
         return 'touchtechnology/admin'
 
     def get_urls(self):
+        user_patterns = ([
+            url(r'^$', self.list_users, name='list'),
+            url(r'^add/$', self.edit_user, name='add'),
+            url(r'^(?P<pk>\d+)/$', self.edit_user, name='edit'),
+            url(r'^(?P<pk>\d+)/delete/$', self.delete_user, name='delete'),
+            url(r'^(?P<pk>\d+)/permission/$',
+                self.perms_user, name='perms'),
+        ], self.app_name)
+
+        group_patterns = ([
+            url(r'^$', self.list_groups, name='list'),
+            url(r'^add/$', self.edit_group, name='add'),
+            url(r'^(?P<pk>\d+)/$', self.edit_group, name='edit'),
+            url(r'^(?P<pk>\d+)/delete/$',
+                self.delete_group, name='delete'),
+            url(r'^(?P<pk>\d+)/permission/$',
+                self.perms_group, name='perms'),
+        ], self.app_name)
+
         urlpatterns = [
             url(r'^$', self.index, name='index'),
-
-            url(r'^user/', include([
-                url(r'^$', self.list_users, name='list'),
-                url(r'^add/$', self.edit_user, name='add'),
-                url(r'^(?P<pk>\d+)/$', self.edit_user, name='edit'),
-                url(r'^(?P<pk>\d+)/delete/$', self.delete_user, name='delete'),
-                url(r'^(?P<pk>\d+)/permission/$',
-                    self.perms_user, name='perms'),
-            ], namespace='users')),
-
-            url(r'^group/', include([
-                url(r'^$', self.list_groups, name='list'),
-                url(r'^add/$', self.edit_group, name='add'),
-                url(r'^(?P<pk>\d+)/$', self.edit_group, name='edit'),
-                url(r'^(?P<pk>\d+)/delete/$',
-                    self.delete_group, name='delete'),
-                url(r'^(?P<pk>\d+)/permission/$',
-                    self.perms_group, name='perms'),
-            ], namespace='groups')),
+            url(r'^user/', include(user_patterns, namespace='users')),
+            url(r'^group/', include(group_patterns, namespace='groups')),
         ]
         return urlpatterns
 

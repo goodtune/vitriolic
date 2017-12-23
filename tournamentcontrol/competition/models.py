@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import unicode_literals
+
 import collections
 import logging
 import uuid
@@ -9,33 +11,40 @@ from operator import attrgetter
 
 import django
 import pytz
+import six
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
 from django import forms
 from django.conf import settings
+from django.contrib.postgres import fields as PG
 from django.core import validators
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Count, Min, Q, Sum
-from django.db.models.deletion import SET_NULL
+from django.db.models import (
+    BooleanField, Count, DateField, DateTimeField, Min, Q, Sum, TimeField,
+)
+from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
 from django.template import Context, Template
 from django.template.loader import get_template
 from django.utils import timezone
+from django.utils.encoding import python_2_unicode_compatible
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
 from touchtechnology.common.db.models import (
-    BooleanField, DateField, DateTimeField, ForeignKey, HTMLField,
-    LocationField, ManyToManyField, TimeField,
+    ForeignKey, HTMLField, LocationField, ManyToManyField,
 )
 from touchtechnology.common.models import SitemapNodeBase
 from tournamentcontrol.competition.constants import (
     GENDER_CHOICES, PYTZ_TIME_ZONE_CHOICES, SEASON_MODE_CHOICES, WIN_LOSE,
 )
+from tournamentcontrol.competition.managers import (
+    LadderEntryManager, MatchManager,
+)
 from tournamentcontrol.competition.mixins import ModelDiffMixin
 from tournamentcontrol.competition.query import (
-    DivisionQuerySet, MatchQuerySet, StageQuerySet, StatisticQuerySet,
+    DivisionQuerySet, StageQuerySet, StatisticQuerySet,
 )
 from tournamentcontrol.competition.signals import match_forfeit
 from tournamentcontrol.competition.utils import (
@@ -66,7 +75,8 @@ class AdminUrlMixin(BaseAdminUrlMixin):
 class RankDivisionMixin(models.Model):
     rank_division_parent_attr = None
 
-    rank_division = models.ForeignKey('RankDivision', null=True, blank=True)
+    rank_division = models.ForeignKey(
+        'RankDivision', null=True, blank=True, on_delete=PROTECT)
 
     @property
     def rank_division_parent(self):
@@ -90,7 +100,7 @@ class RankImportanceMixin(models.Model):
 
     @property
     def rank_importance_parent(self):
-        if isinstance(self.rank_importance_parent_attr, basestring):
+        if isinstance(self.rank_importance_parent_attr, six.string_types):
             return getattr(self, self.rank_importance_parent_attr)
         if isinstance(self.rank_importance_parent_attr, (list, tuple)):
             for attr in self.rank_importance_parent_attr:
@@ -164,15 +174,15 @@ class TwitterField(models.CharField):
             form_class=form_class, **kwargs)
 
 
+@python_2_unicode_compatible
 class OrderedSitemapNode(SitemapNodeBase):
 
     order = models.PositiveIntegerField(default=1)
 
     def __repr__(self):
-        return u'<{cls}: {title}>'.format(cls=self.__class__.__name__,
-                                          title=self.title)
+        return '<{}: {}>'.format(self.__class__.__name__, self.title)
 
-    def __unicode__(self):
+    def __str__(self):
         return self.title
 
     class Meta:
@@ -195,6 +205,7 @@ class Competition(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         pass
 
 
+@python_2_unicode_compatible
 class Club(AdminUrlMixin, SitemapNodeBase):
 
     email = models.EmailField(max_length=255, blank=True)
@@ -208,7 +219,8 @@ class Club(AdminUrlMixin, SitemapNodeBase):
                          verbose_name=_('Primary contact'),
                          label_from_instance='get_full_name',
                          help_text=_("Appears on the front-end with other "
-                                     "club information."))
+                                     "club information."),
+                         on_delete=PROTECT)
     primary_position = models.CharField(max_length=200, blank=True,
                                         verbose_name=_('Position'),
                                         help_text=_('Position of the primary '
@@ -248,7 +260,7 @@ class Club(AdminUrlMixin, SitemapNodeBase):
     def _get_admin_namespace(self):
         return 'admin:fixja:club'
 
-    def __unicode__(self):
+    def __str__(self):
         return self.title
 
     @property
@@ -270,8 +282,8 @@ class RankDivision(AdminUrlMixin, OrderedSitemapNode):
 
 class RankTeam(models.Model):
 
-    club = models.ForeignKey(Club)
-    division = models.ForeignKey(RankDivision)
+    club = models.ForeignKey(Club, on_delete=CASCADE)
+    division = models.ForeignKey(RankDivision, on_delete=CASCADE)
 
     class Meta:
         ordering = ('division',)
@@ -289,7 +301,7 @@ class RankTeam(models.Model):
 
 class RankPoints(models.Model):
 
-    team = models.ForeignKey(RankTeam)
+    team = models.ForeignKey(RankTeam, on_delete=CASCADE)
     points = models.DecimalField(default=0, max_digits=6, decimal_places=3)
     date = models.DateField()
 
@@ -300,6 +312,7 @@ class RankPoints(models.Model):
         return '%r, %r, %r' % (self.team, self.points, self.date)
 
 
+@python_2_unicode_compatible
 class Person(AdminUrlMixin, models.Model):
     """
     This is not tied to the `django.contrib.auth.models.User` model because
@@ -313,7 +326,7 @@ class Person(AdminUrlMixin, models.Model):
         primary_key=True, default=uuid.uuid4, editable=False)
 
     club = ForeignKey('competition.Club', related_name='members',
-                      label_from_instance='title')
+                      label_from_instance='title', on_delete=PROTECT)
 
     first_name = models.CharField(max_length=50)
     last_name = models.CharField(max_length=50)
@@ -327,7 +340,7 @@ class Person(AdminUrlMixin, models.Model):
     mobile_phone = models.CharField(max_length=30, blank=True)
 
     user = models.OneToOneField(
-        settings.AUTH_USER_MODEL, blank=True, null=True)
+        settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=SET_NULL)
 
     def _get_admin_namespace(self):
         return 'admin:fixja:club:person'
@@ -350,12 +363,12 @@ class Person(AdminUrlMixin, models.Model):
         ordering = ('last_name', 'first_name')
         verbose_name_plural = 'people'
 
-    def __unicode__(self):
+    def __str__(self):
         return self.get_full_name
 
     @property
     def get_full_name(self):
-        return u'%s, %s' % (self.last_name, self.first_name)
+        return '{}, {}'.format(self.last_name, self.first_name)
 
     @cached_property
     def age(self):
@@ -391,7 +404,8 @@ class Person(AdminUrlMixin, models.Model):
 class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     rank_importance_parent_attr = 'competition'
 
-    competition = ForeignKey(Competition, related_name='seasons')
+    competition = ForeignKey(
+        Competition, related_name='seasons', on_delete=PROTECT)
     hashtag = models.CharField(max_length=30, blank=True, null=True,
                                validators=[validate_hashtag],
                                verbose_name="Hash Tag",
@@ -438,7 +452,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         return (self.competition_id, self.pk)
 
     def __repr__(self):
-        return u'<Season: %s - %s>' % (self.competition.title, self.title)
+        return '<Season: {} - {}>'.format(self.competition, self)
 
     @property
     def datetimes(self):
@@ -530,7 +544,7 @@ class Venue(Place):
     below. A match will be scheduled to take place on either at a venue or
     on a particular ground.
     """
-    season = ForeignKey(Season, related_name='venues')
+    season = ForeignKey(Season, related_name='venues', on_delete=PROTECT)
 
     def _get_admin_namespace(self):
         return 'admin:fixja:competition:season:venue'
@@ -544,7 +558,7 @@ class Ground(Place):
     A ground (in some sports it may be a court or field) is an individual
     playing surface at a given venue.
     """
-    venue = ForeignKey(Venue, related_name='grounds')
+    venue = ForeignKey(Venue, related_name='grounds', on_delete=PROTECT)
 
     def _get_admin_namespace(self):
         return 'admin:fixja:competition:season:venue:ground'
@@ -561,7 +575,7 @@ class Division(AdminUrlMixin, ModelDiffMixin, RankDivisionMixin,
     """
     rank_importance_parent_attr = 'season'
 
-    season = ForeignKey(Season, related_name='divisions')
+    season = ForeignKey(Season, related_name='divisions', on_delete=PROTECT)
 
     points_formula = LadderPointsField(blank=True, null=True,
                                        verbose_name=_("Points system"))
@@ -621,11 +635,12 @@ class Division(AdminUrlMixin, ModelDiffMixin, RankDivisionMixin,
         return res
 
 
+@python_2_unicode_compatible
 class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     rank_importance_parent_attr = 'division'
 
     division = ForeignKey(Division, related_name='stages',
-                          label_from_instance='title')
+                          label_from_instance='title', on_delete=PROTECT)
     follows = ForeignKey('self', blank=True, null=True, on_delete=SET_NULL,
                          related_name='preceeds', label_from_instance='title',
                          help_text=_("When progressing teams into this stage, "
@@ -679,7 +694,7 @@ class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         return (self.division.season.competition_id, self.division.season_id,
                 self.division_id, self.pk)
 
-    def __unicode__(self):
+    def __str__(self):
         return self.title
 
     @property
@@ -737,7 +752,7 @@ class StageGroup(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     """
     rank_importance_parent_attr = 'stage'
 
-    stage = ForeignKey(Stage, related_name='pools')
+    stage = ForeignKey(Stage, related_name='pools', on_delete=PROTECT)
     carry_ladder = BooleanField(default=False,
                                 verbose_name="Carry over points",
                                 help_text=_("Set this to <b>Yes</b> if the "
@@ -779,20 +794,19 @@ class StageGroup(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     def matches_by_date(self):
         tzinfo = timezone.get_current_timezone()
         res = collections.OrderedDict()
-        for match in self.matches.select_related(
-                    'play_at', 'stage__division',
-                    'home_team__club', 'home_team__division',
-                    'away_team__club', 'away_team__division',
-                ).annotate(
-                    statistics_count=Count('statistics'),
-                    video_count=Count('videos'),
-                ):
+        matches = self.matches.select_related(
+            'play_at', 'stage__division', 'home_team__club',
+            'home_team__division', 'away_team__club', 'away_team__division')
+        for match in matches.annotate(
+                statistics_count=Count('statistics'),
+                video_count=Count('videos')):
             res.setdefault(self, collections.OrderedDict()) \
                .setdefault(match.get_date(tzinfo), []) \
                .append(match)
         return res
 
 
+@python_2_unicode_compatible
 class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
     """
     A model which represents a team in a competition. A team may not yet be
@@ -815,7 +829,8 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
     club = ForeignKey(Club, blank=True, null=True, on_delete=SET_NULL,
                       related_name='teams', label_from_instance='title')
     division = ForeignKey(Division, blank=True, null=True,
-                          related_name='teams', label_from_instance='title')
+                          related_name='teams', label_from_instance='title',
+                          on_delete=PROTECT)
     stage_group = ForeignKey(StageGroup, verbose_name=_('Pool'),
                              blank=True, null=True, on_delete=SET_NULL,
                              related_name='teams', label_from_instance='title')
@@ -880,7 +895,7 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
     def __repr__(self):
         return '<Team: %s>' % self.title
 
-    def __unicode__(self):
+    def __str__(self):
         return self.title
 
     @property
@@ -947,18 +962,13 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
     def matches_by_date(self):
         tzinfo = timezone.get_current_timezone()
         res = collections.OrderedDict()
-        for m in self.matches.select_related(
-                    'play_at', 'stage__division', 'stage_group',
-                    'home_team__club', 'home_team__division',
-                    'away_team__club', 'away_team__division',
-                ).annotate(
-                    statistics_count=Count('statistics'),
-                    videos_count=Count('videos'),
-                ):
+        matches = self.matches.select_related(
+            'play_at', 'stage__division', 'stage_group', 'home_team__club',
+            'home_team__division', 'away_team__club', 'away_team__division')
+        for m in matches.annotate(
+                statistics_count=Count('statistics'),
+                videos_count=Count('videos')):
             res.setdefault(m.get_date(tzinfo), []).append(m)
-            # res.setdefault(self, collections.OrderedDict()) \
-            #    .setdefault(match.get_date(tzinfo), []) \
-            #    .append(match)
         return res
 
 
@@ -976,6 +986,7 @@ class ByeTeam(object):
         raise NotImplementedError
 
 
+@python_2_unicode_compatible
 class UndecidedTeam(AdminUrlMixin, models.Model):
     """
     A model which represents a team in a competition that is dependant on the
@@ -986,7 +997,7 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
     formula = models.CharField(max_length=20, blank=True)
     label = models.CharField(max_length=30, blank=True)
     stage = ForeignKey(Stage, related_name='undecided_teams',
-                       label_from_instance='title')
+                       label_from_instance='title', on_delete=PROTECT)
     stage_group = ForeignKey(StageGroup, blank=True, null=True,
                              on_delete=SET_NULL,
                              related_name='undecided_teams',
@@ -997,7 +1008,7 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
         ordering = ('stage_group', 'formula')
         # verbose_name = 'team'
 
-    def __unicode__(self):
+    def __str__(self):
         return self.title
 
     def _get_admin_namespace(self):
@@ -1042,15 +1053,16 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
         return home | away
 
 
+@python_2_unicode_compatible
 class ClubRole(AdminUrlMixin, models.Model):
     competition = ForeignKey(Competition, related_name='club_roles',
-                             label_from_instance='title')
+                             label_from_instance='title', on_delete=PROTECT)
     name = models.CharField(max_length=50)
 
     class Meta:
         ordering = ('name',)
 
-    def __unicode__(self):
+    def __str__(self):
         return self.name
 
     def _get_admin_namespace(self):
@@ -1061,8 +1073,8 @@ class ClubRole(AdminUrlMixin, models.Model):
 
 
 class ClubAssociation(AdminUrlMixin, models.Model):
-    club = ForeignKey(Club, related_name='staff', label_from_instance='title')
-    person = ForeignKey(Person, label_from_instance='get_full_name')
+    club = ForeignKey(Club, related_name='staff', label_from_instance='title', on_delete=PROTECT)
+    person = ForeignKey(Person, label_from_instance='get_full_name', on_delete=PROTECT)
     roles = ManyToManyField(ClubRole, label_from_instance='name')
 
     class Meta:
@@ -1078,15 +1090,16 @@ class ClubAssociation(AdminUrlMixin, models.Model):
         return (self.club_id, self.pk)
 
 
+@python_2_unicode_compatible
 class TeamRole(AdminUrlMixin, models.Model):
     competition = ForeignKey(Competition, related_name='team_roles',
-                             label_from_instance='title')
+                             label_from_instance='title', on_delete=PROTECT)
     name = models.CharField(max_length=50)
 
     class Meta:
         ordering = ('name',)
 
-    def __unicode__(self):
+    def __str__(self):
         return self.name
 
     def _get_admin_namespace(self):
@@ -1096,15 +1109,16 @@ class TeamRole(AdminUrlMixin, models.Model):
         return (self.competition_id, self.pk)
 
 
+@python_2_unicode_compatible
 class TeamAssociation(AdminUrlMixin, models.Model):
-    team = ForeignKey(Team, related_name='people')
-    person = ForeignKey(Person, null=True, label_from_instance='get_full_name')
+    team = ForeignKey(Team, related_name='people', on_delete=PROTECT)
+    person = ForeignKey(Person, null=True, label_from_instance='get_full_name', on_delete=PROTECT)
     roles = ManyToManyField(TeamRole, blank=True, label_from_instance='name')
     number = models.IntegerField(blank=True, null=True)
     is_player = BooleanField(default=True)
 
-    def __unicode__(self):
-        return unicode(self.person)
+    def __str__(self):
+        return self.person
 
     class Meta:
         ordering = (
@@ -1140,9 +1154,9 @@ class TeamAssociation(AdminUrlMixin, models.Model):
 
 
 class SeasonAssociation(models.Model):
-    club = models.ForeignKey(Club, related_name='officials')
-    season = models.ForeignKey(Season, related_name='officials')
-    person = ForeignKey(Person, label_from_instance='get_full_name')
+    club = models.ForeignKey(Club, related_name='officials', on_delete=PROTECT)
+    season = models.ForeignKey(Season, related_name='officials', on_delete=PROTECT)
+    person = ForeignKey(Person, label_from_instance='get_full_name', on_delete=PROTECT)
     roles = ManyToManyField(ClubRole, label_from_instance='name')
 
     class Meta:
@@ -1155,6 +1169,7 @@ class SeasonAssociation(models.Model):
         unique_together = ('season', 'person')
 
 
+@python_2_unicode_compatible
 class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     uuid = models.UUIDField(
         primary_key=False, default=uuid.uuid4, editable=False,
@@ -1163,38 +1178,38 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     rank_importance_parent_attr = ('stage_group', 'stage')
 
     stage = ForeignKey(Stage, label_from_instance='title', null=True,
-                       related_name='matches')
+                       related_name='matches', on_delete=PROTECT)
     stage_group = ForeignKey(StageGroup, blank=True, null=True,
                              verbose_name=_('Pool'),
                              label_from_instance='title',
-                             related_name='matches')
+                             related_name='matches', on_delete=PROTECT)
 
     label = models.CharField(max_length=100, blank=True, null=True)
 
     home_team = ForeignKey(Team, blank=True, null=True,
                            related_name='home_games',
-                           label_from_instance='title')
+                           label_from_instance='title', on_delete=PROTECT)
     away_team = ForeignKey(Team, blank=True, null=True,
                            related_name='away_games',
-                           label_from_instance='title')
+                           label_from_instance='title', on_delete=PROTECT)
 
     # these fields are used when the home/away teams are to be determined by
     # some form of calculation - usually by a position within the ladder or
     # group/pool
     home_team_undecided = ForeignKey(UndecidedTeam, blank=True, null=True,
                                      related_name='home_games',
-                                     label_from_instance='title')
+                                     label_from_instance='title', on_delete=PROTECT)
     home_team_eval = models.CharField(max_length=10, blank=True, null=True)
     home_team_eval_related = ForeignKey('self', blank=True, null=True,
                                         related_name='+',
-                                        label_from_instance='pk')
+                                        label_from_instance='pk', on_delete=PROTECT)
     away_team_undecided = ForeignKey(UndecidedTeam, blank=True, null=True,
                                      related_name='away_games',
-                                     label_from_instance='title')
+                                     label_from_instance='title', on_delete=PROTECT)
     away_team_eval = models.CharField(max_length=10, blank=True, null=True)
     away_team_eval_related = ForeignKey('self', blank=True, null=True,
                                         related_name='+',
-                                        label_from_instance='pk')
+                                        label_from_instance='pk', on_delete=PROTECT)
 
     evaluated = models.NullBooleanField()
 
@@ -1216,7 +1231,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     is_forfeit = BooleanField(default=False)
     forfeit_winner = ForeignKey(Team, blank=True, null=True,
                                 related_name='+',
-                                label_from_instance='title')
+                                label_from_instance='title', on_delete=PROTECT)
 
     round = models.IntegerField(blank=True, null=True)
 
@@ -1226,7 +1241,12 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                                            blank=True, null=True, unique=True,
                                            db_index=True)
 
-    objects = MatchQuerySet.as_manager()
+    videos = PG.ArrayField(
+        models.URLField(),
+        null=True,
+    )
+
+    objects = MatchManager()
 
     class Meta:
         get_latest_by = 'datetime'
@@ -1355,7 +1375,6 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         if self.stage_group and self.stage_group not in self.stage.pools.all():
             errors.setdefault('stage_group', []).append(
                 _('This pool is not in the selected division'))
-
 
         if errors:
             raise ValidationError(errors)
@@ -1513,34 +1532,11 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                 res[index] = team
         return tuple(res)
 
-    def __unicode__(self):
-        return unicode(self.title)
+    def __str__(self):
+        return self.title
 
     def __repr__(self):
         return '<Match: %s>' % self.id
-
-
-class MatchVideo(AdminUrlMixin, models.Model):
-
-    match = ForeignKey('Match', related_name='videos')
-    url = models.URLField(_("URL"), max_length=255)
-
-    class Meta:
-        verbose_name = 'video'
-
-    def __unicode__(self):
-        return self.url
-
-    def _get_admin_namespace(self):
-        return 'admin:fixja:competition:season:division:stage:match:matchvideo'
-
-    def _get_url_args(self):
-        return (self.match.stage.division.season.competition_id,
-                self.match.stage.division.season_id,
-                self.match.stage.division_id,
-                self.match.stage_id,
-                self.match_id,
-                self.pk)
 
 
 class LadderBase(models.Model):
@@ -1566,13 +1562,12 @@ class LadderBase(models.Model):
 
 class LadderEntry(LadderBase):
 
-    match = ForeignKey(Match, related_name='ladder_entries')
+    match = ForeignKey(Match, related_name='ladder_entries', on_delete=CASCADE)
     team = ForeignKey(Team, related_name='ladder_entries',
-                      label_from_instance='title')
-    opponent = ForeignKey(Team, null=True)
+                      label_from_instance='title', on_delete=CASCADE)
+    opponent = ForeignKey(Team, null=True, on_delete=PROTECT)
 
-    diff = property(lambda self: self.score_for - self.score_against)
-    margin = property(lambda self: abs(self.diff))
+    objects = LadderEntryManager()
 
     def __repr__(self):
         return '<LadderEntry: #%s>' % self.pk
@@ -1580,10 +1575,10 @@ class LadderEntry(LadderBase):
 
 class LadderSummary(LadderBase):
 
-    stage = ForeignKey(Stage, related_name='ladder_summary')
+    stage = ForeignKey(Stage, related_name='ladder_summary', on_delete=CASCADE)
     stage_group = ForeignKey(StageGroup, null=True,
-                             related_name='ladder_summary')
-    team = ForeignKey(Team, related_name='ladder_summary')
+                             related_name='ladder_summary', on_delete=CASCADE)
+    team = ForeignKey(Team, related_name='ladder_summary', on_delete=PROTECT)
     difference = models.DecimalField(max_digits=6, decimal_places=3, default=0)
     percentage = models.DecimalField(max_digits=10, decimal_places=2,
                                      null=True)
@@ -1599,10 +1594,11 @@ class LadderSummary(LadderBase):
         unique_together = ('stage', 'team')
 
 
+@python_2_unicode_compatible
 class DrawFormat(AdminUrlMixin, models.Model):
 
     name = models.CharField(max_length=50)
-    text = models.TextField(verbose_name=u'Formula')
+    text = models.TextField(verbose_name='Formula')
     teams = models.PositiveIntegerField(blank=True, null=True)
     is_final = BooleanField(default=False)
 
@@ -1621,7 +1617,7 @@ class DrawFormat(AdminUrlMixin, models.Model):
         generator.parse(self.text)
         return generator
 
-    def __unicode__(self):
+    def __str__(self):
         return self.name
 
 
@@ -1639,7 +1635,7 @@ class ExclusionDateBase(AdminUrlMixin, models.Model):
 
 class SeasonExclusionDate(ExclusionDateBase):
 
-    season = ForeignKey('Season', related_name='exclusions')
+    season = ForeignKey('Season', related_name='exclusions', on_delete=CASCADE)
 
     class Meta(ExclusionDateBase.Meta):
         unique_together = ('season', 'date')
@@ -1654,7 +1650,7 @@ class SeasonExclusionDate(ExclusionDateBase):
 
 class DivisionExclusionDate(ExclusionDateBase):
 
-    division = ForeignKey('Division', related_name='exclusions')
+    division = ForeignKey('Division', related_name='exclusions', on_delete=CASCADE)
 
     class Meta:
         unique_together = ('division', 'date')
@@ -1695,9 +1691,10 @@ class MatchTimeBase(models.Model):
         return rrule(MINUTELY, **self.rrule_kwargs())
 
 
+@python_2_unicode_compatible
 class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
 
-    season = ForeignKey('Season', related_name='timeslots')
+    season = ForeignKey('Season', related_name='timeslots', on_delete=CASCADE)
     start_date = DateField(verbose_name='From', blank=True, null=True)
     end_date = DateField(verbose_name='Until', blank=True, null=True)
 
@@ -1710,14 +1707,14 @@ class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
     def _get_url_args(self):
         return (self.season.competition_id, self.season_id, self.pk)
 
-    def __unicode__(self):
-        return u'#%d' % self.pk
+    def __str__(self):
+        return '#{}'.format(self.pk)
 
 
 class MatchStatisticBase(models.Model):
 
-    match = ForeignKey('Match', related_name='statistics')
-    player = ForeignKey('Person', related_name='statistics')
+    match = ForeignKey('Match', related_name='statistics', on_delete=PROTECT)
+    player = ForeignKey('Person', related_name='statistics', on_delete=PROTECT)
     number = models.IntegerField(blank=True, null=True)
 
     def team(self):

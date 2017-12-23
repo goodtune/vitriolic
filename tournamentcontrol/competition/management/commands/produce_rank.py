@@ -1,8 +1,6 @@
 import argparse
 
-from datetime import date
 from dateutil.parser import parse as date_parse
-
 from django.core.management import BaseCommand
 from django.utils.module_loading import import_string
 
@@ -27,6 +25,6 @@ class Command(BaseCommand):
         from tournamentcontrol.competition.rank import rank, json_rank
 
         if not json:
-            ranking_table = rank(start=start, at=at, decay=decay)
+            rank(start=start, at=at, decay=decay)
         else:
             json_rank(stream=json, start=start, at=at, decay=decay)

@@ -1,4 +1,5 @@
 # coding=UTF-8
+from __future__ import unicode_literals
 
 from datetime import date, datetime, time
 
@@ -12,10 +13,9 @@ from django.test.utils import override_settings
 from django.utils import timezone
 from touchtechnology.common.forms.auth import permissionformset_factory
 from touchtechnology.common.forms.fields import (
-    BooleanChoiceField, EmailField, HTMLField, SelectDateField,
-    SelectDateTimeField, SelectTimeField,
+    EmailField, HTMLField, SelectDateField, SelectDateTimeField,
+    SelectTimeField,
 )
-from touchtechnology.common.forms.icheck import iCheckSelectMultiple
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.tests import factories
 
@@ -26,33 +26,29 @@ class CustomFormField(TestCase):
         self.assertFieldOutput(
             EmailField,
             {'a@a.com': 'a@a.com', 'B@B.COM': 'b@b.com'},
-            {'aaa': [u'Enter a valid email address.']})
+            {'aaa': ['Enter a valid email address.']})
         self.assertFieldOutput(
             EmailField,
             {'a@a.com': 'a@a.com', 'B@B.COM': 'B@B.COM'},
-            {'aaa': [u'Enter a valid email address.']},
+            {'aaa': ['Enter a valid email address.']},
             (),
             {'lowercase': False})
 
     def test_html_field(self):
         valid = {
-            u'sauté': 'saut&#233;',
+            '<a href="http://www.example.com/">Example</a>':
+                '&lt;a href="http://www.example.com/"&gt;Example&lt;/a&gt;',
+            'Penn\u00a0& Teller': 'Penn&nbsp;&amp; Teller',
+            'sauté': 'saut&eacute;',
         }
         self.assertFieldOutput(HTMLField, valid, {})
-
-    def test_boolean_choice_field(self):
-        valid = {
-            u'0': False,
-            u'1': True,
-        }
-        self.assertFieldOutput(BooleanChoiceField, valid, {})
 
     def test_select_date_field(self):
         valid = {
             ('25', '9', '2013'): date(2013, 9, 25),
         }
         invalid = {
-            ('30', '2', '2013'): [u'Please enter a valid date.'],
+            ('30', '2', '2013'): ['Please enter a valid date.'],
         }
         self.assertFieldOutput(SelectDateField, valid, invalid,
                                empty_value=None)
@@ -63,10 +59,10 @@ class CustomFormField(TestCase):
             ('15', '15'): time(15, 15),
         }
         invalid = {
-            ('42', '0'): [u'Hour must be in 0..23'],
-            ('1', '72'): [u'Minute must be in 0..59'],
-            ('', '15'): [u'Hour must be in 0..23'],
-            ('10', ''): [u'Minute must be in 0..59'],
+            ('42', '0'): ['Hour must be in 0..23'],
+            ('1', '72'): ['Minute must be in 0..59'],
+            ('', '15'): ['Hour must be in 0..23'],
+            ('10', ''): ['Minute must be in 0..59'],
         }
         self.assertFieldOutput(SelectTimeField, valid, invalid,
                                empty_value=None)
@@ -102,9 +98,9 @@ class CustomFormField(TestCase):
             ('25', '9', '2013', '10', '15', 'Australia/Sydney'): est_dt,
         }
         invalid = {
-            ('25', '9', '2013', '10', '15'): [u'Please select a time zone.'],
-            ('25', '9', '2013', '10', '15', ''): [u'Please select a valid '
-                                                  u'time zone.'],
+            ('25', '9', '2013', '10', '15'): ['Please select a time zone.'],
+            ('25', '9', '2013', '10', '15', ''): ['Please select a valid '
+                                                  'time zone.'],
         }
         self.assertFieldOutput(SelectDateTimeField, valid, invalid,
                                empty_value=None)
@@ -153,10 +149,6 @@ class TestPermissionFormSet(TestCase):
             formset.forms[0].fields['users'].queryset.count(),
             3,  # need to account for the AnonymousUser that guardian creates
         )
-        self.assertIsInstance(
-            formset.forms[0].fields['users'].widget,
-            iCheckSelectMultiple,
-        )
 
     def test_user_widget_checkbox_eq(self):
         "Equal to 3 users, should be iCheckboxSelectMultiple widget"
@@ -167,10 +159,6 @@ class TestPermissionFormSet(TestCase):
             formset.forms[0].fields['users'].queryset.count(),
             3,  # need to account for the AnonymousUser that guardian creates
         )
-        self.assertIsInstance(
-            formset.forms[0].fields['users'].widget,
-            iCheckSelectMultiple,
-        )
 
     def test_user_widget_select2(self):
         "More than 1 user, should not be iCheckboxSelectMultiple widget"
@@ -180,8 +168,4 @@ class TestPermissionFormSet(TestCase):
         self.assertEqual(
             formset.forms[0].fields['users'].queryset.count(),
             3,  # need to account for the AnonymousUser that guardian creates
-        )
-        self.assertNotIsInstance(
-            formset.forms[0].fields['users'].widget,
-            iCheckSelectMultiple,
         )

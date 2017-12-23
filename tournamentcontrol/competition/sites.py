@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 import base64
 import collections
 import os.path
@@ -12,9 +14,11 @@ from django.db.models import Case, Count, F, Q, Sum, When
 from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.encoding import smart_bytes
 from django.utils.module_loading import import_string
 from django.utils.translation import ugettext, ugettext_lazy as _
 from icalendar import Calendar, Event
+from six.moves import reduce
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
 from tournamentcontrol.competition import rank
@@ -345,11 +349,11 @@ class CompetitionSite(Application):
             })
 
             # Combine the resource path with our current request context
-            url = request.build_absolute_uri(unicode(path))
+            url = request.build_absolute_uri(str(path))
 
             event = Event()
             event['uid'] = '%s@%s' % (
-                base64.b64encode(url), request.get_host())
+                base64.b64encode(smart_bytes(url)), request.get_host())
             event.add('summary', match.title)
             event.add('location', '{0} ({1})'.format(
                 match.stage.division.title, match.stage.title))
@@ -516,11 +520,11 @@ class MultiCompetitionSite(CompetitionSite):
             self._competitions = self._competitions.filter(q)
 
     def get_urls(self):
-        return patterns(
-            '',
+        urlpatterns = [
             url(r'^$', self.index, name='index'),
-            url(r'^(?P<competition>[\w-]+)/', include(self.competition_urls())),
-        )
+            url(r'^(?P<competition>[^/]+)/', include(self.competition_urls())),
+        ]
+        return urlpatterns
 
 
 class RegistrationSite(Application):
@@ -543,15 +547,20 @@ class TournamentCalculatorSite(Application):
             name=name, app_name=app_name, **kwargs)
 
     def get_urls(self):
+        live_form_class = import_string('tournamentcontrol.competition.forms.'
+                                        'DivisionTournamentScheduleForm')
         urlpatterns = [
-            url(r'^$', self.index, name='index',
-                kwargs={'form_class': self.form_class}),
-            url(r'^live/$', self.index, name='division',
+            url(r'^$', self.index,
+                name='index',
                 kwargs={
+                    'form_class': self.form_class,
+                }),
+            url(r'^live/$', self.index,
+                name='division',
+                kwargs={
+                    'form_class': live_form_class,
                     'template_name': 'live.html',
-                    'form_class': import_string(
-                    'tournamentcontrol.competition.forms.'
-                    'DivisionTournamentScheduleForm')}),
+                }),
         ]
         return urlpatterns
 
@@ -583,7 +592,6 @@ class RankingSite(Application):
             name=name, app_name=app_name, **kwargs)
 
     def get_urls(self):
-
         urlpatterns = [
             url(r'^$', rank.IndexView.as_view(), name='index'),
             url(r'^(?P<year>\d{4})/', include([
@@ -601,9 +609,6 @@ class RankingSite(Application):
             ])),
         ]
         return urlpatterns
-
-    def ranking(self, request, *args, **kwargs):
-        raise ValueError('STOP')
 
 
 competition = CompetitionSite()

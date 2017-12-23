@@ -13,11 +13,9 @@ from modelforms.forms import ModelForm
 from touchtechnology.common.forms.fields import (
     EmailField, ModelMultipleChoiceField,
 )
-from touchtechnology.common.forms.icheck import iCheckSelectMultiple
 from touchtechnology.common.forms.mixins import (
     BootstrapFormControlMixin, PermissionFormSetMixin,
 )
-from touchtechnology.common.shim import widgets
 
 
 class EmailAuthenticationForm(BootstrapFormControlMixin, AuthenticationForm):
@@ -61,7 +59,6 @@ class PermissionForm(ModelForm):
     """
     Generic form to be used to assign row-level permissions to an object.
     """
-    widget = iCheckSelectMultiple
     staff_only = True
     max_checkboxes = 7  # Set based on number of rows visible in MVP layout
 
@@ -75,24 +72,13 @@ class PermissionForm(ModelForm):
         if self.staff_only:
             user_queryset = user_queryset.filter(is_staff=True)
 
-        if user_queryset.count() <= self.max_checkboxes:
-            user_widget = self.widget
-        else:
-            user_widget = widgets.SelectMultiple
-
         group_queryset = Group.objects.all()
-
-        if group_queryset.count() <= self.max_checkboxes:
-            group_widget = self.widget
-        else:
-            group_widget = widgets.SelectMultiple
 
         self.fields['users'] = ModelMultipleChoiceField(
             queryset=user_queryset,
             required=False,
             initial=self._users_with_perms,
             label_from_instance=lambda o: o.get_full_name(),
-            widget=user_widget,
         )
         self.fields['users'].widget.attrs.setdefault('class', 'form-control')
 
@@ -100,7 +86,6 @@ class PermissionForm(ModelForm):
             queryset=group_queryset,
             required=False,
             initial=self._groups_with_perms,
-            widget=group_widget,
         )
         self.fields['groups'].widget.attrs.setdefault('class', 'form-control')
 

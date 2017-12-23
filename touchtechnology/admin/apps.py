@@ -41,7 +41,10 @@ def touchtechnology_assumptions(app_configs, **kwargs):
         ))
 
     # ensure appropriate tenant/site middleware is first loaded
-    first_middleware = first(settings.MIDDLEWARE_CLASSES)
+    try:
+        first_middleware = first(settings.MIDDLEWARE)
+    except (AttributeError, TypeError):
+        first_middleware = first(settings.MIDDLEWARE_CLASSES)
 
     if MULTITENANT:
         TenantMiddleware = import_string(

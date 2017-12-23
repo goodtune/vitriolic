@@ -1,15 +1,10 @@
+from __future__ import division
+
 import decimal
 import operator
 
 from pyparsing import (
-    Forward,
-    Literal,
-    Optional,
-    StringEnd,
-    Word,
-    ZeroOrMore,
-    alphas,
-    alphanums,
+    Forward, Literal, Optional, StringEnd, Word, ZeroOrMore, alphanums, alphas,
     nums,
 )
 
@@ -38,11 +33,11 @@ Comma = Literal(',')
 # Note: order matters, longer tokens must be listed first!
 #   eg. '>=' before '>'
 
-Addition = reduce(operator.or_, map(Literal, '+-')).setName('addop')
-Multiplication = reduce(operator.or_, map(Literal, '*/')).setName('mulop')
-Comparison = reduce(
-    operator.or_,
-    map(Literal, ['=', '>=', '<=', '>', '<'])).setName('comparison')
+Addition = (Literal('+') | Literal('-')).setName('addop')
+Multiplication = (Literal('*') | Literal('/')).setName('mulop')
+Comparison = (
+    Literal('=') | Literal('>=') | Literal('<=') | Literal('>') | Literal('<')
+).setName('comparison')
 
 
 class Calculator(object):
@@ -62,7 +57,7 @@ class Calculator(object):
             "+": operator.add,
             "-": operator.sub,
             "*": operator.mul,
-            "/": operator.div,
+            "/": operator.truediv,
         }
 
         self.instance = instance

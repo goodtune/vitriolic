@@ -2,9 +2,9 @@ import logging
 from collections import OrderedDict
 
 from django import template
-from django.core.urlresolvers import resolve, reverse_lazy
 from django.db import models
 from django.template import loader
+from django.urls import resolve, reverse_lazy
 from six.moves import zip_longest
 from touchtechnology.common.utils import (
     get_all_perms_for_model_cached, get_objects_for_user, model_and_manager,
@@ -109,7 +109,7 @@ def related(instance, whitelist=None):
     annotate = getattr(instance, '_mvp_annotate', {})
     select_related = getattr(instance, '_mvp_select_related', {})
 
-    for name, manager in rel.iteritems():
+    for name, manager in rel.items():
         if name in select_related:
             manager = manager.select_related(*select_related[name])
         if name in annotate:

@@ -14,8 +14,8 @@ class AdminTests(TestCase):
     def setUp(self):
         self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
         self.staff = UserFactory.create(is_staff=True)
-        self.staff.user_permissions = Permission.objects.filter(
-            codename__endswith='_sitemapnode')
+        self.staff.user_permissions.set(
+            Permission.objects.filter(codename__endswith='_sitemapnode'))
 
         # Make sure the application config has been loaded for this app so as
         # to initialize the Placeholder instances.

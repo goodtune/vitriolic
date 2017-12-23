@@ -10,12 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/1.10/ref/settings/
 """
 
-import django
-import environ
 import os
 import time
 
-from django.core.urlresolvers import reverse_lazy
+import django
+import environ
+from django.urls import reverse_lazy
 
 env = environ.Env()
 
@@ -38,6 +38,7 @@ ALLOWED_HOSTS = []
 
 SITE_ID = 1
 
+
 # Disable the database migrations machinery to speed up test suite.
 class DisableMigrations(object):
     """
@@ -45,8 +46,10 @@ class DisableMigrations(object):
     """
     def __contains__(self, item):
         return True
+
     def __getitem__(self, item):
         return None if django.VERSION >= (1, 11) else 'notmigrations'
+
 
 MIGRATION_MODULES = DisableMigrations()
 
@@ -57,16 +60,17 @@ INSTALLED_APPS = [
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.humanize',
+    'django.contrib.messages',
+    'django.contrib.postgres',
     'django.contrib.sessions',
     'django.contrib.sites',
-    'django.contrib.messages',
     'django.contrib.staticfiles',
 
     'mptt',
     'guardian',
     'bootstrap3',
     'django_gravatar',
-    'oembed',
+    'embed_video',
 
     'touchtechnology.common',
     'touchtechnology.admin',
@@ -78,7 +82,7 @@ INSTALLED_APPS = [
     'example_app',
 ]
 
-MIDDLEWARE_CLASSES = [
+MIDDLEWARE = [
     'django.contrib.sites.middleware.CurrentSiteMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',

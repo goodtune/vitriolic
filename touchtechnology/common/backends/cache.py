@@ -25,7 +25,7 @@ class RedisCache(BaseRedisCache):
         try:
             hit = super(RedisCache, self).get(
                 key, default=default, version=version)
-        except ConnectionError, exc:
+        except ConnectionError as exc:
             hit = default
             logger.error('redis="get", key="%s", default="%s", version="%s", '
                          'result="miss", exception="%s"',
@@ -46,7 +46,7 @@ class RedisCache(BaseRedisCache):
         try:
             super(RedisCache, self).set(
                 key, value, timeout=timeout, version=version)
-        except ConnectionError, exc:
+        except ConnectionError as exc:
             logger.error('redis="set", key="%s", version="%s", timeout="%s", '
                          'result="miss", exception="%s"',
                          key, version, timeout, exc)

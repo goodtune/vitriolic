@@ -2,8 +2,8 @@ import os.path
 
 from django.conf.urls import url
 from django.contrib import messages
-from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect
+from django.urls import reverse
 from django.utils.encoding import smart_str
 from django.utils.six.moves.urllib.parse import urlunparse
 from modelforms.forms import ModelForm

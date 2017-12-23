@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 import pytz
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import redirect
@@ -18,7 +20,7 @@ def login(request, to, *args, **kwargs):
 
 @require_POST
 def set_timezone(request):
-    url = request.META.get('HTTP_REFERER', u'/')
+    url = request.META.get('HTTP_REFERER', '/')
     response = HttpResponseRedirect(url)
 
     form = SelectTimezoneForm(data=request.POST)

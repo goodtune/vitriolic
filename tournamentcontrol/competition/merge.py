@@ -1,6 +1,8 @@
+from django.apps import apps
+from django.contrib.contenttypes.fields import GenericForeignKey
 from django.db import transaction
-from django.db.models import get_models, Model, OneToOneField
-from django.contrib.contenttypes.generic import GenericForeignKey
+from django.db.models import Model, OneToOneField
+
 
 @transaction.atomic
 def merge_model_objects(primary_object, alias_objects=[], keep_old=False):
@@ -32,17 +34,27 @@ def merge_model_objects(primary_object, alias_objects=[], keep_old=False):
     # Get a list of all GenericForeignKeys in all models
     # TODO: this is a bit of a hack, since the generics framework should provide a similar
     # method to the ForeignKey field for accessing the generic related fields.
-    generic_fields = []
-    for model in get_models():
-        for field_name, field in filter(lambda x: isinstance(x[1], GenericForeignKey), model.__dict__.iteritems()):
-            generic_fields.append(field)
+    generic_fields = [
+        field
+        for app in apps.get_app_configs()
+        for model in app.get_models()
+        for field_name, field in model.__dict__.items()
+        if isinstance(field, GenericForeignKey)
+    ]
 
-    blank_local_fields = set([field.attname for field in primary_object._meta.local_fields if getattr(primary_object, field.attname) in [None, '']])
+    blank_local_fields = {
+        field.attname
+        for field in primary_object._meta.local_fields
+        if getattr(primary_object, field.attname) in {None, ''}
+    }
 
     # Loop through all alias objects and migrate their data to the primary object.
     for alias_object in alias_objects:
         # Migrate all foreign key references from alias object to primary object.
-        for related_object in alias_object._meta.get_all_related_objects():
+        for related_object in [
+                f for f in alias_object._meta.get_fields()
+                if (f.one_to_many or f.one_to_one) and
+                f.auto_created and not f.concrete]:
             # The variable name on the alias_object model.
             alias_varname = related_object.get_accessor_name()
             if isinstance(related_object.field, OneToOneField):
@@ -55,7 +67,9 @@ def merge_model_objects(primary_object, alias_objects=[], keep_old=False):
                 obj.save()
 
         # Migrate all many to many references from alias object to primary object.
-        for related_many_object in alias_object._meta.get_all_related_many_to_many_objects():
+        for related_many_object in [
+                f for f in alias_object._meta.get_fields(include_hidden=True)
+                if f.many_to_many and f.auto_created]:
             alias_varname = related_many_object.get_accessor_name()
             obj_varname = related_many_object.field.name
 

@@ -4,7 +4,6 @@ from django.test.utils import override_settings
 from django.utils import timezone
 from freezegun import freeze_time
 from test_plus import TestCase
-
 from tournamentcontrol.competition.tests import factories
 
 
@@ -115,12 +114,17 @@ class GoodViewTests(TestCase):
             self.response_410()
 
     def test_match_video(self):
-        video = factories.MatchVideoFactory.create()
+        match = factories.MatchFactory.create(videos=['https://youtu.be/jNQXAC9IVRw'])
         self.assertGoodView('competition:match-video',
-                            video.match.stage.division.season.competition.slug,
-                            video.match.stage.division.season.slug,
-                            video.match.stage.division.slug,
-                            video.match.pk)
+                            match.stage.division.season.competition.slug,
+                            match.stage.division.season.slug,
+                            match.stage.division.slug,
+                            match.pk)
+        self.assertResponseContains(
+            '<iframe width="480" height="360" '
+            'src="http://www.youtube.com/embed/jNQXAC9IVRw?wmode=opaque" '
+            'frameborder="0" allowfullscreen>'
+            '</iframe>')
 
     def test_match_video_gone(self):
         opts = [

@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 import logging
 import os
 
@@ -5,10 +7,11 @@ from django.conf import settings
 from django.conf.urls import include, url
 from django.contrib import messages
 from django.core.files.storage import default_storage
-from django.core.urlresolvers import resolve, reverse
 from django.db.models import Q
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
+from django.urls import resolve, reverse
+from django.utils.encoding import python_2_unicode_compatible
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 from first import first
@@ -42,84 +45,81 @@ class ContentAdminComponent(AdminComponent):
         super(ContentAdminComponent, self).__init__(app, name, app_name)
 
     def get_urls(self):
+        folder_patterns = ([
+            url(r'^add/$', self.edit_folder, name='add'),
+            url(r'^(?P<pk>\d+)/$', self.edit_folder, name='edit'),
+            url(r'^(?P<pk>\d+)/delete/$',
+                self.delete_folder, name='delete'),
+        ], self.app_name)
+
+        page_patterns = ([
+            url(r'^add/$',
+                self.edit_page, name='add'),
+            url(r'^(?P<pk>\d+)/$',
+                self.edit_page, name='edit'),
+            url(r'^(?P<pk>\d+)/delete/$',
+                self.delete_page, name='delete'),
+            url(r'^(?P<pk>\d+)/permission/$',
+                self.perms_sitemapnode, name='perms'),
+        ], self.app_name)
+
+        redirect_patterns = ([
+            url(r'^$', self.list_redirects, name='list'),
+            url(r'^create/$', self.edit_redirect, name='add'),
+            url(r'^(?P<pk>\d+)/$', self.edit_redirect, name='edit'),
+            url(r'^(?P<pk>\d+)/delete/$',
+                self.delete_redirect, name='delete'),
+            url(r'^(?P<pk>\d+)/permission/$',
+                self.perms_redirect, name='perms'),
+        ], self.app_name)
+
+        placeholder_patterns = ([
+            url(r'^$', self.list_placeholders, name='list'),
+            url(r'^create/$', self.edit_placeholder_x, name='add'),
+            url(r'^(?P<pk>\d+)/$', self.edit_placeholder_x, name='edit'),
+            url(r'^(?P<pk>\d+)/delete/$',
+                self.delete_placeholder_x, name='delete'),
+            # url(r'^(?P<pk>\d+)/permission/$',
+            #     self.perms_placeholder, name='delete'),
+        ], self.app_name)
+
+        application_patterns = ([
+            url(r'^add/$', self.edit_application_node, name='add'),
+            url(r'^(?P<pk>\d+)/$',
+                self.edit_application_node, name='edit'),
+            url(r'^(?P<pk>\d+)/delete/$',
+                self.delete_application_node, name='delete'),
+            url(r'^(?P<pk>\d+)/permission/$',
+                self.perms_sitemapnode, name='perms'),
+        ], self.app_name)
+
+        chunk_patterns = ([
+            url(r'^$', self.list_chunks, name='list'),
+            url(r'^create/$', self.edit_chunk, name='add'),
+            url(r'^(?P<pk>\d+)/$', self.edit_chunk, name='edit'),
+            url(r'^(?P<pk>\d+)/delete/$',
+                self.delete_chunk, name='delete'),
+            url(r'^(?P<pk>\d+)/permission/$',
+                self.perms_chunk, name='perms'),
+        ], self.app_name)
+
+        files_patterns = ([
+            url(r'^(?P<path>.+/)?(?P<filename>[^/]+?)/rm/$',
+                self.rm, name='delete'),
+            url(r'^(?P<path>.+/)rmdir/$', self.rm, name='delete'),
+            url(r'^$', self.ls, name='list'),
+            url(r'^(?P<path>.+)$', self.ls, name='edit'),
+        ], self.app_name)
+
         urlpatterns = [
             url(r'^$', self.list_pages, name='index'),
-
-            # Folders
-
-            url(r'^folder/', include([
-                url(r'^add/$', self.edit_folder, name='add'),
-                url(r'^(?P<pk>\d+)/$', self.edit_folder, name='edit'),
-                url(r'^(?P<pk>\d+)/delete/$',
-                    self.delete_folder, name='delete'),
-            ], namespace='folder')),
-
-            # Pages
-
-            url(r'^page/', include([
-                url(r'^add/$',
-                    self.edit_page, name='add'),
-                url(r'^(?P<pk>\d+)/$',
-                    self.edit_page, name='edit'),
-                url(r'^(?P<pk>\d+)/delete/$',
-                    self.delete_page, name='delete'),
-                url(r'^(?P<pk>\d+)/permission/$',
-                    self.perms_sitemapnode, name='perms'),
-            ], namespace='page')),
-
-            # Redirects
-            url(r'^redirect/', include([
-                url(r'^$', self.list_redirects, name='list'),
-                url(r'^create/$', self.edit_redirect, name='add'),
-                url(r'^(?P<pk>\d+)/$', self.edit_redirect, name='edit'),
-                url(r'^(?P<pk>\d+)/delete/$',
-                    self.delete_redirect, name='delete'),
-                url(r'^(?P<pk>\d+)/permission/$',
-                    self.perms_redirect, name='perms'),
-            ], namespace='redirect')),
-
-            # Applications / Placeholders
-            url(r'^placeholder/', include([
-                url(r'^$', self.list_placeholders, name='list'),
-                url(r'^create/$', self.edit_placeholder_x, name='add'),
-                url(r'^(?P<pk>\d+)/$', self.edit_placeholder_x, name='edit'),
-                url(r'^(?P<pk>\d+)/delete/$',
-                    self.delete_placeholder_x, name='delete'),
-                # url(r'^(?P<pk>\d+)/permission/$',
-                #     self.perms_placeholder, name='delete'),
-            ], namespace='real_placeholder')),
-
-            url(r'^application/', include([
-                url(r'^add/$', self.edit_application_node, name='add'),
-                url(r'^(?P<pk>\d+)/$',
-                    self.edit_application_node, name='edit'),
-                url(r'^(?P<pk>\d+)/delete/$',
-                    self.delete_application_node, name='delete'),
-                url(r'^(?P<pk>\d+)/permission/$',
-                    self.perms_sitemapnode, name='perms'),
-            ], namespace='placeholder')),
-
-            # Chunks
-
-            url(r'^chunk/', include([
-                url(r'^$', self.list_chunks, name='list'),
-                url(r'^create/$', self.edit_chunk, name='add'),
-                url(r'^(?P<pk>\d+)/$', self.edit_chunk, name='edit'),
-                url(r'^(?P<pk>\d+)/delete/$',
-                    self.delete_chunk, name='delete'),
-                url(r'^(?P<pk>\d+)/permission/$',
-                    self.perms_chunk, name='perms'),
-            ], namespace='chunk')),
-
-            # Files & Folders
-
-            url(r'^files/', include([
-                url(r'^(?P<path>.+/)?(?P<filename>[^/]+?)/rm/$',
-                    self.rm, name='delete'),
-                url(r'^(?P<path>.+/)rmdir/$', self.rm, name='delete'),
-                url(r'^$', self.ls, name='list'),
-                url(r'^(?P<path>.+)$', self.ls, name='edit'),
-            ], namespace='media')),
+            url(r'^folder/', include(folder_patterns, namespace='folder')),
+            url(r'^page/', include(page_patterns, namespace='page')),
+            url(r'^redirect/', include(redirect_patterns, namespace='redirect')),
+            url(r'^placeholder/', include(placeholder_patterns, namespace='real_placeholder')),
+            url(r'^application/', include(application_patterns, namespace='placeholder')),
+            url(r'^chunk/', include(chunk_patterns, namespace='chunk')),
+            url(r'^files/', include(files_patterns, namespace='media')),
         ]
         return urlpatterns
 
@@ -464,16 +464,17 @@ class ContentAdminComponent(AdminComponent):
         directories = map(_directories, directories)
         match = resolve(request.path)
 
+        @python_2_unicode_compatible
         class FileOrFolder(AdminUrlMixin, object):
             def __init__(s, pk, name):
                 s.pk = pk
                 s.name = name
 
-            def __unicode__(s):
+            def __str__(s):
                 return s.name
 
             def __repr__(s):
-                return u'<%s: %s, %r>' % (s.__class__.__name__, s.name, s.urls)
+                return '<%s: %s, %r>' % (s.__class__.__name__, s.name, s.urls)
 
             def _get_admin_namespace(s):
                 return match.namespace
@@ -534,11 +535,12 @@ class ContentAdminComponent(AdminComponent):
             logger.exception('path: %r', path)
             raise Http404(e[1])
 
+        @python_2_unicode_compatible
         class File(object):
             def __init__(self, path):
                 self.path = path
 
-            def __unicode__(self):
+            def __str__(self):
                 return self.path
 
             def is_leaf_node(self):

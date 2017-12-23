@@ -1,6 +1,5 @@
 from django.conf.urls import include, url
-from example_app.models import TestDateTimeField, Relative
-
+from example_app.models import Relative, TestDateTimeField
 from touchtechnology.common.sites import Application
 
 
@@ -105,7 +104,7 @@ class TestGenericViewsSite(Application):
 
     def get_urls(self):
         urlpatterns = [
-            url(r'^vanilla/', include([
+            url(r'^vanilla/', include(([
                 url(r'^$', self.list, name='list'),
                 url(r'^add/$', self.edit, name='add'),
                 url(r'^(?P<pk>\d+)/$', self.detail, name='detail'),
@@ -113,8 +112,8 @@ class TestGenericViewsSite(Application):
                 url(r'^(?P<pk>\d+)/delete/$', self.delete, name='delete'),
                 url(r'^(?P<pk>\d+)/perms/$', self.perms, name='perms'),
                 url(r'^edit/$', self.edit_multiple, name='edit'),
-            ], namespace='vanilla')),
-            url(r'^permissions/', include([
+            ], self.app_name), namespace='vanilla')),
+            url(r'^permissions/', include(([
                 url(r'^$', self.list_with_perms, name='list'),
                 url(r'^add/$', self.edit_with_perms, name='add'),
                 url(r'^(?P<pk>\d+)/$', self.detail_with_perms, name='detail'),
@@ -122,7 +121,7 @@ class TestGenericViewsSite(Application):
                 url(r'^(?P<pk>\d+)/delete/$',
                     self.delete_with_perms, name='delete'),
                 url(r'^edit/$', self.edit_multiple_with_perms, name='edit'),
-            ], namespace='permissions')),
+            ], self.app_name), namespace='permissions')),
         ]
         return urlpatterns
 

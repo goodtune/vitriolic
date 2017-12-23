@@ -139,7 +139,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='division',
             name='draft',
-            field=touchtechnology.common.db.models.BooleanField(
+            field=models.BooleanField(
                 default=False,
                 help_text='Marking a division as draft will prevent matches '
                           'from being visible in the front-end.',
@@ -158,7 +158,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='division',
             name='include_forfeits_in_played',
-            field=touchtechnology.common.db.models.BooleanField(default=True),
+            field=models.BooleanField(default=True),
         ),
         migrations.AlterField(
             model_name='match',
@@ -238,7 +238,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='stage',
             name='carry_ladder',
-            field=touchtechnology.common.db.models.BooleanField(
+            field=models.BooleanField(
                 verbose_name=b'Carry over points',
                 default=False,
                 help_text='Set this to <b>Yes</b> if this stage should carry '
@@ -263,7 +263,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='stage',
             name='keep_ladder',
-            field=touchtechnology.common.db.models.BooleanField(
+            field=models.BooleanField(
                 verbose_name=b'Keep a ladder',
                 default=True,
                 help_text='Set this to <b>No</b> if this stage does not need '
@@ -274,7 +274,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='stage',
             name='keep_mvp',
-            field=touchtechnology.common.db.models.BooleanField(
+            field=models.BooleanField(
                 verbose_name=b'Keep MVP stats',
                 default=True,
                 help_text='Set this to <b>No</b> if this stage does not need '
@@ -285,7 +285,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='stage',
             name='scale_group_points',
-            field=touchtechnology.common.db.models.BooleanField(
+            field=models.BooleanField(
                 default=False,
                 help_text='In stages with multiple pools, adjust points in '
                           'the smaller groups to compensate for the reduced '
@@ -297,7 +297,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='stagegroup',
             name='carry_ladder',
-            field=touchtechnology.common.db.models.BooleanField(
+            field=models.BooleanField(
                 verbose_name=b'Carry over points',
                 default=False,
                 help_text='Set this to <b>Yes</b> if the ladder for this pool '
@@ -310,7 +310,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='team',
             name='names_locked',
-            field=touchtechnology.common.db.models.BooleanField(
+            field=models.BooleanField(
                 default=False,
                 help_text='When the team name is locked, the team manager '
                           'will not be able to change their team name.<br />'

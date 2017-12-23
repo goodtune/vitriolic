@@ -1,18 +1,20 @@
+from __future__ import unicode_literals
+
 import collections
 import logging
 import warnings
 
 import django
 from django.conf import settings
-from django.conf.urls import include, url
+from django.conf.urls import url
 from django.contrib.admin.sites import (
     AdminSite as DjangoAdminSite, AlreadyRegistered, NotRegistered,
 )
-from django.core.urlresolvers import reverse_lazy
 from django.db import connection
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
+from django.urls import reverse_lazy
 from django.utils.deprecation import RemovedInNextVersionWarning
 from django.utils.encoding import smart_str
 from django.utils.translation import ugettext_lazy as _
@@ -42,8 +44,8 @@ class AdminSite(DjangoAdminSite):
     def register(self, component, *schemas):
         logger.debug("Registering admin component... %s" % component.__name__)
         if component in self._components:
-            raise AlreadyRegistered(_(u"The component %s is already "
-                                      u"registered" % component.__name__))
+            raise AlreadyRegistered(_("The component %s is already "
+                                      "registered" % component.__name__))
         self._components[component] = component(self.name)
         if schemas:
             self._schemas[component] = schemas
@@ -53,8 +55,8 @@ class AdminSite(DjangoAdminSite):
         try:
             self._components.pop(component)
         except KeyError:
-            raise NotRegistered(_(u"The component %s is not "
-                                  u"registered" % component.__name__))
+            raise NotRegistered(_("The component %s is not "
+                                  "registered" % component.__name__))
 
     def _hidden_component(self, component):
         schemas = self._schemas[component.__class__]
@@ -99,7 +101,7 @@ class AdminSite(DjangoAdminSite):
             # content.SitemapNodeMiddleware but it might require quite lots of
             # refactoring.
             urlpatterns += [
-                url(r'^%s/' % component.name, include(component.urls),
+                url(r'^%s/' % component.name, component.urls,
                     {'admin': self, 'component': component}),
             ]
 

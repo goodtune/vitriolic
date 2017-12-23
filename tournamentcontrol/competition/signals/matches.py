@@ -4,9 +4,10 @@ from email.utils import formataddr
 from django.conf import settings
 from django.core.mail import send_mail
 from django.template import Context, Template
-
-from tournamentcontrol.competition.calc import Calculator, BonusPointCalculator
-from tournamentcontrol.competition.signals.decorators import disable_for_loaddata
+from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
+from tournamentcontrol.competition.signals.decorators import (
+    disable_for_loaddata,
+)
 from tournamentcontrol.competition.utils import forfeit_notification_recipients
 
 logger = logging.getLogger(__name__)

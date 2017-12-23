@@ -1,29 +1,26 @@
+from __future__ import unicode_literals
+
 import datetime
 import itertools
 import logging
 import re
 from collections import defaultdict
 from decimal import Decimal
-from first import first
-from dateutil.rrule import rrule, rruleset, DAILY, WEEKLY
+
+import six
+from dateutil.rrule import DAILY, WEEKLY, rrule, rruleset
 from django.conf import settings
 from django.db.models import Max
 from django.utils import timezone
+from django.utils.encoding import python_2_unicode_compatible
 from django.utils.translation import ugettext_lazy as _
-
+from first import first
 from tournamentcontrol.competition.models import (
-    Match,
-    Stage,
-    StageGroup,
-    Team,
-    UndecidedTeam,
+    Match, Stage, StageGroup, Team, UndecidedTeam,
 )
 from tournamentcontrol.competition.utils import (
-    ceiling,
+    ceiling, final_series_rounds, grouper, round_robin_format,
     single_elimination_final_format,
-    final_series_rounds,
-    grouper,
-    round_robin_format,
 )
 
 win_lose_re = re.compile(r'(?P<result>[WL])(?P<match_id>\d+)')
@@ -179,16 +176,20 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1,
         min_per_day,
     )
 
-    if isinstance(first(seeded_team_list), basestring):
+    if isinstance(first(seeded_team_list), six.string_types):
+        @python_2_unicode_compatible
         class Team(object):
             def __init__(self, st, order):
                 self.st = st
                 self.order = order
             def __cmp__(self, other):
                 return cmp(self.order, other.order)
-            def __unicode__(self):
+            def __str__(self):
                 return self.st
-        seeded_team_list = [Team(t, order=order) for order, t in enumerate(seeded_team_list, 1)]
+        seeded_team_list = [
+            Team(t, order=order)
+            for order, t in enumerate(seeded_team_list, 1)
+        ]
 
     if number_of_pools is None:
         raise ValueError("Incompatible set of constraints")
@@ -229,6 +230,7 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1,
     return dict(pools=pools, draw_formats=draw_formats)
 
 
+@python_2_unicode_compatible
 class RoundDescriptor(object):
     def __init__(self, count, round_label, **kwargs):
         self.count = count
@@ -242,11 +244,12 @@ class RoundDescriptor(object):
         return map(
             lambda m: m.generate(generator, stage, self, date), self.matches)
 
-    def __unicode__(self):
-        return u'\n'.join(
+    def __str__(self):
+        return '\n'.join(
             ['ROUND %s' % self.round_label] + map(unicode, self.matches))
 
 
+@python_2_unicode_compatible
 class MatchDescriptor(object):
     def __init__(self, match_id, home_team, away_team, match_label=None,
                  **kwargs):
@@ -255,12 +258,12 @@ class MatchDescriptor(object):
         self.away_team = away_team
         self.match_label = match_label
 
-    def __unicode__(self):
+    def __str__(self):
         if self.match_label:
-            return u'%s: %s vs %s "%s"' % (
+            return '%s: %s vs %s "%s"' % (
                 self.match_id, self.home_team,
                 self.away_team, self.match_label)
-        return u'%s: %s vs %s' % (
+        return '%s: %s vs %s' % (
             self.match_id, self.home_team, self.away_team)
 
     def generate(self, generator, stage, round, date):

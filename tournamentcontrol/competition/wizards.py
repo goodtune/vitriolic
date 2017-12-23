@@ -7,6 +7,7 @@ from django.db.models import Q
 from django.http import HttpResponse, HttpResponseRedirect
 from django.utils.translation import ugettext_lazy as _
 from formtools.wizard.views import SessionWizardView
+from six.moves import reduce
 from touchtechnology.common.forms.fields import (
     ModelChoiceField, ModelMultipleChoiceField,
 )
@@ -18,6 +19,7 @@ from tournamentcontrol.competition.utils import generate_scorecards
 # Scorecard Report
 ##############################################################################
 
+
 def combine_date_time_tuple(t):
     return datetime.datetime.combine(*t)
 
@@ -28,6 +30,7 @@ def q_date_from_datetime(dt):
 
 def q_date_time_from_datetime(dt):
     return Q(date=dt.date(), time=dt.time())
+
 
 no_date_or_time = Q(date__isnull=True) | Q(time__isnull=True)
 

@@ -1,6 +1,7 @@
 from django.db.models import F
-
-from tournamentcontrol.competition.signals.decorators import disable_for_loaddata
+from tournamentcontrol.competition.signals.decorators import (
+    disable_for_loaddata,
+)
 
 
 @disable_for_loaddata
