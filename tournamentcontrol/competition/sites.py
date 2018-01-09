@@ -327,6 +327,9 @@ class CompetitionSite(Application):
         # Do not include matches which have not had the time scheduled
         matches = matches.exclude(datetime__isnull=True)
 
+        # Perform select_related to reduce extra queries
+        matches = matches.select_related('stage__division__season')
+
         # For development server turn back plain text to make debugging easier
         if settings.DEBUG:
             content_type = 'text/plain'
