@@ -13,6 +13,7 @@ from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render_to_response
 from django.template import RequestContext, TemplateDoesNotExist
 from django.urls import reverse_lazy
+from django.utils.deprecation import MiddlewareMixin
 from django.utils.six.moves.urllib.parse import urlunparse
 from guardian.conf import settings as guardian_settings
 from touchtechnology.common.default_settings import SITEMAP_HTTPS_OPTION
@@ -30,7 +31,7 @@ logger = logging.getLogger(__name__)
 protect = AccountsSite(name="protect")
 
 
-class SitemapNodeMiddleware(object):
+class SitemapNodeMiddleware(MiddlewareMixin):
 
     def process_request(self, request):
         # When working with multiple tenants, we want to shard the cache for
@@ -138,7 +139,7 @@ class SitemapNodeMiddleware(object):
                 pattern = url(node['regex'], node['view'],
                               node['kwargs'], name=node.get('name'))
             except KeyError:
-                pattern = url(node['regex'], include(node['site'].urls),
+                pattern = url(node['regex'], node['site'].urls,
                               node['kwargs'], name=node['site'].name)
             urlpatterns.append(pattern)
 
@@ -200,7 +201,7 @@ class SitemapNodeMiddleware(object):
             return redirect(redirect_to)
 
 
-class RedirectMiddleware(object):
+class RedirectMiddleware(MiddlewareMixin):
 
     def process_request(self, request):
         try:
