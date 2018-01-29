@@ -1143,7 +1143,7 @@ class TeamAssociation(AdminUrlMixin, models.Model):
 
     def statistics(self):
         stats = SimpleScoreMatchStatistic.objects.filter(
-            player__teamassociation=self)
+            player=self.person, player__teamassociation__team=self.team)
         stats = stats.filter(
             Q(match__home_team=self.team) | Q(match__away_team=self.team))
         return stats.aggregate(
