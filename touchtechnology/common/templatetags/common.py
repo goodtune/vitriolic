@@ -196,7 +196,7 @@ class NavigationNode(Node):
 
 def do_navigation(root=None, start_at=None, stop_at=None, current_node=None,
                   expand_all_nodes=None, template_name=None, **kwargs):
-    nodes = SitemapNode._tree_manager.all()
+    nodes = SitemapNode._tree_manager.select_related('content_type', 'parent')
 
     if template_name is None:
         template_name = 'touchtechnology/common/templatetags/navigation.html'
@@ -274,8 +274,8 @@ def do_navigation(root=None, start_at=None, stop_at=None, current_node=None,
             rel = current_node.rel(node)
             url = node.get_absolute_url()
             logger.debug(fmt.format(node=node, rel=rel, url=url))
-            return rel in ('ROOT', 'ANCESTOR', 'PARENT', 'UNCLE',
-                           'ME', 'SIBLING', 'DESCENDANT')
+            return rel in {'ROOT', 'ANCESTOR', 'PARENT', 'UNCLE',
+                           'ME', 'SIBLING', 'DESCENDANT'}
 
         log = {
             'rel': 'NODE',

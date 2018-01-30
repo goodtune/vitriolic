@@ -1,5 +1,6 @@
 import imp
 import logging
+import os.path
 
 from django.conf import settings
 from django.conf.urls import include, url
@@ -16,6 +17,7 @@ from django.urls import reverse_lazy
 from django.utils.deprecation import MiddlewareMixin
 from django.utils.six.moves.urllib.parse import urlunparse
 from guardian.conf import settings as guardian_settings
+from mptt.utils import tree_item_iterator
 from touchtechnology.common.default_settings import (
     SITEMAP_HTTPS_OPTION, SITEMAP_ROOT,
 )
@@ -67,20 +69,46 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 },
             })
 
-            enabled_nodes = SitemapNode._tree_manager.filter(enabled=True)
+            enabled_nodes = SitemapNode._tree_manager.all()
             related_nodes = enabled_nodes.select_related('content_type')
 
-            for node in related_nodes.get_cached_trees():
-                if node.get_ancestors().filter(enabled=False):
+            def has_disabled_ancestors(st):
+                for ancestor in st['ancestors']:
+                    if not ancestor.enabled:
+                        return True
+                return False
+
+            def get_absolute_url(n, st):
+                assert not n.is_root_node()
+                offset = 1 if st['ancestors'][0].slug == SITEMAP_ROOT else 0
+                paths = [
+                    ancestor.slug
+                    for ancestor in st['ancestors'][offset:]
+                ]
+                if paths:
+                    return os.path.join(os.path.join(*paths), n.slug)
+                return n.slug
+
+            for node, struct in tree_item_iterator(related_nodes, True, lambda x: x):
+                # Skip over nodes that they themselves or have disabled ancestors.
+                if not node.enabled:
+                    logger.debug('%r is disabled, omit from urlconf', node)
+                    continue
+                if has_disabled_ancestors(struct):
+                    logger.debug('%r has disabled ancestor, omit from urlconf', node)
                     continue
 
-                if node.is_root_node() and node.slug is SITEMAP_ROOT:
+                if node.is_root_node() and node.slug == SITEMAP_ROOT:
                     path = ''
+                elif node.is_root_node():
+                    path = node.slug
                 else:
-                    path = node.get_absolute_url()[1:]
+                    path = get_absolute_url(node, struct)
 
-                if node.content_type is not None and \
-                   node.content_type.name == 'placeholder':
+                if settings.APPEND_SLASH:
+                    path += '/'
+
+                if node.content_type is not None and node.content_type.model == 'placeholder':
                     try:
                         app = node.object.site(node)
                     except (AttributeError, ImportError, ValueError):
@@ -99,7 +127,7 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                         # parent application. In these cases, force them to the
                         # top of the map.
                         if node.parent and node.parent.content_type and \
-                                node.parent.content_type.name == 'placeholder':
+                                node.parent.content_type.model == 'placeholder':
                             dehydrated.insert(0, pattern)
                         else:
                             dehydrated.append(pattern)
