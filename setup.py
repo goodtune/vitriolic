@@ -8,7 +8,7 @@ except IOError:
 
 setup(
     name='vitriolic',
-    version='1.3.4',
+    version='1.3.5',
     author='Gary Reynolds',
     author_email='gary@touch.asn.au',
     license='BSD',
