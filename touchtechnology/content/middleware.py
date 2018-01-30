@@ -105,7 +105,7 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 else:
                     path = get_absolute_url(node, struct)
 
-                if settings.APPEND_SLASH:
+                if path and settings.APPEND_SLASH:
                     path += '/'
 
                 if node.content_type is not None and node.content_type.model == 'placeholder':
