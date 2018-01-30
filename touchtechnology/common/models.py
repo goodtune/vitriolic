@@ -125,21 +125,23 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         return set(groups).difference(user.groups.all())
 
     def get_absolute_url(self):
-        """
-        This really needs to be made more efficient -- at present we hit the
-        database an awful lot of times to calculate the initial
-        ``get_absolute_url`` call so we can build our URLconf in middleware...
-        chicken and egg!
-        """
-        url = '/'
-        node = SitemapNode.objects.get(pk=self.pk)
-        parts = node.get_ancestors(include_self=True).exclude(
-            level=0, slug=SITEMAP_ROOT).values_list('slug', flat=True)
-        if parts:
-            url += join(*parts)
-        if not url.endswith('/') and settings.APPEND_SLASH:
-            url += '/'
-        return url
+        parts = [
+            ancestor.slug
+            for ancestor in self.get_ancestors(include_self=True)
+            if not (ancestor.is_root_node() and ancestor.slug == SITEMAP_ROOT)
+        ]
+
+        path = '/'
+
+        try:
+            path += join(*parts)
+        except TypeError:
+            logger.debug('SITEMAP_ROOT=%r', self)
+
+        if settings.APPEND_SLASH and not path.endswith('/'):
+            path += '/'
+
+        return path
 
     def _move(self, direction):
         """
