@@ -16,7 +16,9 @@ from django.urls import reverse_lazy
 from django.utils.deprecation import MiddlewareMixin
 from django.utils.six.moves.urllib.parse import urlunparse
 from guardian.conf import settings as guardian_settings
-from touchtechnology.common.default_settings import SITEMAP_HTTPS_OPTION
+from touchtechnology.common.default_settings import (
+    SITEMAP_HTTPS_OPTION, SITEMAP_ROOT,
+)
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.sitemaps import NodeSitemap
 from touchtechnology.common.sites import AccountsSite
@@ -54,7 +56,7 @@ class SitemapNodeMiddleware(MiddlewareMixin):
             # url conf (we're in the middle of building it!) this will need
             # to be found using a reverse_lazy below.
             try:
-                root = SitemapNode.objects.filter(level=0).latest('lft')
+                root = SitemapNode._tree_manager.root_nodes().first()
             except ObjectDoesNotExist:
                 root = None
             dehydrated.append({
@@ -65,14 +67,17 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 },
             })
 
-            enabled_nodes = SitemapNode.objects.filter(enabled=True)
+            enabled_nodes = SitemapNode._tree_manager.filter(enabled=True)
             related_nodes = enabled_nodes.select_related('content_type')
 
-            for node in related_nodes:
+            for node in related_nodes.get_cached_trees():
                 if node.get_ancestors().filter(enabled=False):
                     continue
 
-                path = node.get_absolute_url()[1:]
+                if node.is_root_node() and node.slug is SITEMAP_ROOT:
+                    path = ''
+                else:
+                    path = node.get_absolute_url()[1:]
 
                 if node.content_type is not None and \
                    node.content_type.name == 'placeholder':

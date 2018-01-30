@@ -7,7 +7,7 @@ from touchtechnology.common.utils import create_exclude_filter
 class NodeSitemap(Sitemap):
 
     def items(self):
-        nodes = SitemapNode.objects.all()
+        nodes = SitemapNode._tree_manager.select_related('content_type')
 
         nodes_hidden_from_sitemap = nodes.filter(
             Q(hidden_from_sitemap=True) | Q(enabled=False))

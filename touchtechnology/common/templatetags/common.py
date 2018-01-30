@@ -196,7 +196,7 @@ class NavigationNode(Node):
 
 def do_navigation(root=None, start_at=None, stop_at=None, current_node=None,
                   expand_all_nodes=None, template_name=None, **kwargs):
-    nodes = SitemapNode.objects.all()
+    nodes = SitemapNode._tree_manager.all()
 
     if template_name is None:
         template_name = 'touchtechnology/common/templatetags/navigation.html'
