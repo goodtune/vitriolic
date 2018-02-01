@@ -8,7 +8,7 @@ except IOError:
 
 setup(
     name='vitriolic',
-    version='1.3.5',
+    version='1.3.6',
     author='Gary Reynolds',
     author_email='gary@touch.asn.au',
     license='BSD',
@@ -63,6 +63,7 @@ setup(
             'django-mathfilters',
             'icalendar>=3.9.0,<4',
             'numpy',
+            'orderedset',
             'pyparsing>=2.0.3,<3',
         ],
     },
