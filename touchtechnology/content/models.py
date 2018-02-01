@@ -186,19 +186,9 @@ class Placeholder(models.Model):
             return None
 
     def site(self, node):
-        cache = caches[NODE_CACHE]
         cache_key = "node%d" % node.pk
-        site = cache.get(cache_key)
-        if not site:
-            cls = import_string(self.path)
-            site = cls(node=node, name=cache_key, **node.kwargs)
-            try:
-                cache.set(node.pk, site)
-            except TypeError:
-                logger.exception(
-                    "Unable to add %r to Application cache.", site)
-            else:
-                logger.debug("Added %r to Application cache.", site)
+        cls = import_string(self.path)
+        site = cls(node=node, name=cache_key, **node.kwargs)
         return site
 
     def invalidate_cache(self):
