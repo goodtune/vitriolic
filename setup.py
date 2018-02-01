@@ -63,6 +63,7 @@ setup(
             'django-mathfilters',
             'icalendar>=3.9.0,<4',
             'numpy',
+            'orderedset',
             'pyparsing>=2.0.3,<3',
         ],
     },

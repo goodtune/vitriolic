@@ -12,7 +12,6 @@ from django.contrib import messages
 from django.contrib.sitemaps import views as sitemaps_views
 from django.db.models import Case, Count, F, Q, Sum, When
 from django.http import Http404, HttpResponse, HttpResponseGone
-from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.encoding import smart_bytes
 from django.utils.module_loading import import_string
@@ -26,7 +25,7 @@ from tournamentcontrol.competition.decorators import competition_slug
 from tournamentcontrol.competition.forms import (
     ConfigurationForm, MultiConfigurationForm, RankingConfigurationForm,
 )
-from tournamentcontrol.competition.models import Competition, Person
+from tournamentcontrol.competition.models import Competition, Match, Person
 from tournamentcontrol.competition.sitemaps import (
     DivisionSitemap, MatchSitemap, SeasonSitemap,
 )
@@ -74,53 +73,66 @@ class CompetitionSite(Application):
     def get_urls(self):
         sitemaps = collections.OrderedDict()
 
-        if 'season' in self.kwargs:
-            c = get_object_or_404(self._competitions,
-                                  slug=self.kwargs['competition'])
-            s = get_object_or_404(c.seasons, slug=self.kwargs['season'])
+        # Only return matches that have known opponents, will exclude Byes
+        matches = Match.objects.exclude(
+            home_team__isnull=True,
+            away_team__isnull=True,
+        ).select_related('stage__division__season__competition')
 
-            for d in s.divisions.all():
-                sitemaps[d.slug] = MatchSitemap({
-                    'queryset': d.matches.all(),
-                    'app': self}, priority=0.9)
+        if 'season' in self.kwargs:
+            matches = matches.filter(
+                stage__division__season__competition__slug=self.kwargs['competition'],
+                stage__division__season__slug=self.kwargs['season'],
+            )
+
+            for match in matches:
+                sitemaps.setdefault(
+                    match.stage.division.slug,
+                    MatchSitemap(self, priority=0.9)).add(match)
 
             urlpatterns = [
                 url(r'^', include(self.season_urls()),
                     kwargs=self.kwargs),
             ]
         elif 'competition' in self.kwargs:
-            c = get_object_or_404(self._competitions,
-                                  slug=self.kwargs['competition'])
+            matches = matches.filter(
+                stage__division__season__competition__slug=self.kwargs['competition'],
+            )
 
-            for s in c.seasons.all():
-                sitemaps[s.slug] = DivisionSitemap({
-                    'queryset': s.divisions.all(),
-                    'app': self}, priority=0.7)
-                for d in s.divisions.all():
-                    d_key = os.path.join(s.slug, d.slug)
-                    sitemaps[d_key] = MatchSitemap({
-                        'queryset': d.matches.all(),
-                        'app': self}, priority=0.9)
+            for match in matches:
+                sitemaps.setdefault(
+                    match.stage.division.season.slug,
+                    DivisionSitemap(self, priority=0.7)).add(match.stage.division)
+                sitemaps.setdefault(
+                    os.path.join(
+                        match.stage.division.season.slug,
+                        match.stage.division.slug),
+                    MatchSitemap(self, priority=0.9)).add(match)
 
             urlpatterns = [
                 url(r'^', include(self.competition_urls()),
                     kwargs=self.kwargs),
             ]
         else:
-            for c in self._competitions.prefetch_related('seasons__divisions'):
-                sitemaps[c.slug] = SeasonSitemap({
-                    'queryset': c.seasons.all(),
-                    'app': self}, priority=0.6)
-                for s in c.seasons.all():
-                    s_key = os.path.join(c.slug, s.slug)
-                    sitemaps[s_key] = DivisionSitemap({
-                        'queryset': s.divisions.all(),
-                        'app': self}, priority=0.7)
-                    for d in s.divisions.all():
-                        d_key = os.path.join(c.slug, s.slug, d.slug)
-                        sitemaps[d_key] = MatchSitemap({
-                            'queryset': d.matches.all(),
-                            'app': self}, priority=0.9)
+            matches = matches.filter(
+                stage__division__season__competition__in=self._competitions,
+            )
+
+            for match in matches:
+                sitemaps.setdefault(
+                    match.stage.division.season.competition.slug,
+                    SeasonSitemap(self, priority=0.6)).add(match.stage.division.season)
+                sitemaps.setdefault(
+                    os.path.join(
+                        match.stage.division.season.competition.slug,
+                        match.stage.division.season.slug),
+                    DivisionSitemap(self, priority=0.7)).add(match.stage.division)
+                sitemaps.setdefault(
+                    os.path.join(
+                        match.stage.division.season.competition.slug,
+                        match.stage.division.season.slug,
+                        match.stage.division.slug),
+                    MatchSitemap(self, priority=0.9)).add(match)
 
             urlpatterns = [
                 url(r'^$', self.index, name='index'),
