@@ -1,8 +1,6 @@
 from __future__ import unicode_literals
 
 import base64
-import collections
-import os.path
 from datetime import timedelta
 from operator import or_
 
@@ -25,10 +23,7 @@ from tournamentcontrol.competition.decorators import competition_slug
 from tournamentcontrol.competition.forms import (
     ConfigurationForm, MultiConfigurationForm, RankingConfigurationForm,
 )
-from tournamentcontrol.competition.models import Competition, Match, Person
-from tournamentcontrol.competition.sitemaps import (
-    DivisionSitemap, MatchSitemap, SeasonSitemap,
-)
+from tournamentcontrol.competition.models import Competition, Person
 
 
 class CompetitionSite(Application):
@@ -71,82 +66,22 @@ class CompetitionSite(Application):
         ]
 
     def get_urls(self):
-        sitemaps = collections.OrderedDict()
-
-        # Only return matches that have known opponents, will exclude Byes
-        matches = Match.objects.exclude(
-            home_team__isnull=True,
-            away_team__isnull=True,
-        ).select_related('stage__division__season__competition')
-
         if 'season' in self.kwargs:
-            matches = matches.filter(
-                stage__division__season__competition__slug=self.kwargs['competition'],
-                stage__division__season__slug=self.kwargs['season'],
-            )
-
-            for match in matches:
-                sitemaps.setdefault(
-                    match.stage.division.slug,
-                    MatchSitemap(self, priority=0.9)).add(match)
-
             urlpatterns = [
                 url(r'^', include(self.season_urls()),
                     kwargs=self.kwargs),
             ]
         elif 'competition' in self.kwargs:
-            matches = matches.filter(
-                stage__division__season__competition__slug=self.kwargs['competition'],
-            )
-
-            for match in matches:
-                sitemaps.setdefault(
-                    match.stage.division.season.slug,
-                    DivisionSitemap(self, priority=0.7)).add(match.stage.division)
-                sitemaps.setdefault(
-                    os.path.join(
-                        match.stage.division.season.slug,
-                        match.stage.division.slug),
-                    MatchSitemap(self, priority=0.9)).add(match)
-
             urlpatterns = [
                 url(r'^', include(self.competition_urls()),
                     kwargs=self.kwargs),
             ]
         else:
-            matches = matches.filter(
-                stage__division__season__competition__in=self._competitions,
-            )
-
-            for match in matches:
-                sitemaps.setdefault(
-                    match.stage.division.season.competition.slug,
-                    SeasonSitemap(self, priority=0.6)).add(match.stage.division.season)
-                sitemaps.setdefault(
-                    os.path.join(
-                        match.stage.division.season.competition.slug,
-                        match.stage.division.season.slug),
-                    DivisionSitemap(self, priority=0.7)).add(match.stage.division)
-                sitemaps.setdefault(
-                    os.path.join(
-                        match.stage.division.season.competition.slug,
-                        match.stage.division.season.slug,
-                        match.stage.division.slug),
-                    MatchSitemap(self, priority=0.9)).add(match)
-
             urlpatterns = [
                 url(r'^$', self.index, name='index'),
                 url(r'^(?P<competition>[\w-]+)/',
                     include(self.competition_urls())),
             ]
-
-        urlpatterns += [
-            url(r'^sitemap\.xml$', self.sitemap_index,
-                {'sitemaps': sitemaps,
-                 'sitemap_url_name': "competition:sitemap"}),
-            url(r'^(?P<section>.+)/sitemap\.xml$', self.sitemap_section,
-                {'sitemaps': sitemaps}, name='sitemap'),
-        ]
         return urlpatterns
 
     def sitemap_index(self, request, node=None, competition=None, season=None, division=None, *args, **kwargs):
