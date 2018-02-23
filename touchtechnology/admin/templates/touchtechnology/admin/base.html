@@ -100,12 +100,12 @@
 				</a>
 
 				<nav class="collapse mainnav-collapse" role="navigation">
-{% comment %}
-					<form class="mainnav-form" role="search">
-						<input type="text" class="form-control input-md mainnav-search-query" placeholder="{% trans "Search" %}">
-						<button class="btn btn-sm mainnav-form-btn"><i class="fa fa-search"></i></button>
-					</form>
-{% endcomment %}
+					{% if searchable %}
+						<form class="mainnav-form" role="search">
+							<input name="search" value="{{ search }}" type="text" class="form-control input-md mainnav-search-query" placeholder="{% trans "Search" %}">
+							<button class="btn btn-sm mainnav-form-btn"><i class="fa fa-search"></i></button>
+						</form>
+					{% endif %}
 
 					<ul class="mainnav-menu">
 						{% for verbose_name, app_name, url, c, schemas in admin.get_components|allowed:request %}

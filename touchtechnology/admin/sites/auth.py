@@ -77,6 +77,7 @@ class UsersGroups(AdminComponent):
         return self.generic_list(request, queryset,
                                  paginate_by=25,
                                  permission_required=True,
+                                 search=('first_name', 'last_name', 'email'),
                                  extra_context=extra_context)
 
     @staff_login_required_m
