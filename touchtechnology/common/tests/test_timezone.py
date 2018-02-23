@@ -116,7 +116,7 @@ class TimeZoneTests(TestCase):
 
 @override_settings(ROOT_URLCONF='example_app.urls')
 @modify_settings(MIDDLEWARE={
-    'append': 'touchtechnology.common.middleware.TimezoneMiddleware',
+    'append': 'touchtechnology.common.middleware.timezone_middleware',
 })
 class TestTimezoneMiddleware(TestCase):
 

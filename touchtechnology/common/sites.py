@@ -10,6 +10,7 @@ from django.contrib import messages
 from django.contrib.auth import forms, get_user_model, views
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.postgres.search import SearchVector
 from django.core.paginator import EmptyPage, Paginator
 from django.db import transaction
 from django.forms.models import inlineformset_factory, modelformset_factory
@@ -199,6 +200,7 @@ class Application(object):
                      permission_required=False,
                      accept_global_perms=True,
                      return_403=None,
+                     search=None,
                      *args, **kwargs):
 
         model, manager = model_and_manager(model_or_manager)
@@ -211,6 +213,14 @@ class Application(object):
 
         if queryset is None:
             queryset = manager.all()
+
+        # Search should be an iterable of fields to look into.
+        if search is not None:
+            terms = request.GET.get('search')
+            if terms is not None:
+                queryset = queryset.annotate(
+                    search=SearchVector(*search),
+                ).filter(search=terms)
 
         # Implement permission checking for list of objects, will filter the
         # list to those objects the user is entitled to work on if we do not
@@ -284,6 +294,10 @@ class Application(object):
             'model': manager.none(),
             'template': select_template_name(templates),
             'list_template': select_template_name(list_templates),
+
+            # Is search enabled?
+            'searchable': bool(search),
+            'search': request.GET.get('search', ''),
 
             # Pass to template the name permissions so we can re-use template
             # code to generically list and add/change/delete objects
