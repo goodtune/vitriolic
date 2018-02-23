@@ -1597,6 +1597,37 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         return '<Match: %s: %s vs %s>' % (self.round, self.home_team, self.away_team)
 
 
+class DismissalType(models.Model):
+    """
+    Various terminology is used between sports. Allow each installation to
+    determine this so as not to make it only fit one sport or code.
+
+    Examples: "period of time" in Touch, "yellow card" in Football and Rugby,
+    "sin-bin" in Rugby League, etc.
+    """
+    key = models.SlugField(
+        primary_key=True, max_length=20, unique=True, editable=False,
+        db_index=True)
+    name = models.CharField(max_length=50)
+
+    class Meta:
+        ordering = ('name',)
+
+
+class Dismissal(models.Model):
+
+    uuid = models.UUIDField(
+        primary_key=True, default=uuid.uuid4, editable=False, unique=True,
+        db_index=True)
+    match = models.ForeignKey(Match, related_name='dismissals', on_delete=PROTECT)
+    dismissal_type = models.ForeignKey(DismissalType, on_delete=PROTECT)
+    person = models.ForeignKey(Person, related_name='dismissals', on_delete=PROTECT)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ('match',)
+
+
 class LadderBase(models.Model):
 
     played = models.SmallIntegerField(default=0)
