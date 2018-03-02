@@ -13,6 +13,7 @@ from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.forms import array as PGA
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db.models import Q
+from django.forms import BooleanField as BooleanChoiceField
 from django.forms.formsets import (
     DELETION_FIELD_NAME, INITIAL_FORM_COUNT, MAX_NUM_FORM_COUNT,
     TOTAL_FORM_COUNT, ManagementForm, formset_factory,
