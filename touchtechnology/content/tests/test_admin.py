@@ -88,6 +88,10 @@ class AdminTests(TestCase):
             node = SitemapNode.objects.latest('pk')
             self.assertEqual(node.get_absolute_url(), '/sample/')
 
+            self.assertEqual(
+                node.object.content.latest('pk').copy,
+                copy)
+
             # Unfortunately the SitemapNodeMiddleware does not appear to be
             # having an effect?
             # self.get(node.get_absolute_url())
