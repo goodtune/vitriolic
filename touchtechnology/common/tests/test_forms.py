@@ -37,8 +37,8 @@ class CustomFormField(TestCase):
     def test_html_field(self):
         valid = {
             '<a href="http://www.example.com/">Example</a>':
-                '&lt;a href="http://www.example.com/"&gt;Example&lt;/a&gt;',
-            'Penn\u00a0& Teller': 'Penn&nbsp;&amp; Teller',
+                '<a href="http://www.example.com/">Example</a>',
+            'Penn\u00a0& Teller': 'Penn&nbsp;& Teller',
             'sauté': 'saut&eacute;',
         }
         self.assertFieldOutput(HTMLField, valid, {})
