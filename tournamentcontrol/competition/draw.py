@@ -15,12 +15,9 @@ from django.utils import timezone
 from django.utils.encoding import python_2_unicode_compatible
 from django.utils.translation import ugettext_lazy as _
 from first import first
-from tournamentcontrol.competition.models import (
-    Match, Stage, StageGroup, Team, UndecidedTeam,
-)
+from tournamentcontrol.competition.models import Match, Stage, StageGroup, Team, UndecidedTeam
 from tournamentcontrol.competition.utils import (
-    ceiling, final_series_rounds, grouper, round_robin_format,
-    single_elimination_final_format,
+    ceiling, final_series_rounds, grouper, round_robin_format, single_elimination_final_format,
 )
 
 win_lose_re = re.compile(r'(?P<result>[WL])(?P<match_id>\d+)')
@@ -182,8 +179,10 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1,
             def __init__(self, st, order):
                 self.st = st
                 self.order = order
+
             def __cmp__(self, other):
                 return cmp(self.order, other.order)
+
             def __str__(self):
                 return self.st
         seeded_team_list = [

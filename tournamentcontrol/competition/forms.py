@@ -15,12 +15,11 @@ from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db.models import Q
 from django.forms import BooleanField as BooleanChoiceField
 from django.forms.formsets import (
-    DELETION_FIELD_NAME, INITIAL_FORM_COUNT, MAX_NUM_FORM_COUNT,
-    TOTAL_FORM_COUNT, ManagementForm, formset_factory,
+    DELETION_FIELD_NAME, INITIAL_FORM_COUNT, MAX_NUM_FORM_COUNT, TOTAL_FORM_COUNT, ManagementForm,
+    formset_factory,
 )
 from django.forms.models import (
-    BaseInlineFormSet, BaseModelFormSet, inlineformset_factory,
-    modelformset_factory,
+    BaseInlineFormSet, BaseModelFormSet, inlineformset_factory, modelformset_factory,
 )
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -35,19 +34,16 @@ from touchtechnology.common.forms.mixins import (
     BootstrapFormControlMixin, SuperUserSlugMixin, UserMixin,
 )
 from touchtechnology.common.forms.tz import timezone_choice
-from touchtechnology.common.forms.widgets import (
-    SelectDateTimeWidget as SelectDateTimeWidgetBase,
-)
+from touchtechnology.common.forms.widgets import SelectDateTimeWidget as SelectDateTimeWidgetBase
 from touchtechnology.content.forms import PlaceholderConfigurationBase
 from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
 from tournamentcontrol.competition.draw import seeded_tournament
 from tournamentcontrol.competition.fields import URLField
 from tournamentcontrol.competition.models import (
-    ByeTeam, Club, ClubAssociation, ClubRole, Competition, Division,
-    DivisionExclusionDate, DrawFormat, Ground, LadderEntry, Match, Person,
-    Place, Season, SeasonAssociation, SeasonExclusionDate, SeasonMatchTime,
-    SimpleScoreMatchStatistic, Stage, StageGroup, Team, TeamAssociation,
-    TeamRole, UndecidedTeam, Venue, stage_group_position_re,
+    ByeTeam, Club, ClubAssociation, ClubRole, Competition, Division, DivisionExclusionDate,
+    DrawFormat, Ground, LadderEntry, Match, Person, Place, Season, SeasonAssociation,
+    SeasonExclusionDate, SeasonMatchTime, SimpleScoreMatchStatistic, Stage, StageGroup, Team,
+    TeamAssociation, TeamRole, UndecidedTeam, Venue, stage_group_position_re,
 )
 from tournamentcontrol.competition.signals.custom import score_updated
 from tournamentcontrol.competition.utils import (
@@ -122,6 +118,7 @@ class MatchPlayedWidget(forms.widgets.Select):
 
     Based on django.forms.widget.NullBooleanSelect
     """
+
     def __init__(self, attrs=None):
         choices = (('1', _('Yes')), ('0', _('No')))
         super(MatchPlayedWidget, self).__init__(attrs, choices)
@@ -176,6 +173,7 @@ class ConstructFormMixin(object):
     child form, we can simply define the ``get_defaults`` method to return a
     dictionary to be passed through to the form constructor.
     """
+
     def get_defaults(self):
         return {}
 
@@ -321,6 +319,7 @@ class TimezoneMixin(object):
     Mixin to remove the timezone field if we are not operating in a timezone
     aware state.
     """
+
     def __init__(self, *args, **kwargs):
         super(TimezoneMixin, self).__init__(*args, **kwargs)
         if not settings.USE_TZ:
@@ -990,6 +989,7 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
     """
     This form is used to make it easy to enter results for a match.
     """
+
     def __init__(self, *args, **kwargs):
         super(MatchResultForm, self).__init__(*args, **kwargs)
         home_team = self.instance.home_team
@@ -1052,7 +1052,7 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
                     if isinstance(res, Exception):
                         raise res
                     logger.debug('%s: %r', receiver, res)
-                except:
+                except:  # noqa
                     logger.exception('Receiver "%s" did not complete.',
                                      receiver)
 
