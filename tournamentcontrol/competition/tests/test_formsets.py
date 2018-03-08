@@ -6,10 +6,23 @@ from tournamentcontrol.competition.tests import factories
 
 class DrawGenerationMatchFormSetTest(TestCase):
 
-    def setUp(self):
-        super(TestCase, self).setUp()
-        self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
-        self.draw_format = factories.DrawFormatFactory.create(teams=4)
+    @classmethod
+    def setUpClass(cls):
+        cls.superuser = UserFactory.create(is_staff=True, is_superuser=True)
+
+        factories.DrawFormatFactory.reset_sequence()
+        cls.draw_format = factories.DrawFormatFactory.create(teams=4)
+
+        factories.StageFactory.reset_sequence()
+        cls.stage = factories.StageFactory.create()
+
+        factories.TeamFactory.reset_sequence()
+        cls.teams = factories.TeamFactory.create_batch(
+            4, division=cls.stage.division)
+
+    @classmethod
+    def tearDownClass(cls):
+        pass
 
     def test_draw_format_name(self):
         self.assertEqual(self.draw_format.name, "Round Robin (3/4 teams)")
@@ -29,8 +42,6 @@ class DrawGenerationMatchFormSetTest(TestCase):
         )
 
     def test_draw_generation_match_form_set_save(self):
-        stage = factories.StageFactory.create()
-        factories.TeamFactory.create_batch(4, division=stage.division)
 
         self.assertEqual(Match.objects.count(), 0)
 
@@ -53,10 +64,10 @@ class DrawGenerationMatchFormSetTest(TestCase):
         with self.login(self.superuser):
             self.post(
                 'admin:fixja:competition:season:division:stage:draw:build',
-                stage.division.season.competition.pk,
-                stage.division.season.pk,
-                stage.division.pk,
-                stage.pk,
+                self.stage.division.season.competition.pk,
+                self.stage.division.season.pk,
+                self.stage.division.pk,
+                self.stage.pk,
                 data=data0)
             self.response_200()
 
@@ -83,22 +94,24 @@ class DrawGenerationMatchFormSetTest(TestCase):
 
             self.post(
                 'admin:fixja:competition:season:division:stage:draw:build',
-                stage.division.season.competition.pk,
-                stage.division.season.pk,
-                stage.division.pk,
-                stage.pk,
+                self.stage.division.season.competition.pk,
+                self.stage.division.season.pk,
+                self.stage.division.pk,
+                self.stage.pk,
                 data=data1)
             self.response_302()
 
         self.assertEqual(Match.objects.count(), 6)
+
+        team1, team2, team3, team4 = self.teams
         self.assertQuerysetEqual(
             Match.objects.all(),
             [
-                '<Match: 1: Team 1 vs Team 4>',
-                '<Match: 1: Team 2 vs Team 3>',
-                '<Match: 2: Team 1 vs Team 3>',
-                '<Match: 2: Team 4 vs Team 2>',
-                '<Match: 3: Team 1 vs Team 2>',
-                '<Match: 3: Team 3 vs Team 4>',
+                '<Match: 1: %s vs %s>' % (team1, team4),
+                '<Match: 1: %s vs %s>' % (team2, team3),
+                '<Match: 2: %s vs %s>' % (team1, team3),
+                '<Match: 2: %s vs %s>' % (team4, team2),
+                '<Match: 3: %s vs %s>' % (team1, team2),
+                '<Match: 3: %s vs %s>' % (team3, team4),
             ],
         )
