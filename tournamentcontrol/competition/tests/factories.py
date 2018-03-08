@@ -245,4 +245,4 @@ class DrawFormatFactory(factory.DjangoModelFactory):
     name = factory.LazyAttribute(
         lambda a: 'Round Robin ({}/{} teams)'.format(a.teams - 1, a.teams))
     text = factory.LazyAttribute(
-        lambda a: utils.round_robin_format([t for t in range(a.teams + 1)]))
+        lambda a: utils.round_robin_format([t for t in range(1, a.teams + 1)]))
