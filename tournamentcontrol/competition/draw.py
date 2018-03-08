@@ -340,6 +340,9 @@ class MatchCollection(object):
     def __len__(self):
         return len(self.iterable)
 
+    def __repr__(self):
+        return repr(self.iterable)
+
     def add(self, match_id, match):
         self.keyed.setdefault(match_id, []).append(match)
         self.iterable.append(match)

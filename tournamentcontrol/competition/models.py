@@ -972,6 +972,7 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
         return res
 
 
+@python_2_unicode_compatible
 class ByeTeam(object):
 
     def __init__(self, title="Bye", *args, **kwargs):
@@ -981,6 +982,9 @@ class ByeTeam(object):
 
     def __nonzero__(self):
         return False
+
+    def __str__(self):
+        return self.title
 
     def save(self, *args, **kwargs):
         raise NotImplementedError
@@ -1536,7 +1540,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         return self.title
 
     def __repr__(self):
-        return '<Match: %s>' % self.id
+        return '<Match: %s: %s vs %s>' % (self.round, self.home_team, self.away_team)
 
 
 class LadderBase(models.Model):

@@ -980,22 +980,9 @@ class DrawGenerationMatchFormSet(BaseDrawGenerationMatchFormSet):
                 BooleanChoiceField(label=_('Skip'), required=False)
 
     def save(self, *args, **kwargs):
-        logger.debug('DrawGenerationMatchFormSet.save %r %r', args, kwargs)
-        logger.debug('forms: %r', self.forms)
-        matches = super(DrawGenerationMatchFormSet, self).save(*args, **kwargs)
-        for match in matches:
-            logger.debug('Avoid bug #6886 for %r', match)
-            # I'm unsure if this is a Django related bug, but when I think it
-            # might related to a database optimisation - see
-            # djangoproject:#6886 - to prevent a hit when you've just assigned.
-            #
-            # To fix our case, simply re-assign the cached object back so that
-            # we update the id field before our database INSERT.
-            if match.home_team_eval_related:
-                match.home_team_eval_related = match.home_team_eval_related
-            if match.away_team_eval_related:
-                match.away_team_eval_related = match.away_team_eval_related
-            match.save()
+        matches = []
+        for form in self.forms:
+            matches.append(form.save())
         return matches
 
 
