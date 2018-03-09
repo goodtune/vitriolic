@@ -140,7 +140,7 @@ def revpow(n, base):
     """
     Reverse of ``pow`` built-in function.
 
-        >>> for i in xrange(4):
+        >>> for i in range(4):
         ...     revpow(pow(2, i), 2) == i
         ...
         True
@@ -298,7 +298,7 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
             number_of_pools,
             final_series_round_label(number_of_pools))
 
-        for pool in xrange(number_of_pools):
+        for pool in range(number_of_pools):
             match = MatchDescriptor(
                 pool + 1,
                 'G%dP1' % (pool + 1),
@@ -323,7 +323,7 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
             matches_this_round,
             final_series_round_label(matches_this_round))
 
-        for i in xrange(matches_this_round):
+        for i in range(matches_this_round):
             match = MatchDescriptor(
                 series[-1].matches[-1].match_id + i + 1,
                 'W%s' % (series[-1].matches[i].match_id),

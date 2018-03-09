@@ -1616,7 +1616,7 @@ class DrawFormat(AdminUrlMixin, models.Model):
         return (self.pk,)
 
     def generator(self, stage, start_date=None):
-        from draw import DrawGenerator
+        from tournamentcontrol.competition.draw import DrawGenerator
         generator = DrawGenerator(stage, start_date)
         generator.parse(self.text)
         return generator

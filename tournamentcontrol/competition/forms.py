@@ -1237,7 +1237,7 @@ class MatchScheduleFormSet(BaseMatchScheduleFormSet):
                 teams.setdefault(m.away_team, []).append(m.time)
                 scheduled.setdefault((m.play_at, m.time), []).append(m)
 
-        for i in xrange(0, self.total_form_count()):
+        for i in range(0, self.total_form_count()):
             match = self.forms[i].cleaned_data.get('id')
             play_at = self.forms[i].cleaned_data.get('play_at')
             time = self.forms[i].cleaned_data.get('time')

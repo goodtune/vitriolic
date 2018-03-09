@@ -6,6 +6,7 @@ from django import forms
 from django.db.models import Q
 from django.http import HttpResponse, HttpResponseRedirect
 from django.utils.translation import ugettext_lazy as _
+from first import first
 from formtools.wizard.views import SessionWizardView
 from six.moves import reduce
 from touchtechnology.common.forms.fields import (
@@ -123,11 +124,18 @@ class FilterForm(forms.Form):
         timeslots = self.cleaned_data.get('timeslots')
 
         if dates:
-            l = map(parse, dates)
-            query_filter |= reduce(or_, map(q_date_from_datetime, l))
+            date_list = [
+                q_date_from_datetime(parse(d))
+                for d in dates
+            ]
+            query_filter |= reduce(or_, date_list)
+
         if timeslots:
-            l = map(parse, timeslots)
-            query_filter |= reduce(or_, map(q_date_time_from_datetime, l))
+            timeslot_list = [
+                q_date_time_from_datetime(parse(t))
+                for t in timeslots
+            ]
+            query_filter |= reduce(or_, timeslot_list)
 
         divisions = self.cleaned_data.get('division')
 
@@ -243,5 +251,5 @@ class DrawGenerationWizard(SessionWizardView):
         return context
 
     def done(self, form_list, **kwargs):
-        form_list[-1].save()
+        first(reversed(form_list)).save()
         return HttpResponseRedirect(self.redirect_to)
