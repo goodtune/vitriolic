@@ -13,13 +13,13 @@ from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.forms import array as PGA
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db.models import Q
+from django.forms import BooleanField as BooleanChoiceField
 from django.forms.formsets import (
-    DELETION_FIELD_NAME, INITIAL_FORM_COUNT, MAX_NUM_FORM_COUNT,
-    TOTAL_FORM_COUNT, ManagementForm, formset_factory,
+    DELETION_FIELD_NAME, INITIAL_FORM_COUNT, MAX_NUM_FORM_COUNT, TOTAL_FORM_COUNT, ManagementForm,
+    formset_factory,
 )
 from django.forms.models import (
-    BaseInlineFormSet, BaseModelFormSet, inlineformset_factory,
-    modelformset_factory,
+    BaseInlineFormSet, BaseModelFormSet, inlineformset_factory, modelformset_factory,
 )
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -34,19 +34,16 @@ from touchtechnology.common.forms.mixins import (
     BootstrapFormControlMixin, SuperUserSlugMixin, UserMixin,
 )
 from touchtechnology.common.forms.tz import timezone_choice
-from touchtechnology.common.forms.widgets import (
-    SelectDateTimeWidget as SelectDateTimeWidgetBase,
-)
+from touchtechnology.common.forms.widgets import SelectDateTimeWidget as SelectDateTimeWidgetBase
 from touchtechnology.content.forms import PlaceholderConfigurationBase
 from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
 from tournamentcontrol.competition.draw import seeded_tournament
 from tournamentcontrol.competition.fields import URLField
 from tournamentcontrol.competition.models import (
-    ByeTeam, Club, ClubAssociation, ClubRole, Competition, Division,
-    DivisionExclusionDate, DrawFormat, Ground, LadderEntry, Match, Person,
-    Place, Season, SeasonAssociation, SeasonExclusionDate, SeasonMatchTime,
-    SimpleScoreMatchStatistic, Stage, StageGroup, Team, TeamAssociation,
-    TeamRole, UndecidedTeam, Venue, stage_group_position_re,
+    ByeTeam, Club, ClubAssociation, ClubRole, Competition, Division, DivisionExclusionDate,
+    DrawFormat, Ground, LadderEntry, Match, Person, Place, Season, SeasonAssociation,
+    SeasonExclusionDate, SeasonMatchTime, SimpleScoreMatchStatistic, Stage, StageGroup, Team,
+    TeamAssociation, TeamRole, UndecidedTeam, Venue, stage_group_position_re,
 )
 from tournamentcontrol.competition.signals.custom import score_updated
 from tournamentcontrol.competition.utils import (
@@ -121,6 +118,7 @@ class MatchPlayedWidget(forms.widgets.Select):
 
     Based on django.forms.widget.NullBooleanSelect
     """
+
     def __init__(self, attrs=None):
         choices = (('1', _('Yes')), ('0', _('No')))
         super(MatchPlayedWidget, self).__init__(attrs, choices)
@@ -175,6 +173,7 @@ class ConstructFormMixin(object):
     child form, we can simply define the ``get_defaults`` method to return a
     dictionary to be passed through to the form constructor.
     """
+
     def get_defaults(self):
         return {}
 
@@ -320,6 +319,7 @@ class TimezoneMixin(object):
     Mixin to remove the timezone field if we are not operating in a timezone
     aware state.
     """
+
     def __init__(self, *args, **kwargs):
         super(TimezoneMixin, self).__init__(*args, **kwargs)
         if not settings.USE_TZ:
@@ -979,22 +979,9 @@ class DrawGenerationMatchFormSet(BaseDrawGenerationMatchFormSet):
                 BooleanChoiceField(label=_('Skip'), required=False)
 
     def save(self, *args, **kwargs):
-        logger.debug('DrawGenerationMatchFormSet.save %r %r', args, kwargs)
-        logger.debug('forms: %r', self.forms)
-        matches = super(DrawGenerationMatchFormSet, self).save(*args, **kwargs)
-        for match in matches:
-            logger.debug('Avoid bug #6886 for %r', match)
-            # I'm unsure if this is a Django related bug, but when I think it
-            # might related to a database optimisation - see
-            # djangoproject:#6886 - to prevent a hit when you've just assigned.
-            #
-            # To fix our case, simply re-assign the cached object back so that
-            # we update the id field before our database INSERT.
-            if match.home_team_eval_related:
-                match.home_team_eval_related = match.home_team_eval_related
-            if match.away_team_eval_related:
-                match.away_team_eval_related = match.away_team_eval_related
-            match.save()
+        matches = []
+        for form in self.forms:
+            matches.append(form.save())
         return matches
 
 
@@ -1002,6 +989,7 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
     """
     This form is used to make it easy to enter results for a match.
     """
+
     def __init__(self, *args, **kwargs):
         super(MatchResultForm, self).__init__(*args, **kwargs)
         home_team = self.instance.home_team
@@ -1064,7 +1052,7 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
                     if isinstance(res, Exception):
                         raise res
                     logger.debug('%s: %r', receiver, res)
-                except:
+                except:  # noqa
                     logger.exception('Receiver "%s" did not complete.',
                                      receiver)
 
@@ -1249,7 +1237,7 @@ class MatchScheduleFormSet(BaseMatchScheduleFormSet):
                 teams.setdefault(m.away_team, []).append(m.time)
                 scheduled.setdefault((m.play_at, m.time), []).append(m)
 
-        for i in xrange(0, self.total_form_count()):
+        for i in range(0, self.total_form_count()):
             match = self.forms[i].cleaned_data.get('id')
             play_at = self.forms[i].cleaned_data.get('play_at')
             time = self.forms[i].cleaned_data.get('time')

@@ -1,5 +1,5 @@
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
+  - repo: git://github.com/pre-commit/pre-commit-hooks
     sha: v1.2.3
     hooks:
       - id: check-added-large-files
@@ -10,3 +10,7 @@ repos:
       - id: end-of-file-fixer
       - id: flake8
       - id: pretty-format-json
+  - repo: git://github.com/pre-commit/mirrors-isort
+    sha: v4.3.4
+    hooks:
+      - id: isort

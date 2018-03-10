@@ -2,10 +2,14 @@
 {% load common %}
 
 {% block form-fieldset %}
+	<!-- wizard.management_form -->
 	{{ wizard.management_form }}
+
+	<!-- wizard.form.management_form -->
 	{{ wizard.form.management_form }}
 
 	{% for form in wizard.form %}
+		<!-- wizard.form[{{ forloop.counter0 }}] -->
 		<fieldset>
 			<legend>{{ form.instance.descriptor|default:form.instance }}</legend>
 			{% for f in form %}

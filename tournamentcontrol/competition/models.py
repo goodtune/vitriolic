@@ -20,9 +20,7 @@ from django.contrib.postgres import fields as PG
 from django.core import validators
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import (
-    BooleanField, Count, DateField, DateTimeField, Min, Q, Sum, TimeField,
-)
+from django.db.models import BooleanField, Count, DateField, DateTimeField, Min, Q, Sum, TimeField
 from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
 from django.template import Context, Template
 from django.template.loader import get_template
@@ -32,24 +30,17 @@ from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
-from touchtechnology.common.db.models import (
-    ForeignKey, HTMLField, LocationField, ManyToManyField,
-)
+from touchtechnology.common.db.models import ForeignKey, HTMLField, LocationField, ManyToManyField
 from touchtechnology.common.models import SitemapNodeBase
 from tournamentcontrol.competition.constants import (
     GENDER_CHOICES, PYTZ_TIME_ZONE_CHOICES, SEASON_MODE_CHOICES, WIN_LOSE,
 )
-from tournamentcontrol.competition.managers import (
-    LadderEntryManager, MatchManager,
-)
+from tournamentcontrol.competition.managers import LadderEntryManager, MatchManager
 from tournamentcontrol.competition.mixins import ModelDiffMixin
-from tournamentcontrol.competition.query import (
-    DivisionQuerySet, StageQuerySet, StatisticQuerySet,
-)
+from tournamentcontrol.competition.query import DivisionQuerySet, StageQuerySet, StatisticQuerySet
 from tournamentcontrol.competition.signals import match_forfeit
 from tournamentcontrol.competition.utils import (
-    combine_and_localize, stage_group_position, stage_group_position_re,
-    team_and_division,
+    combine_and_localize, stage_group_position, stage_group_position_re, team_and_division,
 )
 from tournamentcontrol.competition.validators import validate_hashtag
 
@@ -972,6 +963,7 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
         return res
 
 
+@python_2_unicode_compatible
 class ByeTeam(object):
 
     def __init__(self, title="Bye", *args, **kwargs):
@@ -981,6 +973,9 @@ class ByeTeam(object):
 
     def __nonzero__(self):
         return False
+
+    def __str__(self):
+        return self.title
 
     def save(self, *args, **kwargs):
         raise NotImplementedError
@@ -1536,7 +1531,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         return self.title
 
     def __repr__(self):
-        return '<Match: %s>' % self.id
+        return '<Match: %s: %s vs %s>' % (self.round, self.home_team, self.away_team)
 
 
 class LadderBase(models.Model):
@@ -1612,7 +1607,7 @@ class DrawFormat(AdminUrlMixin, models.Model):
         return (self.pk,)
 
     def generator(self, stage, start_date=None):
-        from draw import DrawGenerator
+        from tournamentcontrol.competition.draw import DrawGenerator
         generator = DrawGenerator(stage, start_date)
         generator.parse(self.text)
         return generator
