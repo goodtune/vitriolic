@@ -1,7 +1,6 @@
 from __future__ import unicode_literals
 
 import logging
-from decimal import Decimal
 from operator import attrgetter, or_
 
 import guardian.shortcuts
@@ -21,7 +20,6 @@ from django.template import RequestContext, TemplateDoesNotExist
 from django.template.loader import select_template
 from first import first
 from guardian.conf import settings as guardian_settings
-from guardian.shortcuts import get_perms_for_model
 from six.moves import reduce
 from touchtechnology.common.exceptions import NotModelManager
 from touchtechnology.common.mixins import NodeRelationMixin
@@ -110,16 +108,6 @@ def get_mod_func(callback):
     except ValueError:
         return callback, ''
     return callback[:dot], callback[dot + 1:]
-
-
-def average(iter):
-    """
-    Basic function which will return the average of an iterable.
-    Should only be used on iterables of items which can be cast to Decimal.
-    """
-    items = list(filter(None, iter))
-    total = sum(map(lambda i: Decimal(str(i)), items))
-    return total / len(items)
 
 
 def create_exclude_filter(queryset):
