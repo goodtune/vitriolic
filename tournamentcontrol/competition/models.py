@@ -22,7 +22,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import BooleanField, Count, DateField, DateTimeField, Min, Q, Sum, TimeField
 from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
-from django.template import Context, Template
+from django.template import Template
 from django.template.loader import get_template
 from django.utils import timezone
 from django.utils.encoding import python_2_unicode_compatible
@@ -1033,11 +1033,11 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
         stage, group, position = stage_group_position(
             self.stage, self.formula)
 
-        c = Context({
+        c = {
             'stage': stage,
             'group': group,
             'position': position,
-        })
+        }
 
         return stage_group_position_tpl.render(c).strip()
 

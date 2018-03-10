@@ -56,6 +56,6 @@ def dispatch(request, page_id=None, node=None, url=None):
 
     # For authenticated visitors we may alter the rendered content, so mark
     # the content as private to stop interim caches from keeping a copy.
-    if not request.user.is_anonymous():
+    if request.user.is_authenticated:
         patch_cache_control(response, private=True)
     return response

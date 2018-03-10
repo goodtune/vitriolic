@@ -37,7 +37,7 @@ class Migration(migrations.Migration):
                 ('label', models.SlugField(max_length=20, verbose_name='CSS class', choices=[(b'copy', 'Copy')])),
                 ('sequence', models.PositiveIntegerField(verbose_name='Sequence')),
                 ('copy', touchtechnology.common.db.models.HTMLField(verbose_name='Copy', blank=True)),
-                ('article', models.ForeignKey(related_name=b'content', verbose_name='Article', to='news.Article')),
+                ('article', models.ForeignKey(related_name=b'content', verbose_name='Article', to='news.Article', on_delete=models.PROTECT)),
             ],
             options={
                 'ordering': ('sequence',),
