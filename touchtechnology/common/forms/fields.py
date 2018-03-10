@@ -11,7 +11,6 @@ from django.conf import settings
 from django.db.models import Min
 from django.utils import timezone
 from django.utils.encoding import smart_str
-from django.utils.html import escape
 from django.utils.translation import ugettext_lazy as _
 from mptt.forms import TreeNodeChoiceField
 from namedentities import named_entities
@@ -62,7 +61,7 @@ class HTMLField(forms.CharField):
 
     def clean(self, value):
         if isinstance(value, six.string_types):
-            value = named_entities(escape(value))
+            value = named_entities(value)
         return super(HTMLField, self).clean(value)
 
 

@@ -15,12 +15,9 @@ from django.utils import timezone
 from django.utils.encoding import python_2_unicode_compatible
 from django.utils.translation import ugettext_lazy as _
 from first import first
-from tournamentcontrol.competition.models import (
-    Match, Stage, StageGroup, Team, UndecidedTeam,
-)
+from tournamentcontrol.competition.models import Match, Stage, StageGroup, Team, UndecidedTeam
 from tournamentcontrol.competition.utils import (
-    ceiling, final_series_rounds, grouper, round_robin_format,
-    single_elimination_final_format,
+    ceiling, final_series_rounds, grouper, round_robin_format, single_elimination_final_format,
 )
 
 win_lose_re = re.compile(r'(?P<result>[WL])(?P<match_id>\d+)')
@@ -120,7 +117,7 @@ def optimum_tournament_pool_count(number_of_teams, days_available,
     max_per_day = Decimal(max_per_day)
     min_per_day = Decimal(min_per_day)
 
-    for n in xrange(4):
+    for n in range(4):
         number_of_pools = pow(2, n)
         largest_pool_size = ceiling(number_of_teams / number_of_pools)
         # smallest_pool_size = floor(number_of_teams / number_of_pools)
@@ -182,8 +179,10 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1,
             def __init__(self, st, order):
                 self.st = st
                 self.order = order
+
             def __cmp__(self, other):
                 return cmp(self.order, other.order)
+
             def __str__(self):
                 return self.st
         seeded_team_list = [
@@ -340,6 +339,9 @@ class MatchCollection(object):
     def __len__(self):
         return len(self.iterable)
 
+    def __repr__(self):
+        return repr(self.iterable)
+
     def add(self, match_id, match):
         self.keyed.setdefault(match_id, []).append(match)
         self.iterable.append(match)
@@ -466,9 +468,9 @@ class DrawGenerator(object):
                 initial += follows.matches.aggregate(
                     max=Max('round')).get('max') or 0
 
-        for i in xrange(offset + initial, offset + n + initial):
-            date = dates.next()
-            round = rounds.next()
+        for i in range(offset + initial, offset + n + initial):
+            date = next(dates)
+            round = next(rounds)
             for match_id, match in round.generate(self, self.stage, date):
                 match.round = i
                 matches.add(match_id, match)
