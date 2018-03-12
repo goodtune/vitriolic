@@ -1193,7 +1193,7 @@ class CompetitionAdminComponent(AdminComponent):
 
         queryset = manager.filter(where) \
                           .order_by('stage__division__order',
-                                    'datetime', 'play_at')
+                                    'round', 'datetime', 'play_at')
 
         return self.generic_edit_multiple(
             request, queryset,

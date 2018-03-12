@@ -38,7 +38,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
                 ('copy', touchtechnology.common.db.models.HTMLField(verbose_name='Page Copy', blank=True)),
-                ('node', models.ForeignKey(related_name=b'contents', verbose_name='Node', to='common.SitemapNode')),
+                ('node', models.ForeignKey(related_name=b'contents', verbose_name='Node', to='common.SitemapNode', on_delete=models.PROTECT)),
             ],
             options={
             },
@@ -63,7 +63,7 @@ class Migration(migrations.Migration):
                 ('label', models.SlugField(default=b'copy', max_length=20, verbose_name='CSS class', choices=[(b'copy', b'copy')])),
                 ('sequence', models.PositiveIntegerField(verbose_name='Sequence')),
                 ('copy', touchtechnology.common.db.models.HTMLField(verbose_name='Copy', blank=True)),
-                ('page', models.ForeignKey(related_name=b'content', verbose_name='Page', to='content.Page')),
+                ('page', models.ForeignKey(related_name=b'content', verbose_name='Page', to='content.Page', on_delete=models.PROTECT)),
             ],
             options={
                 'ordering': ('sequence',),
@@ -87,7 +87,7 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
                 ('key', models.CharField(max_length=200, verbose_name='Key')),
                 ('value', models.TextField(default='null', help_text='Enter a valid JSON object', verbose_name='Value', blank=True)),
-                ('node', models.ForeignKey(related_name=b'kw', verbose_name='Node', to='common.SitemapNode')),
+                ('node', models.ForeignKey(related_name=b'kw', verbose_name='Node', to='common.SitemapNode', on_delete=models.PROTECT)),
             ],
             options={
             },

@@ -46,8 +46,8 @@ class Migration(migrations.Migration):
                 ('rght', models.PositiveIntegerField(editable=False, db_index=True)),
                 ('tree_id', models.PositiveIntegerField(editable=False, db_index=True)),
                 ('level', models.PositiveIntegerField(editable=False, db_index=True)),
-                ('content_type', models.ForeignKey(blank=True, to='contenttypes.ContentType', null=True)),
-                ('parent', models.ForeignKey(related_name=b'children', verbose_name='Parent', blank=True, to='common.SitemapNode', null=True)),
+                ('content_type', models.ForeignKey(blank=True, to='contenttypes.ContentType', null=True, on_delete=models.PROTECT)),
+                ('parent', models.ForeignKey(related_name=b'children', verbose_name='Parent', blank=True, to='common.SitemapNode', null=True, on_delete=models.PROTECT)),
                 ('restrict_to_groups', touchtechnology.common.db.models.ManyToManyField(help_text='If you select one or more of these groups your visitors will need to be logged in and a member of an appropriate group to view this part of the site.', to='auth.Group', verbose_name='Restrict to Groups', blank=True)),
             ],
             options={

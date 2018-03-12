@@ -12,7 +12,7 @@ __all__ = (
 
 S = lambda n, d=None: getattr(settings, 'TOUCHTECHNOLOGY_' + n, d)
 
-project_template_dirs = getattr(settings, 'TEMPLATE_DIRS', ())
+project_template_dirs = first(getattr(settings, 'TEMPLATES', ()), {}).get('DIRS', [])
 project_template_base = first(project_template_dirs, 'templates')
 
 NODE_CACHE = getattr(settings, 'TOUCHTECHNOLOGY_NODE_CACHE', 'default')

@@ -32,7 +32,7 @@ from django.utils.safestring import mark_safe
 from django.utils.six.moves.urllib.parse import parse_qsl
 from django.utils.text import slugify
 from guardian.core import ObjectPermissionChecker
-from six.moves import zip_longest
+from six.moves import xrange, zip_longest
 from touchtechnology.common.default_settings import CURRENCY_SYMBOL
 from touchtechnology.common.exceptions import NotModelManager
 from touchtechnology.common.models import SitemapNode

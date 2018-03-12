@@ -10,9 +10,7 @@ from modelforms.forms import ModelForm
 from touchtechnology.common.default_settings import (
     SITEMAP_EDIT_PARENT, SITEMAP_HTTPS_OPTION, SITEMAP_ROOT,
 )
-from touchtechnology.common.forms.mixins import (
-    BootstrapFormControlMixin, SuperUserSlugMixin,
-)
+from touchtechnology.common.forms.mixins import BootstrapFormControlMixin, SuperUserSlugMixin
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.content.app_settings import PAGE_CONTENT_BLOCKS
 from touchtechnology.content.models import (
@@ -214,6 +212,10 @@ class PageContentFormset(BasePageContentFormset):
             instance=instance, *args, **kwargs)
 
     def total_form_count(self):
+        if isinstance(PAGE_CONTENT_BLOCKS, str):
+            # We may want to overload this by tenant.
+            callback = import_string(PAGE_CONTENT_BLOCKS)
+            return callback(self.node)
         return PAGE_CONTENT_BLOCKS
 
     def _construct_form(self, i, **kwargs):

@@ -1,38 +1,10 @@
 from __future__ import unicode_literals
 
-from decimal import Decimal
-from unittest import skipIf
-
 import mock
-import six
 from test_plus import TestCase
 from touchtechnology.common.forms.fields import boolean_choice_field_coerce
 from touchtechnology.common.forms.tz import timezone_choice
-from touchtechnology.common.utils import average, get_base_url, get_mod_func
-
-
-class Average(TestCase):
-
-    def test_integers(self):
-        series = (1, 2, 3, 4)
-        res = average(series)
-        self.assertEqual(res, 2.5)
-
-    def test_floats(self):
-        series = (1.25, 1.5, 1.75)
-        res = average(series)
-        self.assertEqual(res, 1.5)
-
-    @skipIf(six.PY3, "Floating point's seem to have changed?")
-    def test_complex_floats(self):
-        series = (5.0 / 3, 35.0 / 6, 22.0 / 7)
-        res = average(series)
-        self.assertEqual(res, Decimal('3.54761904762'))
-
-    def test_decimals(self):
-        series = (Decimal(5) / 3, Decimal(35) / 6, Decimal(22) / 7)
-        res = average(series)
-        self.assertEqual(res, Decimal('3.547619047619047619047619047'))
+from touchtechnology.common.utils import get_base_url, get_mod_func
 
 
 class BooleanChoiceFieldCoerce(TestCase):
