@@ -53,11 +53,14 @@ class TemplateTests(TestCase):
     def setUpClass(cls):
         stage1 = factories.StageFactory.create()
         stage2 = factories.StageFactory.create(division=stage1.division, follows=stage1)
+        ground = factories.GroundFactory.create(venue__season=stage2.division.season)
         factories.MatchFactory.create(
             home_team=None, away_team=None, home_team_eval="P1", away_team_eval="P2",
-            stage=stage2, date=date(2017, 2, 13), time=time(9, 0),
+            stage=stage2, date=date(2017, 2, 13), time=time(9, 0), play_at=ground,
             datetime=datetime(2017, 2, 13, 9, tzinfo=pytz.utc))
-        cls.season = stage2.division.season
+        cls.stage = stage2
+        cls.division = stage2.division
+        cls.season = cls.division.season
         cls.competition = cls.season.competition
 
     @classmethod
@@ -72,6 +75,16 @@ class TemplateTests(TestCase):
                 'admin:fixja:match-runsheet', self.competition.pk, self.season.pk, '20170213')
             self.assertResponseContains('<td class="team">1st</td>')
             self.assertResponseContains('<td class="team">2nd </td>')  # whitespace deliberate
+
+    def test_match_grid(self):
+        self.assertLoginRequired(
+            'admin:fixja:match-grid', self.competition.pk, self.season.pk, '20170213', 'html')
+        with self.login(self.superuser):
+            self.assertGoodView(
+                'admin:fixja:match-grid', self.competition.pk, self.season.pk, '20170213', 'html')
+            self.assertResponseContains(
+                '<h4>%s<br /><small>%s</small></h4>' % (self.division, self.stage))
+            self.assertResponseContains('<p>1st <br>2nd</p>')  # whitespace & br style deliberate
 
 
 class GoodViewTests(TestCase):
