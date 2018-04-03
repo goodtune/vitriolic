@@ -30,8 +30,8 @@
 				<td class="time">{% ifchanged match.datetime %}{{ match.datetime|time }}{% endifchanged %}</td>
 				<td class="division">{{ match.stage.division.short_title|default:match.stage.division.title }}</td>
 				<td class="play_at">{{ match.play_at.title }}</td>
-				<td class="team">{{ match.get_home_team|safe }}</td>
-				<td class="team">{{ match.get_away_team|safe }}</td>
+				<td class="team">{{ match.get_home_team.title|safe }}</td>
+				<td class="team">{{ match.get_away_team.title|safe }}</td>
 			</tr>
 		{% endfor %}
 	</tbody>

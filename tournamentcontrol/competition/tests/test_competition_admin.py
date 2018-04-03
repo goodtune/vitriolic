@@ -1,9 +1,10 @@
 from __future__ import unicode_literals
 
 import unittest
-from datetime import date, time
+from datetime import date, datetime, time
 
 import django
+import pytz
 import six
 from django.conf import settings
 from django.urls import reverse
@@ -44,6 +45,33 @@ class TestCase(BaseTestCase):
         self.assertGoodEditView('%s:add' % namespace, *args[:-1], **kwargs)
         self.assertGoodEditView('%s:edit' % namespace, *args, **kwargs)
         self.assertGoodDeleteView('%s:delete' % namespace, *args)
+
+
+class TemplateTests(TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        stage1 = factories.StageFactory.create()
+        stage2 = factories.StageFactory.create(division=stage1.division, follows=stage1)
+        factories.MatchFactory.create(
+            home_team=None, away_team=None, home_team_eval="P1", away_team_eval="P2",
+            stage=stage2, date=date(2017, 2, 13), time=time(9, 0),
+            datetime=datetime(2017, 2, 13, 9, tzinfo=pytz.utc))
+        cls.season = stage2.division.season
+        cls.competition = cls.season.competition
+
+    @classmethod
+    def tearDownClass(cls):
+        pass
+
+    def test_match_runsheet(self):
+        self.assertLoginRequired(
+            'admin:fixja:match-runsheet', self.competition.pk, self.season.pk, '20170213')
+        with self.login(self.superuser):
+            self.assertGoodView(
+                'admin:fixja:match-runsheet', self.competition.pk, self.season.pk, '20170213')
+            self.assertResponseContains('<td class="team">1st</td>')
+            self.assertResponseContains('<td class="team">2nd </td>')  # whitespace deliberate
 
 
 class GoodViewTests(TestCase):
