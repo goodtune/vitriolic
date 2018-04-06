@@ -18,8 +18,8 @@ from django.db.models import Model, Q
 from django.db.models.query import QuerySet
 from django.forms.forms import BoundField
 from django.forms.widgets import (
-    CheckboxInput, CheckboxSelectMultiple, FileInput, MultiWidget,
-    PasswordInput, RadioSelect, Select, Textarea, TextInput,
+    CheckboxInput, CheckboxSelectMultiple, FileInput, MultiWidget, PasswordInput, RadioSelect,
+    Select, Textarea, TextInput,
 )
 from django.template import Library, Node
 from django.template.loader import get_template, render_to_string
@@ -32,13 +32,13 @@ from django.utils.safestring import mark_safe
 from django.utils.six.moves.urllib.parse import parse_qsl
 from django.utils.text import slugify
 from guardian.core import ObjectPermissionChecker
+from namedentities import named_entities
 from six.moves import xrange, zip_longest
 from touchtechnology.common.default_settings import CURRENCY_SYMBOL
 from touchtechnology.common.exceptions import NotModelManager
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.utils import (
-    create_exclude_filter, get_all_perms_for_model_cached, model_and_manager,
-    tree_for_node,
+    create_exclude_filter, get_all_perms_for_model_cached, model_and_manager, tree_for_node,
 )
 
 logger = logging.getLogger(__name__)
@@ -390,7 +390,9 @@ def get_type_plural(obj):
 
 @register.filter
 def htmlentities(s):
-    return mark_safe(escape(s).encode('ascii', 'xmlcharrefreplace'))
+    replaced_entities = named_entities(
+        escape(s).encode('ascii', 'xmlcharrefreplace').decode('utf8'))
+    return mark_safe(replaced_entities)
 
 
 @register.filter('abs')
@@ -408,7 +410,7 @@ def price(value, extra=''):
     return context
 
 
-@register.filter('islice')
+@register.filter('islice', is_safe=True)
 def islice_(value, arg):
     """
     Returns an iterator slice of the list.
@@ -424,7 +426,6 @@ def islice_(value, arg):
 
     except (ValueError, TypeError):
         return value  # Fail silently.
-islice_.is_safe = True
 
 
 @register.inclusion_tag('touchtechnology/common/templatetags/version.html')
@@ -547,5 +548,6 @@ class Login(AsTag):
         if request:
             url += '?next=' + request.path
         return url
+
 
 register.tag(Login)
