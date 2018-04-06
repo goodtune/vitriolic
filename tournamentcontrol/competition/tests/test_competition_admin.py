@@ -7,6 +7,7 @@ import django
 import pytz
 import six
 from django.conf import settings
+from django.template import Context, Template
 from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 from touchtechnology.common.tests.factories import UserFactory
@@ -51,13 +52,20 @@ class TemplateTests(TestCase):
 
     @classmethod
     def setUpClass(cls):
+        super(TemplateTests, cls).setUpClass()
         stage1 = factories.StageFactory.create()
         stage2 = factories.StageFactory.create(division=stage1.division, follows=stage1)
         ground = factories.GroundFactory.create(venue__season=stage2.division.season)
+        cls.team = factories.TeamFactory.create(
+            title="Chees\u00e9\u00a0&\u00a0Crackers", division=stage1.division)
         factories.MatchFactory.create(
             home_team=None, away_team=None, home_team_eval="P1", away_team_eval="P2",
             stage=stage2, date=date(2017, 2, 13), time=time(9, 0), play_at=ground,
             datetime=datetime(2017, 2, 13, 9, tzinfo=pytz.utc))
+        factories.MatchFactory.create(
+            home_team=cls.team, away_team=None, home_team_eval="P3", away_team_eval="P4",
+            stage=stage2, date=date(2017, 2, 13), time=time(10, 0), play_at=ground,
+            datetime=datetime(2017, 2, 13, 10, tzinfo=pytz.utc))
         cls.stage = stage2
         cls.division = stage2.division
         cls.season = cls.division.season
@@ -65,7 +73,13 @@ class TemplateTests(TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        pass
+        super(TemplateTests, cls).tearDownClass()
+
+    def test_team_title(self):
+        template = Template('{% load common %}{{ team.title|htmlentities }}')
+        context = Context({'team': self.team})
+        output = template.render(context)
+        self.assertEqual(output, 'Chees&eacute;&nbsp;&amp;&nbsp;Crackers')
 
     def test_match_runsheet(self):
         self.assertLoginRequired(
@@ -75,6 +89,8 @@ class TemplateTests(TestCase):
                 'admin:fixja:match-runsheet', self.competition.pk, self.season.pk, '20170213')
             self.assertResponseContains('<td class="team">1st</td>')
             self.assertResponseContains('<td class="team">2nd </td>')  # whitespace deliberate
+            self.assertResponseContains(
+                '<td class="team">Chees&eacute;&nbsp;&amp;&nbsp;Crackers</td>')
 
     def test_match_grid(self):
         self.assertLoginRequired(
@@ -85,6 +101,7 @@ class TemplateTests(TestCase):
             self.assertResponseContains(
                 '<h4>%s<br /><small>%s</small></h4>' % (self.division, self.stage))
             self.assertResponseContains('<p>1st <br>2nd</p>')  # whitespace & br style deliberate
+            self.assertResponseContains('<p>Chees&eacute;&nbsp;&amp;&nbsp;Crackers<br>4th</p>')
 
 
 class GoodViewTests(TestCase):

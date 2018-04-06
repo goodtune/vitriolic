@@ -1,14 +1,14 @@
-{% load i18n %}
+{% load i18n static %}
 {% load common %}
 <html>
 <head>
 	<title>{% block page_title %}{{ competition.title }} - {{ season.title }} • {{ date|date }}{% endblock %}</title>
 	{% if not request.is_ajax %}
-		<link rel="stylesheet" href="{{ STATIC_URL }}css/reset-min.css" />
-		<link rel="stylesheet" href="{{ STATIC_URL }}css/base-min.css" />
+		<link rel="stylesheet" href="{% get_static_prefix %}css/reset-min.css" />
+		<link rel="stylesheet" href="{% get_static_prefix %}css/base-min.css" />
 	{% endif %}
 
-	<link rel="stylesheet" href="{{ STATIC_URL }}tournamentcontrol/competition/css/vi_grid.css" />
+	<link rel="stylesheet" href="{% get_static_prefix %}tournamentcontrol/competition/css/vi_grid.css" />
 
 	<style type="text/css">
 		/* timestamp and version number */
@@ -22,7 +22,7 @@
 	</style>
 
 	{% block customcss %}
-		<link rel="stylesheet" href="{{ STATIC_URL }}css/vi_grid.css" />
+		<link rel="stylesheet" href="{% get_static_prefix %}css/vi_grid.css" />
 	{% endblock %}
 </head>
 <body>
