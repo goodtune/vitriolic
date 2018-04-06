@@ -42,7 +42,6 @@ class DrawGenerationMatchFormSetTest(TestCase):
         )
 
     def test_draw_generation_match_form_set_save(self):
-
         self.assertEqual(Match.objects.count(), 0)
 
         data0 = {

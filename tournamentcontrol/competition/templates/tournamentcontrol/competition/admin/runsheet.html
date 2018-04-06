@@ -1,5 +1,7 @@
-{% load i18n static %}
+<!DOCTYPE html>
 <html>
+{% load i18n static %}
+{% load common %}
 <head>
 	<title>{% blocktrans %}Daily Runsheet - {{ date }}{% endblocktrans %}</title>
 	{% if not request.is_ajax %}
@@ -28,10 +30,10 @@
 		{% for match in object_list %}
 			<tr{% ifchanged match.datetime %} class="group"{% endifchanged %}>
 				<td class="time">{% ifchanged match.datetime %}{{ match.datetime|time }}{% endifchanged %}</td>
-				<td class="division">{{ match.stage.division.short_title|default:match.stage.division.title }}</td>
-				<td class="play_at">{{ match.play_at.title }}</td>
-				<td class="team">{{ match.get_home_team|safe }}</td>
-				<td class="team">{{ match.get_away_team|safe }}</td>
+				<td class="division">{{ match.stage.division.short_title|default:match.stage.division.title|htmlentities }}</td>
+				<td class="play_at">{{ match.play_at.title|htmlentities }}</td>
+				<td class="team">{{ match.get_home_team.title|htmlentities }}</td>
+				<td class="team">{{ match.get_away_team.title|htmlentities }}</td>
 			</tr>
 		{% endfor %}
 	</tbody>

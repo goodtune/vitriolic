@@ -11,7 +11,7 @@ from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.db.models import F, Q
 from django.http import HttpResponse
-from django.template import Context, RequestContext
+from django.template import Context
 from django.template.loader import select_template
 from django.utils import timezone
 from touchtechnology.common.prince import prince
@@ -459,11 +459,7 @@ def generate_fixture_grid(season, dates=None, templates=None,
     context.update(extra_context)
 
     template = select_template(templates)
-    if request is None:
-        ctx = Context(context)
-    else:
-        ctx = RequestContext(request, context)
-    html = template.render(ctx)
+    html = template.render(context)
 
     if format == 'pdf':
         pdf = prince(html, **kwargs)
