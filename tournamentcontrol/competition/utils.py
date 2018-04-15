@@ -11,7 +11,6 @@ from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.db.models import F, Q
 from django.http import HttpResponse
-from django.template import Context
 from django.template.loader import select_template
 from django.utils import timezone
 from touchtechnology.common.prince import prince
@@ -402,9 +401,8 @@ def generate_scorecards(matches=None, templates=None, format='html',
     }
     context.update(extra_context)
 
-    context_instance = Context(context)
     template = select_template(templates)
-    output = template.render(context_instance)
+    output = template.render(context)
 
     if format == 'pdf':
         output = prince(output, **kwargs)
