@@ -13,9 +13,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.module_loading import import_string
 from django.views.generic import dates
-from tournamentcontrol.competition.models import (
-    LadderEntry, RankDivision, RankPoints, RankTeam,
-)
+from tournamentcontrol.competition.models import LadderEntry, RankDivision, RankPoints, RankTeam
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +103,8 @@ class TeamView(DivisionView):
             for each in LadderEntry.objects.filter(
                 bye=0,
                 division=division.pk,
-                team__club__slug=self.kwargs['team'])
+                team__club__slug=self.kwargs['team'],
+                match__date__lt=at)
         ]
 
         # Punch this into the context to display in the front end.
@@ -205,8 +204,9 @@ def _rank(decay=no_decay, start=None, at=None, **kwargs):
     table = {}
 
     for ladder_entry in ladder_entries.filter(ladder_entry_q):
-        obj, __ = RankTeam.objects.get_or_create(club=ladder_entry.team.club, division=ladder_entry.division)
-        points = ladder_entry.rank_points * ladder_entry.importance
+        obj, __ = RankTeam.objects.get_or_create(
+            club=ladder_entry.team.club, division=ladder_entry.division)
+        points = ladder_entry.rank_points
         points_decay = points * decay(ladder_entry, at)
         if points_decay:
             team = table.setdefault(obj.division, {}).setdefault(obj, {})
