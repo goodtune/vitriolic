@@ -123,18 +123,9 @@ class MatchPlayedWidget(forms.widgets.Select):
         choices = (('1', _('Yes')), ('0', _('No')))
         super(MatchPlayedWidget, self).__init__(attrs, choices)
 
-    def render(self, name, value, attrs=None, choices=()):
-        try:
-            value = {True: '1', False: '0'}[value]
-        except KeyError:
-            value = '1'
-        return super(MatchPlayedWidget, self).render(
-            name, value, attrs, choices)
-
     def value_from_datadict(self, data, files, name):
         value = data.get(name, None)
-        return {'1': 1, True: 1, 'True': 1,
-                '0': 0, 'False': 0, False: 0}.get(value, None)
+        return {'1': 1, '0': 0, True: 1, False: 0, 'True': 1, 'False': 0}.get(value, None)
 
 
 class LadderPointsField(forms.MultiValueField):
