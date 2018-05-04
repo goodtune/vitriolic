@@ -65,6 +65,12 @@ setup(
             'numpy',
             'pyparsing>=2.0.3,<3',
         ],
+        'youtube': [
+            'google-api-python-client',
+            'google-auth',
+            'google-auth-httplib2',
+            'google-auth-oauthlib',
+        ],
     },
     include_package_data=True,
     zip_safe=False,
