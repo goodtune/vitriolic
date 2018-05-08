@@ -11,7 +11,7 @@ from django.template import Context, Template
 from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 from touchtechnology.common.tests.factories import UserFactory
-from tournamentcontrol.competition.models import Match, Team
+from tournamentcontrol.competition.models import Team
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin
 
@@ -584,12 +584,13 @@ class BackendTests(TestCase):
         self.assertResponseContains('Bare Back Riders', html=False)
         self.assertResponseContains('BBR', html=False)
 
-    @unittest.skip('Not in the fixja namespace.')
     def test_match_detail(self):
-        # Add scoreline to match or this will be a 404
-        Match.objects.filter(pk=1).update(home_team_score=3,
-                                          away_team_score=0)
-        m = Match.objects.get(pk=1)
+        play_at = factories.GroundFactory.create()
+        m = factories.MatchFactory.create(play_at=play_at, home_team_score=3, away_team_score=0)
+
+        # Make sure home team has some players associated with it.
+        factories.TeamAssociationFactory.create_batch(
+            4, is_player=True, team=m.home_team, person__club=m.home_team.club)
 
         kwargs = {
             'match_id': m.pk,
@@ -665,6 +666,9 @@ class BackendTests(TestCase):
         })
         res = self.client.post(url, data=data)
         self.assertRedirects(res, reverse('admin:index'))
+
+        # Make sure the database is correctly reflecting the detailed entries.
+        self.assertEqual(m.statistics.count(), 4)
 
     def test_bug_0068(self):
         """

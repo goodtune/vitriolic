@@ -1732,15 +1732,14 @@ class MatchStatisticFormset(BaseMatchStatisticFormset):
                 _("You must set the simple match score prior to entering "
                   "detailed match statistics."))
 
-        points = [f.cleaned_data['points'] for f in self.forms]
-        score = sum(filter(None, points))
+        score = sum([f.cleaned_data['points'] for f in self.forms])
         if score != self.score:
             raise forms.ValidationError(
                 _("Total number of points (%(points)d) does not equal total "
                   "number of scores (%(scores)d) for this team.") % {
                     'points': score, 'scores': self.score})
 
-        players = sum(map(lambda f: f.cleaned_data['played'], self.forms))
+        players = len([f for f in self.forms if f.cleaned_data['played']])
         maximum = 14  # FIXME this maximum should not be hard-coded
         if players > maximum:
             message = ungettext(
@@ -1750,6 +1749,15 @@ class MatchStatisticFormset(BaseMatchStatisticFormset):
                 "there are %(count)d selected.",
                 players) % {'max': maximum, 'count': players}
             raise forms.ValidationError(message)
+
+    def save(self, *args, **kwargs):
+        # Should look into the correct solution. I think it should be to overload save_new
+        # on the base Form to attach it to the team... that seems to be the only reason we
+        # need to pre-populate with a "faux queryset" in the FormSet?
+        stats = []
+        for form in self.forms:
+            stats.append(form.save())
+        return stats
 
 
 SeasonMatchTimeFormSet = inlineformset_factory(
