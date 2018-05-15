@@ -17,9 +17,8 @@ from namedentities import named_entities
 from touchtechnology.common.forms.iter import TemplateChoiceIterator
 from touchtechnology.common.forms.mixins import LabelFromInstanceMixin
 from touchtechnology.common.forms.widgets import (
-    BootstrapGoogleMapsWidget, HTMLWidget, SelectDateHiddenWidget,
-    SelectDateTimeHiddenWidget, SelectDateTimeWidget, SelectDateWidget,
-    SelectTimeHiddenWidget, SelectTimeWidget,
+    BootstrapGoogleMapsWidget, HTMLWidget, SelectDateHiddenWidget, SelectDateTimeHiddenWidget,
+    SelectDateTimeWidget, SelectDateWidget, SelectTimeHiddenWidget, SelectTimeWidget,
 )
 
 
@@ -110,7 +109,7 @@ class SelectDateField(forms.MultiValueField):
             return None
 
         try:
-            day, month, year = map(int, data)
+            day, month, year = (int(i) for i in data)
             d = date(year, month, day)
         except ValueError:
             raise forms.ValidationError('Please enter a valid date.')
@@ -205,7 +204,7 @@ class SelectDateTimeField(forms.MultiValueField):
             return None
 
         try:
-            day, month, year, hour, minute = map(int, data[:5])
+            day, month, year, hour, minute = (int(i) for i in data[:5])
             value = datetime(year, month, day, hour, minute)
             if settings.USE_TZ:
                 try:

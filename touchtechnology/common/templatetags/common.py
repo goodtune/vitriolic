@@ -177,9 +177,12 @@ def navigation(parser, token):
         {% navigation root='page_3' %}
     """
     args = token.split_contents()[1:]
-    kwargs = dict(map(lambda x: x.split('=', 1), args))
-    kwargs = dict([(k, parser.compile_filter(v))
-                   for k, v in kwargs.items()])
+    kwargs = {
+        k: parser.compile_filter(v)
+        for k, v in [
+            a.split('=', 1)
+            for a in args
+        ]}
     return NavigationNode(kwargs)
 
 

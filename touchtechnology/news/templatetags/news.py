@@ -12,7 +12,7 @@ def related_articles(context, article, limit=None, order_by=None):
     categories = article.categories.live()
     articles = Article.objects.live() \
                               .exclude(pk=article.pk) \
-                              .filter(categories=categories) \
+                              .filter(categories__in=categories) \
                               .distinct()
 
     if order_by is not None:

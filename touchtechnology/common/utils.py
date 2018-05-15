@@ -69,14 +69,13 @@ class FauxNode(NodeRelationMixin):
     def __eq__(self, other):
         if other is None:
             return
-        attr = map(attrgetter, ('title', 'short_title', 'slug', 'level',
-                                'tree_id', 'parent'))
-        return all([g(self) == g(other) for g in attr])
+        attr = ('title', 'short_title', 'slug', 'level', 'tree_id', 'parent')
+        gttr = [attrgetter(a) for a in attr]
+        return all([g(self) == g(other) for g in gttr])
 
     def __repr__(self):
-        attr = ('title', 'short_title', 'slug', 'level', 'tree_id',
-                'lft', 'rght', 'parent')
-        gttr = map(attrgetter, attr)
+        attr = ('title', 'short_title', 'slug', 'level', 'tree_id', 'lft', 'rght', 'parent')
+        gttr = [attrgetter(a) for a in attr]
         data = dict(zip(attr, [g(self) for g in gttr]))
         data['class'] = self.__class__.__name__
         return self.REPR_FMT.format(**data)
@@ -113,7 +112,7 @@ def get_mod_func(callback):
 def create_exclude_filter(queryset):
     def _filter(node):
         return Q(tree_id=node.tree_id, lft__gte=node.lft, lft__lte=node.rght)
-    return reduce(or_, map(_filter, queryset), Q())
+    return reduce(or_, [_filter(n) for n in queryset], Q())
 
 
 def get_403_or_None(request, perms, obj=None, login_url=None,

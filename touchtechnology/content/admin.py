@@ -18,19 +18,14 @@ from first import first
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.mixins import AdminUrlMixin
 from touchtechnology.admin.sites import site
-from touchtechnology.common.decorators import (
-    require_POST_m, staff_login_required_m,
-)
+from touchtechnology.common.decorators import require_POST_m, staff_login_required_m
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.content.forms import (
-    FileUploadForm, NewFolderForm, NewPlaceholderSitemapNodeForm,
-    NewSitemapNodeForm, Page, PageContentFormset, PageForm,
-    PlaceholderConfigurationBase, PlaceholderContentFormset,
+    FileUploadForm, NewFolderForm, NewPlaceholderSitemapNodeForm, NewSitemapNodeForm, Page,
+    PageContentFormset, PageForm, PlaceholderConfigurationBase, PlaceholderContentFormset,
     PlaceholderSitemapNodeForm, RedirectEditForm, SitemapNodeForm,
 )
-from touchtechnology.content.models import (
-    Chunk, PageContent, Placeholder, Redirect,
-)
+from touchtechnology.content.models import Chunk, PageContent, Placeholder, Redirect
 
 logger = logging.getLogger(__name__)
 
@@ -461,7 +456,7 @@ class ContentAdminComponent(AdminComponent):
             fullpath = os.path.join(path or '', d, '')
             return fullpath, d, default_storage.listdir(fullpath)
 
-        directories = map(_directories, directories)
+        directories = [_directories(d) for d in directories]
         match = resolve(request.path)
 
         @python_2_unicode_compatible
