@@ -13,8 +13,7 @@ from django.test.utils import override_settings
 from django.utils import timezone
 from touchtechnology.common.forms.auth import permissionformset_factory
 from touchtechnology.common.forms.fields import (
-    EmailField, HTMLField, SelectDateField, SelectDateTimeField,
-    SelectTimeField,
+    EmailField, HTMLField, SelectDateField, SelectDateTimeField, SelectTimeField,
 )
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.tests import factories
@@ -128,7 +127,7 @@ class TestPermissionFormSet(TestCase):
         formset = formset_class(queryset=self.queryset, instance=self.instance)
         self.assertQuerysetEqual(
             formset.forms[0].fields['users'].queryset,
-            map(repr, self.UserModel.objects.filter(is_staff=True)),
+            (repr(o) for o in self.UserModel.objects.filter(is_staff=True)),
         )
 
     def test_all_users(self):
@@ -137,7 +136,7 @@ class TestPermissionFormSet(TestCase):
         formset = formset_class(queryset=self.queryset, instance=self.instance)
         self.assertQuerysetEqual(
             formset.forms[0].fields['users'].queryset.order_by('pk'),
-            map(repr, self.UserModel.objects.order_by('pk')),
+            (repr(o) for o in self.UserModel.objects.order_by('pk')),
         )
 
     def test_user_widget_checkbox_lte(self):

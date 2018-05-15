@@ -2,9 +2,7 @@ import logging
 import os.path
 
 from django.core.files.base import ContentFile
-from django.core.files.storage import (
-    FileSystemStorage as FileSystemStorageBase,
-)
+from django.core.files.storage import FileSystemStorage as FileSystemStorageBase
 from django.db.models.fields.files import ImageFieldFile
 from django.utils.six.moves.urllib.parse import urljoin
 from PIL import Image
@@ -71,13 +69,13 @@ class WalkMixin(object):
         directories, files = self.listdir(top)
         directories.sort()
         files.sort()
-        files = map(lambda name: os.path.join(top, name), files)
+        files = [os.path.join(top, name) for name in files]
 
         # fetch our "url" with respect to this Storage class.
         yield (
             self.url(top),
-            zip(map(self.url, directories), directories),
-            zip(map(self.url, files), files),
+            zip([self.url(d) for d in directories], directories),
+            zip([self.url(f) for f in files], files),
         )
 
         # for any child directories, recursively descend and repeat.

@@ -29,13 +29,11 @@ from django.utils.translation import ugettext_lazy as _
 from django.views.decorators.cache import patch_cache_control
 from modelforms.forms import ModelForm
 from six.moves import xrange
-from touchtechnology.common.decorators import (
-    login_required_m, node2extracontext, require_POST_m,
-)
+from touchtechnology.common.decorators import login_required_m, node2extracontext, require_POST_m
 from touchtechnology.common.default_settings import PAGINATE_BY
 from touchtechnology.common.utils import (
-    get_403_or_None, get_all_perms_for_model_cached, get_objects_for_user,
-    get_perms_for_model, model_and_manager, select_template_name,
+    get_403_or_None, get_all_perms_for_model_cached, get_objects_for_user, get_perms_for_model,
+    model_and_manager, select_template_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -437,9 +435,8 @@ class Application(object):
         # If the developer has not provided a custom form, then dynamically
         # construct a default ModelForm for them.
         if form_class is None:
-            meta_class = type(smart_str('Meta'), (), {'model': model,
-                                        'fields': form_fields,
-                                        'widgets': form_widgets})
+            meta_class = type(smart_str('Meta'), (),
+                              {'model': model, 'fields': form_fields, 'widgets': form_widgets})
             form_class = type(smart_str('EditForm'), self.model_form_bases,
                               {'Meta': meta_class})
 
@@ -597,7 +594,8 @@ class Application(object):
                     models=smart_str(model._meta.verbose_name_plural),
                 )
                 objects = formset.save()
-                map(post_save_callback, objects)
+                for each in objects:
+                    post_save_callback(each)
                 for level, message in changed_messages:
                     messages.add_message(request, level,
                                          message.format(**replace))
@@ -650,7 +648,8 @@ class Application(object):
         # If the developer has not provided a custom form, then dynamically
         # construct a default ModelForm for them.
         if form_class is None:
-            meta_class = type(smart_str('Meta'), (), {'model': model, 'fields': form_fields, 'widgets': form_widgets})
+            meta_class = type(smart_str('Meta'), (),
+                              {'model': model, 'fields': form_fields, 'widgets': form_widgets})
             form_class = type(smart_str('EditForm'), self.model_form_bases, {'Meta': meta_class})
 
         # If the developer has not provided a custom formset, then dynamically
@@ -695,7 +694,8 @@ class Application(object):
                                  "will bubble up.")
                     related = formset.save()
                     post_save_callback(obj)
-                    map(post_save_related_callback, related)
+                    for each in related:
+                        post_save_related_callback(each)
                     transaction.savepoint_commit(sid)
                     messages.add_message(
                         request, messages.SUCCESS,
