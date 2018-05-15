@@ -1,0 +1,16 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	<th>{% trans "Subject" %}</th>
+	<th>{% trans "Sanction" %}</th>
+	<th>{% trans "Reason" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td class="team flag {{ obj.team.club.abbreviation }}">{{ obj.subject }}</td>
+	<td>{{ obj.get_sanction_display }}</td>
+	<td>{{ obj.get_reason_display }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}3{% endblock %}
