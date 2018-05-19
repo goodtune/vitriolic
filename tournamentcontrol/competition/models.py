@@ -16,11 +16,12 @@ from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
 from django import forms
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.postgres import fields as PG
 from django.core import validators
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import BooleanField, Count, DateField, DateTimeField, Min, Q, Sum, TimeField
+from django.db.models import BooleanField, Count, DateField, DateTimeField, Q, Sum, TimeField
 from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
 from django.template import Template
 from django.template.loader import get_template
@@ -40,7 +41,8 @@ from tournamentcontrol.competition.mixins import ModelDiffMixin
 from tournamentcontrol.competition.query import DivisionQuerySet, StageQuerySet, StatisticQuerySet
 from tournamentcontrol.competition.signals import match_forfeit
 from tournamentcontrol.competition.utils import (
-    combine_and_localize, stage_group_position, stage_group_position_re, team_and_division,
+    FauxQueryset, combine_and_localize, stage_group_position, stage_group_position_re,
+    team_and_division,
 )
 from tournamentcontrol.competition.validators import validate_hashtag
 
@@ -225,23 +227,61 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         ordering = ('title',)
 
     @cached_property
-    def _mvp_annotate(self):
+    def _mvp_related(self):
+        """
+        Supercedes _mvp_annotate due to GROUP BY exceptions. Take full control
+        of the query. See the history for the earlier implementation.
+        """
+        query = """
+            SELECT
+                "competition_person"."uuid",
+                "competition_person"."first_name",
+                "competition_person"."last_name",
+                "competition_person"."gender",
+                SUM("competition_simplescorematchstatistic"."played") AS "stats_played",
+                MIN("competition_match"."date") AS "debut",
+                SUM("competition_simplescorematchstatistic"."points") AS "stats_points",
+                COUNT("competition_teamassociation"."id") AS "teams_count",
+                "%(user)s"."id"
+            FROM
+                "competition_person"
+            LEFT OUTER JOIN
+                "competition_simplescorematchstatistic" ON
+                ("competition_person"."uuid" = "competition_simplescorematchstatistic"."player_id")
+            LEFT OUTER JOIN
+                "competition_match" ON
+                ("competition_simplescorematchstatistic"."match_id" = "competition_match"."id")
+            LEFT OUTER JOIN
+                "competition_teamassociation" ON
+                ("competition_person"."uuid" = "competition_teamassociation"."person_id")
+            LEFT OUTER JOIN
+                "%(user)s" ON ("competition_person"."user_id" = "%(user)s"."id")
+            WHERE
+                "competition_person"."club_id" = %%(club)s
+            GROUP BY
+                "competition_person"."uuid",
+                "competition_person"."first_name",
+                "competition_person"."last_name",
+                "competition_person"."gender",
+                "%(user)s"."id"
+            ORDER BY
+                "competition_person"."last_name" ASC,
+                "competition_person"."first_name" ASC
+        """ % {'user': get_user_model()._meta.db_table}
+        params = {
+            'club': self.pk,
+        }
+        members = FauxQueryset(Person)
+        for member in Person.objects.raw(query, params):
+            members.append(member)
         res = {
-            'members': {
-                'debut': Min('statistics__match__date'),
-                'stats_played': Sum('statistics__played'),
-                'stats_points': Sum('statistics__points'),
-                'teams_count': Count('teamassociation'),
-            },
+            'members': members,
         }
         return res
 
     @cached_property
     def _mvp_select_related(self):
         res = {
-            'members': [
-                'user',
-            ],
             'teams': [
                 'division__season__competition',
             ],
