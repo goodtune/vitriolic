@@ -15,7 +15,7 @@ class UserEditForm(UserMixin, ModelForm):
 
     class Meta:
         model = UserModel
-        fields = '__all__'  # Django 1.8 requires `fields` to be set
+        fields = '__all__'
         help_texts = {
             'is_active': _("A disabled account cannot be used to "
                            "login to the site."),
