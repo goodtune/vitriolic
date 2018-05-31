@@ -40,6 +40,7 @@ from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.utils import (
     create_exclude_filter, get_all_perms_for_model_cached, model_and_manager, tree_for_node,
 )
+from tournamentcontrol.competition.utils import FauxQueryset
 
 logger = logging.getLogger(__name__)
 
@@ -382,7 +383,7 @@ def get_type(obj):
 
 @register.filter('types')
 def get_type_plural(obj):
-    if isinstance(obj, QuerySet):
+    if isinstance(obj, (QuerySet, FauxQueryset)):
         return obj.model._meta.verbose_name_plural
     elif isinstance(obj, Model):
         return obj._meta.verbose_name_plural
