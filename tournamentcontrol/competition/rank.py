@@ -203,9 +203,15 @@ def _rank(decay=no_decay, start=None, at=None, **kwargs):
 
     table = {}
 
+    # For performance, use in_bulk to create a dictionary mapping each
+    # RankDivision with pk as it the dictionary key, and model instance
+    # as the value.
+    rank_divisions = RankDivision.objects.in_bulk()
+
     for ladder_entry in ladder_entries.filter(ladder_entry_q):
         obj, __ = RankTeam.objects.get_or_create(
-            club=ladder_entry.team.club, division=ladder_entry.division)
+            club=ladder_entry.team.club,
+            division=rank_divisions[ladder_entry.division])
         points = ladder_entry.rank_points
         points_decay = points * decay(ladder_entry, at)
         if points_decay:
