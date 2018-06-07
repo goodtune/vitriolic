@@ -1,6 +1,5 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.forms import BooleanField as BooleanChoiceField
 from django.utils.translation import ugettext_lazy as _
 from modelforms.forms import ModelForm
 from touchtechnology.common.forms.mixins import UserMixin
@@ -9,22 +8,19 @@ UserModel = get_user_model()
 
 
 class UserEditForm(UserMixin, ModelForm):
-    is_superuser = BooleanChoiceField(label=_("God mode"),
-                                      help_text=_("Should this user be all "
-                                                  "knowing and all powerful?"))
 
     class Meta:
         model = UserModel
         fields = '__all__'
         help_texts = {
-            'is_active': _("A disabled account cannot be used to "
-                           "login to the site."),
-            'is_staff': _("Content editor's have access to this "
-                          "administration interface."),
+            'is_active': _("A disabled account cannot be used to login to the site."),
+            'is_staff': _("Content editor's have access to this administration interface."),
+            'is_superuser': _("Should this user be all knowing and all powerful?"),
         }
         labels = {
             'is_active': _("Enabled"),
             'is_staff': _("Content editor"),
+            'is_superuser': _("God mode"),
         }
 
 
