@@ -17,6 +17,7 @@ from django.db.models.signals import post_save
 from django.urls import reverse_lazy
 from django.utils.encoding import python_2_unicode_compatible
 from django.utils.functional import cached_property
+from django.utils.safestring import mark_safe
 from django.utils.text import slugify
 from django.utils.translation import ugettext_lazy as _
 from touchtechnology.common.default_settings import SITEMAP_ROOT
@@ -92,10 +93,10 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
 
     hidden_from_robots = BooleanField(
         default=False, verbose_name=_("Hide from spiders"),
-        help_text=_("Set this to 'Yes' to prevent search engines from "
-                    "indexing this part of the site.<br />\n"
-                    "<strong>Warning:</strong> this may affect your ranking "
-                    "in search engines."))
+        help_text=mark_safe(_("Set this to <em>Yes</em> to prevent search engines from "
+                              "indexing this part of the site.<br>"
+                              "<strong>Warning:</strong> this may affect your ranking "
+                              "in search engines.")))
 
     restrict_to_groups = ManyToManyField(
         to='auth.Group', blank=True, verbose_name=_("Restrict to Groups"),

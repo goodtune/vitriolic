@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib.auth import get_user_model
+from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
 from touchtechnology.common.forms import RedefineModelForm
 
@@ -26,9 +27,9 @@ class ProfileForm(RedefineModelForm):
             ('first_name', {'required': True}),
             ('last_name', {'required': True}),
             ('email', {
-                'help_text': _("Your email address is also your "
-                               "username.<br />Please ensure you "
-                               "enter it correctly."),
+                'help_text': mark_safe(_("Your email address is also your "
+                                         "username.<br />Please ensure you "
+                                         "enter it correctly.")),
                 'required': True,
             }),
         )

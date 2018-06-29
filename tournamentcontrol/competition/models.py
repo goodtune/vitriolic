@@ -440,8 +440,8 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     hashtag = models.CharField(max_length=30, blank=True, null=True,
                                validators=[validate_hashtag],
                                verbose_name="Hash Tag",
-                               help_text=_("Your official <em>hash tag</em> "
-                                           "for social media promotions."))
+                               help_text=mark_safe(_("Your official <em>hash tag</em> "
+                                                     "for social media promotions.")))
     enabled = BooleanField(default=True)
     start_date = DateField(blank=True, null=True)
     mode = models.IntegerField(choices=SEASON_MODE_CHOICES, default=WEEKLY,
@@ -672,43 +672,38 @@ class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 
     division = ForeignKey(Division, related_name='stages',
                           label_from_instance='title', on_delete=PROTECT)
-    follows = ForeignKey('self', blank=True, null=True, on_delete=SET_NULL,
-                         related_name='preceeds', label_from_instance='title',
-                         help_text=_("When progressing teams into this stage, "
-                                     "which earlier stage should be used for "
-                                     "determining positions.<br />"
-                                     "Default is the immediately preceeding "
-                                     "stage."))
+    follows = ForeignKey(
+        'self', blank=True, null=True, on_delete=SET_NULL,
+        related_name='preceeds', label_from_instance='title',
+        help_text=mark_safe(_("When progressing teams into this stage, which earlier stage "
+                              "should be used for determining positions.<br>"
+                              "Default is the immediately preceeding stage.")))
 
-    keep_ladder = BooleanField(default=True, verbose_name="Keep a ladder",
-                               help_text=_("Set this to <b>No</b> if this "
-                                           "stage does not need to keep a "
-                                           "competition ladder.<br />"
-                                           "Usually set to No for a Final "
-                                           "Series or a Knockout stage."))
-    scale_group_points = BooleanField(default=False,
-                                      help_text=_("In stages with multiple "
-                                                  "pools, adjust points in "
-                                                  "the smaller groups to "
-                                                  "compensate for the reduced "
-                                                  "opportunity to score "
-                                                  "points.<br />You "
-                                                  "<strong>should</strong> "
-                                                  "also set 0 points for Bye "
-                                                  "matches."))
-    carry_ladder = BooleanField(default=False,
-                                verbose_name="Carry over points",
-                                help_text=_("Set this to <b>Yes</b> if this "
-                                            "stage should carry over values "
-                                            "from the previous stage."))
-    keep_mvp = BooleanField(default=True, verbose_name="Keep MVP stats",
-                            help_text=_("Set this to <b>No</b> if this stage "
-                                        "does not need to keep track of MVP "
-                                        "points.<br />Usually set to No for a "
-                                        "Final Series."))
+    keep_ladder = BooleanField(
+        default=True, verbose_name="Keep a ladder",
+        help_text=mark_safe(_("Set this to <b>No</b> if this stage does not need to keep a "
+                              "competition ladder.<br>Usually set to No for a Final "
+                              "Series or a Knockout stage.")))
 
-    matches_needing_printing = ManyToManyField('Match', blank=True,
-                                               related_name='to_be_printed')
+    scale_group_points = BooleanField(
+        default=False,
+        help_text=mark_safe(_("In stages with multiple pools, adjust points in "
+                              "the smaller groups to compensate for the reduced "
+                              "opportunity to score points.<br>You "
+                              "<strong>should</strong> also set 0 points for Bye "
+                              "matches.")))
+
+    carry_ladder = BooleanField(
+        default=False, verbose_name="Carry over points",
+        help_text=_("Set this to <b>Yes</b> if this stage should carry over values "
+                    "from the previous stage."))
+
+    keep_mvp = BooleanField(
+        default=True, verbose_name="Keep MVP stats",
+        help_text=mark_safe(_("Set this to <b>No</b> if this stage does not need to keep "
+                              "track of MVP points.<br>Usually set to No for a Final Series.")))
+
+    matches_needing_printing = ManyToManyField('Match', blank=True, related_name='to_be_printed')
 
     objects = StageQuerySet.as_manager()
 
@@ -784,15 +779,12 @@ class StageGroup(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     rank_importance_parent_attr = 'stage'
 
     stage = ForeignKey(Stage, related_name='pools', on_delete=PROTECT)
-    carry_ladder = BooleanField(default=False,
-                                verbose_name="Carry over points",
-                                help_text=_("Set this to <b>Yes</b> if the "
-                                            "ladder for this pool should "
-                                            "carry over values from the "
-                                            "previous stage.<br />"
-                                            "Will only apply for matches "
-                                            "played against teams that are "
-                                            "now in this group."))
+    carry_ladder = BooleanField(
+        default=False, verbose_name="Carry over points",
+        help_text=mark_safe(_("Set this to <b>Yes</b> if the ladder for this pool should "
+                              "carry over values from the previous stage.<br>"
+                              "Will only apply for matches played against teams that are "
+                              "now in this group.")))
 
     class Meta(OrderedSitemapNode.Meta):
         verbose_name = 'pool'
@@ -849,13 +841,11 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
     """
     rank_division_parent_attr = 'division'
 
-    names_locked = BooleanField(default=False,
-                                help_text=_("When the team name is locked, "
-                                            "the team manager will not be "
-                                            "able to change their team "
-                                            "name.<br />"
-                                            "As a tournament manager you can "
-                                            "always change the names."))
+    names_locked = BooleanField(
+        default=False,
+        help_text=mark_safe(_("When the team name is locked, the team manager will not be "
+                              "able to change their team name.<br>"
+                              "As a tournament manager you can always change the names.")))
 
     club = ForeignKey(Club, blank=True, null=True, on_delete=SET_NULL,
                       related_name='teams', label_from_instance='title')
