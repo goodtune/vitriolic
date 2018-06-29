@@ -10,9 +10,7 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import JSONField
 from django.db import models
-from django.db.models import (
-    BooleanField, DateTimeField, ForeignKey as TreeField, ManyToManyField,
-)
+from django.db.models import BooleanField, DateTimeField, ForeignKey as TreeField, ManyToManyField
 from django.db.models.signals import post_save
 from django.urls import reverse_lazy
 from django.utils.encoding import python_2_unicode_compatible
