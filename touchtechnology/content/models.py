@@ -8,14 +8,14 @@ from importlib import import_module
 from django.contrib.contenttypes.fields import GenericRelation
 from django.core.cache import caches
 from django.db import models
-from django.db.models import BooleanField, DateTimeField
+from django.db.models import DateTimeField
 from django.utils.encoding import python_2_unicode_compatible
 from django.utils.module_loading import import_string
 from django.utils.text import slugify
 from django.utils.translation import ugettext, ugettext_lazy as _
 from first import first
 from touchtechnology.admin.mixins import AdminUrlMixin
-from touchtechnology.common.db.models import HTMLField, TemplatePathField
+from touchtechnology.common.db.models import BooleanField, HTMLField, TemplatePathField
 from touchtechnology.content.app_settings import (
     NODE_CACHE, PAGE_CONTENT_CLASSES, PAGE_TEMPLATE_BASE, PAGE_TEMPLATE_FOLDER,
     PAGE_TEMPLATE_REGEX,
