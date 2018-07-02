@@ -13,6 +13,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.search import SearchVector
 from django.core.paginator import EmptyPage, Paginator
 from django.db import transaction
+from django.forms import ModelForm as BaseModelForm
 from django.forms.models import inlineformset_factory, modelformset_factory
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -450,7 +451,7 @@ class Application(object):
         # Pass the instance to the form constructor if this is a ModelForm
         # subclass, otherwise it will need to be explicitly added to
         # form_kwargs if expected.
-        if issubclass(form_class, ModelForm) and instance is not None:
+        if issubclass(form_class, BaseModelForm) and instance is not None:
             form_kwargs.setdefault('instance', instance)
 
         # Vanilla form processing here, take the post data and files, create

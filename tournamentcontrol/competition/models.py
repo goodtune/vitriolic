@@ -1180,7 +1180,35 @@ class TeamAssociation(AdminUrlMixin, models.Model):
         )
 
 
-class SeasonAssociation(models.Model):
+@python_2_unicode_compatible
+class SeasonReferee(AdminUrlMixin, models.Model):
+    season = models.ForeignKey(Season, related_name='referees', on_delete=PROTECT)
+    club = models.ForeignKey(Club, related_name='referees', on_delete=PROTECT)
+    person = ForeignKey(Person, label_from_instance='get_full_name', on_delete=PROTECT)
+
+    def __str__(self):
+        return str(self.person)
+
+    class Meta:
+        ordering = (
+            'club',
+            'season',
+            'person__last_name',
+            'person__first_name',
+        )
+        unique_together = ('season', 'person')
+        verbose_name = _('referee')
+
+    def _get_admin_namespace(self):
+        return 'admin:fixja:competition:season:seasonreferee'
+
+    def _get_url_args(self):
+        return (self.season.competition_id,
+                self.season_id,
+                self.pk)
+
+
+class SeasonAssociation(AdminUrlMixin, models.Model):
     club = models.ForeignKey(Club, related_name='officials', on_delete=PROTECT)
     season = models.ForeignKey(Season, related_name='officials', on_delete=PROTECT)
     person = ForeignKey(Person, label_from_instance='get_full_name', on_delete=PROTECT)
