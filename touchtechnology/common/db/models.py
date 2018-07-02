@@ -1,12 +1,22 @@
 import uuid
 
 from django.db import models
+from touchtechnology.common import fields
 from touchtechnology.common.forms.fields import (
     EmailField as EmailFormField, GoogleMapsField, HTMLField as HTMLFormField,
     ModelChoiceField, ModelMultipleChoiceField, SelectDateField,
     SelectDateTimeField, SelectTimeField, SitemapNodeModelChoiceField,
     TemplatePathFormField,
 )
+
+
+class BooleanField(models.BooleanField):
+    def formfield(self, **kwargs):
+        defaults = {
+            'form_class': fields.BooleanChoiceField,
+        }
+        defaults.update(kwargs)
+        return super(BooleanField, self).formfield(**defaults)
 
 
 class DateField(models.DateField):

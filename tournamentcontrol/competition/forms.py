@@ -912,6 +912,11 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
                 _('Teams cannot be scheduled to play against itself.'))
         return team
 
+    def clean_videos(self):
+        videos = self.cleaned_data.get('videos')
+        if any(videos):
+            return videos
+
     class Meta:
         model = Match
         fields = (

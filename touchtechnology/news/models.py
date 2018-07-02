@@ -1,14 +1,14 @@
 from __future__ import unicode_literals
 
 from django.db import models
-from django.db.models import BooleanField, DateTimeField, ManyToManyField
+from django.db.models import DateTimeField, ManyToManyField
 from django.template.defaultfilters import slugify
 from django.urls import reverse
 from django.utils.encoding import python_2_unicode_compatible
 from django.utils.translation import ugettext_lazy as _
 from imagekit.models import ImageSpecField
 from touchtechnology.admin.mixins import AdminUrlMixin
-from touchtechnology.common.db.models import HTMLField
+from touchtechnology.common.db.models import BooleanField, HTMLField
 from touchtechnology.news.app_settings import (
     CONTENT_LABEL_CHOICES, DETAIL_IMAGE_KWARGS, DETAIL_IMAGE_PROCESSORS,
     THUMBNAIL_IMAGE_KWARGS, THUMBNAIL_IMAGE_PROCESSORS,

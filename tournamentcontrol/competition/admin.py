@@ -1046,7 +1046,6 @@ class CompetitionAdminComponent(AdminComponent):
         return self.render(request, templates, context)
 
     @competition
-    @staff_login_required_m
     def day_runsheet(self, request, season, date, extra_context,
                      **kwargs):
         matches = season.matches.filter(date=date) \
