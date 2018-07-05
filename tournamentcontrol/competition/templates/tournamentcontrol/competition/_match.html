@@ -42,7 +42,11 @@
 				</tr>
 			</tfoot>
 			<tbody>
-				{% statistics match %}
+				{% if match.statistics.count %}
+					{% statistics match %}
+				{% else %}
+					{% preview match %}
+				{% endif %}
 			</tbody>
 		</table>
 	{% endblock %}

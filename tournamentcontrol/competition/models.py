@@ -766,6 +766,7 @@ class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
                 ).annotate(
                     statistics_count=Count('statistics'),
                     videos_count=Count('videos'),
+                    referee_count=Count('referees'),
                 ):
             res.setdefault(self, collections.OrderedDict()) \
                .setdefault(match.get_date(tzinfo), []) \
@@ -824,7 +825,8 @@ class StageGroup(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             'home_team__division', 'away_team__club', 'away_team__division')
         for match in matches.annotate(
                 statistics_count=Count('statistics'),
-                video_count=Count('videos')):
+                video_count=Count('videos'),
+                referee_count=Count('referees')):
             res.setdefault(self, collections.OrderedDict()) \
                .setdefault(match.get_date(tzinfo), []) \
                .append(match)
@@ -1191,7 +1193,6 @@ class SeasonReferee(AdminUrlMixin, models.Model):
 
     class Meta:
         ordering = (
-            'club',
             'season',
             'person__last_name',
             'person__first_name',
