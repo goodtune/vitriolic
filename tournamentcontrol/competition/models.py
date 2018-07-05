@@ -1187,7 +1187,7 @@ class SeasonReferee(AdminUrlMixin, models.Model):
     person = ForeignKey(Person, label_from_instance='get_full_name', on_delete=PROTECT)
 
     def __str__(self):
-        return str(self.person)
+        return "%s (%s)" % (self.person, self.club)
 
     class Meta:
         ordering = (
@@ -1247,6 +1247,8 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     away_team = ForeignKey(Team, blank=True, null=True,
                            related_name='away_games',
                            label_from_instance='title', on_delete=PROTECT)
+
+    referees = models.ManyToManyField(SeasonReferee, blank=True, related_name='matches')
 
     # these fields are used when the home/away teams are to be determined by
     # some form of calculation - usually by a position within the ladder or
