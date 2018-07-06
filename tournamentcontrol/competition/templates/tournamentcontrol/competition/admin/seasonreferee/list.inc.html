@@ -1,0 +1,26 @@
+{% extends "mvp/list.split.inc.html" %}
+{% load i18n %}
+{% load competition %}
+
+{% block table-headings %}
+	<th>{% trans "Name" %}</th>
+	<th>{% trans "Age" %}</th>
+	<th class="hidden-xs">{% trans "Club" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td>{{ obj.person.age|default_if_none:"-" }}</td>
+	<td class="hidden-xs">{{ obj.club }}</td>
+{% endblock %}
+
+{% block row-buttons-extra %}
+	{% if obj.person.user %}
+		<a class="btn btn-default btn-sm" role="button" href="{% url 'admin:auth:users:edit' obj.person.user.pk %}">
+			<i class="fa fa-user"></i>
+			<span class="hidden-xs">&nbsp;{% trans "User" %}</span>
+		</a>
+	{% endif %}
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}

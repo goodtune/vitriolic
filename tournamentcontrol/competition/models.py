@@ -189,9 +189,7 @@ class Competition(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 
     copy = HTMLField(blank=True)
     enabled = BooleanField(default=True)
-    clubs = ManyToManyField(
-        'Club', blank=True, related_name='competitions',
-        label_from_instance='title')
+    clubs = ManyToManyField('Club', blank=True, related_name='competitions')
 
     def _get_admin_namespace(self):
         return 'admin:fixja:competition'
@@ -467,7 +465,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
                                         "calculations."))
     timezone = TimeZoneField(max_length=50, blank=True, null=True)
 
-    forfeit_notifications = models.ManyToManyField(
+    forfeit_notifications = ManyToManyField(
         settings.AUTH_USER_MODEL, blank=True, related_name=None,
         help_text=_("When a team advises they are forfeiting, notify the "
                     "opposition team plus these people."))
@@ -766,6 +764,7 @@ class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
                 ).annotate(
                     statistics_count=Count('statistics'),
                     videos_count=Count('videos'),
+                    referee_count=Count('referees'),
                 ):
             res.setdefault(self, collections.OrderedDict()) \
                .setdefault(match.get_date(tzinfo), []) \
@@ -824,7 +823,8 @@ class StageGroup(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             'home_team__division', 'away_team__club', 'away_team__division')
         for match in matches.annotate(
                 statistics_count=Count('statistics'),
-                video_count=Count('videos')):
+                video_count=Count('videos'),
+                referee_count=Count('referees')):
             res.setdefault(self, collections.OrderedDict()) \
                .setdefault(match.get_date(tzinfo), []) \
                .append(match)
@@ -1180,7 +1180,34 @@ class TeamAssociation(AdminUrlMixin, models.Model):
         )
 
 
-class SeasonAssociation(models.Model):
+@python_2_unicode_compatible
+class SeasonReferee(AdminUrlMixin, models.Model):
+    season = models.ForeignKey(Season, related_name='referees', on_delete=PROTECT)
+    club = models.ForeignKey(Club, related_name='referees', on_delete=PROTECT)
+    person = ForeignKey(Person, label_from_instance='get_full_name', on_delete=PROTECT)
+
+    def __str__(self):
+        return str(self.person)
+
+    class Meta:
+        ordering = (
+            'season',
+            'person__last_name',
+            'person__first_name',
+        )
+        unique_together = ('season', 'person')
+        verbose_name = _('referee')
+
+    def _get_admin_namespace(self):
+        return 'admin:fixja:competition:season:seasonreferee'
+
+    def _get_url_args(self):
+        return (self.season.competition_id,
+                self.season_id,
+                self.pk)
+
+
+class SeasonAssociation(AdminUrlMixin, models.Model):
     club = models.ForeignKey(Club, related_name='officials', on_delete=PROTECT)
     season = models.ForeignKey(Season, related_name='officials', on_delete=PROTECT)
     person = ForeignKey(Person, label_from_instance='get_full_name', on_delete=PROTECT)
@@ -1219,6 +1246,8 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     away_team = ForeignKey(Team, blank=True, null=True,
                            related_name='away_games',
                            label_from_instance='title', on_delete=PROTECT)
+
+    referees = ManyToManyField(SeasonReferee, blank=True, related_name='matches')
 
     # these fields are used when the home/away teams are to be determined by
     # some form of calculation - usually by a position within the ladder or

@@ -2,9 +2,7 @@ from __future__ import unicode_literals
 
 import collections
 import logging
-import warnings
 
-import django
 from django.conf import settings
 from django.conf.urls import url
 from django.contrib.admin.sites import (
@@ -15,7 +13,6 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import reverse_lazy
-from django.utils.deprecation import RemovedInNextVersionWarning
 from django.utils.encoding import smart_str
 from django.utils.translation import ugettext_lazy as _
 from touchtechnology.common.decorators import staff_login_required_m
@@ -27,17 +24,7 @@ logger = logging.getLogger(__name__)
 class AdminSite(DjangoAdminSite):
 
     def __init__(self, name='admin', app_name='admin'):
-        if django.VERSION[:2] > (1, 7):
-            super(AdminSite, self).__init__(name)
-        else:
-            msg = (
-                'AdminSite no longer takes an app_name argument and its '
-                'app_name attribute has been removed. The application name '
-                'is always admin (as opposed to the instance name which you '
-                'can still customize using AdminSite(name="...")'
-            )
-            warnings.warn(msg, RemovedInNextVersionWarning, stacklevel=2)
-            super(AdminSite, self).__init__(name, app_name)
+        super(AdminSite, self).__init__(name)
         self._components = collections.OrderedDict()
         self._schemas = collections.defaultdict(lambda: None)
 

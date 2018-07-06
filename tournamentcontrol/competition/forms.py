@@ -804,6 +804,9 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
     def __init__(self, *args, **kwargs):
         super(MatchEditForm, self).__init__(*args, **kwargs)
 
+        # restrict the list of referees to those registered this season
+        self.fields['referees'].queryset = self.instance.stage.division.season.referees.all()
+
         # remove `stage_group` field if the `division` has no children
         if not self.instance.stage.pools.count():
             self.fields.pop('stage_group', None)
@@ -925,6 +928,7 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
             'away_team',
             'home_team_undecided',
             'away_team_undecided',
+            'referees',
             'label',
             'round',
             'date',

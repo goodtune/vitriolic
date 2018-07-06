@@ -3,10 +3,9 @@ import uuid
 from django.db import models
 from touchtechnology.common import fields
 from touchtechnology.common.forms.fields import (
-    EmailField as EmailFormField, GoogleMapsField, HTMLField as HTMLFormField,
-    ModelChoiceField, ModelMultipleChoiceField, SelectDateField,
-    SelectDateTimeField, SelectTimeField, SitemapNodeModelChoiceField,
-    TemplatePathFormField,
+    EmailField as EmailFormField, GoogleMapsField, HTMLField as HTMLFormField, ModelChoiceField,
+    ModelMultipleChoiceField, SelectDateField, SelectDateTimeField, SelectTimeField,
+    SitemapNodeModelChoiceField, TemplatePathFormField,
 )
 
 

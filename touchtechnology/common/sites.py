@@ -13,6 +13,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.search import SearchVector
 from django.core.paginator import EmptyPage, Paginator
 from django.db import transaction
+from django.forms import ModelForm as BaseModelForm
 from django.forms.models import inlineformset_factory, modelformset_factory
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -30,7 +31,7 @@ from django.views.decorators.cache import patch_cache_control
 from modelforms.forms import ModelForm
 from six.moves import xrange
 from touchtechnology.common.decorators import login_required_m, node2extracontext, require_POST_m
-from touchtechnology.common.default_settings import PAGINATE_BY
+from touchtechnology.common.default_settings import PAGINATE_BY, PROFILE_FORM_CLASS
 from touchtechnology.common.utils import (
     get_403_or_None, get_all_perms_for_model_cached, get_objects_for_user, get_perms_for_model,
     model_and_manager, select_template_name,
@@ -450,7 +451,7 @@ class Application(object):
         # Pass the instance to the form constructor if this is a ModelForm
         # subclass, otherwise it will need to be explicitly added to
         # form_kwargs if expected.
-        if issubclass(form_class, ModelForm) and instance is not None:
+        if issubclass(form_class, BaseModelForm) and instance is not None:
             form_kwargs.setdefault('instance', instance)
 
         # Vanilla form processing here, take the post data and files, create
@@ -819,9 +820,7 @@ class AccountsSite(Application):
 
     def __init__(self, name='accounts', app_name='accounts', *args, **kwargs):
         super(AccountsSite, self).__init__(name=name, app_name=app_name)
-        self.profile_form_class = kwargs.pop(
-            'profile_form_class',
-            'touchtechnology.common.forms_lazy.ProfileForm')
+        self.profile_form_class = kwargs.pop('profile_form_class', PROFILE_FORM_CLASS)
         self.user_model = get_user_model()
 
     @property

@@ -5,7 +5,7 @@ from dateutil.parser import parse
 from dateutil.rrule import DAILY, WEEKLY
 from django import template
 from django.apps import apps
-from django.db.models import Q
+from django.db.models import Case, F, Q, Sum, When
 from django.template.loader import get_template
 from django.utils import timezone
 from first import first
@@ -198,8 +198,7 @@ def pair(i1, i2):
     return list(zip_longest(i1, i2))
 
 
-@register.inclusion_tag(
-    'tournamentcontrol/competition/templatetags/statistics.html')
+@register.inclusion_tag('tournamentcontrol/competition/templatetags/statistics.html')
 def statistics(match):
     stats = match.statistics.filter(played__gt=0).select_related('player')
 
@@ -218,6 +217,32 @@ def statistics(match):
         'lines': list(zip_longest(home_stats, away_stats)),
         'home_stats': home_stats,
         'away_stats': away_stats,
+    }
+
+    return context
+
+
+@register.inclusion_tag('tournamentcontrol/competition/templatetags/preview.html')
+def preview(match):
+    annotate = {
+        'played': Sum(Case(When(
+                person__statistics__match__stage__division=match.stage.division,
+                then=F('person__statistics__played')),
+            default=0)),
+        'points': Sum(Case(When(
+                person__statistics__match__stage__division=match.stage.division,
+                then=F('person__statistics__points')),
+            default=0)),
+        }
+
+    home_team = match.home_team.people.filter(is_player=True).annotate(**annotate)
+    away_team = match.away_team.people.filter(is_player=True).annotate(**annotate)
+
+    context = {
+        'match': match,
+        'lines': list(zip_longest(home_team, away_team)),
+        'home_team': home_team,
+        'away_team': away_team,
     }
 
     return context
