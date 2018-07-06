@@ -38,9 +38,7 @@ class EmailField(forms.EmailField):
         return data
 
 
-class ModelMultipleChoiceField(LabelFromInstanceMixin,
-                               forms.ModelMultipleChoiceField):
-    widget = forms.CheckboxSelectMultiple
+class ModelMultipleChoiceField(LabelFromInstanceMixin, forms.ModelMultipleChoiceField):
 
     def __init__(self, select_related=True, *args, **kwargs):
         super(ModelMultipleChoiceField, self).__init__(*args, **kwargs)

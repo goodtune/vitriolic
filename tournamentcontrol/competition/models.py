@@ -189,9 +189,7 @@ class Competition(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 
     copy = HTMLField(blank=True)
     enabled = BooleanField(default=True)
-    clubs = ManyToManyField(
-        'Club', blank=True, related_name='competitions',
-        label_from_instance='title')
+    clubs = ManyToManyField('Club', blank=True, related_name='competitions')
 
     def _get_admin_namespace(self):
         return 'admin:fixja:competition'
@@ -467,7 +465,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
                                         "calculations."))
     timezone = TimeZoneField(max_length=50, blank=True, null=True)
 
-    forfeit_notifications = models.ManyToManyField(
+    forfeit_notifications = ManyToManyField(
         settings.AUTH_USER_MODEL, blank=True, related_name=None,
         help_text=_("When a team advises they are forfeiting, notify the "
                     "opposition team plus these people."))
@@ -1189,7 +1187,7 @@ class SeasonReferee(AdminUrlMixin, models.Model):
     person = ForeignKey(Person, label_from_instance='get_full_name', on_delete=PROTECT)
 
     def __str__(self):
-        return "%s (%s)" % (self.person, self.club)
+        return str(self.person)
 
     class Meta:
         ordering = (
@@ -1249,7 +1247,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                            related_name='away_games',
                            label_from_instance='title', on_delete=PROTECT)
 
-    referees = models.ManyToManyField(SeasonReferee, blank=True, related_name='matches')
+    referees = ManyToManyField(SeasonReferee, blank=True, related_name='matches')
 
     # these fields are used when the home/away teams are to be determined by
     # some form of calculation - usually by a position within the ladder or
