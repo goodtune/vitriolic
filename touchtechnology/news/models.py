@@ -10,8 +10,8 @@ from imagekit.models import ImageSpecField
 from touchtechnology.admin.mixins import AdminUrlMixin
 from touchtechnology.common.db.models import BooleanField, HTMLField
 from touchtechnology.news.app_settings import (
-    CONTENT_LABEL_CHOICES, DETAIL_IMAGE_KWARGS, DETAIL_IMAGE_PROCESSORS,
-    THUMBNAIL_IMAGE_KWARGS, THUMBNAIL_IMAGE_PROCESSORS,
+    CONTENT_LABEL_CHOICES, DETAIL_IMAGE_KWARGS, DETAIL_IMAGE_PROCESSORS, THUMBNAIL_IMAGE_KWARGS,
+    THUMBNAIL_IMAGE_PROCESSORS,
 )
 from touchtechnology.news.image_processors import processor_factory
 from touchtechnology.news.query import ArticleQuerySet, CategoryQuerySet

@@ -21,37 +21,32 @@ from django.utils.translation import ugettext_lazy as _, ungettext
 from six.moves import reduce
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.sites import site
-from touchtechnology.common.decorators import (
-    csrf_exempt_m, staff_login_required_m,
-)
+from touchtechnology.common.decorators import csrf_exempt_m, staff_login_required_m
 from touchtechnology.common.prince import prince
 from tournamentcontrol.competition.dashboard import (
-    BasicResultWidget, DetailResultWidget, MostValuableWidget,
-    ProgressStageWidget, ScoresheetWidget,
+    BasicResultWidget, DetailResultWidget, MostValuableWidget, ProgressStageWidget,
+    ScoresheetWidget,
 )
 from tournamentcontrol.competition.decorators import competition, registration
 from tournamentcontrol.competition.forms import (
-    ClubAssociationForm, ClubRoleForm, CompetitionForm, DivisionForm,
-    DrawFormatForm, DrawGenerationFormSet, DrawGenerationMatchFormSet,
-    GroundForm, MatchEditForm, MatchResultFormSet, MatchScheduleFormSet,
-    MatchStatisticFormset, MatchWashoutFormSet, PersonEditForm,
-    PersonMergeForm, ProgressMatchesFormSet, ProgressTeamsFormSet,
-    RescheduleDateFormSet, SeasonAssociationFormSet, SeasonForm,
-    SeasonMatchTimeFormSet, StageForm, StageGroupForm, TeamAssociationForm,
-    TeamAssociationFormSet, TeamForm, TeamRoleForm, UndecidedTeamForm,
-    VenueForm,
+    ClubAssociationForm, ClubRoleForm, CompetitionForm, DivisionForm, DrawFormatForm,
+    DrawGenerationFormSet, DrawGenerationMatchFormSet, GroundForm, MatchEditForm,
+    MatchResultFormSet, MatchScheduleFormSet, MatchStatisticFormset, MatchWashoutFormSet,
+    PersonEditForm, PersonMergeForm, ProgressMatchesFormSet, ProgressTeamsFormSet,
+    RescheduleDateFormSet, SeasonAssociationFormSet, SeasonForm, SeasonMatchTimeFormSet, StageForm,
+    StageGroupForm, TeamAssociationForm, TeamAssociationFormSet, TeamForm, TeamRoleForm,
+    UndecidedTeamForm, VenueForm,
 )
 from tournamentcontrol.competition.models import (
-    Club, ClubAssociation, ClubRole, Competition, Division,
-    DivisionExclusionDate, DrawFormat, Ground, LadderEntry, LadderSummary,
-    Match, Person, Season, SeasonAssociation, SeasonExclusionDate,
-    SeasonMatchTime, SimpleScoreMatchStatistic, Stage, StageGroup, Team,
-    TeamAssociation, TeamRole, UndecidedTeam, Venue,
+    Club, ClubAssociation, ClubRole, Competition, Division, DivisionExclusionDate, DrawFormat,
+    Ground, LadderEntry, LadderSummary, Match, Person, Season, SeasonAssociation,
+    SeasonExclusionDate, SeasonMatchTime, SeasonReferee, SimpleScoreMatchStatistic, Stage,
+    StageGroup, Team, TeamAssociation, TeamRole, UndecidedTeam, Venue,
 )
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.utils import (
-    FauxQueryset, generate_fixture_grid, generate_scorecards,
-    legitimate_bye_match, match_unplayed, team_needs_progressing,
+    FauxQueryset, generate_fixture_grid, generate_scorecards, legitimate_bye_match, match_unplayed,
+    team_needs_progressing,
 )
 from tournamentcontrol.competition.wizards import DrawGenerationWizard
 
@@ -157,6 +152,14 @@ class CompetitionAdminComponent(AdminComponent):
                                 url(r'^(?P<pk>\d+)/$', self.edit_timeslot, name='edit'),
                                 url(r'^(?P<pk>\d+)/delete/$', self.delete_timeslot, name='delete'),
                             ], self.app_name), namespace='seasonmatchtime')),
+
+                            url(r'^referees/', include(([
+                                url(r'^add/$', self.edit_seasonreferee, name='add'),
+                                url(r'^(?P<pk>\d+)/', include([
+                                    url(r'^$', self.edit_seasonreferee, name='edit'),
+                                    url(r'^delete/$', self.delete_seasonreferee, name='delete'),
+                                ])),
+                            ], self.app_name), namespace='seasonreferee')),
 
                             url(r'^permission/$', self.perms_season, name='perms'),
 
@@ -500,6 +503,7 @@ class CompetitionAdminComponent(AdminComponent):
                 'divisions',
                 'venues',
                 'timeslots',
+                'referees',
             ),
             form_class=SeasonForm,
             form_kwargs={'user': request.user},
@@ -920,6 +924,34 @@ class CompetitionAdminComponent(AdminComponent):
     def delete_teamassociation(self, request, team, pk, **kwargs):
         post_delete_redirect = self.redirect(team.urls['edit'] + '#people-tab')
         return self.generic_delete(request, team.people, pk=pk,
+                                   permission_required=True,
+                                   post_delete_redirect=post_delete_redirect)
+
+    @competition
+    @staff_login_required_m
+    def edit_seasonreferee(self, request, season, extra_context, pk=None, **kwargs):
+        # FIXME this dance to establish an instance on a related object
+        #       feels like it's broken to me. If provided with a related
+        #       manager it should create against that? I might be over
+        #       simplifying that - django.contrib.admin probably doesn't
+        #       do that since they use a very flat admin (no nesting).
+        if pk is None:
+            instance = SeasonReferee(season=season)
+        else:
+            instance = get_object_or_404(season.referees, pk=pk)
+        return self.generic_edit(request, season.referees,
+                                 instance=instance,
+                                 form_fields=('person', 'club'),
+                                 post_save_redirect=self.redirect(
+                                     season.urls['edit']),
+                                 permission_required=True,
+                                 extra_context=extra_context)
+
+    @competition
+    @staff_login_required_m
+    def delete_seasonreferee(self, request, season, pk, **kwargs):
+        post_delete_redirect = self.redirect(season.urls['edit'] + '#officials-tab')
+        return self.generic_delete(request, season.referees, pk=pk,
                                    permission_required=True,
                                    post_delete_redirect=post_delete_redirect)
 

@@ -100,12 +100,10 @@
 								</td>
 
 								<td class="report{% if not match.statistics_count %} none{% endif %}">
-									{% if match.statistics_count %}
-										{% url application.name|add:":match" competition=competition.slug season=season.slug division=division.slug match=match.pk as url1 %}
-										{% url application.name|add:":match" season=season.slug division=division.slug match=match.pk as url2 %}
-										{% url application.name|add:":match" division=division.slug match=match.pk as url3 %}
-										<a href="{{ url1|default:url2|default:url3 }}">{% trans "Detail" %}</a>
-									{% endif %}
+									{% url application.name|add:":match" competition=competition.slug season=season.slug division=division.slug match=match.pk as url1 %}
+									{% url application.name|add:":match" season=season.slug division=division.slug match=match.pk as url2 %}
+									{% url application.name|add:":match" division=division.slug match=match.pk as url3 %}
+									<a href="{{ url1|default:url2|default:url3 }}">{% trans "Detail" %}</a>
 								</td>
 							</tr>
 						{% endfor %}
