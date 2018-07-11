@@ -9,7 +9,7 @@
 {% endblock %}
 
 {% block table-columns %}
-	{{ block.super }}
+	<td><a href="{{ obj.urls.edit }}">{{ obj.person }}</a>&nbsp;</td>
 	<td>{{ obj.person.age|default_if_none:"-" }}</td>
 	<td class="hidden-xs">{{ obj.club }}</td>
 {% endblock %}
