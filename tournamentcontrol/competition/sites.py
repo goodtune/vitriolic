@@ -98,7 +98,7 @@ class CompetitionAdminMixin(object):
         return self.render(request, templates, context)
 
 
-class CompetitionSite(Application):
+class CompetitionSite(CompetitionAdminMixin, Application):
 
     kwargs_form_class = ConfigurationForm
 
@@ -112,6 +112,13 @@ class CompetitionSite(Application):
             self._competitions = self._competitions.filter(
                 slug=kwargs['competition'])
 
+    def result_urls(self):
+        return [
+            url(r'^$', self.results, name='results'),
+            url(r'^(?P<datestr>\d{8})/$', self.results, name='results'),
+            url(r'^(?P<datestr>\d{8})/(?P<timestr>\d{4})/$', self.match_results, name='match-results'),
+        ]
+
     def season_urls(self):
         return [
             url(r'^$', self.season, name='season'),
@@ -120,6 +127,7 @@ class CompetitionSite(Application):
             url(r'^videos/$', self.season_videos, name='season-videos'),
             url(r'^club:(?P<club>[\w-]+)/$', self.club, name='club'),
             url(r'^club:(?P<club>[\w-]+).ics$', self.calendar, name='calendar'),
+            url(r'^results/', include(self.result_urls())),
             url(r'^(?P<division>[\w-]+).ics$', self.calendar, name='calendar'),
             url(r'^(?P<division>[\w-]+)/$', self.division, name='division'),
             url(r'^(?P<division>[\w-]+):(?P<stage>[\w-]+)/$', self.stage, name='stage'),
@@ -208,6 +216,32 @@ class CompetitionSite(Application):
                                    slug=season.slug,
                                    templates=templates,
                                    extra_context=extra_context)
+
+    @competition_slug
+    @login_required_m
+    def results(self, request, competition, season, extra_context, date=None, **kwargs):
+        if date is not None:
+            matches = season.matches.filter(date=date)
+        else:
+            matches = season.matches
+        context = {
+            'datetimes': matches.datetimes('datetime', 'minute'),
+        }
+        context.update(extra_context)
+        templates = self.template_path('results.html', competition.slug, season.slug)
+        return self.render(request, templates, context)
+
+    @competition_slug
+    @login_required_m
+    def match_results(self, request, competition, season, date, time, extra_context, **kwargs):
+        redirect_to = self.reverse('results',
+                                   args=(competition.slug, season.slug))
+        return super(CompetitionSite, self).match_results(
+            request, competition=competition, season=season,
+            date=date, time=time,
+            extra_context=extra_context,
+            redirect_to=redirect_to,
+            **kwargs)
 
     @competition_slug
     def season_videos(self, request, competition, season, extra_context, **kwargs):
