@@ -31,11 +31,11 @@ from tournamentcontrol.competition.decorators import competition, registration
 from tournamentcontrol.competition.forms import (
     ClubAssociationForm, ClubRoleForm, CompetitionForm, DivisionForm, DrawFormatForm,
     DrawGenerationFormSet, DrawGenerationMatchFormSet, GroundForm, MatchEditForm,
-    MatchResultFormSet, MatchScheduleFormSet, MatchStatisticFormset, MatchWashoutFormSet,
-    PersonEditForm, PersonMergeForm, ProgressMatchesFormSet, ProgressTeamsFormSet,
-    RescheduleDateFormSet, SeasonAssociationFormSet, SeasonForm, SeasonMatchTimeFormSet, StageForm,
-    StageGroupForm, TeamAssociationForm, TeamAssociationFormSet, TeamForm, TeamRoleForm,
-    UndecidedTeamForm, VenueForm,
+    MatchScheduleFormSet, MatchStatisticFormset, MatchWashoutFormSet, PersonEditForm,
+    PersonMergeForm, ProgressMatchesFormSet, ProgressTeamsFormSet, RescheduleDateFormSet,
+    SeasonAssociationFormSet, SeasonForm, SeasonMatchTimeFormSet, StageForm, StageGroupForm,
+    TeamAssociationForm, TeamAssociationFormSet, TeamForm, TeamRoleForm, UndecidedTeamForm,
+    VenueForm,
 )
 from tournamentcontrol.competition.models import (
     Club, ClubAssociation, ClubRole, Competition, Division, DivisionExclusionDate, DrawFormat,
@@ -43,6 +43,7 @@ from tournamentcontrol.competition.models import (
     SeasonExclusionDate, SeasonMatchTime, SeasonReferee, SimpleScoreMatchStatistic, Stage,
     StageGroup, Team, TeamAssociation, TeamRole, UndecidedTeam, Venue,
 )
+from tournamentcontrol.competition.sites import CompetitionAdminMixin
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.utils import (
     FauxQueryset, generate_fixture_grid, generate_scorecards, legitimate_bye_match, match_unplayed,
@@ -70,7 +71,7 @@ def next_related_factory(model, parent=None, fk_name=None):
     return model(order=last + 1, **kw)
 
 
-class CompetitionAdminComponent(AdminComponent):
+class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     verbose_name = _('Tournament Control')
     unprotected = False
 
@@ -1237,74 +1238,15 @@ class CompetitionAdminComponent(AdminComponent):
     @staff_login_required_m
     def match_results(self, request, competition, season, date, extra_context,
                       division=None, time=None, **kwargs):
-        matches = Match.objects.filter(
-            stage__division__season=season,
-            stage__division__season__competition=competition,
-            date=date,
-        )
-
-        if division is not None:
-            matches = matches.filter(stage__division=division)
-
-        # ensure only matches with progressed teams are able to be updated
-        matches = matches.exclude(team_needs_progressing, is_bye=False)
-        matches = matches.exclude(home_team__isnull=True,
-                                  away_team__isnull=True)
-
-        # FIXME too complex, be verbose so we can all read and understand it
-        if time is not None:
-            base = Q(time=time)
-            bye_kwargs = matches.filter(time=time) \
-                                .values('stage', 'round')
-            time_or_byes = reduce(
-                operator.or_,
-                map(lambda kw: Q(time__isnull=True, **kw), bye_kwargs),
-                base)
-            matches = matches.filter(time_or_byes)
-        else:
-            matches = matches.order_by('date', 'time', 'play_at')
-
-        # change behaviours depending on use mode
         if time is None:
             redirect_to = self.reverse(
                 'match-dates', args=(competition.pk, season.pk))
         else:
             redirect_to = reverse('admin:index', current_app=self.app)
 
-        match_queryset = matches.filter(is_bye=False)
-        bye_queryset = matches.filter(is_bye=True)
-
-        if request.method == 'POST':
-            match_formset = MatchResultFormSet(
-                data=request.POST, queryset=match_queryset, prefix='matches')
-            bye_formset = MatchResultFormSet(
-                data=request.POST, queryset=bye_queryset, prefix='byes')
-
-            if match_formset.is_valid() and bye_formset.is_valid():
-                match_formset.save()
-                bye_formset.save()
-                messages.success(request, _("Your changes have been saved."))
-                return self.redirect(reverse('admin:index'))
-        else:
-            match_formset = MatchResultFormSet(
-                queryset=match_queryset, prefix='matches')
-            bye_formset = MatchResultFormSet(
-                queryset=bye_queryset, prefix='byes')
-
-        context = {
-            'competition': competition,
-            'season': season,
-            'date': date,
-            'division': division,
-            'match_formset': match_formset,
-            'bye_formset': bye_formset,
-            'matches': matches,
-            'cancel_url': redirect_to,
-        }
-        context.update(extra_context)
-
-        templates = self.template_path('match_results.html')
-        return self.render(request, templates, context)
+        return super(CompetitionAdminComponent, self).match_results(
+            request, competition, season, date, extra_context,
+            division=division, time=time, redirect_to=redirect_to, **kwargs)
 
     # FIXME
     @competition

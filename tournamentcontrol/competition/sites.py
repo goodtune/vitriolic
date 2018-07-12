@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 
 import base64
+import operator
 from datetime import timedelta
 from operator import or_
 
@@ -21,9 +22,80 @@ from touchtechnology.common.sites import Application
 from tournamentcontrol.competition import rank
 from tournamentcontrol.competition.decorators import competition_slug
 from tournamentcontrol.competition.forms import (
-    ConfigurationForm, MultiConfigurationForm, RankingConfigurationForm,
+    ConfigurationForm, MatchResultFormSet, MultiConfigurationForm, RankingConfigurationForm,
 )
-from tournamentcontrol.competition.models import Competition, Person
+from tournamentcontrol.competition.models import Competition, Match, Person
+from tournamentcontrol.competition.utils import team_needs_progressing
+
+
+class CompetitionAdminMixin(object):
+    """
+    Some administrative functions should be allowed to authenticated users on
+    the front-end of the site. As long as we only use primitives from the base
+    ``touchtechnology.common.sites.Application`` class it will integrate fine
+    with both.
+    """
+    def match_results(self, request, competition, season, date, extra_context, redirect_to,
+                      division=None, time=None, **kwargs):
+        matches = Match.objects.filter(
+            stage__division__season=season,
+            stage__division__season__competition=competition,
+            date=date,
+        )
+
+        if division is not None:
+            matches = matches.filter(stage__division=division)
+
+        # ensure only matches with progressed teams are able to be updated
+        matches = matches.exclude(team_needs_progressing, is_bye=False)
+        matches = matches.exclude(home_team__isnull=True,
+                                  away_team__isnull=True)
+
+        # FIXME too complex, be verbose so we can all read and understand it
+        if time is not None:
+            base = Q(time=time)
+            bye_kwargs = matches.filter(time=time) \
+                                .values('stage', 'round')
+            time_or_byes = reduce(
+                operator.or_,
+                map(lambda kw: Q(time__isnull=True, **kw), bye_kwargs),
+                base)
+            matches = matches.filter(time_or_byes)
+        else:
+            matches = matches.order_by('date', 'time', 'play_at')
+
+        match_queryset = matches.filter(is_bye=False)
+        bye_queryset = matches.filter(is_bye=True)
+
+        if request.method == 'POST':
+            match_formset = MatchResultFormSet(
+                data=request.POST, queryset=match_queryset, prefix='matches')
+            bye_formset = MatchResultFormSet(
+                data=request.POST, queryset=bye_queryset, prefix='byes')
+
+            if match_formset.is_valid() and bye_formset.is_valid():
+                match_formset.save()
+                bye_formset.save()
+                messages.success(request, _("Your changes have been saved."))
+                return self.redirect(redirect_to)
+        else:
+            match_formset = MatchResultFormSet(queryset=match_queryset, prefix='matches')
+            bye_formset = MatchResultFormSet(queryset=bye_queryset, prefix='byes')
+
+        context = {
+            'competition': competition,
+            'season': season,
+            'date': date,
+            'division': division,
+            'match_formset': match_formset,
+            'bye_formset': bye_formset,
+            'matches': matches,
+            'cancel_url': redirect_to,
+        }
+        context.update(extra_context)
+
+        templates = self.template_path('match_results.html')
+        return self.render(request, templates, context)
 
 
 class CompetitionSite(Application):
