@@ -1145,7 +1145,7 @@ class TeamAssociation(AdminUrlMixin, models.Model):
     is_player = BooleanField(default=True)
 
     def __str__(self):
-        return str(self.person)
+        return self.person.get_full_name
 
     class Meta:
         ordering = (
