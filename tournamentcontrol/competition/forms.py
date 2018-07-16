@@ -805,7 +805,8 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
         super(MatchEditForm, self).__init__(*args, **kwargs)
 
         # restrict the list of referees to those registered this season
-        self.fields['referees'].queryset = self.instance.stage.division.season.referees.all()
+        if 'referees' in self.fields:
+            self.fields['referees'].queryset = self.instance.stage.division.season.referees.all()
 
         # remove `stage_group` field if the `division` has no children
         if not self.instance.stage.pools.count():
