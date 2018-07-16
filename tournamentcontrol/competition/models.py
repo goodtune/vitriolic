@@ -1187,7 +1187,7 @@ class SeasonReferee(AdminUrlMixin, models.Model):
     person = ForeignKey(Person, label_from_instance='get_full_name', on_delete=PROTECT)
 
     def __str__(self):
-        return str(self.person)
+        return self.person.get_full_name
 
     class Meta:
         ordering = (
