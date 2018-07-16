@@ -9,12 +9,10 @@ from django.utils.translation import ugettext_lazy as _
 from six.moves import reduce
 from touchtechnology.admin.base import DashboardWidget
 from tournamentcontrol.competition.models import Match, Stage, Team
-from tournamentcontrol.competition.utils import (
-    legitimate_bye_match, team_needs_progressing,
-)
+from tournamentcontrol.competition.utils import legitimate_bye_match, team_needs_progressing
 
 
-def matches_require_basic_results(now=None):
+def matches_require_basic_results(now=None, matches=None):
     if now is None:
         now = timezone.now()
         now = now.replace(second=0, microsecond=0)
@@ -22,53 +20,67 @@ def matches_require_basic_results(now=None):
     if settings.USE_TZ and timezone.is_naive(now):
         timezone.make_aware(now, timezone.get_default_timezone())
 
-    # All matches must happen either today or in the past
-    matches = Match.objects.filter(date__lte=now.date())
+    # If not provided up front, build a base queryset of matches that take
+    # place prior to "now".
+    if matches is None:
+        matches = Match.objects.filter(date__lte=now.date())
 
     # We want games with no score, or byes that have not been processed.
     # Do not include any matches that have been marked as a washout.
     base = Q(home_team_score__isnull=True, away_team_score__isnull=True)
-    bye_kwargs = matches.filter(is_bye=True, bye_processed=False) \
-                        .values('stage', 'round')
-    no_score_or_byes = reduce(operator.or_,
-                              map(lambda kw: Q(**kw), bye_kwargs), base)
+    bye_kwargs = matches.filter(is_bye=True, bye_processed=False).values(
+        "stage", "round"
+    )
+    no_score_or_byes = reduce(operator.or_, map(lambda kw: Q(**kw), bye_kwargs), base)
 
     matches = matches.filter(no_score_or_byes)
     matches = matches.exclude(is_bye=True, bye_processed=True)
     matches = matches.exclude(is_washout=True)
-    matches = matches.filter(
-        Q(home_team__isnull=False) | Q(away_team__isnull=False))
+    matches = matches.filter(Q(home_team__isnull=False) | Q(away_team__isnull=False))
 
     past_days = matches.filter(date__lt=now.date())
     earlier_today = matches.filter(datetime__lte=now)
     matches = past_days | earlier_today
 
     return matches.select_related(
-        'stage__division__season__competition', 'play_at',
-        'home_team__club', 'home_team__division',
-        'away_team__club', 'away_team__division')
+        "stage__division__season__competition",
+        "play_at",
+        "home_team__club",
+        "home_team__division",
+        "away_team__club",
+        "away_team__division",
+    )
 
 
-def matches_require_details_results():
-    matches = Match.objects.exclude(home_team_score__isnull=True,
-                                    away_team_score__isnull=True) \
-                           .filter(stage__division__season__statistics=True,
-                                   statistics__isnull=True)
+def matches_require_details_results(matches=None):
+    # If not provided up front, build a base queryset of all matches
+    if matches is None:
+        matches = Match.objects.all()
+    matches = matches.exclude(
+        home_team_score__isnull=True, away_team_score__isnull=True
+    ).filter(stage__division__season__statistics=True, statistics__isnull=True)
     return matches.select_related(
-        'stage__division__season__competition', 'play_at',
-        'home_team__club', 'home_team__division',
-        'away_team__club', 'away_team__division')
+        "stage__division__season__competition",
+        "play_at",
+        "home_team__club",
+        "home_team__division",
+        "away_team__club",
+        "away_team__division",
+    )
 
 
 def matches_require_progression():
-    matches = Match.objects.filter(team_needs_progressing) \
-                           .exclude(legitimate_bye_match)
-    matches = matches.order_by('stage__division', 'stage')
+    matches = Match.objects.filter(team_needs_progressing).exclude(legitimate_bye_match)
+    matches = matches.order_by("stage__division", "stage")
 
     return matches.select_related(
-        'stage__division__season__competition', 'play_at',
-        'home_team__club', 'home_team__division',
-        'away_team__club', 'away_team__division')
+        "stage__division__season__competition",
+        "play_at",
+        "home_team__club",
+        "home_team__division",
+        "away_team__club",
+        "away_team__division",
+    )
 
 
 def matches_progression_possible():
@@ -83,7 +95,9 @@ def matches_progression_possible():
     for stage in stages:
         f = stage.comes_after
         try:
-            _stage_cache[stage.pk] = f.matches.exclude(score_entered | played_bye | is_washout).count()
+            _stage_cache[stage.pk] = f.matches.exclude(
+                score_entered | played_bye | is_washout
+            ).count()
         except AttributeError:
             _stage_cache[stage.pk] = 0
 
@@ -128,9 +142,12 @@ def stages_require_progression():
     # above will not be lost.
     stages = collections.OrderedDict()
     for m in matches:
-        stages.setdefault(m.stage.division, collections.OrderedDict()).setdefault(m.stage, []).append(m)
+        stages.setdefault(m.stage.division, collections.OrderedDict()).setdefault(
+            m.stage, []
+        ).append(m)
 
     return stages
+
 
 lazy_stages_require_progression = lazy(stages_require_progression, dict)
 
@@ -139,16 +156,24 @@ lazy_stages_require_progression = lazy(stages_require_progression, dict)
 # Dashboard Widgets
 #
 
+
 class BasicResultWidget(DashboardWidget):
-    verbose_name = _('Awaiting Scores')
-    template = 'tournamentcontrol/competition/admin/widgets/results/basic.html'
+    verbose_name = _("Awaiting Scores")
+    template = "tournamentcontrol/competition/admin/widgets/results/basic.html"
 
     def _get_context(self):
         matches = matches_require_basic_results()
-        matches = matches.order_by('date', 'time')
+        matches = matches.order_by("date", "time")
 
-        dates = matches.values_list('stage__division__season__competition', 'stage__division__season', 'date').distinct()
-        times = matches.values_list('stage__division__season__competition', 'stage__division__season', 'date', 'time').distinct()
+        dates = matches.values_list(
+            "stage__division__season__competition", "stage__division__season", "date"
+        ).distinct()
+        times = matches.values_list(
+            "stage__division__season__competition",
+            "stage__division__season",
+            "date",
+            "time",
+        ).distinct()
 
         # Construct an interim data structure
         data = collections.OrderedDict()
@@ -166,32 +191,24 @@ class BasicResultWidget(DashboardWidget):
             for time in time_list:
                 dates_times.append(key + (time,))
 
-        context = {
-            'matches': matches,
-            'dates': dates,
-            'dates_times': dates_times,
-        }
+        context = {"matches": matches, "dates": dates, "dates_times": dates_times}
         return context
 
 
 class ProgressStageWidget(DashboardWidget):
-    verbose_name = _('Progress Teams')
-    template = \
-        'tournamentcontrol/competition/admin/widgets/progress/stages.html'
+    verbose_name = _("Progress Teams")
+    template = "tournamentcontrol/competition/admin/widgets/progress/stages.html"
 
     def _get_context(self):
         stages = lazy_stages_require_progression()
 
-        context = {
-            'stages': stages,
-        }
+        context = {"stages": stages}
         return context
 
 
 class DetailResultWidget(DashboardWidget):
-    verbose_name = _('Awaiting Detailed Results')
-    template = \
-        'tournamentcontrol/competition/admin/widgets/results/detailed.html'
+    verbose_name = _("Awaiting Detailed Results")
+    template = "tournamentcontrol/competition/admin/widgets/results/detailed.html"
 
     @classmethod
     def show(cls):
@@ -200,21 +217,18 @@ class DetailResultWidget(DashboardWidget):
 
     @property
     def matches(self):
-        if not hasattr(self, '_matches'):
+        if not hasattr(self, "_matches"):
             self._matches = matches_require_details_results()
         return self._matches
 
     def _get_context(self):
-        context = {
-            'matches': self.matches,
-        }
+        context = {"matches": self.matches}
         return context
 
 
 class MostValuableWidget(DashboardWidget):
-    verbose_name = _('Awaiting MVP Points')
-    template = \
-        'tournamentcontrol/competition/admin/widgets/results/detailed.html'
+    verbose_name = _("Awaiting MVP Points")
+    template = "tournamentcontrol/competition/admin/widgets/results/detailed.html"
 
     @property
     def matches(self):
@@ -258,28 +272,25 @@ class MostValuableWidget(DashboardWidget):
         return Match.objects.raw(sql, params=(1,))
 
     def _get_context(self):
-        context = {
-            'matches': self.matches,
-        }
+        context = {"matches": self.matches}
         return context
 
 
 class ScoresheetWidget(DashboardWidget):
-    verbose_name = _('Season Reports')
-    template = 'tournamentcontrol/competition/admin/widgets/scoresheets.html'
+    verbose_name = _("Season Reports")
+    template = "tournamentcontrol/competition/admin/widgets/scoresheets.html"
 
     def _get_context(self):
-        stages = Stage.objects.annotate(p=Count('matches_needing_printing')) \
-                              .filter(p__gt=0)
-        context = {
-            'stages': stages,
-        }
+        stages = Stage.objects.annotate(p=Count("matches_needing_printing")).filter(
+            p__gt=0
+        )
+        context = {"stages": stages}
         return context
 
 
 class ReportWidget(DashboardWidget):
-    verbose_name = _('Reports')
-    template = 'tournamentcontrol/competition/admin/widgets/reports.html'
+    verbose_name = _("Reports")
+    template = "tournamentcontrol/competition/admin/widgets/reports.html"
 
     def _get_context(self):
         context = {}
