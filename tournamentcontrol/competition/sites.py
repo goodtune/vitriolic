@@ -5,6 +5,7 @@ import operator
 from datetime import timedelta
 from operator import or_
 
+from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.conf.urls import include, url
 from django.contrib import messages
@@ -20,6 +21,9 @@ from six.moves import reduce
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
 from tournamentcontrol.competition import rank
+from tournamentcontrol.competition.dashboard import (
+    matches_require_basic_results, matches_require_details_results,
+)
 from tournamentcontrol.competition.decorators import competition_slug
 from tournamentcontrol.competition.forms import (
     ConfigurationForm, MatchResultFormSet, MultiConfigurationForm, RankingConfigurationForm,
@@ -48,8 +52,7 @@ class CompetitionAdminMixin(object):
 
         # ensure only matches with progressed teams are able to be updated
         matches = matches.exclude(team_needs_progressing, is_bye=False)
-        matches = matches.exclude(home_team__isnull=True,
-                                  away_team__isnull=True)
+        matches = matches.exclude(home_team__isnull=True, away_team__isnull=True)
 
         # FIXME too complex, be verbose so we can all read and understand it
         if time is not None:
@@ -224,8 +227,20 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             matches = season.matches.filter(date=date)
         else:
             matches = season.matches
+
+        # Allow super-user accounts visibility to look 1 year into the future.
+        if request.user.is_superuser:
+            now = timezone.now() + relativedelta(years=1)
+        else:
+            now = None
+
+        # Filter the list of matches to those which require result entry
+        basic_results = matches_require_basic_results(now, matches)
+        details_results = matches_require_details_results(matches)
+
         context = {
-            'datetimes': matches.datetimes('datetime', 'minute'),
+            'datetimes': basic_results.datetimes('datetime', 'minute'),
+            'details': details_results,
         }
         context.update(extra_context)
         templates = self.template_path('results.html', competition.slug, season.slug)
@@ -234,8 +249,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
     @competition_slug
     @login_required_m
     def match_results(self, request, competition, season, date, time, extra_context, **kwargs):
-        redirect_to = self.reverse('results',
-                                   args=(competition.slug, season.slug))
+        redirect_to = self.reverse('results', args=(competition.slug, season.slug))
         return super(CompetitionSite, self).match_results(
             request, competition=competition, season=season,
             date=date, time=time,
