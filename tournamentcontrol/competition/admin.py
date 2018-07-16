@@ -1079,15 +1079,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         return self.render(request, templates, context)
 
     @competition
-    def day_runsheet(self, request, season, date, extra_context,
-                     **kwargs):
-        matches = season.matches.filter(date=date) \
-                                .order_by('is_bye', 'datetime', 'play_at')
-        return self.generic_list(request, matches,
-                                 templates=self.template_path('runsheet.html'),
-                                 paginate_by=0,
-                                 permission_required=False,
-                                 extra_context=extra_context)
+    @staff_login_required_m
+    def day_runsheet(self, request, season, date, extra_context, **kwargs):
+        return super(CompetitionAdminComponent, self).day_runsheet(
+            request, season, date, extra_context, **kwargs)
 
     @competition
     @csrf_exempt_m

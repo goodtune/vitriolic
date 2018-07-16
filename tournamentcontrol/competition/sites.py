@@ -39,6 +39,15 @@ class CompetitionAdminMixin(object):
     ``touchtechnology.common.sites.Application`` class it will integrate fine
     with both.
     """
+    def day_runsheet(self, request, season, date, extra_context, templates=None, **kwargs):
+        matches = season.matches.filter(date=date).order_by('is_bye', 'datetime', 'play_at')
+        templates = self.template_path('runsheet.html', season.slug, season.competition.slug)
+        return self.generic_list(request, matches,
+                                 templates=templates,
+                                 paginate_by=0,
+                                 permission_required=False,
+                                 extra_context=extra_context)
+
     def match_results(self, request, competition, season, date, extra_context, redirect_to,
                       division=None, time=None, **kwargs):
         matches = Match.objects.filter(
@@ -122,6 +131,12 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             url(r'^(?P<datestr>\d{8})/(?P<timestr>\d{4})/$', self.match_results, name='match-results'),
         ]
 
+    def runsheet_urls(self):
+        return [
+            url(r'^$', self.runsheet, name='runsheet'),
+            url(r'^(?P<datestr>\d{8})/$', self.day_runsheet, name='runsheet'),
+        ]
+
     def season_urls(self):
         return [
             url(r'^$', self.season, name='season'),
@@ -131,6 +146,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             url(r'^club:(?P<club>[\w-]+)/$', self.club, name='club'),
             url(r'^club:(?P<club>[\w-]+).ics$', self.calendar, name='calendar'),
             url(r'^results/', include(self.result_urls())),
+            url(r'^runsheet/', include(self.runsheet_urls())),
             url(r'^(?P<division>[\w-]+).ics$', self.calendar, name='calendar'),
             url(r'^(?P<division>[\w-]+)/$', self.division, name='division'),
             url(r'^(?P<division>[\w-]+):(?P<stage>[\w-]+)/$', self.stage, name='stage'),
@@ -219,6 +235,20 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                                    slug=season.slug,
                                    templates=templates,
                                    extra_context=extra_context)
+
+    @competition_slug
+    def runsheet(self, request, competition, season, extra_context, **kwargs):
+        context = {
+            'dates': season.matches.dates('date', 'day')
+        }
+        context.update(extra_context)
+        templates = self.template_path('runsheet_list.html', competition.slug, season.slug)
+        return self.render(request, templates, context)
+
+    @competition_slug
+    def day_runsheet(self, request, season, date, extra_context, **kwargs):
+        return super(CompetitionSite, self).day_runsheet(
+            request, season, date, extra_context, **kwargs)
 
     @competition_slug
     @login_required_m
