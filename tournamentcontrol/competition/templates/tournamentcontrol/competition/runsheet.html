@@ -63,9 +63,11 @@
 							{% endfor %}
 						</td>
 						<td>
-							<a href="{% url 'admin:fixja:competition:season:division:stage:match:detail' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}">
-								<span class="glyphicon glyphicon-stats" aria-hidden="true"></span>
-							</a>
+							{% block detail_link %}
+								<a href="{% url application.name|add:":match" match.stage.division.season.competition.slug match.stage.division.season.slug match.stage.division.slug match.pk %}">
+									<span class="glyphicon glyphicon-stats" aria-hidden="true"></span>
+								</a>
+							{% endblock %}
 						</td>
 					</tr>
 				{% endfor %}

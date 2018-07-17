@@ -22,6 +22,7 @@ from icalendar import Calendar, Event
 from six.moves import reduce
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
+from touchtechnology.common.utils import get_403_or_None, get_perms_for_model
 from tournamentcontrol.competition import rank
 from tournamentcontrol.competition.dashboard import (
     matches_require_basic_results, matches_require_details_results,
@@ -35,6 +36,28 @@ from tournamentcontrol.competition.models import (
     Competition, Match, Person, SimpleScoreMatchStatistic,
 )
 from tournamentcontrol.competition.utils import FauxQueryset, team_needs_progressing
+
+
+def permissions_required(request, model, instance=None, return_403=True,
+                         accept_global_perms=True, create=False, perms=None):
+    # If no perms are specified, build sensible default using built in
+    # permission types that come batteries included with Django.
+    if perms is None:
+        perms = get_perms_for_model(model, change=True)
+
+        # When we're doing a creation we should have permission to create the object.
+        if create:
+            perms = get_perms_for_model(model, add=True)
+
+    # Determine the user's permission to edit this object using the
+    # get_403_or_None - saves decorating view method with
+    # @permission_required_or_403
+    has_permission = get_403_or_None(
+        request, perms, obj=instance, return_403=return_403,
+        accept_global_perms=accept_global_perms)
+
+    if has_permission is not None:
+        return has_permission
 
 
 class CompetitionAdminMixin(object):
@@ -323,6 +346,10 @@ class CompetitionSite(CompetitionAdminMixin, Application):
     @competition_slug
     @login_required_m
     def results(self, request, competition, season, extra_context, date=None, **kwargs):
+        has_permission = permissions_required(request, Match, return_403=False)
+        if has_permission is not None:
+            return has_permission
+
         if date is not None:
             matches = season.matches.filter(date=date)
         else:
@@ -349,6 +376,9 @@ class CompetitionSite(CompetitionAdminMixin, Application):
     @competition_slug
     @login_required_m
     def match_results(self, request, competition, season, date, time, extra_context, **kwargs):
+        has_permission = permissions_required(request, Match, return_403=False)
+        if has_permission is not None:
+            return has_permission
         redirect_to = self.reverse('results', args=(competition.slug, season.slug))
         return super(CompetitionSite, self).match_results(
             request, competition=competition, season=season,
@@ -360,6 +390,9 @@ class CompetitionSite(CompetitionAdminMixin, Application):
     @login_required_m
     @competition_slug
     def edit_match_detail(self, request, match, extra_context, **kwargs):
+        has_permission = permissions_required(request, Match, instance=match, return_403=False)
+        if has_permission is not None:
+            return has_permission
         redirect_to = self.reverse(
             'results',
             args=(match.stage.division.season.competition.slug, match.stage.division.season.slug))
