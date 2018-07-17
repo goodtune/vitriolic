@@ -8,7 +8,6 @@ from django.apps import apps
 from django.conf import settings
 from django.conf.urls import include, url
 from django.contrib import messages
-from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
 from django.db.models import Case, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
@@ -31,11 +30,10 @@ from tournamentcontrol.competition.decorators import competition, registration
 from tournamentcontrol.competition.forms import (
     ClubAssociationForm, ClubRoleForm, CompetitionForm, DivisionForm, DrawFormatForm,
     DrawGenerationFormSet, DrawGenerationMatchFormSet, GroundForm, MatchEditForm,
-    MatchScheduleFormSet, MatchStatisticFormset, MatchWashoutFormSet, PersonEditForm,
-    PersonMergeForm, ProgressMatchesFormSet, ProgressTeamsFormSet, RescheduleDateFormSet,
-    SeasonAssociationFormSet, SeasonForm, SeasonMatchTimeFormSet, StageForm, StageGroupForm,
-    TeamAssociationForm, TeamAssociationFormSet, TeamForm, TeamRoleForm, UndecidedTeamForm,
-    VenueForm,
+    MatchScheduleFormSet, MatchWashoutFormSet, PersonEditForm, PersonMergeForm,
+    ProgressMatchesFormSet, ProgressTeamsFormSet, RescheduleDateFormSet, SeasonAssociationFormSet,
+    SeasonForm, SeasonMatchTimeFormSet, StageForm, StageGroupForm, TeamAssociationForm,
+    TeamAssociationFormSet, TeamForm, TeamRoleForm, UndecidedTeamForm, VenueForm,
 )
 from tournamentcontrol.competition.models import (
     Club, ClubAssociation, ClubRole, Competition, Division, DivisionExclusionDate, DrawFormat,
@@ -46,7 +44,7 @@ from tournamentcontrol.competition.models import (
 from tournamentcontrol.competition.sites import CompetitionAdminMixin
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.utils import (
-    FauxQueryset, generate_fixture_grid, generate_scorecards, legitimate_bye_match, match_unplayed,
+    generate_fixture_grid, generate_scorecards, legitimate_bye_match, match_unplayed,
     team_needs_progressing,
 )
 from tournamentcontrol.competition.wizards import DrawGenerationWizard
@@ -1013,70 +1011,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition
     @staff_login_required_m
-    def edit_match_detail(self, request, stage, match, extra_context,
-                          **kwargs):
-        conditions = {
-            'home_team__isnull': False,
-            'away_team__isnull': False,
-            'home_team_score__isnull': False,
-            'away_team_score__isnull': False,
-        }
-
-        if match is None:
-            match = get_object_or_404(stage.matches, pk=match.pk, **conditions)
-
-        def team_faux_queryset(team):
-            stats = FauxQueryset(SimpleScoreMatchStatistic, team=team)
-            for player in team.people.filter(is_player=True):
-                try:
-                    statistic = SimpleScoreMatchStatistic.objects.get(
-                        match=match,
-                        player=player.person)
-                except ObjectDoesNotExist:
-                    statistic = SimpleScoreMatchStatistic(
-                        match=match,
-                        player=player.person,
-                        number=player.number,
-                        played=1)
-                stats.append(statistic)
-            return stats
-
-        home_queryset = team_faux_queryset(match.home_team)
-        away_queryset = team_faux_queryset(match.away_team)
-
-        if request.method == 'POST':
-            home = MatchStatisticFormset(data=request.POST,
-                                         score=match.home_team_score,
-                                         prefix='home',
-                                         queryset=home_queryset)
-
-            away = MatchStatisticFormset(data=request.POST,
-                                         score=match.away_team_score,
-                                         prefix='away',
-                                         queryset=away_queryset)
-
-            if home.is_valid() and away.is_valid():
-                home.save()
-                away.save()
-                messages.success(request, _("Your changes have been saved."))
-                return self.redirect(reverse('admin:index'))
-
-        else:
-            home = MatchStatisticFormset(prefix='home',
-                                         score=match.home_team_score,
-                                         queryset=home_queryset)
-            away = MatchStatisticFormset(prefix='away',
-                                         score=match.away_team_score,
-                                         queryset=away_queryset)
-
-        context = {
-            'object': match,
-            'formsets': (home, away),
-        }
-        context.update(extra_context)
-
-        templates = self.template_path('match_detail.html')
-        return self.render(request, templates, context)
+    def edit_match_detail(self, request, stage, match, extra_context, **kwargs):
+        redirect_to = reverse('admin:index')
+        return super(CompetitionAdminComponent, self).edit_match_detail(
+            request, stage=stage, match=match, extra_context=extra_context,
+            redirect_to=redirect_to, **kwargs)
 
     @competition
     @staff_login_required_m

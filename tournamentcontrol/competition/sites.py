@@ -10,8 +10,10 @@ from django.conf import settings
 from django.conf.urls import include, url
 from django.contrib import messages
 from django.contrib.sitemaps import views as sitemaps_views
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Case, Count, F, Q, Sum, When
 from django.http import Http404, HttpResponse, HttpResponseGone
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.encoding import smart_bytes
 from django.utils.module_loading import import_string
@@ -26,10 +28,13 @@ from tournamentcontrol.competition.dashboard import (
 )
 from tournamentcontrol.competition.decorators import competition_slug
 from tournamentcontrol.competition.forms import (
-    ConfigurationForm, MatchResultFormSet, MultiConfigurationForm, RankingConfigurationForm,
+    ConfigurationForm, MatchResultFormSet, MatchStatisticFormset, MultiConfigurationForm,
+    RankingConfigurationForm,
 )
-from tournamentcontrol.competition.models import Competition, Match, Person
-from tournamentcontrol.competition.utils import team_needs_progressing
+from tournamentcontrol.competition.models import (
+    Competition, Match, Person, SimpleScoreMatchStatistic,
+)
+from tournamentcontrol.competition.utils import FauxQueryset, team_needs_progressing
 
 
 class CompetitionAdminMixin(object):
@@ -109,6 +114,70 @@ class CompetitionAdminMixin(object):
         templates = self.template_path('match_results.html')
         return self.render(request, templates, context)
 
+    def edit_match_detail(self, request, stage, match, extra_context, redirect_to, **kwargs):
+        conditions = {
+            'home_team__isnull': False,
+            'away_team__isnull': False,
+            'home_team_score__isnull': False,
+            'away_team_score__isnull': False,
+        }
+
+        if match is None:
+            match = get_object_or_404(stage.matches, pk=match.pk, **conditions)
+
+        def team_faux_queryset(team):
+            stats = FauxQueryset(SimpleScoreMatchStatistic, team=team)
+            for player in team.people.filter(is_player=True):
+                try:
+                    statistic = SimpleScoreMatchStatistic.objects.get(
+                        match=match,
+                        player=player.person)
+                except ObjectDoesNotExist:
+                    statistic = SimpleScoreMatchStatistic(
+                        match=match,
+                        player=player.person,
+                        number=player.number,
+                        played=1)
+                stats.append(statistic)
+            return stats
+
+        home_queryset = team_faux_queryset(match.home_team)
+        away_queryset = team_faux_queryset(match.away_team)
+
+        if request.method == 'POST':
+            home = MatchStatisticFormset(data=request.POST,
+                                         score=match.home_team_score,
+                                         prefix='home',
+                                         queryset=home_queryset)
+
+            away = MatchStatisticFormset(data=request.POST,
+                                         score=match.away_team_score,
+                                         prefix='away',
+                                         queryset=away_queryset)
+
+            if home.is_valid() and away.is_valid():
+                home.save()
+                away.save()
+                messages.success(request, _("Your changes have been saved."))
+                return self.redirect(redirect_to)
+
+        else:
+            home = MatchStatisticFormset(prefix='home',
+                                         score=match.home_team_score,
+                                         queryset=home_queryset)
+            away = MatchStatisticFormset(prefix='away',
+                                         score=match.away_team_score,
+                                         queryset=away_queryset)
+
+        context = {
+            'object': match,
+            'formsets': (home, away),
+        }
+        context.update(extra_context)
+
+        templates = self.template_path('match_detail.html')
+        return self.render(request, templates, context)
+
 
 class CompetitionSite(CompetitionAdminMixin, Application):
 
@@ -127,6 +196,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
     def result_urls(self):
         return [
             url(r'^$', self.results, name='results'),
+            url(r'^match/(?P<match>\d+)/$', self.edit_match_detail, name='match-details'),
             url(r'^(?P<datestr>\d{8})/$', self.results, name='results'),
             url(r'^(?P<datestr>\d{8})/(?P<timestr>\d{4})/$', self.match_results, name='match-results'),
         ]
@@ -286,6 +356,16 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             extra_context=extra_context,
             redirect_to=redirect_to,
             **kwargs)
+
+    @login_required_m
+    @competition_slug
+    def edit_match_detail(self, request, match, extra_context, **kwargs):
+        redirect_to = self.reverse(
+            'results',
+            args=(match.stage.division.season.competition.slug, match.stage.division.season.slug))
+        return super(CompetitionSite, self).edit_match_detail(
+            request, stage=match.stage, match=match, extra_context=extra_context,
+            redirect_to=redirect_to, **kwargs)
 
     @competition_slug
     def season_videos(self, request, competition, season, extra_context, **kwargs):
