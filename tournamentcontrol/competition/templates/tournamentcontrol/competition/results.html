@@ -1,0 +1,49 @@
+{% extends "tournamentcontrol/competition/season.html" %}
+{% load i18n tz %}
+
+{% block content %}
+	{% regroup datetimes by date as dates %}
+
+	<h2>{% trans "Matches requiring result entry" %}</h2>
+
+	{% block basic_results %}
+		{% timezone season.timezone %}
+			<ul>
+				{% for group in dates %}
+					<li>
+						<a href="{% url application.name|add:":results" competition=competition.slug season=season.slug datestr=group.grouper|date:"Ymd" %}">{{ group.grouper|date:"l jS F" }}</a>
+						<ul>
+							{% for datetime in group.list %}
+								<li>
+									<a href="{% url application.name|add:":match-results" competition=competition.slug season=season.slug datestr=datetime|date:"Ymd" timestr=datetime|time:"Hi" %}">
+										{{ datetime|time }}
+									</a>
+								</li>
+							{% endfor %}
+						</ul>
+					</li>
+				{% endfor %}
+			</ul>
+		{% endtimezone %}
+	{% endblock basic_results %}
+
+	<h2>{% trans "Matches requiring detailed result entry" %}</h2>
+
+	{% block details_results %}
+		<table>
+			{% for match in details %}
+				<tr>
+					<td>{{ match.datetime }}</td>
+					<td>{{ match.stage.division }}</td>
+					<td class="flag {{ match.home_team.club.abbreviation }}">{{ match.home_team }}</td>
+					<td class="flag {{ match.away_team.club.abbreviation }}">{{ match.away_team }}</td>
+					<td><a href="{% url application.name|add:":match-details" competition=competition.slug season=season.slug match=match.pk %}">{% trans "Edit" %}</a></td>
+				</tr>
+			{% empty %}
+				<tr>
+					<td colspan="5">{% trans "Congratulations! There are no matches requiring detailed result entry." %}</td>
+				</tr>
+			{% endfor %}
+		</table>
+	{% endblock details_results %}
+{% endblock %}

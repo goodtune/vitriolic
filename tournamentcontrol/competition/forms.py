@@ -1714,6 +1714,12 @@ class SimpleScoreMatchStatisticForm(ModelForm):
         """
         return True
 
+    def clean_points(self):
+        points = self.cleaned_data['points']
+        if points is None:
+            return 0
+        return points
+
 
 BaseMatchStatisticFormset = modelformset_factory(
     SimpleScoreMatchStatistic,

@@ -1,0 +1,77 @@
+{% extends "tournamentcontrol/competition/season.html" %}
+{% load i18n tz %}
+{% load common %}
+
+{% block content %}
+	<h1>{{ competition }} &dash; {{ season }}</h1>
+	<h2>{{ match.stage.division }}: {{ match }}</h2>
+	<h3>{{ match.datetime|timezone:match.play_at.timezone|date:"l jS F Y, g:i a e" }}</h3>
+
+	<form action="" method="post">
+		{% csrf_token %}
+
+		{% for formset in formsets %}
+			{{ formset.management_form }}
+
+			{% with team=formset.queryset.team %}
+				<h3>{{ team.title }}</h3>
+
+				{% if not formset.is_valid and formset.non_form_errors %}
+					<ul class="list-group">
+						{% for error in formset.non_form_errors %}
+							<li class="list-group-item list-group-item-danger">{{ error }}</li>
+						{% endfor %}
+					</ul>
+				{% endif %}
+
+				<table>
+					<thead>
+						<tr>
+							<th>#</th>
+							<th>{% trans "Player" %}</th>
+							<th>{% trans "Played" %}</th>
+							<th>{% trans "Points" %}</th>
+							<th>{% trans "MVP" %}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{% for form in formset %}
+							{% with player=form.instance.player errors=form.errors.items %}
+								<tr class="{% if errors %}danger has-error{% endif %}">
+									<td>{{ form.number }}</td>
+									<td>
+										{{ player.first_name }} {{ player.last_name }}
+										{% if errors %}
+											<ul class="list-unstyled text-danger">
+												{% for field, error_list in errors %}
+													{% for msg in error_list %}
+														<li>{{ msg }}</li>
+													{% endfor %}
+												{% endfor %}
+											</ul>
+										{% endif %}
+									</td>
+									<td>{{ form.played }}</td>
+									<td>{{ form.points }}</td>
+									<td>{{ form.id }}{% if form.mvp %}{{ form.mvp }}{% else %}-{% endif %}</td>
+								</tr>
+							{% endwith %}
+						{% empty %}
+							<tr>
+								<td colspan="5" class="no_results">
+									{% trans "There are no registered players in this team." %}
+								</td>
+							</tr>
+						{% endfor %}
+					</tbody>
+				</table>
+			{% endwith %}
+		{% endfor %}
+
+		<p>
+			<button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
+			<a class="btn btn-default" href="{% url 'admin:index' %}">{% trans "Cancel" %}</a>
+		</p>
+
+	</form>
+{% endblock %}

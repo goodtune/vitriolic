@@ -8,7 +8,6 @@ from django.apps import apps
 from django.conf import settings
 from django.conf.urls import include, url
 from django.contrib import messages
-from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
 from django.db.models import Case, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
@@ -31,11 +30,10 @@ from tournamentcontrol.competition.decorators import competition, registration
 from tournamentcontrol.competition.forms import (
     ClubAssociationForm, ClubRoleForm, CompetitionForm, DivisionForm, DrawFormatForm,
     DrawGenerationFormSet, DrawGenerationMatchFormSet, GroundForm, MatchEditForm,
-    MatchResultFormSet, MatchScheduleFormSet, MatchStatisticFormset, MatchWashoutFormSet,
-    PersonEditForm, PersonMergeForm, ProgressMatchesFormSet, ProgressTeamsFormSet,
-    RescheduleDateFormSet, SeasonAssociationFormSet, SeasonForm, SeasonMatchTimeFormSet, StageForm,
-    StageGroupForm, TeamAssociationForm, TeamAssociationFormSet, TeamForm, TeamRoleForm,
-    UndecidedTeamForm, VenueForm,
+    MatchScheduleFormSet, MatchWashoutFormSet, PersonEditForm, PersonMergeForm,
+    ProgressMatchesFormSet, ProgressTeamsFormSet, RescheduleDateFormSet, SeasonAssociationFormSet,
+    SeasonForm, SeasonMatchTimeFormSet, StageForm, StageGroupForm, TeamAssociationForm,
+    TeamAssociationFormSet, TeamForm, TeamRoleForm, UndecidedTeamForm, VenueForm,
 )
 from tournamentcontrol.competition.models import (
     Club, ClubAssociation, ClubRole, Competition, Division, DivisionExclusionDate, DrawFormat,
@@ -43,9 +41,10 @@ from tournamentcontrol.competition.models import (
     SeasonExclusionDate, SeasonMatchTime, SeasonReferee, SimpleScoreMatchStatistic, Stage,
     StageGroup, Team, TeamAssociation, TeamRole, UndecidedTeam, Venue,
 )
+from tournamentcontrol.competition.sites import CompetitionAdminMixin
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.utils import (
-    FauxQueryset, generate_fixture_grid, generate_scorecards, legitimate_bye_match, match_unplayed,
+    generate_fixture_grid, generate_scorecards, legitimate_bye_match, match_unplayed,
     team_needs_progressing,
 )
 from tournamentcontrol.competition.wizards import DrawGenerationWizard
@@ -70,7 +69,7 @@ def next_related_factory(model, parent=None, fk_name=None):
     return model(order=last + 1, **kw)
 
 
-class CompetitionAdminComponent(AdminComponent):
+class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     verbose_name = _('Tournament Control')
     unprotected = False
 
@@ -1012,81 +1011,17 @@ class CompetitionAdminComponent(AdminComponent):
 
     @competition
     @staff_login_required_m
-    def edit_match_detail(self, request, stage, match, extra_context,
-                          **kwargs):
-        conditions = {
-            'home_team__isnull': False,
-            'away_team__isnull': False,
-            'home_team_score__isnull': False,
-            'away_team_score__isnull': False,
-        }
-
-        if match is None:
-            match = get_object_or_404(stage.matches, pk=match.pk, **conditions)
-
-        def team_faux_queryset(team):
-            stats = FauxQueryset(SimpleScoreMatchStatistic, team=team)
-            for player in team.people.filter(is_player=True):
-                try:
-                    statistic = SimpleScoreMatchStatistic.objects.get(
-                        match=match,
-                        player=player.person)
-                except ObjectDoesNotExist:
-                    statistic = SimpleScoreMatchStatistic(
-                        match=match,
-                        player=player.person,
-                        number=player.number,
-                        played=1)
-                stats.append(statistic)
-            return stats
-
-        home_queryset = team_faux_queryset(match.home_team)
-        away_queryset = team_faux_queryset(match.away_team)
-
-        if request.method == 'POST':
-            home = MatchStatisticFormset(data=request.POST,
-                                         score=match.home_team_score,
-                                         prefix='home',
-                                         queryset=home_queryset)
-
-            away = MatchStatisticFormset(data=request.POST,
-                                         score=match.away_team_score,
-                                         prefix='away',
-                                         queryset=away_queryset)
-
-            if home.is_valid() and away.is_valid():
-                home.save()
-                away.save()
-                messages.success(request, _("Your changes have been saved."))
-                return self.redirect(reverse('admin:index'))
-
-        else:
-            home = MatchStatisticFormset(prefix='home',
-                                         score=match.home_team_score,
-                                         queryset=home_queryset)
-            away = MatchStatisticFormset(prefix='away',
-                                         score=match.away_team_score,
-                                         queryset=away_queryset)
-
-        context = {
-            'object': match,
-            'formsets': (home, away),
-        }
-        context.update(extra_context)
-
-        templates = self.template_path('match_detail.html')
-        return self.render(request, templates, context)
+    def edit_match_detail(self, request, stage, match, extra_context, **kwargs):
+        redirect_to = reverse('admin:index')
+        return super(CompetitionAdminComponent, self).edit_match_detail(
+            request, stage=stage, match=match, extra_context=extra_context,
+            redirect_to=redirect_to, **kwargs)
 
     @competition
-    def day_runsheet(self, request, season, date, extra_context,
-                     **kwargs):
-        matches = season.matches.filter(date=date) \
-                                .order_by('is_bye', 'datetime', 'play_at')
-        return self.generic_list(request, matches,
-                                 templates=self.template_path('runsheet.html'),
-                                 paginate_by=0,
-                                 permission_required=False,
-                                 extra_context=extra_context)
+    @staff_login_required_m
+    def day_runsheet(self, request, season, date, extra_context, **kwargs):
+        return super(CompetitionAdminComponent, self).day_runsheet(
+            request, season, date, extra_context, **kwargs)
 
     @competition
     @csrf_exempt_m
@@ -1237,74 +1172,15 @@ class CompetitionAdminComponent(AdminComponent):
     @staff_login_required_m
     def match_results(self, request, competition, season, date, extra_context,
                       division=None, time=None, **kwargs):
-        matches = Match.objects.filter(
-            stage__division__season=season,
-            stage__division__season__competition=competition,
-            date=date,
-        )
-
-        if division is not None:
-            matches = matches.filter(stage__division=division)
-
-        # ensure only matches with progressed teams are able to be updated
-        matches = matches.exclude(team_needs_progressing, is_bye=False)
-        matches = matches.exclude(home_team__isnull=True,
-                                  away_team__isnull=True)
-
-        # FIXME too complex, be verbose so we can all read and understand it
-        if time is not None:
-            base = Q(time=time)
-            bye_kwargs = matches.filter(time=time) \
-                                .values('stage', 'round')
-            time_or_byes = reduce(
-                operator.or_,
-                map(lambda kw: Q(time__isnull=True, **kw), bye_kwargs),
-                base)
-            matches = matches.filter(time_or_byes)
-        else:
-            matches = matches.order_by('date', 'time', 'play_at')
-
-        # change behaviours depending on use mode
         if time is None:
             redirect_to = self.reverse(
                 'match-dates', args=(competition.pk, season.pk))
         else:
             redirect_to = reverse('admin:index', current_app=self.app)
 
-        match_queryset = matches.filter(is_bye=False)
-        bye_queryset = matches.filter(is_bye=True)
-
-        if request.method == 'POST':
-            match_formset = MatchResultFormSet(
-                data=request.POST, queryset=match_queryset, prefix='matches')
-            bye_formset = MatchResultFormSet(
-                data=request.POST, queryset=bye_queryset, prefix='byes')
-
-            if match_formset.is_valid() and bye_formset.is_valid():
-                match_formset.save()
-                bye_formset.save()
-                messages.success(request, _("Your changes have been saved."))
-                return self.redirect(reverse('admin:index'))
-        else:
-            match_formset = MatchResultFormSet(
-                queryset=match_queryset, prefix='matches')
-            bye_formset = MatchResultFormSet(
-                queryset=bye_queryset, prefix='byes')
-
-        context = {
-            'competition': competition,
-            'season': season,
-            'date': date,
-            'division': division,
-            'match_formset': match_formset,
-            'bye_formset': bye_formset,
-            'matches': matches,
-            'cancel_url': redirect_to,
-        }
-        context.update(extra_context)
-
-        templates = self.template_path('match_results.html')
-        return self.render(request, templates, context)
+        return super(CompetitionAdminComponent, self).match_results(
+            request, competition, season, date, extra_context,
+            division=division, time=time, redirect_to=redirect_to, **kwargs)
 
     # FIXME
     @competition
