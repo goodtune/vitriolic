@@ -1,0 +1,88 @@
+<!DOCTYPE html>{% load i18n static tz %}{% load common %}
+<html>
+<head>
+	<title>{% blocktrans %}Daily Runsheet - {{ date }}{% endblocktrans %}</title>
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+	<!-- Latest compiled and minified CSS -->
+	<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+	<!-- Optional theme -->
+	<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap-theme.min.css">
+	<!-- Latest compiled and minified JavaScript -->
+	<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
+	<!-- get rid of links on print layout -->
+	<style type="text/css">
+		@media print { a[href]:after { content: none; } }
+	</style>
+</head>
+<body>
+
+{% timezone season.timezone %}
+<div class="container">
+	<div class="page-header">
+		<h1>{% trans "Run Sheet" %}</h1>
+	</div>
+
+	<div class="panel panel-default">
+		<div class="panel-heading">
+			<h3 class="panel-title">{{ date|date:"l, jS F Y" }}</h3>
+		</div>
+
+		<table class="table table-condensed table-striped" id="match_list">
+			<thead>
+				<tr>
+					<th class="time">{% trans "Time" %}</th>
+					<th class="division">{% trans "Division" %}</th>
+					<th class="play_at">{% trans "Place" %}</th>
+					<th class="team">{% trans "Team 1" %}</th>
+					<th class="team">{% trans "Team 2" %}</th>
+					<th class="referees">{% trans "Referees" %}</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for match in object_list.playable %}
+					<tr{% ifchanged match.datetime %} class="group"{% endifchanged %}>
+						<td class="time">{% ifchanged match.datetime %}{{ match.datetime|time }}{% endifchanged %}</td>
+						<td class="division">{{ match.stage.division.short_title|default:match.stage.division.title|htmlentities }}</td>
+						<td class="play_at">{{ match.play_at.title|htmlentities }}</td>
+						<td class="team">
+							{{ match.get_home_team.title|htmlentities }}
+							{% ifnotequal match.home_team_score None %}
+								({{ match.home_team_score }})
+							{% endifnotequal %}
+						</td>
+						<td class="team">
+							{{ match.get_away_team.title|htmlentities }}
+							{% ifnotequal match.away_team_score None %}
+								({{ match.away_team_score }})
+							{% endifnotequal %}
+						</td>
+						<td class="referees">
+							{% for ref in match.referees.all %}
+								<div>{{ ref.person.first_name.0 }} {{ ref.person.last_name }}</div>
+							{% endfor %}
+						</td>
+						<td>
+							{% block detail_link %}
+								<a href="{% url application.name|add:":match" match.stage.division.season.competition.slug match.stage.division.season.slug match.stage.division.slug match.pk %}">
+									<span class="glyphicon glyphicon-stats" aria-hidden="true"></span>
+								</a>
+							{% endblock %}
+						</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+
+		<div class="panel-footer">
+			{% now "r" %}
+			{% if user.is_authenticated %}
+				by {{ user.get_full_name|default:user.email }}
+			{% endif %}
+		</div>
+	</div>
+</div>
+{% endtimezone %}
+
+</body>
+</html>

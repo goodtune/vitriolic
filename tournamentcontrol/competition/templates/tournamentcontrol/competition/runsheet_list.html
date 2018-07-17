@@ -1,0 +1,11 @@
+{% extends "tournamentcontrol/competition/season.html" %}
+{% load i18n tz %}
+
+{% block content %}
+	<h1>{% trans "Daily Run Sheets" %}</h1>
+	<ul>
+		{% for date in dates %}
+			<li><a href="{% url application.name|add:":runsheet" competition=competition.slug season=season.slug datestr=date|date:"Ymd" %}">{{ date }}</a></li>
+		{% endfor %}
+	</ul>
+{% endblock %}
