@@ -3,9 +3,7 @@ from decimal import Decimal, DivisionByZero, InvalidOperation
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Count, Sum
-from tournamentcontrol.competition.signals.decorators import (
-    disable_for_loaddata,
-)
+from tournamentcontrol.competition.signals.decorators import disable_for_loaddata
 from tournamentcontrol.competition.utils import SumDict
 
 logger = logging.getLogger(__name__)
@@ -156,7 +154,10 @@ def team_ladder_entry_aggregation(sender, instance, created=None,
                 **aggregate_kw)
 
     aggregate = base + instance.team.ladder_entries.filter(
-        match__stage=instance.match.stage).aggregate(**aggregate_kw)
+        match__include_in_ladder=True,
+        match__stage__keep_ladder=True,
+        match__stage=instance.match.stage,
+        ).aggregate(**aggregate_kw)
 
     score_for = aggregate.get('score_for')
     score_against = aggregate.get('score_against')

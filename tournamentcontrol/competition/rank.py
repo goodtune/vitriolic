@@ -17,6 +17,9 @@ from tournamentcontrol.competition.models import LadderEntry, RankDivision, Rank
 
 logger = logging.getLogger(__name__)
 
+# Filter to determine which LadderEntry records get a rank_points attribute.
+RANK_POINTS_Q = Q(match__include_in_ladder=True, match__stage__keep_ladder=True)
+
 
 class NodeToContextMixin(object):
 
@@ -190,7 +193,7 @@ def base(ladder_entry, win=15, draw=10, loss=5, forfeit_against=-20):
 
 def correct_points_func(win=15.0, draw=10.0, loss=5.0, forfeit_against=-20.0):
     "This version resolves the bug from the original implementation."
-    return ExpressionWrapper(
+    expr = (
         F('win') * win +
         F('draw') * draw +
         F('loss') * loss +
@@ -201,14 +204,17 @@ def correct_points_func(win=15.0, draw=10.0, loss=5.0, forfeit_against=-20.0):
             When(Q(win=1, margin__gt=5), then=win * 0.5),
             When(Q(loss=1, margin__lt=2), then=loss * 0.5),
             default=0,
-        ),
+        )
+    )
+    return ExpressionWrapper(
+        Case(When(RANK_POINTS_Q, then=expr), default=None),
         output_field=DecimalField(),
     )
 
 
 def points_func(win=15.0, draw=10.0, loss=5.0, forfeit_against=-20.0):
     "This version preserves the bug from the original implementation."
-    return ExpressionWrapper(
+    expr = (
         F('win') * win +
         F('draw') * draw +
         F('loss') * loss +
@@ -222,7 +228,10 @@ def points_func(win=15.0, draw=10.0, loss=5.0, forfeit_against=-20.0):
             When(Q(win=1, margin__gt=5), then=win * 0.5),
             When(Q(loss=1, margin__lt=2), then=loss * 0.5),
             default=0,
-        ),
+        )
+    )
+    return ExpressionWrapper(
+        Case(When(RANK_POINTS_Q, then=expr), default=None),
         output_field=DecimalField(),
     )
 

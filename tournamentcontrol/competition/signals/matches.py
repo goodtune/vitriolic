@@ -5,9 +5,7 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.template import Context, Template
 from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
-from tournamentcontrol.competition.signals.decorators import (
-    disable_for_loaddata,
-)
+from tournamentcontrol.competition.signals.decorators import disable_for_loaddata
 from tournamentcontrol.competition.utils import forfeit_notification_recipients
 
 logger = logging.getLogger(__name__)
@@ -23,14 +21,6 @@ def match_saved_handler(sender, instance, created, *args, **kwargs):
     """
     for ladder_entry in instance.ladder_entries.all():
         ladder_entry.delete()
-
-    if not instance.include_in_ladder:
-        logger.debug('Match #{0} is marked for exclusion from ladders.'.format(instance.pk))
-        return
-
-    if not instance.stage.keep_ladder:
-        logger.debug('Stage #{0} does not keep a ladder.'.format(instance.stage.pk))
-        return
 
     if instance.is_bye and instance.bye_processed:
         logger.debug('BYE: Match #{0}'.format(instance.pk))
