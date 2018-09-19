@@ -28,9 +28,7 @@ class RankingLadderEntryTestCase(TestCase):
     DYNAMIC_FIELDS = ("margin", "diff", "rank_points")
 
     def assertLadderEntries(self, home_score, away_score, expected, **kwargs):
-        rank_importance = kwargs.pop("rank_importance", 1)
         match = factories.MatchFactory.create(
-            rank_importance=rank_importance,
             home_team_score=home_score,
             away_team_score=away_score,
             **kwargs
