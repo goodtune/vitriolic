@@ -232,6 +232,7 @@ class GoodViewTests(TestCase):
                    "https://github.com/django-guardian/django-guardian/issues/519")
     def test_club(self):
         club = factories.ClubFactory.create()
+        factories.PersonFactory.create_batch(500, club=club)
         self.assertLoginRequired('admin:fixja:club:list')
         with self.login(self.superuser):
             self.assertGoodView('admin:fixja:club:list')

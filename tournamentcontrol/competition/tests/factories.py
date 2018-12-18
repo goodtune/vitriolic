@@ -76,6 +76,7 @@ class SeasonFactory(OrderedSitemapNodeFactory):
     timezone = factory.Faker('timezone')
 
     competition = factory.SubFactory(CompetitionFactory)
+    rank_importance = factory.SelfAttribute('competition.rank_importance')
 
 
 class SeasonExclusionDateFactory(factory.DjangoModelFactory):
@@ -129,6 +130,8 @@ class DivisionFactory(OrderedSitemapNodeFactory):
     games_per_day = 2
 
     season = factory.SubFactory(SeasonFactory)
+    rank_division = factory.SubFactory(RankDivisionFactory)
+    rank_importance = factory.SelfAttribute('season.rank_importance')
 
 
 class DivisionExclusionDateFactory(factory.DjangoModelFactory):
@@ -147,6 +150,7 @@ class TeamFactory(OrderedSitemapNodeFactory):
 
     club = factory.SubFactory(ClubFactory)
     division = factory.SubFactory(DivisionFactory)
+    # rank_division = factory.SelfAttribute('division.rank_division')
 
 
 class StageFactory(OrderedSitemapNodeFactory):
@@ -156,6 +160,7 @@ class StageFactory(OrderedSitemapNodeFactory):
     title = factory.Sequence(lambda n: "Stage %d" % (n + 1))
 
     division = factory.SubFactory(DivisionFactory)
+    rank_importance = factory.SelfAttribute('division.rank_importance')
 
 
 class StageGroupFactory(OrderedSitemapNodeFactory):
@@ -165,6 +170,7 @@ class StageGroupFactory(OrderedSitemapNodeFactory):
     title = factory.Sequence(lambda n: "Pool %d" % (n + 1))
 
     stage = factory.SubFactory(StageFactory)
+    rank_importance = factory.SelfAttribute('stage.rank_importance')
 
 
 class UndecidedTeamFactory(factory.DjangoModelFactory):
@@ -180,6 +186,7 @@ class MatchFactory(factory.DjangoModelFactory):
         model = models.Match
 
     stage = factory.SubFactory(StageFactory)
+    rank_importance = factory.SelfAttribute('stage.rank_importance')
 
     home_team = factory.SubFactory(
         TeamFactory, division=factory.SelfAttribute('..stage.division'))

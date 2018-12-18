@@ -1,11 +1,19 @@
 import six
 from django.test.utils import override_settings
 from test_plus import TestCase
-from tournamentcontrol.competition.models import LadderSummary
+from tournamentcontrol.competition import models
 from tournamentcontrol.competition.tests import factories
 
 ORIGINAL_BEHAVIOUR = "tournamentcontrol.competition.rank.points_func"
 CORRECT_BEHAVIOUR = "tournamentcontrol.competition.rank.correct_points_func"
+
+
+class RankDivisionInheritance(TestCase):
+    def test_team_inherits_from_division(self):
+        factories.TeamFactory.create()
+        team = models.Team.objects.all()[0]
+        self.assertIsNone(team.rank_division)
+        self.assertEqual(team.rd, team.division.rank_division.pk)  # FIXME
 
 
 class RankingLadderEntryTestCase(TestCase):
@@ -36,6 +44,9 @@ class RankingLadderEntryTestCase(TestCase):
             away_team_score=away_score,
             **kwargs
         )
+
+    def assertLadderEntries(self, home_score, away_score, expected, **kwargs):
+        match = self.create_match(home_score, away_score, **kwargs)
         six.assertCountEqual(
             self, match.ladder_entries.values_list(*self.DYNAMIC_FIELDS), expected
         )
@@ -121,4 +132,14 @@ class Issue27Tests(RankingLadderEntryTestCase):
             expected_summaries=0,
             include_in_ladder=False,
             stage__keep_ladder=False,
+        )
+
+    def test_away_team_does_not_rank(self):
+        match = self.create_match(2, 1, away_team__rank_division=None)
+        self.assertIsNotNone(match.home_team.rank_division)
+        self.assertIsNone(match.away_team.rank_division)
+
+    def test_bye(self):
+        self.assertLadderEntries(
+            None, None, [(0, 0, None)], away_team=None, is_bye=True, bye_processed=True
         )

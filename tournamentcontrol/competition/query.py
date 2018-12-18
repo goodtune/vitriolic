@@ -13,6 +13,22 @@ class DivisionQuerySet(QuerySet):
         return self.filter(draft=False)
 
 
+class TeamQuerySet(QuerySet):
+
+    def _rank_division(self):
+        from tournamentcontrol.competition.models import RankDivision
+        return self.annotate(
+            rd=Case(
+                When(
+                    rank_division__isnull=False,
+                    then=F('rank_division')),
+                When(
+                    division__rank_division__isnull=False,
+                    then=F('division__rank_division')),
+            ),
+        )
+
+
 class StageQuerySet(QuerySet):
 
     def with_ladder(self):

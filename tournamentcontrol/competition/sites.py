@@ -537,8 +537,8 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         # Do not include matches which have not had the time scheduled
         matches = matches.exclude(datetime__isnull=True)
 
-        # Perform select_related to reduce extra queries
-        matches = matches.select_related('stage__division__season__competition')
+        # Perform prefetch_related to reduce extra queries
+        matches = matches.prefetch_related('stage__division__season__competition')
 
         # Reduce the size of the data set to return from the database
         matches = matches.defer('stage__division__season__competition__copy')

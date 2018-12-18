@@ -21,7 +21,9 @@ from django.contrib.postgres import fields as PG
 from django.core import validators
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Count, DateField, DateTimeField, Q, Sum, TimeField
+from django.db.models import (
+    Count, DateField, DateTimeField, Q, Sum, TimeField, prefetch_related_objects,
+)
 from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
 from django.template import Template
 from django.template.loader import get_template
@@ -38,7 +40,7 @@ from touchtechnology.common.models import SitemapNodeBase
 from tournamentcontrol.competition.constants import (
     GENDER_CHOICES, PYTZ_TIME_ZONE_CHOICES, SEASON_MODE_CHOICES, WIN_LOSE,
 )
-from tournamentcontrol.competition.managers import LadderEntryManager, MatchManager
+from tournamentcontrol.competition.managers import LadderEntryManager, MatchManager, TeamManager
 from tournamentcontrol.competition.mixins import ModelDiffMixin
 from tournamentcontrol.competition.query import DivisionQuerySet, StageQuerySet, StatisticQuerySet
 from tournamentcontrol.competition.signals import match_forfeit
@@ -271,11 +273,9 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         params = {
             'club': self.pk,
         }
-        members = FauxQueryset(Person)
-        for member in Person.objects.raw(query, params):
-            members.append(member)
+        prefetch_related_objects(self.people, 'user')
         res = {
-            'members': members,
+            'people': self.people,
         }
         return res
 
@@ -876,6 +876,8 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
                                    symmetrical=True,
                                    help_text=_("Select any teams that must "
                                                "not play at the same time."))
+
+    objects = TeamManager()
 
     class Meta:
         ordering = (

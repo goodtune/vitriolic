@@ -29,6 +29,7 @@ setup(
         'django>=1.11,<2.1',
         'first~=2.0.1',
         'namedentities',
+        'psycopg2-binary',
         'python-dateutil~=2.5.3',
         'pytz',
     ],
@@ -41,7 +42,6 @@ setup(
             'factory_boy',
             'freezegun',
             'mock',
-            'psycopg2',
         ],
         'redis': [
             'django-redis-cache>=1.8.0,<2',
@@ -58,7 +58,7 @@ setup(
         ],
         'competition': [
             'django-celery>=3.1.0',
-            'django-embed-video',
+            'django-embed-video~=1.1.2',
             'django-formtools>=2.1',
             'django-mathfilters',
             'icalendar>=3.9.0,<4',

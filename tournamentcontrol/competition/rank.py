@@ -78,8 +78,7 @@ class DivisionView(NodeToContextMixin, dates.DayArchiveView):
     def get_queryset(self):
         queryset = super(DivisionView, self).get_queryset()
         slug = self.kwargs['slug']
-        division_queryset = queryset.filter(team__division__slug=slug) \
-                                    .select_related("team__club")
+        division_queryset = queryset.filter(team__division__slug=slug)
         return division_queryset.order_by('-points')
 
     def get_context_data(self, **kwargs):
@@ -95,8 +94,9 @@ class TeamView(DivisionView):
     def get_context_data(self, **kwargs):
         data = super(TeamView, self).get_context_data(**kwargs)
 
-        decay = import_string(self.kwargs.get(
-            'decay', 'tournamentcontrol.competition.rank.no_decay'))
+        decay = import_string(
+            self.kwargs.get("decay", "tournamentcontrol.competition.rank.no_decay")
+        )
         version = "%(year)s-%(month)s-%(day)s" % self.kwargs
         at = date_parse(version).date()
 
@@ -193,18 +193,20 @@ def base(ladder_entry, win=15, draw=10, loss=5, forfeit_against=-20):
         win * 2 if ladder_entry.win and ladder_entry.margin > 15 else 0,
         win if ladder_entry.win and ladder_entry.margin > 10 else 0,
         win * Constants.HALF if ladder_entry.win and ladder_entry.margin > 5 else 0,
-        loss * Constants.HALF if ladder_entry.loss and ladder_entry.margin < 2 else 0,
+        loss * Constants.HALF
+        if ladder_entry.loss and ladder_entry.margin < 2
+        else 0,
     ])
 
 
 def correct_points_func(win=15.0, draw=10.0, loss=5.0, forfeit_against=-20.0):
     "This version resolves the bug from the original implementation."
     expr = (
-        F('win') * win +
-        F('draw') * draw +
-        F('loss') * loss +
-        F('forfeit_against') * forfeit_against +
-        Case(
+        F("win") * win
+        + F("draw") * draw
+        + F("loss") * loss
+        + F("forfeit_against") * forfeit_against
+        + Case(
             When(Q(win=1, margin__gt=15), then=win * 2),
             When(Q(win=1, margin__gt=10), then=win),
             When(Q(win=1, margin__gt=5), then=win * 0.5),
@@ -220,10 +222,11 @@ def correct_points_func(win=15.0, draw=10.0, loss=5.0, forfeit_against=-20.0):
 def points_func(win=15.0, draw=10.0, loss=5.0, forfeit_against=-20.0):
     "This version preserves the bug from the original implementation."
     expr = (
-        F('win') * win +
-        F('draw') * draw +
-        F('loss') * loss +
-        F('forfeit_against') * forfeit_against +
+        F("win") * win
+        + F("draw") * draw
+        + F("loss") * loss
+        + F("forfeit_against") * forfeit_against
+        +
         # The original implementation did not choose one of these, it applied
         # all that were true. For the winning bonuses this meant a massive
         # accumulator for blowout scores (1.5 times greater than was intended).
@@ -246,7 +249,7 @@ def no_decay(ladder_entry, at):
 
 def _rank(decay=no_decay, start=None, at=None, **kwargs):
     if start is None:
-        start = LadderEntry.objects.earliest('match').match.date
+        start = LadderEntry.objects.earliest("match").match.date
 
     if at is None:
         at = timezone.now() + relativedelta(day=1)
@@ -277,16 +280,16 @@ def _rank(decay=no_decay, start=None, at=None, **kwargs):
         if ladder_entry.rank_points is None:
             continue
         obj, __ = RankTeam.objects.get_or_create(
-            club=ladder_entry.team.club,
-            division=rank_divisions[ladder_entry.division])
-        points = ladder_entry.rank_points
+            club=ladder_entry.team.club, division=rank_divisions[ladder_entry.division]
+        )
+        points = ladder_entry.rank_points or Constants.ZERO
         points_decay = points * decay(ladder_entry, at)
         if points_decay:
             team = table.setdefault(obj.division, {}).setdefault(obj, {})
-            team.setdefault('importance', []).append(ladder_entry.importance)
-            team.setdefault('points', []).append(points)
-            team.setdefault('points_decay', []).append(points_decay)
-            team.setdefault('matches', []).append(ladder_entry.match)
+            team.setdefault("importance", []).append(ladder_entry.importance)
+            team.setdefault("points", []).append(points)
+            team.setdefault("points_decay", []).append(points_decay)
+            team.setdefault("matches", []).append(ladder_entry.match)
 
     return table
 
@@ -337,7 +340,7 @@ def rank(decay=no_decay, start=None, at=None, debug=None):
 
 
 def json_rank(stream=None, indent=4, *args, **kwargs):
-    JSONSerializer = get_serializer('json')
+    JSONSerializer = get_serializer("json")
     json_serializer = JSONSerializer()
     json_serializer.serialize(
         rank(*args, **kwargs),
