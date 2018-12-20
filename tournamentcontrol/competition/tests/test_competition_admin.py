@@ -228,6 +228,8 @@ class GoodViewTests(TestCase):
         pool = factories.StageGroupFactory.create()
         self.assertGoodNamespace(pool)
 
+    @unittest.skip("django-guardian bug - see "
+                   "https://github.com/django-guardian/django-guardian/issues/519")
     def test_club(self):
         club = factories.ClubFactory.create()
         self.assertLoginRequired('admin:fixja:club:list')
