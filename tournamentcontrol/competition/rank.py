@@ -73,7 +73,8 @@ class DivisionView(NodeToContextMixin, dates.DayArchiveView):
     def get_queryset(self):
         queryset = super(DivisionView, self).get_queryset()
         slug = self.kwargs['slug']
-        division_queryset = queryset.filter(team__division__slug=slug)
+        division_queryset = queryset.filter(team__division__slug=slug) \
+                                    .select_related("team__club")
         return division_queryset.order_by('-points')
 
     def get_context_data(self, **kwargs):
