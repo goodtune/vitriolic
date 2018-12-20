@@ -332,6 +332,7 @@ def field(bf, label=None):
             caption = bf.label_tag(label, attrs={'class': 'field_name'})
         else:
             # Don't use a <label> tag
+            label = label.decode('utf8') if type(label) is bytes else label
             label_suffix = bf.form.label_suffix or ''
             caption = '<span class="field_name">' \
                       '%s%s</span>' % (label, label_suffix)
