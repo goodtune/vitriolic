@@ -215,7 +215,7 @@ class NewsSite(Application):
                 return live.prefetch_related('categories')
 
             def item_categories(slf, item):
-                return item.categories.values_list('title', flat=True)
+                return [c.title for c in item.categories.all()]
 
             def item_link(slf, item):
                 date = item.published.date()
@@ -243,7 +243,6 @@ class NewsSite(Application):
                     return magic.from_file(item.image.path, mime=True)
                 except Exception:
                     pass
-
 
         class AtomNewsFeed(NewsFeed):
             feed_type = Atom1Feed

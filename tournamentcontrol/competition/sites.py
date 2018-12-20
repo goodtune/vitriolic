@@ -538,7 +538,10 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         matches = matches.exclude(datetime__isnull=True)
 
         # Perform select_related to reduce extra queries
-        matches = matches.select_related('stage__division__season')
+        matches = matches.select_related('stage__division__season__competition')
+
+        # Reduce the size of the data set to return from the database
+        matches = matches.defer('stage__division__season__competition__copy')
 
         # For development server turn back plain text to make debugging easier
         if settings.DEBUG:
