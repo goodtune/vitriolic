@@ -1172,12 +1172,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @staff_login_required_m
     def match_results(self, request, competition, season, date, extra_context,
                       division=None, time=None, **kwargs):
-        if time is None:
-            redirect_to = self.reverse(
-                'match-dates', args=(competition.pk, season.pk))
-        else:
-            redirect_to = reverse('admin:index', current_app=self.app)
-
+        redirect_to = reverse('admin:index', current_app=self.app)
         return super(CompetitionAdminComponent, self).match_results(
             request, competition, season, date, extra_context,
             division=division, time=time, redirect_to=redirect_to, **kwargs)
