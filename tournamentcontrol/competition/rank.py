@@ -98,13 +98,57 @@ class TeamView(DivisionView):
         team = division.rankteam_set.get(club__slug=self.kwargs['team'])
 
         # Transform the data for template consumption.
-        rows = [
-            (each.match, each.rank_points, each.rank_points * decay(each, at=at))
-            for each in LadderEntry.objects.filter(
+        queryset = (
+            LadderEntry.objects.filter(
                 bye=0,
                 division=division.pk,
-                team__club__slug=self.kwargs['team'],
-                match__date__lt=at)
+                team__club__slug=self.kwargs["team"],
+                match__date__lt=at,
+            ).select_related(
+                "match",
+                "match__stage",
+                "match__stage__division",
+                "match__stage__division__season",
+                "match__stage__division__season__competition",
+                "match__home_team__club",
+                "match__home_team__rank_division",
+                "match__home_team__division__rank_division",
+                "match__away_team__club",
+                "match__away_team__rank_division",
+                "match__away_team__division__rank_division",
+            )
+            # It would be nicer to use only but it's very easy to introduce breaking
+            # changes. Let's defer useless and expensive columns we can easily identify.
+            .defer(
+                "match__away_team__club__short_title",
+                "match__away_team_eval",
+                "match__away_team_eval_related",
+                "match__away_team_undecided",
+                "match__bye_processed",
+                "match__evaluated",
+                "match__external_identifier",
+                "match__home_team__club__short_title",
+                "match__home_team_eval",
+                "match__home_team_eval_related",
+                "match__home_team_undecided",
+                "match__include_in_ladder",
+                "match__is_bye",
+                "match__is_washout",
+                "match__play_at",
+                "match__round",
+                "match__time",
+                "match__videos",
+                # This is a text field and could be quite large, we don't want to
+                # return it for every match. We'll have a limited number of matches
+                # to constrain the issue, but we have seen it bite before in real
+                # world so let's defer it.
+                "match__stage__division__season__competition__copy",
+            )
+        )
+
+        rows = [
+            (each.match, each.rank_points, each.rank_points * decay(each, at=at))
+            for each in queryset
         ]
 
         # Punch this into the context to display in the front end.
