@@ -115,6 +115,7 @@ class Chunk(AdminUrlModel):
 
     slug = models.SlugField(verbose_name=_("Slug"))
     copy = HTMLField(blank=True, verbose_name=_("Page Copy"))
+    safe = BooleanField(default=True)
 
     def __str__(self):
         return self.slug

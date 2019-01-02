@@ -1,6 +1,7 @@
 import logging
 
 from django.template import Library
+from django.utils.safestring import mark_safe
 from touchtechnology.content.models import Chunk
 
 logger = logging.getLogger(__name__)
@@ -12,4 +13,6 @@ def chunk(slug):
     instance, created = Chunk.objects.get_or_create(slug=slug)
     if created:
         logger.debug('Created %r' % instance)
+    if instance.safe:
+        return mark_safe(instance.copy)
     return instance.copy
