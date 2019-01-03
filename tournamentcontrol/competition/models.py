@@ -509,9 +509,11 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 
     @property
     def clubs(self):
-        lhs = self.matches.values_list('home_team__club', flat=True)
-        rhs = self.matches.values_list('away_team__club', flat=True)
-        ids = filter(None, set(lhs).union(rhs))
+        ids = (
+            Team.objects.filter(division__season=self)
+            .values_list('club', flat=True)
+            .distinct()
+        )
         return self.competition.clubs.filter(pk__in=ids)
 
     def get_places(self):
