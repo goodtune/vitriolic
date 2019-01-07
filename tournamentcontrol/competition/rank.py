@@ -18,7 +18,9 @@ from tournamentcontrol.competition.models import LadderEntry, RankDivision, Rank
 logger = logging.getLogger(__name__)
 
 # Filter to determine which LadderEntry records get a rank_points attribute.
-RANK_POINTS_Q = Q(match__include_in_ladder=True, match__stage__keep_ladder=True)
+RANK_POINTS_Q = Q(match__is_bye=False, match__is_forfeit=False) | (
+    Q(match__is_forfeit=True) & ~Q(match__forfeit_winner=F("team"))
+)
 
 
 class NodeToContextMixin(object):
@@ -148,11 +150,13 @@ class TeamView(DivisionView):
                 # world so let's defer it.
                 "match__stage__division__season__competition__copy",
             )
+            .order_by("match__datetime")
         )
 
         rows = [
             (each.match, each.rank_points, each.rank_points * decay(each, at=at))
             for each in queryset
+            if each.rank_points is not None
         ]
 
         # Punch this into the context to display in the front end.
@@ -263,6 +267,8 @@ def _rank(decay=no_decay, start=None, at=None, **kwargs):
     rank_divisions = RankDivision.objects.in_bulk()
 
     for ladder_entry in ladder_entries.filter(ladder_entry_q):
+        if ladder_entry.rank_points is None:
+            continue
         obj, __ = RankTeam.objects.get_or_create(
             club=ladder_entry.team.club,
             division=rank_divisions[ladder_entry.division])
