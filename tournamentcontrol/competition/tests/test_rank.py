@@ -1,6 +1,7 @@
 import six
 from django.test.utils import override_settings
 from test_plus import TestCase
+from tournamentcontrol.competition.models import LadderSummary
 from tournamentcontrol.competition.tests import factories
 
 ORIGINAL_BEHAVIOUR = "tournamentcontrol.competition.rank.points_func"
@@ -27,7 +28,9 @@ class RankingLadderEntryTestCase(TestCase):
 
     DYNAMIC_FIELDS = ("margin", "diff", "rank_points")
 
-    def assertLadderEntries(self, home_score, away_score, expected, **kwargs):
+    def assertLadderEntries(
+        self, home_score, away_score, expected, expected_summaries=2, **kwargs
+    ):
         match = factories.MatchFactory.create(
             home_team_score=home_score,
             away_team_score=away_score,
@@ -35,6 +38,9 @@ class RankingLadderEntryTestCase(TestCase):
         )
         six.assertCountEqual(
             self, match.ladder_entries.values_list(*self.DYNAMIC_FIELDS), expected
+        )
+        self.assertEqual(
+            expected_summaries, LadderSummary.objects.filter(stage=match.stage).count()
         )
 
 
@@ -88,19 +94,31 @@ class CorrectBehaviourTests(RankingLadderEntryTestCase):
 class Issue27Tests(RankingLadderEntryTestCase):
     def test_match_not_included_in_ladder(self):
         self.assertLadderEntries(
-            2, 1, [(1, 1, None), (1, -1, None)], include_in_ladder=False
+            2, 1, [(1, 1, 15), (1, -1, 7.5)], include_in_ladder=False
+        )
+        # Extra test - we expect the LadderSummary to exist because the Stage will keep
+        # a ladder, but this particular match is excluded from it.
+        six.assertCountEqual(
+            self,
+            LadderSummary.objects.values_list("played", "score_for", "score_against"),
+            [(0, 0, 0), (0, 0, 0)],
         )
 
     def test_stage_does_not_keep_ladder(self):
         self.assertLadderEntries(
-            2, 1, [(1, 1, None), (1, -1, None)], stage__keep_ladder=False
+            2,
+            1,
+            [(1, 1, 15), (1, -1, 7.5)],
+            expected_summaries=0,
+            stage__keep_ladder=False,
         )
 
     def test_neither_included_in_ladder_or_stage_keep_ladder(self):
         self.assertLadderEntries(
             2,
             1,
-            [(1, 1, None), (1, -1, None)],
+            [(1, 1, 15), (1, -1, 7.5)],
+            expected_summaries=0,
             include_in_ladder=False,
             stage__keep_ladder=False,
         )

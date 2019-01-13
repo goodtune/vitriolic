@@ -19,12 +19,12 @@ logger = logging.getLogger(__name__)
 
 # Filter to determine which LadderEntry records get a rank_points attribute.
 RANK_POINTS_Q = Q(match__is_bye=False, match__is_forfeit=False) | (
-    Q(match__is_forfeit=True) & ~Q(match__forfeit_winner=F("team"))
+    (Q(match__is_forfeit=True) & ~Q(match__forfeit_winner=F("team")))
+    & Q(division=F("opponent_division"))
 )
 
 
 class NodeToContextMixin(object):
-
     def get_context_data(self, **kwargs):
         data = super(NodeToContextMixin, self).get_context_data(**kwargs)
         data['node'] = self.kwargs.get('node')
@@ -108,9 +108,11 @@ class TeamView(DivisionView):
             LadderEntry.objects.filter(
                 bye=0,
                 division=division.pk,
+                opponent_division=division.pk,
                 team__club__slug=self.kwargs["team"],
                 match__date__lt=at,
-            ).select_related(
+            )
+            .select_related(
                 "match",
                 "match__stage",
                 "match__stage__division",
@@ -211,8 +213,7 @@ def correct_points_func(win=15.0, draw=10.0, loss=5.0, forfeit_against=-20.0):
         )
     )
     return ExpressionWrapper(
-        Case(When(RANK_POINTS_Q, then=expr), default=None),
-        output_field=DecimalField(),
+        Case(When(RANK_POINTS_Q, then=expr), default=None), output_field=DecimalField()
     )
 
 
@@ -235,8 +236,7 @@ def points_func(win=15.0, draw=10.0, loss=5.0, forfeit_against=-20.0):
         )
     )
     return ExpressionWrapper(
-        Case(When(RANK_POINTS_Q, then=expr), default=None),
-        output_field=DecimalField(),
+        Case(When(RANK_POINTS_Q, then=expr), default=None), output_field=DecimalField()
     )
 
 
@@ -254,10 +254,17 @@ def _rank(decay=no_decay, start=None, at=None, **kwargs):
     if isinstance(at, datetime):
         at = at.date()
 
-    ladder_entry_q = Q(match__date__gte=start, match__date__lt=at,
-                       forfeit_for=0, importance__isnull=False, division__isnull=False)
+    ladder_entry_q = Q(
+        match__date__gte=start,
+        match__date__lt=at,
+        forfeit_for=0,
+        importance__isnull=False,
+        division__isnull=False,
+        division=F('opponent_division'),
+    )
     ladder_entries = LadderEntry.objects.select_related(
-        'match__stage__division__season__competition').order_by('match')
+        'match__stage__division__season__competition'
+    ).order_by('match')
 
     table = {}
 
@@ -323,7 +330,8 @@ def rank(decay=no_decay, start=None, at=None, debug=None):
             RankPoints.objects.create(
                 team=team,
                 points=numpy.mean(table[division][team]['points_decay']),
-                date=at)
+                date=at,
+            )
 
     return RankPoints.objects.filter(date=at)
 
@@ -336,4 +344,5 @@ def json_rank(stream=None, indent=4, *args, **kwargs):
         stream=stream,
         indent=indent,
         use_natural_foreign_keys=True,
-        use_natural_primary_keys=True)
+        use_natural_primary_keys=True,
+    )
