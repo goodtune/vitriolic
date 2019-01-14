@@ -20,6 +20,7 @@ setup(
     long_description=long_description,
     packages=find_packages(),
     install_requires=[
+        'Pillow~=3.0',
         'django-classy-tags~=0.7.2',
         'django-froala-editor>=2.7.1',
         'django-guardian~=1.4.5,!=1.4.6',
