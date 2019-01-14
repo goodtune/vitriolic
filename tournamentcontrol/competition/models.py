@@ -40,7 +40,9 @@ from tournamentcontrol.competition.constants import (
 )
 from tournamentcontrol.competition.managers import LadderEntryManager, MatchManager
 from tournamentcontrol.competition.mixins import ModelDiffMixin
-from tournamentcontrol.competition.query import DivisionQuerySet, StageQuerySet, StatisticQuerySet
+from tournamentcontrol.competition.query import (
+    DivisionQuerySet, StageQuerySet, StatisticQuerySet,
+)
 from tournamentcontrol.competition.signals import match_forfeit
 from tournamentcontrol.competition.utils import (
     FauxQueryset, combine_and_localize, stage_group_position, stage_group_position_re,
@@ -883,9 +885,6 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
             'division__order',
             'stage_group__order',
             'order',
-        )
-        permissions = (
-            ('view_team', _("Can view team")),
         )
         unique_together = (
             ('title', 'division'),
