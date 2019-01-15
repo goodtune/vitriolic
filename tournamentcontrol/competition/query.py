@@ -1,7 +1,5 @@
 from django.conf import settings
-from django.db.models import (
-    Case, DecimalField, ExpressionWrapper, F, Func, When,
-)
+from django.db.models import Case, DecimalField, ExpressionWrapper, F, Func, When
 from django.db.models.query import QuerySet
 from django.utils import timezone
 from django.utils.module_loading import import_string
@@ -81,6 +79,14 @@ class LadderEntryQuerySet(QuerySet):
                 When(
                     team__division__rank_division__isnull=False,
                     then=F('team__division__rank_division')),
+            ),
+            opponent_division=Case(
+                When(
+                    opponent__rank_division__isnull=False,
+                    then=F('opponent__rank_division')),
+                When(
+                    opponent__division__rank_division__isnull=False,
+                    then=F('opponent__division__rank_division')),
             ),
         )
 

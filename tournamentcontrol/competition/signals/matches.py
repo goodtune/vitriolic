@@ -5,9 +5,7 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.template import Context, Template
 from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
-from tournamentcontrol.competition.signals.decorators import (
-    disable_for_loaddata,
-)
+from tournamentcontrol.competition.signals.decorators import disable_for_loaddata
 from tournamentcontrol.competition.utils import forfeit_notification_recipients
 
 logger = logging.getLogger(__name__)
@@ -24,27 +22,19 @@ def match_saved_handler(sender, instance, created, *args, **kwargs):
     for ladder_entry in instance.ladder_entries.all():
         ladder_entry.delete()
 
-    if not instance.include_in_ladder:
-        logger.debug('Match #{0} is marked for exclusion from ladders.'.format(instance.pk))
-        return
-
-    if not instance.stage.keep_ladder:
-        logger.debug('Stage #{0} does not keep a ladder.'.format(instance.stage.pk))
-        return
-
     if instance.is_bye and instance.bye_processed:
-        logger.debug('BYE: Match #{0}'.format(instance.pk))
+        logger.debug('BYE: Match #%s', instance.pk)
         return create_match_ladder_entries(instance)
 
     elif instance.is_forfeit:
-        logger.debug('FORFEIT: Match #{0}'.format(instance.pk))
+        logger.debug('FORFEIT: Match #%s', instance.pk)
         return create_match_ladder_entries(instance)
 
     elif instance.home_team_score is not None and instance.away_team_score is not None:
-        logger.debug('RESULT: Match #{0}'.format(instance.pk))
+        logger.debug('RESULT: Match #%s', instance.pk)
         return create_match_ladder_entries(instance)
 
-    logger.debug('SKIPPED: Match #{0}'.format(instance.pk))
+    logger.debug('SKIPPED: Match #%s', instance.pk)
 
 
 def match_deleted_handler(sender, instance, *args, **kwargs):
@@ -76,12 +66,16 @@ def create_team_ladder_entry(instance, home_or_away):
     opponent_obj = getattr(instance, opponent + '_team', None)
     opponent_score = getattr(instance, opponent + '_team_score') or 0
 
-    ladder_kwargs = dict(match=instance,
-                         team=team,
-                         opponent=opponent_obj,
+    ladder_kwargs = dict(match_id=instance.pk,
                          played=1,
                          score_for=team_score,
                          score_against=opponent_score)
+
+    if team is not None:
+        ladder_kwargs['team_id'] = team.pk
+
+    if opponent_obj is not None:
+        ladder_kwargs['opponent_id'] = opponent_obj.pk
 
     if instance.is_bye:
         ladder_kwargs['bye'] = 1
