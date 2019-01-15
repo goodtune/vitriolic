@@ -26,7 +26,7 @@ setup(
         'django-guardian~=1.4.5,!=1.4.6',
         'django-modelforms~=0.2,!=0.2.0',
         'django-mptt~=0.9',
-        'django>=1.11',
+        'django>=1.11,<2.1',
         'first~=2.0.1',
         'namedentities',
         'python-dateutil~=2.5.3',
