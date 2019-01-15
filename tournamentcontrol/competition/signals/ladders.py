@@ -3,9 +3,7 @@ from decimal import Decimal, DivisionByZero, InvalidOperation
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Count, Sum
-from tournamentcontrol.competition.signals.decorators import (
-    disable_for_loaddata,
-)
+from tournamentcontrol.competition.signals.decorators import disable_for_loaddata
 from tournamentcontrol.competition.utils import SumDict
 
 logger = logging.getLogger(__name__)
@@ -110,6 +108,10 @@ def team_ladder_entry_aggregation(sender, instance, created=None,
     except ObjectDoesNotExist as e:
         logger.debug(e)
 
+    if not instance.match.stage.keep_ladder:
+        logger.debug('Stage does not keep a ladder, skipping.')
+        return
+
     # if we are carrying points from the previous stage then we'll need to add
     # them here.
 
@@ -127,6 +129,7 @@ def team_ladder_entry_aggregation(sender, instance, created=None,
         if instance.match.stage_group.carry_ladder:
             logger.debug('Pool match, group statistics only.')
             base += instance.team.ladder_entries.filter(
+                match__include_in_ladder=True,
                 match__stage=instance.match.stage.comes_after,
                 opponent__in=opponent_pks).aggregate(**aggregate_kw)
 
@@ -135,6 +138,7 @@ def team_ladder_entry_aggregation(sender, instance, created=None,
         elif instance.match.stage.carry_ladder:
             logger.debug('Pool match, all stage statistics.')
             base += instance.team.ladder_entries.filter(
+                match__include_in_ladder=True,
                 match__stage=instance.match.stage.comes_after).aggregate(
                 **aggregate_kw)
 
@@ -144,6 +148,7 @@ def team_ladder_entry_aggregation(sender, instance, created=None,
         # statistics from matches played with other teams in the stage.
         if instance.match.stage.comes_after.pools.count():
             base += instance.team.ladder_entries.filter(
+                match__include_in_ladder=True,
                 match__stage=instance.match.stage.comes_after,
                 opponent__in=instance.match.stage.teams).aggregate(
                 **aggregate_kw)
@@ -156,7 +161,9 @@ def team_ladder_entry_aggregation(sender, instance, created=None,
                 **aggregate_kw)
 
     aggregate = base + instance.team.ladder_entries.filter(
-        match__stage=instance.match.stage).aggregate(**aggregate_kw)
+        match__include_in_ladder=True,
+        match__stage=instance.match.stage,
+        ).aggregate(**aggregate_kw)
 
     score_for = aggregate.get('score_for')
     score_against = aggregate.get('score_against')
