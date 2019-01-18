@@ -982,6 +982,12 @@ class DrawGenerationMatchFormSet(BaseDrawGenerationMatchFormSet):
     def save(self, *args, **kwargs):
         matches = []
         for form in self.forms:
+            if form.instance.home_team_eval_related is not None:
+                form.instance.home_team_eval_related = Match.objects.get(
+                    uuid=form.instance.home_team_eval_related.uuid)
+            if form.instance.away_team_eval_related is not None:
+                form.instance.away_team_eval_related = Match.objects.get(
+                    uuid=form.instance.away_team_eval_related.uuid)
             matches.append(form.save())
         return matches
 
