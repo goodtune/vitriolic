@@ -1,7 +1,7 @@
 from __future__ import unicode_literals
 
+import six
 from test_plus import TestCase
-
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.models import Match
 from tournamentcontrol.competition.tests import factories
@@ -195,21 +195,13 @@ class DrawGenerationMatchFormSetTest(TestCase):
                 data=data1)
             self.response_302()
 
-        self.assertEqual(Match.objects.count(), 4)
-
-        SF1, SF2 = stage.matches.filter(round=1)
-        self.assertItemsEqual(
-            Match.objects.values_list(
-                'label',
-                'home_team_eval',
-                'home_team_eval_related',
-                'away_team_eval',
-                'away_team_eval_related',
-            ),
+        six.assertCountEqual(
+            self,
+            [(m.get_home_team(), m.get_away_team()) for m in Match.objects.all()],
             [
-                ('Semi Final 1', 'P1', None, 'P4', None),
-                ('Semi Final 2', 'P2', None, 'P3', None),
-                ('Bronze Medal', 'L', SF1.pk, 'L', SF2.pk),
-                ('Gold Medal', 'W', SF1.pk, 'W', SF2.pk),
+                ({'title': '1st  '}, {'title': '4th  '}),
+                ({'title': '2nd  '}, {'title': '3rd  '}),
+                ({'title': 'Loser Semi Final 1'}, {'title': 'Loser Semi Final 2'}),
+                ({'title': 'Winner Semi Final 1'}, {'title': 'Winner Semi Final 2'}),
             ],
         )

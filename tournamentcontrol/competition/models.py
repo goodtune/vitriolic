@@ -1594,7 +1594,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         return self.title
 
     def __repr__(self):
-        return '<Match: %s: %s vs %s>' % (self.round, self.home_team, self.away_team)
+        return '<Match: %s: %s>' % (self.round, self)
 
 
 class LadderBase(models.Model):
