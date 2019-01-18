@@ -21,8 +21,9 @@ WIN_LOSE = {
 MATCH_TIME_EVENT_CHOICES = (
     ('COMMENCE', _("Commenced")),
     ('BREAK', _("Scheduled Break")),
-    ('CONCLUDE', _("Concluded")),
     ('OVERTIME', _("Overtime")),
+    # Make sure this is last, used to find matches "in progress"
+    ('CONCLUDE', _("Concluded")),
 )
 
 ###################

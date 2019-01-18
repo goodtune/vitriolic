@@ -21,7 +21,9 @@ from django.contrib.postgres import fields as PG
 from django.core import validators
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Count, DateField, DateTimeField, Q, Sum, TimeField
+from django.db.models import (
+    Case, Count, DateField, DateTimeField, F, Q, Sum, TimeField, Value, When,
+)
 from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
 from django.template import Template
 from django.template.loader import get_template
@@ -1307,6 +1309,25 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         models.URLField(),
         null=True,
     )
+
+    @property
+    def live(self):
+        return self.events.annotate(
+            home_team_live_points=Case(
+                When(matchscoreevent__person__team=F('match__home_team'),
+                     then=F('matchscoreevent__points')), default=0),
+            away_team_live_points=Case(
+                When(matchscoreevent__person__team=F('match__away_team'),
+                     then=F('matchscoreevent__points')), default=0),
+            live_in_progress=Case(
+                When(matchtimeevent__type=MATCH_TIME_EVENT_CHOICES[0][0],
+                     then=Value(1)),
+                When(matchtimeevent__type=MATCH_TIME_EVENT_CHOICES[-1][0],
+                     then=Value(-1)),
+                default=Value(0), output_field=models.IntegerField())
+        ).aggregate(home_team_live_score=Sum('home_team_live_points'),
+                    away_team_live_score=Sum('away_team_live_points'),
+                    in_progress=Sum('live_in_progress'))
 
     objects = MatchManager()
 
