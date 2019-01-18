@@ -18,6 +18,13 @@ WIN_LOSE = {
     'L': _("Loser"),
 }
 
+MATCH_TIME_EVENT_CHOICES = (
+    ('COMMENCE', _("Commenced")),
+    ('BREAK', _("Scheduled Break")),
+    ('CONCLUDE', _("Concluded")),
+    ('OVERTIME', _("Overtime")),
+)
+
 ###################
 # TIME ZONE NAMES #
 ###################

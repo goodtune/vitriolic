@@ -30,17 +30,21 @@ from django.utils.encoding import python_2_unicode_compatible
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
+from polymorphic.models import PolymorphicModel
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
 from touchtechnology.common.db.models import (
     BooleanField, ForeignKey, HTMLField, LocationField, ManyToManyField,
 )
 from touchtechnology.common.models import SitemapNodeBase
 from tournamentcontrol.competition.constants import (
-    GENDER_CHOICES, PYTZ_TIME_ZONE_CHOICES, SEASON_MODE_CHOICES, WIN_LOSE,
+    GENDER_CHOICES, MATCH_TIME_EVENT_CHOICES, PYTZ_TIME_ZONE_CHOICES,
+    SEASON_MODE_CHOICES, WIN_LOSE,
 )
 from tournamentcontrol.competition.managers import LadderEntryManager, MatchManager
 from tournamentcontrol.competition.mixins import ModelDiffMixin
-from tournamentcontrol.competition.query import DivisionQuerySet, StageQuerySet, StatisticQuerySet
+from tournamentcontrol.competition.query import (
+    DivisionQuerySet, StageQuerySet, StatisticQuerySet,
+)
 from tournamentcontrol.competition.signals import match_forfeit
 from tournamentcontrol.competition.utils import (
     FauxQueryset, combine_and_localize, stage_group_position, stage_group_position_re,
@@ -1595,6 +1599,39 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
 
     def __repr__(self):
         return '<Match: %s: %s>' % (self.round, self)
+
+
+@python_2_unicode_compatible
+class MatchEvent(AdminUrlMixin, PolymorphicModel):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    match = models.ForeignKey(Match, related_name='events', on_delete=PROTECT)
+    datetime = models.DateTimeField(default=timezone.now)
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True)
+
+    def __str__(self):
+        return six.text_type(self.match.title)
+
+    class Meta:
+        ordering = ('datetime',)
+
+
+@python_2_unicode_compatible
+class MatchTimeEvent(MatchEvent):
+    type = models.CharField(
+        max_length=20, blank=False, db_index=True, choices=MATCH_TIME_EVENT_CHOICES)
+
+    def __str__(self):
+        return six.text_type(self.get_type_display())
+
+
+@python_2_unicode_compatible
+class MatchScoreEvent(MatchEvent):
+    person = models.ForeignKey(
+        TeamAssociation, blank=True, related_name='scores', on_delete=PROTECT)
+    points = models.PositiveSmallIntegerField()
+
+    def __str__(self):
+        return six.text_type(self.person)
 
 
 class LadderBase(models.Model):

@@ -61,6 +61,7 @@ setup(
             'django-embed-video',
             'django-formtools>=2.1',
             'django-mathfilters',
+            'django-polymorphic',
             'icalendar>=3.9.0,<4',
             'numpy',
             'pyparsing>=2.0.3,<3',
