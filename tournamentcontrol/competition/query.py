@@ -30,6 +30,11 @@ class MatchQuerySet(QuerySet):
     def playable(self):
         return self.exclude(is_bye=True)
 
+    def in_progress(self):
+        return self.filter(events__matchtimeevent__type='COMMENCE').exclude(
+            events__matchtimeevent__type='CONCLUDE'
+        )
+
     def videos(self):
         return self.filter(videos__isnull=False).order_by('datetime').distinct()
 
