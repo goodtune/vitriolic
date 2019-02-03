@@ -44,7 +44,7 @@ setup(
             'psycopg2',
         ],
         'redis': [
-            'django-redis-cache>=1.10.0,<2',
+            'django-redis-cache>=1.8.0,<2',
         ],
         'admin': [
             'django-bootstrap3>=8.2,<9',
