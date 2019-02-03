@@ -366,6 +366,7 @@ class Application(object):
                      form_class=None,
                      form_kwargs=None,
                      form_fields='__all__',
+                     form_excludes=None,
                      form_widgets=None,
                      post_save_callback=lambda o: None,
                      post_save_redirect=None,
@@ -394,6 +395,9 @@ class Application(object):
 
         if instance is None and pk is not None:
             instance = get_object_or_404(manager, pk=pk)
+
+        if form_excludes is None:
+            form_excludes = ()
 
         if form_kwargs is None:
             form_kwargs = {}
@@ -436,10 +440,23 @@ class Application(object):
         # If the developer has not provided a custom form, then dynamically
         # construct a default ModelForm for them.
         if form_class is None:
-            meta_class = type(smart_str('Meta'), (),
-                              {'model': model, 'fields': form_fields, 'widgets': form_widgets})
-            form_class = type(smart_str('EditForm'), self.model_form_bases,
-                              {'Meta': meta_class})
+            meta_class = type(
+                smart_str("Meta"),
+                (),
+                {
+                    "model": instance._meta.model,
+                    "fields": form_fields,
+                    "exclude": form_excludes,
+                    "widgets": form_widgets,
+                }
+            )
+            form_class = type(
+                smart_str("EditForm"),
+                self.model_form_bases,
+                {
+                    "Meta": meta_class,
+                },
+            )
 
         # Whether we've dynamically constructed our form_class or not, check to
         # ensure that we've inherited from all the bases. Log when we haven't,

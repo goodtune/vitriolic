@@ -1641,6 +1641,9 @@ class MatchTimeEvent(MatchEvent):
     type = models.CharField(
         max_length=20, blank=False, db_index=True, choices=MATCH_TIME_EVENT_CHOICES)
 
+    class Meta(MatchEvent.Meta):
+        verbose_name = _("timing event")
+
     def __str__(self):
         return six.text_type(self.get_type_display())
 
@@ -1650,6 +1653,9 @@ class MatchScoreEvent(MatchEvent):
     person = models.ForeignKey(
         TeamAssociation, blank=True, related_name='scores', on_delete=PROTECT)
     points = models.PositiveSmallIntegerField()
+
+    class Meta(MatchEvent.Meta):
+        verbose_name = _("scoring event")
 
     def __str__(self):
         return six.text_type(self.person)
