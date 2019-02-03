@@ -1627,13 +1627,22 @@ class MatchEvent(AdminUrlMixin, PolymorphicModel):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
     match = models.ForeignKey(Match, related_name='events', on_delete=PROTECT)
     datetime = models.DateTimeField(default=timezone.now)
-    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True)
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=SET_NULL)
 
     def __str__(self):
         return six.text_type(self.match.title)
 
     class Meta:
-        ordering = ('datetime',)
+        ordering = ('-datetime',)
+
+    def _get_admin_namespace(self):
+        return 'admin:fixja:competition:season:division:stage:match:matchevent'
+
+    def _get_url_args(self):
+        return (self.match.stage.division.season.competition_id,
+                self.match.stage.division.season_id, self.match.stage.division_id,
+                self.match.stage_id, self.match_id, self.pk)
 
 
 @python_2_unicode_compatible

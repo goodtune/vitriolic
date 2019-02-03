@@ -34,6 +34,7 @@ from tournamentcontrol.competition.forms import (
 )
 from tournamentcontrol.competition.models import (
     Competition, Match, Person, SimpleScoreMatchStatistic,
+    MatchEvent,
 )
 from tournamentcontrol.competition.utils import FauxQueryset, team_needs_progressing
 
@@ -137,6 +138,23 @@ class CompetitionAdminMixin(object):
         templates = self.template_path('match_results.html')
         return self.render(request, templates, context)
 
+    def edit_match_event(self, request, match, extra_context, redirect_to,
+            event_id=None, **kwargs):
+        try:
+            instance = match.events.get(pk=event_id)
+        except MatchEvent.DoesNotExist:
+            instance = None
+        return self.generic_edit(
+            request,
+            match.events,
+            instance=instance,
+            form_excludes=(
+                "uuid",
+                "match",
+            ),
+            extra_context=extra_context,
+        )
+
     def edit_match_detail(self, request, stage, match, extra_context, redirect_to, **kwargs):
         conditions = {
             'home_team__isnull': False,
@@ -220,6 +238,9 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         return [
             url(r'^$', self.results, name='results'),
             url(r'^match/(?P<match>\d+)/$', self.edit_match_detail, name='match-details'),
+            url(r'^match/(?P<match>\d+)/', include(([
+                url('^event/(?P<pk>\d+)/$', self.edit_match_event, name='match-events'),
+            ], 'matchevent'))),
             url(r'^(?P<datestr>\d{8})/$', self.results, name='results'),
             url(r'^(?P<datestr>\d{8})/(?P<timestr>\d{4})/$', self.match_results, name='match-results'),
         ]
@@ -397,6 +418,19 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             'results',
             args=(match.stage.division.season.competition.slug, match.stage.division.season.slug))
         return super(CompetitionSite, self).edit_match_detail(
+            request, stage=match.stage, match=match, extra_context=extra_context,
+            redirect_to=redirect_to, **kwargs)
+
+    @login_required_m
+    @competition_slug
+    def edit_match_event(self, request, match, extra_context, **kwargs):
+        has_permission = permissions_required(request, Match, instance=match, return_403=False)
+        if has_permission is not None:
+            return has_permission
+        redirect_to = self.reverse(
+            'results',
+            args=(match.stage.division.season.competition.slug, match.stage.division.season.slug))
+        return super(CompetitionSite, self).edit_match_event(
             request, stage=match.stage, match=match, extra_context=extra_context,
             redirect_to=redirect_to, **kwargs)
 

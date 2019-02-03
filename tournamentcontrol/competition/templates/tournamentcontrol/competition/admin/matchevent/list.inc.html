@@ -1,0 +1,25 @@
+{% extends "mvp/list.split.inc.html" %}
+{% load i18n %}
+{% load common competition %}
+
+{% block table-headings %}
+	<th>{% trans "Date" %}</th>
+	<th>{% trans "Type" %}</th>
+	<th>{% trans "Event" %}</th>
+	<th>{% trans "Team" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td data-order="{{ obj.datetime|time:"YmdHi" }}">{{ obj.datetime|timeuntil:obj.match.datetime }}</td>
+	<td>{{ obj|type|title }}</td>
+	<td>{{ obj }}</td>
+	{% if obj.person %}
+		<td>{{ obj.person.team }}</td>
+	{% else %}
+		<td><a href="{{ obj.urls.edit }}">edit</a></td>
+	{% endif %}
+{% endblock %}
+
+{% block actions %}{% endblock %}
+{% block row-buttons-items %}{% endblock %}
+{% block table-row-empty %}{% endblock %}

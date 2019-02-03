@@ -118,6 +118,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 url(r'^statistic/', include(([
                     url(r'^add/$', self.index, name='add'),
                 ], self.app_name), namespace='simplescorematchstatistic')),
+
+                url(r'^events/', include(([
+                    url(r'add/$', self.edit_match_event, name='add'),
+                    url(r'(?P<event_id>[^/]+)/$', self.edit_match_event, name='edit'),
+                ], self.app_name), namespace='matchevent')),
             ])),
         ], self.app_name), namespace='match')
 
@@ -1014,6 +1019,14 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def edit_match_detail(self, request, stage, match, extra_context, **kwargs):
         redirect_to = reverse('admin:index')
         return super(CompetitionAdminComponent, self).edit_match_detail(
+            request, stage=stage, match=match, extra_context=extra_context,
+            redirect_to=redirect_to, **kwargs)
+
+    @competition
+    @staff_login_required_m
+    def edit_match_event(self, request, stage, match, extra_context, **kwargs):
+        redirect_to = reverse('admin:index')  # FIXME
+        return super(CompetitionAdminComponent, self).edit_match_event(
             request, stage=stage, match=match, extra_context=extra_context,
             redirect_to=redirect_to, **kwargs)
 
