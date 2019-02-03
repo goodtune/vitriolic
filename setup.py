@@ -8,7 +8,7 @@ except IOError:
 
 setup(
     name='vitriolic',
-    version='1.9.0',
+    version='1.10.0',
     author='Gary Reynolds',
     author_email='gary@touch.asn.au',
     license='BSD',
@@ -44,7 +44,7 @@ setup(
             'psycopg2',
         ],
         'redis': [
-            'django-redis-cache>=1.9.0,<2',
+            'django-redis-cache>=1.10.0,<2',
         ],
         'admin': [
             'django-bootstrap3>=8.2,<9',
