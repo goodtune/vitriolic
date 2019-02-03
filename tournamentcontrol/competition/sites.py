@@ -543,6 +543,11 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         # Reduce the size of the data set to return from the database
         matches = matches.defer('stage__division__season__competition__copy')
 
+        # Remove any matches that are part of a draft division unless being viewed
+        # by a superuser.
+        if not request.user.is_superuser:
+            matches = matches.exclude(stage__division__draft=True)
+
         # For development server turn back plain text to make debugging easier
         if settings.DEBUG:
             content_type = 'text/plain'

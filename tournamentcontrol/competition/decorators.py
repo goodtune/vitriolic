@@ -243,9 +243,7 @@ def competition_by_slug(f, *a, **kw):
                 kwargs["venues"] = season.venues.all()
 
                 if division_slug:
-                    division = get_object_or_404(
-                        season.divisions, slug=division_slug, draft=False
-                    )
+                    division = get_object_or_404(season.divisions, slug=division_slug)
                     kwargs["division"] = division
 
                     # Because Division and StageGroup use the same template
