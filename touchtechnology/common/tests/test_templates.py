@@ -5,6 +5,7 @@ from django.test.utils import override_settings
 from django.utils.http import urlencode
 from django.utils.six.moves.urllib.parse import urlparse, urlunparse
 from test_plus import TestCase
+from touchtechnology.common.tests.forms import TestForm
 
 CSSIFY_TEMPLATE = Template("{% load common %}{{ value|cssify }}")
 TWITTIFY_TEMPLATE = Template("{% load common %}{{ value|twittify }}")
@@ -109,3 +110,18 @@ class ContextTest(TestCase):
     def test_tz(self):
         self.get('context:tz')
         self.assertResponseContains('UTC', html=False)
+
+
+class FieldTagTest(TestCase):
+
+    def test_field2_compat(self):
+        c = Context({"form": TestForm()})
+        t1 = Template("{% load common %}{% field form.text %}")
+        t2 = Template("{% load common %}{% field2 form.text %}")
+        self.assertHTMLEqual(t1.render(c), t2.render(c))
+
+    def test_field2_compat_with_label(self):
+        c = Context({"form": TestForm()})
+        t1 = Template("{% load common %}{% field form.text "" %}")
+        t2 = Template("{% load common %}{% field2 form.text "" %}")
+        self.assertHTMLEqual(t1.render(c), t2.render(c))

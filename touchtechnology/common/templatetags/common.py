@@ -350,6 +350,52 @@ def field(bf, label=None):
     return FORM_FIELD_TEMPLATE.render(context)
 
 
+@register.inclusion_tag('touchtechnology/common/templatetags/field.html')
+def field2(bf, label=None):
+    if not isinstance(bf, BoundField):
+        raise TypeError("{{% field %}} tag can only be used with "
+                        "BoundFields ({0})".format(bf))
+
+    if bf.is_hidden:
+        return smart_str(bf)
+
+    widget = bf.field.widget
+    widget_class_name = camel_case_to_underscores(widget.__class__.__name__)
+
+    if label is None:
+        label = bf.label
+
+    if isinstance(widget, (CheckboxInput,)):
+        radio_checkbox_input = True
+    else:
+        radio_checkbox_input = False
+
+    if label:
+        if isinstance(widget, (TextInput, PasswordInput, FileInput,
+                               Textarea, Select)) and not \
+           isinstance(widget, (CheckboxInput, RadioSelect,
+                               CheckboxSelectMultiple, MultiWidget)):
+            # Use a <label> tag
+            caption = bf.label_tag(label, attrs={'class': 'field_name'})
+        else:
+            # Don't use a <label> tag
+            label = label.decode('utf8') if type(label) is bytes else label
+            label_suffix = bf.form.label_suffix or ''
+            caption = '<span class="field_name">' \
+                      '%s%s</span>' % (label, label_suffix)
+    else:
+        caption = ''
+
+    context = {
+        'f': bf,
+        'caption': caption,
+        'widget_class_name': widget_class_name,
+        'radio_checkbox_input': radio_checkbox_input,
+        'no_label': not bool(label),
+    }
+    return context
+
+
 @register.inclusion_tag('touchtechnology/common/templatetags/analytics.html')
 def analytics(code=None):
     if code is None:
