@@ -1,6 +1,5 @@
 from __future__ import unicode_literals
 
-import base64
 import operator
 from datetime import timedelta
 from operator import or_
@@ -15,7 +14,6 @@ from django.db.models import Case, Count, F, Q, Sum, When
 from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.utils.encoding import smart_bytes
 from django.utils.module_loading import import_string
 from django.utils.translation import ugettext, ugettext_lazy as _
 from icalendar import Calendar, Event
@@ -29,8 +27,8 @@ from tournamentcontrol.competition.dashboard import (
 )
 from tournamentcontrol.competition.decorators import competition_slug
 from tournamentcontrol.competition.forms import (
-    ConfigurationForm, MatchResultFormSet, MatchStatisticFormset, MultiConfigurationForm,
-    RankingConfigurationForm,
+    ConfigurationForm, MatchResultFormSet, MatchStatisticFormset,
+    MultiConfigurationForm, RankingConfigurationForm,
 )
 from tournamentcontrol.competition.models import (
     Competition, Match, Person, SimpleScoreMatchStatistic,
@@ -538,7 +536,12 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         matches = matches.exclude(datetime__isnull=True)
 
         # Perform select_related to reduce extra queries
-        matches = matches.select_related('stage__division__season__competition')
+        matches = matches.select_related(
+            'stage__division__season__competition',
+            'stage__follows',
+            'stage_group__stage__follows',
+            'play_at__ground__venue',
+        )
 
         # Reduce the size of the data set to return from the database
         matches = matches.defer('stage__division__season__competition__copy')
@@ -573,11 +576,16 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             url = request.build_absolute_uri(str(path))
 
             event = Event()
-            event['uid'] = '%s@%s' % (
-                base64.b64encode(smart_bytes(url)), request.get_host())
+            event['uid'] = match.uuid
             event.add('summary', match.title)
-            event.add('location', '{0} ({1})'.format(
-                match.stage.division.title, match.stage.title))
+            if match.play_at.ground:
+                event.add(
+                    'location',
+                    '{} ({})'.format(match.play_at.ground.venue, match.play_at),
+                )
+            else:
+                event.add('location', match.play_at)
+            event.add('geo', (match.play_at.latitude, match.play_at.longitude))
             event.add('description', url)
             event.add('dtstart', match.datetime)
             # FIXME match duration should not be hardcoded
