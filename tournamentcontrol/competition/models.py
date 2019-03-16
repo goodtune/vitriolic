@@ -241,9 +241,11 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         query = """
             SELECT
                 "competition_person"."uuid",
+                "competition_person"."club_id",
                 "competition_person"."first_name",
                 "competition_person"."last_name",
                 "competition_person"."gender",
+                "competition_person"."date_of_birth",
                 SUM("competition_simplescorematchstatistic"."played") AS "stats_played",
                 MIN("competition_match"."date") AS "debut",
                 SUM("competition_simplescorematchstatistic"."points") AS "stats_points",
@@ -266,9 +268,11 @@ class Club(AdminUrlMixin, SitemapNodeBase):
                 "competition_person"."club_id" = %%(club)s
             GROUP BY
                 "competition_person"."uuid",
+                "competition_person"."club_id",
                 "competition_person"."first_name",
                 "competition_person"."last_name",
                 "competition_person"."gender",
+                "competition_person"."date_of_birth",
                 "%(user)s"."id"
             ORDER BY
                 "competition_person"."last_name" ASC,

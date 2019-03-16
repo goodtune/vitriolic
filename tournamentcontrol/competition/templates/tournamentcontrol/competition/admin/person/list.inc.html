@@ -31,8 +31,8 @@
 {% endblock %}
 
 {% block row-buttons-extra %}
-	{% if obj.user %}
-		<a class="btn btn-default btn-sm" role="button" href="{% url 'admin:auth:users:edit' obj.user.pk %}">
+	{% if obj.user_id %}
+		<a class="btn btn-default btn-sm" role="button" href="{% url 'admin:auth:users:edit' obj.user_id %}">
 			<i class="fa fa-user"></i>
 			<span class="hidden-xs">&nbsp;{% trans "User" %}</span>
 		</a>
