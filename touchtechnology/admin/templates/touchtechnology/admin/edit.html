@@ -93,12 +93,15 @@
 		.heading-block .actions a { padding-right: 0.5em; }
 	</style>
 
-	<!-- form media -->
-	{{ form.media }}
+	<!-- form css -->
+	{{ form.media.css }}
 {% endblock %}
 
 {% block extrajs %}
 	{{ block.super }}
+
+	<!-- form js -->
+	{{ form.media.js }}
 
 	<!-- inline javascripts -->
 	<script type="text/javascript">
@@ -126,11 +129,6 @@
 					}
 				})
 			}
-
-			/* activate Select2 */
-			$('.form-group.select select, .form-group.select_multiple select').select2({
-				allowClear: true
-			})
 		})
 	</script>
 {% endblock %}

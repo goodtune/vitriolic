@@ -24,6 +24,7 @@ from django.forms.models import (
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _, ungettext
+from django_select2.forms import Select2Widget, Select2MultipleWidget, ModelSelect2Widget
 from first import first
 from modelforms.forms import ModelForm
 from pyparsing import ParseException
@@ -241,6 +242,37 @@ class RankingConfigurationForm(PlaceholderConfigurationBase):
         self.fields['decay'] = forms.CharField(required=False)
 
 
+class ClubPrimaryPersonWidget(ModelSelect2Widget):
+    model = Person
+    search_fields = ["first_name", "last_name"]
+    dependent_fields = {"id": "club_id"}
+
+    input_type = "text"
+    template_name = 'django/forms/widgets/text.html'
+
+
+class ClubEditForm(BootstrapFormControlMixin, ModelForm):
+    class Meta:
+        model = Club
+        fields = (
+            'title',
+            'short_title',
+            'abbreviation',
+            'email',
+            'website',
+            'twitter',
+            'facebook',
+            'youtube',
+            'primary',
+            'primary_position',
+            'slug',
+            'slug_locked',
+        )
+        widgets = {
+            'primary': ClubPrimaryPersonWidget,
+        }
+
+
 class PersonEditForm(BootstrapFormControlMixin, ModelForm):
 
     class Meta:
@@ -256,6 +288,9 @@ class PersonEditForm(BootstrapFormControlMixin, ModelForm):
             'mobile_phone',
             'user',
         )
+        widgets = {
+            'user': Select2Widget,
+        }
 
 
 class PersonMergeForm(PersonEditForm):

@@ -34,7 +34,7 @@ from tournamentcontrol.competition.forms import (
 )
 from tournamentcontrol.competition.models import (
     Competition, Match, Person, SimpleScoreMatchStatistic,
-    MatchEvent,
+    MatchEvent
 )
 from tournamentcontrol.competition.utils import FauxQueryset, team_needs_progressing
 
@@ -138,22 +138,13 @@ class CompetitionAdminMixin(object):
         templates = self.template_path('match_results.html')
         return self.render(request, templates, context)
 
-    def edit_match_event(self, request, match, extra_context, redirect_to,
-            event_id=None, **kwargs):
-        try:
-            instance = match.events.get(pk=event_id)
-        except MatchEvent.DoesNotExist:
-            instance = None
-        return self.generic_edit(
-            request,
-            match.events,
-            instance=instance,
-            form_excludes=(
-                "uuid",
-                "match",
-            ),
-            extra_context=extra_context,
-        )
+    def edit_match_event(self, request, match, extra_context, redirect_to, event_id=None, **kwargs):
+        # GO OLD SCHOOL!!
+        if request.method == "POST":
+            pass
+        # If not receiving a submission, just return a list of all the MatchEvent's
+        return self.generic_list(request, match.events.all(),
+                extra_context=extra_context)
 
     def edit_match_detail(self, request, stage, match, extra_context, redirect_to, **kwargs):
         conditions = {
@@ -239,7 +230,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             url(r'^$', self.results, name='results'),
             url(r'^match/(?P<match>\d+)/$', self.edit_match_detail, name='match-details'),
             url(r'^match/(?P<match>\d+)/', include(([
-                url('^event/(?P<pk>\d+)/$', self.edit_match_event, name='match-events'),
+                url('^events/$', self.edit_match_event, name='match-events'),
             ], 'matchevent'))),
             url(r'^(?P<datestr>\d{8})/$', self.results, name='results'),
             url(r'^(?P<datestr>\d{8})/(?P<timestr>\d{4})/$', self.match_results, name='match-results'),

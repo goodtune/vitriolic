@@ -30,7 +30,7 @@ from tournamentcontrol.competition.decorators import competition, registration
 from tournamentcontrol.competition.forms import (
     ClubAssociationForm, ClubRoleForm, CompetitionForm, DivisionForm, DrawFormatForm,
     DrawGenerationFormSet, DrawGenerationMatchFormSet, GroundForm, MatchEditForm,
-    MatchScheduleFormSet, MatchWashoutFormSet, PersonEditForm, PersonMergeForm,
+    MatchScheduleFormSet, MatchWashoutFormSet, ClubEditForm, PersonEditForm, PersonMergeForm,
     ProgressMatchesFormSet, ProgressTeamsFormSet, RescheduleDateFormSet, SeasonAssociationFormSet,
     SeasonForm, SeasonMatchTimeFormSet, StageForm, StageGroupForm, TeamAssociationForm,
     TeamAssociationFormSet, TeamForm, TeamRoleForm, UndecidedTeamForm, VenueForm,
@@ -120,8 +120,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 ], self.app_name), namespace='simplescorematchstatistic')),
 
                 url(r'^events/', include(([
-                    url(r'add/$', self.edit_match_event, name='add'),
-                    url(r'(?P<event_id>[^/]+)/$', self.edit_match_event, name='edit'),
+                    url(r'^$', self.edit_match_event, name='edit'),
+                    url(r'(?P<pk>[^/]+)$', self.edit_match_event, name='edit'),
                 ], self.app_name), namespace='matchevent')),
             ])),
         ], self.app_name), namespace='match')
@@ -1357,6 +1357,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @registration
     def edit_club(self, request, extra_context, club=None, **kwargs):
+        if request.is_ajax():
+            print request.GET
         templates = {
             Team: 'tournamentcontrol/competition/admin/club/team.inc.html',
         }
@@ -1364,20 +1366,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         return self.generic_edit(
             request, Club,
             instance=club,
-            form_fields=(
-                'title',
-                'short_title',
-                'abbreviation',
-                'email',
-                'website',
-                'twitter',
-                'facebook',
-                'youtube',
-                'primary',
-                'primary_position',
-                'slug',
-                'slug_locked',
-            ),
+            form_class=ClubEditForm,
             related=(
                 'members',
                 'teams',
