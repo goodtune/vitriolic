@@ -68,6 +68,11 @@
 									<span class="glyphicon glyphicon-stats" aria-hidden="true"></span>
 								</a>
 							{% endblock %}
+							{% if match.videos %}
+								<a href="{{ match.videos|first }}">
+									<span class="glyphicon glyphicon-facetime-video" aria-hidden="true"></span>
+								</a>
+							{% endif %}
 						</td>
 					</tr>
 				{% endfor %}
