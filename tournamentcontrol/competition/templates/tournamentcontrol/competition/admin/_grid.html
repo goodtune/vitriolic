@@ -19,6 +19,9 @@
 				font-style: italic;
 			}
 		}
+		.match.video {
+			border: 3px solid #900;
+		}
 	</style>
 
 	{% block customcss %}
@@ -61,7 +64,7 @@
 									<td>
 										{% for match in matches %}
 											{% with division=match.stage.division stage=match.stage home=match.get_home_team away=match.get_away_team %}
-												<div class="match {{ division.slug|cssify }}" data-match="{{ match.pk }}" data-stage="{{ stage.pk }}" data-division="{{ division.pk }}">
+												<div class="match {{ division.slug|cssify }}{% if match.videos %} video{% endif %}" data-match="{{ match.pk }}" data-stage="{{ stage.pk }}" data-division="{{ division.pk }}">
 													<h4>{% block division %}{% endblock %}</h4>
 													{% if match.label %}
 														<h5>{% trans match.label %}</h5>
