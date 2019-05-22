@@ -228,7 +228,7 @@ class NewsSite(Application):
 
             def item_enclosure_url(slf, item):
                 try:
-                    return item.image.url
+                    return request.build_absolute_uri(item.image.url)
                 except Exception:
                     pass
 
