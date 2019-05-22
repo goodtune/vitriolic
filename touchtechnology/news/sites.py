@@ -217,6 +217,9 @@ class NewsSite(Application):
             def item_categories(slf, item):
                 return [c.title for c in item.categories.all()]
 
+            def item_description(slf, item):
+                return item.abstract
+
             def item_link(slf, item):
                 date = item.published.date()
                 args = (date.year, date.strftime('%b').lower(),
