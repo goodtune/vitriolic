@@ -217,6 +217,9 @@ class NewsSite(Application):
             def item_categories(slf, item):
                 return [c.title for c in item.categories.all()]
 
+            def item_description(slf, item):
+                return item.abstract
+
             def item_link(slf, item):
                 date = item.published.date()
                 args = (date.year, date.strftime('%b').lower(),
@@ -228,7 +231,7 @@ class NewsSite(Application):
 
             def item_enclosure_url(slf, item):
                 try:
-                    return item.image.url
+                    return request.build_absolute_uri(item.image.url)
                 except Exception:
                     pass
 
