@@ -9,7 +9,10 @@ from django.utils.translation import ugettext_lazy as _
 from six.moves import reduce
 from touchtechnology.admin.base import DashboardWidget
 from tournamentcontrol.competition.models import Match, Stage, Team
-from tournamentcontrol.competition.utils import legitimate_bye_match, team_needs_progressing
+from tournamentcontrol.competition.utils import (
+    legitimate_bye_match,
+    team_needs_progressing,
+)
 
 
 def matches_require_basic_results(now=None, matches=None):
@@ -23,26 +26,17 @@ def matches_require_basic_results(now=None, matches=None):
     # If not provided up front, build a base queryset of matches that take
     # place prior to "now".
     if matches is None:
-        matches = Match.objects.filter(date__lte=now.date())
+        last_bye_date = (
+            Match.objects.filter(datetime__lte=now).dates("date", "day").latest()
+        )
+        matches = Match.objects.filter(
+            Q(datetime__lte=now)
+            | Q(is_bye=True, bye_processed=False, date__lte=last_bye_date)
+        )
 
-    # We want games with no score, or byes that have not been processed.
-    # Do not include any matches that have been marked as a washout.
-    base = Q(home_team_score__isnull=True, away_team_score__isnull=True)
-    bye_kwargs = matches.filter(is_bye=True, bye_processed=False).values(
-        "stage", "round"
-    )
-    no_score_or_byes = reduce(operator.or_, map(lambda kw: Q(**kw), bye_kwargs), base)
-
-    matches = matches.filter(no_score_or_byes)
-    matches = matches.exclude(is_bye=True, bye_processed=True)
-    matches = matches.exclude(is_washout=True)
-    matches = matches.filter(Q(home_team__isnull=False) | Q(away_team__isnull=False))
-
-    past_days = matches.filter(date__lt=now.date())
-    earlier_today = matches.filter(datetime__lte=now)
-    matches = past_days | earlier_today
-
-    return matches.select_related(
+    return matches.filter(
+        home_team_score=None, away_team_score=None, is_washout=False
+    ).select_related(
         "stage__division__season__competition",
         "play_at",
         "home_team__club",

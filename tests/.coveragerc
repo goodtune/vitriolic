@@ -3,4 +3,4 @@ branch=True
 omit=*/tests/*,*/migrations/*
 
 [report]
-include=../touchtechnology/*
+include=../touchtechnology/*,../tournamentcontrol/*
