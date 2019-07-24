@@ -49,10 +49,17 @@ def matches_require_basic_results(now=None, matches=None):
 def matches_require_details_results(matches=None):
     # If not provided up front, build a base queryset of all matches
     if matches is None:
-        matches = Match.objects.all()
-    matches = matches.exclude(
-        home_team_score__isnull=True, away_team_score__isnull=True
-    ).filter(stage__division__season__statistics=True, statistics__isnull=True)
+        matches = Match.objects.filter(is_forfeit=False)
+
+    matches = matches.filter(
+        stage__division__season__statistics=True,
+        statistics__isnull=True,
+        home_team__isnull=False,
+        home_team_score__isnull=False,
+        away_team__isnull=False,
+        away_team_score__isnull=False,
+    )
+
     return matches.select_related(
         "stage__division__season__competition",
         "play_at",
