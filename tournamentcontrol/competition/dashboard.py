@@ -31,11 +31,14 @@ def matches_require_basic_results(now=None, matches=None):
         )
         matches = Match.objects.filter(
             Q(datetime__lte=now)
-            | Q(is_bye=True, bye_processed=False, date__lte=last_bye_date)
+            | Q(is_bye=True, bye_processed=False, date__lte=last_bye_date),
+            stage__division__season__complete=False,
         )
 
     return matches.filter(
-        home_team_score=None, away_team_score=None, is_washout=False
+        home_team_score=None,
+        away_team_score=None,
+        is_washout=False,
     ).select_related(
         "stage__division__season__competition",
         "play_at",
@@ -46,10 +49,13 @@ def matches_require_basic_results(now=None, matches=None):
     )
 
 
-def matches_require_details_results(matches=None):
+def matches_require_details_results(matches=None, include_forfeits=False):
     # If not provided up front, build a base queryset of all matches
     if matches is None:
-        matches = Match.objects.filter(is_forfeit=False)
+        matches = Match.objects.filter(
+            is_forfeit=False,
+            stage__division__season__complete=False,
+        )
 
     matches = matches.filter(
         stage__division__season__statistics=True,
@@ -59,6 +65,9 @@ def matches_require_details_results(matches=None):
         away_team__isnull=False,
         away_team_score__isnull=False,
     )
+
+    if not include_forfeits:
+        matches = matches.filter(is_forfeit=False)
 
     return matches.select_related(
         "stage__division__season__competition",

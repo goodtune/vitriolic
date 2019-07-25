@@ -364,7 +364,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
         # Filter the list of matches to those which require result entry
         basic_results = matches_require_basic_results(now, matches)
-        details_results = matches_require_details_results(matches)
+        details_results = matches_require_details_results(matches, True)
 
         context = {
             "datetimes": [
