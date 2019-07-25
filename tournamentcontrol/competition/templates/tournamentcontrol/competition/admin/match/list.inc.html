@@ -21,8 +21,8 @@
 	</td>
 	<td>{{ obj.date|default_if_none:tbc }}</td>
 	<td>{{ obj.time|default_if_none:tbc }}</td>
-	<td>{{ obj.get_home_team }}</td>
-	<td>{{ obj.get_away_team }}</td>
+	<td>{{ obj.get_home_team.title }}</td>
+	<td>{{ obj.get_away_team.title }}</td>
 	<td>{{ obj.videos|length }}</td>
 {% endblock %}
 

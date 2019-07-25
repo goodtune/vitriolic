@@ -57,6 +57,7 @@ setup(
             'python-magic',
         ],
         'competition': [
+            'cloudinary',
             'django-celery>=3.1.0',
             'django-embed-video',
             'django-formtools>=2.1',

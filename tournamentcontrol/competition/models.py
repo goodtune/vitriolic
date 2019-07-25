@@ -12,6 +12,7 @@ from operator import attrgetter
 import django
 import pytz
 import six
+from cloudinary.models import CloudinaryField
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
 from django import forms
@@ -697,8 +698,8 @@ class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 
     carry_ladder = BooleanField(
         default=False, verbose_name="Carry over points",
-        help_text=_("Set this to <b>Yes</b> if this stage should carry over values "
-                    "from the previous stage."))
+        help_text=mark_safe(_("Set this to <b>Yes</b> if this stage should carry over values "
+                              "from the previous stage.")))
 
     keep_mvp = BooleanField(
         default=True, verbose_name="Keep MVP stats",
@@ -1767,6 +1768,28 @@ class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
 
     def __str__(self):
         return '#{}'.format(self.pk)
+
+
+@python_2_unicode_compatible
+class MatchScoreSheet(AdminUrlMixin, models.Model):
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    match = models.ForeignKey(Match, related_name="scoresheets")
+    image = CloudinaryField(verbose_name=_("Image"))
+
+    def _get_admin_namespace(self):
+        return 'admin:fixja:competition:season:division:stage:match:matchscoresheet'
+
+    def _get_url_args(self):
+        return (self.match.stage.division.season.competition_id,
+                self.match.stage.division.season_id,
+                self.match.stage.division_id,
+                self.match.stage_id,
+                self.match_id,
+                self.pk)
+
+    def __str__(self):
+        return str(self.image)
 
 
 class MatchStatisticBase(models.Model):
