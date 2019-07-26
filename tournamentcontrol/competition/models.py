@@ -1774,7 +1774,7 @@ class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
 class MatchScoreSheet(AdminUrlMixin, models.Model):
 
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    match = models.ForeignKey(Match, related_name="scoresheets")
+    match = models.ForeignKey(Match, related_name="scoresheets", on_delete=CASCADE)
     image = CloudinaryField(verbose_name=_("Image"))
 
     def _get_admin_namespace(self):

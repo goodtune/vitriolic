@@ -16,7 +16,7 @@ class BasicResultTests(TestCase):
             datetime=datetime(2019, 7, 15, 8, 30, tzinfo=timezone.utc),
             stage__division__season__timezone="UTC",
         )
-        self.assertItemsEqual(matches_require_basic_results(), [match])
+        six.assertCountEqual(self, matches_require_basic_results(), [match])
 
     @freeze_time("2019-07-15 09:00 +13")
     def test_bare_match_in_samoa(self):
