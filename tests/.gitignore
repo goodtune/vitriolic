@@ -1,2 +1,3 @@
-.coverage
-news/*.png
+/.coverage
+/htmlcov
+/news/*.png

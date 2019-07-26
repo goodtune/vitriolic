@@ -1,0 +1,16 @@
+{% extends "mvp/list.split.inc.html" %}
+{% load i18n %}
+{% load competition %}
+{% load cloudinary %}
+
+{% block table-headings %}
+	<th>{% trans "Image" %}</th>
+	<th>{% trans "Resource" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td>
+		{% cloudinary obj.image crop="thumb" zoom="0.50" width=210 height=300 format="jpg" sign_url=True %}
+	</td>
+	{{ block.super }}
+{% endblock %}

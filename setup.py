@@ -1,14 +1,14 @@
 from setuptools import find_packages, setup
 
 try:
-    with open('README.rst') as fp:
+    with open('README.md') as fp:
         long_description = fp.read()
 except IOError:
     long_description = None
 
 setup(
     name='vitriolic',
-    version='1.12.0',
+    version='1.13.0',
     author='Gary Reynolds',
     author_email='gary@touch.asn.au',
     license='BSD',
@@ -20,15 +20,16 @@ setup(
     long_description=long_description,
     packages=find_packages(),
     install_requires=[
-        'Pillow~=3.0',
+        'pillow',
         'django-classy-tags~=0.7.2',
         'django-froala-editor>=2.7.1',
         'django-guardian~=1.4.5,!=1.4.6',
         'django-modelforms~=0.2,!=0.2.0',
-        'django-mptt~=0.9',
+        'django-mptt>=0.9,<0.10',
         'django>=1.11,<2.1',
         'first~=2.0.1',
         'namedentities',
+        'psycopg2-binary',
         'python-dateutil~=2.5.3',
         'pytz',
     ],
@@ -37,11 +38,10 @@ setup(
             'coverage',
             'coveralls[yaml]',
             'django-environ',
-            'django-test-plus>=1.0.15',
+            'django-test-plus>=1.0.15,<1.0.22',
             'factory_boy',
             'freezegun',
             'mock',
-            'psycopg2',
         ],
         'redis': [
             'django-redis-cache>=1.8.0,<2',
@@ -57,6 +57,7 @@ setup(
             'python-magic',
         ],
         'competition': [
+            'cloudinary',
             'django-celery>=3.1.0',
             'django-embed-video',
             'django-formtools>=2.1',

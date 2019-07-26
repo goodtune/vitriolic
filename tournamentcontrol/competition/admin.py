@@ -31,15 +31,17 @@ from tournamentcontrol.competition.forms import (
     ClubAssociationForm, ClubRoleForm, CompetitionForm, DivisionForm, DrawFormatForm,
     DrawGenerationFormSet, DrawGenerationMatchFormSet, GroundForm, MatchEditForm,
     MatchScheduleFormSet, MatchWashoutFormSet, PersonEditForm, PersonMergeForm,
-    ProgressMatchesFormSet, ProgressTeamsFormSet, RescheduleDateFormSet, SeasonAssociationFormSet,
-    SeasonForm, SeasonMatchTimeFormSet, StageForm, StageGroupForm, TeamAssociationForm,
-    TeamAssociationFormSet, TeamForm, TeamRoleForm, UndecidedTeamForm, VenueForm,
+    ProgressMatchesFormSet, ProgressTeamsFormSet, RescheduleDateFormSet,
+    SeasonAssociationFormSet, SeasonForm, SeasonMatchTimeFormSet, StageForm,
+    StageGroupForm, TeamAssociationForm, TeamAssociationFormSet, TeamForm, TeamRoleForm,
+    UndecidedTeamForm, VenueForm,
 )
 from tournamentcontrol.competition.models import (
-    Club, ClubAssociation, ClubRole, Competition, Division, DivisionExclusionDate, DrawFormat,
-    Ground, LadderEntry, LadderSummary, Match, Person, Season, SeasonAssociation,
-    SeasonExclusionDate, SeasonMatchTime, SeasonReferee, SimpleScoreMatchStatistic, Stage,
-    StageGroup, Team, TeamAssociation, TeamRole, UndecidedTeam, Venue,
+    Club, ClubAssociation, ClubRole, Competition, Division, DivisionExclusionDate,
+    DrawFormat, Ground, LadderEntry, LadderSummary, Match, MatchScoreSheet, Person,
+    Season, SeasonAssociation, SeasonExclusionDate, SeasonMatchTime, SeasonReferee,
+    SimpleScoreMatchStatistic, Stage, StageGroup, Team, TeamAssociation, TeamRole,
+    UndecidedTeam, Venue,
 )
 from tournamentcontrol.competition.sites import CompetitionAdminMixin
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
@@ -104,6 +106,12 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             request, templates, context, *args, **kwargs)
 
     def get_urls(self):
+        matchscoresheet_urls = ([
+            url(r"add/$", self.edit_matchscoresheet, name="add"),
+            url(r"(?P<pk>[^/]+)/$", self.edit_matchscoresheet, name="edit"),
+            url(r"(?P<pk>[^/]+)/delete/$", self.delete_matchscoresheet, name="delete"),
+        ], self.app_name)
+
         match_urls = include(([
             url(r'^add/$', self.edit_match, name='add'),
             url(r'^(?P<match_id>\d+)/', include([
@@ -111,7 +119,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 url(r'^delete/$', self.delete_match, name='delete'),
                 url(r'^detail/$', self.edit_match_detail, name='detail'),
 
-                # FIXME
+                url(r'^scoresheet/', include(matchscoresheet_urls,
+                                             namespace='matchscoresheet')),
+
+                # FIXME - these just prevent template rendering failures
                 url(r'^ladder/', include(([
                     url(r'^add/$', self.index, name='add'),
                 ], self.app_name), namespace='ladderentry')),
@@ -426,6 +437,28 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         return self.generic_delete(request, queryset, pk=pk,
                                    permission_required=True,
                                    post_delete_redirect=post_delete_redirect)
+
+    @competition
+    @staff_login_required_m
+    def edit_matchscoresheet(self, request, pk=None, **extra_context):
+        match = extra_context.get("match")
+
+        if pk is None:
+            instance = MatchScoreSheet(match=match)
+        else:
+            instance = get_object_or_404(MatchScoreSheet, pk=pk, match=match)
+
+        return self.generic_edit(request, MatchScoreSheet, instance=instance,
+                                 form_fields=("image",),
+                                 permission_required=True,
+                                 post_save_redirect=self.redirect(match.urls["edit"]),
+                                 extra_context=extra_context)
+
+    @competition
+    @staff_login_required_m
+    def delete_matchscoresheet(self, request, pk, **extra_context):
+        return self.generic_delete(request, MatchScoreSheet, pk=pk,
+                                   permission_required=True)
 
     @staff_login_required_m
     def list_drawformat(self, request, **extra_context):

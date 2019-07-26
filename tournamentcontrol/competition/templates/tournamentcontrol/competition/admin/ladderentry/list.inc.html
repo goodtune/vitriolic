@@ -1,0 +1,37 @@
+{% extends "mvp/list.split.inc.html" %}
+{% load i18n %}
+{% load competition %}
+
+{% block table-headings %}
+	<th>{% trans "Team" %}</th>
+	<th>{% trans "P" %}</th>
+	<th>{% trans "W" %}</th>
+	<th>{% trans "L" %}</th>
+	<th>{% trans "D" %}</th>
+	<th>{% trans "B" %}</th>
+	<th>{% trans "FW" %}</th>
+	<th>{% trans "FL" %}</th>
+	<th>{% trans "+" %}</th>
+	<th>{% trans "-" %}</th>
+	<th>{% trans "BP" %}</th>
+	<th>{% trans "Pts" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td>{{ obj.team }}</td>
+	<td>{{ obj.played }}</td>
+	<td>{{ obj.win }}</td>
+	<td>{{ obj.loss }}</td>
+	<td>{{ obj.draw }}</td>
+	<td>{{ obj.bye }}</td>
+	<td>{{ obj.forfeit_for }}</td>
+	<td>{{ obj.forfeit_against }}</td>
+	<td>{{ obj.score_for }}</td>
+	<td>{{ obj.score_against }}</td>
+	<td>{{ obj.bonus_points }}</td>
+	<td>{{ obj.points }}</td>
+{% endblock %}
+
+{% block actions %}{% endblock %}
+{% block row-buttons-items %}{% endblock %}
+{% block table-row-empty %}{% endblock %}

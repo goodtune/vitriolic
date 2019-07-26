@@ -5,6 +5,7 @@ import operator
 from datetime import timedelta
 from operator import or_
 
+import pytz
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.conf.urls import include, url
@@ -363,14 +364,17 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
         # Filter the list of matches to those which require result entry
         basic_results = matches_require_basic_results(now, matches)
-        details_results = matches_require_details_results(matches)
+        details_results = matches_require_details_results(matches, True)
 
         context = {
-            'datetimes': basic_results.datetimes('datetime', 'minute'),
-            'details': details_results,
+            "datetimes": [
+                timezone.localtime(each, pytz.timezone(season.timezone))
+                for each in basic_results.datetimes("datetime", "minute")
+            ],
+            "details": details_results,
         }
         context.update(extra_context)
-        templates = self.template_path('results.html', competition.slug, season.slug)
+        templates = self.template_path("results.html", competition.slug, season.slug)
         return self.render(request, templates, context)
 
     @competition_slug

@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'mptt',
+    'cloudinary',
     'guardian',
     'bootstrap3',
     'django_gravatar',
