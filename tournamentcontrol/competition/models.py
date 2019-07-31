@@ -173,6 +173,7 @@ class TwitterField(models.CharField):
 @python_2_unicode_compatible
 class OrderedSitemapNode(SitemapNodeBase):
 
+    copy = HTMLField(blank=True)
     order = models.PositiveIntegerField(default=1)
 
     def __repr__(self):
@@ -188,7 +189,6 @@ class OrderedSitemapNode(SitemapNodeBase):
 
 class Competition(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 
-    copy = HTMLField(blank=True)
     enabled = BooleanField(default=True)
     clubs = ManyToManyField('Club', blank=True, related_name='competitions')
 

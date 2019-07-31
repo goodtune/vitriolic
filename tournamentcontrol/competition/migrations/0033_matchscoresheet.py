@@ -38,6 +38,7 @@ class Migration(migrations.Migration):
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
                         to="competition.Match",
+                        related_name='scoresheets',
                     ),
                 ),
             ],

@@ -324,6 +324,7 @@ class SeasonForm(SuperUserSlugMixin, TimezoneMixin, BootstrapFormControlMixin, M
         fields = (
             'title',
             'short_title',
+            'copy',
             'hashtag',
             'enabled',
             'timezone',
@@ -336,7 +337,12 @@ class SeasonForm(SuperUserSlugMixin, TimezoneMixin, BootstrapFormControlMixin, M
             'slug',
             'slug_locked',
         )
-
+        labels = {
+            'copy': _('Notes (Public)'),
+        }
+        help_texts = {
+            'copy': _('Optional. Will be displayed in the front end if provided.'),
+        }
 
 class VenueForm(SuperUserSlugMixin, TimezoneMixin, ModelForm):
 
@@ -398,6 +404,7 @@ class DivisionForm(SuperUserSlugMixin, ModelForm):
             'title',
             'short_title',
             'rank_division',
+            'copy',
             'draft',
             'points_formula',
             'bonus_points_formula',
@@ -409,9 +416,13 @@ class DivisionForm(SuperUserSlugMixin, ModelForm):
             'slug_locked',
         )
         labels = {
+            'copy': _('Notes (Public)'),
             'forfeit_for_score': _('Forfeit win score'),
             'forfeit_against_score': _('Forfeit loss score'),
             'include_forfeits_in_played': _('Add forfeits to played'),
+        }
+        help_texts = {
+            'copy': _('Optional. Will be displayed in the front end if provided.'),
         }
         widgets = {
             'bonus_points_formula': forms.TextInput,
@@ -651,6 +662,7 @@ class TeamForm(SuperUserSlugMixin, ModelForm):
             'title',
             'short_title',
             'rank_division',
+            'copy',
             'names_locked',
             'slug',
             'slug_locked',
@@ -662,8 +674,10 @@ class TeamForm(SuperUserSlugMixin, ModelForm):
             'title': _('Name'),
             'short_title': _('Abbreviation'),
             'names_locked': _('Name is locked'),
+            'copy': _('Notes (Public)'),
         }
         help_texts = {
+            'copy': _('Optional. Will be displayed in the front end if provided.'),
             'short_title': _("The abbreviated version will be used in draws "
                              "to save space."),
         }
