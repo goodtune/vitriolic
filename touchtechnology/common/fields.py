@@ -10,7 +10,7 @@ def boolean_coerce(value):
 
 
 class BooleanChoiceField(forms.TypedChoiceField):
-    widget = forms.RadioSelect
+    widget = forms.Select
 
     def __init__(self, *args, **kwargs):
         defaults = {
