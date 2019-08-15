@@ -109,6 +109,7 @@ def related(instance, whitelist=None):
     related = getattr(instance, '_mvp_related', {})
     annotate = getattr(instance, '_mvp_annotate', {})
     select_related = getattr(instance, '_mvp_select_related', {})
+    only = getattr(instance, '_mvp_only', {})
 
     for name, manager in rel.items():
         # Prioritise fully customised queries. If you take this route, you're
@@ -121,6 +122,8 @@ def related(instance, whitelist=None):
                 manager = manager.select_related(*select_related[name])
             if name in annotate:
                 manager = manager.annotate(**annotate[name])
+            if name in only:
+                manager = manager.only(*only[name])
         yield (manager, name)
 
 

@@ -239,6 +239,9 @@ class Club(AdminUrlMixin, SitemapNodeBase):
                 "competition_person"."first_name",
                 "competition_person"."last_name",
                 "competition_person"."gender",
+                "competition_person"."date_of_birth",
+                "competition_person"."club_id",
+                "competition_person"."user_id",
                 SUM("competition_simplescorematchstatistic"."played") AS "stats_played",
                 MIN("competition_match"."date") AS "debut",
                 SUM("competition_simplescorematchstatistic"."points") AS "stats_points",
@@ -253,8 +256,13 @@ class Club(AdminUrlMixin, SitemapNodeBase):
                 "competition_match" ON
                 ("competition_simplescorematchstatistic"."match_id" = "competition_match"."id")
             LEFT OUTER JOIN
-                "competition_teamassociation" ON
-                ("competition_person"."uuid" = "competition_teamassociation"."person_id")
+                "competition_teamassociation" ON (
+                    "competition_person"."uuid" = "competition_teamassociation"."person_id"
+                    AND (
+                        "competition_match"."home_team_id" = "competition_teamassociation"."team_id"
+                        OR "competition_match"."away_team_id" = "competition_teamassociation"."team_id"
+                    )
+                )
             LEFT OUTER JOIN
                 "%(user)s" ON ("competition_person"."user_id" = "%(user)s"."id")
             WHERE
@@ -264,6 +272,9 @@ class Club(AdminUrlMixin, SitemapNodeBase):
                 "competition_person"."first_name",
                 "competition_person"."last_name",
                 "competition_person"."gender",
+                "competition_person"."date_of_birth",
+                "competition_person"."club_id",
+                "competition_person"."user_id",
                 "%(user)s"."id"
             ORDER BY
                 "competition_person"."last_name" ASC,
@@ -285,6 +296,24 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         res = {
             'teams': [
                 'division__season__competition',
+            ],
+        }
+        return res
+
+    @cached_property
+    def _mvp_only(self):
+        res = {
+            'teams': [
+                'club',
+                'title',
+                'division__title',
+                'division__short_title',
+                'division__season__title',
+                'division__season__short_title',
+                'division__season__start_date',
+                'division__season__competition__title',
+                'division__season__competition__short_title',
+                'division__season__competition__order',
             ],
         }
         return res
@@ -602,7 +631,7 @@ class Ground(Place):
                 self.venue_id, self.pk)
 
 
-class Division(AdminUrlMixin, ModelDiffMixin, RankDivisionMixin,
+class Division(AdminUrlMixin, RankDivisionMixin,
                RankImportanceMixin, OrderedSitemapNode):
     """
     A model that represents a division within a competition.
