@@ -41,7 +41,9 @@ from tournamentcontrol.competition.constants import (
 )
 from tournamentcontrol.competition.managers import LadderEntryManager, MatchManager
 from tournamentcontrol.competition.mixins import ModelDiffMixin
-from tournamentcontrol.competition.query import DivisionQuerySet, StageQuerySet, StatisticQuerySet
+from tournamentcontrol.competition.query import (
+    DivisionQuerySet, StageQuerySet, StatisticQuerySet,
+)
 from tournamentcontrol.competition.signals import match_forfeit
 from tournamentcontrol.competition.utils import (
     FauxQueryset, combine_and_localize, stage_group_position, stage_group_position_re,
@@ -631,7 +633,7 @@ class Ground(Place):
                 self.venue_id, self.pk)
 
 
-class Division(AdminUrlMixin, RankDivisionMixin,
+class Division(AdminUrlMixin, ModelDiffMixin, RankDivisionMixin,
                RankImportanceMixin, OrderedSitemapNode):
     """
     A model that represents a division within a competition.
