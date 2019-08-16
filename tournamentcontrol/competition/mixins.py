@@ -2,6 +2,7 @@
 Originally copied from http://stackoverflow.com/a/13842223
 """
 
+from django.db.models.fields.related import RelatedField
 from django.forms.models import model_to_dict
 
 
@@ -45,5 +46,11 @@ class ModelDiffMixin(object):
 
     @property
     def _dict(self):
-        return model_to_dict(self, fields=[field.name for field in
-                             self._meta.fields])
+        fields = [
+            field.name
+            for field in self._meta.get_fields()
+            if not isinstance(field, RelatedField)
+            and field.name not in self.get_deferred_fields()
+        ]
+        data = model_to_dict(self, fields=fields)
+        return data

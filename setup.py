@@ -8,7 +8,7 @@ except IOError:
 
 setup(
     name='vitriolic',
-    version='1.14.0',
+    version='1.14.1',
     author='Gary Reynolds',
     author_email='gary@touch.asn.au',
     license='BSD',
@@ -57,13 +57,13 @@ setup(
             'python-magic',
         ],
         'competition': [
+            'backports.statistics',
             'cloudinary',
             'django-celery>=3.1.0',
             'django-embed-video',
             'django-formtools>=2.1',
             'django-mathfilters',
             'icalendar>=3.9.0,<4',
-            'numpy',
             'pyparsing>=2.0.3,<3',
         ],
     },
