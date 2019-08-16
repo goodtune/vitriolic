@@ -4,7 +4,6 @@ import logging
 from datetime import datetime
 from decimal import Decimal
 
-import numpy
 from dateutil.parser import parse as date_parse
 from dateutil.relativedelta import relativedelta
 from django.core.serializers import get_serializer
@@ -14,6 +13,11 @@ from django.utils import timezone
 from django.utils.module_loading import import_string
 from django.views.generic import dates
 from tournamentcontrol.competition.models import LadderEntry, RankDivision, RankPoints, RankTeam
+
+try:
+    from statistics import mean
+except ImportError:
+    from backports.statistics import mean
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +168,7 @@ class TeamView(DivisionView):
         # Punch this into the context to display in the front end.
         data['team'] = team
         data['table'] = rows
-        data['points'] = numpy.mean([
+        data['points'] = mean([
             points_decay
             for match, points, points_decay in rows
         ])
@@ -329,7 +333,7 @@ def rank(decay=no_decay, start=None, at=None, debug=None):
         for team in table[division]:
             RankPoints.objects.create(
                 team=team,
-                points=numpy.mean(table[division][team]['points_decay']),
+                points=mean(table[division][team]['points_decay']),
                 date=at,
             )
 
