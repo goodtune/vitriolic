@@ -63,6 +63,8 @@ setup(
             'django-embed-video',
             'django-formtools>=2.1',
             'django-mathfilters',
+            'djangorestframework',
+            'drf-nested-routers',
             'icalendar>=3.9.0,<4',
             'pyparsing>=2.0.3,<3',
         ],

@@ -5,9 +5,15 @@ import sys
 import django
 import pytz
 from django.utils import timezone
+from django.utils.deprecation import MiddlewareMixin
 from touchtechnology.common.utils import get_timezone_from_request
 
 logger = logging.getLogger(__name__)
+
+
+class AcceptsMiddleware(MiddlewareMixin):
+    def process_request(self, request):
+        request.accepts = set(request.META.get("HTTP_ACCEPT", "").split(","))
 
 
 def served_by_middleware(get_response):
