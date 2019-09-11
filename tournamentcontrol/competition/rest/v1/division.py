@@ -15,6 +15,7 @@ class ListMatchSerializer(serializers.ModelSerializer):
         model = models.Match
         fields = (
             "id",
+            "uuid",
             "round",
             "date",
             "time",
@@ -25,6 +26,8 @@ class ListMatchSerializer(serializers.ModelSerializer):
             "home_team_score",
             "away_team",
             "away_team_score",
+            "referees",
+            "videos",
         )
 
     def get_round(self, obj):

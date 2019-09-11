@@ -1,7 +1,26 @@
+from rest_framework import serializers
 from rest_framework_nested.serializers import NestedHyperlinkedModelSerializer
 from tournamentcontrol.competition import models
 
 from .viewsets import SlugViewSet
+
+
+class RefereeClubSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Club
+        fields = ("title", "abbreviation")
+
+
+class ListRefereeSerializer(serializers.ModelSerializer):
+    uuid = serializers.ReadOnlyField(source="person.uuid")
+    first_name = serializers.ReadOnlyField(source="person.first_name")
+    last_name = serializers.ReadOnlyField(source="person.last_name")
+
+    club = RefereeClubSerializer(read_only=True)
+
+    class Meta:
+        model = models.SeasonReferee
+        fields = ("id", "uuid", "first_name", "last_name", "club")
 
 
 class ListDivisionSerializer(NestedHyperlinkedModelSerializer):
@@ -33,9 +52,10 @@ class ListSeasonSerializer(NestedHyperlinkedModelSerializer):
 
 class SeasonSerializer(ListSeasonSerializer):
     divisions = ListDivisionSerializer(many=True, read_only=True)
+    referees = ListRefereeSerializer(many=True, read_only=True)
 
     class Meta(ListSeasonSerializer.Meta):
-        fields = ("title", "slug", "url", "divisions")
+        fields = ("title", "slug", "url", "divisions", "referees")
 
 
 class SeasonViewSet(SlugViewSet):
