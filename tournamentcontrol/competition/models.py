@@ -1034,6 +1034,7 @@ class ByeTeam(object):
 
     def __init__(self, title="Bye", *args, **kwargs):
         super(ByeTeam, self).__init__(*args, **kwargs)
+        self.pk = None
         self.title = mark_safe(
             '<span class="bye" title="%s">%s</span>' % (title, title))
 
