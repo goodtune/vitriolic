@@ -8,7 +8,7 @@
 
 	<table class="draw">
 		<tbody>
-			{% for match in season.matches.videos %}
+			{% for match in object_list %}
 				<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}{% ifchanged match.round %} group{% endifchanged %}">
 					<td>{{ match.stage.division.title }}</td>
 

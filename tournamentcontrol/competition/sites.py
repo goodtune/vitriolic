@@ -408,10 +408,21 @@ class CompetitionSite(CompetitionAdminMixin, Application):
     def season_videos(self, request, competition, season, extra_context, **kwargs):
         templates = self.template_path(
             'season_videos.html', competition.slug, season.slug)
-        return self.generic_detail(request, competition.seasons,
-                                   slug=season.slug,
-                                   templates=templates,
-                                   extra_context=extra_context)
+        queryset = (
+            Match.objects
+            .select_related(
+                "stage__division",
+                "home_team__club",
+                "away_team__club",
+                "play_at",
+            )
+            .exclude(videos__isnull=True)
+            .filter(stage__division__season=season)
+        )
+        return self.generic_list(request, queryset,
+                                 paginate_by=1000,
+                                 templates=templates,
+                                 extra_context=extra_context)
 
     @competition_slug
     def club(self, request, competition, season, club, extra_context,
