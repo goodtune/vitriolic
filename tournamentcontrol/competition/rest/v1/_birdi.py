@@ -27,7 +27,7 @@ class MatchSerializer(serializers.Serializer):
     def _get_team(self, obj):
         if obj is None:
             return
-        if obj.club is not None:
+        if obj.club_id is not None:
             return obj.club.abbreviation
         return obj.title
 
@@ -52,7 +52,47 @@ class MatchViewSet(viewsets.ModelViewSet):
     serializer_class = MatchSerializer
 
     def get_queryset(self):
-        return models.Match.objects.filter(
-            stage__division__season__slug=self.kwargs["season_slug"],
-            stage__division__season__competition__slug=self.kwargs["competition_slug"],
+        return (
+            models.Match.objects.select_related(
+                "stage__division__season__competition",
+                "home_team__club",
+                "away_team__club",
+                "play_at",
+            )
+            .filter(
+                stage__division__season__slug=self.kwargs["season_slug"],
+                stage__division__season__competition__slug=self.kwargs[
+                    "competition_slug"
+                ],
+            )
+            .defer(
+                # don't select text fields
+                "stage__copy",
+                "stage__division__copy",
+                "stage__division__season__copy",
+                "stage__division__season__competition__copy",
+                # unused home team fields
+                "home_team__club__short_title",
+                "home_team__club__slug",
+                "home_team__club__email",
+                "home_team__club__website",
+                "home_team__club__twitter",
+                "home_team__club__facebook",
+                "home_team__club__youtube",
+                "home_team__club__primary",
+                "home_team__club__primary_position",
+                # unused away team fields
+                "away_team__club__short_title",
+                "away_team__club__slug",
+                "away_team__club__email",
+                "away_team__club__website",
+                "away_team__club__twitter",
+                "away_team__club__facebook",
+                "away_team__club__youtube",
+                "away_team__club__primary",
+                "away_team__club__primary_position",
+                # long textual fields that are unused
+                "stage__division__points_formula",
+                "play_at__latlng",
+            )
         )
