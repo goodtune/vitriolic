@@ -418,6 +418,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             )
             .exclude(videos__isnull=True)
             .filter(stage__division__season=season)
+            .order_by("datetime", "play_at")
         )
         return self.generic_list(request, queryset,
                                  paginate_by=1000,
