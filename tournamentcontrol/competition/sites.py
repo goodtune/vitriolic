@@ -99,7 +99,7 @@ class CompetitionAdminMixin(object):
                                 .values('stage', 'round')
             time_or_byes = reduce(
                 operator.or_,
-                map(lambda kw: Q(time__isnull=True, **kw), bye_kwargs),
+                [Q(time__isnull=True, **kw) for kw in bye_kwargs],
                 base)
             matches = matches.filter(time_or_byes)
         else:

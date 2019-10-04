@@ -86,7 +86,7 @@ class FilterForm(forms.Form):
                                 .values_list('date', 'time') \
                                 .distinct()
 
-        datetimes = map(combine_date_time_tuple, timeslots)
+        datetimes = [combine_date_time_tuple(t) for t in timeslots]
         datetime_choices = zip(datetimes, datetimes)
         self.fields['timeslots'] = forms.MultipleChoiceField(
             choices=datetime_choices,

@@ -526,13 +526,12 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
                 Q(play_at__timezone__isnull=True))
             values_list = queryset.values_list(
                 'date', 'time', 'play_at__timezone').distinct()
-            self._dates = sorted(
-                map(lambda args: combine_and_localize(*args), values_list))
+            self._dates = sorted([combine_and_localize(*v) for v in values_list])
         return self._dates
 
     @property
     def dates(self):
-        return map(lambda dt: dt.date(), self.datetimes)
+        return [dt.date() for dt in self.datetimes]
 
     @property
     def matches(self):
@@ -569,7 +568,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         rset = rruleset()
         for timeslot in self.timeslots.exclude(exc):
             rset.rrule(timeslot.rrule())
-        return map(lambda dt: dt.time(), rset)
+        return [dt.time() for dt in rset]
 
 
 class Place(AdminUrlMixin, OrderedSitemapNode):
@@ -585,7 +584,7 @@ class Place(AdminUrlMixin, OrderedSitemapNode):
     def location(self):
         if not hasattr(self, '_latlng_pieces'):
             try:
-                self._latlng_pieces = map(Decimal, self.latlng.split(','))
+                self._latlng_pieces = [Decimal(p) for p in self.latlng.split(',')]
             except InvalidOperation:
                 self._latlng_pieces = None
         return self._latlng_pieces
@@ -1380,7 +1379,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
             if self.stage_group:
                 siblings = siblings.filter(stage_group=self.stage_group)
             if siblings:
-                res = max(map(attrgetter('datetime'), siblings))
+                res = max([s.datetime for s in siblings])
         if res is not None and settings.USE_TZ and tzinfo is not None:
             return timezone.localtime(res, tzinfo)
         return res
@@ -1586,12 +1585,15 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                         "evaluated.", self)
             return (self.home_team, self.away_team)
 
-        positions = dict(
-            (index + 1, team) for index, team in enumerate(map(
-                attrgetter('team'), stage.ladder_summary.all())))
-        group_positions = dict(
-            (index + 1, map(attrgetter('team'), group.ladder))
-            for index, group in enumerate(stage.pools.all()))
+        positions = {
+            index + 1: team
+            for index, team in enumerate(
+                stage.ladder_summary.values_list('team', flat=True))
+        }
+        group_positions = {
+            index + 1: [each.team for each in group.ladder]
+            for index, group in enumerate(stage.pools.all())
+        }
         res = [None, None]
         for index, field in enumerate(('home_team', 'away_team')):
             team = self._get_team(field)
@@ -1614,7 +1616,8 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                     else:
                         try:
                             try:
-                                g, p = map(int, [group, position])
+                                g = int(group)
+                                p = int(position)
                                 team = group_positions[g][p - 1]
                             except TypeError:
                                 team = positions[int(position)]

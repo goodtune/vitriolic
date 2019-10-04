@@ -75,7 +75,7 @@ class FauxQueryset(list):
         return self
 
     def get(self, **kwargs):
-        pks = map(attrgetter('pk'), self)
+        pks = [each.pk for each in self]
         return self.model.objects.filter(pk__in=pks).get(**kwargs)
 
 
