@@ -539,8 +539,14 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                                    extra_context=extra_context)
 
     @competition_slug
-    def calendar(self, request, season, club=None, division=None, team=None,
-                 **kwargs):
+    def calendar(self, request, season, club=None, division=None, team=None, **kwargs):
+        if season.disable_calendar:
+            # The GONE response informs client that they should remove this resource
+            # from their cache. When a calendar has been added to user's mobile device
+            # they may never look at it again, but we continue to process the requests
+            # which can have poor performance. Try to influence a cleanup of clients.
+            return HttpResponseGone()
+
         if team is not None:
             matches = team.matches
         elif division is not None:
