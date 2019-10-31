@@ -200,7 +200,7 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1,
                    key=None)
 
     # remove any None items from each pool
-    pools = [filter(None, pool) for pool in pools]
+    pools = [[p for p in pool if p] for pool in pools]
 
     # produce round robin formats
     draw_formats = [

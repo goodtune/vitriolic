@@ -737,31 +737,35 @@ class BaseMatchFormMixin(BootstrapFormControlMixin):
             timeslots = self.instance.stage.division.season.get_timeslots(
                 self.instance.date)
 
-            if self.instance.home_team and \
-                    self.instance.home_team.timeslots_after:
-                timeslots = filter(
-                    lambda t: t >= self.instance.home_team.timeslots_after,
-                    timeslots)
+            if self.instance.home_team and self.instance.home_team.timeslots_after:
+                timeslots = [
+                    timeslot
+                    for timeslot in timeslots
+                    if timeslot >= self.instance.home_team.timeslots_after
+                ]
 
-            if self.instance.away_team and \
-                    self.instance.away_team.timeslots_after:
-                timeslots = filter(
-                    lambda t: t >= self.instance.away_team.timeslots_after,
-                    timeslots)
+            if self.instance.away_team and self.instance.away_team.timeslots_after:
+                timeslots = [
+                    timeslot
+                    for timeslot in timeslots
+                    if timeslot >= self.instance.away_team.timeslots_after
+                ]
 
-            if self.instance.home_team and \
-                    self.instance.home_team.timeslots_before:
-                timeslots = filter(
-                    lambda t: t <= self.instance.home_team.timeslots_before,
-                    timeslots)
+            if self.instance.home_team and self.instance.home_team.timeslots_before:
+                timeslots = [
+                    timeslot
+                    for timeslot in timeslots
+                    if timeslot <= self.instance.home_team.timeslots_before
+                ]
 
-            if self.instance.away_team and \
-                    self.instance.away_team.timeslots_before:
-                timeslots = filter(
-                    lambda t: t <= self.instance.away_team.timeslots_before,
-                    timeslots)
+            if self.instance.away_team and self.instance.away_team.timeslots_before:
+                timeslots = [
+                    timeslot
+                    for timeslot in timeslots
+                    if timeslot <= self.instance.away_team.timeslots_before
+                ]
 
-            choices = [('', '')] + [time_choice(t) for t in timeslots]
+            choices = [('', '')] + [time_choice(timeslot) for timeslot in timeslots]
 
             # Ensure that the currently set time is in the list if not in the
             # rruleset defined for the season.
@@ -1831,7 +1835,7 @@ class TournamentScheduleForm(BootstrapFormControlMixin, forms.Form):
         help_text="Only applies to preliminary stages.")
 
     def get_teams(self):
-        return filter(None, self.cleaned_data['team_hook'].splitlines())
+        return [line for line in self.cleaned_data['team_hook'].splitlines() if line]
 
     def get_context(self):
         assert self.is_valid()

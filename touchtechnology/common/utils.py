@@ -112,7 +112,7 @@ def get_mod_func(callback):
 def create_exclude_filter(queryset):
     def _filter(node):
         return Q(tree_id=node.tree_id, lft__gte=node.lft, lft__lte=node.rght)
-    return reduce(or_, [_filter(n) for n in queryset], Q())
+    return reduce(or_, [[x for x in n if _filter(x)] for n in queryset], Q())
 
 
 def get_403_or_None(request, perms, obj=None, login_url=None,

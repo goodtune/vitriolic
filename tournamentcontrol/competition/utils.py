@@ -433,9 +433,8 @@ def generate_fixture_grid(season, dates=None, templates=None,
     for date in dates:
         matches = season.matches.filter(date=date)
 
-        times = set(matches.values_list('time', flat=True)).union(
-            season.get_timeslots(date))
-        times = sorted(filter(None, times))
+        times = sorted({m.time for m in matches if m.time is not None}
+                       .union(season.get_timeslots(date)))
 
         keyed = collections.defaultdict(lambda: None)
         for m in matches:
