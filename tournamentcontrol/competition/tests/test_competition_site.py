@@ -1,9 +1,11 @@
+import unittest
 from datetime import datetime
 
 from django.test.utils import override_settings
 from django.utils import timezone
 from freezegun import freeze_time
 from test_plus import TestCase
+
 from tournamentcontrol.competition.tests import factories
 
 
@@ -218,3 +220,64 @@ class FrontEndTests(TestCase):
         for opponent in team.division.teams.exclude(pk=team.pk):
             subject = '{} vs {}'.format(team.title, opponent.title)
             self.assertResponseContains(subject, html=False)
+
+    @unittest.expectedFailure
+    def test_team_calendar_disabled(self):
+        season = factories.SeasonFactory.create(disable_calendar=True)
+        team = factories.TeamFactory.create(division__season=season)
+        factories.MatchFactory.create_batch(stage__division=team.division,
+                                            home_team=team,
+                                            size=5)
+        self.assertGoodView('competition:calendar',
+                            team.division.season.competition.slug,
+                            team.division.season.slug,
+                            team.division.slug,
+                            team.slug)
+
+    def test_division_calendar(self):
+        team = factories.TeamFactory.create()
+        factories.MatchFactory.create_batch(stage__division=team.division,
+                                            home_team=team,
+                                            size=5)
+        self.assertGoodView('competition:calendar',
+                            team.division.season.competition.slug,
+                            team.division.season.slug,
+                            team.division.slug)
+        for opponent in team.division.teams.exclude(pk=team.pk):
+            subject = '{} vs {}'.format(team.title, opponent.title)
+            self.assertResponseContains(subject, html=False)
+
+    @unittest.expectedFailure
+    def test_division_calendar_disabled(self):
+        season = factories.SeasonFactory.create(disable_calendar=True)
+        team = factories.TeamFactory.create(division__season=season)
+        factories.MatchFactory.create_batch(stage__division=team.division,
+                                            home_team=team,
+                                            size=5)
+        self.assertGoodView('competition:calendar',
+                            team.division.season.competition.slug,
+                            team.division.season.slug,
+                            team.division.slug)
+
+    def test_season_calendar(self):
+        team = factories.TeamFactory.create()
+        factories.MatchFactory.create_batch(stage__division=team.division,
+                                            home_team=team,
+                                            size=5)
+        self.assertGoodView('competition:calendar',
+                            team.division.season.competition.slug,
+                            team.division.season.slug)
+        for opponent in team.division.teams.exclude(pk=team.pk):
+            subject = '{} vs {}'.format(team.title, opponent.title)
+            self.assertResponseContains(subject, html=False)
+
+    @unittest.expectedFailure
+    def test_season_calendar_disabled(self):
+        season = factories.SeasonFactory.create(disable_calendar=True)
+        team = factories.TeamFactory.create(division__season=season)
+        factories.MatchFactory.create_batch(stage__division=team.division,
+                                            home_team=team,
+                                            size=5)
+        self.assertGoodView('competition:calendar',
+                            team.division.season.competition.slug,
+                            team.division.season.slug)

@@ -495,6 +495,12 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
                             help_text=_("Set to indicate this season is in "
                                         "the past. Optimises progression "
                                         "calculations."))
+    disable_calendar = BooleanField(default=False,
+                                    help_text=_("Set to prevent the iCalendar feature "
+                                                "for this season. Will hide icon in "
+                                                "front-end and disable functionality. "
+                                                "Batch process may disable after last "
+                                                "match of tournament has taken place."))
     timezone = TimeZoneField(max_length=50, blank=True, null=True)
 
     forfeit_notifications = ManyToManyField(
