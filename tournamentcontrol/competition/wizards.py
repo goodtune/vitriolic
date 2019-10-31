@@ -1,4 +1,5 @@
 import datetime
+import functools
 from operator import add, or_
 
 from dateutil.parser import parse
@@ -126,14 +127,14 @@ class FilterForm(forms.Form):
                 q_date_from_datetime(parse(d))
                 for d in dates
             ]
-            query_filter |= reduce(or_, date_list)
+            query_filter |= functools.reduce(or_, date_list)
 
         if timeslots:
             timeslot_list = [
                 q_date_time_from_datetime(parse(t))
                 for t in timeslots
             ]
-            query_filter |= reduce(or_, timeslot_list)
+            query_filter |= functools.reduce(or_, timeslot_list)
 
         divisions = self.cleaned_data.get('division')
 
@@ -235,7 +236,7 @@ class DrawGenerationWizard(SessionWizardView):
     def get_form_kwargs(self, step):
         if step == '1':
             data = self.get_cleaned_data_for_step('0')
-            matches = reduce(add, [d['matches'] for d in data])
+            matches = functools.reduce(add, [d['matches'] for d in data])
             return {'queryset': matches}
         return {}
 

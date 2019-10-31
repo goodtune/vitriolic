@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import functools
 import logging
 from operator import attrgetter, or_
 
@@ -112,7 +113,7 @@ def get_mod_func(callback):
 def create_exclude_filter(queryset):
     def _filter(node):
         return Q(tree_id=node.tree_id, lft__gte=node.lft, lft__lte=node.rght)
-    return reduce(or_, [[x for x in n if _filter(x)] for n in queryset], Q())
+    return functools.reduce(or_, [[x for x in n if _filter(x)] for n in queryset], Q())
 
 
 def get_403_or_None(request, perms, obj=None, login_url=None,
@@ -217,9 +218,9 @@ def tree_for_node(node):
         siblings = node.get_siblings(include_self=True)
         children = node.get_descendants()
 
-        rest = reduce(or_,
-                      [p.get_siblings() for p in parents],
-                      SitemapNode.objects.none())
+        rest = functools.reduce(
+            or_, [p.get_siblings() for p in parents], SitemapNode.objects.none()
+        )
 
         nodes = parents | siblings | children | rest
         nodes = nodes.filter(level__lte=node.level + 1)

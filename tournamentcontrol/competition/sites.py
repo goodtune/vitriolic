@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 
 import base64
+import functools
 import operator
 from datetime import timedelta
 from operator import or_
@@ -95,9 +96,8 @@ class CompetitionAdminMixin(object):
         # FIXME too complex, be verbose so we can all read and understand it
         if time is not None:
             base = Q(time=time)
-            bye_kwargs = matches.filter(time=time) \
-                                .values('stage', 'round')
-            time_or_byes = reduce(
+            bye_kwargs = matches.filter(time=time).values('stage', 'round')
+            time_or_byes = functools.reduce(
                 operator.or_,
                 [Q(time__isnull=True, **kw) for kw in bye_kwargs],
                 base)
@@ -753,7 +753,7 @@ class MultiCompetitionSite(CompetitionSite):
         super(CompetitionSite, self).__init__(name=name, app_name=app_name, **kwargs)
         self._competitions = Competition.objects.filter(enabled=True)
         if 'competition' in kwargs:
-            q = reduce(or_, [Q(slug=slug) for slug in kwargs['competition']])
+            q = functools.reduce(or_, [Q(slug=slug) for slug in kwargs['competition']])
             self._competitions = self._competitions.filter(q)
 
     def get_urls(self):

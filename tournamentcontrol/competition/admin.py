@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 
 import collections
+import functools
 import logging
 import operator
 
@@ -1228,7 +1229,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         if time is not None:
             base = Q(time=time)
             bye_kwargs = matches.filter(time=time).values('stage', 'round')
-            time_or_byes = reduce(
+            time_or_byes = functools.reduce(
                 operator.or_,
                 [Q(time__isnull=True, **kw) for kw in bye_kwargs],
                 base)
