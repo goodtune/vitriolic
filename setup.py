@@ -8,7 +8,7 @@ except IOError:
 
 setup(
     name='vitriolic',
-    version='1.16.0',
+    version='1.17.0',
     author='Gary Reynolds',
     author_email='gary@touch.asn.au',
     license='BSD',
@@ -60,7 +60,7 @@ setup(
             'backports.statistics',
             'cloudinary',
             'django-celery>=3.1.0',
-            'django-embed-video',
+            'django-embed-video<1.3',
             'django-formtools>=2.1',
             'django-mathfilters',
             'djangorestframework',

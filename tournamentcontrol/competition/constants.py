@@ -37,6 +37,6 @@ See https://bitbucket.org/touchtechnology/common/issue/16/
 PYTZ_TIME_ZONE_CHOICES = [('\x20Standard', (('UTC', 'UTC'), ('GMT', 'GMT')))]
 for iso, name in pytz.country_names.items():
     values = sorted(pytz.country_timezones.get(iso, []))
-    names = map(lambda s: s.rsplit('/', 1)[1].replace('_', ' '), values)
+    names = [s.rsplit("/", 1)[1].replace("_", " ") for s in values]
     PYTZ_TIME_ZONE_CHOICES.append((name, zip(values, names)))
 PYTZ_TIME_ZONE_CHOICES.sort()

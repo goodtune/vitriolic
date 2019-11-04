@@ -75,7 +75,7 @@ class FauxQueryset(list):
         return self
 
     def get(self, **kwargs):
-        pks = map(attrgetter('pk'), self)
+        pks = [each.pk for each in self]
         return self.model.objects.filter(pk__in=pks).get(**kwargs)
 
 
@@ -433,9 +433,8 @@ def generate_fixture_grid(season, dates=None, templates=None,
     for date in dates:
         matches = season.matches.filter(date=date)
 
-        times = set(matches.values_list('time', flat=True)).union(
-            season.get_timeslots(date))
-        times = sorted(filter(None, times))
+        times = sorted({m.time for m in matches if m.time is not None}
+                       .union(season.get_timeslots(date)))
 
         keyed = collections.defaultdict(lambda: None)
         for m in matches:

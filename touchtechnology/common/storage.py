@@ -28,14 +28,13 @@ __all__ = (
 class MakeDirectoryMixin(object):
 
     def makedirs(self, name, path=None):
-        parts = list(filter(None, (self.location, path, name)))
+        parts = [p for p in [self.location, path, name] if p]
         directory = os.path.join(*parts)
         os.makedirs(directory)
         return os.path.join(*parts[1:])
 
     def mkdir(self, name, path=None):
-        directory = self.path(os.path.join(
-            *list(filter(None, (path, name)))))
+        directory = self.path(os.path.join(*[p for p in [path, name] if p]))
         os.mkdir(directory)
         if path is None:
             return name

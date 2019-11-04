@@ -200,7 +200,7 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1,
                    key=None)
 
     # remove any None items from each pool
-    pools = [filter(None, pool) for pool in pools]
+    pools = [[p for p in pool if p] for pool in pools]
 
     # produce round robin formats
     draw_formats = [
@@ -240,12 +240,11 @@ class RoundDescriptor(object):
         self.matches.append(match)
 
     def generate(self, generator, stage, date):
-        return map(
-            lambda m: m.generate(generator, stage, self, date), self.matches)
+        return [m.generate(generator, stage, self, date) for m in self.matches]
 
     def __str__(self):
         return '\n'.join(
-            ['ROUND %s' % self.round_label] + map(unicode, self.matches))
+            ['ROUND %s' % self.round_label] + [str(m) for m in self.matches])
 
 
 @python_2_unicode_compatible
@@ -505,5 +504,5 @@ class DrawGenerator(object):
         if errors:
             raise ValueError("Draw formula is invalid: line(s) '%s' are not "
                              "in the correct format." %
-                             ", ".join(map(str, errors)))
+                             ", ".join([str(e) for e in errors]))
         return True

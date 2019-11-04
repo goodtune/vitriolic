@@ -492,7 +492,12 @@ class ContentAdminComponent(AdminComponent):
                 return crud
 
             def _get_url_args(s):
-                return filter(None, (path, s.pk))
+                args = []
+                if path:
+                    args.append(path)
+                if s.pk:
+                    args.append(s.pk)
+                return args
 
         class Folder(FileOrFolder):
             icon = 'folder'
@@ -548,7 +553,7 @@ class ContentAdminComponent(AdminComponent):
             def is_leaf_node(self):
                 listdir = default_storage.listdir(self.path)
                 logger.debug(listdir)
-                return not any(filter(None, listdir))
+                return not any([l for l in listdir if l])
 
         fullpath = os.path.join(path or '', filename or '')
 

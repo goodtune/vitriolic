@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 
 import base64
+import functools
 import operator
 from datetime import timedelta
 from operator import or_
@@ -95,11 +96,10 @@ class CompetitionAdminMixin(object):
         # FIXME too complex, be verbose so we can all read and understand it
         if time is not None:
             base = Q(time=time)
-            bye_kwargs = matches.filter(time=time) \
-                                .values('stage', 'round')
-            time_or_byes = reduce(
+            bye_kwargs = matches.filter(time=time).values('stage', 'round')
+            time_or_byes = functools.reduce(
                 operator.or_,
-                map(lambda kw: Q(time__isnull=True, **kw), bye_kwargs),
+                [Q(time__isnull=True, **kw) for kw in bye_kwargs],
                 base)
             matches = matches.filter(time_or_byes)
         else:
@@ -539,8 +539,14 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                                    extra_context=extra_context)
 
     @competition_slug
-    def calendar(self, request, season, club=None, division=None, team=None,
-                 **kwargs):
+    def calendar(self, request, season, club=None, division=None, team=None, **kwargs):
+        if season.disable_calendar:
+            # The GONE response informs client that they should remove this resource
+            # from their cache. When a calendar has been added to user's mobile device
+            # they may never look at it again, but we continue to process the requests
+            # which can have poor performance. Try to influence a cleanup of clients.
+            return HttpResponseGone()
+
         if team is not None:
             matches = team.matches
         elif division is not None:
@@ -753,7 +759,7 @@ class MultiCompetitionSite(CompetitionSite):
         super(CompetitionSite, self).__init__(name=name, app_name=app_name, **kwargs)
         self._competitions = Competition.objects.filter(enabled=True)
         if 'competition' in kwargs:
-            q = reduce(or_, [Q(slug=slug) for slug in kwargs['competition']])
+            q = functools.reduce(or_, [Q(slug=slug) for slug in kwargs['competition']])
             self._competitions = self._competitions.filter(q)
 
     def get_urls(self):

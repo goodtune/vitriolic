@@ -139,7 +139,7 @@ def matches_progression_possible():
 
         return False
 
-    matches = filter(_can_evaluate, matches)
+    matches = [m for m in matches if _can_evaluate(m)]
 
     return matches
 
@@ -196,7 +196,7 @@ class BasicResultWidget(DashboardWidget):
         # can iterate the "loop" at least once.
         dates_times = []
         for key, time_list in data.items():
-            if filter(None, time_list) and None in time_list:
+            if [t for t in time_list if t] and None in time_list:
                 time_list.remove(None)
             for time in time_list:
                 dates_times.append(key + (time,))
