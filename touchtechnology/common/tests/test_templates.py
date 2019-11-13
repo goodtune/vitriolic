@@ -5,13 +5,13 @@ from django.test.utils import override_settings
 from django.utils.http import urlencode
 from django.utils.six.moves.urllib.parse import urlparse, urlunparse
 from test_plus import TestCase
+from touchtechnology.common.models import SitemapNode
 
 CSSIFY_TEMPLATE = Template("{% load common %}{{ value|cssify }}")
 TWITTIFY_TEMPLATE = Template("{% load common %}{{ value|twittify }}")
 
 
 class CssifyTest(TestCase):
-
     def test_cssify_str(self):
         context = Context({'value': 'some-normal-slug'})
         value = CSSIFY_TEMPLATE.render(context)
@@ -28,8 +28,99 @@ class CssifyTest(TestCase):
         self.assertEqual('', value)
 
 
-class TwittifyTest(TestCase):
+class NavigationTest(TestCase):
+    maxDiff = None
 
+    @classmethod
+    def setUpClass(cls):
+        cls.home = SitemapNode.objects.create(title="Home Page", slug="home")
+        cls.about = SitemapNode.objects.create(title="About Us", slug="about")
+        cls.about_people = SitemapNode.objects.create(
+            title="Our People", slug="people", parent=cls.about
+        )
+        cls.about_work = SitemapNode.objects.create(
+            title="Our Work", slug="work", parent=cls.about
+        )
+        cls.contact = SitemapNode.objects.create(title="Contact Us", slug="contact")
+        cls.about_people_gary = SitemapNode.objects.create(
+            title="Gary Reynolds", slug="goodtune", parent=cls.about_people
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        pass
+
+    def test_basic(self):
+        template = Template("{% load common %}{% navigation %}")
+        value = template.render(Context())
+        self.assertHTMLEqual(
+            value,
+            """
+            <ul class="navigation">
+                <li class="root first NoneType" id="node1">
+                    <a href="/">Home Page</a>
+                </li>
+                <li class=" has_children NoneType" id="node2">
+                    <a href="/about/">About Us</a>
+                </li>
+                <li class=" last NoneType" id="node5">
+                    <a href="/contact/">Contact Us</a>
+                </li>
+            </ul>
+            """,
+        )
+
+    def test_current_node(self):
+        template = Template("{% load common %}{% navigation current_node=node %}")
+        context = Context({"node": self.contact})
+        value = template.render(context)
+        self.assertHTMLEqual(
+            value,
+            """
+            <ul class="navigation">
+                <li class="root first NoneType" id="node1">
+                    <a href="/">Home Page</a>
+                </li>
+                <li class=" has_children NoneType" id="node2">
+                    <a href="/about/">About Us</a>
+                </li>
+                <li class=" current last NoneType" id="node5">
+                    <a href="/contact/">Contact Us</a>
+                </li>
+            </ul>
+            """,
+        )
+
+    def test_start_stop(self):
+        template = Template("{% load common %}{% navigation start_at=0 stop_at=1 %}")
+        value = template.render(Context())
+        self.assertHTMLEqual(
+            value,
+            """
+            <ul class="navigation">
+                <li class="root first NoneType" id="node1">
+                    <a href="/">Home Page</a>
+                </li>
+                <li class=" has_children NoneType" id="node2">
+                    <a href="/about/">About Us</a>
+                    <ul class="navigation">
+                        <li class=" has_children first NoneType" id="node3">
+                            <a href="/about/people/">Our People</a>
+                        </li>
+                        <li class=" last NoneType" id="node4">
+                            <a href="/about/work/">Our Work</a>
+                        </li>
+                    </ul>
+                </li>
+                <li class=" NoneType last" id="node5">
+                    <a href="/contact/">Contact Us</a>
+                </li>
+            </ul>
+            """,
+        )
+
+
+class TwittifyTest(TestCase):
     def test_twittify(self):
         context = Context({'value': "@goodtune"})
         value = TWITTIFY_TEMPLATE.render(context)
@@ -101,7 +192,6 @@ class QueryStringTest(TestCase):
 
 @override_settings(ROOT_URLCONF='example_app.urls')
 class ContextTest(TestCase):
-
     def test_env(self):
         self.get('context:env')
         self.assertResponseContains('dev', html=False)
