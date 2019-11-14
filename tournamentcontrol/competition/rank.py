@@ -97,6 +97,7 @@ class TeamView(DivisionView):
     template_name_suffix = '_team'
 
     def get_context_data(self, **kwargs):
+        slug = self.kwargs['team']
         data = super(TeamView, self).get_context_data(**kwargs)
 
         decay = import_string(self.kwargs.get(
@@ -105,7 +106,7 @@ class TeamView(DivisionView):
         at = date_parse(version).date()
 
         division = data['object']
-        team = division.rankteam_set.get(club__slug=self.kwargs['team'])
+        team = get_object_or_404(division.rankteam_set, club__slug=slug)
 
         # Transform the data for template consumption.
         queryset = (
@@ -113,7 +114,7 @@ class TeamView(DivisionView):
                 bye=0,
                 division=division.pk,
                 opponent_division=division.pk,
-                team__club__slug=self.kwargs["team"],
+                team__club__slug=slug,
                 match__date__lt=at,
             )
             .select_related(
