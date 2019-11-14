@@ -520,8 +520,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition
     @staff_login_required_m
-    def edit_season(self, request, competition, extra_context, season=None,
-                    **kwargs):
+    def edit_season(self, request, competition, extra_context, season=None, **kwargs):
         if season is None:
             season = next_related_factory(Season, competition)
 

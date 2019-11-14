@@ -85,7 +85,13 @@ def competition_by_pk(f, *a, **kw):
             kwargs["competition"] = competition
             if season_id:
                 season = get_object_or_404(
-                    competition.seasons.select_related("competition"), pk=season_id
+                    competition.seasons.select_related("competition",).prefetch_related(
+                        "divisions__rank_division",
+                        "referees__person__user",
+                        "referees__club",
+                        "timeslots",
+                    ),
+                    pk=season_id,
                 )
                 kwargs["season"] = season
                 if division_id:
