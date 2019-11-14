@@ -63,17 +63,19 @@ class NavigationTest(TestCase):
             value,
             """
             <ul class="navigation">
-                <li class="root first NoneType" id="node1">
+                <li class="root first NoneType" id="node{}">
                     <a href="/">Home Page</a>
                 </li>
-                <li class=" has_children NoneType" id="node2">
+                <li class=" has_children NoneType" id="node{}">
                     <a href="/about/">About Us</a>
                 </li>
-                <li class=" last NoneType" id="node5">
+                <li class=" last NoneType" id="node{}">
                     <a href="/contact/">Contact Us</a>
                 </li>
             </ul>
-            """,
+            """.format(
+                self.home.pk, self.about.pk, self.contact.pk
+            ),
         )
 
     def test_current_node(self):
@@ -84,17 +86,19 @@ class NavigationTest(TestCase):
             value,
             """
             <ul class="navigation">
-                <li class="root first NoneType" id="node1">
+                <li class="root first NoneType" id="node{}">
                     <a href="/">Home Page</a>
                 </li>
-                <li class=" has_children NoneType" id="node2">
+                <li class=" has_children NoneType" id="node{}">
                     <a href="/about/">About Us</a>
                 </li>
-                <li class=" current last NoneType" id="node5">
+                <li class=" current last NoneType" id="node{}">
                     <a href="/contact/">Contact Us</a>
                 </li>
             </ul>
-            """,
+            """.format(
+                self.home.pk, self.about.pk, self.contact.pk
+            ),
         )
 
     def test_start_stop(self):
@@ -104,25 +108,31 @@ class NavigationTest(TestCase):
             value,
             """
             <ul class="navigation">
-                <li class="root first NoneType" id="node1">
+                <li class="root first NoneType" id="node{}">
                     <a href="/">Home Page</a>
                 </li>
-                <li class=" has_children NoneType" id="node2">
+                <li class=" has_children NoneType" id="node{}">
                     <a href="/about/">About Us</a>
                     <ul class="navigation">
-                        <li class=" has_children first NoneType" id="node3">
+                        <li class=" has_children first NoneType" id="node{}">
                             <a href="/about/people/">Our People</a>
                         </li>
-                        <li class=" last NoneType" id="node4">
+                        <li class=" last NoneType" id="node{}">
                             <a href="/about/work/">Our Work</a>
                         </li>
                     </ul>
                 </li>
-                <li class=" NoneType last" id="node5">
+                <li class=" NoneType last" id="node{}">
                     <a href="/contact/">Contact Us</a>
                 </li>
             </ul>
-            """,
+            """.format(
+                self.home.pk,
+                self.about.pk,
+                self.about_people.pk,
+                self.about_work.pk,
+                self.contact.pk,
+            ),
         )
 
 
