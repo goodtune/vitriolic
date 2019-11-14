@@ -45,6 +45,12 @@ class NavigationTest(TestCase):
         cls.about_people_gary = SitemapNode.objects.create(
             title="Gary Reynolds", slug="goodtune", parent=cls.about_people
         )
+        cls.about_people_fred = SitemapNode.objects.create(
+            title="Fred Nurks",
+            slug="freddy",
+            parent=cls.about_people,
+            hidden_from_navigation=True,
+        )
 
     @classmethod
     def tearDownClass(cls):
