@@ -200,3 +200,8 @@ LOGGING = {
         "": {"level": "DEBUG", "handlers": ["null"]},
     },
 }
+
+
+# Touch Technology settings
+
+TOUCHTECHNOLOGY_SITEMAP_ROOT = "home"
