@@ -286,8 +286,10 @@ def competition_by_slug(f, *a, **kw):
                         kwargs["team"] = team
 
                         # List of players for this team.
-                        players = team.people.select_related("person").filter(
-                            is_player=True
+                        players = (
+                            team.people.select_related("person")
+                            .prefetch_related("person__user")
+                            .filter(is_player=True)
                         )
                         players = players.extra(
                             select={"has_number": "number IS NULL"},

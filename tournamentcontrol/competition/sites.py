@@ -513,8 +513,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                                    extra_context=extra_context)
 
     @competition_slug
-    def team(self, request, competition, season, division, team, extra_context,
-             **kwargs):
+    def team(self, request, competition, season, division, team, extra_context, **kwargs):
         templates = self.template_path(
             'team.html', competition.slug, season.slug, division.slug,
             team.slug)
