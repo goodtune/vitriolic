@@ -26,7 +26,7 @@ setup(
         'django-guardian<2',
         'django-modelforms~=0.2,!=0.2.0',
         'django-mptt>=0.9,<0.10',
-        'django>=1.11,<2.1',
+        'django>=1.11,<3',
         'first~=2.0.1',
         'namedentities',
         'psycopg2-binary',
