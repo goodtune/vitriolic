@@ -85,7 +85,13 @@ def competition_by_pk(f, *a, **kw):
             kwargs["competition"] = competition
             if season_id:
                 season = get_object_or_404(
-                    competition.seasons.select_related("competition"), pk=season_id
+                    competition.seasons.select_related("competition",).prefetch_related(
+                        "divisions__rank_division",
+                        "referees__person__user",
+                        "referees__club",
+                        "timeslots",
+                    ),
+                    pk=season_id,
                 )
                 kwargs["season"] = season
                 if division_id:
@@ -280,8 +286,10 @@ def competition_by_slug(f, *a, **kw):
                         kwargs["team"] = team
 
                         # List of players for this team.
-                        players = team.people.select_related("person").filter(
-                            is_player=True
+                        players = (
+                            team.people.select_related("person")
+                            .prefetch_related("person__user")
+                            .filter(is_player=True)
                         )
                         players = players.extra(
                             select={"has_number": "number IS NULL"},

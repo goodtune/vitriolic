@@ -8,6 +8,7 @@ from dateutil.parser import parse as date_parse
 from dateutil.relativedelta import relativedelta
 from django.core.serializers import get_serializer
 from django.db.models import Case, DecimalField, ExpressionWrapper, F, Q, When
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.module_loading import import_string
@@ -15,9 +16,9 @@ from django.views.generic import dates
 from tournamentcontrol.competition.models import LadderEntry, RankDivision, RankPoints, RankTeam
 
 try:
-    from statistics import mean
+    from statistics import mean, StatisticsError
 except ImportError:
-    from backports.statistics import mean
+    from backports.statistics import mean, StatisticsError
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,7 @@ class TeamView(DivisionView):
     template_name_suffix = '_team'
 
     def get_context_data(self, **kwargs):
+        slug = self.kwargs['team']
         data = super(TeamView, self).get_context_data(**kwargs)
 
         decay = import_string(self.kwargs.get(
@@ -105,7 +107,7 @@ class TeamView(DivisionView):
         at = date_parse(version).date()
 
         division = data['object']
-        team = division.rankteam_set.get(club__slug=self.kwargs['team'])
+        team = get_object_or_404(division.rankteam_set, club__slug=slug)
 
         # Transform the data for template consumption.
         queryset = (
@@ -113,7 +115,7 @@ class TeamView(DivisionView):
                 bye=0,
                 division=division.pk,
                 opponent_division=division.pk,
-                team__club__slug=self.kwargs["team"],
+                team__club__slug=slug,
                 match__date__lt=at,
             )
             .select_related(
@@ -159,19 +161,26 @@ class TeamView(DivisionView):
             .order_by("match__datetime")
         )
 
-        rows = [
+        table = [
             (each.match, each.rank_points, each.rank_points * decay(each, at=at))
             for each in queryset
             if each.rank_points is not None
         ]
 
+        series = [
+            points_decay
+            for match, points, points_decay in table
+        ]
+
+        try:
+            points = mean(series)
+        except StatisticsError as exc:
+            raise Http404(exc)
+
         # Punch this into the context to display in the front end.
         data['team'] = team
-        data['table'] = rows
-        data['points'] = mean([
-            points_decay
-            for match, points, points_decay in rows
-        ])
+        data['table'] = table
+        data['points'] = points
 
         return data
 
