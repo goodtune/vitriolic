@@ -11,7 +11,6 @@ from django.db.models import Q
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import resolve, reverse
-from django.utils.encoding import python_2_unicode_compatible
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 from first import first
@@ -459,7 +458,6 @@ class ContentAdminComponent(AdminComponent):
         directories = [_directories(d) for d in directories]
         match = resolve(request.path)
 
-        @python_2_unicode_compatible
         class FileOrFolder(AdminUrlMixin, object):
             def __init__(s, pk, name):
                 s.pk = pk
@@ -535,7 +533,6 @@ class ContentAdminComponent(AdminComponent):
             logger.exception('path: %r', path)
             raise Http404(e[1])
 
-        @python_2_unicode_compatible
         class File(object):
             def __init__(self, path):
                 self.path = path

@@ -11,7 +11,6 @@ from dateutil.rrule import DAILY, WEEKLY, rrule, rruleset
 from django.conf import settings
 from django.db.models import Max
 from django.utils import timezone
-from django.utils.encoding import python_2_unicode_compatible
 from django.utils.translation import ugettext_lazy as _
 from first import first
 from tournamentcontrol.competition.models import Match, Stage, StageGroup, Team, UndecidedTeam
@@ -173,7 +172,6 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1,
     )
 
     if isinstance(first(seeded_team_list), str):
-        @python_2_unicode_compatible
         class Team(object):
             def __init__(self, st, order):
                 self.st = st
@@ -228,7 +226,6 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1,
     return dict(pools=pools, draw_formats=draw_formats)
 
 
-@python_2_unicode_compatible
 class RoundDescriptor(object):
     def __init__(self, count, round_label, **kwargs):
         self.count = count
@@ -246,7 +243,6 @@ class RoundDescriptor(object):
             ['ROUND %s' % self.round_label] + [str(m) for m in self.matches])
 
 
-@python_2_unicode_compatible
 class MatchDescriptor(object):
     def __init__(self, match_id, home_team, away_team, match_label=None,
                  **kwargs):

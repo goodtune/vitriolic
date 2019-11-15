@@ -13,7 +13,6 @@ from django.db import models
 from django.db.models import DateTimeField, ForeignKey as TreeField, ManyToManyField
 from django.db.models.signals import post_save
 from django.urls import reverse_lazy
-from django.utils.encoding import python_2_unicode_compatible
 from django.utils.functional import cached_property
 from django.utils.safestring import mark_safe
 from django.utils.text import slugify
@@ -25,7 +24,6 @@ from touchtechnology.common.mixins import NodeRelationMixin
 logger = logging.getLogger(__name__)
 
 
-@python_2_unicode_compatible
 class SitemapNodeBase(models.Model):
 
     title = models.CharField(max_length=255, verbose_name=_("Title"))
