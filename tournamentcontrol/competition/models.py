@@ -923,9 +923,6 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
             'stage_group__order',
             'order',
         )
-        permissions = (
-            ('view_team', _("Can view team")),
-        )
         unique_together = (
             ('title', 'division'),
         )

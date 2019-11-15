@@ -99,9 +99,6 @@ class Migration(migrations.Migration):
                     'stage_group__order',
                     'order',
                 ),
-                'permissions': (
-                    ('view_team', 'Can view team'),
-                ),
             },
         ),
         migrations.AlterModelOptions(
