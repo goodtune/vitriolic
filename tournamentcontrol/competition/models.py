@@ -11,7 +11,6 @@ from operator import attrgetter
 
 import django
 import pytz
-import six
 from cloudinary.models import CloudinaryField
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
@@ -27,7 +26,6 @@ from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
 from django.template import Template
 from django.template.loader import get_template
 from django.utils import timezone
-from django.utils.encoding import python_2_unicode_compatible
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
@@ -98,7 +96,7 @@ class RankImportanceMixin(models.Model):
 
     @property
     def rank_importance_parent(self):
-        if isinstance(self.rank_importance_parent_attr, six.string_types):
+        if isinstance(self.rank_importance_parent_attr, str):
             return getattr(self, self.rank_importance_parent_attr)
         if isinstance(self.rank_importance_parent_attr, (list, tuple)):
             for attr in self.rank_importance_parent_attr:
@@ -172,7 +170,6 @@ class TwitterField(models.CharField):
             form_class=form_class, **kwargs)
 
 
-@python_2_unicode_compatible
 class OrderedSitemapNode(SitemapNodeBase):
 
     copy = HTMLField(blank=True)
@@ -201,7 +198,6 @@ class Competition(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         pass
 
 
-@python_2_unicode_compatible
 class Club(AdminUrlMixin, SitemapNodeBase):
 
     email = models.EmailField(max_length=255, blank=True)
@@ -375,7 +371,6 @@ class RankPoints(models.Model):
         return '%r, %r, %r' % (self.team, self.points, self.date)
 
 
-@python_2_unicode_compatible
 class Person(AdminUrlMixin, models.Model):
     """
     This is not tied to the `django.contrib.auth.models.User` model because
@@ -705,7 +700,6 @@ class Division(AdminUrlMixin, ModelDiffMixin, RankDivisionMixin,
         return res
 
 
-@python_2_unicode_compatible
 class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     rank_importance_parent_attr = 'division'
 
@@ -873,7 +867,6 @@ class StageGroup(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         return res
 
 
-@python_2_unicode_compatible
 class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
     """
     A model which represents a team in a competition. A team may not yet be
@@ -923,9 +916,6 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
             'division__order',
             'stage_group__order',
             'order',
-        )
-        permissions = (
-            ('view_team', _("Can view team")),
         )
         unique_together = (
             ('title', 'division'),
@@ -1037,7 +1027,6 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
         return res
 
 
-@python_2_unicode_compatible
 class ByeTeam(object):
 
     def __init__(self, title="Bye", *args, **kwargs):
@@ -1056,7 +1045,6 @@ class ByeTeam(object):
         raise NotImplementedError
 
 
-@python_2_unicode_compatible
 class UndecidedTeam(AdminUrlMixin, models.Model):
     """
     A model which represents a team in a competition that is dependant on the
@@ -1123,7 +1111,6 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
         return home | away
 
 
-@python_2_unicode_compatible
 class ClubRole(AdminUrlMixin, models.Model):
     competition = ForeignKey(Competition, related_name='club_roles',
                              label_from_instance='title', on_delete=PROTECT)
@@ -1160,7 +1147,6 @@ class ClubAssociation(AdminUrlMixin, models.Model):
         return (self.club_id, self.pk)
 
 
-@python_2_unicode_compatible
 class TeamRole(AdminUrlMixin, models.Model):
     competition = ForeignKey(Competition, related_name='team_roles',
                              label_from_instance='title', on_delete=PROTECT)
@@ -1179,7 +1165,6 @@ class TeamRole(AdminUrlMixin, models.Model):
         return (self.competition_id, self.pk)
 
 
-@python_2_unicode_compatible
 class TeamAssociation(AdminUrlMixin, models.Model):
     team = ForeignKey(Team, related_name='people', on_delete=PROTECT)
     person = ForeignKey(Person, null=True, label_from_instance='get_full_name', on_delete=PROTECT)
@@ -1223,7 +1208,6 @@ class TeamAssociation(AdminUrlMixin, models.Model):
         )
 
 
-@python_2_unicode_compatible
 class SeasonReferee(AdminUrlMixin, models.Model):
     season = models.ForeignKey(Season, related_name='referees', on_delete=PROTECT)
     club = models.ForeignKey(Club, related_name='referees', on_delete=PROTECT)
@@ -1266,7 +1250,6 @@ class SeasonAssociation(AdminUrlMixin, models.Model):
         unique_together = ('season', 'person')
 
 
-@python_2_unicode_compatible
 class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     uuid = models.UUIDField(
         primary_key=False, default=uuid.uuid4, editable=False,
@@ -1697,7 +1680,6 @@ class LadderSummary(LadderBase):
         unique_together = ('stage', 'team')
 
 
-@python_2_unicode_compatible
 class DrawFormat(AdminUrlMixin, models.Model):
 
     name = models.CharField(max_length=50)
@@ -1794,7 +1776,6 @@ class MatchTimeBase(models.Model):
         return rrule(MINUTELY, **self.rrule_kwargs())
 
 
-@python_2_unicode_compatible
 class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
 
     season = ForeignKey('Season', related_name='timeslots', on_delete=CASCADE)
@@ -1814,7 +1795,6 @@ class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
         return '#{}'.format(self.pk)
 
 
-@python_2_unicode_compatible
 class MatchScoreSheet(AdminUrlMixin, models.Model):
 
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

@@ -1,6 +1,5 @@
 from datetime import timedelta
 
-import six
 from dateutil.parser import parse
 from dateutil.rrule import DAILY, WEEKLY
 from django import template
@@ -40,7 +39,7 @@ def opponent(match, team):
 def next_date(context, season, offset=0, datestr=None):
     from tournamentcontrol.competition.models import Match, Season
 
-    if isinstance(season, six.string_types):
+    if isinstance(season, str):
         season = Season.objects.get(pk=season)
 
     # TODO make the offset a value stored on the competition

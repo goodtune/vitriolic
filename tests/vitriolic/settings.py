@@ -13,7 +13,6 @@ https://docs.djangoproject.com/en/1.10/ref/settings/
 import os
 import time
 
-import django
 import environ
 from django.urls import reverse_lazy
 
@@ -39,16 +38,17 @@ ALLOWED_HOSTS = []
 SITE_ID = 1
 
 
-# Disable the database migrations machinery to speed up test suite.
 class DisableMigrations(object):
     """
+    Disable the database migrations machinery to speed up test suite.
+
     Trick learned at http://bit.ly/2vjVpNc
     """
     def __contains__(self, item):
         return True
 
     def __getitem__(self, item):
-        return None if django.VERSION >= (1, 11) else 'notmigrations'
+        return None
 
 
 MIGRATION_MODULES = DisableMigrations()

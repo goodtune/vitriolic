@@ -2,6 +2,7 @@ from __future__ import unicode_literals
 
 import functools
 import logging
+from functools import reduce
 from operator import attrgetter, or_
 
 import guardian.shortcuts
@@ -16,12 +17,11 @@ from django.core.paginator import Paginator
 from django.db import connection
 from django.db.models import Model, Q
 from django.http import Http404, HttpRequest, HttpResponseForbidden
-from django.shortcuts import render_to_response
+from django.shortcuts import render
 from django.template import RequestContext, TemplateDoesNotExist
 from django.template.loader import select_template
 from first import first
 from guardian.conf import settings as guardian_settings
-from six.moves import reduce
 from touchtechnology.common.exceptions import NotModelManager
 from touchtechnology.common.mixins import NodeRelationMixin
 
@@ -149,7 +149,8 @@ def get_403_or_None(request, perms, obj=None, login_url=None,
         if return_403:
             if guardian_settings.RENDER_403:
                 try:
-                    response = render_to_response(
+                    response = render(
+                        request,
                         guardian_settings.TEMPLATE_403, {},
                         RequestContext(request))
                     response.status_code = 403

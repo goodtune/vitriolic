@@ -6,10 +6,10 @@ import os
 import re
 import socket
 from decimal import Decimal
-from itertools import islice
+from itertools import islice, zip_longest
+from urllib.parse import parse_qsl
 
 import pkg_resources
-import six
 from classytags.arguments import Argument
 from classytags.core import Options
 from classytags.helpers import AsTag
@@ -18,8 +18,8 @@ from django.db.models import Model, Q
 from django.db.models.query import QuerySet
 from django.forms.forms import BoundField
 from django.forms.widgets import (
-    CheckboxInput, CheckboxSelectMultiple, FileInput, MultiWidget, PasswordInput, RadioSelect,
-    Select, Textarea, TextInput,
+    CheckboxInput, CheckboxSelectMultiple, FileInput, MultiWidget, PasswordInput,
+    RadioSelect, Select, Textarea, TextInput,
 )
 from django.template import Library, Node
 from django.template.loader import get_template, render_to_string
@@ -29,16 +29,15 @@ from django.utils.encoding import smart_str
 from django.utils.html import escape
 from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
-from django.utils.six.moves.urllib.parse import parse_qsl
 from django.utils.text import slugify
 from guardian.core import ObjectPermissionChecker
 from namedentities import named_entities
-from six.moves import xrange, zip_longest
 from touchtechnology.common.default_settings import CURRENCY_SYMBOL
 from touchtechnology.common.exceptions import NotModelManager
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.utils import (
-    create_exclude_filter, get_all_perms_for_model_cached, model_and_manager, tree_for_node,
+    create_exclude_filter, get_all_perms_for_model_cached, model_and_manager,
+    tree_for_node,
 )
 from tournamentcontrol.competition.utils import FauxQueryset
 
@@ -81,7 +80,7 @@ def at_a_time(i, n):
 
     We don't filter out None items, so check when iterating in your template.
     """
-    return zip_longest(*[islice(i, x, None, n) for x in xrange(n)])
+    return zip_longest(*[islice(i, x, None, n) for x in range(n)])
 
 
 @register.filter
@@ -214,7 +213,7 @@ def do_navigation(root=None, start_at=None, stop_at=None, current_node=None,
     logger.debug('current_node: %r', current_node)
 
     if root is not None:
-        if isinstance(root, six.string_types):
+        if isinstance(root, str):
             try:
                 root = resolve(root).kwargs.get('node')
             except Resolver404:

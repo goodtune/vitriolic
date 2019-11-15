@@ -4,7 +4,6 @@ from django.db import models
 from django.db.models import DateTimeField, ManyToManyField
 from django.template.defaultfilters import slugify
 from django.urls import reverse
-from django.utils.encoding import python_2_unicode_compatible
 from django.utils.translation import ugettext_lazy as _
 from imagekit.models import ImageSpecField
 from touchtechnology.admin.mixins import AdminUrlMixin
@@ -29,7 +28,6 @@ class AdminUrlModel(AdminUrlMixin, models.Model):
         return (self.pk,)
 
 
-@python_2_unicode_compatible
 class Article(AdminUrlModel):
 
     headline = models.CharField(max_length=150, verbose_name=_('Headline'))
@@ -106,7 +104,6 @@ class ArticleContent(models.Model):
         return '<ArticleContent: #%d, article=%d>' % (self.pk, self.article.pk)
 
 
-@python_2_unicode_compatible
 class Category(AdminUrlModel):
 
     title = models.CharField(max_length=75, verbose_name=_('Title'))

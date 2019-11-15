@@ -2,6 +2,7 @@ from __future__ import unicode_literals
 
 import logging
 import os.path
+from urllib.parse import urljoin
 
 import django
 from django.conf import settings
@@ -25,16 +26,16 @@ from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.utils.http import urlencode
 from django.utils.module_loading import import_string
-from django.utils.six.moves.urllib.parse import urljoin
 from django.utils.translation import ugettext_lazy as _
 from django.views.decorators.cache import patch_cache_control
 from modelforms.forms import ModelForm
-from six.moves import xrange
-from touchtechnology.common.decorators import login_required_m, node2extracontext, require_POST_m
+from touchtechnology.common.decorators import (
+    login_required_m, node2extracontext, require_POST_m,
+)
 from touchtechnology.common.default_settings import PAGINATE_BY, PROFILE_FORM_CLASS
 from touchtechnology.common.utils import (
-    get_403_or_None, get_all_perms_for_model_cached, get_objects_for_user, get_perms_for_model,
-    model_and_manager, select_template_name,
+    get_403_or_None, get_all_perms_for_model_cached, get_objects_for_user,
+    get_perms_for_model, model_and_manager, select_template_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -93,7 +94,7 @@ class Application(object):
         ``get_version`` function, to a maximum depth of 4 levels.
         """
         ver = ''
-        for depth in xrange(1, 5):
+        for depth in range(1, 5):
             parts = self.__module__.rsplit('.', depth)
             mod = parts[0]
             try:
@@ -868,60 +869,69 @@ class AccountsSite(Application):
         return urlpatterns
 
     @node2extracontext
-    def login(self, request, *args, **kwargs):
+    def login(self, request, extra_context, *args, **kwargs):
         form_class = getattr(
-            settings, 'AUTHENTICATION_FORM_CLASS',
-            'django.contrib.auth.forms.AuthenticationForm')
+            settings,
+            "AUTHENTICATION_FORM_CLASS",
+            "django.contrib.auth.forms.AuthenticationForm",
+        )
         authentication_form = import_string(form_class)
-        if django.VERSION[0] < 2:
-            kwargs.setdefault('current_app', self.name)
-        return views.login(
-            request, authentication_form=authentication_form, *args, **kwargs)
+        view = views.LoginView.as_view(
+            authentication_form=authentication_form, extra_context=extra_context
+        )
+        return view(request, *args, **kwargs)
 
     @node2extracontext
-    def logout(self, request, *args, **kwargs):
-        if django.VERSION[0] < 2:
-            kwargs.setdefault('current_app', self.name)
-        return views.logout(request, *args, **kwargs)
+    def logout(self, request, extra_context, *args, **kwargs):
+        view = views.LogoutView.as_view(extra_context=extra_context)
+        return view(request, *args, **kwargs)
 
     @node2extracontext
-    def password_change(self, request, *args, **kwargs):
-        post_change_redirect = kwargs.pop(
-            'post_change_redirect', self.reverse('password_change_done'))
-        password_change_form = kwargs.pop(
-            'password_change_form', self.password_change_form)
-        return views.password_change(
-            request, post_change_redirect=post_change_redirect,
-            password_change_form=password_change_form, *args, **kwargs)
+    def password_change(self, request, extra_context, *args, **kwargs):
+        success_url = kwargs.pop(
+            "post_change_redirect", self.reverse("password_change_done")
+        )
+        form_class = kwargs.pop("password_change_form", self.password_change_form)
+        view = views.PasswordChangeView.as_view(
+            form_class=form_class, success_url=success_url, extra_context=extra_context
+        )
+        return view(request, *args, **kwargs)
 
     @node2extracontext
-    def password_change_done(self, request, *args, **kwargs):
-        return views.password_change_done(request, *args, **kwargs)
+    def password_change_done(self, request, extra_context, *args, **kwargs):
+        view = views.PasswordChangeDoneView.as_view(extra_context=extra_context)
+        return view(request, *args, **kwargs)
 
     @node2extracontext
-    def password_reset(self, request, *args, **kwargs):
-        post_reset_redirect = kwargs.pop(
-            'post_reset_redirect', self.reverse('password_reset_done'))
-        return views.password_reset(
-            request, post_reset_redirect=post_reset_redirect, *args, **kwargs)
+    def password_reset(self, request, extra_context, *args, **kwargs):
+        success_url = kwargs.pop(
+            "post_reset_redirect", self.reverse("password_reset_done")
+        )
+        view = views.PasswordResetView.as_view(
+            success_url=success_url, extra_context=extra_context
+        )
+        return view(request, *args, **kwargs)
 
     @node2extracontext
-    def password_reset_done(self, request, *args, **kwargs):
-        return views.password_reset_done(request, *args, **kwargs)
+    def password_reset_done(self, request, extra_context, *args, **kwargs):
+        view = views.PasswordResetDoneView.as_view(extra_context=extra_context)
+        return view(request, *args, **kwargs)
 
     @node2extracontext
-    def password_reset_confirm(self, request, *args, **kwargs):
-        post_reset_redirect = kwargs.pop(
-            'post_reset_redirect', self.reverse('password_reset_complete'))
-        set_password_form = kwargs.pop(
-            'set_password_form', self.set_password_form)
-        return views.password_reset_confirm(
-            request, post_reset_redirect=post_reset_redirect,
-            set_password_form=set_password_form, *args, **kwargs)
+    def password_reset_confirm(self, request, extra_context, *args, **kwargs):
+        success_url = kwargs.pop(
+            "post_reset_redirect", self.reverse("password_reset_complete")
+        )
+        form_class = kwargs.pop("set_password_form", self.set_password_form)
+        view = views.PasswordResetConfirmView.as_view(
+            form_class=form_class, success_url=success_url, extra_context=extra_context,
+        )
+        return view(request, *args, **kwargs)
 
     @node2extracontext
-    def password_reset_complete(self, request, *args, **kwargs):
-        return views.password_reset_complete(request, *args, **kwargs)
+    def password_reset_complete(self, request, extra_context, *args, **kwargs):
+        view = views.PasswordResetCompleteView.as_view(extra_context=extra_context)
+        return view(request, *args, **kwargs)
 
     def activation_complete(self, request, *args, **kwargs):
         context = {}

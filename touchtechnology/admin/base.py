@@ -1,15 +1,13 @@
 import os.path
+from urllib.parse import urlunparse
 
 from django.conf.urls import url
 from django.contrib import messages
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.utils.encoding import smart_str
-from django.utils.six.moves.urllib.parse import urlunparse
 from modelforms.forms import ModelForm
-from touchtechnology.common.decorators import (
-    never_cache_m, staff_login_required_m,
-)
+from touchtechnology.common.decorators import never_cache_m, staff_login_required_m
 from touchtechnology.common.default_settings import SITEMAP_HTTPS_OPTION
 from touchtechnology.common.forms.mixins import BootstrapFormControlMixin
 from touchtechnology.common.sites import Application

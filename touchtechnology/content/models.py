@@ -9,7 +9,6 @@ from django.contrib.contenttypes.fields import GenericRelation
 from django.core.cache import caches
 from django.db import models
 from django.db.models import DateTimeField
-from django.utils.encoding import python_2_unicode_compatible
 from django.utils.module_loading import import_string
 from django.utils.text import slugify
 from django.utils.translation import ugettext, ugettext_lazy as _
@@ -110,7 +109,6 @@ class PageContent(models.Model):
         return '<PageContent: #%d, page=%d>' % (self.pk, self.page.pk)
 
 
-@python_2_unicode_compatible
 class Chunk(AdminUrlModel):
 
     slug = models.SlugField(verbose_name=_("Slug"))
@@ -128,7 +126,6 @@ class NodeContent(models.Model):
     copy = HTMLField(blank=True, verbose_name=_("Page Copy"))
 
 
-@python_2_unicode_compatible
 class Placeholder(models.Model):
 
     path = models.CharField(max_length=255, verbose_name=_("Module path"))
@@ -198,7 +195,6 @@ class Placeholder(models.Model):
     invalidate_cache.alters_data = True
 
 
-@python_2_unicode_compatible
 class Redirect(AdminUrlModel):
 
     source_url = models.CharField(

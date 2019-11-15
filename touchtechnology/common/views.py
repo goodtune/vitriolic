@@ -1,10 +1,11 @@
 from __future__ import unicode_literals
 
+from urllib.parse import parse_qsl, urlsplit, urlunsplit
+
 import pytz
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.utils.http import is_safe_url, urlencode
-from django.utils.six.moves.urllib.parse import parse_qsl, urlsplit, urlunsplit
 from django.views.decorators.http import require_POST
 from touchtechnology.common.forms.tz import SelectTimezoneForm
 
@@ -32,7 +33,7 @@ def set_timezone(request):
             else:
                 response.set_cookie('django_timezone', tzname)
 
-    if not is_safe_url(url=url, host=request.get_host()):
+    if not is_safe_url(url, {request.get_host()}):
         raise Http404
 
     return response

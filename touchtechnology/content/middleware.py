@@ -1,6 +1,7 @@
 import imp
 import logging
 import os.path
+from urllib.parse import urlunparse
 
 from django.conf import settings
 from django.conf.urls import include, url
@@ -11,16 +12,13 @@ from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.core.files.storage import default_storage
 from django.http import HttpResponseForbidden
-from django.shortcuts import redirect, render_to_response
+from django.shortcuts import redirect, render
 from django.template import RequestContext, TemplateDoesNotExist
 from django.urls import reverse_lazy
 from django.utils.deprecation import MiddlewareMixin
-from django.utils.six.moves.urllib.parse import urlunparse
 from guardian.conf import settings as guardian_settings
 from mptt.utils import tree_item_iterator
-from touchtechnology.common.default_settings import (
-    SITEMAP_HTTPS_OPTION, SITEMAP_ROOT,
-)
+from touchtechnology.common.default_settings import SITEMAP_HTTPS_OPTION, SITEMAP_ROOT
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.sitemaps import NodeSitemap
 from touchtechnology.common.sites import AccountsSite
@@ -213,7 +211,8 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 if set(required).difference(groups):
                     if guardian_settings.RENDER_403:
                         try:
-                            response = render_to_response(
+                            response = render(
+                                request,
                                 guardian_settings.TEMPLATE_403, {},
                                 RequestContext(request))
                             response.status_code = 403

@@ -1,4 +1,3 @@
-import six
 from test_plus import TestCase
 from tournamentcontrol.competition.models import LadderEntry, LadderSummary
 from tournamentcontrol.competition.tests import factories
@@ -14,8 +13,7 @@ class SignalHandlerTests(TestCase):
 
     def test_ladder_entry_match_with_score(self):
         factories.MatchFactory.create(home_team_score=5, away_team_score=2)
-        six.assertCountEqual(
-            self,
+        self.assertCountEqual(
             [
                 (1, 0, 0, 5, 2, 3, 3),
                 (0, 1, 0, 2, 5, -3, 3),
@@ -38,8 +36,7 @@ class SignalHandlerTests(TestCase):
             away_team=match.away_team, away_team_score=2,
             stage=match.stage)
 
-        six.assertCountEqual(
-            self,
+        self.assertCountEqual(
             [
                 (3, 1, 1, 1, 10, 8, 2),
                 (3, 1, 1, 1, 8, 10, -2),

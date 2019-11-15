@@ -1,5 +1,6 @@
 import datetime
 import functools
+from functools import reduce
 from operator import add, or_
 
 from dateutil.parser import parse
@@ -9,8 +10,9 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.utils.translation import ugettext_lazy as _
 from first import first
 from formtools.wizard.views import SessionWizardView
-from six.moves import reduce
-from touchtechnology.common.forms.fields import ModelChoiceField, ModelMultipleChoiceField
+from touchtechnology.common.forms.fields import (
+    ModelChoiceField, ModelMultipleChoiceField,
+)
 from tournamentcontrol.competition.models import Season
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.utils import generate_scorecards

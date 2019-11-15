@@ -22,8 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class AdminSite(DjangoAdminSite):
-
-    def __init__(self, name='admin', app_name='admin'):
+    def __init__(self, name="admin"):
         super(AdminSite, self).__init__(name)
         self._components = collections.OrderedDict()
         self._schemas = collections.defaultdict(lambda: None)
@@ -31,8 +30,9 @@ class AdminSite(DjangoAdminSite):
     def register(self, component, *schemas):
         logger.debug("Registering admin component... %s" % component.__name__)
         if component in self._components:
-            raise AlreadyRegistered(_("The component %s is already "
-                                      "registered" % component.__name__))
+            raise AlreadyRegistered(
+                _("The component %s is already " "registered" % component.__name__)
+            )
         self._components[component] = component(self.name)
         if schemas:
             self._schemas[component] = schemas
@@ -42,13 +42,14 @@ class AdminSite(DjangoAdminSite):
         try:
             self._components.pop(component)
         except KeyError:
-            raise NotRegistered(_("The component %s is not "
-                                  "registered" % component.__name__))
+            raise NotRegistered(
+                _("The component %s is not " "registered" % component.__name__)
+            )
 
     def _hidden_component(self, component):
         schemas = self._schemas[component.__class__]
 
-        if 'tenant_schemas' not in settings.INSTALLED_APPS:
+        if "tenant_schemas" not in settings.INSTALLED_APPS:
             # Only hide components when we are not in multi-tenant mode
             return False
 
@@ -58,8 +59,9 @@ class AdminSite(DjangoAdminSite):
             return True
 
         from tenant_schemas.utils import get_public_schema_name
-        application = component.__module__.split('.admin', 1)[0]
-        logger.debug('application=%r', application)
+
+        application = component.__module__.split(".admin", 1)[0]
+        logger.debug("application=%r", application)
 
         # Before we allow it through, make sure the application is available
         # on this tenant.
@@ -75,9 +77,12 @@ class AdminSite(DjangoAdminSite):
 
     def get_urls(self):
         urlpatterns = [
-            url(r'^$', self.index, name='index'),
-            url(r'^sitemapnode/move/(?P<id>\d+)/(?P<direction>(up|down))/$',
-                self.reorder, name='reorder'),
+            url(r"^$", self.index, name="index"),
+            url(
+                r"^sitemapnode/move/(?P<id>\d+)/(?P<direction>(up|down))/$",
+                self.reorder,
+                name="reorder",
+            ),
         ]
 
         for klass, component in self._components.items():
@@ -88,8 +93,11 @@ class AdminSite(DjangoAdminSite):
             # content.SitemapNodeMiddleware but it might require quite lots of
             # refactoring.
             urlpatterns += [
-                url(r'^%s/' % component.name, component.urls,
-                    {'admin': self, 'component': component}),
+                url(
+                    r"^%s/" % component.name,
+                    component.urls,
+                    {"admin": self, "component": component},
+                ),
             ]
 
         return urlpatterns
@@ -99,13 +107,15 @@ class AdminSite(DjangoAdminSite):
         for n, c in self._components.items():
             visible = c.visible or not show_all
             if visible and not self._hidden_component(c):
-                components.append((
-                    smart_str(c.verbose_name),
-                    c.app_name,
-                    smart_str(c.reverse('index')),
-                    c,
-                    self._schemas[n],
-                ))
+                components.append(
+                    (
+                        smart_str(c.verbose_name),
+                        c.app_name,
+                        smart_str(c.reverse("index")),
+                        c,
+                        self._schemas[n],
+                    )
+                )
         return components
 
     def dashboard(self):
@@ -118,31 +128,31 @@ class AdminSite(DjangoAdminSite):
         return widgets
 
     def get_absolute_url(self):
-        return self.reverse('index')
+        return self.reverse("index")
 
     def reverse(self, name, args=None, kwargs=None, prefix=None):
         if args is None:
             args = ()
         if kwargs is None:
             kwargs = {}
-        named_url = '%s:%s' % (self.name, name)
+        named_url = "%s:%s" % (self.name, name)
         if prefix:
-            named_url = '%s:%s' % (prefix, named_url)
-        return reverse_lazy(named_url, args=args, kwargs=kwargs,
-                            current_app=self.name)
+            named_url = "%s:%s" % (prefix, named_url)
+        return reverse_lazy(named_url, args=args, kwargs=kwargs, current_app=self.name)
 
     @staff_login_required_m
     def index(self, request, *args, **kwargs):
-        context = {'admin': self}
+        context = {"admin": self}
         context.update(kwargs)
         response = TemplateResponse(
-            request, 'touchtechnology/admin/index.html', context=context)
+            request, "touchtechnology/admin/index.html", context=context
+        )
         response.current_app = self.name
         return response
 
     @staff_login_required_m
     def reorder(self, request, id, direction, *args, **kwargs):
         node = get_object_or_404(SitemapNode, pk=id)
-        getattr(node, 'move_%s' % direction)()
-        redirect_to = request.META.get('HTTP_REFERER', self.reverse('index'))
+        getattr(node, "move_%s" % direction)()
+        redirect_to = request.META.get("HTTP_REFERER", self.reverse("index"))
         return HttpResponseRedirect(redirect_to)
