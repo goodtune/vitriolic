@@ -1,11 +1,11 @@
 import logging
 from collections import OrderedDict
+from itertools import zip_longest
 
 from django import template
 from django.db import models
 from django.template import loader
 from django.urls import resolve, reverse_lazy
-from six.moves import zip_longest
 from touchtechnology.common.utils import (
     get_all_perms_for_model_cached, get_objects_for_user, model_and_manager,
 )

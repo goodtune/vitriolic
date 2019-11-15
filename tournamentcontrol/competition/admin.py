@@ -4,6 +4,7 @@ import collections
 import functools
 import logging
 import operator
+from functools import reduce
 
 from django.apps import apps
 from django.conf import settings
@@ -18,7 +19,6 @@ from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _, ungettext
-from six.moves import reduce
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.sites import site
 from touchtechnology.common.decorators import csrf_exempt_m, staff_login_required_m

@@ -1,6 +1,5 @@
 from __future__ import unicode_literals
 
-import six
 from test_plus import TestCase
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.models import Match
@@ -195,8 +194,7 @@ class DrawGenerationMatchFormSetTest(TestCase):
                 data=data1)
             self.response_302()
 
-        six.assertCountEqual(
-            self,
+        self.assertCountEqual(
             [(m.get_home_team(), m.get_away_team()) for m in Match.objects.all()],
             [
                 ({'title': '1st  '}, {'title': '4th  '}),

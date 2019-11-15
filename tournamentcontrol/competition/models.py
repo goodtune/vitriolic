@@ -11,7 +11,6 @@ from operator import attrgetter
 
 import django
 import pytz
-import six
 from cloudinary.models import CloudinaryField
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
@@ -98,7 +97,7 @@ class RankImportanceMixin(models.Model):
 
     @property
     def rank_importance_parent(self):
-        if isinstance(self.rank_importance_parent_attr, six.string_types):
+        if isinstance(self.rank_importance_parent_attr, str):
             return getattr(self, self.rank_importance_parent_attr)
         if isinstance(self.rank_importance_parent_attr, (list, tuple)):
             for attr in self.rank_importance_parent_attr:

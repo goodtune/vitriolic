@@ -2,6 +2,7 @@ from __future__ import unicode_literals
 
 import functools
 import logging
+from functools import reduce
 from operator import attrgetter, or_
 
 import guardian.shortcuts
@@ -21,7 +22,6 @@ from django.template import RequestContext, TemplateDoesNotExist
 from django.template.loader import select_template
 from first import first
 from guardian.conf import settings as guardian_settings
-from six.moves import reduce
 from touchtechnology.common.exceptions import NotModelManager
 from touchtechnology.common.mixins import NodeRelationMixin
 

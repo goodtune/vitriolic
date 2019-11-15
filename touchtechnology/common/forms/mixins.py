@@ -1,4 +1,3 @@
-import six
 from django.forms import widgets
 from django.utils.encoding import smart_str
 from django.utils.translation import ugettext_lazy as _
@@ -65,7 +64,7 @@ class LabelFromInstanceMixin(object):
         self._label_from_instance = label_from_instance
 
     def label_from_instance(self, obj):
-        if isinstance(self._label_from_instance, six.string_types):
+        if isinstance(self._label_from_instance, str):
             value = getattr(obj, self._label_from_instance)
         elif callable(self._label_from_instance):
             value = self._label_from_instance(obj)

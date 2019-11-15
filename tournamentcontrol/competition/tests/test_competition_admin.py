@@ -5,7 +5,6 @@ from datetime import date, datetime, time
 
 import django
 import pytz
-import six
 from django.conf import settings
 from django.template import Context, Template
 from django.urls import reverse
@@ -382,8 +381,7 @@ class GoodViewTests(TestCase):
         member2 = factories.PersonFactory.create(club=club)
 
         # Check our initial setup is as we expect.
-        six.assertCountEqual(
-            self,
+        self.assertCountEqual(
             [
                 ('Alice', 'User', None),
                 (member2.first_name, member2.last_name, member2.user.pk),
@@ -409,8 +407,7 @@ class GoodViewTests(TestCase):
             self.response_302()
 
         # Check the database state after the merge.
-        six.assertCountEqual(
-            self,
+        self.assertCountEqual(
             [
                 ('Alice', 'User', member2.user.pk, 'F', date(1983, 4, 27)),
             ],

@@ -5,7 +5,6 @@ import re
 from datetime import date, datetime, time
 
 import pytz
-import six
 from django import forms
 from django.conf import settings
 from django.db.models import Min
@@ -57,7 +56,7 @@ class HTMLField(forms.CharField):
         return attrs
 
     def clean(self, value):
-        if isinstance(value, six.string_types):
+        if isinstance(value, str):
             value = named_entities(value)
         return super(HTMLField, self).clean(value)
 

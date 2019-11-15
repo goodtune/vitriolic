@@ -4,6 +4,7 @@ import base64
 import functools
 import operator
 from datetime import timedelta
+from functools import reduce
 from operator import or_
 
 import pytz
@@ -21,7 +22,6 @@ from django.utils.encoding import smart_bytes
 from django.utils.module_loading import import_string
 from django.utils.translation import ugettext, ugettext_lazy as _
 from icalendar import Calendar, Event
-from six.moves import reduce
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
 from touchtechnology.common.utils import get_403_or_None, get_perms_for_model
@@ -31,8 +31,8 @@ from tournamentcontrol.competition.dashboard import (
 )
 from tournamentcontrol.competition.decorators import competition_slug
 from tournamentcontrol.competition.forms import (
-    ConfigurationForm, MatchResultFormSet, MatchStatisticFormset, MultiConfigurationForm,
-    RankingConfigurationForm,
+    ConfigurationForm, MatchResultFormSet, MatchStatisticFormset,
+    MultiConfigurationForm, RankingConfigurationForm,
 )
 from tournamentcontrol.competition.models import (
     Competition, Match, Person, SimpleScoreMatchStatistic,

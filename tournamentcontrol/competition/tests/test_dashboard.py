@@ -1,7 +1,6 @@
 from datetime import date, datetime
 
 import pytz
-import six
 from django.utils import timezone
 from freezegun import freeze_time
 from test_plus import TestCase
@@ -16,7 +15,7 @@ class BasicResultTests(TestCase):
             datetime=datetime(2019, 7, 15, 8, 30, tzinfo=timezone.utc),
             stage__division__season__timezone="UTC",
         )
-        six.assertCountEqual(self, matches_require_basic_results(), [match])
+        self.assertCountEqual(matches_require_basic_results(), [match])
 
     @freeze_time("2019-07-15 09:00 +13")
     def test_bare_match_in_samoa(self):
@@ -26,7 +25,7 @@ class BasicResultTests(TestCase):
             datetime=timezone.make_aware(datetime(2019, 7, 15, 8, 30), tzinfo),
             stage__division__season__timezone=tzname,
         )
-        six.assertCountEqual(self, matches_require_basic_results(), [match])
+        self.assertCountEqual(matches_require_basic_results(), [match])
 
     @freeze_time("2019-07-15 09:00 +13")
     def test_bare_match_in_samoa_bye(self):
@@ -49,4 +48,4 @@ class BasicResultTests(TestCase):
             home_team_score=5,
             away_team_score=4,
         )
-        six.assertCountEqual(self, matches_require_basic_results(), [match])
+        self.assertCountEqual(matches_require_basic_results(), [match])

@@ -7,7 +7,6 @@ from django.core.cache import cache
 from django.db.models.signals import post_save
 from django.db.utils import DatabaseError
 from django.utils.module_loading import import_string
-from six.moves import xrange
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.content.app_settings import TENANT_MEDIA_PUBLIC
 from touchtechnology.content.models import Placeholder
@@ -39,7 +38,7 @@ def install_placeholder(app):
 
 def template_path(base, filename, *args):
     args = [arg for arg in args if arg]
-    for index in xrange(len(args), 0, -1):
+    for index in range(len(args), 0, -1):
         yield os.path.join(base, os.path.join(*args[:index]), filename)
     yield os.path.join(base, filename)
 

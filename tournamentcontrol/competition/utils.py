@@ -6,7 +6,6 @@ from decimal import Decimal
 from operator import and_, attrgetter, or_
 
 import pytz
-import six
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.db.models import F, Q
@@ -193,7 +192,7 @@ def combine_and_localize(date, time, tz):
     local to tzinfo.
     """
     combined = datetime.combine(date, time)
-    if isinstance(tz, six.string_types):
+    if isinstance(tz, str):
         tz = pytz.timezone(tz)
     return timezone.make_aware(combined, tz)
 

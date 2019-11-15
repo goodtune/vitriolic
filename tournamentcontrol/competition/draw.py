@@ -7,7 +7,6 @@ import re
 from collections import defaultdict
 from decimal import Decimal
 
-import six
 from dateutil.rrule import DAILY, WEEKLY, rrule, rruleset
 from django.conf import settings
 from django.db.models import Max
@@ -173,7 +172,7 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1,
         min_per_day,
     )
 
-    if isinstance(first(seeded_team_list), six.string_types):
+    if isinstance(first(seeded_team_list), str):
         @python_2_unicode_compatible
         class Team(object):
             def __init__(self, st, order):

@@ -2,6 +2,7 @@ from __future__ import unicode_literals
 
 import logging
 import os.path
+from urllib.parse import urljoin
 
 import django
 from django.conf import settings
@@ -25,16 +26,16 @@ from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.utils.http import urlencode
 from django.utils.module_loading import import_string
-from django.utils.six.moves.urllib.parse import urljoin
 from django.utils.translation import ugettext_lazy as _
 from django.views.decorators.cache import patch_cache_control
 from modelforms.forms import ModelForm
-from six.moves import xrange
-from touchtechnology.common.decorators import login_required_m, node2extracontext, require_POST_m
+from touchtechnology.common.decorators import (
+    login_required_m, node2extracontext, require_POST_m,
+)
 from touchtechnology.common.default_settings import PAGINATE_BY, PROFILE_FORM_CLASS
 from touchtechnology.common.utils import (
-    get_403_or_None, get_all_perms_for_model_cached, get_objects_for_user, get_perms_for_model,
-    model_and_manager, select_template_name,
+    get_403_or_None, get_all_perms_for_model_cached, get_objects_for_user,
+    get_perms_for_model, model_and_manager, select_template_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -93,7 +94,7 @@ class Application(object):
         ``get_version`` function, to a maximum depth of 4 levels.
         """
         ver = ''
-        for depth in xrange(1, 5):
+        for depth in range(1, 5):
             parts = self.__module__.rsplit('.', depth)
             mod = parts[0]
             try:

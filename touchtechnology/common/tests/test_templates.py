@@ -1,9 +1,10 @@
 from __future__ import unicode_literals
 
+from urllib.parse import urlparse, urlunparse
+
 from django.template import Context, Template
 from django.test.utils import override_settings
 from django.utils.http import urlencode
-from django.utils.six.moves.urllib.parse import urlparse, urlunparse
 from test_plus import TestCase
 from touchtechnology.common.models import SitemapNode
 
