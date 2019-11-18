@@ -902,23 +902,26 @@ class AccountsSite(Application):
     @node2extracontext
     def password_reset(self, request, *args, **kwargs):
         post_reset_redirect = kwargs.pop(
-            'post_reset_redirect', self.reverse('password_reset_done'))
-        return views.password_reset(
-            request, post_reset_redirect=post_reset_redirect, *args, **kwargs)
+            'post_reset_redirect', self.reverse('password_reset_done')
+        )
+        view = views.PasswordResetView.as_view(success_url=post_reset_redirect)
+        return view(request, *args, **kwargs)
 
     @node2extracontext
     def password_reset_done(self, request, *args, **kwargs):
-        return views.password_reset_done(request, *args, **kwargs)
+        view = views.PasswordResetDoneView.as_view()
+        return view(request, *args, **kwargs)
 
     @node2extracontext
     def password_reset_confirm(self, request, *args, **kwargs):
         post_reset_redirect = kwargs.pop(
-            'post_reset_redirect', self.reverse('password_reset_complete'))
-        set_password_form = kwargs.pop(
-            'set_password_form', self.set_password_form)
-        return views.password_reset_confirm(
-            request, post_reset_redirect=post_reset_redirect,
-            set_password_form=set_password_form, *args, **kwargs)
+            'post_reset_redirect', self.reverse('password_reset_complete')
+        )
+        set_password_form = kwargs.pop('set_password_form', self.set_password_form)
+        view = views.PasswordResetConfirmView.as_view(
+            success_url=post_reset_redirect, form_class=set_password_form
+        )
+        return view(request, *args, **kwargs)
 
     @node2extracontext
     def password_reset_complete(self, request, *args, **kwargs):

@@ -10,7 +10,8 @@ from test_plus import TestCase
 from touchtechnology.common.tests import factories
 
 # Based on regular expression found at https://gist.github.com/gruber/8891611
-url_re = re.compile(r"""# noqa
+url_re = re.compile(
+    r"""# noqa
 (?xi)
 \b
 (                                             # Capture 1: entire matched URL
@@ -54,28 +55,28 @@ url_re = re.compile(r"""# noqa
 #    (?!@)                                     # not succeeded by a @, avoid matching "foo.na" in "foo.na@example.com"
 #  )
 )
-""", re.VERBOSE)
+""",
+    re.VERBOSE,
+)
 
 
 class PasswordResetTests(TestCase):
-
     def setUp(self):
-        self.staff = factories.UserFactory.create(
-            is_staff=True, is_superuser=True)
+        self.staff = factories.UserFactory.create(is_staff=True, is_superuser=True)
         self.regular = factories.UserFactory.create()
 
     def test_password_reset_GET(self):
-        self.assertGoodView('accounts:password_reset')
+        self.assertGoodView("accounts:password_reset")
 
     def test_password_reset_POST(self):
         data = {
-            'email': self.staff.email,
+            "email": self.staff.email,
         }
-        self.post('accounts:password_reset', data=data)
+        self.post("accounts:password_reset", data=data)
 
         # check that the form submission was successful and
         # redirection to the "done" page has occured.
-        redirect_to = self.reverse('accounts:password_reset_done')
+        redirect_to = self.reverse("accounts:password_reset_done")
         self.assertRedirects(self.last_response, redirect_to)
 
         # check that an email has been delivered
@@ -83,10 +84,11 @@ class PasswordResetTests(TestCase):
 
         # check that the email body is correct
         text_re = re.compile(
-            '''Just in case you've forgotten, your username is ".+".''')
-        self.assertRegexpMatches(mail.outbox[0].body, text_re)
+            """Just in case you've forgotten, your username is ".+"."""
+        )
+        self.assertRegex(mail.outbox[0].body, text_re)
 
         # check that the URL in the email body works
         link = url_re.findall(mail.outbox[0].body)[0]
-        self.get(urlparse(link).path)
+        self.get(urlparse(link).path, follow=True)
         self.assertResponseContains("<h1>Enter new password</h1>")
