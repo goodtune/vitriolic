@@ -33,7 +33,7 @@ def set_timezone(request):
             else:
                 response.set_cookie('django_timezone', tzname)
 
-    if not is_safe_url(url=url, host=request.get_host()):
+    if not is_safe_url(url, {request.get_host()}):
         raise Http404
 
     return response
