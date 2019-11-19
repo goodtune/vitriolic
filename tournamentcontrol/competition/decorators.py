@@ -1,4 +1,5 @@
 import datetime
+import inspect
 import logging
 import time
 
@@ -193,12 +194,10 @@ def competition_by_slug(f, *a, **kw):
     def _decorated(*args, **kwargs):
         # deep dive into the object internals and fetch the Application
         # instance so we can call the sitemapnodes method.
+        closure = inspect.getclosurevars(f.func)
         try:
-            manager = f.__closure__[1].cell_contents._competitions
-            # manager = f.func_closure[1].cell_contents._competitions
-        # except AttributeError:
-        #     manager = f.__closure__[1].cell_contents._competitions
-        except TypeError:
+            manager = closure.globals["competition"]._competitions
+        except KeyError:
             manager = Competition.objects
 
         club_slug = kwargs.pop("club", None)
