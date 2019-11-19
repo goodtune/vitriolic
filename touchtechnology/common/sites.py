@@ -869,63 +869,69 @@ class AccountsSite(Application):
         return urlpatterns
 
     @node2extracontext
-    def login(self, request, *args, **kwargs):
+    def login(self, request, extra_context, *args, **kwargs):
         form_class = getattr(
-            settings, 'AUTHENTICATION_FORM_CLASS',
-            'django.contrib.auth.forms.AuthenticationForm')
+            settings,
+            "AUTHENTICATION_FORM_CLASS",
+            "django.contrib.auth.forms.AuthenticationForm",
+        )
         authentication_form = import_string(form_class)
-        if django.VERSION[0] < 2:
-            kwargs.setdefault('current_app', self.name)
-        return views.login(
-            request, authentication_form=authentication_form, *args, **kwargs)
-
-    @node2extracontext
-    def logout(self, request, *args, **kwargs):
-        if django.VERSION[0] < 2:
-            kwargs.setdefault('current_app', self.name)
-        return views.logout(request, *args, **kwargs)
-
-    @node2extracontext
-    def password_change(self, request, *args, **kwargs):
-        post_change_redirect = kwargs.pop(
-            'post_change_redirect', self.reverse('password_change_done'))
-        password_change_form = kwargs.pop(
-            'password_change_form', self.password_change_form)
-        return views.password_change(
-            request, post_change_redirect=post_change_redirect,
-            password_change_form=password_change_form, *args, **kwargs)
-
-    @node2extracontext
-    def password_change_done(self, request, *args, **kwargs):
-        return views.password_change_done(request, *args, **kwargs)
-
-    @node2extracontext
-    def password_reset(self, request, *args, **kwargs):
-        post_reset_redirect = kwargs.pop(
-            'post_reset_redirect', self.reverse('password_reset_done')
+        view = views.LoginView.as_view(
+            authentication_form=authentication_form, extra_context=extra_context
         )
-        view = views.PasswordResetView.as_view(success_url=post_reset_redirect)
         return view(request, *args, **kwargs)
 
     @node2extracontext
-    def password_reset_done(self, request, *args, **kwargs):
-        view = views.PasswordResetDoneView.as_view()
+    def logout(self, request, extra_context, *args, **kwargs):
+        view = views.LogoutView.as_view(extra_context=extra_context)
         return view(request, *args, **kwargs)
 
     @node2extracontext
-    def password_reset_confirm(self, request, *args, **kwargs):
-        post_reset_redirect = kwargs.pop(
-            'post_reset_redirect', self.reverse('password_reset_complete')
+    def password_change(self, request, extra_context, *args, **kwargs):
+        success_url = kwargs.pop(
+            "post_change_redirect", self.reverse("password_change_done")
         )
-        set_password_form = kwargs.pop('set_password_form', self.set_password_form)
+        form_class = kwargs.pop("password_change_form", self.password_change_form)
+        view = views.PasswordChangeView.as_view(
+            form_class=form_class, success_url=success_url, extra_context=extra_context
+        )
+        return view(request, *args, **kwargs)
+
+    @node2extracontext
+    def password_change_done(self, request, extra_context, *args, **kwargs):
+        view = views.PasswordChangeDoneView.as_view(extra_context=extra_context)
+        return view(request, *args, **kwargs)
+
+    @node2extracontext
+    def password_reset(self, request, extra_context, *args, **kwargs):
+        success_url = kwargs.pop(
+            "post_reset_redirect", self.reverse("password_reset_done")
+        )
+        view = views.PasswordResetView.as_view(
+            success_url=success_url, extra_context=extra_context
+        )
+        return view(request, *args, **kwargs)
+
+    @node2extracontext
+    def password_reset_done(self, request, extra_context, *args, **kwargs):
+        view = views.PasswordResetDoneView.as_view(extra_context=extra_context)
+        return view(request, *args, **kwargs)
+
+    @node2extracontext
+    def password_reset_confirm(self, request, extra_context, *args, **kwargs):
+        success_url = kwargs.pop(
+            "post_reset_redirect", self.reverse("password_reset_complete")
+        )
+        form_class = kwargs.pop("set_password_form", self.set_password_form)
         view = views.PasswordResetConfirmView.as_view(
-            success_url=post_reset_redirect, form_class=set_password_form
+            form_class=form_class, success_url=success_url, extra_context=extra_context,
         )
         return view(request, *args, **kwargs)
 
     @node2extracontext
-    def password_reset_complete(self, request, *args, **kwargs):
-        return views.password_reset_complete(request, *args, **kwargs)
+    def password_reset_complete(self, request, extra_context, *args, **kwargs):
+        view = views.PasswordResetCompleteView.as_view(extra_context=extra_context)
+        return view(request, *args, **kwargs)
 
     def activation_complete(self, request, *args, **kwargs):
         context = {}

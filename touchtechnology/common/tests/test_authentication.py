@@ -65,6 +65,26 @@ class PasswordResetTests(TestCase):
         self.staff = factories.UserFactory.create(is_staff=True, is_superuser=True)
         self.regular = factories.UserFactory.create()
 
+    def test_login(self):
+        self.assertGoodView("accounts:login")
+
+    def test_logout(self):
+        self.assertGoodView("accounts:logout")
+
+    def test_password_change(self):
+        with self.login(self.regular):
+            self.assertGoodView("accounts:password_change")
+
+    def test_password_change_done(self):
+        with self.login(self.regular):
+            self.assertGoodView("accounts:password_change_done")
+
+    def test_password_reset_complete(self):
+        self.assertGoodView("accounts:password_reset_complete")
+
+    def test_password_reset_confirm(self):
+        self.assertGoodView("accounts:password_reset_confirm", uidb64="z", token="1-a")
+
     def test_password_reset_GET(self):
         self.assertGoodView("accounts:password_reset")
 
