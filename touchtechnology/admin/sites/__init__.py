@@ -1,7 +1,3 @@
-from .admin import AdminSite
-from .auth import UsersGroups
-from .settings import Settings
+from touchtechnology.admin.sites.admin import AdminSite
 
 site = AdminSite()
-site.register(Settings)
-site.register(UsersGroups)

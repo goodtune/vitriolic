@@ -9,13 +9,13 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('common', '0003_drop_pythonpackage'),
+        ("common", "0003_drop_pythonpackage"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='sitemapnode',
-            name='kwargs',
-            field=django.contrib.postgres.fields.jsonb.JSONField(default={}),
+            model_name="sitemapnode",
+            name="kwargs",
+            field=django.contrib.postgres.fields.jsonb.JSONField(default=dict),
         ),
     ]

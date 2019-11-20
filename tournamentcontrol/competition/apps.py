@@ -1,14 +1,14 @@
 from django.apps import AppConfig
-from django.db.models.signals import (
-    post_delete, post_save, pre_delete, pre_save,
-)
+from django.db.models.signals import post_delete, post_save, pre_delete, pre_save
 
 
 class CompetitionConfig(AppConfig):
-    name = 'tournamentcontrol.competition'
+    name = "tournamentcontrol.competition"
 
     def ready(self):
+        from touchtechnology.admin.sites import site
         from touchtechnology.content import utils
+        from tournamentcontrol.competition.admin import CompetitionAdminComponent
         from tournamentcontrol.competition.models import (
             Club,
             Competition,
@@ -34,6 +34,8 @@ class CompetitionConfig(AppConfig):
             set_ground_timezone,
             team_ladder_entry_aggregation,
         )
+
+        site.register(CompetitionAdminComponent)
 
         post_save.connect(match_saved_handler, sender=Match)
 

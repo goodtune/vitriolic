@@ -38,7 +38,7 @@ setup(
             'coverage',
             'coveralls[yaml]',
             'django-environ',
-            'django-test-plus>=1.0.15,<1.0.22',
+            'django-test-plus',
             'factory_boy',
             'freezegun',
             'mock',
