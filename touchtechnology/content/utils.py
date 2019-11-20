@@ -16,24 +16,30 @@ logger = logging.getLogger(__name__)
 
 def install_placeholder(app):
     application = import_module(app)
-    for cls_name in getattr(application, 'INSTALL', ()):
-        path = '%s.sites.%s' % (app, cls_name)
+    for cls_name in getattr(application, "INSTALL", ()):
+        path = "%s.sites.%s" % (app, cls_name)
         logger.debug('Installing application "{0}"'.format(path))
         site = import_string(path)()
         namespace = site.app_name
         try:
             placeholder, created = Placeholder.objects.get_or_create(
-                path=path, namespace=namespace)
+                path=path, namespace=namespace
+            )
         except DatabaseError:
             logger.exception("Unable to install placeholder: %s", path)
         else:
             if created:
-                logger.info('Registered new application "%s" (pk=%d)',
-                            placeholder.path, placeholder.pk)
+                logger.info(
+                    'Registered new application "%s" (pk=%d)',
+                    placeholder.path,
+                    placeholder.pk,
+                )
             else:
-                logger.debug('Application "%s" (pk=%d) already '
-                             'exists, skipping.',
-                             placeholder.path, placeholder.pk)
+                logger.debug(
+                    'Application "%s" (pk=%d) already ' "exists, skipping.",
+                    placeholder.path,
+                    placeholder.pk,
+                )
 
 
 def template_path(base, filename, *args):
@@ -44,8 +50,9 @@ def template_path(base, filename, *args):
 
 
 def get_media_storage(request):
-    if hasattr(request, 'tenant'):
+    if hasattr(request, "tenant"):
         from tenant_schemas.utils import get_public_schema_name
+
         public = request.tenant.schema_name == get_public_schema_name()
         if not public or (public and not TENANT_MEDIA_PUBLIC):
             return os.path.join(settings.MEDIA_ROOT, request.tenant.domain_url)
@@ -62,8 +69,8 @@ def invalidate_sitemapnode_urlpatterns(sender, instance, **kwargs):
     keyword arguments to a Placeholder node have changed. This will be _far_
     less frequent than it would seem worthwhile to worry about.
     """
-    logger.debug('SitemapNodeMiddleware cache requires invalidation.')
-    middleware = import_module('touchtechnology.content.middleware')
+    logger.debug("SitemapNodeMiddleware cache requires invalidation.")
+    middleware = import_module("touchtechnology.content.middleware")
     cache.delete(middleware.DEHYDRATED_URLPATTERNS_KEY)
 
 

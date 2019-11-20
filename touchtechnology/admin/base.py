@@ -14,7 +14,7 @@ from touchtechnology.common.sites import Application
 
 
 class AdminComponentMixin(object):
-    verbose_name = 'ExampleComponent'
+    verbose_name = "ExampleComponent"
     visible = True
 
     # While adding this new functionality, we'll start out with
@@ -25,7 +25,8 @@ class AdminComponentMixin(object):
 
     def __init__(self, app, name, app_name, *args, **kwargs):
         super(AdminComponentMixin, self).__init__(
-            name=name, app_name=app_name, *args, **kwargs)
+            name=name, app_name=app_name, *args, **kwargs
+        )
         self.app = app
 
     @property
@@ -36,7 +37,7 @@ class AdminComponentMixin(object):
         i = super(AdminComponentMixin, self)._template_path(filename, *args)
         for t in i:
             yield t
-        yield os.path.join('touchtechnology/admin', filename)
+        yield os.path.join("touchtechnology/admin", filename)
 
     @never_cache_m
     @staff_login_required_m
@@ -49,28 +50,30 @@ class AdminComponentMixin(object):
         to be hidden for this tenant. Will have no impact on single-tenant
         installs.
         """
-        if hasattr(request, 'tenant'):
-            admin = context.get('admin')
+        if hasattr(request, "tenant"):
+            admin = context.get("admin")
             if admin._hidden_component(self):
-                messages.error(request, 'Attempt to access component "%s" '
-                                        'is not allowed for this tenant.'
-                                        % smart_str(self.verbose_name))
-                return HttpResponseRedirect(reverse('admin:index'))
+                messages.error(
+                    request,
+                    'Attempt to access component "%s" '
+                    "is not allowed for this tenant." % smart_str(self.verbose_name),
+                )
+                return HttpResponseRedirect(reverse("admin:index"))
 
         if SITEMAP_HTTPS_OPTION and not request.is_secure():
-            host = request.META.get('HTTP_HOST')
-            path = request.META.get('PATH_INFO')
-            redirect_to = urlunparse(('https', host, path, '', '', ''))
+            host = request.META.get("HTTP_HOST")
+            path = request.META.get("PATH_INFO")
+            redirect_to = urlunparse(("https", host, path, "", "", ""))
             return HttpResponseRedirect(redirect_to)
 
         return super(AdminComponentMixin, self).render(
-            request, templates, context, *args, **kwargs)
+            request, templates, context, *args, **kwargs
+        )
 
     def reverse(self, name, args=(), kwargs={}, prefix=None):
         if prefix is None:
             prefix = self.app
-        return super(AdminComponentMixin, self).reverse(
-            name, args, kwargs, prefix)
+        return super(AdminComponentMixin, self).reverse(name, args, kwargs, prefix)
 
     def dropdowns(self):
         """
@@ -95,11 +98,12 @@ class AdminComponent(AdminComponentMixin, Application):
     front end application, it can just inherit from this for simplicity
     and backwards compatibility.
     """
+
     model_form_bases = (BootstrapFormControlMixin, ModelForm)
 
     def get_urls(self):
         urlpatterns = [
-            url(r'^$', self.index, name='index'),
+            url(r"^$", self.index, name="index"),
         ]
         return urlpatterns
 
@@ -121,7 +125,7 @@ class AdminComponent(AdminComponentMixin, Application):
         Our standard template directory for AdminComponent's will be 'admin'
         within the projects normally namespaced template directory.
         """
-        return os.path.join(super(AdminComponent, self).template_base, 'admin')
+        return os.path.join(super(AdminComponent, self).template_base, "admin")
 
 
 class DashboardWidget(object):

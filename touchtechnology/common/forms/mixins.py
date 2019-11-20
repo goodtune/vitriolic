@@ -12,27 +12,28 @@ class BootstrapFormControlMixin(object):
     This mixin should be applied to all forms. It will add placeholder text and
     set the bootstrap "form-control" class to the widget of the field.
     """
+
     def __init__(self, *args, **kwargs):
         super(BootstrapFormControlMixin, self).__init__(*args, **kwargs)
-        for field_name in getattr(self, 'fields', ()):
+        for field_name in getattr(self, "fields", ()):
             field = self.fields[field_name]
 
             # Which widget types don't we want to have the placeholder
             # overloaded with the title?
-            if not isinstance(field.widget, (widgets.RadioSelect,
-                                             widgets.MultiWidget)):
-                field.widget.attrs.setdefault('placeholder', field.label)
+            if not isinstance(field.widget, (widgets.RadioSelect, widgets.MultiWidget)):
+                field.widget.attrs.setdefault("placeholder", field.label)
 
             # Which widget types don't we want to have the class attribute set
             # to be 'form-control'?
             if not isinstance(field.widget, (widgets.RadioSelect,)):
-                field.widget.attrs['class'] = 'form-control'
+                field.widget.attrs["class"] = "form-control"
 
 
 class UserMixin(BootstrapFormControlMixin):
     """
     Mixin class to be used in forms that need a `User` object passed in.
     """
+
     def __init__(self, user=None, *args, **kwargs):
         self.user = user
         super(UserMixin, self).__init__(*args, **kwargs)
@@ -46,20 +47,23 @@ class SuperUserSlugMixin(UserMixin):
     Handy for allowing advanced users to have finer control over the slug
     of a page, while providing default behaviour for regular users.
     """
+
     def __init__(self, *args, **kwargs):
         super(SuperUserSlugMixin, self).__init__(*args, **kwargs)
         if self.user is None or not self.user.is_superuser:
-            self.fields.pop('slug', None)
-            self.fields.pop('slug_locked', None)
+            self.fields.pop("slug", None)
+            self.fields.pop("slug_locked", None)
         else:
-            self.fields['slug'].required = False
-            self.fields['slug'].help_text = _("If left blank, this will "
-                                              "be automatically set based "
-                                              "on the title.")
+            self.fields["slug"].required = False
+            self.fields["slug"].help_text = _(
+                "If left blank, this will "
+                "be automatically set based "
+                "on the title."
+            )
 
 
 class LabelFromInstanceMixin(object):
-    def __init__(self, label_from_instance='name', *args, **kwargs):
+    def __init__(self, label_from_instance="name", *args, **kwargs):
         super(LabelFromInstanceMixin, self).__init__(*args, **kwargs)
         self._label_from_instance = label_from_instance
 
@@ -89,7 +93,8 @@ class PermissionFormSetMixin(object):
 
     def _construct_form(self, i, **kwargs):
         return super(PermissionFormSetMixin, self)._construct_form(
-            i, instance=self.instance, permission=self.queryset[i])
+            i, instance=self.instance, permission=self.queryset[i]
+        )
 
     def save(self, *args, **kwargs):
         res = []

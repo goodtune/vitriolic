@@ -31,9 +31,7 @@ class RankingLadderEntryTestCase(TestCase):
         self, home_score, away_score, expected, expected_summaries=2, **kwargs
     ):
         match = factories.MatchFactory.create(
-            home_team_score=home_score,
-            away_team_score=away_score,
-            **kwargs
+            home_team_score=home_score, away_team_score=away_score, **kwargs
         )
         self.assertCountEqual(
             match.ladder_entries.values_list(*self.DYNAMIC_FIELDS), expected

@@ -5,7 +5,6 @@ from django.test.utils import override_settings
 from django.utils import timezone
 from freezegun import freeze_time
 from test_plus import TestCase
-
 from tournamentcontrol.competition.tests import factories
 
 

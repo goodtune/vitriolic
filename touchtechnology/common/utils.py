@@ -30,18 +30,29 @@ logger = logging.getLogger(__name__)
 
 class FauxNodeMeta(object):
 
-    left_attr = 'lft'
-    right_attr = 'rght'
-    level_attr = 'level'
+    left_attr = "lft"
+    right_attr = "rght"
+    level_attr = "level"
 
 
 class FauxNode(NodeRelationMixin):
 
-    REPR_FMT = '<{class}: {title} ({tree_id}:{lft},{rght})>'
+    REPR_FMT = "<{class}: {title} ({tree_id}:{lft},{rght})>"
 
-    def __init__(self, app, title, short_title, slug, level, tree_id,
-                 lft=None, rght=None, parent=None,
-                 changefreq='monthly', priority=0.5):
+    def __init__(
+        self,
+        app,
+        title,
+        short_title,
+        slug,
+        level,
+        tree_id,
+        lft=None,
+        rght=None,
+        parent=None,
+        changefreq="monthly",
+        priority=0.5,
+    ):
         self.app = app
         self.title = title
         self.short_title = short_title
@@ -58,27 +69,36 @@ class FauxNode(NodeRelationMixin):
         try:
             self.changefreq = changefreq
         except AttributeError:
-            logger.exception('Unable to set `changefreq` for %r', self)
+            logger.exception("Unable to set `changefreq` for %r", self)
 
         try:
             self.priority = priority
         except AttributeError:
-            logger.exception('Unable to set `priority` for %r', self)
+            logger.exception("Unable to set `priority` for %r", self)
 
         self._mptt_meta = FauxNodeMeta()
 
     def __eq__(self, other):
         if other is None:
             return
-        attr = ('title', 'short_title', 'slug', 'level', 'tree_id', 'parent')
+        attr = ("title", "short_title", "slug", "level", "tree_id", "parent")
         gttr = [attrgetter(a) for a in attr]
         return all([g(self) == g(other) for g in gttr])
 
     def __repr__(self):
-        attr = ('title', 'short_title', 'slug', 'level', 'tree_id', 'lft', 'rght', 'parent')
+        attr = (
+            "title",
+            "short_title",
+            "slug",
+            "level",
+            "tree_id",
+            "lft",
+            "rght",
+            "parent",
+        )
         gttr = [attrgetter(a) for a in attr]
         data = dict(zip(attr, [g(self) for g in gttr]))
-        data['class'] = self.__class__.__name__
+        data["class"] = self.__class__.__name__
         return self.REPR_FMT.format(**data)
 
     @classmethod
@@ -104,21 +124,29 @@ def get_mod_func(callback):
     # Converts 'touchtechnology.common.utils.get_mod_func' to
     # ['touchtechnology.common.utils', 'get_mod_func']
     try:
-        dot = callback.rindex('.')
+        dot = callback.rindex(".")
     except ValueError:
-        return callback, ''
-    return callback[:dot], callback[dot + 1:]
+        return callback, ""
+    return callback[:dot], callback[dot + 1 :]
 
 
 def create_exclude_filter(queryset):
     def _filter(node):
         return Q(tree_id=node.tree_id, lft__gte=node.lft, lft__lte=node.rght)
+
     return functools.reduce(or_, [_filter(n) for n in queryset], Q())
 
 
-def get_403_or_None(request, perms, obj=None, login_url=None,
-                    redirect_field_name=None, return_403=False,
-                    accept_global_perms=False, any_perm=False):
+def get_403_or_None(
+    request,
+    perms,
+    obj=None,
+    login_url=None,
+    redirect_field_name=None,
+    return_403=False,
+    accept_global_perms=False,
+    any_perm=False,
+):
     """
     Copied from django-guardian (v1.2.5) and added the ability to decide if we
     are willing to accept ANY of the listed perms or they must ALL be included
@@ -134,16 +162,10 @@ def get_403_or_None(request, perms, obj=None, login_url=None,
     has_permissions = False
 
     if accept_global_perms:
-        has_permissions = check([
-            request.user.has_perm(perm)
-            for perm in perms
-        ])
+        has_permissions = check([request.user.has_perm(perm) for perm in perms])
 
     if not has_permissions:
-        has_permissions = check([
-            request.user.has_perm(perm, obj)
-            for perm in perms
-        ])
+        has_permissions = check([request.user.has_perm(perm, obj) for perm in perms])
 
     if not has_permissions:
         if return_403:
@@ -151,8 +173,10 @@ def get_403_or_None(request, perms, obj=None, login_url=None,
                 try:
                     response = render(
                         request,
-                        guardian_settings.TEMPLATE_403, {},
-                        RequestContext(request))
+                        guardian_settings.TEMPLATE_403,
+                        {},
+                        RequestContext(request),
+                    )
                     response.status_code = 403
                     return response
                 except TemplateDoesNotExist as e:
@@ -162,13 +186,14 @@ def get_403_or_None(request, perms, obj=None, login_url=None,
                 raise PermissionDenied
             return HttpResponseForbidden()
         else:
-            return redirect_to_login(request.get_full_path(),
-                                     login_url,
-                                     redirect_field_name)
+            return redirect_to_login(
+                request.get_full_path(), login_url, redirect_field_name
+            )
 
 
-def get_objects_for_user(user, perms, model_or_manager, use_groups=True,
-                         any_perm=False, with_superuser=True):
+def get_objects_for_user(
+    user, perms, model_or_manager, use_groups=True, any_perm=False, with_superuser=True
+):
     """
     The get_objects_for_user shortcut does not take into account any globally
     granted permissions, we want to check these first and then defer decision
@@ -181,18 +206,19 @@ def get_objects_for_user(user, perms, model_or_manager, use_groups=True,
         return manager.all()
 
     return guardian.shortcuts.get_objects_for_user(
-        user, perms, klass=model, any_perm=True)
+        user, perms, klass=model, any_perm=True
+    )
 
 
 def get_perms_for_model(model, add=False, change=False, delete=False, *extra):
-    tpl = '%s.%%s_%s' % (model._meta.app_label, model._meta.model_name)
+    tpl = "%s.%%s_%s" % (model._meta.app_label, model._meta.model_name)
     res = []
     if add:
-        res.append(tpl % 'add')
+        res.append(tpl % "add")
     if change:
-        res.append(tpl % 'change')
+        res.append(tpl % "change")
     if delete:
-        res.append(tpl % 'delete')
+        res.append(tpl % "delete")
     for x in extra:
         res.append(tpl % x)
     return res
@@ -210,8 +236,7 @@ def tree_for_node(node):
     from .models import SitemapNode
 
     if not isinstance(node, SitemapNode):
-        real_nodes = SitemapNode.objects.filter(
-            tree_id=node.tree_id, lft__lte=node.lft)
+        real_nodes = SitemapNode.objects.filter(tree_id=node.tree_id, lft__lte=node.lft)
         node = first(real_nodes.reverse())
 
     if node:
@@ -242,7 +267,7 @@ def model_and_manager(model_or_manager):
     if isinstance(model_or_manager, Model):
         model = model_or_manager._meta.model
         manager = model._default_manager
-    elif hasattr(model_or_manager, 'model'):
+    elif hasattr(model_or_manager, "model"):
         model = model_or_manager.model
         manager = model_or_manager
     else:
@@ -263,11 +288,11 @@ def determine_page_number(request, paginator):
     """
     assert isinstance(request, HttpRequest)
     assert isinstance(paginator, Paginator)
-    page = request.GET.get('page', 1)
+    page = request.GET.get("page", 1)
     try:
         page_number = int(page)
     except ValueError:
-        if page == 'last':
+        if page == "last":
             page_number = paginator.num_pages
         else:
             raise Http404
@@ -290,8 +315,8 @@ def select_template_name(templates):
 
 
 def get_timezone_from_request(request):
-    if hasattr(request, 'session'):
-        tzname = request.session.get('django_timezone', None)
+    if hasattr(request, "session"):
+        tzname = request.session.get("django_timezone", None)
         if tzname is not None:
             try:
                 tzinfo = pytz.timezone(tzname)
@@ -300,27 +325,27 @@ def get_timezone_from_request(request):
             return tzinfo
 
 
-def get_base_url(scheme='http'):
+def get_base_url(scheme="http"):
     """
     It is frustratingly difficult to obtain the appropriate base URL to use
     for sending links outside of the request-response cycle. If we are using
     the django-tenant-schemas application, this can be somewhat simplified.
     If we are not, fall back to using the django.contrib.sites framework.
     """
-    if hasattr(connection, 'tenant'):
+    if hasattr(connection, "tenant"):
         hostname = connection.tenant.domain_url
         # We have our own pattern of using the `prepend_www` attribute so lets
         # check for it and stick it on the front.
-        if getattr(connection.tenant, 'prepend_www', False):
-            hostname = 'www.' + hostname
+        if getattr(connection.tenant, "prepend_www", False):
+            hostname = "www." + hostname
     else:
-        site = apps.get_model('sites.Site').objects.get_current()
+        site = apps.get_model("sites.Site").objects.get_current()
         hostname = site.domain
     context = {
-        'scheme': scheme,
-        'hostname': hostname,
+        "scheme": scheme,
+        "hostname": hostname,
     }
-    return '%(scheme)s://%(hostname)s/' % context
+    return "%(scheme)s://%(hostname)s/" % context
 
 
 def get_all_perms_for_model_cached(model, ttl=60, **extra):
@@ -329,11 +354,9 @@ def get_all_perms_for_model_cached(model, ttl=60, **extra):
     set on a given model.
     """
     # What are the permissions that this model accepts?
-    cache_key = 'model_perms.%s.%s' % (
-        model._meta.app_label, model._meta.model_name)
+    cache_key = "model_perms.%s.%s" % (model._meta.app_label, model._meta.model_name)
     model_perms = cache.get(cache_key)
-    logger.debug(
-        'model_perms_cache=%s', 'MISS' if model_perms is None else 'HIT')
+    logger.debug("model_perms_cache=%s", "MISS" if model_perms is None else "HIT")
     if model_perms is None:
         model_perms = get_all_perms_for_model(model, **extra)
         cache.set(cache_key, model_perms, timeout=ttl)
