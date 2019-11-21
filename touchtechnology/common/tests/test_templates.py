@@ -1,9 +1,10 @@
 from __future__ import unicode_literals
 
+from urllib.parse import urlparse, urlunparse
+
 from django.template import Context, Template
 from django.test.utils import override_settings
 from django.utils.http import urlencode
-from django.utils.six.moves.urllib.parse import urlparse, urlunparse
 from test_plus import TestCase
 from touchtechnology.common.models import SitemapNode
 
@@ -13,19 +14,19 @@ TWITTIFY_TEMPLATE = Template("{% load common %}{{ value|twittify }}")
 
 class CssifyTest(TestCase):
     def test_cssify_str(self):
-        context = Context({'value': 'some-normal-slug'})
+        context = Context({"value": "some-normal-slug"})
         value = CSSIFY_TEMPLATE.render(context)
-        self.assertEqual('some_normal_slug', value)
+        self.assertEqual("some_normal_slug", value)
 
     def test_cssify_unicode(self):
-        context = Context({'value': 'some-normal-slug'})
+        context = Context({"value": "some-normal-slug"})
         value = CSSIFY_TEMPLATE.render(context)
-        self.assertEqual('some_normal_slug', value)
+        self.assertEqual("some_normal_slug", value)
 
     def test_cssify_none(self):
-        context = Context({'value': None})
+        context = Context({"value": None})
         value = CSSIFY_TEMPLATE.render(context)
-        self.assertEqual('', value)
+        self.assertEqual("", value)
 
 
 class NavigationTest(TestCase):
@@ -138,7 +139,7 @@ class NavigationTest(TestCase):
 
 class TwittifyTest(TestCase):
     def test_twittify(self):
-        context = Context({'value': "@goodtune"})
+        context = Context({"value": "@goodtune"})
         value = TWITTIFY_TEMPLATE.render(context)
         expected = """
         @<a class="twitter user" target="_blank"
@@ -147,23 +148,23 @@ class TwittifyTest(TestCase):
         self.assertHTMLEqual(expected, value)
 
     def test_twittify_invalid(self):
-        context = Context({'value': "goodtune"})
+        context = Context({"value": "goodtune"})
         value = TWITTIFY_TEMPLATE.render(context)
         expected = "goodtune"
         self.assertHTMLEqual(expected, value)
 
 
-@override_settings(ROOT_URLCONF='example_app.urls')
+@override_settings(ROOT_URLCONF="example_app.urls")
 class QueryStringTest(TestCase):
 
-    fixtures = ['query_string']
+    fixtures = ["query_string"]
 
     def setUp(self):
         self.query = dict(year=2013)
-        self.url = urlparse(self.reverse('querystring:index'))
+        self.url = urlparse(self.reverse("querystring:index"))
 
     def test_no_filter_no_page(self):
-        self.get('querystring:index')
+        self.get("querystring:index")
 
         self.assertResponseContains('<a href="?page=3">3</a>')
         self.assertResponseNotContains('<a href="?page=4">4</a>')
@@ -206,12 +207,12 @@ class QueryStringTest(TestCase):
         self.assertResponseContains('<span id="9">9</span>')
 
 
-@override_settings(ROOT_URLCONF='example_app.urls')
+@override_settings(ROOT_URLCONF="example_app.urls")
 class ContextTest(TestCase):
     def test_env(self):
-        self.get('context:env')
-        self.assertResponseContains('dev', html=False)
+        self.get("context:env")
+        self.assertResponseContains("dev", html=False)
 
     def test_tz(self):
-        self.get('context:tz')
-        self.assertResponseContains('UTC', html=False)
+        self.get("context:tz")
+        self.assertResponseContains("UTC", html=False)

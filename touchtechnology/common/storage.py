@@ -1,32 +1,31 @@
 import logging
 import os.path
+from urllib.parse import urljoin
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage as FileSystemStorageBase
 from django.db.models.fields.files import ImageFieldFile
-from django.utils.six.moves.urllib.parse import urljoin
 from PIL import Image
 from touchtechnology.common.default_settings import STORAGE_FOLDER, STORAGE_URL
 
 try:
     from tenant_schemas.storage import TenantStorageMixin
 except ImportError:
-    TenantStorageMixin = type('TenantStorageMixin', (), {})
+    TenantStorageMixin = type("TenantStorageMixin", (), {})
 
 
 logger = logging.getLogger(__name__)
 
 __all__ = (
-    'FileSystemStorage',
-    'MakeDirectoryMixin',
-    'OverwriteMixin',
-    'ResizedImageFieldFile',
-    'WalkMixin',
+    "FileSystemStorage",
+    "MakeDirectoryMixin",
+    "OverwriteMixin",
+    "ResizedImageFieldFile",
+    "WalkMixin",
 )
 
 
 class MakeDirectoryMixin(object):
-
     def makedirs(self, name, path=None):
         parts = [p for p in [self.location, path, name] if p]
         directory = os.path.join(*parts)
@@ -46,7 +45,6 @@ class MakeDirectoryMixin(object):
 
 
 class OverwriteMixin(object):
-
     def get_available_name(self, name):
         while self.exists(name):
             self.delete(name)
@@ -54,14 +52,13 @@ class OverwriteMixin(object):
 
 
 class WalkMixin(object):
-
     def walk(self, top=None):
         """
         Generator that returns tuples similar to the built-in `os.walk`, but
         all paths are calculated from the Storage API `url` method.
         """
         if top is None:
-            top = '.'
+            top = "."
 
         # determine the directories and files in the present location, and
         # calculate their full path relative to the "top".
@@ -83,11 +80,10 @@ class WalkMixin(object):
                 yield triple
 
 
-class FileSystemStorage(MakeDirectoryMixin, WalkMixin, TenantStorageMixin,
-                        FileSystemStorageBase):
-
-    def __init__(self, location=STORAGE_FOLDER, base_url=STORAGE_URL,
-                 *args, **kwargs):
+class FileSystemStorage(
+    MakeDirectoryMixin, WalkMixin, TenantStorageMixin, FileSystemStorageBase
+):
+    def __init__(self, location=STORAGE_FOLDER, base_url=STORAGE_URL, *args, **kwargs):
         super(FileSystemStorage, self).__init__(*args, **kwargs)
         if location is not None:
             self.location = os.path.join(self.location, location)
@@ -101,22 +97,23 @@ class FileSystemStorage(MakeDirectoryMixin, WalkMixin, TenantStorageMixin,
 
 
 class ResizedImageFieldFile(ImageFieldFile):
-
     def __init__(self, instance, field_name, size, background):
         self.field_name = field_name
         self.maxwidth, self.maxheight = size
         self.background = background
         field = instance._meta.get_field(field_name)
         path, filename = os.path.split(getattr(instance, field_name).name)
-        dim = '%sx%s' % (self.maxwidth, self.maxheight)
-        name = os.path.join(path, dim, '%s.jpg' % instance.pk)
+        dim = "%sx%s" % (self.maxwidth, self.maxheight)
+        name = os.path.join(path, dim, "%s.jpg" % instance.pk)
         super(ResizedImageFieldFile, self).__init__(instance, field, name)
 
     def regenerate(self):
         image_field = getattr(self.instance, self.field_name)
         if not self.storage.exists(image_field):
-            logger.warning('Original file "{0}" does not exist, failed to '
-                           'regenerate sized image.'.format(image_field))
+            logger.warning(
+                'Original file "{0}" does not exist, failed to '
+                "regenerate sized image.".format(image_field)
+            )
             return
 
         path = os.path.dirname(self.name)
@@ -125,8 +122,8 @@ class ResizedImageFieldFile(ImageFieldFile):
 
         original = self.storage.open(image_field)
         image = Image.open(original)
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
+        if image.mode != "RGB":
+            image = image.convert("RGB")
 
         # determine the dimensions of the original image
         (__, __, w, h) = image.getbbox()

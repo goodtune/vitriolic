@@ -7,20 +7,21 @@ import re
 from collections import defaultdict
 from decimal import Decimal
 
-import six
 from dateutil.rrule import DAILY, WEEKLY, rrule, rruleset
 from django.conf import settings
 from django.db.models import Max
 from django.utils import timezone
-from django.utils.encoding import python_2_unicode_compatible
 from django.utils.translation import ugettext_lazy as _
 from first import first
-from tournamentcontrol.competition.models import Match, Stage, StageGroup, Team, UndecidedTeam
+from tournamentcontrol.competition.models import (
+    Match, Stage, StageGroup, Team, UndecidedTeam,
+)
 from tournamentcontrol.competition.utils import (
-    ceiling, final_series_rounds, grouper, round_robin_format, single_elimination_final_format,
+    ceiling, final_series_rounds, grouper, round_robin_format,
+    single_elimination_final_format,
 )
 
-win_lose_re = re.compile(r'(?P<result>[WL])(?P<match_id>\d+)')
+win_lose_re = re.compile(r"(?P<result>[WL])(?P<match_id>\d+)")
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,8 @@ def coerce_datetime(start_date):
     if settings.USE_TZ:
         if not timezone.is_aware(start_date):
             start_date = timezone.make_aware(
-                start_date, timezone.get_current_timezone())
+                start_date, timezone.get_current_timezone()
+            )
     return start_date
 
 
@@ -50,12 +52,11 @@ def weekly_date_generator(stage, start_date=None):
     logger.debug("Weekly date generator: '%s' (%s)", stage.title, start_date)
     ruleset = rruleset()
     ruleset.rrule(rrule(WEEKLY, dtstart=start_date))
-    for exclusion in stage.division.season.exclusions.dates('date', 'day'):
+    for exclusion in stage.division.season.exclusions.dates("date", "day"):
         exclusion = coerce_datetime(exclusion)
         ruleset.exdate(exclusion)
-        logger.debug("EXCLUSION (%s) %s",
-                     stage.division.season.title, exclusion)
-    for exclusion in stage.division.exclusions.dates('date', 'day'):
+        logger.debug("EXCLUSION (%s) %s", stage.division.season.title, exclusion)
+    for exclusion in stage.division.exclusions.dates("date", "day"):
         exclusion = coerce_datetime(exclusion)
         ruleset.exdate(exclusion)
         logger.debug("EXCLUSION (%s) %s", stage.division.title, exclusion)
@@ -71,31 +72,36 @@ def tournament_date_generator(stage, start_date=None, games_per_day=None):
         # in case `games_per_day` is not set on the division, fallback to 1
         games_per_day = stage.division.games_per_day or 1
 
-    logger.debug("Tournament date generator: '%s' (%s:%s)",
-                 stage.title, start_date, games_per_day)
+    logger.debug(
+        "Tournament date generator: '%s' (%s:%s)",
+        stage.title,
+        start_date,
+        games_per_day,
+    )
 
     ruleset = rruleset()
     ruleset.rrule(rrule(DAILY, dtstart=start_date))
 
-    for exclusion in stage.division.season.exclusions.dates('date', 'day'):
+    for exclusion in stage.division.season.exclusions.dates("date", "day"):
         exclusion = coerce_datetime(exclusion)
         ruleset.exdate(exclusion)
-        logger.debug("EXCLUSION (%s) %s",
-                     stage.division.season.title, exclusion)
+        logger.debug("EXCLUSION (%s) %s", stage.division.season.title, exclusion)
 
-    for exclusion in stage.division.exclusions.dates('date', 'day'):
+    for exclusion in stage.division.exclusions.dates("date", "day"):
         exclusion = coerce_datetime(exclusion)
         ruleset.exdate(exclusion)
         logger.debug("EXCLUSION (%s) %s", stage.division.title, exclusion)
 
     for dates in itertools.imap(
-            lambda dt: itertools.repeat(dt.date(), games_per_day), ruleset):
+        lambda dt: itertools.repeat(dt.date(), games_per_day), ruleset
+    ):
         for date in dates:
             yield date
 
 
-def optimum_tournament_pool_count(number_of_teams, days_available,
-                                  max_per_day=1, min_per_day=1):
+def optimum_tournament_pool_count(
+    number_of_teams, days_available, max_per_day=1, min_per_day=1
+):
     """
     Using the available input variables, decide how many pools to divide a
     division into.
@@ -129,26 +135,29 @@ def optimum_tournament_pool_count(number_of_teams, days_available,
 
         # Make sure we are playing enough games per day through preliminary
         # stage of the tournament.
-        if preliminary_rounds / max_per_day > \
-                days_available - elimination_days:
-            logger.warn("Too many games (%s) to be played before the finals "
-                        "with %s pools.", preliminary_rounds, number_of_pools)
+        if preliminary_rounds / max_per_day > days_available - elimination_days:
+            logger.warn(
+                "Too many games (%s) to be played before the finals " "with %s pools.",
+                preliminary_rounds,
+                number_of_pools,
+            )
             continue
 
         # Make sure we are playing enough games during the preliminary stages
-        if preliminary_rounds / max_per_day > \
-                days_available - elimination_days:
-            logger.warn("Not enough time (%s days) to play %s games at %s "
-                        "games per day.", days_available - elimination_days,
-                        preliminary_rounds, max_per_day)
+        if preliminary_rounds / max_per_day > days_available - elimination_days:
+            logger.warn(
+                "Not enough time (%s days) to play %s games at %s " "games per day.",
+                days_available - elimination_days,
+                preliminary_rounds,
+                max_per_day,
+            )
             continue
 
         if days_required <= days_available:
             return number_of_pools
 
 
-def seeded_tournament(seeded_team_list, days_available, max_per_day=1,
-                      min_per_day=1):
+def seeded_tournament(seeded_team_list, days_available, max_per_day=1, min_per_day=1):
     """
     Using the available input variables, divide the list of seeded teams into
     the appropriate number of pools. Produce suitable draw formats definitions
@@ -167,14 +176,11 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1,
     """
     number_of_teams = len(seeded_team_list)
     number_of_pools = optimum_tournament_pool_count(
-        number_of_teams,
-        days_available,
-        max_per_day,
-        min_per_day,
+        number_of_teams, days_available, max_per_day, min_per_day,
     )
 
-    if isinstance(first(seeded_team_list), six.string_types):
-        @python_2_unicode_compatible
+    if isinstance(first(seeded_team_list), str):
+
         class Team(object):
             def __init__(self, st, order):
                 self.st = st
@@ -185,19 +191,24 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1,
 
             def __str__(self):
                 return self.st
+
         seeded_team_list = [
-            Team(t, order=order)
-            for order, t in enumerate(seeded_team_list, 1)
+            Team(t, order=order) for order, t in enumerate(seeded_team_list, 1)
         ]
 
     if number_of_pools is None:
         raise ValueError("Incompatible set of constraints")
 
     # split teams into number of pools, employing the "serpent" pattern
-    pools = sorted(zip(*[
-        g if i % 2 else reversed(g)
-        for i, g in enumerate(grouper(seeded_team_list, number_of_pools))]),
-                   key=None)
+    pools = sorted(
+        zip(
+            *[
+                g if i % 2 else reversed(g)
+                for i, g in enumerate(grouper(seeded_team_list, number_of_pools))
+            ]
+        ),
+        key=None,
+    )
 
     # remove any None items from each pool
     pools = [[p for p in pool if p] for pool in pools]
@@ -205,23 +216,21 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1,
     # produce round robin formats
     draw_formats = [
         {
-            'label': 'Round Robin (%d/%d teams)' % (size - 1, size),
-            'format': round_robin_format(range(1, size + 1)),
+            "label": "Round Robin (%d/%d teams)" % (size - 1, size),
+            "format": round_robin_format(range(1, size + 1)),
         }
         # unique set of pool sizes requiring individual draw formats
-        for size in sorted(set([
-            ceiling(size, 2)
-            for size in [len(pool) for pool in pools]
-        ]))
+        for size in sorted(
+            set([ceiling(size, 2) for size in [len(pool) for pool in pools]])
+        )
     ]
 
     # produce finals formats
     draw_formats += [
         {
-            'label': _("Final Series (%s pools)") % number_of_pools,
-            'format': single_elimination_final_format(
-                number_of_pools,
-                bronze_playoff=_("Bronze Medal"),
+            "label": _("Final Series (%s pools)") % number_of_pools,
+            "format": single_elimination_final_format(
+                number_of_pools, bronze_playoff=_("Bronze Medal"),
             ),
         }
     ]
@@ -229,7 +238,6 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1,
     return dict(pools=pools, draw_formats=draw_formats)
 
 
-@python_2_unicode_compatible
 class RoundDescriptor(object):
     def __init__(self, count, round_label, **kwargs):
         self.count = count
@@ -243,14 +251,13 @@ class RoundDescriptor(object):
         return [m.generate(generator, stage, self, date) for m in self.matches]
 
     def __str__(self):
-        return '\n'.join(
-            ['ROUND %s' % self.round_label] + [str(m) for m in self.matches])
+        return "\n".join(
+            ["ROUND %s" % self.round_label] + [str(m) for m in self.matches]
+        )
 
 
-@python_2_unicode_compatible
 class MatchDescriptor(object):
-    def __init__(self, match_id, home_team, away_team, match_label=None,
-                 **kwargs):
+    def __init__(self, match_id, home_team, away_team, match_label=None, **kwargs):
         self.match_id = match_id
         self.home_team = home_team
         self.away_team = away_team
@@ -259,20 +266,22 @@ class MatchDescriptor(object):
     def __str__(self):
         if self.match_label:
             return '%s: %s vs %s "%s"' % (
-                self.match_id, self.home_team,
-                self.away_team, self.match_label)
-        return '%s: %s vs %s' % (
-            self.match_id, self.home_team, self.away_team)
+                self.match_id,
+                self.home_team,
+                self.away_team,
+                self.match_label,
+            )
+        return "%s: %s vs %s" % (self.match_id, self.home_team, self.away_team)
 
     def generate(self, generator, stage, round, date):
         if isinstance(stage, StageGroup):
             stages = {
-                'stage': stage.stage,
-                'stage_group': stage,
+                "stage": stage.stage,
+                "stage_group": stage,
             }
             include_in_ladder = stage.stage.keep_ladder
         else:
-            stages = {'stage': stage}
+            stages = {"stage": stage}
             include_in_ladder = stage.keep_ladder
 
         match = Match(
@@ -280,9 +289,10 @@ class MatchDescriptor(object):
             include_in_ladder=include_in_ladder,
             round=round.count,
             date=date,
-            **stages)
+            **stages
+        )
 
-        setattr(match, 'descriptor', self)
+        setattr(match, "descriptor", self)
 
         home_team = generator.team(self.home_team)
         away_team = generator.team(self.away_team)
@@ -369,7 +379,7 @@ class MatchCollection(object):
 class DrawGenerator(object):
 
     regex = re.compile(
-        r'''  # noqa
+        r"""  # noqa
         (?:
             (?P<round>ROUND(?:\ +(?P<round_label>\d+|[\S ]+))?)         # Start a new Round section
         )
@@ -383,7 +393,7 @@ class DrawGenerator(object):
             (?P<away_team>(?:(?:S\d+)?(?:(?:G\d+)?P|[WL])|[PWL])?\d+)   # away team ID
             \ *(?P<match_label>[\S ]+)?                                 # match label (optional)
         )
-        ''',
+        """,
         re.VERBOSE,
     )
 
@@ -418,7 +428,7 @@ class DrawGenerator(object):
         for line in self.regex.finditer(text):
             data = line.groupdict()
 
-            if data.get('round'):
+            if data.get("round"):
                 round = RoundDescriptor(count=count, **data)
                 self.rounds.append(round)
                 count += 1
@@ -435,17 +445,22 @@ class DrawGenerator(object):
         rounds = itertools.cycle(self.rounds)
 
         if self.stage.division.season.mode == WEEKLY:
-            logger.debug("WEEKLY generator mode: '%s' (%s)",
-                         self.stage.title, self.start_date)
+            logger.debug(
+                "WEEKLY generator mode: '%s' (%s)", self.stage.title, self.start_date
+            )
             dates = weekly_date_generator(self.stage, self.start_date)
         elif self.stage.division.season.mode == DAILY:
-            logger.debug("DAILY generator mode: '%s' (%s)",
-                         self.stage.title, self.start_date)
+            logger.debug(
+                "DAILY generator mode: '%s' (%s)", self.stage.title, self.start_date
+            )
             dates = tournament_date_generator(self.stage, self.start_date)
         else:
-            logger.debug("Fallback date generator [%s]: '%s' (%s)",
-                         self.stage.division.season.mode, self.stage.title,
-                         self.start_date)
+            logger.debug(
+                "Fallback date generator [%s]: '%s' (%s)",
+                self.stage.division.season.mode,
+                self.stage.title,
+                self.start_date,
+            )
             dates = itertools.cycle([None])
 
         matches = MatchCollection()
@@ -464,8 +479,7 @@ class DrawGenerator(object):
             # Set our initial round number, if we're following another stage,
             # keep the number ticking over from that point.
             if follows is not None:
-                initial += follows.matches.aggregate(
-                    max=Max('round')).get('max') or 0
+                initial += follows.matches.aggregate(max=Max("round")).get("max") or 0
 
         for i in range(offset + initial, offset + n + initial):
             date = next(dates)
@@ -475,15 +489,18 @@ class DrawGenerator(object):
                 matches.add(match_id, match)
 
                 # update the related match values and store only the W or L
-                for team in ('home', 'away'):
+                for team in ("home", "away"):
                     team_eval = win_lose_re.match(
-                        getattr(match, team + '_team_eval') or '')
+                        getattr(match, team + "_team_eval") or ""
+                    )
                     if team_eval:
                         decode = team_eval.groupdict()
-                        setattr(match, team + '_team_eval_related',
-                                matches.get_latest(**decode))
-                        setattr(match, team + '_team_eval',
-                                decode.get('result'))
+                        setattr(
+                            match,
+                            team + "_team_eval_related",
+                            matches.get_latest(**decode),
+                        )
+                        setattr(match, team + "_team_eval", decode.get("result"))
 
         return matches
 
@@ -496,13 +513,14 @@ class DrawGenerator(object):
             if not match:
                 errors.add(line)
                 continue
-            match_id = match.groupdict().get('match_id')
+            match_id = match.groupdict().get("match_id")
             if match_id:
                 if match_id in keys:
                     errors.add(line)
                 keys.add(match_id)
         if errors:
-            raise ValueError("Draw formula is invalid: line(s) '%s' are not "
-                             "in the correct format." %
-                             ", ".join([str(e) for e in errors]))
+            raise ValueError(
+                "Draw formula is invalid: line(s) '%s' are not "
+                "in the correct format." % ", ".join([str(e) for e in errors])
+            )
         return True

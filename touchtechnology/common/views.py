@@ -1,10 +1,11 @@
 from __future__ import unicode_literals
 
+from urllib.parse import parse_qsl, urlsplit, urlunsplit
+
 import pytz
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.utils.http import is_safe_url, urlencode
-from django.utils.six.moves.urllib.parse import parse_qsl, urlsplit, urlunsplit
 from django.views.decorators.http import require_POST
 from touchtechnology.common.forms.tz import SelectTimezoneForm
 
@@ -20,19 +21,19 @@ def login(request, to, *args, **kwargs):
 
 @require_POST
 def set_timezone(request):
-    url = request.META.get('HTTP_REFERER', '/')
+    url = request.META.get("HTTP_REFERER", "/")
     response = HttpResponseRedirect(url)
 
     form = SelectTimezoneForm(data=request.POST)
     if form.is_valid():
-        tzname = form.cleaned_data.get('timezone')
+        tzname = form.cleaned_data.get("timezone")
         if tzname in pytz.all_timezones_set:
-            if hasattr(request, 'session'):
-                request.session['django_timezone'] = tzname
+            if hasattr(request, "session"):
+                request.session["django_timezone"] = tzname
             else:
-                response.set_cookie('django_timezone', tzname)
+                response.set_cookie("django_timezone", tzname)
 
-    if not is_safe_url(url=url, host=request.get_host()):
+    if not is_safe_url(url, {request.get_host()}):
         raise Http404
 
     return response

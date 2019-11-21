@@ -1,17 +1,16 @@
 import collections
 import operator
+from functools import reduce
 
 from django.conf import settings
 from django.db.models import Count, Q
 from django.utils import timezone
 from django.utils.functional import lazy
 from django.utils.translation import ugettext_lazy as _
-from six.moves import reduce
 from touchtechnology.admin.base import DashboardWidget
 from tournamentcontrol.competition.models import Match, Stage, Team
 from tournamentcontrol.competition.utils import (
-    legitimate_bye_match,
-    team_needs_progressing,
+    legitimate_bye_match, team_needs_progressing,
 )
 
 
@@ -36,9 +35,7 @@ def matches_require_basic_results(now=None, matches=None):
         )
 
     return matches.filter(
-        home_team_score=None,
-        away_team_score=None,
-        is_washout=False,
+        home_team_score=None, away_team_score=None, is_washout=False,
     ).select_related(
         "stage__division__season__competition",
         "play_at",
@@ -53,8 +50,7 @@ def matches_require_details_results(matches=None, include_forfeits=False):
     # If not provided up front, build a base queryset of all matches
     if matches is None:
         matches = Match.objects.filter(
-            is_forfeit=False,
-            stage__division__season__complete=False,
+            is_forfeit=False, stage__division__season__complete=False,
         )
 
     matches = matches.filter(

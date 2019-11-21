@@ -1,4 +1,3 @@
-import six
 from django.test.utils import override_settings
 from test_plus import TestCase
 from tournamentcontrol.competition.models import LadderSummary
@@ -32,12 +31,10 @@ class RankingLadderEntryTestCase(TestCase):
         self, home_score, away_score, expected, expected_summaries=2, **kwargs
     ):
         match = factories.MatchFactory.create(
-            home_team_score=home_score,
-            away_team_score=away_score,
-            **kwargs
+            home_team_score=home_score, away_team_score=away_score, **kwargs
         )
-        six.assertCountEqual(
-            self, match.ladder_entries.values_list(*self.DYNAMIC_FIELDS), expected
+        self.assertCountEqual(
+            match.ladder_entries.values_list(*self.DYNAMIC_FIELDS), expected
         )
         self.assertEqual(
             expected_summaries, LadderSummary.objects.filter(stage=match.stage).count()
@@ -98,8 +95,7 @@ class Issue27Tests(RankingLadderEntryTestCase):
         )
         # Extra test - we expect the LadderSummary to exist because the Stage will keep
         # a ladder, but this particular match is excluded from it.
-        six.assertCountEqual(
-            self,
+        self.assertCountEqual(
             LadderSummary.objects.values_list("played", "score_for", "score_against"),
             [(0, 0, 0), (0, 0, 0)],
         )

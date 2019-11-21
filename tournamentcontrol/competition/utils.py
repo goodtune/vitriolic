@@ -6,7 +6,6 @@ from decimal import Decimal
 from operator import and_, attrgetter, or_
 
 import pytz
-import six
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.db.models import F, Q
@@ -23,27 +22,29 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-home_team_needs_progressing = and_(Q(home_team__isnull=True),
-                                   or_(Q(home_team_undecided__isnull=False),
-                                       Q(home_team_eval__isnull=False)))
+home_team_needs_progressing = and_(
+    Q(home_team__isnull=True),
+    or_(Q(home_team_undecided__isnull=False), Q(home_team_eval__isnull=False)),
+)
 
-away_team_needs_progressing = and_(Q(away_team__isnull=True),
-                                   or_(Q(away_team_undecided__isnull=False),
-                                       Q(away_team_eval__isnull=False)))
+away_team_needs_progressing = and_(
+    Q(away_team__isnull=True),
+    or_(Q(away_team_undecided__isnull=False), Q(away_team_eval__isnull=False)),
+)
 
-team_needs_progressing = and_(or_(home_team_needs_progressing,
-                                  away_team_needs_progressing),
-                              Q(stage__division__season__complete=False))
+team_needs_progressing = and_(
+    or_(home_team_needs_progressing, away_team_needs_progressing),
+    Q(stage__division__season__complete=False),
+)
 
-legitimate_bye_match = and_(Q(is_bye=True),
-                            or_(Q(home_team__isnull=False),
-                                Q(away_team__isnull=False)))
+legitimate_bye_match = and_(
+    Q(is_bye=True), or_(Q(home_team__isnull=False), Q(away_team__isnull=False))
+)
 
-match_unplayed = or_(Q(home_team_score__isnull=True),
-                     Q(away_team_score__isnull=True))
+match_unplayed = or_(Q(home_team_score__isnull=True), Q(away_team_score__isnull=True))
 
 stage_group_position_re = re.compile(
-    r'''
+    r"""
     (?:
         S(?P<stage>\d+)         # stage number (optional)
     )?
@@ -51,7 +52,7 @@ stage_group_position_re = re.compile(
         G(?P<group>\d+)         # group number (optional)
     )?
     P(?P<position>\d+)          # position number
-    ''',
+    """,
     re.VERBOSE,
 )
 
@@ -61,6 +62,7 @@ class FauxQueryset(list):
     In some scenarios we need to construct a list-like object so we
     can handle the ordering of the objects.
     """
+
     def __init__(self, model, team=None, *args, **kwargs):
         super(FauxQueryset, self).__init__(*args, **kwargs)
         # the team attribute is a legacy from a previous implementation
@@ -86,6 +88,7 @@ class SumDict(dict):
     accessible as a `dict` so this will quickly allow us to add the
     values together and get a total.
     """
+
     def __add__(self, other):
         i = {}
         for d in (self, other):
@@ -114,7 +117,7 @@ def ceiling(value, factor=1):
     """
     value = Decimal(str(value))
     factor = Decimal(str(factor))
-    return (value / factor).quantize(1, rounding='ROUND_UP') * factor
+    return (value / factor).quantize(1, rounding="ROUND_UP") * factor
 
 
 def floor(value, factor=1):
@@ -132,7 +135,7 @@ def floor(value, factor=1):
     """
     value = Decimal(str(value))
     factor = Decimal(str(factor))
-    return (value / factor).quantize(1, rounding='ROUND_DOWN') * factor
+    return (value / factor).quantize(1, rounding="ROUND_DOWN") * factor
 
 
 def revpow(n, base):
@@ -193,7 +196,7 @@ def combine_and_localize(date, time, tz):
     local to tzinfo.
     """
     combined = datetime.combine(date, time)
-    if isinstance(tz, six.string_types):
+    if isinstance(tz, str):
         tz = pytz.timezone(tz)
     return timezone.make_aware(combined, tz)
 
@@ -236,9 +239,9 @@ def round_robin(teams, rounds=None):
 def round_robin_format(teams, rounds=None):
     i, s = 1, ""
     for round in round_robin(teams, rounds):
-        s += 'ROUND\n'
+        s += "ROUND\n"
         for home, away in round:
-            s += '%s: %s vs %s\n' % (i, home, away)
+            s += "%s: %s vs %s\n" % (i, home, away)
             i += 1
     return s.strip()
 
@@ -289,19 +292,17 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
 
     if number_of_pools == 1:
         initial = RoundDescriptor(2, final_series_round_label(2))
-        initial.add(MatchDescriptor(1, 'P1', 'P4'))
-        initial.add(MatchDescriptor(2, 'P2', 'P3'))
+        initial.add(MatchDescriptor(1, "P1", "P4"))
+        initial.add(MatchDescriptor(2, "P2", "P3"))
 
     else:
         initial = RoundDescriptor(
-            number_of_pools,
-            final_series_round_label(number_of_pools))
+            number_of_pools, final_series_round_label(number_of_pools)
+        )
 
         for pool in range(number_of_pools):
             match = MatchDescriptor(
-                pool + 1,
-                'G%dP1' % (pool + 1),
-                'G%dP2' % (number_of_pools - pool),
+                pool + 1, "G%dP1" % (pool + 1), "G%dP2" % (number_of_pools - pool),
             )
             initial.add(match)
 
@@ -319,14 +320,14 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
         matches_this_round = len(series[-1].matches) / 2
 
         this_round = RoundDescriptor(
-            matches_this_round,
-            final_series_round_label(matches_this_round))
+            matches_this_round, final_series_round_label(matches_this_round)
+        )
 
         for i in range(matches_this_round):
             match = MatchDescriptor(
                 series[-1].matches[-1].match_id + i + 1,
-                'W%s' % (series[-1].matches[i].match_id),
-                'W%s' % (series[-1].matches[-1 - i].match_id),
+                "W%s" % (series[-1].matches[i].match_id),
+                "W%s" % (series[-1].matches[-1 - i].match_id),
             )
             this_round.add(match)
 
@@ -337,8 +338,8 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
     if bronze_playoff is not None:
         match = MatchDescriptor(
             series[-1].matches[0].match_id + 1,
-            'L%s' % (series[-2].matches[0].match_id),
-            'L%s' % (series[-2].matches[1].match_id),
+            "L%s" % (series[-2].matches[0].match_id),
+            "L%s" % (series[-2].matches[1].match_id),
             bronze_playoff,
         )
         series[-1].add(match)
@@ -359,29 +360,28 @@ def stage_group_position(stage, formula):
     logger.debug("stage = %s, group = %s, position = %s", s, g, p)
 
     if s is None:
-        logger.debug('No stage specified in formula %r', formula)
+        logger.debug("No stage specified in formula %r", formula)
         s = stage.comes_after
     else:
         try:
             s = stage.division.stages.all()[int(s) - 1]
         except IndexError:
-            logger.exception(
-                'Invalid stage %r for division %r', s, stage.division)
+            logger.exception("Invalid stage %r for division %r", s, stage.division)
             raise
-    logger.debug('stage=%r', s)
+    logger.debug("stage=%r", s)
 
     if g is None:
-        logger.debug('No group specified in formula %r', formula)
+        logger.debug("No group specified in formula %r", formula)
     else:
         try:
             g = s.pools.all()[int(g) - 1]
         except IndexError:
-            logger.exception('Invalid group %r for stage %r', g, stage)
+            logger.exception("Invalid group %r for stage %r", g, stage)
             raise
-    logger.debug('group=%r', g)
+    logger.debug("group=%r", g)
 
     p = int(p)
-    logger.debug('position=%r', p)
+    logger.debug("position=%r", p)
 
     return s, g, p
 
@@ -391,20 +391,26 @@ def stage_group_position(stage, formula):
 #
 
 
-def generate_scorecards(matches=None, templates=None, format='html',
-                        extra_context=None, stage=None, **kwargs):
+def generate_scorecards(
+    matches=None,
+    templates=None,
+    format="html",
+    extra_context=None,
+    stage=None,
+    **kwargs
+):
     if extra_context is None:
         extra_context = {}
 
     context = {
-        'matches': matches,
+        "matches": matches,
     }
     context.update(extra_context)
 
     template = select_template(templates)
     output = template.render(context)
 
-    if format == 'pdf':
+    if format == "pdf":
         output = prince(output, **kwargs)
 
     if stage is not None:
@@ -414,14 +420,20 @@ def generate_scorecards(matches=None, templates=None, format='html',
     return output
 
 
-def generate_fixture_grid(season, dates=None, templates=None,
-                          format='html', request=None,
-                          extra_context=None, **kwargs):
+def generate_fixture_grid(
+    season,
+    dates=None,
+    templates=None,
+    format="html",
+    request=None,
+    extra_context=None,
+    **kwargs
+):
     if dates is None:
-        dates = season.matches.dates('date', 'day')
+        dates = season.matches.dates("date", "day")
 
     if templates is None:
-        templates = ['tournamentcontrol/competition/admin/grid.html']
+        templates = ["tournamentcontrol/competition/admin/grid.html"]
 
     if extra_context is None:
         extra_context = {}
@@ -433,8 +445,11 @@ def generate_fixture_grid(season, dates=None, templates=None,
     for date in dates:
         matches = season.matches.filter(date=date)
 
-        times = sorted({m.time for m in matches if m.time is not None}
-                       .union(season.get_timeslots(date)))
+        times = sorted(
+            {m.time for m in matches if m.time is not None}.union(
+                season.get_timeslots(date)
+            )
+        )
 
         keyed = collections.defaultdict(lambda: None)
         for m in matches:
@@ -449,16 +464,16 @@ def generate_fixture_grid(season, dates=None, templates=None,
         matrices.setdefault(date, matrix)
 
     context = {
-        'matrices': matrices,
-        'venues': season.venues.all(),
-        'columns': play_at,
+        "matrices": matrices,
+        "venues": season.venues.all(),
+        "columns": play_at,
     }
     context.update(extra_context)
 
     template = select_template(templates)
     html = template.render(context)
 
-    if format == 'pdf':
+    if format == "pdf":
         pdf = prince(html, **kwargs)
         response = HttpResponse(pdf, content_type="application/pdf")
     else:
@@ -470,6 +485,7 @@ def generate_fixture_grid(season, dates=None, templates=None,
 #
 # Forfeit handling
 #
+
 
 def forfeit_notification_recipients(match):
     """
@@ -484,7 +500,7 @@ def forfeit_notification_recipients(match):
     UserModel = get_user_model()
 
     people = match.forfeit_winner.people.exclude(person__user__isnull=True)
-    user = UserModel.objects.filter(person__in=people.values('person'))
+    user = UserModel.objects.filter(person__in=people.values("person"))
 
     return (user, match.stage.division.season.forfeit_notifications.all())
 
@@ -495,32 +511,32 @@ def forfeit_notification_recipients(match):
 
 
 def regrade(team, to, from_date=None):
-    Division = apps.get_model('competition', 'Division')
-    Team = apps.get_model('competition', 'Team')
+    Division = apps.get_model("competition", "Division")
+    Team = apps.get_model("competition", "Team")
 
     assert isinstance(team, Team), "team is not a Team instance"
     assert isinstance(to, Division), "to is not a Division instance"
     assert team.division != to, "move to same Division is not allowed"
-    assert team.division.season == to.season, \
-        "move to different Season is not allowed"
+    assert team.division.season == to.season, "move to different Season is not allowed"
 
     # Work out the regrade date if not specified
     if from_date is None:
-        from_date = team.matches.filter(match_unplayed).earliest('date').date
+        from_date = team.matches.filter(match_unplayed).earliest("date").date
 
     # Update the sequence numbers of all teams in the current division to keep
     # them in order without any gaps
-    team.division.teams.filter(order__gt=team.order) \
-                       .update(order=F('order') - 1)
+    team.division.teams.filter(order__gt=team.order).update(order=F("order") - 1)
 
     # All unplayed matches that this team is assigned to play need to be turned
     # into byes, removing them from the home_team and away_team fields. Strip
     # the time and field also.
     old_matches = team.matches.filter(match_unplayed, date__gte=from_date)
     old_matches.filter(home_team=team).update(
-        home_team=None, is_bye=True, time=None, datetime=None, play_at=None)
+        home_team=None, is_bye=True, time=None, datetime=None, play_at=None
+    )
     old_matches.filter(away_team=team).update(
-        away_team=None, is_bye=True, time=None, datetime=None, play_at=None)
+        away_team=None, is_bye=True, time=None, datetime=None, play_at=None
+    )
 
     # Move team into the bye matches in the new division.
     new_matches = to.matches.filter(legitimate_bye_match, date__gte=from_date)
@@ -531,7 +547,7 @@ def regrade(team, to, from_date=None):
     # that to our team. If it throws an DoesNotExist exception, the division
     # is empty and we need to set it to 1.
     try:
-        team.order = to.teams.latest('order').order + 1
+        team.order = to.teams.latest("order").order + 1
     except Team.DoesNotExist:
         team.order = 1
 
@@ -539,6 +555,7 @@ def regrade(team, to, from_date=None):
 #
 # label_from_instance utilities
 #
+
 
 def team_and_division(o):
     "For use on Model.team_clashes as label_from_instance argument."

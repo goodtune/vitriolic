@@ -14,23 +14,25 @@ logger = logging.getLogger(__name__)
 
 @user_passes_test
 def staff_login_required(user):
-    logger.debug('staff_login_required: %s: %s', user, user.is_staff)
+    logger.debug("staff_login_required: %s: %s", user, user.is_staff)
     return user.is_staff
 
 
 @user_passes_test
 def superuser_login_required(user):
-    logger.debug('superuser_login_required: %s: %s', user, user.is_superuser)
+    logger.debug("superuser_login_required: %s: %s", user, user.is_superuser)
     return user.is_superuser
 
 
 def node2extracontext(f, *a, **kw):
     @wraps(f)
     def _decorated(*args, **kwargs):
-        node = kwargs.pop('node', None)
+        node = kwargs.pop("node", None)
+        extra_context = kwargs.setdefault("extra_context", {})
         if node is not None:
-            kwargs.setdefault('extra_context', {}).update({'node': node})
+            extra_context.update({"node": node})
         return f(*args, **kwargs)
+
     return _decorated
 
 

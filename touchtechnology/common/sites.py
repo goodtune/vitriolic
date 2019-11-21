@@ -2,6 +2,7 @@ from __future__ import unicode_literals
 
 import logging
 import os.path
+from urllib.parse import urljoin
 
 import django
 from django.conf import settings
@@ -25,16 +26,16 @@ from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.utils.http import urlencode
 from django.utils.module_loading import import_string
-from django.utils.six.moves.urllib.parse import urljoin
 from django.utils.translation import ugettext_lazy as _
 from django.views.decorators.cache import patch_cache_control
 from modelforms.forms import ModelForm
-from six.moves import xrange
-from touchtechnology.common.decorators import login_required_m, node2extracontext, require_POST_m
+from touchtechnology.common.decorators import (
+    login_required_m, node2extracontext, require_POST_m,
+)
 from touchtechnology.common.default_settings import PAGINATE_BY, PROFILE_FORM_CLASS
 from touchtechnology.common.utils import (
-    get_403_or_None, get_all_perms_for_model_cached, get_objects_for_user, get_perms_for_model,
-    model_and_manager, select_template_name,
+    get_403_or_None, get_all_perms_for_model_cached, get_objects_for_user,
+    get_perms_for_model, model_and_manager, select_template_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -58,16 +59,19 @@ class Application(object):
         self._spawned = timezone.now()
 
     def __repr__(self):
-        return '<{0}: {1}/{2}/{3}?{4}>'.format(self.__class__.__name__,
-                                               self.name, self.app_name,
-                                               self.node or '',
-                                               urlencode(self.kwargs))
+        return "<{0}: {1}/{2}/{3}?{4}>".format(
+            self.__class__.__name__,
+            self.name,
+            self.app_name,
+            self.node or "",
+            urlencode(self.kwargs),
+        )
 
     def _get_namespace(self, cls=None):
         if cls is None:
             cls = self.__class__
-        ns, __ = cls.__module__.split('.', 1)
-        return ns if ns not in ('apps', self.app_name) else ''
+        ns, __ = cls.__module__.split(".", 1)
+        return ns if ns not in ("apps", self.app_name) else ""
 
     namespace = property(_get_namespace)
 
@@ -92,9 +96,9 @@ class Application(object):
         module we look up the import path until we find the module level
         ``get_version`` function, to a maximum depth of 4 levels.
         """
-        ver = ''
-        for depth in xrange(1, 5):
-            parts = self.__module__.rsplit('.', depth)
+        ver = ""
+        for depth in range(1, 5):
+            parts = self.__module__.rsplit(".", depth)
             mod = parts[0]
             try:
                 ver = import_string("%s.__version__" % mod)
@@ -106,7 +110,7 @@ class Application(object):
         name = self.verbose_name
         if callable(name):
             name = name()
-        return '{name} {ver}'.format(name=_(name), ver=ver)
+        return "{name} {ver}".format(name=_(name), ver=ver)
 
     @property
     def current_app(self):
@@ -117,13 +121,14 @@ class Application(object):
             args = ()
         if kwargs is None:
             kwargs = {}
-        named_url = '%s:%s' % (self.app_name, name)
+        named_url = "%s:%s" % (self.app_name, name)
         if prefix:
-            named_url = '%s:%s' % (prefix, named_url)
+            named_url = "%s:%s" % (prefix, named_url)
         for key in self.kwargs:
             kwargs.pop(key, None)
-        return reverse_lazy(named_url, args=args, kwargs=kwargs,
-                            current_app=self.current_app)
+        return reverse_lazy(
+            named_url, args=args, kwargs=kwargs, current_app=self.current_app
+        )
 
     def redirect(self, *args, **kwargs):
         "Thin wrapper around django.shortcuts.redirect to save on imports"
@@ -133,19 +138,25 @@ class Application(object):
         args = list(reversed([a for a in args if a]))
         for index, arg in enumerate(args, 1):
             yield os.path.join(
-                self.template_base, os.path.join(*args[:index]), filename)
+                self.template_base, os.path.join(*args[:index]), filename
+            )
         yield os.path.join(self.template_base, filename)
 
     def template_path(self, *args, **kwargs):
         return list(self._template_path(*args, **kwargs))
 
-    def generic_permissions(self, request, model,
-                            pk=None, instance=None,
-                            post_save_redirect=None,
-                            templates=None,
-                            staff_only=None,
-                            max_checkboxes=None,
-                            **extra_context):
+    def generic_permissions(
+        self,
+        request,
+        model,
+        pk=None,
+        instance=None,
+        post_save_redirect=None,
+        templates=None,
+        staff_only=None,
+        max_checkboxes=None,
+        **extra_context
+    ):
         # avoid circular import
         from touchtechnology.common.forms.auth import permissionformset_factory
 
@@ -154,53 +165,62 @@ class Application(object):
             instance = get_object_or_404(model, pk=pk)
 
         perms = get_perms_for_model(model, add=True)
-        has_permission = get_403_or_None(request, perms, instance,
-                                         return_403=True,
-                                         accept_global_perms=True,
-                                         any_perm=False)
+        has_permission = get_403_or_None(
+            request,
+            perms,
+            instance,
+            return_403=True,
+            accept_global_perms=True,
+            any_perm=False,
+        )
 
         if has_permission and not request.user.is_superuser:
             return has_permission
 
-        extra_context.update({
-            'model': model,
-        })
+        extra_context.update(
+            {"model": model,}
+        )
 
         content_type = ContentType.objects.get_for_model(model)
-        queryset = Permission.objects.filter(content_type=content_type) \
-                                     .exclude(codename__startswith='add_')
+        queryset = Permission.objects.filter(content_type=content_type).exclude(
+            codename__startswith="add_"
+        )
         formset_class = permissionformset_factory(
-            model, staff_only=staff_only, max_checkboxes=max_checkboxes)
+            model, staff_only=staff_only, max_checkboxes=max_checkboxes
+        )
 
         if templates is None:
-            templates = self.template_path(
-                'permissions.html', model._meta.model_name)
+            templates = self.template_path("permissions.html", model._meta.model_name)
 
         return self.generic_edit_multiple(
-            request, model,
+            request,
+            model,
             queryset=queryset,
             formset_class=formset_class,
-            formset_kwargs={
-                'instance': instance,
-                'queryset': queryset,
-            },
+            formset_kwargs={"instance": instance, "queryset": queryset,},
             post_save_redirect=post_save_redirect,
             templates=templates,
-            extra_context=extra_context)
+            extra_context=extra_context,
+        )
 
-    def generic_list(self, request, model_or_manager,
-                     extra_context=None,
-                     object_list_name=None,
-                     paginate_by=None,
-                     queryset=None,
-                     templates=None,
-                     list_templates=None,
-                     perms=None,
-                     permission_required=False,
-                     accept_global_perms=True,
-                     return_403=None,
-                     search=None,
-                     *args, **kwargs):
+    def generic_list(
+        self,
+        request,
+        model_or_manager,
+        extra_context=None,
+        object_list_name=None,
+        paginate_by=None,
+        queryset=None,
+        templates=None,
+        list_templates=None,
+        perms=None,
+        permission_required=False,
+        accept_global_perms=True,
+        return_403=None,
+        search=None,
+        *args,
+        **kwargs
+    ):
 
         model, manager = model_and_manager(model_or_manager)
 
@@ -215,11 +235,11 @@ class Application(object):
 
         # Search should be an iterable of fields to look into.
         if search is not None:
-            terms = request.GET.get('search')
+            terms = request.GET.get("search")
             if terms is not None:
-                queryset = queryset.annotate(
-                    search=SearchVector(*search),
-                ).filter(search=terms)
+                queryset = queryset.annotate(search=SearchVector(*search),).filter(
+                    search=terms
+                )
 
         # Implement permission checking for list of objects, will filter the
         # list to those objects the user is entitled to work on if we do not
@@ -232,8 +252,12 @@ class Application(object):
             # get_403_or_None - saves decorating view method with
             # @permission_required_or_403
             has_permission = get_403_or_None(
-                request, perms, return_403=return_403,
-                accept_global_perms=accept_global_perms, any_perm=True)
+                request,
+                perms,
+                return_403=return_403,
+                accept_global_perms=accept_global_perms,
+                any_perm=True,
+            )
 
             global_perms = any([request.user.has_perm(p) for p in perms])
 
@@ -241,8 +265,8 @@ class Application(object):
             # queryset to return only the objects they can act on.
             if not global_perms:
                 queryset = get_objects_for_user(
-                    request.user, perms, queryset,
-                    use_groups=True, any_perm=True)
+                    request.user, perms, queryset, use_groups=True, any_perm=True
+                )
 
             # If permission is denied, return the response. May already have
             # thrown an exception by now.
@@ -253,59 +277,58 @@ class Application(object):
             extra_context = {}
 
         if object_list_name is None:
-            object_list_name = '{0}_list'.format(model._meta.model_name)
+            object_list_name = "{0}_list".format(model._meta.model_name)
 
         if templates is None:
-            templates = self.template_path('list.html',
-                                           model._meta.model_name)
+            templates = self.template_path("list.html", model._meta.model_name)
 
         if list_templates is None:
-            list_templates = self.template_path('list.inc.html',
-                                                model._meta.model_name)
+            list_templates = self.template_path("list.inc.html", model._meta.model_name)
             # Always tack the mvp theme version on the end as a fallback.
-            list_templates.append('mvp/list.inc.html')
+            list_templates.append("mvp/list.inc.html")
 
         # Determine the namespace of this Application so we can construct view
         # names to pass to the template engine to reverse CRUD URI's.
-        create_url_name = '%s:add' % request.resolver_match.namespace
+        create_url_name = "%s:add" % request.resolver_match.namespace
         create_url_kwargs = request.resolver_match.kwargs.copy()
-        create_url_kwargs.pop('admin', None)
-        create_url_kwargs.pop('component', None)
+        create_url_kwargs.pop("admin", None)
+        create_url_kwargs.pop("component", None)
 
         # We can't leave this until the template is rendered because it throws
         # exceptions (stupid!) so we'll avoid lazy evaluation and pass None if
         # the create view doesn't exist for this model.
         try:
-            create_url = reverse(create_url_name,
-                                 args=request.resolver_match.args,
-                                 kwargs=create_url_kwargs)
+            create_url = reverse(
+                create_url_name,
+                args=request.resolver_match.args,
+                kwargs=create_url_kwargs,
+            )
         except NoReverseMatch:
             create_url = None
 
         context = {
-            'queryset': queryset,
+            "queryset": queryset,
             object_list_name: queryset,
-            'object_list': queryset,
-            'is_paginated': False,
-            'page': None,
-            'page_num': None,
-            'paginator': None,
-            'model': manager.none(),
-            'template': select_template_name(templates),
-            'list_template': select_template_name(list_templates),
-
+            "object_list": queryset,
+            "is_paginated": False,
+            "page": None,
+            "page_num": None,
+            "paginator": None,
+            "model": manager.none(),
+            "template": select_template_name(templates),
+            "list_template": select_template_name(list_templates),
             # Is search enabled?
-            'searchable': bool(search),
-            'search': request.GET.get('search', ''),
-
+            "searchable": bool(search),
+            "search": request.GET.get("search", ""),
             # Pass to template the name permissions so we can re-use template
             # code to generically list and add/change/delete objects
-            'add_perm': '%s.add_%s' % (model._meta.app_label, model._meta.model_name),
-            'view_perm': '%s.view_%s' % (model._meta.app_label, model._meta.model_name),
-            'change_perm': '%s.change_%s' % (model._meta.app_label, model._meta.model_name),
-            'delete_perm': '%s.delete_%s' % (model._meta.app_label, model._meta.model_name),
-
-            'create_url': create_url,
+            "add_perm": "%s.add_%s" % (model._meta.app_label, model._meta.model_name),
+            "view_perm": "%s.view_%s" % (model._meta.app_label, model._meta.model_name),
+            "change_perm": "%s.change_%s"
+            % (model._meta.app_label, model._meta.model_name),
+            "delete_perm": "%s.delete_%s"
+            % (model._meta.app_label, model._meta.model_name),
+            "create_url": create_url,
         }
 
         if paginate_by is None:
@@ -317,7 +340,7 @@ class Application(object):
 
         if paginate_by > 0:
             try:
-                page_num = int(request.GET.get('page', 1))
+                page_num = int(request.GET.get("page", 1))
             except TypeError:
                 page_num = 1
 
@@ -328,61 +351,60 @@ class Application(object):
             except EmptyPage:
                 page = paginator.page(paginator.num_pages)
 
-            context.update({
-                object_list_name: page.object_list,
-                'object_list': page.object_list,
-                'is_paginated': paginator.num_pages > 1,
-                'page': page,
-                'page_num': page_num,
-                'paginator': paginator,
-            })
+            context.update(
+                {
+                    object_list_name: page.object_list,
+                    "object_list": page.object_list,
+                    "is_paginated": paginator.num_pages > 1,
+                    "page": page,
+                    "page_num": page_num,
+                    "paginator": paginator,
+                }
+            )
 
         context.update(extra_context)
         return self.render(request, templates, context, *args, **kwargs)
 
-    def generic_detail(self, request, model_or_manager,
-                       templates=None,
-                       extra_context=None,
-                       **kwargs):
+    def generic_detail(
+        self, request, model_or_manager, templates=None, extra_context=None, **kwargs
+    ):
         model, manager = model_and_manager(model_or_manager)
         instance = get_object_or_404(manager, **kwargs)
 
         context = {
-            'object': instance,
+            "object": instance,
             model._meta.model_name: instance,
-            'model': manager.none(),
+            "model": manager.none(),
         }
         context.update(extra_context or {})
 
         if templates is None:
-            templates = self.template_path('detail.html',
-                                           model._meta.model_name)
+            templates = self.template_path("detail.html", model._meta.model_name)
 
         return self.render(request, templates, context)
 
-    def generic_edit(self, request, model_or_manager,
-                     pk=None,
-                     instance=None,
-                     form_class=None,
-                     form_kwargs=None,
-                     form_fields='__all__',
-                     form_widgets=None,
-                     post_save_callback=lambda o: None,
-                     post_save_redirect=None,
-                     templates=None,
-                     changed_messages=(
-                         (messages.SUCCESS, _("Your {model} has been "
-                                              "saved.")),
-                     ),
-                     unchanged_messages=(
-                         (messages.INFO, _("Your {model} was not changed.")),
-                     ),
-                     permission_required=False,
-                     perms=None,
-                     accept_global_perms=True,
-                     return_403=None,
-                     related=None,
-                     extra_context=None):
+    def generic_edit(
+        self,
+        request,
+        model_or_manager,
+        pk=None,
+        instance=None,
+        form_class=None,
+        form_kwargs=None,
+        form_fields="__all__",
+        form_widgets=None,
+        post_save_callback=lambda o: None,
+        post_save_redirect=None,
+        templates=None,
+        changed_messages=((messages.SUCCESS, _("Your {model} has been " "saved.")),),
+        unchanged_messages=((messages.INFO, _("Your {model} was not changed.")),),
+        permission_required=False,
+        perms=None,
+        accept_global_perms=True,
+        return_403=None,
+        related=None,
+        extra_context=None,
+    ):
 
         model, manager = model_and_manager(model_or_manager)
 
@@ -402,8 +424,7 @@ class Application(object):
             extra_context = {}
 
         if post_save_redirect is None:
-            redirect_to = urljoin(request.path, '..') \
-                if pk is None else request.path
+            redirect_to = urljoin(request.path, "..") if pk is None else request.path
             post_save_redirect = self.redirect(redirect_to)
 
         # Implement permission checking for specified object instance, throw a
@@ -425,8 +446,12 @@ class Application(object):
             # get_403_or_None - saves decorating view method with
             # @permission_required_or_403
             has_permission = get_403_or_None(
-                request, perms, obj=instance, return_403=return_403,
-                accept_global_perms=accept_global_perms)
+                request,
+                perms,
+                obj=instance,
+                return_403=return_403,
+                accept_global_perms=accept_global_perms,
+            )
 
             # If permission is denied, return the response. May already have
             # thrown an exception by now.
@@ -436,10 +461,14 @@ class Application(object):
         # If the developer has not provided a custom form, then dynamically
         # construct a default ModelForm for them.
         if form_class is None:
-            meta_class = type(smart_str('Meta'), (),
-                              {'model': model, 'fields': form_fields, 'widgets': form_widgets})
-            form_class = type(smart_str('EditForm'), self.model_form_bases,
-                              {'Meta': meta_class})
+            meta_class = type(
+                smart_str("Meta"),
+                (),
+                {"model": model, "fields": form_fields, "widgets": form_widgets},
+            )
+            form_class = type(
+                smart_str("EditForm"), self.model_form_bases, {"Meta": meta_class}
+            )
 
         # Whether we've dynamically constructed our form_class or not, check to
         # ensure that we've inherited from all the bases. Log when we haven't,
@@ -452,13 +481,12 @@ class Application(object):
         # subclass, otherwise it will need to be explicitly added to
         # form_kwargs if expected.
         if issubclass(form_class, BaseModelForm) and instance is not None:
-            form_kwargs.setdefault('instance', instance)
+            form_kwargs.setdefault("instance", instance)
 
         # Vanilla form processing here, take the post data and files, create
         # an instance of form_class, save and redirect.
         if request.method == "POST":
-            form = form_class(data=request.POST, files=request.FILES,
-                              **form_kwargs)
+            form = form_class(data=request.POST, files=request.FILES, **form_kwargs)
             if form.is_valid():
                 replace = dict(
                     model=smart_str(model._meta.verbose_name),
@@ -468,51 +496,53 @@ class Application(object):
                     obj = form.save()
                     callback_res = post_save_callback(obj)
                     for level, message in changed_messages:
-                        messages.add_message(request, level,
-                                             message.format(**replace))
+                        messages.add_message(request, level, message.format(**replace))
                     if callback_res is not None:
                         return callback_res
                 else:
                     for level, message in unchanged_messages:
-                        messages.add_message(request, level,
-                                             message.format(**replace))
+                        messages.add_message(request, level, message.format(**replace))
                 return post_save_redirect
         else:
             form = form_class(**form_kwargs)
 
         if templates is None:
-            templates = self.template_path('edit.html',
-                                           model._meta.model_name)
-            templates.append('edit.html')
+            templates = self.template_path("edit.html", model._meta.model_name)
+            templates.append("edit.html")
 
         context = {
-            'model': manager.none(),
-            'template': select_template_name(templates),
-            'form': form,
-            'object': instance,
-            'related': related,
-            'cancel_url': post_save_redirect.url,
+            "model": manager.none(),
+            "template": select_template_name(templates),
+            "form": form,
+            "object": instance,
+            "related": related,
+            "cancel_url": post_save_redirect.url,
         }
         context.update(extra_context or {})
 
         return self.render(request, templates, context)
 
-    def generic_edit_multiple(self, request, model_or_manager,
-                              extra_context=None,
-                              formset_class=None,
-                              formset_kwargs=None,
-                              formset_fields='__all__',
-                              post_save_callback=lambda o: None,
-                              post_save_redirect_args=None,
-                              post_save_redirect_kwargs=None,
-                              post_save_redirect=None,
-                              templates=None,
-                              changed_messages=None,
-                              perms=None,
-                              permission_required=False,
-                              accept_global_perms=True,
-                              return_403=None,
-                              *args, **kwargs):
+    def generic_edit_multiple(
+        self,
+        request,
+        model_or_manager,
+        extra_context=None,
+        formset_class=None,
+        formset_kwargs=None,
+        formset_fields="__all__",
+        post_save_callback=lambda o: None,
+        post_save_redirect_args=None,
+        post_save_redirect_kwargs=None,
+        post_save_redirect=None,
+        templates=None,
+        changed_messages=None,
+        perms=None,
+        permission_required=False,
+        accept_global_perms=True,
+        return_403=None,
+        *args,
+        **kwargs
+    ):
 
         if extra_context is None:
             extra_context = {}
@@ -552,15 +582,19 @@ class Application(object):
             # get_403_or_None - saves decorating view method with
             # @permission_required_or_403
             has_permission = get_403_or_None(
-                request, perms, return_403=return_403,
-                accept_global_perms=accept_global_perms, any_perm=True)
+                request,
+                perms,
+                return_403=return_403,
+                accept_global_perms=accept_global_perms,
+                any_perm=True,
+            )
 
             # If the user does not have any global permissions then adjust the
             # queryset to return only the objects they can act on.
             if not any([request.user.has_perm(p) for p in perms]):
                 queryset = get_objects_for_user(
-                    request.user, perms, queryset,
-                    use_groups=True, any_perm=True)
+                    request.user, perms, queryset, use_groups=True, any_perm=True
+                )
 
             # If permission is denied, return the response. May already have
             # thrown an exception by now.
@@ -568,27 +602,31 @@ class Application(object):
                 return has_permission
 
             queryset = get_objects_for_user(
-                request.user, perms, queryset, any_perm=True)
+                request.user, perms, queryset, any_perm=True
+            )
 
         # If queryset is not already specified as a keyword argument to the
         # formset attach it now. Value in formset_kwargs will take precedence.
-        queryset = formset_kwargs.pop('queryset', queryset)
+        queryset = formset_kwargs.pop("queryset", queryset)
 
         # If the developer has not provided a custom formset, then dynamically
         # construct a default ModelFormSet for them.
         if formset_class is None:
-            formset_class = modelformset_factory(model, extra=0,
-                                                 fields=formset_fields)
+            formset_class = modelformset_factory(model, extra=0, fields=formset_fields)
 
         if post_save_redirect is None:
-            redirect_to = urljoin(request.path, '..')
+            redirect_to = urljoin(request.path, "..")
             post_save_redirect = self.redirect(redirect_to)
 
         # Vanilla formset processing here, take the post data and files, create
         # an instance of formset_class, save and redirect.
         if request.method == "POST":
-            formset = formset_class(data=request.POST, files=request.FILES,
-                                    queryset=queryset, **formset_kwargs)
+            formset = formset_class(
+                data=request.POST,
+                files=request.FILES,
+                queryset=queryset,
+                **formset_kwargs
+            )
             if formset.is_valid():
                 replace = dict(
                     model=smart_str(model._meta.verbose_name),
@@ -598,48 +636,53 @@ class Application(object):
                 for each in objects:
                     post_save_callback(each)
                 for level, message in changed_messages:
-                    messages.add_message(request, level,
-                                         message.format(**replace))
+                    messages.add_message(request, level, message.format(**replace))
                 if isinstance(post_save_redirect, HttpResponse):
                     return post_save_redirect
-                redirect_to = self.reverse(post_save_redirect,
-                                           args=post_save_redirect_args,
-                                           kwargs=post_save_redirect_kwargs)
+                redirect_to = self.reverse(
+                    post_save_redirect,
+                    args=post_save_redirect_args,
+                    kwargs=post_save_redirect_kwargs,
+                )
                 return redirect(redirect_to)
         else:
             formset = formset_class(queryset=queryset, **formset_kwargs)
 
         context = {
-            'model': manager.none(),
-            'formset': formset,
-            'object_list': queryset,
+            "model": manager.none(),
+            "formset": formset,
+            "object_list": queryset,
         }
         context.update(extra_context)
 
         if templates is None:
-            templates = self.template_path('edit_multiple.html',
-                                           model._meta.model_name)
-            templates.append('edit_multiple.html')
+            templates = self.template_path("edit_multiple.html", model._meta.model_name)
+            templates.append("edit_multiple.html")
 
         return self.render(request, templates, context)
 
-    def generic_edit_related(self, request, model_or_manager, related_model,
-                             extra_context={},
-                             form_class=None,
-                             form_kwargs={},
-                             form_fields='__all__',
-                             form_widgets=None,
-                             formset_class=None,
-                             formset_kwargs={},
-                             formset_fields='__all__',
-                             instance=None,
-                             pk=None,
-                             post_save_callback=lambda o: None,
-                             post_save_redirect_args=(),
-                             post_save_redirect_kwargs={},
-                             post_save_redirect='index',
-                             post_save_related_callback=lambda o: None,
-                             templates=None):
+    def generic_edit_related(
+        self,
+        request,
+        model_or_manager,
+        related_model,
+        extra_context={},
+        form_class=None,
+        form_kwargs={},
+        form_fields="__all__",
+        form_widgets=None,
+        formset_class=None,
+        formset_kwargs={},
+        formset_fields="__all__",
+        instance=None,
+        pk=None,
+        post_save_callback=lambda o: None,
+        post_save_redirect_args=(),
+        post_save_redirect_kwargs={},
+        post_save_redirect="index",
+        post_save_related_callback=lambda o: None,
+        templates=None,
+    ):
 
         model, manager = model_and_manager(model_or_manager)
 
@@ -649,27 +692,32 @@ class Application(object):
         # If the developer has not provided a custom form, then dynamically
         # construct a default ModelForm for them.
         if form_class is None:
-            meta_class = type(smart_str('Meta'), (),
-                              {'model': model, 'fields': form_fields, 'widgets': form_widgets})
-            form_class = type(smart_str('EditForm'), self.model_form_bases, {'Meta': meta_class})
+            meta_class = type(
+                smart_str("Meta"),
+                (),
+                {"model": model, "fields": form_fields, "widgets": form_widgets},
+            )
+            form_class = type(
+                smart_str("EditForm"), self.model_form_bases, {"Meta": meta_class}
+            )
 
         # If the developer has not provided a custom formset, then dynamically
         # construct a default one with inlineformset_factory.
         if formset_class is None:
             formset_class = inlineformset_factory(
-                model, related_model, fields=formset_fields, extra=0)
+                model, related_model, fields=formset_fields, extra=0
+            )
 
         # Add form and formset prefixes if not already present in the kwargs
-        form_kwargs.setdefault('prefix', 'form')
-        formset_kwargs.setdefault('prefix', 'formset')
+        form_kwargs.setdefault("prefix", "form")
+        formset_kwargs.setdefault("prefix", "formset")
 
         # Keep verbose names for model and related_model for use in messages
         model_verbose_name = model._meta.verbose_name.lower()
-        related_verbose_name_plural = \
-            related_model._meta.verbose_name_plural.lower()
+        related_verbose_name_plural = related_model._meta.verbose_name_plural.lower()
         verbose = {
-            'model_verbose_name': model_verbose_name,
-            'related_verbose_name_plural': related_verbose_name_plural,
+            "model_verbose_name": model_verbose_name,
+            "related_verbose_name_plural": related_verbose_name_plural,
         }
 
         # Vanilla form processing here, take the post data and files, create
@@ -677,38 +725,50 @@ class Application(object):
         if request.method == "POST":
             sid = transaction.savepoint()
 
-            form = form_class(data=request.POST, files=request.FILES,
-                              instance=instance, **form_kwargs)
+            form = form_class(
+                data=request.POST, files=request.FILES, instance=instance, **form_kwargs
+            )
 
             if form.is_valid():
                 obj = form.save()
-                logger.debug('Saved %r to database.', obj)
+                logger.debug("Saved %r to database.", obj)
 
                 # Rebuild formset with updated instance object.
-                formset = formset_class(data=request.POST,
-                                        files=request.FILES,
-                                        instance=obj, **formset_kwargs)
+                formset = formset_class(
+                    data=request.POST,
+                    files=request.FILES,
+                    instance=obj,
+                    **formset_kwargs
+                )
 
                 if formset.is_valid():
-                    logger.debug("Related formset is valid, if we don't "
-                                 "complete successfully then an exception "
-                                 "will bubble up.")
+                    logger.debug(
+                        "Related formset is valid, if we don't "
+                        "complete successfully then an exception "
+                        "will bubble up."
+                    )
                     related = formset.save()
                     post_save_callback(obj)
                     for each in related:
                         post_save_related_callback(each)
                     transaction.savepoint_commit(sid)
                     messages.add_message(
-                        request, messages.SUCCESS,
-                        _("Your %(model_verbose_name)s and "
-                          "%(related_verbose_name_plural)s "
-                          "have been saved.") % verbose)
+                        request,
+                        messages.SUCCESS,
+                        _(
+                            "Your %(model_verbose_name)s and "
+                            "%(related_verbose_name_plural)s "
+                            "have been saved."
+                        )
+                        % verbose,
+                    )
                     if isinstance(post_save_redirect, HttpResponse):
                         return post_save_redirect
                     redirect_to = self.reverse(
                         post_save_redirect,
                         args=post_save_redirect_args,
-                        kwargs=post_save_redirect_kwargs)
+                        kwargs=post_save_redirect_kwargs,
+                    )
                     return redirect(redirect_to)
 
                 # if we've made it out without returning a HttpRedirect then
@@ -718,36 +778,43 @@ class Application(object):
 
             else:
                 formset = formset_class(
-                    data=request.POST, files=request.FILES,
-                    instance=instance, **formset_kwargs)
+                    data=request.POST,
+                    files=request.FILES,
+                    instance=instance,
+                    **formset_kwargs
+                )
 
         else:
             form = form_class(instance=instance, **form_kwargs)
             formset = formset_class(instance=instance, **formset_kwargs)
 
         context = {
-            'model': manager.none(),
-            'form': form,
-            'formset': formset,
-            'object': instance,
-            'media': form.media + formset.media,
+            "model": manager.none(),
+            "form": form,
+            "formset": formset,
+            "object": instance,
+            "media": form.media + formset.media,
         }
         context.update(extra_context)
 
         if templates is None:
-            templates = self.template_path('edit.related.html',
-                                           model._meta.model_name)
+            templates = self.template_path("edit.related.html", model._meta.model_name)
 
         return self.render(request, templates, context)
 
     @require_POST_m
-    def generic_delete(self, request, model_or_manager, pk,
-                       post_delete_redirect=None,
-                       perms=None,
-                       permission_required=False,
-                       accept_global_perms=True,
-                       return_403=None,
-                       **kwargs):
+    def generic_delete(
+        self,
+        request,
+        model_or_manager,
+        pk,
+        post_delete_redirect=None,
+        perms=None,
+        permission_required=False,
+        accept_global_perms=True,
+        return_403=None,
+        **kwargs
+    ):
 
         model, manager = model_and_manager(model_or_manager)
 
@@ -773,8 +840,12 @@ class Application(object):
             # get_403_or_None - saves decorating view method with
             # @permission_required_or_403
             has_permission = get_403_or_None(
-                request, perms, obj=instance, return_403=return_403,
-                accept_global_perms=accept_global_perms)
+                request,
+                perms,
+                obj=instance,
+                return_403=return_403,
+                accept_global_perms=accept_global_perms,
+            )
 
             # If permission is denied, return the response. May already have
             # thrown an exception by now.
@@ -782,13 +853,15 @@ class Application(object):
                 return has_permission
 
         if post_delete_redirect is None:
-            redirect_to = urljoin(request.path, '../..')
+            redirect_to = urljoin(request.path, "../..")
             post_delete_redirect = self.redirect(redirect_to)
 
         instance.delete()
         messages.add_message(
-            request, messages.SUCCESS,
-            _("The %s has been deleted.") % model._meta.verbose_name)
+            request,
+            messages.SUCCESS,
+            _("The %s has been deleted.") % model._meta.verbose_name,
+        )
         return post_delete_redirect
 
     def context_instance(self, request, **kwargs):
@@ -799,10 +872,13 @@ class Application(object):
         return render_to_string(templates, context, context_instance, **kwargs)
 
     def render(self, request, templates, context, tz=None, **kwargs):
-        logger.debug('{app}.render: {request.path}'.format(
-            app=self.__class__.__name__, request=request))
-        context.update({'application': self})
-        kwargs.setdefault('context', context)
+        logger.debug(
+            "{app}.render: {request.path}".format(
+                app=self.__class__.__name__, request=request
+            )
+        )
+        context.update({"application": self})
+        kwargs.setdefault("context", context)
 
         response = TemplateResponse(request, templates, **kwargs)
         response.current_app = self.current_app
@@ -817,10 +893,9 @@ class Application(object):
 
 
 class AccountsSite(Application):
-
-    def __init__(self, name='accounts', app_name='accounts', *args, **kwargs):
+    def __init__(self, name="accounts", app_name="accounts", *args, **kwargs):
         super(AccountsSite, self).__init__(name=name, app_name=app_name)
-        self.profile_form_class = kwargs.pop('profile_form_class', PROFILE_FORM_CLASS)
+        self.profile_form_class = kwargs.pop("profile_form_class", PROFILE_FORM_CLASS)
         self.user_model = get_user_model()
 
     @property
@@ -830,6 +905,7 @@ class AccountsSite(Application):
                 super(SetPasswordForm, slf).__init__(user, *a, **kw)
                 if user:
                     slf.user = self.user_model.objects.get(pk=user.pk)
+
         return SetPasswordForm
 
     @property
@@ -839,94 +915,114 @@ class AccountsSite(Application):
                 super(PasswordChangeForm, slf).__init__(user, *a, **kw)
                 if user:
                     slf.user = self.user_model.objects.get(pk=user.pk)
+
         return PasswordChangeForm
 
     @property
     def template_base(self):
-        return 'registration'
+        return "registration"
 
     def get_urls(self):
         urlpatterns = [
-            url(r'^login/$', self.login, name='login'),
-            url(r'^logout/$', self.logout, name='logout'),
-            url(r'^password-change/$',
-                self.password_change, name='password_change'),
-            url(r'^password-change/done/$',
-                self.password_change_done, name='password_change_done'),
-            url(r'^password-reset/$',
-                self.password_reset, name='password_reset'),
-            url(r'^password-reset/done/$',
-                self.password_reset_done, name='password_reset_done'),
-            url(r'^reset/(?P<uidb64>[0-9A-Za-z_\-]+)/'
-                r'(?P<token>[0-9A-Za-z]{1,13}-[0-9A-Za-z]{1,20})/$',
-                self.password_reset_confirm, name='password_reset_confirm'),
-            url(r'^reset/done/$',
-                self.password_reset_complete, name='password_reset_complete'),
-            url(r'^profile/$', self.profile, name='profile'),
-            url(r'^$', self.index, name='index'),
+            url(r"^login/$", self.login, name="login"),
+            url(r"^logout/$", self.logout, name="logout"),
+            url(r"^password-change/$", self.password_change, name="password_change"),
+            url(
+                r"^password-change/done/$",
+                self.password_change_done,
+                name="password_change_done",
+            ),
+            url(r"^password-reset/$", self.password_reset, name="password_reset"),
+            url(
+                r"^password-reset/done/$",
+                self.password_reset_done,
+                name="password_reset_done",
+            ),
+            url(
+                r"^reset/(?P<uidb64>[0-9A-Za-z_\-]+)/"
+                r"(?P<token>[0-9A-Za-z]{1,13}-[0-9A-Za-z]{1,20})/$",
+                self.password_reset_confirm,
+                name="password_reset_confirm",
+            ),
+            url(
+                r"^reset/done/$",
+                self.password_reset_complete,
+                name="password_reset_complete",
+            ),
+            url(r"^profile/$", self.profile, name="profile"),
+            url(r"^$", self.index, name="index"),
         ]
         return urlpatterns
 
     @node2extracontext
-    def login(self, request, *args, **kwargs):
+    def login(self, request, extra_context, *args, **kwargs):
         form_class = getattr(
-            settings, 'AUTHENTICATION_FORM_CLASS',
-            'django.contrib.auth.forms.AuthenticationForm')
+            settings,
+            "AUTHENTICATION_FORM_CLASS",
+            "django.contrib.auth.forms.AuthenticationForm",
+        )
         authentication_form = import_string(form_class)
-        if django.VERSION[0] < 2:
-            kwargs.setdefault('current_app', self.name)
-        return views.login(
-            request, authentication_form=authentication_form, *args, **kwargs)
+        view = views.LoginView.as_view(
+            authentication_form=authentication_form, extra_context=extra_context
+        )
+        return view(request, *args, **kwargs)
 
     @node2extracontext
-    def logout(self, request, *args, **kwargs):
-        if django.VERSION[0] < 2:
-            kwargs.setdefault('current_app', self.name)
-        return views.logout(request, *args, **kwargs)
+    def logout(self, request, extra_context, *args, **kwargs):
+        view = views.LogoutView.as_view(extra_context=extra_context)
+        return view(request, *args, **kwargs)
 
     @node2extracontext
-    def password_change(self, request, *args, **kwargs):
-        post_change_redirect = kwargs.pop(
-            'post_change_redirect', self.reverse('password_change_done'))
-        password_change_form = kwargs.pop(
-            'password_change_form', self.password_change_form)
-        return views.password_change(
-            request, post_change_redirect=post_change_redirect,
-            password_change_form=password_change_form, *args, **kwargs)
+    def password_change(self, request, extra_context, *args, **kwargs):
+        success_url = kwargs.pop(
+            "post_change_redirect", self.reverse("password_change_done")
+        )
+        form_class = kwargs.pop("password_change_form", self.password_change_form)
+        view = views.PasswordChangeView.as_view(
+            form_class=form_class, success_url=success_url, extra_context=extra_context
+        )
+        return view(request, *args, **kwargs)
 
     @node2extracontext
-    def password_change_done(self, request, *args, **kwargs):
-        return views.password_change_done(request, *args, **kwargs)
+    def password_change_done(self, request, extra_context, *args, **kwargs):
+        view = views.PasswordChangeDoneView.as_view(extra_context=extra_context)
+        return view(request, *args, **kwargs)
 
     @node2extracontext
-    def password_reset(self, request, *args, **kwargs):
-        post_reset_redirect = kwargs.pop(
-            'post_reset_redirect', self.reverse('password_reset_done'))
-        return views.password_reset(
-            request, post_reset_redirect=post_reset_redirect, *args, **kwargs)
+    def password_reset(self, request, extra_context, *args, **kwargs):
+        success_url = kwargs.pop(
+            "post_reset_redirect", self.reverse("password_reset_done")
+        )
+        view = views.PasswordResetView.as_view(
+            success_url=success_url, extra_context=extra_context
+        )
+        return view(request, *args, **kwargs)
 
     @node2extracontext
-    def password_reset_done(self, request, *args, **kwargs):
-        return views.password_reset_done(request, *args, **kwargs)
+    def password_reset_done(self, request, extra_context, *args, **kwargs):
+        view = views.PasswordResetDoneView.as_view(extra_context=extra_context)
+        return view(request, *args, **kwargs)
 
     @node2extracontext
-    def password_reset_confirm(self, request, *args, **kwargs):
-        post_reset_redirect = kwargs.pop(
-            'post_reset_redirect', self.reverse('password_reset_complete'))
-        set_password_form = kwargs.pop(
-            'set_password_form', self.set_password_form)
-        return views.password_reset_confirm(
-            request, post_reset_redirect=post_reset_redirect,
-            set_password_form=set_password_form, *args, **kwargs)
+    def password_reset_confirm(self, request, extra_context, *args, **kwargs):
+        success_url = kwargs.pop(
+            "post_reset_redirect", self.reverse("password_reset_complete")
+        )
+        form_class = kwargs.pop("set_password_form", self.set_password_form)
+        view = views.PasswordResetConfirmView.as_view(
+            form_class=form_class, success_url=success_url, extra_context=extra_context,
+        )
+        return view(request, *args, **kwargs)
 
     @node2extracontext
-    def password_reset_complete(self, request, *args, **kwargs):
-        return views.password_reset_complete(request, *args, **kwargs)
+    def password_reset_complete(self, request, extra_context, *args, **kwargs):
+        view = views.PasswordResetCompleteView.as_view(extra_context=extra_context)
+        return view(request, *args, **kwargs)
 
     def activation_complete(self, request, *args, **kwargs):
         context = {}
         context.update(kwargs)
-        templates = self.template_path('activation_complete.html')
+        templates = self.template_path("activation_complete.html")
         return self.render(request, templates, context)
 
     def index(self, request, *args, **kwargs):
@@ -936,26 +1032,26 @@ class AccountsSite(Application):
     def profile(self, request, *args, **kwargs):
         form_class = import_string(self.profile_form_class)
 
-        if request.method == 'POST':
+        if request.method == "POST":
             form = form_class(data=request.POST, instance=request.user)
             if form.is_valid():
                 if form.has_changed():
                     form.save()
                     messages.add_message(
-                        request, messages.SUCCESS,
-                        _("Your changes have been saved."))
+                        request, messages.SUCCESS, _("Your changes have been saved.")
+                    )
                 else:
                     messages.add_message(
-                        request, messages.INFO,
-                        _("You did not make any changes."))
-                return redirect('.')
+                        request, messages.INFO, _("You did not make any changes.")
+                    )
+                return redirect(".")
         else:
             form = form_class(instance=request.user)
 
         context = {
-            'form': form,
+            "form": form,
         }
         context.update(kwargs)
 
-        templates = self.template_path('profile.html')
+        templates = self.template_path("profile.html")
         return self.render(request, templates, context)

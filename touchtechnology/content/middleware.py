@@ -1,6 +1,7 @@
 import imp
 import logging
 import os.path
+from urllib.parse import urlunparse
 
 from django.conf import settings
 from django.conf.urls import include, url
@@ -11,16 +12,13 @@ from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.core.files.storage import default_storage
 from django.http import HttpResponseForbidden
-from django.shortcuts import redirect, render_to_response
+from django.shortcuts import redirect, render
 from django.template import RequestContext, TemplateDoesNotExist
 from django.urls import reverse_lazy
 from django.utils.deprecation import MiddlewareMixin
-from django.utils.six.moves.urllib.parse import urlunparse
 from guardian.conf import settings as guardian_settings
 from mptt.utils import tree_item_iterator
-from touchtechnology.common.default_settings import (
-    SITEMAP_HTTPS_OPTION, SITEMAP_ROOT,
-)
+from touchtechnology.common.default_settings import SITEMAP_HTTPS_OPTION, SITEMAP_ROOT
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.sitemaps import NodeSitemap
 from touchtechnology.common.sites import AccountsSite
@@ -28,7 +26,7 @@ from touchtechnology.common.views import login
 from touchtechnology.content.models import Redirect
 from touchtechnology.content.views import dispatch
 
-DEHYDRATED_URLPATTERNS_KEY = 'urlpatterns'
+DEHYDRATED_URLPATTERNS_KEY = "urlpatterns"
 DEHYDRATED_URLPATTERNS_TIMEOUT = 600
 
 logger = logging.getLogger(__name__)
@@ -36,14 +34,13 @@ protect = AccountsSite(name="protect")
 
 
 class SitemapNodeMiddleware(MiddlewareMixin):
-
     def process_request(self, request):
         # When working with multiple tenants, we want to shard the cache for
         # each of them. Use of the version is a nice way to do this as it will
         # prevent collisions while making the API consistent.
         v_kw = {}
-        if hasattr(request, 'tenant'):
-            v_kw.setdefault('version', request.tenant.schema_name)
+        if hasattr(request, "tenant"):
+            v_kw.setdefault("version", request.tenant.schema_name)
 
         # TODO write a cache backend that will do this automatically, and
         #      contribute it back to django-tenant-schemas
@@ -51,7 +48,7 @@ class SitemapNodeMiddleware(MiddlewareMixin):
         dehydrated = cache.get(DEHYDRATED_URLPATTERNS_KEY, [], **v_kw)
 
         if not dehydrated:
-            logging.getLogger('newrelic.cache').debug('RECALCULATE URLCONF')
+            logging.getLogger("newrelic.cache").debug("RECALCULATE URLCONF")
 
             # We need a secret set of account urls so we can bounce the user
             # here if the page is protected. As we haven't yet embedded our
@@ -61,30 +58,23 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 root = SitemapNode._tree_manager.root_nodes().first()
             except ObjectDoesNotExist:
                 root = None
-            dehydrated.append({
-                'regex': r'^p/',
-                'site': protect,
-                'kwargs': {
-                    'node': root,
-                },
-            })
+            dehydrated.append(
+                {"regex": r"^p/", "site": protect, "kwargs": {"node": root,},}
+            )
 
             enabled_nodes = SitemapNode._tree_manager.all()
-            related_nodes = enabled_nodes.select_related('content_type')
+            related_nodes = enabled_nodes.select_related("content_type")
 
             def has_disabled_ancestors(st):
-                for ancestor in st['ancestors']:
+                for ancestor in st["ancestors"]:
                     if not ancestor.enabled:
                         return True
                 return False
 
             def get_absolute_url(n, st):
                 assert not n.is_root_node()
-                offset = 1 if st['ancestors'][0].slug == SITEMAP_ROOT else 0
-                paths = [
-                    ancestor.slug
-                    for ancestor in st['ancestors'][offset:]
-                ]
+                offset = 1 if st["ancestors"][0].slug == SITEMAP_ROOT else 0
+                paths = [ancestor.slug for ancestor in st["ancestors"][offset:]]
                 if paths:
                     return os.path.join(os.path.join(*paths), n.slug)
                 return n.slug
@@ -92,75 +82,91 @@ class SitemapNodeMiddleware(MiddlewareMixin):
             for node, struct in tree_item_iterator(related_nodes, True, lambda x: x):
                 # Skip over nodes that they themselves or have disabled ancestors.
                 if not node.enabled:
-                    logger.debug('%r is disabled, omit from urlconf', node)
+                    logger.debug("%r is disabled, omit from urlconf", node)
                     continue
                 if has_disabled_ancestors(struct):
-                    logger.debug('%r has disabled ancestor, omit from urlconf', node)
+                    logger.debug("%r has disabled ancestor, omit from urlconf", node)
                     continue
 
                 if node.is_root_node() and node.slug == SITEMAP_ROOT:
-                    path = ''
+                    path = ""
                 elif node.is_root_node():
                     path = node.slug
                 else:
                     path = get_absolute_url(node, struct)
 
                 if path and settings.APPEND_SLASH:
-                    path += '/'
+                    path += "/"
 
-                if node.content_type is not None and node.content_type.model == 'placeholder':
+                if (
+                    node.content_type is not None
+                    and node.content_type.model == "placeholder"
+                ):
                     try:
                         app = node.object.site(node)
                     except (AttributeError, ImportError, ValueError):
-                        logger.exception("Application is unavailable, "
-                                         "disabling this node.")
+                        logger.exception(
+                            "Application is unavailable, " "disabling this node."
+                        )
                         node.disable()
                     else:
                         pattern = {
-                            'regex': r'^%s' % path,
-                            'site': app,
-                            'kwargs': dict(node=node, **node.kwargs),
-                            'name': app.name,
+                            "regex": r"^%s" % path,
+                            "site": app,
+                            "kwargs": dict(node=node, **node.kwargs),
+                            "name": app.name,
                         }
                         # When nesting applications we need to ensure that any
                         # root url is not clobbered by the patterns of the
                         # parent application. In these cases, force them to the
                         # top of the map.
-                        if node.parent and node.parent.content_type and \
-                                node.parent.content_type.model == 'placeholder':
+                        if (
+                            node.parent
+                            and node.parent.content_type
+                            and node.parent.content_type.model == "placeholder"
+                        ):
                             dehydrated.insert(0, pattern)
                         else:
                             dehydrated.append(pattern)
 
                 elif node.object_id is None:
-                    dehydrated.append({
-                        'regex': r'^%s$' % path,
-                        'view': dispatch,
-                        'kwargs': dict(
-                            node=node, url=path),
-                        'name': 'folder_%d' % node.pk,
-                    })
+                    dehydrated.append(
+                        {
+                            "regex": r"^%s$" % path,
+                            "view": dispatch,
+                            "kwargs": dict(node=node, url=path),
+                            "name": "folder_%d" % node.pk,
+                        }
+                    )
 
                 else:
-                    dehydrated.append({
-                        'regex': r'^%s$' % path,
-                        'view': dispatch,
-                        'kwargs': dict(
-                            page_id=node.object_id, node=node, url=path),
-                        'name': 'page_%d' % (
-                            node.object_id if node.object_id else None,),
-                    })
+                    dehydrated.append(
+                        {
+                            "regex": r"^%s$" % path,
+                            "view": dispatch,
+                            "kwargs": dict(page_id=node.object_id, node=node, url=path),
+                            "name": "page_%d"
+                            % (node.object_id if node.object_id else None,),
+                        }
+                    )
 
-            cache.set(DEHYDRATED_URLPATTERNS_KEY, dehydrated,
-                      timeout=DEHYDRATED_URLPATTERNS_TIMEOUT,
-                      **v_kw)
+            cache.set(
+                DEHYDRATED_URLPATTERNS_KEY,
+                dehydrated,
+                timeout=DEHYDRATED_URLPATTERNS_TIMEOUT,
+                **v_kw
+            )
 
         # Always start with the project wide ROOT_URLCONF and add our
         # sitemap.xml view
         urlpatterns = [
-            url(r'^', include(settings.ROOT_URLCONF)),
-            url(r'^sitemap\.xml', sitemap,
-                {'sitemaps': {'nodes': NodeSitemap}}, name='sitemap'),
+            url(r"^", include(settings.ROOT_URLCONF)),
+            url(
+                r"^sitemap\.xml",
+                sitemap,
+                {"sitemaps": {"nodes": NodeSitemap}},
+                name="sitemap",
+            ),
         ]
 
         # Construct the cache of url pattern definitions. We are not keeping
@@ -169,38 +175,44 @@ class SitemapNodeMiddleware(MiddlewareMixin):
         # fly from cache... rehydrating it ;)
         for node in dehydrated:
             try:
-                pattern = url(node['regex'], node['view'],
-                              node['kwargs'], name=node.get('name'))
+                pattern = url(
+                    node["regex"], node["view"], node["kwargs"], name=node.get("name")
+                )
             except KeyError:
-                pattern = url(node['regex'], node['site'].urls,
-                              node['kwargs'], name=node['site'].name)
+                pattern = url(
+                    node["regex"],
+                    node["site"].urls,
+                    node["kwargs"],
+                    name=node["site"].name,
+                )
             urlpatterns.append(pattern)
 
         # For development, add the MEDIA_URL and STATIC_URL to the project
         if settings.DEBUG:
             urlpatterns += static(
                 settings.MEDIA_URL,
-                document_root=default_storage.path(''),
-                show_indexes=True)
+                document_root=default_storage.path(""),
+                show_indexes=True,
+            )
 
             urlpatterns += staticfiles_urlpatterns()
 
         # Create a new module on the fly and attach the rehydrated urlpatterns
-        dynamic_urls = imp.new_module('dynamic_urls')
+        dynamic_urls = imp.new_module("dynamic_urls")
         dynamic_urls.urlpatterns = urlpatterns
 
         # Attach the module to the request
         request.urlconf = dynamic_urls
 
     def process_view(self, request, view_func, view_args, view_kwargs):
-        node = view_kwargs.get('node')
+        node = view_kwargs.get("node")
 
         if node:
             required = node.restrict_to_groups.all()
 
             if required:
                 next = node.get_absolute_url()
-                to = reverse_lazy('accounts:login')
+                to = reverse_lazy("accounts:login")
 
                 # An anonymous user will never be a member of a group, so make
                 # them go off and be authenticated.
@@ -213,9 +225,12 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 if set(required).difference(groups):
                     if guardian_settings.RENDER_403:
                         try:
-                            response = render_to_response(
-                                guardian_settings.TEMPLATE_403, {},
-                                RequestContext(request))
+                            response = render(
+                                request,
+                                guardian_settings.TEMPLATE_403,
+                                {},
+                                RequestContext(request),
+                            )
                             response.status_code = 403
                             return response
                         except TemplateDoesNotExist as e:
@@ -225,12 +240,15 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                         raise PermissionDenied
                     return HttpResponseForbidden()
 
-        if SITEMAP_HTTPS_OPTION and node and \
-           node.require_https and not request.is_secure():
-            host = request.META.get('HTTP_HOST')
-            path = request.META.get('PATH_INFO')
-            redirect_to = urlunparse(
-                ('https', host, path, '', '', ''))
+        if (
+            SITEMAP_HTTPS_OPTION
+            and node
+            and node.require_https
+            and not request.is_secure()
+        ):
+            host = request.META.get("HTTP_HOST")
+            path = request.META.get("PATH_INFO")
+            redirect_to = urlunparse(("https", host, path, "", "", ""))
             return redirect(redirect_to)
 
 
@@ -243,4 +261,5 @@ def redirect_middleware(get_response):
         else:
             response = redirect(obj.destination_url, obj.permanent)
         return response
+
     return middleware
