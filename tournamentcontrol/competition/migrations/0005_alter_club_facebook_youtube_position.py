@@ -7,25 +7,30 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('competition', '0004_alter_person_gender'),
+        ("competition", "0004_alter_person_gender"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='club',
-            name='facebook',
+            model_name="club",
+            name="facebook",
             field=models.URLField(max_length=255, blank=True),
             preserve_default=True,
         ),
         migrations.AddField(
-            model_name='club',
-            name='primary_position',
-            field=models.CharField(help_text=b'Position of the primary contact', max_length=200, verbose_name=b'Position', blank=True),
+            model_name="club",
+            name="primary_position",
+            field=models.CharField(
+                help_text="Position of the primary contact",
+                max_length=200,
+                verbose_name="Position",
+                blank=True,
+            ),
             preserve_default=True,
         ),
         migrations.AddField(
-            model_name='club',
-            name='youtube',
+            model_name="club",
+            name="youtube",
             field=models.URLField(max_length=255, blank=True),
             preserve_default=True,
         ),

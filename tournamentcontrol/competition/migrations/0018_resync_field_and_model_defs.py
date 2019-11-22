@@ -207,7 +207,7 @@ class Migration(migrations.Migration):
             model_name="stage",
             name="carry_ladder",
             field=models.BooleanField(
-                verbose_name=b"Carry over points",
+                verbose_name="Carry over points",
                 default=False,
                 help_text="Set this to <b>Yes</b> if this stage should carry "
                 "over values from the previous stage.",
@@ -232,7 +232,7 @@ class Migration(migrations.Migration):
             model_name="stage",
             name="keep_ladder",
             field=models.BooleanField(
-                verbose_name=b"Keep a ladder",
+                verbose_name="Keep a ladder",
                 default=True,
                 help_text="Set this to <b>No</b> if this stage does not need "
                 "to keep a competition ladder.<br />Usually set to "
@@ -243,7 +243,7 @@ class Migration(migrations.Migration):
             model_name="stage",
             name="keep_mvp",
             field=models.BooleanField(
-                verbose_name=b"Keep MVP stats",
+                verbose_name="Keep MVP stats",
                 default=True,
                 help_text="Set this to <b>No</b> if this stage does not need "
                 "to keep track of MVP points.<br />Usually set to "
@@ -266,7 +266,7 @@ class Migration(migrations.Migration):
             model_name="stagegroup",
             name="carry_ladder",
             field=models.BooleanField(
-                verbose_name=b"Carry over points",
+                verbose_name="Carry over points",
                 default=False,
                 help_text="Set this to <b>Yes</b> if the ladder for this pool "
                 "should carry over values from the previous "

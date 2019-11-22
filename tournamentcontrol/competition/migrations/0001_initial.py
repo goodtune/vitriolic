@@ -43,7 +43,7 @@ class Migration(migrations.Migration):
                 (
                     "twitter",
                     models.CharField(
-                        help_text=b'Official Twitter name for use in social "mentions"',
+                        help_text='Official Twitter name for use in social "mentions"',
                         max_length=50,
                         blank=True,
                     ),
@@ -51,7 +51,7 @@ class Migration(migrations.Migration):
                 (
                     "abbreviation",
                     models.CharField(
-                        help_text=b"Optional 3-letter abbreviation to be used on scoreboards.",
+                        help_text="Optional 3-letter abbreviation to be used on scoreboards.",
                         max_length=3,
                         blank=True,
                     ),
@@ -75,7 +75,7 @@ class Migration(migrations.Migration):
                 (
                     "club",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"staff",
+                        related_name="staff",
                         to="competition.Club",
                         on_delete=django.db.models.deletion.PROTECT,
                     ),
@@ -134,7 +134,7 @@ class Migration(migrations.Migration):
                 (
                     "clubs",
                     touchtechnology.common.db.models.ManyToManyField(
-                        related_name=b"competitions",
+                        related_name="competitions",
                         null=True,
                         to="competition.Club",
                         blank=True,
@@ -185,7 +185,7 @@ class Migration(migrations.Migration):
                 (
                     "games_per_day",
                     models.SmallIntegerField(
-                        help_text=b"\n        In Tournament mode, specify how many matches per day should be scheduled\n        by the automatic draw generator.",
+                        help_text="\n        In Tournament mode, specify how many matches per day should be scheduled\n        by the automatic draw generator.",
                         null=True,
                     ),
                 ),
@@ -209,7 +209,7 @@ class Migration(migrations.Migration):
                 (
                     "division",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"exclusions",
+                        related_name="exclusions",
                         to="competition.Division",
                         on_delete=django.db.models.deletion.PROTECT,
                     ),
@@ -404,7 +404,7 @@ class Migration(migrations.Migration):
                 (
                     "club",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"members",
+                        related_name="members",
                         to="competition.Club",
                         on_delete=django.db.models.deletion.PROTECT,
                     ),
@@ -503,10 +503,10 @@ class Migration(migrations.Migration):
                 (
                     "hashtag",
                     models.CharField(
-                        help_text=b"Your official tag for social media promotions, excluding the # symbol.",
+                        help_text="Your official tag for social media promotions, excluding the # symbol.",
                         max_length=30,
                         null=True,
-                        verbose_name=b"Hash Tag",
+                        verbose_name="Hash Tag",
                         blank=True,
                     ),
                 ),
@@ -519,7 +519,7 @@ class Migration(migrations.Migration):
                     "mode",
                     models.IntegerField(
                         default=2,
-                        help_text=b"Used by the draw wizard to help you set your match dates & times automatically.",
+                        help_text="Used by the draw wizard to help you set your match dates & times automatically.",
                         choices=[(2, "Season"), (3, "Tournament")],
                     ),
                 ),
@@ -527,13 +527,13 @@ class Migration(migrations.Migration):
                     "statistics",
                     models.BooleanField(
                         default=True,
-                        help_text=b"Set to No if you do not wish to keep scoring or most valuable player statistics.",
+                        help_text="Set to No if you do not wish to keep scoring or most valuable player statistics.",
                     ),
                 ),
                 (
                     "mvp_results_public",
                     touchtechnology.common.db.models.DateTimeField(
-                        help_text=b"Set to prevent the front-end site revealing MVP points before the specified time.",
+                        help_text="Set to prevent the front-end site revealing MVP points before the specified time.",
                         null=True,
                         blank=True,
                     ),
@@ -542,14 +542,14 @@ class Migration(migrations.Migration):
                     "complete",
                     models.BooleanField(
                         default=False,
-                        help_text=b"Set to indicate this season is in the past. Optimises progression calculations.",
+                        help_text="Set to indicate this season is in the past. Optimises progression calculations.",
                     ),
                 ),
                 ("timezone", models.CharField(blank=True, max_length=50, null=True)),
                 (
                     "competition",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"seasons",
+                        related_name="seasons",
                         to="competition.Competition",
                         on_delete=django.db.models.deletion.PROTECT,
                     ),
@@ -573,7 +573,7 @@ class Migration(migrations.Migration):
                 (
                     "club",
                     models.ForeignKey(
-                        related_name=b"officials",
+                        related_name="officials",
                         to="competition.Club",
                         on_delete=django.db.models.deletion.PROTECT,
                     ),
@@ -594,7 +594,7 @@ class Migration(migrations.Migration):
                 (
                     "season",
                     models.ForeignKey(
-                        related_name=b"officials",
+                        related_name="officials",
                         to="competition.Season",
                         on_delete=django.db.models.deletion.PROTECT,
                     ),
@@ -626,7 +626,7 @@ class Migration(migrations.Migration):
                 (
                     "season",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"exclusions",
+                        related_name="exclusions",
                         to="competition.Season",
                         on_delete=django.db.models.deletion.PROTECT,
                     ),
@@ -653,19 +653,19 @@ class Migration(migrations.Migration):
                 (
                     "start_date",
                     touchtechnology.common.db.models.DateField(
-                        null=True, verbose_name=b"From", blank=True
+                        null=True, verbose_name="From", blank=True
                     ),
                 ),
                 (
                     "end_date",
                     touchtechnology.common.db.models.DateField(
-                        null=True, verbose_name=b"Until", blank=True
+                        null=True, verbose_name="Until", blank=True
                     ),
                 ),
                 (
                     "season",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"timeslots",
+                        related_name="timeslots",
                         to="competition.Season",
                         on_delete=django.db.models.deletion.PROTECT,
                     ),
@@ -693,7 +693,7 @@ class Migration(migrations.Migration):
                 (
                     "match",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"statistics",
+                        related_name="statistics",
                         to="competition.Match",
                         on_delete=django.db.models.deletion.PROTECT,
                     ),
@@ -701,7 +701,7 @@ class Migration(migrations.Migration):
                 (
                     "player",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"statistics",
+                        related_name="statistics",
                         to="competition.Person",
                         on_delete=django.db.models.deletion.PROTECT,
                     ),
@@ -742,37 +742,37 @@ class Migration(migrations.Migration):
                     "keep_ladder",
                     models.BooleanField(
                         default=True,
-                        help_text=b"\n        Set this to <b>No</b> if this stage does not need to keep a competition ladder.<br />\n        Usually set to No for a Final Series or a Knockout stage.\n        ",
-                        verbose_name=b"Keep a ladder",
+                        help_text="\n        Set this to <b>No</b> if this stage does not need to keep a competition ladder.<br />\n        Usually set to No for a Final Series or a Knockout stage.\n        ",
+                        verbose_name="Keep a ladder",
                     ),
                 ),
                 (
                     "scale_group_points",
                     models.BooleanField(
                         default=False,
-                        help_text=b"\n        In stages with multiple pools, adjust points in the smaller groups to\n        compensate for the reduced opportunity to score points.<br />\n        You <strong>should</strong> also set 0 points for Bye matches.",
+                        help_text="\n        In stages with multiple pools, adjust points in the smaller groups to\n        compensate for the reduced opportunity to score points.<br />\n        You <strong>should</strong> also set 0 points for Bye matches.",
                     ),
                 ),
                 (
                     "carry_ladder",
                     models.BooleanField(
                         default=False,
-                        help_text=b"\n        Set this to <b>Yes</b> if this stage should carry over values from the previous stage.\n        ",
-                        verbose_name=b"Carry over points",
+                        help_text="\n        Set this to <b>Yes</b> if this stage should carry over values from the previous stage.\n        ",
+                        verbose_name="Carry over points",
                     ),
                 ),
                 (
                     "keep_mvp",
                     models.BooleanField(
                         default=True,
-                        help_text=b"\n        Set this to <b>No</b> if this stage does not need to keep track of MVP points.<br />\n        Usually set to No for a Final Series.\n        ",
-                        verbose_name=b"Keep MVP stats",
+                        help_text="\n        Set this to <b>No</b> if this stage does not need to keep track of MVP points.<br />\n        Usually set to No for a Final Series.\n        ",
+                        verbose_name="Keep MVP stats",
                     ),
                 ),
                 (
                     "division",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"stages",
+                        related_name="stages",
                         to="competition.Division",
                         on_delete=django.db.models.deletion.PROTECT,
                     ),
@@ -780,18 +780,18 @@ class Migration(migrations.Migration):
                 (
                     "follows",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"preceeds",
+                        related_name="preceeds",
                         on_delete=django.db.models.deletion.SET_NULL,
                         blank=True,
                         to="competition.Stage",
-                        help_text=b"\n        When progressing teams into this stage, which earlier stage should be used for\n        determining positions.<br />\n        Default is the immediately preceeding stage.\n        ",
+                        help_text="\n        When progressing teams into this stage, which earlier stage should be used for\n        determining positions.<br />\n        Default is the immediately preceeding stage.\n        ",
                         null=True,
                     ),
                 ),
                 (
                     "matches_needing_printing",
                     touchtechnology.common.db.models.ManyToManyField(
-                        related_name=b"to_be_printed",
+                        related_name="to_be_printed",
                         to="competition.Match",
                         blank=True,
                     ),
@@ -832,14 +832,14 @@ class Migration(migrations.Migration):
                     "carry_ladder",
                     models.BooleanField(
                         default=False,
-                        help_text=b"\n        Set this to <b>Yes</b> if the ladder for this pool should carry over values from\n        the previous stage.<br />\n        Will only apply for matches played against teams that are now in this group.\n        ",
-                        verbose_name=b"Carry over points",
+                        help_text="\n        Set this to <b>Yes</b> if the ladder for this pool should carry over values from\n        the previous stage.<br />\n        Will only apply for matches played against teams that are now in this group.\n        ",
+                        verbose_name="Carry over points",
                     ),
                 ),
                 (
                     "stage",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"pools",
+                        related_name="pools",
                         to="competition.Stage",
                         on_delete=django.db.models.deletion.PROTECT,
                     ),
@@ -880,31 +880,31 @@ class Migration(migrations.Migration):
                     "names_locked",
                     models.BooleanField(
                         default=False,
-                        help_text=b"\n        When the team name is locked, the team manager will not be able to change their team name.<br />\n        As a tournament manager you can always change the names.",
+                        help_text="\n        When the team name is locked, the team manager will not be able to change their team name.<br />\n        As a tournament manager you can always change the names.",
                     ),
                 ),
                 (
                     "timeslots_after",
                     touchtechnology.common.db.models.TimeField(
-                        help_text=b"Specify the earliest time that this team can play. Leave blank for no preference.",
+                        help_text="Specify the earliest time that this team can play. Leave blank for no preference.",
                         null=True,
-                        verbose_name=b"Start after",
+                        verbose_name="Start after",
                         blank=True,
                     ),
                 ),
                 (
                     "timeslots_before",
                     touchtechnology.common.db.models.TimeField(
-                        help_text=b"Specify the latest time that this team can play. Leave blank for no preference.",
+                        help_text="Specify the latest time that this team can play. Leave blank for no preference.",
                         null=True,
-                        verbose_name=b"Start before",
+                        verbose_name="Start before",
                         blank=True,
                     ),
                 ),
                 (
                     "club",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"teams",
+                        related_name="teams",
                         on_delete=django.db.models.deletion.SET_NULL,
                         blank=True,
                         to="competition.Club",
@@ -914,7 +914,7 @@ class Migration(migrations.Migration):
                 (
                     "division",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"teams",
+                        related_name="teams",
                         blank=True,
                         to="competition.Division",
                         null=True,
@@ -924,9 +924,9 @@ class Migration(migrations.Migration):
                 (
                     "stage_group",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"teams",
+                        related_name="teams",
                         on_delete=django.db.models.deletion.SET_NULL,
-                        verbose_name=b"Pool",
+                        verbose_name="Pool",
                         blank=True,
                         to="competition.StageGroup",
                         null=True,
@@ -935,9 +935,9 @@ class Migration(migrations.Migration):
                 (
                     "team_clashes",
                     touchtechnology.common.db.models.ManyToManyField(
-                        help_text=b"Select any teams that must not play at the same time.",
+                        help_text="Select any teams that must not play at the same time.",
                         related_name="team_clashes_rel_+",
-                        verbose_name=b"Don't clash",
+                        verbose_name="Don't clash",
                         to="competition.Team",
                         blank=True,
                     ),
@@ -995,7 +995,7 @@ class Migration(migrations.Migration):
                 (
                     "competition",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"team_roles",
+                        related_name="team_roles",
                         to="competition.Competition",
                         on_delete=django.db.models.deletion.PROTECT,
                     ),
@@ -1021,7 +1021,7 @@ class Migration(migrations.Migration):
                 (
                     "stage",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"undecided_teams",
+                        related_name="undecided_teams",
                         to="competition.Stage",
                         on_delete=django.db.models.deletion.PROTECT,
                     ),
@@ -1029,9 +1029,9 @@ class Migration(migrations.Migration):
                 (
                     "stage_group",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"undecided_teams",
+                        related_name="undecided_teams",
                         on_delete=django.db.models.deletion.SET_NULL,
-                        verbose_name=b"Pool",
+                        verbose_name="Pool",
                         blank=True,
                         to="competition.StageGroup",
                         null=True,
@@ -1058,7 +1058,7 @@ class Migration(migrations.Migration):
                 (
                     "season",
                     touchtechnology.common.db.models.ForeignKey(
-                        related_name=b"venues",
+                        related_name="venues",
                         to="competition.Season",
                         on_delete=django.db.models.deletion.PROTECT,
                     ),
@@ -1079,7 +1079,7 @@ class Migration(migrations.Migration):
             model_name="teamassociation",
             name="team",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"people",
+                related_name="people",
                 to="competition.Team",
                 on_delete=django.db.models.deletion.PROTECT,
             ),
@@ -1107,7 +1107,7 @@ class Migration(migrations.Migration):
             model_name="match",
             name="away_team",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"away_games",
+                related_name="away_games",
                 blank=True,
                 to="competition.Team",
                 null=True,
@@ -1119,7 +1119,7 @@ class Migration(migrations.Migration):
             model_name="match",
             name="away_team_eval_related",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"+away_team_eval",
+                related_name="+away_team_eval",
                 blank=True,
                 to="competition.Match",
                 null=True,
@@ -1131,7 +1131,7 @@ class Migration(migrations.Migration):
             model_name="match",
             name="away_team_undecided",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"away_games",
+                related_name="away_games",
                 blank=True,
                 to="competition.UndecidedTeam",
                 null=True,
@@ -1143,7 +1143,7 @@ class Migration(migrations.Migration):
             model_name="match",
             name="forfeit_winner",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"+team",
+                related_name="+team",
                 blank=True,
                 to="competition.Team",
                 null=True,
@@ -1155,7 +1155,7 @@ class Migration(migrations.Migration):
             model_name="match",
             name="home_team",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"home_games",
+                related_name="home_games",
                 blank=True,
                 to="competition.Team",
                 null=True,
@@ -1167,7 +1167,7 @@ class Migration(migrations.Migration):
             model_name="match",
             name="home_team_eval_related",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"+home_team_eval",
+                related_name="+home_team_eval",
                 blank=True,
                 to="competition.Match",
                 null=True,
@@ -1179,7 +1179,7 @@ class Migration(migrations.Migration):
             model_name="match",
             name="home_team_undecided",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"home_games",
+                related_name="home_games",
                 blank=True,
                 to="competition.UndecidedTeam",
                 null=True,
@@ -1201,7 +1201,7 @@ class Migration(migrations.Migration):
             model_name="match",
             name="stage",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"matches",
+                related_name="matches",
                 to="competition.Stage",
                 null=True,
                 on_delete=django.db.models.deletion.PROTECT,
@@ -1212,8 +1212,8 @@ class Migration(migrations.Migration):
             model_name="match",
             name="stage_group",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"matches",
-                verbose_name=b"Pool",
+                related_name="matches",
+                verbose_name="Pool",
                 blank=True,
                 to="competition.StageGroup",
                 null=True,
@@ -1225,7 +1225,7 @@ class Migration(migrations.Migration):
             model_name="laddersummary",
             name="stage",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"ladder_summary",
+                related_name="ladder_summary",
                 to="competition.Stage",
                 on_delete=django.db.models.deletion.PROTECT,
             ),
@@ -1235,7 +1235,7 @@ class Migration(migrations.Migration):
             model_name="laddersummary",
             name="stage_group",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"ladder_summary",
+                related_name="ladder_summary",
                 to="competition.StageGroup",
                 null=True,
                 on_delete=django.db.models.deletion.PROTECT,
@@ -1246,7 +1246,7 @@ class Migration(migrations.Migration):
             model_name="laddersummary",
             name="team",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"ladder_summary",
+                related_name="ladder_summary",
                 to="competition.Team",
                 on_delete=django.db.models.deletion.PROTECT,
             ),
@@ -1259,7 +1259,7 @@ class Migration(migrations.Migration):
             model_name="ladderentry",
             name="match",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"ladder_entries",
+                related_name="ladder_entries",
                 to="competition.Match",
                 on_delete=django.db.models.deletion.PROTECT,
             ),
@@ -1279,7 +1279,7 @@ class Migration(migrations.Migration):
             model_name="ladderentry",
             name="team",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"ladder_entries",
+                related_name="ladder_entries",
                 to="competition.Team",
                 on_delete=django.db.models.deletion.PROTECT,
             ),
@@ -1289,7 +1289,7 @@ class Migration(migrations.Migration):
             model_name="ground",
             name="venue",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"grounds",
+                related_name="grounds",
                 to="competition.Venue",
                 on_delete=django.db.models.deletion.PROTECT,
             ),
@@ -1302,7 +1302,7 @@ class Migration(migrations.Migration):
             model_name="division",
             name="season",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"divisions",
+                related_name="divisions",
                 to="competition.Season",
                 on_delete=django.db.models.deletion.PROTECT,
             ),
@@ -1312,7 +1312,7 @@ class Migration(migrations.Migration):
             model_name="clubrole",
             name="competition",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"club_roles",
+                related_name="club_roles",
                 to="competition.Competition",
                 on_delete=django.db.models.deletion.PROTECT,
             ),
@@ -1341,12 +1341,12 @@ class Migration(migrations.Migration):
             model_name="club",
             name="primary",
             field=touchtechnology.common.db.models.ForeignKey(
-                related_name=b"+club",
+                related_name="+club",
                 blank=True,
                 to="competition.Person",
-                help_text=b"Appears on the front-end with other club information.",
+                help_text="Appears on the front-end with other club information.",
                 null=True,
-                verbose_name=b"Primary contact",
+                verbose_name="Primary contact",
                 on_delete=django.db.models.deletion.PROTECT,
             ),
             preserve_default=True,
