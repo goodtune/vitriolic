@@ -9,14 +9,19 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('competition', '0014_match_play_at_blank'),
+        ("competition", "0014_match_play_at_blank"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='person',
-            name='user',
-            field=models.OneToOneField(null=True, blank=True, to=settings.AUTH_USER_MODEL),
+            model_name="person",
+            name="user",
+            field=models.OneToOneField(
+                null=True,
+                blank=True,
+                to=settings.AUTH_USER_MODEL,
+                on_delete=models.deletion.PROTECT,
+            ),
             preserve_default=True,
         ),
     ]
