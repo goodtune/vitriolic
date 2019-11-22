@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import functools
 import logging
 from os.path import join
 
@@ -53,6 +54,7 @@ class SitemapNodeBase(models.Model):
                 self.slug = slugify(self.title)
 
 
+@functools.total_ordering
 class SitemapNode(NodeRelationMixin, SitemapNodeBase):
     """
     Base class which can be used to represent the structure of the site.
@@ -136,6 +138,22 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
     )
 
     last_modified = DateTimeField(auto_now=True)
+
+    def __hash__(self):
+        return hash(repr(self))
+
+    def __eq__(self, other):
+        if other is None:
+            return False
+        return self.pk == other.pk
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __lt__(self, other):
+        if other is None:
+            return True
+        return (self.level, self.lft) < (other.level, other.lft)
 
     def __repr__(self):
         return '<{0}: "{1}" ({2}:{3},{4})>'.format(
