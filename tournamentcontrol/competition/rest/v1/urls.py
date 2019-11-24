@@ -1,9 +1,10 @@
-from django.conf.urls import include, url
-from tournamentcontrol.competition.rest.v1._routers import *
+from tournamentcontrol.competition.rest.v1._routers import (
+    router,
+    competition_router,
+    season_router,
+    division_router,
+)
 
-urlpatterns = [
-    url(r"^", router.urls),
-    url(r"^", competition_router.urls),
-    url(r"^", season_router.urls),
-    url(r"^", division_router.urls),
-]
+urlpatterns = (
+    router.urls + competition_router.urls + season_router.urls + division_router.urls
+)
