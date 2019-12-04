@@ -143,6 +143,8 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         return hash(repr(self))
 
     def __eq__(self, other):
+        if not isinstance(other, SitemapNode):
+            return False
         if other is None:
             return False
         return self.pk == other.pk
@@ -151,6 +153,7 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         return not (self == other)
 
     def __lt__(self, other):
+        assert isinstance(other, SitemapNode)
         if other is None:
             return True
         return (self.level, self.lft) < (other.level, other.lft)
