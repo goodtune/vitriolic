@@ -155,7 +155,7 @@ def revpow(n, base):
     :return: int
     """
     res = 0
-    intermediate = n / base
+    intermediate = n // base
     if intermediate:
         res += 1
         res += revpow(intermediate, base)
