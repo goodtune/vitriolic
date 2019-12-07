@@ -14,7 +14,7 @@ class UserSubclassBackend(ModelBackend):
 
 
 class EmailUserSubclassBackend(UserSubclassBackend):
-    def authenticate(self, username=None, password=None):
+    def authenticate(self, request, username=None, password=None):
         UserModel = get_user_model()
         try:
             # Check if the 'username' is actually an email address
