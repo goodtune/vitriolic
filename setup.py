@@ -49,7 +49,6 @@ setup(
         "content": [],
         "news": ["django-imagekit", "python-magic",],
         "competition": [
-            "backports.statistics",
             "cloudinary",
             "django-celery>=3.1.0",
             "django-embed-video<1.3",

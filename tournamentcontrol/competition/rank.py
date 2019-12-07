@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime
 from decimal import Decimal
+from statistics import StatisticsError, mean
 
 from dateutil.parser import parse as date_parse
 from dateutil.relativedelta import relativedelta
@@ -14,11 +15,6 @@ from django.utils import timezone
 from django.utils.module_loading import import_string
 from django.views.generic import dates
 from tournamentcontrol.competition.models import LadderEntry, RankDivision, RankPoints, RankTeam
-
-try:
-    from statistics import mean, StatisticsError
-except ImportError:
-    from backports.statistics import mean, StatisticsError
 
 logger = logging.getLogger(__name__)
 
