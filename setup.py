@@ -21,7 +21,7 @@ setup(
     setup_requires=["setuptools_scm"],
     use_scm_version=True,
     install_requires=[
-        "django-classy-tags",
+        "django-classy-tags<0.9",
         "django-froala-editor",
         "django-guardian",
         "django-modelforms",
