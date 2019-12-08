@@ -228,7 +228,10 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         # touchtechnology.content application in tandem with the
         # touchtechnology.admin application, but you probably won't be using
         # the .urls API if that isn't true anyway!
-        namespace = "admin:content:%s" % (self.content_type or "folder")
+        try:
+            namespace = "admin:content:" + self.content_type.name
+        except AttributeError:
+            namespace = "admin:content:folder"
         args = (self.id,)
         crud = {
             "edit": reverse_lazy("%s:edit" % namespace, args=args),
