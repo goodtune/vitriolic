@@ -724,8 +724,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 r"^(?P<competition_id>\d+)/seasons/(?P<season_id>\d+)/matches/(?P<datestr>\d{8})(?::(?P<timestr>\d{4}))?/",
                 include(
                     [
+                        url(r"^results/$", self.match_results, name="match-results"),
                         url(
-                            r"^results(?::(?P<division_id>\d+))?/$",
+                            r"^results:(?P<division_id>\d+)/$",
                             self.match_results,
                             name="match-results",
                         ),
