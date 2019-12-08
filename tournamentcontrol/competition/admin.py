@@ -27,7 +27,7 @@ from tournamentcontrol.competition.dashboard import (
     BasicResultWidget, DetailResultWidget, MostValuableWidget, ProgressStageWidget,
     ScoresheetWidget,
 )
-from tournamentcontrol.competition.decorators import competition, registration
+from tournamentcontrol.competition.decorators import competition_by_pk_m, registration
 from tournamentcontrol.competition.forms import (
     ClubAssociationForm, ClubRoleForm, CompetitionForm, DivisionForm, DrawFormatForm,
     DrawGenerationFormSet, DrawGenerationMatchFormSet, GroundForm, MatchEditForm,
@@ -724,8 +724,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 r"^(?P<competition_id>\d+)/seasons/(?P<season_id>\d+)/matches/(?P<datestr>\d{8})(?::(?P<timestr>\d{4}))?/",
                 include(
                     [
+                        url(r"^results/$", self.match_results, name="match-results"),
                         url(
-                            r"^results(?::(?P<division_id>\d+))?/$",
+                            r"^results:(?P<division_id>\d+)/$",
                             self.match_results,
                             name="match-results",
                         ),
@@ -967,7 +968,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         )
         return self.redirect(self.reverse("competition:list"))
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def edit_role(self, request, cls, pk=None, **extra_context):
         if cls == "club":
@@ -994,7 +995,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def delete_role(self, request, cls, pk, extra_context, **kwargs):
         if cls == "club":
@@ -1016,7 +1017,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_delete_redirect=post_delete_redirect,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def edit_matchscoresheet(self, request, pk=None, **extra_context):
         match = extra_context.get("match")
@@ -1036,7 +1037,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def delete_matchscoresheet(self, request, pk, **extra_context):
         return self.generic_delete(
@@ -1080,14 +1081,14 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def perms_competition(self, request, competition, **kwargs):
         return self.generic_permissions(
             request, Competition, instance=competition, **kwargs
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def edit_competition(self, request, extra_context, competition=None, **kwargs):
         if competition is None:
@@ -1102,7 +1103,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def delete_competition(self, request, competition, extra_context, **kwargs):
         return self.generic_delete(
@@ -1113,7 +1114,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def edit_season(self, request, competition, extra_context, season=None, **kwargs):
         if season is None:
@@ -1134,7 +1135,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def delete_season(self, request, extra_context, season, **kwargs):
         return self.generic_delete(
@@ -1145,7 +1146,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def perms_season(self, request, season, **kwargs):
         post_save_redirect = self.redirect(season.competition.urls["edit"])
@@ -1157,7 +1158,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             **kwargs
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def season_report(self, request, season, extra_context, **kwargs):
         teams = (
@@ -1174,7 +1175,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def season_summary(self, request, competition, season, extra_context, **kwargs):
         teams = (
@@ -1207,7 +1208,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         templates = self.template_path("season_summary.html")
         return self.render(request, templates, context)
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def edit_timeslot(self, request, extra_context, season, pk=None, **kwargs):
         instance = SeasonMatchTime(season=season) if pk is None else None
@@ -1222,7 +1223,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def delete_timeslot(self, request, season, pk, **kwargs):
         post_delete_redirect = self.redirect(season.urls["edit"] + "#timeslots-tab")
@@ -1234,7 +1235,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_delete_redirect=post_delete_redirect,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def edit_seasonexclusiondate(
         self, request, season, extra_context, pk=None, **kwargs
@@ -1251,7 +1252,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def delete_seasonexclusiondate(self, request, season, pk, **kwargs):
         post_delete_redirect = self.redirect(season.urls["edit"] + "#exclusions-tab")
@@ -1263,7 +1264,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_delete_redirect=post_delete_redirect,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def timeslots(self, request, competition, season, extra_context, **kwargs):
         return self.generic_edit_multiple(
@@ -1277,7 +1278,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def edit_venue(self, request, season, extra_context, venue=None, **kwargs):
         if venue is None:
@@ -1298,7 +1299,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def delete_venue(self, request, season, venue, extra_context=None, **kwargs):
         post_delete_redirect = self.redirect(season.urls["edit"] + "#venues-tab")
@@ -1311,7 +1312,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def edit_ground(self, request, venue, extra_context, ground=None, **kwargs):
         if ground is None:
@@ -1332,7 +1333,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def delete_ground(self, request, venue, ground, extra_context=None, **kwargs):
         post_delete_redirect = self.redirect(venue.urls["edit"] + "#grounds-tab")
@@ -1345,7 +1346,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def edit_division(self, request, season, extra_context, division=None, **kwargs):
         if division is None:
@@ -1363,7 +1364,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def delete_division(self, request, season, division, **kwargs):
         post_delete_redirect = self.redirect(season.urls["edit"] + "#divisions-tab")
@@ -1375,7 +1376,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_delete_redirect=post_delete_redirect,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def edit_divisionexclusiondate(
         self, request, division, extra_context, pk=None, **kwargs
@@ -1395,7 +1396,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def delete_divisionexclusiondate(self, request, division, pk, **kwargs):
         post_delete_redirect = self.redirect(division.urls["edit"] + "#exclusions-tab")
@@ -1407,7 +1408,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_delete_redirect=post_delete_redirect,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def edit_stage(self, request, division, extra_context, stage=None, **kwargs):
         if stage is None:
@@ -1430,7 +1431,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def delete_stage(self, request, division, stage, **kwargs):
         post_delete_redirect = self.redirect(division.urls["edit"] + "#stages-tab")
@@ -1442,7 +1443,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_delete_redirect=post_delete_redirect,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def edit_pool(self, request, stage, extra_context, pool=None, **kwargs):
         if pool is None:
@@ -1465,7 +1466,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def delete_pool(self, request, stage, pool, **kwargs):
         post_delete_redirect = self.redirect(stage.urls["edit"] + "#pools-tab")
@@ -1477,7 +1478,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_delete_redirect=post_delete_redirect,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def edit_team(
         self,
@@ -1526,7 +1527,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def perms_team(self, request, team, **kwargs):
         competition = kwargs.get("competition")
@@ -1542,7 +1543,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             **kwargs
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def delete_team(
         self,
@@ -1580,7 +1581,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def edit_teamassociation(self, request, team, extra_context, pk=None, **kwargs):
         if pk is None:
@@ -1599,7 +1600,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def delete_teamassociation(self, request, team, pk, **kwargs):
         post_delete_redirect = self.redirect(team.urls["edit"] + "#people-tab")
@@ -1611,7 +1612,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_delete_redirect=post_delete_redirect,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def edit_seasonreferee(self, request, season, extra_context, pk=None, **kwargs):
         # FIXME this dance to establish an instance on a related object
@@ -1633,7 +1634,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def delete_seasonreferee(self, request, season, pk, **kwargs):
         post_delete_redirect = self.redirect(season.urls["edit"] + "#officials-tab")
@@ -1645,7 +1646,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_delete_redirect=post_delete_redirect,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def generate_draw(
         self, request, competition, season, division, stage, extra_context, **kwargs
@@ -1667,7 +1668,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
         return view(request)
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def undo_draw(self, request, division, stage, **kwargs):
         LadderSummary.objects.filter(stage=stage).delete()
@@ -1676,7 +1677,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         messages.success(request, _("Your draw has been undone."))
         return self.redirect(division.urls["edit"])
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def edit_match(
         self,
@@ -1702,7 +1703,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def delete_match(self, request, stage, match, **kwargs):
         post_delete_redirect = self.redirect(stage.urls["edit"] + "#matches-tab")
@@ -1714,7 +1715,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_delete_redirect=post_delete_redirect,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def edit_match_detail(self, request, stage, match, extra_context, **kwargs):
         redirect_to = reverse("admin:index")
@@ -1727,14 +1728,14 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             **kwargs
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def day_runsheet(self, request, season, date, extra_context, **kwargs):
         return super(CompetitionAdminComponent, self).day_runsheet(
             request, season, date, extra_context, **kwargs
         )
 
-    @competition
+    @competition_by_pk_m
     @csrf_exempt_m
     @staff_login_required_m
     def season_grid(self, request, season, mode, extra_context, **kwargs):
@@ -1746,7 +1747,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             season, format=mode, request=request, extra_context=extra_context
         )
 
-    @competition
+    @competition_by_pk_m
     @csrf_exempt_m
     @staff_login_required_m
     def day_grid(self, request, season, date, mode, extra_context, **kwargs):
@@ -1758,7 +1759,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             dates=[date],
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def progress_teams(
         self, request, competition, season, division, stage, extra_context, **kwargs
@@ -1812,7 +1813,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             **generic_edit_kwargs
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def match_reschedule(self, request, competition, season, extra_context, **kwargs):
         matches = Match.objects.filter(
@@ -1855,7 +1856,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         return self.render(request, templates, context)
 
     # FIXME
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def match_schedule(
         self,
@@ -1897,7 +1898,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def match_results(
         self,
@@ -1924,7 +1925,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         )
 
     # FIXME
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def match_washout(
         self, request, competition, season, date, extra_context, time=None, **kwargs
@@ -1964,7 +1965,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         wizard = ScorecardWizard.as_view(form_list=[SeasonForm, FilterForm])
         return wizard(request)
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def scorecards(
         self,
@@ -2038,7 +2039,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
         return response
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def scorecards_async(self, request, result_id, extra_context, **kwargs):
         result = generate_pdf_scorecards.AsyncResult(result_id)
@@ -2051,7 +2052,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         response["Refresh"] = SCORECARD_PDF_WAIT
         return response
 
-    @competition
+    @competition_by_pk_m
     @staff_login_required_m
     def highest_point_scorer(self, request, division, extra_context, **kwargs):
         def _get_clause(field, aggregate=Sum):

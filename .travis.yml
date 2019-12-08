@@ -27,9 +27,8 @@ script:
 
 env:
   jobs:
-    - DJANGO=2.0
-    - DJANGO=2.1
     - DJANGO=2.2
+    - DJANGO=3.0
   global:
     - DATABASE_URL=postgresql://postgres@localhost/travis
     - secure: |

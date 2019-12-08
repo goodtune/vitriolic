@@ -29,7 +29,7 @@ from tournamentcontrol.competition import rank
 from tournamentcontrol.competition.dashboard import (
     matches_require_basic_results, matches_require_details_results,
 )
-from tournamentcontrol.competition.decorators import competition_slug
+from tournamentcontrol.competition.decorators import competition_by_slug_m
 from tournamentcontrol.competition.forms import (
     ConfigurationForm, MatchResultFormSet, MatchStatisticFormset,
     MultiConfigurationForm, RankingConfigurationForm,
@@ -378,7 +378,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             extra_context=kwargs,
         )
 
-    @competition_slug
+    @competition_by_slug_m
     def competition(self, request, competition, extra_context, **kwargs):
         templates = self.template_path("competition.html", competition.slug)
         return self.generic_detail(
@@ -389,7 +389,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             extra_context=extra_context,
         )
 
-    @competition_slug
+    @competition_by_slug_m
     def season(self, request, competition, season, extra_context, **kwargs):
         templates = self.template_path("season.html", competition.slug, season.slug)
         extra_context.update(
@@ -422,7 +422,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             extra_context=extra_context,
         )
 
-    @competition_slug
+    @competition_by_slug_m
     def runsheet(self, request, competition, season, extra_context, **kwargs):
         context = {"dates": season.matches.dates("date", "day")}
         context.update(extra_context)
@@ -431,13 +431,13 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         )
         return self.render(request, templates, context)
 
-    @competition_slug
+    @competition_by_slug_m
     def day_runsheet(self, request, season, date, extra_context, **kwargs):
         return super(CompetitionSite, self).day_runsheet(
             request, season, date, extra_context, **kwargs
         )
 
-    @competition_slug
+    @competition_by_slug_m
     @login_required_m
     def results(self, request, competition, season, extra_context, date=None, **kwargs):
         has_permission = permissions_required(request, Match, return_403=False)
@@ -470,7 +470,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         templates = self.template_path("results.html", competition.slug, season.slug)
         return self.render(request, templates, context)
 
-    @competition_slug
+    @competition_by_slug_m
     @login_required_m
     def match_results(
         self, request, competition, season, date, time, extra_context, **kwargs
@@ -491,7 +491,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         )
 
     @login_required_m
-    @competition_slug
+    @competition_by_slug_m
     def edit_match_detail(self, request, match, extra_context, **kwargs):
         has_permission = permissions_required(
             request, Match, instance=match, return_403=False
@@ -514,7 +514,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             **kwargs
         )
 
-    @competition_slug
+    @competition_by_slug_m
     def season_videos(self, request, competition, season, extra_context, **kwargs):
         templates = self.template_path(
             "season_videos.html", competition.slug, season.slug
@@ -535,7 +535,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             extra_context=extra_context,
         )
 
-    @competition_slug
+    @competition_by_slug_m
     def club(self, request, competition, season, club, extra_context, **kwargs):
         templates = self.template_path(
             "club.html", competition.slug, season.slug, club.slug
@@ -548,7 +548,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             extra_context=extra_context,
         )
 
-    @competition_slug
+    @competition_by_slug_m
     def division(self, request, competition, season, division, extra_context, **kwargs):
         templates = self.template_path(
             "division.html", competition.slug, season.slug, division.slug
@@ -583,7 +583,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             extra_context=extra_context,
         )
 
-    @competition_slug
+    @competition_by_slug_m
     def stage(
         self, request, competition, season, division, stage, extra_context, **kwargs
     ):
@@ -619,7 +619,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             extra_context=extra_context,
         )
 
-    @competition_slug
+    @competition_by_slug_m
     def pool(
         self,
         request,
@@ -671,7 +671,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             extra_context=extra_context,
         )
 
-    @competition_slug
+    @competition_by_slug_m
     def team(
         self, request, competition, season, division, team, extra_context, **kwargs
     ):
@@ -709,7 +709,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             extra_context=extra_context,
         )
 
-    @competition_slug
+    @competition_by_slug_m
     def calendar(self, request, season, club=None, division=None, team=None, **kwargs):
         if season.disable_calendar:
             # The GONE response informs client that they should remove this resource
@@ -864,7 +864,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         response.write(cal.to_ical())
         return response
 
-    @competition_slug
+    @competition_by_slug_m
     def match(
         self, request, competition, season, division, match, extra_context, **kwargs
     ):
@@ -883,7 +883,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             extra_context=extra_context,
         )
 
-    @competition_slug
+    @competition_by_slug_m
     def match_video(
         self, request, competition, season, division, match, extra_context, **kwargs
     ):
@@ -908,7 +908,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         #                          extra_context=extra_context)
 
     @login_required_m
-    @competition_slug
+    @competition_by_slug_m
     def forfeit_list(self, request, competition, season, extra_context, **kwargs):
         """
         List the matches that the visitor is permitted to forfeit. Must only
@@ -931,7 +931,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         return self.render(request, templates, context)
 
     @login_required_m
-    @competition_slug
+    @competition_by_slug_m
     def forfeit(self, request, competition, season, extra_context, match, **kwargs):
         """
         View that will allow a team member to forfeit a match they are due to

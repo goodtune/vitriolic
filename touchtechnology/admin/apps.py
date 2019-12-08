@@ -8,6 +8,7 @@ from first import first
 class AdminConfig(AppConfig):
     default_site = "touchtechnology.admin.sites.admin.AdminSite"
     name = "touchtechnology.admin"
+    label = "touchtechnology_name"
 
     def ready(self):
         from touchtechnology.admin.sites import site

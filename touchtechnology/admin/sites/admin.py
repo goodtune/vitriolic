@@ -6,7 +6,9 @@ import logging
 from django.conf import settings
 from django.conf.urls import url
 from django.contrib.admin.sites import (
-    AdminSite as DjangoAdminSite, AlreadyRegistered, NotRegistered,
+    AdminSite as DjangoAdminSite,
+    AlreadyRegistered,
+    NotRegistered,
 )
 from django.db import connection
 from django.http import HttpResponseRedirect
@@ -17,6 +19,11 @@ from django.utils.encoding import smart_str
 from django.utils.translation import ugettext_lazy as _
 from touchtechnology.common.decorators import staff_login_required_m
 from touchtechnology.common.models import SitemapNode
+
+try:
+    from tenant_schemas.utils import get_public_schema_name
+except ImportError as exc:
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -47,18 +54,18 @@ class AdminSite(DjangoAdminSite):
             )
 
     def _hidden_component(self, component):
-        schemas = self._schemas[component.__class__]
-
         if "tenant_schemas" not in settings.INSTALLED_APPS:
             # Only hide components when we are not in multi-tenant mode
             return False
 
+        # For components only registered for specific schemas, return solely
+        # based on that option. That is, you can't disable an explicitly
+        # registered component for a given schema.
+        schemas = self._schemas[component.__class__]
         if schemas:
             if connection.tenant.schema_name in schemas:
                 return False
             return True
-
-        from tenant_schemas.utils import get_public_schema_name
 
         application = component.__module__.split(".admin", 1)[0]
         logger.debug("application=%r", application)
@@ -73,7 +80,11 @@ class AdminSite(DjangoAdminSite):
                 if application not in settings.TENANT_APPS:
                     return True
 
-        return False
+        # Lastly, check if the client allows the application in this tenant.
+        try:
+            return connection.tenant.hidden_component(component)
+        except AttributeError:
+            return False
 
     def get_urls(self):
         urlpatterns = [

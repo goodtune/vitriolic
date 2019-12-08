@@ -25,9 +25,12 @@ def matches_require_basic_results(now=None, matches=None):
     # If not provided up front, build a base queryset of matches that take
     # place prior to "now".
     if matches is None:
-        last_bye_date = (
-            Match.objects.filter(datetime__lte=now).dates("date", "day").latest()
-        )
+        try:
+            last_bye_date = (
+                Match.objects.filter(datetime__lte=now).dates("date", "day").latest()
+            )
+        except Match.DoesNotExist:
+            last_bye_date = now.date()
         matches = Match.objects.filter(
             Q(datetime__lte=now)
             | Q(is_bye=True, bye_processed=False, date__lte=last_bye_date),

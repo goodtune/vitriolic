@@ -45,3 +45,6 @@ class UtilTests(TestCase):
         self.assertEqual(
             d1 + d2,
             utils.SumDict({'a': 1, 'b': 3, 'c': 2}))
+
+    def test_revpow(self):
+        self.assertEqual(utils.revpow(2**4, 2), 4)

@@ -143,6 +143,8 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         return hash(repr(self))
 
     def __eq__(self, other):
+        if not isinstance(other, SitemapNode):
+            return False
         if other is None:
             return False
         return self.pk == other.pk
@@ -151,6 +153,7 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         return not (self == other)
 
     def __lt__(self, other):
+        assert isinstance(other, SitemapNode)
         if other is None:
             return True
         return (self.level, self.lft) < (other.level, other.lft)
@@ -225,7 +228,10 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         # touchtechnology.content application in tandem with the
         # touchtechnology.admin application, but you probably won't be using
         # the .urls API if that isn't true anyway!
-        namespace = "admin:content:%s" % (self.content_type or "folder")
+        try:
+            namespace = "admin:content:" + self.content_type.name
+        except AttributeError:
+            namespace = "admin:content:folder"
         args = (self.id,)
         crud = {
             "edit": reverse_lazy("%s:edit" % namespace, args=args),
