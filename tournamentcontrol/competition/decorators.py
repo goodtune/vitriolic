@@ -186,7 +186,7 @@ def competition_by_pk(f, *a, **kw):
     return _decorated
 
 
-competition = method_decorator(competition_by_pk)
+competition_by_pk_m = method_decorator(competition_by_pk)
 
 
 def competition_by_slug(f, *a, **kw):
@@ -336,4 +336,4 @@ def competition_by_slug(f, *a, **kw):
     return _decorated
 
 
-competition_slug = method_decorator(competition_by_slug)
+competition_by_slug_m = method_decorator(competition_by_slug)
