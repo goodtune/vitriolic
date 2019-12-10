@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 
 import datetime
+import functools
 import itertools
 import logging
 import re
@@ -181,16 +182,26 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1, min_per_d
 
     if isinstance(first(seeded_team_list), str):
 
+        @functools.total_ordering
         class Team(object):
             def __init__(self, st, order):
                 self.st = st
                 self.order = order
 
-            def __cmp__(self, other):
-                return cmp(self.order, other.order)
+            def __eq__(self, other):
+                return self.order == other.order
+
+            def __ne__(self, other):
+                return not (self == other)
+
+            def __lt__(self, other):
+                return self.order < other.order
 
             def __str__(self):
                 return self.st
+
+            def __repr__(self):
+                return "<Team: {} ({})>".format(self.st, self.order)
 
         seeded_team_list = [
             Team(t, order=order) for order, t in enumerate(seeded_team_list, 1)
@@ -221,7 +232,7 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1, min_per_d
         }
         # unique set of pool sizes requiring individual draw formats
         for size in sorted(
-            set([ceiling(size, 2) for size in [len(pool) for pool in pools]])
+            set([int(ceiling(size, 2)) for size in [len(pool) for pool in pools]])
         )
     ]
 

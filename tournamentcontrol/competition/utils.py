@@ -214,6 +214,10 @@ def round_robin(teams, rounds=None):
     """
     Based on recipe found at http://code.activestate.com/recipes/65200/
     """
+    # ensure we have a list so we can perform appends and inserts
+    if not isinstance(teams, list):
+        teams = [t for t in teams]
+
     # ensure we have an even number of teams
     if len(teams) % 2:
         teams.append(0)
@@ -317,7 +321,7 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
 
     while len(series[-1].matches) > 1:
         # Always half as many as the previous round, we're eliminating teams!
-        matches_this_round = len(series[-1].matches) / 2
+        matches_this_round = len(series[-1].matches) // 2
 
         this_round = RoundDescriptor(
             matches_this_round, final_series_round_label(matches_this_round)
