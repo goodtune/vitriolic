@@ -9,8 +9,8 @@ from imagekit.models import ImageSpecField
 from touchtechnology.admin.mixins import AdminUrlMixin
 from touchtechnology.common.db.models import BooleanField, HTMLField
 from touchtechnology.news.app_settings import (
-    CONTENT_LABEL_CHOICES, DETAIL_IMAGE_KWARGS, DETAIL_IMAGE_PROCESSORS,
-    THUMBNAIL_IMAGE_KWARGS, THUMBNAIL_IMAGE_PROCESSORS,
+    DETAIL_IMAGE_KWARGS, DETAIL_IMAGE_PROCESSORS, THUMBNAIL_IMAGE_KWARGS,
+    THUMBNAIL_IMAGE_PROCESSORS,
 )
 from touchtechnology.news.image_processors import processor_factory
 from touchtechnology.news.query import ArticleQuerySet, CategoryQuerySet
@@ -50,6 +50,8 @@ class Article(AdminUrlModel):
 
     is_active = BooleanField(default=True, verbose_name=_("Enabled"))
 
+    copy = HTMLField(_("Copy"), blank=True)
+
     # image and imagekit spec files
     thumbnail = ImageSpecField(
         source="image",
@@ -75,35 +77,6 @@ class Article(AdminUrlModel):
 
     def __str__(self):
         return self.headline
-
-    @property
-    def copy(self):
-        """
-        Backwards compatibility -- concatenate all of the content sections
-        into a single string and return this instead.
-        """
-        return "".join(self.content.sections.values_list("copy", flat=True))
-
-
-class ArticleContent(models.Model):
-
-    article = models.ForeignKey(
-        Article,
-        related_name="content",
-        verbose_name=_("Article"),
-        on_delete=models.PROTECT,
-    )
-    label = models.SlugField(
-        max_length=20, choices=CONTENT_LABEL_CHOICES, verbose_name=_("CSS class")
-    )
-    sequence = models.PositiveIntegerField(verbose_name=_("Sequence"))
-    copy = HTMLField(_("Copy"), blank=True)
-
-    class Meta:
-        ordering = ("sequence",)
-
-    def __repr__(self):
-        return "<ArticleContent: #%d, article=%d>" % (self.pk, self.article.pk)
 
 
 class Category(AdminUrlModel):

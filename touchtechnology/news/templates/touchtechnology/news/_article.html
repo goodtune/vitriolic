@@ -27,11 +27,9 @@
 		<div class="abstract">
 			{{ article.abstract|linebreaks }}
 		</div>
-		{% for content in article.content.all %}
-			<div id="c{{ content.pk }}" class="{{ content.label }} {% if forloop.first %}first {% endif %}{% if forloop.last %} last{% endif %} {% block sectionclass %}{% endblock %}">
-				{{ content.copy|safe }}
-			</div>
-		{% endfor %}
+        <div class="copy">
+            {{ article.copy|safe }}
+        </div>
 	</div>
 {% endblock %}
 
