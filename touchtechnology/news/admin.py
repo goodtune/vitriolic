@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.translation import ugettext_lazy as _
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.common.decorators import staff_login_required_m
-from touchtechnology.news.forms import ArticleForm, CategoryForm
+from touchtechnology.news.forms import ArticleForm, CategoryForm, TranslationForm
 from touchtechnology.news.models import Article, Category, Translation
 
 
@@ -126,7 +126,7 @@ class NewsAdminComponent(AdminComponent):
             request,
             article.translations,
             instance=instance,
-            form_fields=("locale", "headline", "abstract", "copy",),
+            form_class=TranslationForm,
             post_save_redirect=self.redirect(article.urls["edit"]),
             extra_context=extra_context,
         )
