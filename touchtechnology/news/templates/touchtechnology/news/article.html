@@ -1,1 +1,63 @@
-{% extends "touchtechnology/news/_article.html" %}
+{% extends "touchtechnology/news/base.html" %}
+{% load i18n tz %}
+{% load common news %}
+
+{% block body_class %}{{ block.super }} detail{% endblock %}
+
+{% block news_content %}
+	<h1>{% block page_title %}{{ article.headline }}{% endblock %}</h1>
+
+	<p class="published" data-localtime="{{ article.published|date }} @ {{ article.published|date:"G:i e" }}">
+		{{ article.published|date }} @ {{ article.published|date:"G:i e" }}
+	</p>
+
+	{% if article.byline %}<p class="byline">{{ article.byline }}</p>{% endif %}
+
+	{% block image %}
+		{% if article.image %}
+			<div class="img">
+				<a href="{{ article.image.url }}">
+					<img src="{{ article.detail_image.url }}" alt="{{ article.headline }}">
+				</a>
+			</div>
+		{% endif %}
+	{% endblock %}
+
+	<div class="cms">
+		<div class="abstract">
+			{{ article.abstract|linebreaks }}
+		</div>
+        <div class="copy">
+            {{ article.copy|safe }}
+        </div>
+
+        {% if translation %}
+            <dl>
+                <dt>{% trans "Original" %}</dt>
+                <dd>
+                    {% language "en" %}
+                        <a href="{% timezone "UTC" %}{% url application.name|add:":article" year=article.published|date:"Y" month=article.published|date:"b" day=article.published|date:"j" slug=article.slug %}{% endtimezone %}">{{ article.article.headline }}</a>
+                    {% endlanguage %}
+                </dd>
+            </dl>
+        {% elif article.translations.count %}
+            <h3>{% trans "Translations" %}</h3>
+            <ul>
+                {% for translation in article.translations.all %}
+                    {% get_language_info for translation.locale as lang %}
+                    <li>
+                        {% language "en" %}
+                            <a href="{% timezone "UTC" %}{% url application.name|add:":article" year=article.published|date:"Y" month=article.published|date:"b" day=article.published|date:"j" slug=article.slug locale=translation.locale %}{% endtimezone %}">{% language lang.code %}{% trans lang.name %}{% endlanguage %} ({{ lang.name }})</a>
+                        {% endlanguage %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+	</div>
+{% endblock %}
+
+{% if not translation %}
+    {% block related_content %}
+            {% related_articles article %}
+    {% endblock %}
+{% endif %}
