@@ -1,7 +1,11 @@
+from django import forms
 from django.conf import settings
+from django.utils.translation import ugettext_lazy as _
 from modelforms.forms import ModelForm
-from touchtechnology.common.forms.mixins import SuperUserSlugMixin
-from touchtechnology.news.models import Article, Category
+from touchtechnology.common.forms.mixins import (
+    BootstrapFormControlMixin, SuperUserSlugMixin,
+)
+from touchtechnology.news.models import Article, Category, Translation
 
 
 class ArticleForm(SuperUserSlugMixin, ModelForm):
@@ -41,3 +45,16 @@ class CategoryForm(SuperUserSlugMixin, ModelForm):
             "is_active",
             "hidden_from_navigation",
         )
+
+
+class TranslationForm(BootstrapFormControlMixin, ModelForm):
+    class Meta:
+        model = Translation
+        fields = (
+            "locale",
+            "headline",
+            "abstract",
+            "copy",
+        )
+
+    locale = forms.ChoiceField(choices=settings.LANGUAGES, label=_("Language"))
