@@ -1,1 +1,22 @@
-{% extends "touchtechnology/news/archive/_index.html" %}
+{% extends "touchtechnology/news/archive/base.html" %}
+{% load i18n tz %}
+
+{% block page_title %}{{ block.super }}: {% trans "Archive" %}{% endblock %}
+
+{% block archive_info %}
+	<h2>{% trans "Latest" %}</h2>
+
+	<ul>
+		{% for article in latest %}
+            <li><a href="{{ article.get_absolute_url }}">{{ article.headline }}</a></li>
+		{% endfor %}
+	</ul>
+
+    <h3>{% trans "Archive" %}</h3>
+
+	<ul>
+		{% for date in date_list reversed %}
+			<li><a href="{% url application.name|add:":year" year=date.year %}">{{ date.year }}</a></li>
+		{% endfor %}
+	</ul>
+{% endblock %}

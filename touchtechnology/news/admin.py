@@ -1,11 +1,12 @@
 from urllib.parse import urljoin
 
 from django.conf.urls import include, url
+from django.shortcuts import get_object_or_404
 from django.utils.translation import ugettext_lazy as _
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.common.decorators import staff_login_required_m
 from touchtechnology.news.forms import ArticleForm, CategoryForm
-from touchtechnology.news.models import Article, Category
+from touchtechnology.news.models import Article, Category, Translation
 
 
 class NewsAdminComponent(AdminComponent):
@@ -16,6 +17,24 @@ class NewsAdminComponent(AdminComponent):
         super(NewsAdminComponent, self).__init__(app, name, app_name)
 
     def get_urls(self):
+        translation_patterns = (
+            [
+                url(r"^add/$", self.edit_translation, name="add"),
+                url(r"^(?P<locale>[^/]+)/$", self.edit_translation, name="edit"),
+                url(
+                    r"^(?P<locale>[^/]+)/delete/$",
+                    self.delete_translation,
+                    name="delete",
+                ),
+                url(
+                    r"^(?P<locale>[^/]+)/permission/$",
+                    self.perms_translation,
+                    name="perms",
+                ),
+            ],
+            self.app_name,
+        )
+
         article_patterns = (
             [
                 url(r"^$", self.list_articles, name="list"),
@@ -23,6 +42,10 @@ class NewsAdminComponent(AdminComponent):
                 url(r"^(?P<pk>\d+)/$", self.edit_article, name="edit"),
                 url(r"^(?P<pk>\d+)/delete/$", self.delete_article, name="delete"),
                 url(r"^(?P<pk>\d+)/permission/$", self.perms_article, name="perms"),
+                url(
+                    r"^(?P<pk>\d+)/",
+                    include(translation_patterns, namespace="translation"),
+                ),
             ],
             self.app_name,
         )
@@ -59,7 +82,7 @@ class NewsAdminComponent(AdminComponent):
     # Article views
 
     @staff_login_required_m
-    def list_articles(self, request, *args, **kwargs):
+    def list_articles(self, request, **kwargs):
         return self.generic_list(
             request,
             Article,
@@ -69,7 +92,7 @@ class NewsAdminComponent(AdminComponent):
         )
 
     @staff_login_required_m
-    def edit_article(self, request, pk=None, *args, **kwargs):
+    def edit_article(self, request, pk=None, **kwargs):
         return self.generic_edit(
             request,
             Article,
@@ -88,6 +111,39 @@ class NewsAdminComponent(AdminComponent):
     @staff_login_required_m
     def perms_article(self, request, pk, **extra_context):
         return self.generic_permissions(request, Article, pk=pk, **extra_context)
+
+    # Translations
+
+    def edit_translation(self, request, pk, locale=None, **extra_context):
+        article = get_object_or_404(Article, pk=pk)
+
+        if locale is None:
+            instance = Translation(article=article)
+        else:
+            instance = get_object_or_404(article.translations, locale=locale)
+
+        return self.generic_edit(
+            request,
+            article.translations,
+            instance=instance,
+            form_fields=("locale", "headline", "abstract", "copy",),
+            post_save_redirect=self.redirect(article.urls["edit"]),
+            extra_context=extra_context,
+        )
+
+    def delete_translation(self, request, pk, locale, **kwargs):
+        instance = get_object_or_404(Translation, article__pk=pk, locale=locale)
+        return self.generic_permissions(request, Translation, instance=instance)
+
+    def perms_translation(self, request, pk, locale, **extra_context):
+        instance = get_object_or_404(Translation, article__pk=pk, locale=locale)
+        return self.generic_permissions(
+            request,
+            Translation,
+            instance=instance,
+            post_save_redirect=self.redirect(instance.article.urls["edit"]),
+            **extra_context
+        )
 
     # Category views
 

@@ -4,44 +4,48 @@ from test_plus import TestCase
 from touchtechnology.news.tests import factories
 
 
-@override_settings(ROOT_URLCONF='example_app.urls')
+@override_settings(ROOT_URLCONF="example_app.urls")
 class InvalidDateTest(TestCase):
-
     def test_archive_day(self):
-        self.get('news:article', year='2013', month='feb', day='31')
+        self.get("news:article", year="2013", month="feb", day="31")
         self.response_404()
 
     def test_article(self):
-        self.get('news:article', year='2013', month='feb', day='31',
-                 slug='tfms-new-generaltechnical-manager')
+        self.get(
+            "news:article",
+            year="2013",
+            month="feb",
+            day="31",
+            slug="tfms-new-generaltechnical-manager",
+        )
         self.response_404()
 
 
-@override_settings(ROOT_URLCONF='example_app.urls')
+@override_settings(ROOT_URLCONF="example_app.urls")
 class FeedTest(TestCase):
-
     def test_atom(self):
-        self.assertGoodView('news:feed', format='atom')
+        self.assertGoodView("news:feed-atom")
 
     def test_rss(self):
-        self.assertGoodView('news:feed', format='rss')
+        self.assertGoodView("news:feed-rss")
 
 
-@override_settings(ROOT_URLCONF='example_app.urls')
+@override_settings(ROOT_URLCONF="example_app.urls")
 class SiteTest(TestCase):
-
     def assertGoodArticleView(self, article):
         self.assertGoodView(
-            'news:article',
+            "news:article",
             year=article.published.year,
-            month=article.published.strftime('%b').lower(),
+            month=article.published.strftime("%b").lower(),
             day=article.published.day,
-            slug=article.slug)
+            slug=article.slug,
+        )
 
     def test_article(self):
         article = factories.ArticleFactory.create(
-            headline='This is a predictable headline!')
-        self.assertEqual(article.slug, 'this-is-a-predictable-headline')
+            headline="This is a predictable headline!"
+        )
+        self.assertEqual(article.slug, "this-is-a-predictable-headline")
         self.assertGoodArticleView(article)
 
     def test_article_one_category(self):

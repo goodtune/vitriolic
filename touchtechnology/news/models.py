@@ -75,8 +75,48 @@ class Article(AdminUrlModel):
         if not self.slug_locked or not self.slug:
             self.slug = slugify(self.headline)
 
+    def get_absolute_url(self):
+        return reverse(
+            "news:article",
+            kwargs={
+                "year": self.published.year,
+                "month": self.published.strftime("%b").lower(),
+                "day": self.published.day,
+                "slug": self.slug,
+            },
+        )
+
     def __str__(self):
         return self.headline
+
+
+class Translation(AdminUrlModel):
+
+    article = models.ForeignKey(
+        Article, related_name="translations", on_delete=models.CASCADE
+    )
+    locale = models.CharField(max_length=10, blank=False, null=False)
+    headline = models.CharField(max_length=150, verbose_name=_("Headline"))
+    abstract = models.TextField(verbose_name=_("Abstract"))
+    copy = HTMLField(_("Copy"), blank=True)
+
+    def __getattr__(self, name):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self.article, name)
+
+    def _get_admin_namespace(self):
+        return "admin:news:article:%s" % self._meta.model_name
+
+    def _get_url_args(self):
+        return (self.article.pk, self.locale)
+
+    def __str__(self):
+        return self.headline
+
+    class Meta:
+        unique_together = ("article", "locale")
 
 
 class Category(AdminUrlModel):
@@ -114,8 +154,7 @@ class Category(AdminUrlModel):
             self.slug = slugify(self.title)
 
     def get_absolute_url(self):
-        kwargs = {"category": self.slug}
-        return reverse("news:category-index", kwargs=kwargs)
+        return reverse("news:category", kwargs={"category": self.slug})
 
     def __str__(self):
         return self.title

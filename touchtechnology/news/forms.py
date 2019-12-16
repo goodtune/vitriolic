@@ -1,19 +1,7 @@
-from django import forms
 from django.conf import settings
-from django.utils.translation import ugettext_lazy as _
 from modelforms.forms import ModelForm
 from touchtechnology.common.forms.mixins import SuperUserSlugMixin
-from touchtechnology.content.forms import PlaceholderConfigurationBase
 from touchtechnology.news.models import Article, Category
-
-
-class ConfigurationForm(PlaceholderConfigurationBase):
-    def __init__(self, *args, **kwargs):
-        super(ConfigurationForm, self).__init__(*args, **kwargs)
-        choices = [("", _("Please select..."))]
-        choices += list(Category.objects.values_list("slug", "title"))
-        self.fields["category"] = forms.ChoiceField(choices=choices, required=False)
-        self.fields["category"].widget.attrs.update({"class": "form-control"})
 
 
 class ArticleForm(SuperUserSlugMixin, ModelForm):
