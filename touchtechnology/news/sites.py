@@ -1,39 +1,21 @@
 from __future__ import unicode_literals
 
-import magic
 from dateutil.relativedelta import relativedelta
-from django.contrib.syndication.views import Feed
 from django.shortcuts import get_object_or_404
 from django.urls import path
 from django.utils import timezone
-from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed
+from django.utils.feedgenerator import Atom1Feed
 from touchtechnology.common.sites import Application
 from touchtechnology.news.app_settings import PAGINATE_BY
 from touchtechnology.news.decorators import (
     date_view, last_modified_article, news_last_modified,
 )
 from touchtechnology.news.models import Article, Category
+from touchtechnology.news.syndication import ExtendedRSSFeed, NewsFeed
 
 YEAR_DELTA = relativedelta(years=1)
 MONTH_DELTA = relativedelta(months=1)
 DAY_DELTA = relativedelta(days=1)
-
-
-class ExtendedRSSFeed(Rss201rev2Feed):
-    """
-    Create a type of RSS feed that has content:encoded elements.
-    """
-
-    content_type = "text/xml; charset=utf-8"
-
-    def root_attributes(self):
-        attrs = super().root_attributes()
-        attrs["xmlns:content"] = "http://purl.org/rss/1.0/modules/content/"
-        return attrs
-
-    def add_item_elements(self, handler, item):
-        super().add_item_elements(handler, item)
-        handler.addQuickElement("content:encoded", item["content_encoded"])
 
 
 class NewsSite(Application):
@@ -195,53 +177,14 @@ class NewsSite(Application):
         return self.render(request, templates, context)
 
     def feed(self, request, format, **kwargs):
-        class NewsFeed(Feed):
+        class BaseFeed(NewsFeed):
             title = getattr(request, "tenant", None) or kwargs.get("node")
             link = self.reverse("feeds")
 
-            def items(slf):
-                return Article.objects.live().prefetch_related("categories")
-
-            def item_categories(slf, item):
-                return [c.title for c in item.categories.all()]
-
-            def item_description(slf, item):
-                return item.abstract
-
-            def item_link(slf, item):
-                return item.get_absolute_url()
-
-            def item_pubdate(slf, item):
-                return item.published
-
-            def item_enclosure_url(slf, item):
-                try:
-                    return request.build_absolute_uri(item.image.url)
-                except Exception:
-                    pass
-
-            def item_enclosure_length(slf, item):
-                try:
-                    return item.image.size
-                except Exception:
-                    pass
-
-            def item_enclosure_mime_type(slf, item):
-                try:
-                    return magic.from_file(item.image.path, mime=True)
-                except Exception:
-                    pass
-
-            def item_extra_kwargs(slf, item):
-                return {
-                    "content_encoded": "<blockquote>%(abstract)s</blockquote>\n%(copy)s"
-                    % vars(item)
-                }
-
-        class AtomNewsFeed(NewsFeed):
+        class AtomNewsFeed(BaseFeed):
             feed_type = Atom1Feed
 
-        class RssNewsFeed(NewsFeed):
+        class RssNewsFeed(BaseFeed):
             feed_type = ExtendedRSSFeed
 
         feed_class = {
