@@ -1,1 +1,15 @@
-{% extends "tournamentcontrol/competition/_videos.html" %}
+{% extends "tournamentcontrol/competition/match.html" %}
+{% load i18n %}
+{% load embed_video_tags %}
+
+{% block head-to-head %}
+	{% block video %}
+		{% for video in match.videos %}
+			<p>{% video video 'small' %}</p>
+		{% empty %}
+			<p>{% trans "No video links has been provided for this match." %}</p>
+		{% endfor %}
+	{% endblock %}
+
+	{{ block.super }}
+{% endblock %}
