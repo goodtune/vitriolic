@@ -1,8 +1,8 @@
+from django.shortcuts import get_object_or_404
+from django.urls import path, include
+from django.utils.translation import ugettext_lazy as _
 from urllib.parse import urljoin
 
-from django.conf.urls import include, url
-from django.shortcuts import get_object_or_404
-from django.utils.translation import ugettext_lazy as _
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.common.decorators import staff_login_required_m
 from touchtechnology.news.forms import ArticleForm, CategoryForm, TranslationForm
@@ -19,32 +19,23 @@ class NewsAdminComponent(AdminComponent):
     def get_urls(self):
         translation_patterns = (
             [
-                url(r"^add/$", self.edit_translation, name="add"),
-                url(r"^(?P<locale>[^/]+)/$", self.edit_translation, name="edit"),
-                url(
-                    r"^(?P<locale>[^/]+)/delete/$",
-                    self.delete_translation,
-                    name="delete",
-                ),
-                url(
-                    r"^(?P<locale>[^/]+)/permission/$",
-                    self.perms_translation,
-                    name="perms",
-                ),
+                path("add/", self.edit_translation, name="add"),
+                path("<slug:locale>/", self.edit_translation, name="edit"),
+                path("<slug:locale>/delete/", self.delete_translation, name="delete"),
+                path("<slug:locale>/permission/", self.perms_translation, name="perms"),
             ],
             self.app_name,
         )
 
         article_patterns = (
             [
-                url(r"^$", self.list_articles, name="list"),
-                url(r"^add/$", self.edit_article, name="add"),
-                url(r"^(?P<pk>\d+)/$", self.edit_article, name="edit"),
-                url(r"^(?P<pk>\d+)/delete/$", self.delete_article, name="delete"),
-                url(r"^(?P<pk>\d+)/permission/$", self.perms_article, name="perms"),
-                url(
-                    r"^(?P<pk>\d+)/",
-                    include(translation_patterns, namespace="translation"),
+                path("", self.list_articles, name="list"),
+                path("add/", self.edit_article, name="add"),
+                path("<int:pk>/", self.edit_article, name="edit"),
+                path("<int:pk>/delete/", self.delete_article, name="delete"),
+                path("<int:pk>/permission/", self.perms_article, name="perms"),
+                path(
+                    "<int:pk>/", include(translation_patterns, namespace="translation"),
                 ),
             ],
             self.app_name,
@@ -52,19 +43,19 @@ class NewsAdminComponent(AdminComponent):
 
         category_patterns = (
             [
-                url(r"^$", self.list_categories, name="list"),
-                url(r"^add/$", self.edit_category, name="add"),
-                url(r"^(?P<pk>\d+)/$", self.edit_category, name="edit"),
-                url(r"^(?P<pk>\d+)/delete/$", self.delete_category, name="delete"),
-                url(r"^(?P<pk>\d+)/permission/$", self.perms_category, name="perms"),
+                path("", self.list_categories, name="list"),
+                path("add/", self.edit_category, name="add"),
+                path("<int:pk>/", self.edit_category, name="edit"),
+                path("<int:pk>/delete/", self.delete_category, name="delete"),
+                path("<int:pk>/permission/", self.perms_category, name="perms"),
             ],
             self.app_name,
         )
 
         urlpatterns = [
-            url(r"^$", self.index, name="index"),
-            url(r"^article/", include(article_patterns, namespace="article")),
-            url(r"^category/", include(category_patterns, namespace="category")),
+            path("", self.index, name="index"),
+            path("article/", include(article_patterns, namespace="article")),
+            path("category/", include(category_patterns, namespace="category")),
         ]
         return urlpatterns
 
@@ -76,7 +67,7 @@ class NewsAdminComponent(AdminComponent):
         return dl
 
     @staff_login_required_m
-    def index(self, request, *args, **kwargs):
+    def index(self, request, **kwargs):
         return self.redirect(self.reverse("article:list"))
 
     # Article views
@@ -148,7 +139,7 @@ class NewsAdminComponent(AdminComponent):
     # Category views
 
     @staff_login_required_m
-    def list_categories(self, request, *args, **kwargs):
+    def list_categories(self, request, **kwargs):
         return self.generic_list(
             request,
             Category,
@@ -158,7 +149,7 @@ class NewsAdminComponent(AdminComponent):
         )
 
     @staff_login_required_m
-    def edit_category(self, request, pk=None, *args, **kwargs):
+    def edit_category(self, request, pk=None, **kwargs):
         return self.generic_edit(
             request,
             Category,
