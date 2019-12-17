@@ -36,7 +36,7 @@
                 <dt>{% trans "Original" %}</dt>
                 <dd>
                     {% language "en" %}
-                        <a href="{% timezone "UTC" %}{% url application.name|add:":article" year=article.published|date:"Y" month=article.published|date:"b" day=article.published|date:"j" slug=article.slug %}{% endtimezone %}">{{ article.article.headline }}</a>
+                        <a href="{{ article.article.get_absolute_url }}">{{ article.article.headline }}</a>
                     {% endlanguage %}
                 </dd>
             </dl>
@@ -47,7 +47,7 @@
                     {% get_language_info for translation.locale as lang %}
                     <li>
                         {% language "en" %}
-                            <a href="{% timezone "UTC" %}{% url application.name|add:":article" year=article.published|date:"Y" month=article.published|date:"b" day=article.published|date:"j" slug=article.slug locale=translation.locale %}{% endtimezone %}">{% language lang.code %}{% trans lang.name %}{% endlanguage %} ({{ lang.name }})</a>
+                            <a href="{{ translation.get_absolute_url }}" class="{{ lang.code }}">{% language lang.code %}{% trans lang.name %}{% endlanguage %} ({{ lang.name }})</a>
                         {% endlanguage %}
                     </li>
                 {% endfor %}
