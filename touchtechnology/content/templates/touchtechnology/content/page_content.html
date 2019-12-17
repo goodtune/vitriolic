@@ -1,1 +1,11 @@
-{% extends "touchtechnology/content/_page_content.html" %}
+{% block outer_page_title %}<h1>{% block page_title %}{{ node.title }}{% endblock %}</h1>{% endblock %}
+{% load common %}
+<div class="cms">
+	{% for content in page.content.all %}
+		<div id="c{{ content.pk }}" class="{{ content.label }} {% if forloop.first %}first {% endif %}{% if forloop.last %} last {% endif %}{% block sectionclass %}{% endblock %}">
+			{{ content.copy|safe }}
+		</div>
+	{% empty %}
+		<!-- there are no content sections for this page -->
+	{% endfor %}
+</div>
