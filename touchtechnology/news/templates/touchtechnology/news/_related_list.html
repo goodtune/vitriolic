@@ -18,7 +18,7 @@
 		<ul>
 			{% for category in category_list %}
 				<li class="{% if forloop.first %}first {% endif %}{% if forloop.last %} last {% endif %}">
-					<a href="{% url application.name|add:":category-index" category.slug %}">{{ category.short_title|default:category.title }}</a>
+					<a href="{% url application.name|add:":category" category.slug %}">{{ category.short_title|default:category.title }}</a>
 				</li>
 			{% endfor %}
 		</ul>

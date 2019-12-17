@@ -1,1 +1,22 @@
-{% extends "touchtechnology/news/_feeds.html" %}
+{% extends "touchtechnology/news/base.html" %}
+{% load i18n %}
+{% load content %}
+
+{% block body_class %}{{ block.super }} feeds{% endblock %}
+
+{% block news_content %}
+	<h1>{% block page_title %}{% trans "Feeds" %}{% endblock %}</h1>
+
+	{% block syndication %}
+		{% chunk "syndication-info" %}
+	{% endblock %}
+
+	{% block syndication_terms %}
+		{% chunk "syndication-terms" %}
+	{% endblock %}
+
+	<ul>
+        <li><a href="{% url application.name|add:":feed-atom" %}">{% trans "Atom" %}</a></li>
+        <li><a href="{% url application.name|add:":feed-rss" %}">{% trans "RSS" %}</a></li>
+	</ul>
+{% endblock %}

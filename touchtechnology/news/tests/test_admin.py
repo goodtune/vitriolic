@@ -27,22 +27,15 @@ class ImageFieldTestCase(TestCase):
         )
 
         self.data_no_image = {
-            "form-headline": "Headline",
-            "form-image": "",
-            "form-abstract": "This is the abstract",
-            "form-published": "2017-01-01 05:30:00",
-            "formset-0-copy": "",
-            "formset-0-label": "copy",
-            "formset-0-sequence": "1",
-            "formset-TOTAL_FORMS": "1",
-            "formset-INITIAL_FORMS": "0",
-            "formset-MIN_NUM_FORMS": "0",
-            "formset-MAX_NUM_FORMS": "100",
+            "headline": "Headline",
+            "image": "",
+            "abstract": "This is the abstract",
+            "copy": "<p>This is the copy</p>",
+            "published": "2017-01-01 05:30:00",
         }
         self.data_with_image = copy.copy(self.data_no_image)
-        self.data_with_image["form-image"] = BytesIO(png_data)
-        # From Django 1.11 the image field validates the filename.
-        self.data_with_image["form-image"].name = "pixel.png"
+        self.data_with_image["image"] = BytesIO(png_data)
+        self.data_with_image["image"].name = "pixel.png"
 
     def test_image_required_no_image(self):
         with self.login(self.superuser):
@@ -55,6 +48,7 @@ class ImageFieldTestCase(TestCase):
     def test_image_required_with_image(self):
         with self.login(self.superuser):
             self.post("admin:news:article:add", data=self.data_with_image)
+        # print(self.last_response.content.decode("utf-8"))
         self.response_302()
         self.assertEqual(1, Article.objects.count())
 
@@ -62,6 +56,7 @@ class ImageFieldTestCase(TestCase):
     def test_image_not_required_no_image(self):
         with self.login(self.superuser):
             self.post("admin:news:article:add", data=self.data_no_image)
+        # print(self.last_response.content.decode("utf-8"))
         self.response_302()
         self.assertEqual(1, Article.objects.count())
 
@@ -69,5 +64,6 @@ class ImageFieldTestCase(TestCase):
     def test_image_not_required_with_image(self):
         with self.login(self.superuser):
             self.post("admin:news:article:add", data=self.data_with_image)
+        # print(self.last_response.content.decode("utf-8"))
         self.response_302()
         self.assertEqual(1, Article.objects.count())

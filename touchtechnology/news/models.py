@@ -9,8 +9,8 @@ from imagekit.models import ImageSpecField
 from touchtechnology.admin.mixins import AdminUrlMixin
 from touchtechnology.common.db.models import BooleanField, HTMLField
 from touchtechnology.news.app_settings import (
-    CONTENT_LABEL_CHOICES, DETAIL_IMAGE_KWARGS, DETAIL_IMAGE_PROCESSORS,
-    THUMBNAIL_IMAGE_KWARGS, THUMBNAIL_IMAGE_PROCESSORS,
+    DETAIL_IMAGE_KWARGS, DETAIL_IMAGE_PROCESSORS, THUMBNAIL_IMAGE_KWARGS,
+    THUMBNAIL_IMAGE_PROCESSORS,
 )
 from touchtechnology.news.image_processors import processor_factory
 from touchtechnology.news.query import ArticleQuerySet, CategoryQuerySet
@@ -50,6 +50,8 @@ class Article(AdminUrlModel):
 
     is_active = BooleanField(default=True, verbose_name=_("Enabled"))
 
+    copy = HTMLField(_("Copy"), blank=True)
+
     # image and imagekit spec files
     thumbnail = ImageSpecField(
         source="image",
@@ -73,37 +75,60 @@ class Article(AdminUrlModel):
         if not self.slug_locked or not self.slug:
             self.slug = slugify(self.headline)
 
+    def get_absolute_url(self):
+        return reverse(
+            "news:article",
+            kwargs={
+                "year": self.published.year,
+                "month": self.published.strftime("%b").lower(),
+                "day": self.published.day,
+                "slug": self.slug,
+            },
+        )
+
     def __str__(self):
         return self.headline
 
-    @property
-    def copy(self):
-        """
-        Backwards compatibility -- concatenate all of the content sections
-        into a single string and return this instead.
-        """
-        return "".join(self.content.sections.values_list("copy", flat=True))
 
-
-class ArticleContent(models.Model):
+class Translation(AdminUrlModel):
 
     article = models.ForeignKey(
-        Article,
-        related_name="content",
-        verbose_name=_("Article"),
-        on_delete=models.PROTECT,
+        Article, related_name="translations", on_delete=models.CASCADE
     )
-    label = models.SlugField(
-        max_length=20, choices=CONTENT_LABEL_CHOICES, verbose_name=_("CSS class")
-    )
-    sequence = models.PositiveIntegerField(verbose_name=_("Sequence"))
+    locale = models.CharField(max_length=10, blank=False, null=False)
+    headline = models.CharField(max_length=150, verbose_name=_("Headline"))
+    abstract = models.TextField(verbose_name=_("Abstract"))
     copy = HTMLField(_("Copy"), blank=True)
 
-    class Meta:
-        ordering = ("sequence",)
+    def __getattr__(self, name):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self.article, name)
 
-    def __repr__(self):
-        return "<ArticleContent: #%d, article=%d>" % (self.pk, self.article.pk)
+    def _get_admin_namespace(self):
+        return "admin:news:article:%s" % self._meta.model_name
+
+    def _get_url_args(self):
+        return (self.article.pk, self.locale)
+
+    def get_absolute_url(self):
+        return reverse(
+            "news:article",
+            kwargs={
+                "year": self.published.year,
+                "month": self.published.strftime("%b").lower(),
+                "day": self.published.day,
+                "slug": self.slug,
+                "locale": self.locale,
+            },
+        )
+
+    def __str__(self):
+        return self.headline
+
+    class Meta:
+        unique_together = ("article", "locale")
 
 
 class Category(AdminUrlModel):
@@ -141,8 +166,7 @@ class Category(AdminUrlModel):
             self.slug = slugify(self.title)
 
     def get_absolute_url(self):
-        kwargs = {"category": self.slug}
-        return reverse("news:category-index", kwargs=kwargs)
+        return reverse("news:category", kwargs={"category": self.slug})
 
     def __str__(self):
         return self.title
