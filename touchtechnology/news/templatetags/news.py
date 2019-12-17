@@ -6,6 +6,11 @@ from touchtechnology.news.models import Article, Category
 register = Library()
 
 
+@register.filter("category")
+def get_category(slug):
+    return Category.objects.get(slug=slug)
+
+
 @register.inclusion_tag('touchtechnology/news/_related_list.html',
                         takes_context=True)
 def related_articles(context, article, limit=None, order_by=None):
