@@ -1,3 +1,4 @@
+import factory
 from django.db import transaction
 from django.test.utils import override_settings
 from test_plus import TestCase
@@ -32,13 +33,14 @@ class FeedTest(TestCase):
 
 @override_settings(ROOT_URLCONF="example_app.urls")
 class SiteTest(TestCase):
-    def assertGoodArticleView(self, article):
+    def assertGoodArticleView(self, article, **kwargs):
         self.assertGoodView(
             "news:article",
             year=article.published.year,
             month=article.published.strftime("%b").lower(),
             day=article.published.day,
             slug=article.slug,
+            **kwargs
         )
 
     def test_article(self):
@@ -67,3 +69,21 @@ class SiteTest(TestCase):
             for article in articles:
                 article.categories.set(categories)
         self.assertGoodArticleView(article)
+
+    def test_article_translation(self):
+        article = factories.ArticleFactory.create(headline="This is in English")
+        translation = factories.TranslationFactory.create(
+            locale="de", article_id=article.pk, headline="Das ist in Deutsch"
+        )
+        with self.subTest(msg="Article references Translation"):
+            self.assertGoodArticleView(article)
+            self.assertResponseContains(
+                '<a class="de" href="{}">Deutsch (German)</a>'.format(
+                    translation.get_absolute_url()
+                )
+            )
+        with self.subTest(msg="Translation references Article"):
+            self.assertGoodArticleView(article, locale="de")
+            self.assertResponseContains(
+                '<a href="{}">This is in English</a>'.format(article.get_absolute_url())
+            )

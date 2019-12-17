@@ -112,6 +112,18 @@ class Translation(AdminUrlModel):
     def _get_url_args(self):
         return (self.article.pk, self.locale)
 
+    def get_absolute_url(self):
+        return reverse(
+            "news:article",
+            kwargs={
+                "year": self.published.year,
+                "month": self.published.strftime("%b").lower(),
+                "day": self.published.day,
+                "slug": self.slug,
+                "locale": self.locale,
+            },
+        )
+
     def __str__(self):
         return self.headline
 
