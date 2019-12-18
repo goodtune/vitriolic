@@ -126,27 +126,20 @@ class NewsSite(Application):
 
     @date_view
     @last_modified_article
-    def archive_year(self, request, date, **kwargs):
-        queryset = Article.objects.live().filter(
+    def archive_year(self, request, date, **extra_context):
+        queryset = Article.objects.filter(
             published__range=(date, date + YEAR_DELTA)
+        ).live()
+        extra_context.update(
+            {"date_list": queryset.dates("published", "month"), "year": date.year,}
         )
-        try:
-            date_list = queryset.datetimes("published", "month", tzinfo=timezone.utc)
-        except AttributeError:
-            date_list = queryset.dates("published", "month")
-
-        # compatibility with date_based.archive_year
-        year = str(date.year)
-
-        context = {
-            "date_list": date_list,
-            "year": year,
-            "object_list": queryset,
-        }
-        context.update(kwargs)
-
-        templates = ["touchtechnology/news/archive/year.html"]
-        return self.render(request, templates, context)
+        return self.generic_list(
+            request,
+            Article,
+            queryset=queryset,
+            templates=self.template_path("archive/year.html"),
+            extra_context=extra_context,
+        )
 
     def archive(self, request, **kwargs):
         queryset = Article.objects.live()
