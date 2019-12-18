@@ -10,7 +10,7 @@ from touchtechnology.news.app_settings import PAGINATE_BY
 from touchtechnology.news.decorators import (
     date_view, last_modified_article, news_last_modified,
 )
-from touchtechnology.news.models import Article, Category
+from touchtechnology.news.models import Article, Category, Translation
 from touchtechnology.news.syndication import ExtendedRSSFeed, NewsFeed
 
 YEAR_DELTA = relativedelta(years=1)
@@ -36,14 +36,14 @@ class NewsSite(Application):
             ),
             path(
                 "<int:year>/<str:month>/<int:day>/<slug:slug>/<str:locale>/",
-                self.article,
-                name="article",
+                self.translation,
+                name="translation",
             ),
             path("feeds/", self.feeds, name="feeds"),
             path("feeds/atom/", self.feed, kwargs={"format": "atom"}, name="feed-atom"),
             path("feeds/rss/", self.feed, kwargs={"format": "rss"}, name="feed-rss"),
             path("archive/", self.archive, name="archive"),
-            path("<str:category>/", self.list_articles, name="category",),
+            path("<str:category>/", self.list_articles, name="category"),
         ]
 
     @property
@@ -63,39 +63,37 @@ class NewsSite(Application):
         return self.render(request, "touchtechnology/news/index.html", context)
 
     @news_last_modified
-    def list_articles(self, request, **kwargs):
-        articles = Article.objects.live()
-        templates = self.template_path("list_articles.html")
-
-        extra_context = {}
-        extra_context.update(kwargs)
-
-        context = {
-            "object_list": articles,
-        }
-        context.update(extra_context)
-
-        return self.render(request, templates, context)
+    def list_articles(self, request, **extra_context):
+        queryset = Article.objects.live()
+        category = extra_context.get("category")
+        if category is not None:
+            queryset = queryset.filter(categories__slug=category)
+        return self.generic_list(
+            request, Article, queryset=queryset, extra_context=extra_context,
+        )
 
     @date_view
     @last_modified_article
-    def article(self, request, date, slug, locale=None, **kwargs):
-        date_range = (date, date + DAY_DELTA)
-        article = get_object_or_404(Article, slug=slug, published__range=date_range)
-        context = {
-            "article": article,
-            "translation": False,
-        }
-        if locale is not None:
-            context.update(
-                {
-                    "article": get_object_or_404(article.translations, locale=locale),
-                    "translation": True,
-                }
-            )
-        context.update(kwargs)
-        templates = self.template_path("article.html")
-        return self.render(request, templates, context)
+    def article(self, request, date, slug, **extra_context):
+        return self.generic_detail(
+            request,
+            Article.objects.live(),
+            published__range=(date, date + DAY_DELTA),
+            slug=slug,
+            extra_context=extra_context,
+        )
+
+    @date_view
+    @last_modified_article
+    def translation(self, request, date, slug, locale, **extra_context):
+        article = get_object_or_404(
+            Article.objects.live(),
+            published__range=(date, date + DAY_DELTA),
+            slug=slug,
+        )
+        return self.generic_detail(
+            request, article.translations, locale=locale, extra_context=extra_context,
+        )
 
     @date_view
     @last_modified_article

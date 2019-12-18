@@ -1,0 +1,54 @@
+{% extends "touchtechnology/news/base.html" %}
+{% load i18n tz %}
+{% load common news %}
+
+{% block body_class %}{{ block.super }} detail{% endblock %}
+
+{% block news_content %}
+	<h1>{% block page_title %}{{ object.headline }}{% endblock %}</h1>
+
+	<p class="published" data-localtime="{{ object.published|date }} @ {{ object.published|date:"G:i e" }}">
+		{{ object.published|date }} @ {{ object.published|date:"G:i e" }}
+	</p>
+
+	{% if object.byline %}<p class="byline">{{ object.byline }}</p>{% endif %}
+
+	{% block image %}
+		{% if object.image %}
+			<div class="img">
+				<a href="{{ object.image.url }}">
+					<img src="{{ object.detail_image.url }}" alt="{{ object.headline }}">
+				</a>
+			</div>
+		{% endif %}
+	{% endblock %}
+
+	<div class="cms">
+		<div class="abstract">
+			{{ object.abstract|linebreaks }}
+		</div>
+        <div class="copy">
+            {{ object.copy|safe }}
+        </div>
+
+        {% block translations %}
+            {% if object.translations.count %}
+                <h3>{% trans "Translations" %}</h3>
+                <ul>
+                    {% for translation in object.translations.all %}
+                        {% get_language_info for translation.locale as lang %}
+                        <li>
+                            {% language "en" %}
+                                <a href="{{ translation.get_absolute_url }}" class="{{ lang.code }}">{% language lang.code %}{% trans lang.name %}{% endlanguage %} ({{ lang.name }})</a>
+                            {% endlanguage %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endblock %}
+	</div>
+{% endblock %}
+
+{% block related_content %}
+    {% related_articles object %}
+{% endblock %}

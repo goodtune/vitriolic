@@ -83,7 +83,14 @@ class SiteTest(TestCase):
                 )
             )
         with self.subTest(msg="Translation references Article"):
-            self.assertGoodArticleView(article, locale="de")
+            self.assertGoodView(
+                "news:translation",
+                year=article.published.year,
+                month=article.published.strftime("%b").lower(),
+                day=article.published.day,
+                slug=article.slug,
+                locale="de",
+            )
             self.assertResponseContains(
                 '<a href="{}">This is in English</a>'.format(article.get_absolute_url())
             )
