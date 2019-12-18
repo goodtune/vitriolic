@@ -109,22 +109,20 @@ class NewsSite(Application):
 
     @date_view
     @last_modified_article
-    def archive_month(self, request, date, **kwargs):
-        queryset = Article.objects.live().filter(
+    def archive_month(self, request, date, **extra_context):
+        queryset = Article.objects.filter(
             published__range=(date, date + MONTH_DELTA)
+        ).live()
+        extra_context.update(
+            {"date_list": queryset.dates("published", "day"), "month": date}
         )
-        try:
-            date_list = queryset.datetimes("published", "day", tzinfo=timezone.utc)
-        except AttributeError:
-            date_list = queryset.dates("published", "day")
-        context = {
-            "date_list": date_list,
-            "month": date,
-            "object_list": queryset,
-        }
-        context.update(kwargs)
-        templates = ["touchtechnology/news/archive/month.html"]
-        return self.render(request, templates, context)
+        return self.generic_list(
+            request,
+            Article,
+            queryset=queryset,
+            templates=self.template_path("archive/month.html"),
+            extra_context=extra_context,
+        )
 
     @date_view
     @last_modified_article
