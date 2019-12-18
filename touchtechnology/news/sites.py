@@ -55,12 +55,13 @@ class NewsSite(Application):
         return Category.objects.all()
 
     @news_last_modified
-    def index(self, request, **kwargs):
-        context = {
-            "object_list": Article.objects.live()[:PAGINATE_BY],
-        }
-        context.update(kwargs)
-        return self.render(request, "touchtechnology/news/index.html", context)
+    def index(self, request, **extra_context):
+        return self.generic_list(
+            request,
+            Article.objects.live()[:PAGINATE_BY],
+            templates=self.template_path("index.html"),
+            extra_context=extra_context,
+        )
 
     @news_last_modified
     def list_articles(self, request, **extra_context):
