@@ -98,17 +98,14 @@ class NewsSite(Application):
 
     @date_view
     @last_modified_article
-    def archive_day(self, request, date, **kwargs):
-        queryset = Article.objects.live().filter(
-            published__range=(date, date + DAY_DELTA)
+    def archive_day(self, request, date, **extra_context):
+        extra_context["day"] = date
+        return self.generic_list(
+            request,
+            Article.objects.live().filter(published__range=(date, date + DAY_DELTA)),
+            templates=self.template_path("archive/day.html"),
+            extra_context=extra_context,
         )
-        context = {
-            "day": date,
-            "object_list": queryset,
-        }
-        context.update(kwargs)
-        templates = ["touchtechnology/news/archive/day.html"]
-        return self.render(request, templates, context)
 
     @date_view
     @last_modified_article
