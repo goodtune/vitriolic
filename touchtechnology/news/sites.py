@@ -1,14 +1,14 @@
-from __future__ import unicode_literals
-
 from dateutil.relativedelta import relativedelta
 from django.shortcuts import get_object_or_404
 from django.urls import path
-from django.utils import timezone
 from django.utils.feedgenerator import Atom1Feed
+
 from touchtechnology.common.sites import Application
 from touchtechnology.news.app_settings import PAGINATE_BY
 from touchtechnology.news.decorators import (
-    date_view, last_modified_article, news_last_modified,
+    date_view,
+    last_modified_article,
+    news_last_modified,
 )
 from touchtechnology.news.models import Article, Category
 from touchtechnology.news.syndication import ExtendedRSSFeed, NewsFeed
@@ -36,14 +36,14 @@ class NewsSite(Application):
             ),
             path(
                 "<int:year>/<str:month>/<int:day>/<slug:slug>/<str:locale>/",
-                self.article,
-                name="article",
+                self.translation,
+                name="translation",
             ),
             path("feeds/", self.feeds, name="feeds"),
             path("feeds/atom/", self.feed, kwargs={"format": "atom"}, name="feed-atom"),
             path("feeds/rss/", self.feed, kwargs={"format": "rss"}, name="feed-rss"),
             path("archive/", self.archive, name="archive"),
-            path("<str:category>/", self.list_articles, name="category",),
+            path("<str:category>/", self.list_articles, name="category"),
         ]
 
     @property
@@ -55,118 +55,107 @@ class NewsSite(Application):
         return Category.objects.all()
 
     @news_last_modified
-    def index(self, request, **kwargs):
-        context = {
-            "object_list": Article.objects.live()[:PAGINATE_BY],
-        }
-        context.update(kwargs)
-        return self.render(request, "touchtechnology/news/index.html", context)
+    def index(self, request, **extra_context):
+        return self.generic_list(
+            request,
+            Article.objects.live()[:PAGINATE_BY],
+            templates=self.template_path("index.html"),
+            extra_context=extra_context,
+        )
 
     @news_last_modified
-    def list_articles(self, request, **kwargs):
-        articles = Article.objects.live()
-        templates = self.template_path("list_articles.html")
-
-        extra_context = {}
-        extra_context.update(kwargs)
-
-        context = {
-            "object_list": articles,
-        }
-        context.update(extra_context)
-
-        return self.render(request, templates, context)
-
-    @date_view
-    @last_modified_article
-    def article(self, request, date, slug, locale=None, **kwargs):
-        date_range = (date, date + DAY_DELTA)
-        article = get_object_or_404(Article, slug=slug, published__range=date_range)
-        context = {
-            "article": article,
-            "translation": False,
-        }
-        if locale is not None:
-            context.update(
-                {
-                    "article": get_object_or_404(article.translations, locale=locale),
-                    "translation": True,
-                }
-            )
-        context.update(kwargs)
-        templates = self.template_path("article.html")
-        return self.render(request, templates, context)
-
-    @date_view
-    @last_modified_article
-    def archive_day(self, request, date, **kwargs):
-        queryset = Article.objects.live().filter(
-            published__range=(date, date + DAY_DELTA)
-        )
-        context = {
-            "day": date,
-            "object_list": queryset,
-        }
-        context.update(kwargs)
-        templates = ["touchtechnology/news/archive/day.html"]
-        return self.render(request, templates, context)
-
-    @date_view
-    @last_modified_article
-    def archive_month(self, request, date, **kwargs):
-        queryset = Article.objects.live().filter(
-            published__range=(date, date + MONTH_DELTA)
-        )
-        try:
-            date_list = queryset.datetimes("published", "day", tzinfo=timezone.utc)
-        except AttributeError:
-            date_list = queryset.dates("published", "day")
-        context = {
-            "date_list": date_list,
-            "month": date,
-            "object_list": queryset,
-        }
-        context.update(kwargs)
-        templates = ["touchtechnology/news/archive/month.html"]
-        return self.render(request, templates, context)
-
-    @date_view
-    @last_modified_article
-    def archive_year(self, request, date, **kwargs):
-        queryset = Article.objects.live().filter(
-            published__range=(date, date + YEAR_DELTA)
-        )
-        try:
-            date_list = queryset.datetimes("published", "month", tzinfo=timezone.utc)
-        except AttributeError:
-            date_list = queryset.dates("published", "month")
-
-        # compatibility with date_based.archive_year
-        year = str(date.year)
-
-        context = {
-            "date_list": date_list,
-            "year": year,
-            "object_list": queryset,
-        }
-        context.update(kwargs)
-
-        templates = ["touchtechnology/news/archive/year.html"]
-        return self.render(request, templates, context)
-
-    def archive(self, request, **kwargs):
+    def list_articles(self, request, **extra_context):
         queryset = Article.objects.live()
-        try:
-            date_list = queryset.datetimes("published", "year", tzinfo=timezone.utc)
-        except AttributeError:
-            date_list = queryset.dates("published", "year")
-        context = {
-            "date_list": date_list,
-            "latest": queryset.order_by("-published")[:15],
-        }
-        context.update(kwargs)
-        templates = ["touchtechnology/news/archive/index.html"]
-        return self.render(request, templates, context)
+        category = extra_context.get("category")
+        if category is not None:
+            queryset = queryset.filter(categories__slug=category)
+        return self.generic_list(
+            request, Article, queryset=queryset, extra_context=extra_context,
+        )
+
+    @date_view
+    @last_modified_article
+    def article(self, request, date, slug, **extra_context):
+        return self.generic_detail(
+            request,
+            Article.objects.live(),
+            published__range=(date, date + DAY_DELTA),
+            slug=slug,
+            extra_context=extra_context,
+        )
+
+    @date_view
+    @last_modified_article
+    def translation(self, request, date, slug, locale, **extra_context):
+        article = get_object_or_404(
+            Article.objects.live(),
+            published__range=(date, date + DAY_DELTA),
+            slug=slug,
+        )
+        return self.generic_detail(
+            request, article.translations, locale=locale, extra_context=extra_context,
+        )
+
+    @date_view
+    @last_modified_article
+    def archive_day(self, request, date, **extra_context):
+        extra_context["day"] = date
+        return self.generic_list(
+            request,
+            Article.objects.live().filter(published__range=(date, date + DAY_DELTA)),
+            templates=self.template_path("archive/day.html"),
+            extra_context=extra_context,
+        )
+
+    @date_view
+    @last_modified_article
+    def archive_month(self, request, date, **extra_context):
+        queryset = Article.objects.filter(
+            published__range=(date, date + MONTH_DELTA)
+        ).live()
+        extra_context.update(
+            {"date_list": queryset.dates("published", "day"), "month": date}
+        )
+        return self.generic_list(
+            request,
+            Article,
+            queryset=queryset,
+            templates=self.template_path("archive/month.html"),
+            extra_context=extra_context,
+        )
+
+    @date_view
+    @last_modified_article
+    def archive_year(self, request, date, **extra_context):
+        queryset = Article.objects.filter(
+            published__range=(date, date + YEAR_DELTA)
+        ).live()
+        extra_context.update(
+            {"date_list": queryset.dates("published", "month"), "year": date.year,}
+        )
+        return self.generic_list(
+            request,
+            Article,
+            queryset=queryset,
+            templates=self.template_path("archive/year.html"),
+            extra_context=extra_context,
+        )
+
+    def archive(self, request, **extra_context):
+        queryset = Article.objects.live()
+        extra_context.update(
+            {
+                "date_list": queryset.dates("published", "year"),
+                "latest": queryset.order_by("-published")[: (3 * PAGINATE_BY)],
+            }
+        )
+        return self.generic_list(
+            request,
+            Article,
+            queryset=queryset,
+            templates=self.template_path("archive/index.html"),
+            extra_context=extra_context,
+        )
 
     def feeds(self, request, **kwargs):
         context = {

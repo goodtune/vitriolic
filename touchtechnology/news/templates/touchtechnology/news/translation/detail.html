@@ -1,0 +1,13 @@
+{% extends "touchtechnology/news/article/detail.html" %}
+{% load i18n %}
+
+{% block translations %}
+    <dl>
+        <dt>{% trans "Original" %}</dt>
+        <dd>
+            {% language "en" %}
+                <a href="{{ object.article.get_absolute_url }}">{{ object.article.headline }}</a>
+            {% endlanguage %}
+        </dd>
+    </dl>
+{% endblock %}

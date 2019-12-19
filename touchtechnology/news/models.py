@@ -1,5 +1,3 @@
-from __future__ import unicode_literals
-
 from django.db import models
 from django.db.models import DateTimeField, ManyToManyField
 from django.template.defaultfilters import slugify
@@ -113,13 +111,14 @@ class Translation(AdminUrlModel):
         return (self.article.pk, self.locale)
 
     def get_absolute_url(self):
+        published = self.article.published
         return reverse(
-            "news:article",
+            "news:translation",
             kwargs={
-                "year": self.published.year,
-                "month": self.published.strftime("%b").lower(),
-                "day": self.published.day,
-                "slug": self.slug,
+                "year": published.year,
+                "month": published.strftime("%b").lower(),
+                "day": published.day,
+                "slug": self.article.slug,
                 "locale": self.locale,
             },
         )
