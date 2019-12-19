@@ -1,16 +1,16 @@
-from __future__ import unicode_literals
-
 from dateutil.relativedelta import relativedelta
 from django.shortcuts import get_object_or_404
 from django.urls import path
-from django.utils import timezone
 from django.utils.feedgenerator import Atom1Feed
+
 from touchtechnology.common.sites import Application
 from touchtechnology.news.app_settings import PAGINATE_BY
 from touchtechnology.news.decorators import (
-    date_view, last_modified_article, news_last_modified,
+    date_view,
+    last_modified_article,
+    news_last_modified,
 )
-from touchtechnology.news.models import Article, Category, Translation
+from touchtechnology.news.models import Article, Category
 from touchtechnology.news.syndication import ExtendedRSSFeed, NewsFeed
 
 YEAR_DELTA = relativedelta(years=1)

@@ -1,5 +1,3 @@
-from __future__ import unicode_literals
-
 from django.db import models
 from django.db.models import DateTimeField, ManyToManyField
 from django.template.defaultfilters import slugify
