@@ -141,19 +141,21 @@ class NewsSite(Application):
             extra_context=extra_context,
         )
 
-    def archive(self, request, **kwargs):
+    def archive(self, request, **extra_context):
         queryset = Article.objects.live()
-        try:
-            date_list = queryset.datetimes("published", "year", tzinfo=timezone.utc)
-        except AttributeError:
-            date_list = queryset.dates("published", "year")
-        context = {
-            "date_list": date_list,
-            "latest": queryset.order_by("-published")[:15],
-        }
-        context.update(kwargs)
-        templates = ["touchtechnology/news/archive/index.html"]
-        return self.render(request, templates, context)
+        extra_context.update(
+            {
+                "date_list": queryset.dates("published", "year"),
+                "latest": queryset.order_by("-published")[: (3 * PAGINATE_BY)],
+            }
+        )
+        return self.generic_list(
+            request,
+            Article,
+            queryset=queryset,
+            templates=self.template_path("archive/index.html"),
+            extra_context=extra_context,
+        )
 
     def feeds(self, request, **kwargs):
         context = {
