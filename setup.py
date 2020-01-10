@@ -44,7 +44,7 @@ setup(
             "freezegun",
             "mock",
         ],
-        "redis": ["django-redis-cache"],
+        "redis": ["django-redis-cache", "redis<3"],
         "admin": ["django-bootstrap3", "django-gravatar2"],
         "content": [],
         "news": ["django-imagekit", "python-magic"],
