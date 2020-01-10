@@ -30,8 +30,7 @@ def prince(html, base_url=None, ttl=300, **kwargs):
 
     if SERVER:
         logger.debug("server: %s", SERVER)
-        if isinstance(html, unicode):
-            html = html.encode("utf8")
+        html = html.encode("utf8")
 
         headers = {}
         if base_url:
