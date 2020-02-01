@@ -794,6 +794,9 @@ class Application(object):
             "formset": formset,
             "object": instance,
             "media": form.media + formset.media,
+            # For template compatibility, we don't use related ourselves but this
+            # method is only used in touchtechnology.content.admin
+            "related": (),
         }
         context.update(extra_context)
 
