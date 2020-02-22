@@ -4,25 +4,33 @@ import logging
 import os
 
 from django.conf import settings
-from django.conf.urls import include, url
 from django.contrib import messages
 from django.core.files.storage import default_storage
 from django.db.models import Q
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
+from django.urls import include, path, re_path
 from django.urls import resolve, reverse
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 from first import first
+
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.mixins import AdminUrlMixin
-from touchtechnology.admin.sites import site
 from touchtechnology.common.decorators import require_POST_m, staff_login_required_m
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.content.forms import (
-    FileUploadForm, NewFolderForm, NewPlaceholderSitemapNodeForm, NewSitemapNodeForm,
-    Page, PageContentFormset, PageForm, PlaceholderConfigurationBase,
-    PlaceholderContentFormset, PlaceholderSitemapNodeForm, RedirectEditForm,
+    FileUploadForm,
+    NewFolderForm,
+    NewPlaceholderSitemapNodeForm,
+    NewSitemapNodeForm,
+    Page,
+    PageContentFormset,
+    PageForm,
+    PlaceholderConfigurationBase,
+    PlaceholderContentFormset,
+    PlaceholderSitemapNodeForm,
+    RedirectEditForm,
     SitemapNodeForm,
 )
 from touchtechnology.content.models import Chunk, PageContent, Placeholder, Redirect
@@ -41,97 +49,92 @@ class ContentAdminComponent(AdminComponent):
     def get_urls(self):
         folder_patterns = (
             [
-                url(r"^add/$", self.edit_folder, name="add"),
-                url(r"^(?P<pk>\d+)/$", self.edit_folder, name="edit"),
-                url(r"^(?P<pk>\d+)/delete/$", self.delete_folder, name="delete"),
+                path("add/", self.edit_folder, name="add"),
+                path("<int:pk>/", self.edit_folder, name="edit"),
+                path("<int:pk>/delete/", self.delete_folder, name="delete"),
             ],
             self.app_name,
         )
 
         page_patterns = (
             [
-                url(r"^add/$", self.edit_page, name="add"),
-                url(r"^(?P<pk>\d+)/$", self.edit_page, name="edit"),
-                url(r"^(?P<pk>\d+)/delete/$", self.delete_page, name="delete"),
-                url(r"^(?P<pk>\d+)/permission/$", self.perms_sitemapnode, name="perms"),
+                path("add/", self.edit_page, name="add"),
+                path("<int:pk>/", self.edit_page, name="edit"),
+                path("<int:pk>/delete/", self.delete_page, name="delete"),
+                path("<int:pk>/permission/", self.perms_sitemapnode, name="perms"),
             ],
             self.app_name,
         )
 
         redirect_patterns = (
             [
-                url(r"^$", self.list_redirects, name="list"),
-                url(r"^create/$", self.edit_redirect, name="add"),
-                url(r"^(?P<pk>\d+)/$", self.edit_redirect, name="edit"),
-                url(r"^(?P<pk>\d+)/delete/$", self.delete_redirect, name="delete"),
-                url(r"^(?P<pk>\d+)/permission/$", self.perms_redirect, name="perms"),
+                path("", self.list_redirects, name="list"),
+                path("create/", self.edit_redirect, name="add"),
+                path("<int:pk>/", self.edit_redirect, name="edit"),
+                path("<int:pk>/delete/", self.delete_redirect, name="delete"),
+                path("<int:pk>/permission/", self.perms_redirect, name="perms"),
             ],
             self.app_name,
         )
 
         placeholder_patterns = (
             [
-                url(r"^$", self.list_placeholders, name="list"),
-                url(r"^create/$", self.edit_placeholder_x, name="add"),
-                url(r"^(?P<pk>\d+)/$", self.edit_placeholder_x, name="edit"),
-                url(r"^(?P<pk>\d+)/delete/$", self.delete_placeholder_x, name="delete"),
-                # url(r'^(?P<pk>\d+)/permission/$',
-                #     self.perms_placeholder, name='delete'),
+                path("", self.list_placeholders, name="list"),
+                path("create/", self.edit_placeholder_x, name="add"),
+                path("<int:pk>/", self.edit_placeholder_x, name="edit"),
+                path("<int:pk>/delete/", self.delete_placeholder_x, name="delete"),
+                # path("<int:pk>/permission/", self.perms_placeholder, name="delete"),
             ],
             self.app_name,
         )
 
         application_patterns = (
             [
-                url(r"^add/$", self.edit_application_node, name="add"),
-                url(r"^(?P<pk>\d+)/$", self.edit_application_node, name="edit"),
-                url(
-                    r"^(?P<pk>\d+)/delete/$",
-                    self.delete_application_node,
-                    name="delete",
-                ),
-                url(r"^(?P<pk>\d+)/permission/$", self.perms_sitemapnode, name="perms"),
+                path("add/", self.edit_application_node, name="add"),
+                path("<int:pk>/", self.edit_application_node, name="edit"),
+                path("<int:pk>/delete/", self.delete_application_node, name="delete"),
+                path("<int:pk>/permission/", self.perms_sitemapnode, name="perms"),
             ],
             self.app_name,
         )
 
         chunk_patterns = (
             [
-                url(r"^$", self.list_chunks, name="list"),
-                url(r"^create/$", self.edit_chunk, name="add"),
-                url(r"^(?P<pk>\d+)/$", self.edit_chunk, name="edit"),
-                url(r"^(?P<pk>\d+)/delete/$", self.delete_chunk, name="delete"),
-                url(r"^(?P<pk>\d+)/permission/$", self.perms_chunk, name="perms"),
+                path("", self.list_chunks, name="list"),
+                path("create/", self.edit_chunk, name="add"),
+                path("<int:pk>/", self.edit_chunk, name="edit"),
+                path("<int:pk>/delete/", self.delete_chunk, name="delete"),
+                path("<int:pk>/permission/", self.perms_chunk, name="perms"),
             ],
             self.app_name,
         )
 
         files_patterns = (
             [
-                url(
+                re_path(
                     r"^(?P<path>.+/)?(?P<filename>[^/]+?)/rm/$", self.rm, name="delete"
                 ),
-                url(r"^(?P<path>.+/)rmdir/$", self.rm, name="delete"),
-                url(r"^$", self.ls, name="list"),
-                url(r"^(?P<path>.+)$", self.ls, name="edit"),
+                re_path(r"^(?P<path>.+/)rmdir/$", self.rm, name="delete"),
+                path("", self.ls, name="list"),
+                re_path(r"^(?P<path>.+)$", self.ls, name="edit"),
             ],
             self.app_name,
         )
 
         urlpatterns = [
-            url(r"^$", self.list_pages, name="index"),
-            url(r"^folder/", include(folder_patterns, namespace="folder")),
-            url(r"^page/", include(page_patterns, namespace="page")),
-            url(r"^redirect/", include(redirect_patterns, namespace="redirect")),
-            url(
-                r"^placeholder/",
+            path("", self.list_pages, name="index"),
+            path("folder/", include(folder_patterns, namespace="folder")),
+            path("page/", include(page_patterns, namespace="page")),
+            path("redirect/", include(redirect_patterns, namespace="redirect")),
+            path(
+                "placeholder/",
                 include(placeholder_patterns, namespace="real_placeholder"),
             ),
-            url(
-                r"^application/", include(application_patterns, namespace="placeholder")
+            path(
+                "application/", include(application_patterns, namespace="placeholder")
             ),
-            url(r"^chunk/", include(chunk_patterns, namespace="chunk")),
-            url(r"^files/", include(files_patterns, namespace="media")),
+            path("chunk/", include(chunk_patterns, namespace="chunk")),
+            path("files/", include(files_patterns, namespace="media")),
         ]
         return urlpatterns
 

@@ -4,19 +4,18 @@ import base64
 import functools
 import operator
 from datetime import timedelta
-from functools import reduce
 from operator import or_
 
 import pytz
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
-from django.conf.urls import include, url
 from django.contrib import messages
 from django.contrib.sitemaps import views as sitemaps_views
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Case, Count, F, Q, Sum, When
 from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
+from django.urls import include, path, re_path
 from django.utils import timezone
 from django.utils.encoding import smart_bytes
 from django.utils.module_loading import import_string
@@ -25,17 +24,32 @@ from icalendar import Calendar, Event
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
 from touchtechnology.common.utils import get_403_or_None, get_perms_for_model
-from tournamentcontrol.competition import rank
 from tournamentcontrol.competition.dashboard import (
-    matches_require_basic_results, matches_require_details_results,
+    matches_require_basic_results,
+    matches_require_details_results,
 )
 from tournamentcontrol.competition.decorators import competition_by_slug_m
 from tournamentcontrol.competition.forms import (
-    ConfigurationForm, MatchResultFormSet, MatchStatisticFormset,
-    MultiConfigurationForm, RankingConfigurationForm,
+    ConfigurationForm,
+    DivisionTournamentScheduleForm,
+    MatchResultFormSet,
+    MatchStatisticFormset,
+    MultiConfigurationForm,
+    RankingConfigurationForm,
 )
 from tournamentcontrol.competition.models import (
-    Competition, Match, Person, SimpleScoreMatchStatistic,
+    Competition,
+    Match,
+    Person,
+    SimpleScoreMatchStatistic,
+)
+from tournamentcontrol.competition.rank import (
+    DayView as RankDay,
+    DivisionView as RankDivision,
+    IndexView as RankIndex,
+    MonthView as RankMonth,
+    TeamView as RankTeam,
+    YearView as RankYear,
 )
 from tournamentcontrol.competition.utils import FauxQueryset, team_needs_progressing
 
@@ -245,25 +259,22 @@ class CompetitionAdminMixin(object):
 
 
 class CompetitionSite(CompetitionAdminMixin, Application):
-
     kwargs_form_class = ConfigurationForm
 
     def __init__(self, name="competition", app_name="competition", **kwargs):
         # store the node for future reference
         self.node = kwargs.get("node")
-        super(CompetitionSite, self).__init__(name=name, app_name=app_name, **kwargs)
+        super().__init__(name=name, app_name=app_name, **kwargs)
         self._competitions = Competition.objects.filter(enabled=True)
         if "competition" in kwargs:
             self._competitions = self._competitions.filter(slug=kwargs["competition"])
 
     def result_urls(self):
         return [
-            url(r"^$", self.results, name="results"),
-            url(
-                r"^match/(?P<match>\d+)/$", self.edit_match_detail, name="match-details"
-            ),
-            url(r"^(?P<datestr>\d{8})/$", self.results, name="results"),
-            url(
+            path("", self.results, name="results"),
+            path("match/<int:match>/", self.edit_match_detail, name="match-details"),
+            re_path(r"^(?P<datestr>\d{8})/$", self.results, name="results"),
+            re_path(
                 r"^(?P<datestr>\d{8})/(?P<timestr>\d{4})/$",
                 self.match_results,
                 name="match-results",
@@ -272,66 +283,54 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
     def runsheet_urls(self):
         return [
-            url(r"^$", self.runsheet, name="runsheet"),
-            url(r"^(?P<datestr>\d{8})/$", self.day_runsheet, name="runsheet"),
+            path("", self.runsheet, name="runsheet"),
+            re_path(r"^(?P<datestr>\d{8})/$", self.day_runsheet, name="runsheet"),
         ]
 
     def season_urls(self):
         return [
-            url(r"^$", self.season, name="season"),
-            url(r"^forfeit/$", self.forfeit_list, name="forfeit-list"),
-            url(r"^forfeit/(?P<match>\d+)/$", self.forfeit, name="forfeit"),
-            url(r"^videos/$", self.season_videos, name="season-videos"),
-            url(r"^club:(?P<club>[\w-]+)/$", self.club, name="club"),
-            url(r"^club:(?P<club>[\w-]+).ics$", self.calendar, name="calendar"),
-            url(r"^results/", include(self.result_urls())),
-            url(r"^runsheet/", include(self.runsheet_urls())),
-            url(r"^(?P<division>[\w-]+).ics$", self.calendar, name="calendar"),
-            url(r"^(?P<division>[\w-]+)/$", self.division, name="division"),
-            url(r"^(?P<division>[\w-]+):(?P<stage>[\w-]+)/$", self.stage, name="stage"),
-            url(
-                r"^(?P<division>[\w-]+):(?P<stage>[\w-]+):(?P<pool>[\w-]+)/$",
-                self.pool,
-                name="pool",
-            ),
-            url(
-                r"^(?P<division>[\w-]+)/match:(?P<match>\d+)/$",
-                self.match,
-                name="match",
-            ),
-            url(
-                r"^(?P<division>[\w-]+)/match:(?P<match>\d+)/video/$",
+            path("", self.season, name="season"),
+            path("forfeit/", self.forfeit_list, name="forfeit-list"),
+            path("forfeit/<int:match>/", self.forfeit, name="forfeit"),
+            path("videos/", self.season_videos, name="season-videos"),
+            path("club:<slug:club>/", self.club, name="club"),
+            path("club:<slug:club>.ics", self.calendar, name="calendar"),
+            path("results/", include(self.result_urls())),
+            path("runsheet/", include(self.runsheet_urls())),
+            path("<slug:division>.ics", self.calendar, name="calendar"),
+            path("<slug:division>/", self.division, name="division"),
+            path("<slug:division>:<slug:stage>/", self.stage, name="stage"),
+            path("<slug:division>:<slug:stage>:<slug:pool>/", self.pool, name="pool"),
+            path("<slug:division>/match:<int:match>/", self.match, name="match"),
+            path(
+                "<slug:division>/match:<int:match>/video/",
                 self.match_video,
                 name="match-video",
             ),
-            url(
-                r"^(?P<division>[\w-]+)/(?P<team>[\w-]+).ics$",
-                self.calendar,
-                name="calendar",
-            ),
-            url(r"^(?P<division>[\w-]+)/(?P<team>[\w-]+)/$", self.team, name="team"),
+            path("<slug:division>/<slug:team>.ics", self.calendar, name="calendar"),
+            path("<slug:division>/<slug:team>/", self.team, name="team"),
         ]
 
     def competition_urls(self):
         return [
-            url(r"^$", self.competition, name="competition"),
-            url(r"^(?P<season>[\w-]+).ics$", self.calendar, name="calendar"),
-            url(r"^(?P<season>[\w-]+)/", include(self.season_urls())),
+            path("", self.competition, name="competition"),
+            path("<slug:season>.ics", self.calendar, name="calendar"),
+            path("<slug:season>/", include(self.season_urls())),
         ]
 
     def get_urls(self):
         if "season" in self.kwargs:
             urlpatterns = [
-                url(r"^", include(self.season_urls()), kwargs=self.kwargs),
+                path("", include(self.season_urls()), kwargs=self.kwargs),
             ]
         elif "competition" in self.kwargs:
             urlpatterns = [
-                url(r"^", include(self.competition_urls()), kwargs=self.kwargs),
+                path("", include(self.competition_urls()), kwargs=self.kwargs),
             ]
         else:
             urlpatterns = [
-                url(r"^$", self.index, name="index"),
-                url(r"^(?P<competition>[\w-]+)/", include(self.competition_urls())),
+                path("", self.index, name="index"),
+                path("<slug:competition>/", include(self.competition_urls())),
             ]
         return urlpatterns
 
@@ -433,9 +432,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
     @competition_by_slug_m
     def day_runsheet(self, request, season, date, extra_context, **kwargs):
-        return super(CompetitionSite, self).day_runsheet(
-            request, season, date, extra_context, **kwargs
-        )
+        return super().day_runsheet(request, season, date, extra_context, **kwargs)
 
     @competition_by_slug_m
     @login_required_m
@@ -479,7 +476,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         if has_permission is not None:
             return has_permission
         redirect_to = self.reverse("results", args=(competition.slug, season.slug))
-        return super(CompetitionSite, self).match_results(
+        return super().match_results(
             request,
             competition=competition,
             season=season,
@@ -505,7 +502,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                 match.stage.division.season.slug,
             ),
         )
-        return super(CompetitionSite, self).edit_match_detail(
+        return super().edit_match_detail(
             request,
             stage=match.stage,
             match=match,
@@ -1022,7 +1019,6 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
 
 class MultiCompetitionSite(CompetitionSite):
-
     kwargs_form_class = MultiConfigurationForm
 
     @classmethod
@@ -1031,7 +1027,7 @@ class MultiCompetitionSite(CompetitionSite):
 
     def __init__(self, name="competition", app_name="competition", **kwargs):
         self.node = kwargs.get("node")  # store the node for future reference
-        super(CompetitionSite, self).__init__(name=name, app_name=app_name, **kwargs)
+        super().__init__(name=name, app_name=app_name, **kwargs)
         self._competitions = Competition.objects.filter(enabled=True)
         if "competition" in kwargs:
             q = functools.reduce(or_, [Q(slug=slug) for slug in kwargs["competition"]])
@@ -1039,15 +1035,15 @@ class MultiCompetitionSite(CompetitionSite):
 
     def get_urls(self):
         urlpatterns = [
-            url(r"^$", self.index, name="index"),
-            url(r"^(?P<competition>[^/]+)/", include(self.competition_urls())),
+            path("", self.index, name="index"),
+            path("<slug:competition>/", include(self.competition_urls())),
         ]
         return urlpatterns
 
 
 class RegistrationSite(Application):
     def __init__(self, name="rego", app_name="rego", **kwargs):
-        super(RegistrationSite, self).__init__(name=name, app_name=app_name, **kwargs)
+        super().__init__(name=name, app_name=app_name, **kwargs)
 
     def get_urls(self):
         return []
@@ -1061,23 +1057,19 @@ class TournamentCalculatorSite(Application):
                 "tournamentcontrol.competition.forms.TournamentScheduleForm",
             )
         )
-        super(TournamentCalculatorSite, self).__init__(
-            name=name, app_name=app_name, **kwargs
-        )
+        super().__init__(name=name, app_name=app_name, **kwargs)
 
     def get_urls(self):
-        live_form_class = import_string(
-            "tournamentcontrol.competition.forms." "DivisionTournamentScheduleForm"
-        )
         urlpatterns = [
-            url(
-                r"^$", self.index, name="index", kwargs={"form_class": self.form_class,}
-            ),
-            url(
-                r"^live/$",
+            path("", self.index, kwargs={"form_class": self.form_class}, name="index"),
+            path(
+                "live/",
                 self.index,
+                kwargs={
+                    "form_class": DivisionTournamentScheduleForm,
+                    "template_name": "live.html",
+                },
                 name="division",
-                kwargs={"form_class": live_form_class, "template_name": "live.html",},
             ),
         ]
         return urlpatterns
@@ -1101,59 +1093,26 @@ class TournamentCalculatorSite(Application):
 
 
 class RankingSite(Application):
-
     kwargs_form_class = RankingConfigurationForm
 
     def __init__(self, name="ranking", app_name="ranking", **kwargs):
-        super(RankingSite, self).__init__(name=name, app_name=app_name, **kwargs)
+        super().__init__(name=name, app_name=app_name, **kwargs)
 
     def get_urls(self):
         urlpatterns = [
-            url(r"^$", rank.IndexView.as_view(), name="index"),
-            url(
-                r"^(?P<year>\d{4})/",
-                include(
-                    [
-                        url(r"^$", rank.YearView.as_view(), name="year"),
-                        url(
-                            r"^(?P<month>[a-z]{3})/",
-                            include(
-                                [
-                                    url(r"^$", rank.MonthView.as_view(), name="month"),
-                                    url(
-                                        r"^(?P<day>\d{1,2})/",
-                                        include(
-                                            [
-                                                url(
-                                                    r"^$",
-                                                    rank.DayView.as_view(),
-                                                    name="day",
-                                                ),
-                                                url(
-                                                    r"^(?P<slug>[^/]+)/",
-                                                    include(
-                                                        [
-                                                            url(
-                                                                r"^$",
-                                                                rank.DivisionView.as_view(),
-                                                                name="rank",
-                                                            ),
-                                                            url(
-                                                                r"^(?P<team>[^/]+)/$",
-                                                                rank.TeamView.as_view(),
-                                                                name="team",
-                                                            ),
-                                                        ]
-                                                    ),
-                                                ),
-                                            ]
-                                        ),
-                                    ),
-                                ]
-                            ),
-                        ),
-                    ]
-                ),
+            path("", RankIndex.as_view(), name="index"),
+            path("<int:year>/", RankYear.as_view(), name="year"),
+            path("<int:year>/<str:month>/", RankMonth.as_view(), name="month"),
+            path("<int:year>/<str:month>/<int:day>/", RankDay.as_view(), name="day"),
+            path(
+                "<int:year>/<str:month>/<int:day>/<slug:slug>/",
+                RankDivision.as_view(),
+                name="rank",
+            ),
+            path(
+                "<int:year>/<str:month>/<int:day>/<slug:slug>/<slug:team>/",
+                RankTeam.as_view(),
+                name="team",
             ),
         ]
         return urlpatterns
