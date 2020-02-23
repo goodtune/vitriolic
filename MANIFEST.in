@@ -16,3 +16,4 @@ recursive-include tournamentcontrol/competition/static *
 recursive-include tournamentcontrol/competition/templates *
 recursive-exclude * *.py[co]
 exclude .tox
+exclude tests

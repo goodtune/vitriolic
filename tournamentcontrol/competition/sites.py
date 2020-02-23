@@ -266,7 +266,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         self.node = kwargs.get("node")
         super().__init__(name=name, app_name=app_name, **kwargs)
         self._competitions = Competition.objects.filter(enabled=True)
-        if "competition" in kwargs:
+        if "competition" in kwargs and kwargs["competition"]:
             self._competitions = self._competitions.filter(slug=kwargs["competition"])
 
     def result_urls(self):
@@ -319,11 +319,11 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         ]
 
     def get_urls(self):
-        if "season" in self.kwargs:
+        if self.kwargs.get("season") and self.kwargs.get("competition"):
             urlpatterns = [
                 path("", include(self.season_urls()), kwargs=self.kwargs),
             ]
-        elif "competition" in self.kwargs:
+        elif self.kwargs.get("competition"):
             urlpatterns = [
                 path("", include(self.competition_urls()), kwargs=self.kwargs),
             ]
