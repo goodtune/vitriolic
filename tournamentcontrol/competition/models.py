@@ -7,7 +7,6 @@ import logging
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from operator import attrgetter
 
 import django
 import pytz
@@ -31,20 +30,33 @@ from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
 from touchtechnology.common.db.models import (
-    BooleanField, ForeignKey, HTMLField, LocationField, ManyToManyField,
+    BooleanField,
+    ForeignKey,
+    HTMLField,
+    LocationField,
+    ManyToManyField,
 )
 from touchtechnology.common.models import SitemapNodeBase
 from tournamentcontrol.competition.constants import (
-    GENDER_CHOICES, PYTZ_TIME_ZONE_CHOICES, SEASON_MODE_CHOICES, WIN_LOSE,
+    GENDER_CHOICES,
+    PYTZ_TIME_ZONE_CHOICES,
+    SEASON_MODE_CHOICES,
+    TIMELINE_TYPE_CHOICES,
+    WIN_LOSE,
 )
 from tournamentcontrol.competition.managers import LadderEntryManager, MatchManager
 from tournamentcontrol.competition.mixins import ModelDiffMixin
 from tournamentcontrol.competition.query import (
-    DivisionQuerySet, StageQuerySet, StatisticQuerySet,
+    DivisionQuerySet,
+    StageQuerySet,
+    StatisticQuerySet,
 )
 from tournamentcontrol.competition.signals import match_forfeit
 from tournamentcontrol.competition.utils import (
-    FauxQueryset, combine_and_localize, stage_group_position, stage_group_position_re,
+    FauxQueryset,
+    combine_and_localize,
+    stage_group_position,
+    stage_group_position_re,
     team_and_division,
 )
 from tournamentcontrol.competition.validators import validate_hashtag
@@ -346,7 +358,6 @@ class Club(AdminUrlMixin, SitemapNodeBase):
 
 
 class RankDivision(AdminUrlMixin, OrderedSitemapNode):
-
     enabled = BooleanField(default=True)
 
     class Meta(OrderedSitemapNode.Meta):
@@ -354,7 +365,6 @@ class RankDivision(AdminUrlMixin, OrderedSitemapNode):
 
 
 class RankTeam(models.Model):
-
     club = models.ForeignKey(Club, on_delete=CASCADE)
     division = models.ForeignKey(RankDivision, on_delete=CASCADE)
 
@@ -373,7 +383,6 @@ class RankTeam(models.Model):
 
 
 class RankPoints(models.Model):
-
     team = models.ForeignKey(RankTeam, on_delete=CASCADE)
     points = models.DecimalField(default=0, max_digits=6, decimal_places=3)
     date = models.DateField()
@@ -625,7 +634,6 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 
 
 class Place(AdminUrlMixin, OrderedSitemapNode):
-
     abbreviation = models.CharField(max_length=20, blank=True, null=True)
     latlng = LocationField(max_length=100)
     timezone = TimeZoneField(max_length=50, blank=True, null=True)
@@ -1883,8 +1891,29 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         return "<Match: %s: %s>" % (self.round, self)
 
 
-class LadderBase(models.Model):
+class MatchEvent(models.Model):
+    """
+    A timeline of Events for a Match.
+    """
 
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    timestamp = DateTimeField(blank=True, null=True)
+
+    # Reference the Match.uuid field, as this will become the primary key eventually.
+    match = ForeignKey(
+        Match, related_name="timeline", to_field="uuid", on_delete=PROTECT
+    )
+
+    type = models.TextField(max_length=20, choices=TIMELINE_TYPE_CHOICES)
+
+    # Using JSONField more or less turns this into a NoSQL object. I've chosen not to
+    # use the HStoreField because values need to be strings, and I'd like to do use
+    # aggregation when type=SCORE.
+    # Read: https://dev.to/saschalalala/aggregation-in-django-jsonfields-4kg5
+    details = PG.JSONField()
+
+
+class LadderBase(models.Model):
     played = models.SmallIntegerField(default=0)
     win = models.SmallIntegerField(default=0)
     loss = models.SmallIntegerField(default=0)
@@ -1905,7 +1934,6 @@ class LadderBase(models.Model):
 
 
 class LadderEntry(LadderBase):
-
     match = ForeignKey(Match, related_name="ladder_entries", on_delete=CASCADE)
     team = ForeignKey(
         Team,
@@ -1922,7 +1950,6 @@ class LadderEntry(LadderBase):
 
 
 class LadderSummary(LadderBase):
-
     stage = ForeignKey(Stage, related_name="ladder_summary", on_delete=CASCADE)
     stage_group = ForeignKey(
         StageGroup, null=True, related_name="ladder_summary", on_delete=CASCADE
@@ -1943,7 +1970,6 @@ class LadderSummary(LadderBase):
 
 
 class DrawFormat(AdminUrlMixin, models.Model):
-
     name = models.CharField(max_length=50)
     text = models.TextField(verbose_name="Formula")
     teams = models.PositiveIntegerField(blank=True, null=True)
@@ -1983,7 +2009,6 @@ class ExclusionDateBase(AdminUrlMixin, models.Model):
 
 
 class SeasonExclusionDate(ExclusionDateBase):
-
     season = ForeignKey("Season", related_name="exclusions", on_delete=CASCADE)
 
     class Meta(ExclusionDateBase.Meta):
@@ -1998,7 +2023,6 @@ class SeasonExclusionDate(ExclusionDateBase):
 
 
 class DivisionExclusionDate(ExclusionDateBase):
-
     division = ForeignKey("Division", related_name="exclusions", on_delete=CASCADE)
 
     class Meta:
@@ -2047,7 +2071,6 @@ class MatchTimeBase(models.Model):
 
 
 class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
-
     season = ForeignKey("Season", related_name="timeslots", on_delete=CASCADE)
     start_date = DateField(verbose_name="From", blank=True, null=True)
     end_date = DateField(verbose_name="Until", blank=True, null=True)
@@ -2066,7 +2089,6 @@ class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
 
 
 class MatchScoreSheet(AdminUrlMixin, models.Model):
-
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     match = models.ForeignKey(Match, related_name="scoresheets", on_delete=CASCADE)
     image = CloudinaryField(verbose_name=_("Image"))
@@ -2089,7 +2111,6 @@ class MatchScoreSheet(AdminUrlMixin, models.Model):
 
 
 class MatchStatisticBase(models.Model):
-
     match = ForeignKey("Match", related_name="statistics", on_delete=PROTECT)
     player = ForeignKey("Person", related_name="statistics", on_delete=PROTECT)
     number = models.IntegerField(blank=True, null=True)
@@ -2110,7 +2131,6 @@ class MatchStatisticBase(models.Model):
 
 
 class SimpleScoreMatchStatistic(MatchStatisticBase):
-
     played = models.SmallIntegerField(
         default=0,
         blank=True,

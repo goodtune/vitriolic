@@ -18,8 +18,15 @@ from django.db.models import Model, Q
 from django.db.models.query import QuerySet
 from django.forms.forms import BoundField
 from django.forms.widgets import (
-    CheckboxInput, CheckboxSelectMultiple, FileInput, MultiWidget, PasswordInput,
-    RadioSelect, Select, Textarea, TextInput,
+    CheckboxInput,
+    CheckboxSelectMultiple,
+    FileInput,
+    MultiWidget,
+    PasswordInput,
+    RadioSelect,
+    Select,
+    Textarea,
+    TextInput,
 )
 from django.template import Library, Node
 from django.template.loader import get_template, render_to_string
@@ -36,7 +43,9 @@ from touchtechnology.common.default_settings import CURRENCY_SYMBOL
 from touchtechnology.common.exceptions import NotModelManager
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.utils import (
-    create_exclude_filter, get_all_perms_for_model_cached, model_and_manager,
+    create_exclude_filter,
+    get_all_perms_for_model_cached,
+    model_and_manager,
     tree_for_node,
 )
 from tournamentcontrol.competition.utils import FauxQueryset
@@ -456,6 +465,16 @@ def islice_(value, arg):
 
     except (ValueError, TypeError):
         return value  # Fail silently.
+
+
+@register.filter
+def get(data, key):
+    return data.get(key)
+
+
+@register.filter
+def gets(data, key):
+    return data.get(str(key))
 
 
 @register.inclusion_tag("touchtechnology/common/templatetags/version.html")

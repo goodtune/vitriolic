@@ -24,30 +24,77 @@ from touchtechnology.admin.sites import site
 from touchtechnology.common.decorators import csrf_exempt_m, staff_login_required_m
 from touchtechnology.common.prince import prince
 from tournamentcontrol.competition.dashboard import (
-    BasicResultWidget, DetailResultWidget, MostValuableWidget, ProgressStageWidget,
+    BasicResultWidget,
+    DetailResultWidget,
+    MostValuableWidget,
+    ProgressStageWidget,
     ScoresheetWidget,
 )
 from tournamentcontrol.competition.decorators import competition_by_pk_m, registration
 from tournamentcontrol.competition.forms import (
-    ClubAssociationForm, ClubRoleForm, CompetitionForm, DivisionForm, DrawFormatForm,
-    DrawGenerationFormSet, DrawGenerationMatchFormSet, GroundForm, MatchEditForm,
-    MatchScheduleFormSet, MatchWashoutFormSet, PersonEditForm, PersonMergeForm,
-    ProgressMatchesFormSet, ProgressTeamsFormSet, RescheduleDateFormSet,
-    SeasonAssociationFormSet, SeasonForm, SeasonMatchTimeFormSet, StageForm,
-    StageGroupForm, TeamAssociationForm, TeamAssociationFormSet, TeamForm, TeamRoleForm,
-    UndecidedTeamForm, VenueForm,
+    ClubAssociationForm,
+    ClubRoleForm,
+    CompetitionForm,
+    DivisionForm,
+    DrawFormatForm,
+    DrawGenerationFormSet,
+    DrawGenerationMatchFormSet,
+    GroundForm,
+    MatchEditForm,
+    MatchScheduleFormSet,
+    MatchWashoutFormSet,
+    PersonEditForm,
+    PersonMergeForm,
+    ProgressMatchesFormSet,
+    ProgressTeamsFormSet,
+    RescheduleDateFormSet,
+    SeasonAssociationFormSet,
+    SeasonForm,
+    SeasonMatchTimeFormSet,
+    StageForm,
+    StageGroupForm,
+    TeamAssociationForm,
+    TeamAssociationFormSet,
+    TeamForm,
+    TeamRoleForm,
+    UndecidedTeamForm,
+    VenueForm,
 )
 from tournamentcontrol.competition.models import (
-    Club, ClubAssociation, ClubRole, Competition, Division, DivisionExclusionDate,
-    DrawFormat, Ground, LadderEntry, LadderSummary, Match, MatchScoreSheet, Person,
-    Season, SeasonAssociation, SeasonExclusionDate, SeasonMatchTime, SeasonReferee,
-    SimpleScoreMatchStatistic, Stage, StageGroup, Team, TeamAssociation, TeamRole,
-    UndecidedTeam, Venue,
+    Club,
+    ClubAssociation,
+    ClubRole,
+    Competition,
+    Division,
+    DivisionExclusionDate,
+    DrawFormat,
+    Ground,
+    LadderEntry,
+    LadderSummary,
+    Match,
+    MatchScoreSheet,
+    Person,
+    Season,
+    SeasonAssociation,
+    SeasonExclusionDate,
+    SeasonMatchTime,
+    SeasonReferee,
+    SimpleScoreMatchStatistic,
+    Stage,
+    StageGroup,
+    Team,
+    TeamAssociation,
+    TeamRole,
+    UndecidedTeam,
+    Venue,
 )
 from tournamentcontrol.competition.sites import CompetitionAdminMixin
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.utils import (
-    generate_fixture_grid, generate_scorecards, legitimate_bye_match, match_unplayed,
+    generate_fixture_grid,
+    generate_scorecards,
+    legitimate_bye_match,
+    match_unplayed,
     team_needs_progressing,
 )
 from tournamentcontrol.competition.wizards import DrawGenerationWizard
@@ -2065,7 +2112,16 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             )
 
         people = (
-            Person.objects.select_related("club")
+            Person.objects  # .select_related("club")
+            .defer(
+                "uuid",
+                "date_of_birth",
+                "email",
+                "home_phone",
+                "work_phone",
+                "mobile_phone",
+                "club_id",
+            )
             .annotate(
                 played=_get_clause("statistics__played"),
                 points=_get_clause("statistics__points"),

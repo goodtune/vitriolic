@@ -1,0 +1,129 @@
+<!DOCTYPE html>{% load i18n static %}
+<html lang="en">{% load common %}
+
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="{% get_static_prefix %}livescore/css/bootstrap-4.1.1.min.css">
+    <link rel="stylesheet" href="{% get_static_prefix %}livescore/fontawesome-free-5.12.1-web/css/all.min.css">
+    <link rel="stylesheet" href="{% get_static_prefix %}livescore/css/app.css">
+{% block extrahead %}{% endblock %}
+</head>
+
+<body>
+{% block content %}
+    {% trans "To Be Confirmed" as tbc %}
+    <div class="container">
+        <div class="card mt-3">
+            <h5 class="card-header">
+                <span class="d-none d-lg-inline">{% trans "Live Score" %}:</span>
+                <span class="d-block d-sm-inline">{{ object.home_team }}</span>
+                <span class="d-none d-sm-inline">vs</span>
+                <span class="d-block d-sm-inline">{{ object.away_team }}</span>
+            </h5>
+
+            <div class="card-body">
+                <div class="mb-3">
+                    <span class="badge badge-dark">{{ object.stage.division.short_title }}</span>
+                    <span class="badge badge-dark">{{ object.play_at }}</span>
+                    <span class="badge badge-dark">{{ object.date|date:"j M" }}</span>
+                    <span class="badge badge-dark">{{ object.time|time:"G:i" }}</span>
+                </div>
+
+                <div class="btn-group w-100 mb-3">
+                    {% for team, players in teams %}
+                        <button class="btn btn-lg btn-primary w-50 d-flex justify-content-between align-items-center"
+                                data-target="#modal{{ team.pk }}"
+                                data-toggle="modal"
+                                id="button_{{ team.pk }}"
+                                type="button">
+                            {% if forloop.first %}
+                                <span class="d-inline d-md-none">{{ team.club.abbreviation|default_if_none:team }}</span>
+                                <span class="d-none d-md-inline">{{ team }}</span>
+                            {% endif %}
+                            <span class="badge badge-light mx-2">{{ scores|gets:team.pk }}</span>
+                            {% if forloop.last %}
+                                <span class="d-inline d-md-none">{{ team.club.abbreviation|default_if_none:team }}</span>
+                                <span class="d-none d-md-inline">{{ team }}</span>
+                            {% endif %}
+                        </button>
+                    {% endfor %}
+                </div>
+
+                <table class="table table-sm table-hover table-borderless mb-0">
+                    <thead>
+                        <tr class="d-flex">
+                            <th class="col-4 col-sm-5 text-center text-sm-right">{% trans "Home team" %}</th>
+                            <th class="col-4 col-sm-2 text-center">{% trans "Time" %}</th>
+                            <th class="col-4 col-sm-5 text-center text-sm-left">{% trans "Away team" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in events %}
+                            <tr class="d-flex"{% for key, val in event.details.items %} data-{{ key }}="{{ val }}"{% endfor %}>
+                                <td class="col-4 col-sm-5 text-center text-sm-right">
+                                    {% ifequal event.details.team "HOME" %}
+                                        <span class="badge badge-pill badge-secondary d-none d-sm-inline px-2">{{ home_team_players_map|get:event.details.player|default_if_none:tbc }}</span>
+                                        <span class="badge badge-pill badge-primary px-3 px-sm-2 mx-2">{{ event.details.player }}</span>
+                                    {% endifequal %}
+                                </td>
+                                <td class="col-4 col-sm-2 text-center">
+                                    <span class="badge badge-pill badge-{{ event.period|divisibleby:2|yesno:"warning,info" }} px-2">{{ event.relative_timestamp }}</span>
+                                </td>
+                                <td class="col-4 col-sm-5 text-center text-sm-left">
+                                    {% ifequal event.details.team "AWAY" %}
+                                        <span class="badge badge-pill badge-primary px-3 px-sm-2 mx-2">{{ event.details.player }}</span>
+                                        <span class="badge badge-pill badge-secondary d-none d-sm-inline px-2">{{ away_team_players_map|get:event.details.player|default_if_none:tbc }}</span>
+                                    {% endifequal %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    {% for team, players in teams %}
+        <div class="modal fade" id="modal{{ team.pk }}" tabindex="-1" role="dialog" aria-labelledby="modal{{ team.pk }}Label" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="qrModalLabel">{{ team }}</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <ol class="list-group">
+                            {% for player in players %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center px-2 py-1">
+                                    <span>{{ player.number }}</span>
+                                    <span>
+                                        {{ player.person.last_name }},
+                                        <span class="d-lg-none">{{ player.person.first_name|slice:":1" }}</span>
+                                        <span class="d-none d-lg-inline-block">{{ player.person.first_name }}</span>
+                                    </span>
+                                    <span class="badge badge-light">0</span>
+                                </li>
+                            {% endfor %}
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+{% endblock %}
+
+    <!-- Optional JavaScript -->
+    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+    <script src="{% get_static_prefix %}livescore/js/jquery-3.1.1.min.js"></script>
+    <script src="{% get_static_prefix %}livescore/js/popper-1.14.3.min.js"></script>
+    <script src="{% get_static_prefix %}livescore/js/bootstrap-4.1.1.min.js"></script>
+{% block extrafoot %}{% endblock %}
+</body>
+</html>
