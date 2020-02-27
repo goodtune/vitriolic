@@ -18,6 +18,30 @@ WIN_LOSE = {
     "L": _("Loser"),
 }
 
+TIMELINE_TYPE_CHOICES = (
+    ('TIME', _('Timing Event')),
+    ('SCORE', _('Scoring Event')),
+    ('DISCIPLINE', _('Discipline Event'))
+)
+
+TIMELINE_TIME_CHOICES = (
+    ('START', _('Started')),
+    (
+        _('Break in play'),
+        ('QUARTER', _('Quarter break')),
+        ('HALF', _('Half-time break')),
+        ('PERIOD', _('Period break')),
+        ('BREAK', _('Break')),
+        ('RESUME', _('Play resumed')),
+    ),
+    ('FINISH', _('Completed')),
+)
+
+TIMELINE_SCORE_CHOICES = (
+    ('HOME', _('Home team')),
+    ('AWAY', _('Away team')),
+)
+
 ###################
 # TIME ZONE NAMES #
 ###################

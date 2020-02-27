@@ -1,0 +1,11 @@
+#events .list-group-item { display: none; }
+#events .list-group-item:nth-last-child(-n+10) { display: initial; }
+
+#orderBookTable .badge { margin: 0 0.25em; }
+
+/* Show up to 3 buyers */
+#orderBookTable .badge-info { display: none; }
+#orderBookTable .badge-info:nth-last-child(-n+4) { display: initial; }
+
+/* Show up to 3 sellers */
+#orderBookTable .badge-warning:nth-child(n+5) { display: none; }

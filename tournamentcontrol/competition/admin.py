@@ -1780,7 +1780,16 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             )
 
         people = (
-            Person.objects.select_related("club")
+            Person.objects  # .select_related("club")
+            .defer(
+                "uuid",
+                "date_of_birth",
+                "email",
+                "home_phone",
+                "work_phone",
+                "mobile_phone",
+                "club_id",
+            )
             .annotate(
                 played=_get_clause("statistics__played"),
                 points=_get_clause("statistics__points"),

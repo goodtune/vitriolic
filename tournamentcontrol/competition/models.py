@@ -42,12 +42,10 @@ from tournamentcontrol.competition.constants import (
     GENDER_CHOICES,
     PYTZ_TIME_ZONE_CHOICES,
     SEASON_MODE_CHOICES,
+    TIMELINE_TYPE_CHOICES,
     WIN_LOSE,
 )
-from tournamentcontrol.competition.managers import (
-    LadderEntryManager,
-    MatchManager,
-)
+from tournamentcontrol.competition.managers import LadderEntryManager, MatchManager
 from tournamentcontrol.competition.mixins import ModelDiffMixin
 from tournamentcontrol.competition.query import (
     DivisionQuerySet,
@@ -1903,6 +1901,28 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
 
     def __repr__(self):
         return "<Match: %s: %s>" % (self.round, self)
+
+
+class MatchEvent(models.Model):
+    """
+    A timeline of Events for a Match.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    timestamp = DateTimeField(blank=True, null=True)
+
+    # Reference the Match.uuid field, as this will become the primary key eventually.
+    match = ForeignKey(
+        Match, related_name="timeline", to_field="uuid", on_delete=PROTECT
+    )
+
+    type = models.TextField(max_length=20, choices=TIMELINE_TYPE_CHOICES)
+
+    # Using JSONField more or less turns this into a NoSQL object. I've chosen not to
+    # use the HStoreField because values need to be strings, and I'd like to do use
+    # aggregation when type=SCORE.
+    # Read: https://dev.to/saschalalala/aggregation-in-django-jsonfields-4kg5
+    details = PG.JSONField()
 
 
 class LadderBase(models.Model):

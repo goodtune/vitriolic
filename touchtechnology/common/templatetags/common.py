@@ -18,11 +18,14 @@ from django.forms.boundfield import BoundField
 from django.forms.widgets import (
     CheckboxInput,
     CheckboxSelectMultiple,
-    Input,
+    FileInput,
+                                  Input,
     MultiWidget,
+    PasswordInput,
     RadioSelect,
     Select,
     Textarea,
+    TextInput,
 )
 from django.template.base import Node
 from django.template.library import Library
@@ -460,6 +463,16 @@ def islice_(value, arg):
 
     except (ValueError, TypeError):
         return value  # Fail silently.
+
+
+@register.filter
+def get(data, key):
+    return data.get(key)
+
+
+@register.filter
+def gets(data, key):
+    return data.get(str(key))
 
 
 @register.inclusion_tag("touchtechnology/common/templatetags/version.html")

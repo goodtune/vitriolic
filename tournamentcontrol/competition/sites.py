@@ -10,9 +10,11 @@ import pytz
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.postgres.fields.jsonb import KeyTextTransform
 from django.contrib.sitemaps import views as sitemaps_views
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Case, Count, F, Q, Sum, When
+from django.db.models import Case, Count, F, IntegerField, Q, Sum, When
+from django.db.models.functions import Cast
 from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
 from django.urls import include, path, re_path
@@ -41,6 +43,7 @@ from tournamentcontrol.competition.forms import (
 from tournamentcontrol.competition.models import (
     Competition,
     Match,
+    MatchEvent,
     Person,
     SimpleScoreMatchStatistic,
 )
@@ -190,6 +193,81 @@ class CompetitionAdminMixin(object):
         templates = self.template_path("match_results.html")
         return self.render(request, templates, context)
 
+    def edit_match_live(self, request, match, **extra_context):
+        instance = get_object_or_404(
+            Match, pk=match, home_team__isnull=False, away_team__isnull=False
+        )
+
+        home_team_players = instance.home_team.people.filter(is_player=True)
+        home_team_players_map = {ta.number: ta.person for ta in home_team_players}
+
+        away_team_players = instance.away_team.people.filter(is_player=True)
+        away_team_players_map = {ta.number: ta.person for ta in away_team_players}
+
+        scoring_events = MatchEvent.objects.raw(
+            """
+            SELECT
+                m.uuid, m.timestamp, m.match_id, m.type, m.details,
+                AGE(m.timestamp, MAX(e.timestamp)) relative_timestamp,
+                COUNT(e.timestamp) period
+            FROM
+                competition_matchevent m
+            INNER JOIN
+                competition_matchevent e
+            ON
+                (e.match_id = m.match_id AND e.type = 'TIME' AND '["START","RESUME"]'::jsonb @> e.details AND e.timestamp <= m.timestamp)
+            WHERE
+                m.type != 'TIME' AND m.match_id = %s
+            GROUP BY
+                m.uuid, m.timestamp, m.match_id, m.type, m.details
+            ORDER BY
+                m.timestamp DESC
+            """,
+            (instance.uuid,),
+        )
+
+        scores_kwargs = {
+            str(instance.home_team_id): Sum(
+                Case(
+                    When(
+                        type="SCORE",
+                        details__team="HOME",
+                        then=Cast(
+                            KeyTextTransform("points", "details"), IntegerField(),
+                        ),
+                    )
+                )
+            ),
+            str(instance.away_team_id): Sum(
+                Case(
+                    When(
+                        type="SCORE",
+                        details__team="AWAY",
+                        then=Cast(
+                            KeyTextTransform("points", "details"), IntegerField(),
+                        ),
+                    )
+                )
+            ),
+        }
+        scores = instance.timeline.aggregate(**scores_kwargs)
+
+        context = {
+            "object": instance,
+            "match": instance,
+            "teams": [
+                (instance.home_team, home_team_players),
+                (instance.away_team, away_team_players),
+            ],
+            "home_team_players_map": home_team_players_map,
+            "away_team_players_map": away_team_players_map,
+            "events": scoring_events,
+            "scores": scores,
+        }
+        context.update(extra_context)
+
+        return self.render(request, self.template_path("match_live.html"), context)
+
     def edit_match_detail(
         self, request, stage, match, extra_context, redirect_to, **kwargs
     ):
@@ -276,7 +354,10 @@ class CompetitionSite(CompetitionAdminMixin, Application):
     def result_urls(self):
         return [
             path("", self.results, name="results"),
-            path("match/<int:match>/", self.edit_match_detail, name="match-details"),
+            path(
+                "match/<int:match>/edit/", self.edit_match_detail, name="match-details"
+            ),
+            path("match/<int:match>/live/", self.edit_match_live, name="match-live"),
             re_path(r"^(?P<datestr>\d{8})/$", self.results, name="results"),
             re_path(
                 r"^(?P<datestr>\d{8})/(?P<timestr>\d{4})/$",
@@ -951,10 +1032,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         redirect = self.redirect(
             self.reverse(
                 "forfeit-list",
-                kwargs={
-                    "competition": competition.slug,
-                    "season": season.slug,
-                },
+                kwargs={"competition": competition.slug, "season": season.slug},
             )
         )
 

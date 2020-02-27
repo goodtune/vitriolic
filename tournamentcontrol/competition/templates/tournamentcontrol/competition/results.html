@@ -37,7 +37,10 @@
 					<td>{{ match.stage.division }}</td>
 					<td class="flag {{ match.home_team.club.abbreviation }}">{{ match.home_team }}</td>
 					<td class="flag {{ match.away_team.club.abbreviation }}">{{ match.away_team }}</td>
-					<td><a href="{% url application.name|add:":match-details" competition=competition.slug season=season.slug match=match.pk %}">{% trans "Edit" %}</a></td>
+					<td>
+                        <a href="{% url application.name|add:":match-details" competition=competition.slug season=season.slug match=match.pk %}">{% trans "Edit" %}</a>
+                        <a href="{% url application.name|add:":match-live" competition=competition.slug season=season.slug match=match.pk %}">{% trans "Live" %}</a>
+                    </td>
 				</tr>
 			{% empty %}
 				<tr>
