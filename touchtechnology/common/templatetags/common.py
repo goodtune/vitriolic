@@ -19,7 +19,7 @@ from django.forms.widgets import (
     CheckboxInput,
     CheckboxSelectMultiple,
     FileInput,
-                                  Input,
+    Input,
     MultiWidget,
     PasswordInput,
     RadioSelect,

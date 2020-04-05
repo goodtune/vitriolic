@@ -51,4 +51,16 @@
 		</table>
 	{% endblock %}
 	{% endwith %}
+
+    <div class="timeline">
+        <h3>{% trans "Time line" %}</h3>
+        <table>
+            {% for event in timeline reversed %}
+                <tr>
+                    <td>{{ event }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+        <xmp>{{ timeline|safe }}</xmp>
+    </div>
 {% endblock %}

@@ -53,6 +53,7 @@ setup(
             "celery",
             "cloudinary",
             "django-embed-video",
+            "django-eventstream",
             "django-formtools",
             "django-mathfilters",
             "djangorestframework>=3.11",

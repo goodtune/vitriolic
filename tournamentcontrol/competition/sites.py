@@ -26,7 +26,8 @@ from icalendar import Calendar, Event
 
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
-from touchtechnology.common.utils import get_perms_for_model
+from touchtechnology.common.utils import get_403_or_None, get_perms_for_model
+from tournamentcontrol.competition.constants import MATCH_TIMELINE_EVENTS
 from tournamentcontrol.competition.dashboard import (
     matches_require_basic_results,
     matches_require_details_results,
@@ -195,35 +196,18 @@ class CompetitionAdminMixin(object):
 
     def edit_match_live(self, request, match, **extra_context):
         instance = get_object_or_404(
-            Match, pk=match, home_team__isnull=False, away_team__isnull=False
+            Match,
+            pk=match, home_team__isnull=False, away_team__isnull=False
         )
 
-        home_team_players = instance.home_team.people.filter(is_player=True)
+        home_team_players = instance.home_team.people.filter(is_player=True).select_related("person")
         home_team_players_map = {ta.number: ta.person for ta in home_team_players}
 
-        away_team_players = instance.away_team.people.filter(is_player=True)
+        away_team_players = instance.away_team.people.filter(is_player=True).select_related("person")
         away_team_players_map = {ta.number: ta.person for ta in away_team_players}
 
         scoring_events = MatchEvent.objects.raw(
-            """
-            SELECT
-                m.uuid, m.timestamp, m.match_id, m.type, m.details,
-                AGE(m.timestamp, MAX(e.timestamp)) relative_timestamp,
-                COUNT(e.timestamp) period
-            FROM
-                competition_matchevent m
-            INNER JOIN
-                competition_matchevent e
-            ON
-                (e.match_id = m.match_id AND e.type = 'TIME' AND '["START","RESUME"]'::jsonb @> e.details AND e.timestamp <= m.timestamp)
-            WHERE
-                m.type != 'TIME' AND m.match_id = %s
-            GROUP BY
-                m.uuid, m.timestamp, m.match_id, m.type, m.details
-            ORDER BY
-                m.timestamp DESC
-            """,
-            (instance.uuid,),
+            MATCH_TIMELINE_EVENTS, params=(instance.uuid,),
         )
 
         scores_kwargs = {
@@ -231,26 +215,29 @@ class CompetitionAdminMixin(object):
                 Case(
                     When(
                         type="SCORE",
-                        details__team="HOME",
+                        team=F("match__home_team"),
                         then=Cast(
                             KeyTextTransform("points", "details"), IntegerField(),
                         ),
-                    )
+                    ),
+                    default=0,
                 )
             ),
             str(instance.away_team_id): Sum(
                 Case(
                     When(
                         type="SCORE",
-                        details__team="AWAY",
+                        team=F("match__away_team"),
                         then=Cast(
                             KeyTextTransform("points", "details"), IntegerField(),
                         ),
-                    )
+                    ),
+                    default = 0,
                 )
             ),
         }
         scores = instance.timeline.aggregate(**scores_kwargs)
+        scoreline = instance.timeline.annotate(**scores_kwargs)
 
         context = {
             "object": instance,
@@ -263,6 +250,7 @@ class CompetitionAdminMixin(object):
             "away_team_players_map": away_team_players_map,
             "events": scoring_events,
             "scores": scores,
+            "scoreline": scoreline,
         }
         context.update(extra_context)
 
@@ -333,6 +321,7 @@ class CompetitionAdminMixin(object):
         context = {
             "object": match,
             "formsets": (home, away),
+            "timeline": timeline,
         }
         context.update(extra_context)
 
@@ -387,6 +376,10 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             path("<slug:division>:<slug:stage>/", self.stage, name="stage"),
             path("<slug:division>:<slug:stage>:<slug:pool>/", self.pool, name="pool"),
             path("<slug:division>/match:<int:match>/", self.match, name="match"),
+            path(
+                "<slug:division>/match:<int:match>/<channel>/",
+                include("django_eventstream.urls"),
+            ),
             path(
                 "<slug:division>/match:<int:match>/video/",
                 self.match_video,
@@ -957,6 +950,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             # Temporary, realistically nobody should ever have this URL but we
             # will use GONE so that Google removes it from their index.
             return HttpResponseGone()
+        extra_context["timeline"] = MatchEvent.objects.raw(MATCH_TIMELINE_EVENTS, params=(match.uuid,))
         templates = self.template_path(
             "match.html", competition.slug, season.slug, division.slug
         )

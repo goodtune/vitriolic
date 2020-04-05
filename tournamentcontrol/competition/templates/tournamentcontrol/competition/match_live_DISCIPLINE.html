@@ -1,0 +1,24 @@
+{% extends "tournamentcontrol/competition/match_live_tr.html" %}
+{% load common %}
+
+{% block home_team %}
+{% ifequal event.details.team "HOME" %}
+<span class="badge">
+    <em class="fa fa-eject text-danger"></em>
+</span>
+<span class="badge badge-pill badge-secondary d-none d-sm-inline px-2">{{ home_team_players_map|get:event.details.player|default_if_none:tbc }}</span>
+<span class="badge badge-pill badge-primary px-3 px-sm-2 mx-2">{{ event.details.player }}</span>
+{% endifequal %}
+{% endblock home_team %}
+
+{% block timestamp_style %}badge-danger{% endblock timestamp_style %}
+
+{% block away_team %}
+{% ifequal event.details.team "AWAY" %}
+<span class="badge badge-pill badge-primary px-3 px-sm-2 mx-2">{{ event.details.player }}</span>
+<span class="badge badge-pill badge-secondary d-none d-sm-inline px-2">{{ away_team_players_map|get:event.details.player|default_if_none:tbc }}</span>
+<span class="badge">
+    <em class="fa fa-eject text-danger"></em>
+</span>
+{% endifequal %}
+{% endblock away_team %}

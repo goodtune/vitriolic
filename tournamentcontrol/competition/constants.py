@@ -19,9 +19,10 @@ WIN_LOSE = {
 }
 
 TIMELINE_TYPE_CHOICES = (
+    ('TOSS', _('Coin Toss')),
     ('TIME', _('Timing Event')),
     ('SCORE', _('Scoring Event')),
-    ('DISCIPLINE', _('Discipline Event'))
+    ('DISCIPLINE', _('Discipline Event')),
 )
 
 TIMELINE_TIME_CHOICES = (
@@ -41,6 +42,73 @@ TIMELINE_SCORE_CHOICES = (
     ('HOME', _('Home team')),
     ('AWAY', _('Away team')),
 )
+
+TIMELINE_DISCIPLINE_CHOICES = (
+    # Touch specific
+    ('FORCE', _('Forced Substitution')),
+    ('PERIOD', _('Period of Time')),
+    ('SENDOFF', _('Sent off')),
+    # General
+    ('SINBIN', _('Sin Bin')),
+    ('YELLOW', _('Yellow Card')),
+    ('RED', _('Red Card')),
+)
+
+##########
+# RawSQL #
+##########
+
+MATCH_TIMELINE_EVENTS = """
+SELECT
+    m.uuid, m.timestamp, m.match_id, m.type, m.team_id, m.details
+    , COUNT(DISTINCT e.timestamp) period
+    , MAX(e.timestamp) period_timestamp
+    , AGE(m.timestamp, MAX(e.timestamp)) relative_timestamp
+    , s.home_score, s.away_score
+FROM
+    competition_matchevent m
+LEFT OUTER JOIN
+    competition_matchevent e
+ON
+    (
+        e.match_id = m.match_id
+        AND e.type = 'TIME'
+        AND '["START","RESUME"]'::jsonb @> e.details
+        AND e.timestamp <= m.timestamp
+    )
+LEFT OUTER JOIN
+	(
+		SELECT
+			m.match_id, m.timestamp
+			, SUM(CASE WHEN (e.details @> '{"team":"HOME"}'::jsonb AND e.type = 'SCORE') THEN ((e.details ->> 'points'))::integer ELSE 0 END) home_score
+			, SUM(CASE WHEN (e.details @> '{"team":"AWAY"}'::jsonb AND e.type = 'SCORE') THEN ((e.details ->> 'points'))::integer ELSE 0 END) away_score
+		FROM
+			competition_matchevent m
+		INNER JOIN
+			competition_matchevent e
+		ON
+			(
+				e.match_id = m.match_id
+		        AND e.timestamp <= m.timestamp
+		    )
+		WHERE
+			m.type = 'SCORE'
+		GROUP BY
+			m.match_id, m.timestamp
+	) s
+ON
+	(
+		s.match_id = m.match_id
+        AND s.timestamp = m.timestamp
+	)
+WHERE
+    m.type != 'TIME' AND m.match_id = %s
+GROUP BY
+    m.uuid, m.timestamp, m.match_id, m.type, m.team_id, m.details
+    , s.home_score, s.away_score
+ORDER BY
+    m.timestamp DESC
+"""
 
 ###################
 # TIME ZONE NAMES #

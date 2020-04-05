@@ -45,7 +45,10 @@ from tournamentcontrol.competition.constants import (
     TIMELINE_TYPE_CHOICES,
     WIN_LOSE,
 )
-from tournamentcontrol.competition.managers import LadderEntryManager, MatchManager
+from tournamentcontrol.competition.managers import (
+    LadderEntryManager,
+    MatchManager,
+)
 from tournamentcontrol.competition.mixins import ModelDiffMixin
 from tournamentcontrol.competition.query import (
     DivisionQuerySet,
@@ -1909,20 +1912,34 @@ class MatchEvent(models.Model):
     """
 
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    timestamp = DateTimeField(blank=True, null=True)
+    timestamp = DateTimeField(auto_now_add=True, db_index=True)
 
     # Reference the Match.uuid field, as this will become the primary key eventually.
     match = ForeignKey(
         Match, related_name="timeline", to_field="uuid", on_delete=PROTECT
     )
 
-    type = models.TextField(max_length=20, choices=TIMELINE_TYPE_CHOICES)
+    type = models.TextField(max_length=20, choices=TIMELINE_TYPE_CHOICES, db_index=True)
 
     # Using JSONField more or less turns this into a NoSQL object. I've chosen not to
     # use the HStoreField because values need to be strings, and I'd like to do use
     # aggregation when type=SCORE.
     # Read: https://dev.to/saschalalala/aggregation-in-django-jsonfields-4kg5
+    team = ForeignKey(
+        Team, blank=True, null=True, related_name="timeline", on_delete=PROTECT
+    )
     details = PG.JSONField()
+
+    def __str__(self):
+        return "{} {}".format(self.type, self.details)
+
+    @cached_property
+    def template_name_live(self):
+        return "tournamentcontrol/competition/match_live_{}.html".format(self.type)
+
+    @cached_property
+    def template_name(self):
+        return "tournamentcontrol/competition/match_{}.html".format(self.type)
 
 
 class LadderBase(models.Model):

@@ -53,7 +53,7 @@
                     {% endfor %}
                 </div>
 
-                <table class="table table-sm table-hover table-borderless mb-0">
+                <table class="table table-sm table-striped table-hover table-borderless mb-0">
                     <thead>
                         <tr class="d-flex">
                             <th class="col-4 col-sm-5 text-center text-sm-right">{% trans "Home team" %}</th>
@@ -63,26 +63,16 @@
                     </thead>
                     <tbody>
                         {% for event in events %}
-                            <tr class="d-flex"{% for key, val in event.details.items %} data-{{ key }}="{{ val }}"{% endfor %}>
-                                <td class="col-4 col-sm-5 text-center text-sm-right">
-                                    {% ifequal event.details.team "HOME" %}
-                                        <span class="badge badge-pill badge-secondary d-none d-sm-inline px-2">{{ home_team_players_map|get:event.details.player|default_if_none:tbc }}</span>
-                                        <span class="badge badge-pill badge-primary px-3 px-sm-2 mx-2">{{ event.details.player }}</span>
-                                    {% endifequal %}
-                                </td>
-                                <td class="col-4 col-sm-2 text-center">
-                                    <span class="badge badge-pill badge-{{ event.period|divisibleby:2|yesno:"warning,info" }} px-2">{{ event.relative_timestamp }}</span>
-                                </td>
-                                <td class="col-4 col-sm-5 text-center text-sm-left">
-                                    {% ifequal event.details.team "AWAY" %}
-                                        <span class="badge badge-pill badge-primary px-3 px-sm-2 mx-2">{{ event.details.player }}</span>
-                                        <span class="badge badge-pill badge-secondary d-none d-sm-inline px-2">{{ away_team_players_map|get:event.details.player|default_if_none:tbc }}</span>
-                                    {% endifequal %}
-                                </td>
-                            </tr>
+                            {% include event.template_name_live %}
                         {% endfor %}
                     </tbody>
                 </table>
+                {% ifequal SITE_ENV "dev" %}
+                <h5>{% trans "Debug" %}</h5>
+                {% autoescape off %}
+                <xmp class="p-3 bg-dark text-light">{{ events }}</xmp>
+                {% endautoescape %}
+                {% endifequal %}
             </div>
         </div>
     </div>

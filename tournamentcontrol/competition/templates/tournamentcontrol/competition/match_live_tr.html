@@ -1,0 +1,14 @@
+<tr class="d-flex"{% for key, val in event.details.items %}
+    data-{{ key }}="{{ val }}"{% endfor %}>
+    <td class="col-4 col-sm-5 text-center text-sm-right align-self-center">
+        {% block home_team %}{% endblock %}
+    </td>
+    <td class="col-4 col-sm-2 text-center align-self-center">
+        {% block timestamp %}
+        <span class="badge badge-pill {% block timestamp_style %}badge-{{ event.period|divisibleby:2|yesno:"warning,info" }}{% endblock %} px-2">{{ event.period_timestamp|timesince:event.timestamp }}</span>
+        {% endblock %}
+    </td>
+    <td class="col-4 col-sm-5 text-center text-sm-left align-self-center">
+        {% block away_team %}{% endblock %}
+    </td>
+</tr>
