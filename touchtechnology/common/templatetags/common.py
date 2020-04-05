@@ -498,7 +498,12 @@ def create_permission_checker(model_or_manager, user):
     """
     model, manager = model_and_manager(model_or_manager)
     checker = ObjectPermissionChecker(user)
-    checker.prefetch_perms(manager)
+    try:
+        checker.prefetch_perms(manager)
+    except UnboundLocalError:
+        logger.exception(
+            "https://github.com/django-guardian/django-guardian/issues/519"
+        )
     return checker
 
 
