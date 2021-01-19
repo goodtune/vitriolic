@@ -1,8 +1,9 @@
 import factory
+from factory.django import DjangoModelFactory
 from touchtechnology.content.models import Redirect
 
 
-class RedirectFactory(factory.django.DjangoModelFactory):
+class RedirectFactory(DjangoModelFactory):
 
     class Meta:
         model = Redirect
