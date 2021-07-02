@@ -131,10 +131,9 @@ DATABASES = {
 }
 
 if DATABASES["default"]["ENGINE"].startswith("django.db.backends.postgresql"):
-    if os.getenv("POSTGRES_5432_TCP"):
-        DATABASES["default"]["PORT"] = env.int("POSTGRES_5432_TCP")
-        # delay long enough to let the postgresql container startup
-        time.sleep(4)
+    DATABASES["default"]["PORT"] = env.int("DB_5432_TCP_PORT", default=5432)
+    # delay long enough to let the postgresql container startup
+    time.sleep(4)
 
 
 # Password validation

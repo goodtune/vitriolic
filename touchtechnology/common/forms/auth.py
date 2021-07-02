@@ -1,20 +1,22 @@
+from typing import Optional
+
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import Group
 from django.contrib.contenttypes.models import ContentType
-from django.forms import formset_factory
+from django.db.models import QuerySet
+from django.forms import BaseFormSet, formset_factory
 from django.utils.functional import cached_property
 from django.utils.http import urlencode
 from django.utils.translation import ugettext_lazy as _
 from guardian.models import GroupObjectPermission, UserObjectPermission
 from guardian.shortcuts import assign_perm, remove_perm
 from modelforms.forms import ModelForm
-from touchtechnology.common.forms.fields import (
-    EmailField, ModelMultipleChoiceField,
-)
+from touchtechnology.common.forms.fields import EmailField, ModelMultipleChoiceField
 from touchtechnology.common.forms.mixins import (
-    BootstrapFormControlMixin, PermissionFormSetMixin,
+    BootstrapFormControlMixin,
+    PermissionFormSetMixin,
 )
 
 
@@ -59,8 +61,9 @@ class PermissionForm(ModelForm):
     """
     Generic form to be used to assign row-level permissions to an object.
     """
-    staff_only = True
-    max_checkboxes = 7  # Set based on number of rows visible in MVP layout
+
+    staff_only: bool = True
+    max_checkboxes: int = 7  # Set based on number of rows visible in MVP layout
 
     def __init__(self, permission, *args, **kwargs):
         super(PermissionForm, self).__init__(*args, **kwargs)
@@ -108,7 +111,7 @@ class PermissionForm(ModelForm):
         return get_user_model().objects.filter(pk__in=pks)
 
     @cached_property
-    def _groups_with_perms(self):
+    def _groups_with_perms(self) -> QuerySet:
         pks = GroupObjectPermission.objects.filter(
             permission=self.permission,
             object_pk=self.instance.pk,
@@ -142,7 +145,9 @@ class PermissionForm(ModelForm):
         return super(PermissionForm, self).save(*args, **kwargs)
 
 
-def permissionformset_factory(model, staff_only=None, max_checkboxes=None):
+def permissionformset_factory(
+    model, staff_only: Optional[bool] = None, max_checkboxes: Optional[int] = None
+) -> BaseFormSet:
     """
     For the specified Model, return a FormSet class which will allow you to
     control which specific users & groups should have the ability to change
