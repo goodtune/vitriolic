@@ -29,8 +29,8 @@ script:
 env:
   jobs:
     - DJANGO=2.2
-    - DJANGO=3.0
     - DJANGO=3.1
+    - DJANGO=3.2
   global:
     - DATABASE_URL=postgresql://postgres@localhost/travis
 
@@ -55,5 +55,5 @@ deploy:
   on:
     tags: true
     repo: goodtune/vitriolic
-    python: 3.7
-    condition: $DJANGO = 3.1
+    python: 3.9
+    condition: $DJANGO = 3.2
