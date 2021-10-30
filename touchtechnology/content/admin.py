@@ -517,7 +517,7 @@ class ContentAdminComponent(AdminComponent):
                 namespace = s._get_admin_namespace()
                 args = s._get_url_args()
                 crud = {
-                    "detail": os.path.join(settings.MEDIA_URL, *args),
+                    "detail": default_storage.url(os.path.join(*args)),
                     "delete": reverse("%s:delete" % namespace, args=args),
                 }
                 return crud
@@ -539,7 +539,6 @@ class ContentAdminComponent(AdminComponent):
         from collections import namedtuple
 
         context = {
-            "base_url": default_storage.base_url,
             "path": path,
             "parent": parentdir,
             "directories": directories,

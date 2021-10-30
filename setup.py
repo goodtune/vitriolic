@@ -49,8 +49,8 @@ setup(
         "content": [],
         "news": ["django-imagekit", "python-magic"],
         "competition": [
+            "celery",
             "cloudinary",
-            "django-celery",
             "django-embed-video",
             "django-formtools",
             "django-mathfilters",

@@ -4,10 +4,11 @@ import factory
 import factory.fuzzy
 from django.utils import timezone
 from django.utils.text import slugify
+from factory.django import DjangoModelFactory
 from touchtechnology.news.models import Article, Category, Translation
 
 
-class ArticleFactory(factory.django.DjangoModelFactory):
+class ArticleFactory(DjangoModelFactory):
     class Meta:
         model = Article
 
@@ -20,7 +21,7 @@ class ArticleFactory(factory.django.DjangoModelFactory):
     slug = factory.LazyAttribute(lambda a: slugify(a.headline))
 
 
-class TranslationFactory(factory.django.DjangoModelFactory):
+class TranslationFactory(DjangoModelFactory):
     class Meta:
         model = Translation
 
@@ -29,7 +30,7 @@ class TranslationFactory(factory.django.DjangoModelFactory):
     copy = factory.Faker("paragraph")
 
 
-class CategoryFactory(factory.django.DjangoModelFactory):
+class CategoryFactory(DjangoModelFactory):
     class Meta:
         model = Category
 

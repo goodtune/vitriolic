@@ -1,12 +1,8 @@
-from __future__ import unicode_literals
-
 import logging
 import os.path
 from urllib.parse import urljoin
 
-import django
 from django.conf import settings
-from django.conf.urls import url
 from django.contrib import messages
 from django.contrib.auth import forms, get_user_model, views
 from django.contrib.auth.models import Permission
@@ -21,7 +17,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.template import RequestContext
 from django.template.loader import render_to_string
 from django.template.response import TemplateResponse
-from django.urls import NoReverseMatch, reverse, reverse_lazy
+from django.urls import NoReverseMatch, path, reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.utils.http import urlencode
@@ -30,12 +26,18 @@ from django.utils.translation import ugettext_lazy as _
 from django.views.decorators.cache import patch_cache_control
 from modelforms.forms import ModelForm
 from touchtechnology.common.decorators import (
-    login_required_m, node2extracontext, require_POST_m,
+    login_required_m,
+    node2extracontext,
+    require_POST_m,
 )
 from touchtechnology.common.default_settings import PAGINATE_BY, PROFILE_FORM_CLASS
 from touchtechnology.common.utils import (
-    get_403_or_None, get_all_perms_for_model_cached, get_objects_for_user,
-    get_perms_for_model, model_and_manager, select_template_name,
+    get_403_or_None,
+    get_all_perms_for_model_cached,
+    get_objects_for_user,
+    get_perms_for_model,
+    model_and_manager,
+    select_template_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -927,33 +929,32 @@ class AccountsSite(Application):
 
     def get_urls(self):
         urlpatterns = [
-            url(r"^login/$", self.login, name="login"),
-            url(r"^logout/$", self.logout, name="logout"),
-            url(r"^password-change/$", self.password_change, name="password_change"),
-            url(
-                r"^password-change/done/$",
+            path("login/", self.login, name="login"),
+            path("logout/", self.logout, name="logout"),
+            path("password-change/", self.password_change, name="password_change"),
+            path(
+                "password-change/done/",
                 self.password_change_done,
                 name="password_change_done",
             ),
-            url(r"^password-reset/$", self.password_reset, name="password_reset"),
-            url(
-                r"^password-reset/done/$",
+            path("password-reset/", self.password_reset, name="password_reset"),
+            path(
+                "password-reset/done/",
                 self.password_reset_done,
                 name="password_reset_done",
             ),
-            url(
-                r"^reset/(?P<uidb64>[0-9A-Za-z_\-]+)/"
-                r"(?P<token>[0-9A-Za-z]{1,13}-[0-9A-Za-z]{1,20})/$",
+            path(
+                "reset/<uidb64>/<token>/",
                 self.password_reset_confirm,
                 name="password_reset_confirm",
             ),
-            url(
-                r"^reset/done/$",
+            path(
+                "reset/done/",
                 self.password_reset_complete,
                 name="password_reset_complete",
             ),
-            url(r"^profile/$", self.profile, name="profile"),
-            url(r"^$", self.index, name="index"),
+            path("profile/", self.profile, name="profile"),
+            path(r"", self.index, name="index"),
         ]
         return urlpatterns
 

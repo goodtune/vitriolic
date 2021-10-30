@@ -4,9 +4,10 @@ import factory
 import factory.fuzzy
 from django.utils import timezone
 from example_app import models
+from factory.django import DjangoModelFactory
 
 
-class TestDateTimeFieldFactory(factory.DjangoModelFactory):
+class TestDateTimeFieldFactory(DjangoModelFactory):
     class Meta:
         model = models.TestDateTimeField
 
@@ -17,7 +18,7 @@ class TestDateTimeFieldFactory(factory.DjangoModelFactory):
     )
 
 
-class RelativeFactory(factory.DjangoModelFactory):
+class RelativeFactory(DjangoModelFactory):
     class Meta:
         model = models.Relative
 
