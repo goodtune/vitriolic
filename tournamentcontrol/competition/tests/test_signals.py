@@ -1,4 +1,5 @@
-from test_plus import TestCase
+from django.test import TestCase
+
 from tournamentcontrol.competition.models import LadderEntry, LadderSummary
 from tournamentcontrol.competition.tests import factories
 
@@ -11,7 +12,10 @@ class SignalHandlerTests(TestCase):
     def test_ladder_entry_match_with_score(self):
         factories.MatchFactory.create(home_team_score=5, away_team_score=2)
         self.assertCountEqual(
-            [(1, 0, 0, 5, 2, 3, 3), (0, 1, 0, 2, 5, -3, 3),],
+            [
+                (1, 0, 0, 5, 2, 3, 3),
+                (0, 1, 0, 2, 5, -3, 3),
+            ],
             LadderEntry.objects.values_list(
                 "win", "loss", "draw", "score_for", "score_against", "diff", "margin"
             ),
@@ -38,7 +42,10 @@ class SignalHandlerTests(TestCase):
         )
 
         self.assertCountEqual(
-            [(3, 1, 1, 1, 10, 8, 2), (3, 1, 1, 1, 8, 10, -2),],
+            [
+                (3, 1, 1, 1, 10, 8, 2),
+                (3, 1, 1, 1, 8, 10, -2),
+            ],
             LadderSummary.objects.values_list(
                 "played",
                 "win",

@@ -21,6 +21,7 @@ env = environ.Env()
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 SILENCED_SYSTEM_CHECKS = env.list("SILENCED_SYSTEM_CHECKS", default=[])
 SILENCED_SYSTEM_CHECKS.append("models.E006")
 
