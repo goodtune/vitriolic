@@ -139,7 +139,7 @@ class GoodViewTests(TestCase):
         self.assertResponseContains(
             '<iframe width="480" height="360" '
             'src="http://www.youtube.com/embed/jNQXAC9IVRw?wmode=opaque" '
-            'frameborder="0" allowfullscreen>'
+            'loading="lazy" frameborder="0" allowfullscreen>'
             "</iframe>"
         )
 

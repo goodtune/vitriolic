@@ -52,7 +52,7 @@
 			<tbody>
 				{% for f in files %}
 					<tr class="{% if forloop.first %}first {% endif %}{% if forloop.last %} last {% endif %} file">
-						<td><a target="_blank" href="{{ base_url }}{{ path|default_if_none:"" }}{{ f }}">{{ f }}</a></td>
+						<td><a target="_blank" href="{{ path|default_if_none:"" }}{{ f }}">{{ f }}</a></td>
 						<td class="rm">
 							{% if writable %}
 								<a class="rm" href="{% url 'admin:files:rm' path=path|default_if_none:"" filename=f %}">{% trans "Delete" %}</a>

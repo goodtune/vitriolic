@@ -6,10 +6,11 @@ import factory
 import factory.fuzzy
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from factory.django import DjangoModelFactory
 from tournamentcontrol.competition import models, utils
 
 
-class SitemapNodeBaseFactory(factory.DjangoModelFactory):
+class SitemapNodeBaseFactory(DjangoModelFactory):
     """
     For any model which inherits from
     ``touchtechnology.common.models.SitemapNodeBase`` we need to execute the
@@ -78,7 +79,7 @@ class SeasonFactory(OrderedSitemapNodeFactory):
     competition = factory.SubFactory(CompetitionFactory)
 
 
-class SeasonExclusionDateFactory(factory.DjangoModelFactory):
+class SeasonExclusionDateFactory(DjangoModelFactory):
     class Meta:
         model = models.SeasonExclusionDate
 
@@ -86,7 +87,7 @@ class SeasonExclusionDateFactory(factory.DjangoModelFactory):
     season = factory.SubFactory(SeasonFactory)
 
 
-class SeasonMatchTimeFactory(factory.DjangoModelFactory):
+class SeasonMatchTimeFactory(DjangoModelFactory):
     class Meta:
         model = models.SeasonMatchTime
 
@@ -131,7 +132,7 @@ class DivisionFactory(OrderedSitemapNodeFactory):
     season = factory.SubFactory(SeasonFactory)
 
 
-class DivisionExclusionDateFactory(factory.DjangoModelFactory):
+class DivisionExclusionDateFactory(DjangoModelFactory):
     class Meta:
         model = models.DivisionExclusionDate
 
@@ -167,7 +168,7 @@ class StageGroupFactory(OrderedSitemapNodeFactory):
     stage = factory.SubFactory(StageFactory)
 
 
-class UndecidedTeamFactory(factory.DjangoModelFactory):
+class UndecidedTeamFactory(DjangoModelFactory):
     class Meta:
         model = models.UndecidedTeam
 
@@ -175,7 +176,7 @@ class UndecidedTeamFactory(factory.DjangoModelFactory):
     stage = factory.SubFactory(StageFactory)
 
 
-class MatchFactory(factory.DjangoModelFactory):
+class MatchFactory(DjangoModelFactory):
     class Meta:
         model = models.Match
 
@@ -193,7 +194,7 @@ class MatchFactory(factory.DjangoModelFactory):
     time = factory.LazyAttribute(lambda o: o.datetime.time())
 
 
-class UserFactory(factory.DjangoModelFactory):
+class UserFactory(DjangoModelFactory):
     class Meta:
         model = get_user_model()
 
@@ -207,7 +208,7 @@ class UserFactory(factory.DjangoModelFactory):
     is_active = True
 
 
-class PersonFactory(factory.DjangoModelFactory):
+class PersonFactory(DjangoModelFactory):
     class Meta:
         model = models.Person
 
@@ -222,7 +223,7 @@ class PersonFactory(factory.DjangoModelFactory):
     user = factory.SubFactory(UserFactory)
 
 
-class ClubAssociationFactory(factory.DjangoModelFactory):
+class ClubAssociationFactory(DjangoModelFactory):
     class Meta:
         model = models.ClubAssociation
 
@@ -230,7 +231,7 @@ class ClubAssociationFactory(factory.DjangoModelFactory):
     person = factory.SubFactory(PersonFactory)
 
 
-class TeamAssociationFactory(factory.DjangoModelFactory):
+class TeamAssociationFactory(DjangoModelFactory):
     class Meta:
         model = models.TeamAssociation
 
@@ -238,7 +239,7 @@ class TeamAssociationFactory(factory.DjangoModelFactory):
     person = factory.SubFactory(PersonFactory)
 
 
-class DrawFormatFactory(factory.DjangoModelFactory):
+class DrawFormatFactory(DjangoModelFactory):
     class Meta:
         model = models.DrawFormat
 

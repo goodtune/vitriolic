@@ -21,6 +21,7 @@ env = environ.Env()
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 SILENCED_SYSTEM_CHECKS = env.list("SILENCED_SYSTEM_CHECKS", default=[])
 SILENCED_SYSTEM_CHECKS.append("models.E006")
 
@@ -131,10 +132,9 @@ DATABASES = {
 }
 
 if DATABASES["default"]["ENGINE"].startswith("django.db.backends.postgresql"):
-    if os.getenv("POSTGRES_5432_TCP"):
-        DATABASES["default"]["PORT"] = env.int("POSTGRES_5432_TCP")
-        # delay long enough to let the postgresql container startup
-        time.sleep(4)
+    DATABASES["default"]["PORT"] = env.int("DB_5432_TCP_PORT", default=5432)
+    # delay long enough to let the postgresql container startup
+    time.sleep(4)
 
 
 # Password validation

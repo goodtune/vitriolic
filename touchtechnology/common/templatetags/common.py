@@ -16,7 +16,7 @@ from classytags.helpers import AsTag
 from django.conf import settings
 from django.db.models import Model, Q
 from django.db.models.query import QuerySet
-from django.forms.forms import BoundField
+from django.forms.boundfield import BoundField
 from django.forms.widgets import (
     CheckboxInput, CheckboxSelectMultiple, FileInput, MultiWidget, PasswordInput,
     RadioSelect, Select, Textarea, TextInput,

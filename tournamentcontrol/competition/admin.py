@@ -2012,10 +2012,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
         if mode == "pdf":
             kw = {
-                "matches": matches,
+                "matches": matches.values_list("pk"),
                 "templates": templates,
                 "extra_context": extra_context,
-                "stage": stage,
+                "stage": stage.pk,
             }
             if hasattr(request, "tenant"):
                 kw["_schema_name"] = request.tenant.schema_name
