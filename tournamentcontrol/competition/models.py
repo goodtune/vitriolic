@@ -1538,7 +1538,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         on_delete=PROTECT,
     )
 
-    evaluated = models.NullBooleanField()
+    evaluated = models.BooleanField(null=True)
 
     is_washout = BooleanField(default=False)
 
