@@ -9,7 +9,6 @@ from django.conf import settings
 from django.contrib.auth.models import Group
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
-from django.contrib.postgres.fields import JSONField
 from django.db import models
 from django.db.models import DateTimeField, ForeignKey as TreeField, ManyToManyField
 from django.db.models.signals import post_save
@@ -21,6 +20,11 @@ from django.utils.translation import ugettext_lazy as _
 from touchtechnology.common.db.models import BooleanField
 from touchtechnology.common.default_settings import SITEMAP_ROOT
 from touchtechnology.common.mixins import NodeRelationMixin
+
+try:
+    from django.db.models import JSONField
+except ImportError:  # Django 2.2 support
+    from django.contrib.postgres.fields import JSONField
 
 logger = logging.getLogger(__name__)
 
