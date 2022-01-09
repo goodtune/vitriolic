@@ -5,9 +5,15 @@ from urllib.parse import parse_qsl, urlsplit, urlunsplit
 import pytz
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import redirect
-from django.utils.http import is_safe_url, urlencode
+from django.utils.http import urlencode
 from django.views.decorators.http import require_POST
+
 from touchtechnology.common.forms.tz import SelectTimezoneForm
+
+try:
+    from django.utils.http import url_has_allowed_host_and_scheme
+except ImportError:  # Django 2.2
+    from django.utils.http import is_safe_url as url_has_allowed_host_and_scheme
 
 
 def login(request, to, *args, **kwargs):
@@ -33,7 +39,7 @@ def set_timezone(request):
             else:
                 response.set_cookie("django_timezone", tzname)
 
-    if not is_safe_url(url, {request.get_host()}):
+    if not url_has_allowed_host_and_scheme(url, request.get_host()):
         raise Http404
 
     return response

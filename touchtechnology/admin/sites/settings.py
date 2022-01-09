@@ -1,7 +1,8 @@
 from django.conf import settings
-from django.conf.urls import url
 from django.contrib.sites.models import Site
-from django.utils.translation import ugettext_lazy as _
+from django.urls import path
+from django.utils.translation import gettext_lazy as _
+
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.common.decorators import superuser_login_required_m
 
@@ -20,7 +21,7 @@ class Settings(AdminComponent):
     def get_urls(self):
         urlpatterns = super(Settings, self).get_urls()
         urlpatterns += [
-            url(r"^site/$", self.edit_site, name="site"),
+            path("site/", self.edit_site, name="site"),
         ]
         return urlpatterns
 

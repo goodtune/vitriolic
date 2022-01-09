@@ -9,11 +9,15 @@ from django.db.models import QuerySet
 from django.forms import BaseFormSet, formset_factory
 from django.utils.functional import cached_property
 from django.utils.http import urlencode
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from guardian.models import GroupObjectPermission, UserObjectPermission
 from guardian.shortcuts import assign_perm, remove_perm
 from modelforms.forms import ModelForm
-from touchtechnology.common.forms.fields import EmailField, ModelMultipleChoiceField
+
+from touchtechnology.common.forms.fields import (
+    EmailField,
+    ModelMultipleChoiceField,
+)
 from touchtechnology.common.forms.mixins import (
     BootstrapFormControlMixin,
     PermissionFormSetMixin,
@@ -21,39 +25,42 @@ from touchtechnology.common.forms.mixins import (
 
 
 class EmailAuthenticationForm(BootstrapFormControlMixin, AuthenticationForm):
-    username = EmailField(label=_('Email Address'))
+    username = EmailField(label=_("Email Address"))
 
     def __init__(self, *args, **kwargs):
         super(EmailAuthenticationForm, self).__init__(*args, **kwargs)
         for field_name in self.fields:
-            self.fields[field_name].widget.attrs['class'] += ' text-center'
+            self.fields[field_name].widget.attrs["class"] += " text-center"
 
 
 class RegistrationForm(forms.Form):
     first_name = forms.CharField(max_length=30)
     last_name = forms.CharField(max_length=30)
     email = EmailField()
-    password1 = forms.CharField(widget=forms.PasswordInput,
-                                label=_('Password'))
-    password2 = forms.CharField(widget=forms.PasswordInput,
-                                label=_('Password (again)'))
+    password1 = forms.CharField(widget=forms.PasswordInput, label=_("Password"))
+    password2 = forms.CharField(widget=forms.PasswordInput, label=_("Password (again)"))
 
     def clean_email(self):
         UserModel = get_user_model()
-        email = self.cleaned_data.get('email')
+        email = self.cleaned_data.get("email")
         if UserModel.objects.filter(email__iexact=email):
-            raise forms.ValidationError(_("This email address is already in "
-                                          "use. Please supply a different "
-                                          "email address."))
+            raise forms.ValidationError(
+                _(
+                    "This email address is already in "
+                    "use. Please supply a different "
+                    "email address."
+                )
+            )
         return email
 
     def clean_password2(self):
-        password1 = self.cleaned_data.get('password1')
-        password2 = self.cleaned_data.get('password2')
+        password1 = self.cleaned_data.get("password1")
+        password2 = self.cleaned_data.get("password2")
         if password1 and password2:
             if password1 != password2:
-                raise forms.ValidationError(_("The two password fields "
-                                              "didn't match."))
+                raise forms.ValidationError(
+                    _("The two password fields " "didn't match.")
+                )
         return password2
 
 
@@ -77,29 +84,32 @@ class PermissionForm(ModelForm):
 
         group_queryset = Group.objects.all()
 
-        self.fields['users'] = ModelMultipleChoiceField(
+        self.fields["users"] = ModelMultipleChoiceField(
             queryset=user_queryset,
             required=False,
             initial=self._users_with_perms,
             label_from_instance=lambda o: o.get_full_name(),
         )
-        self.fields['users'].widget.attrs.setdefault('class', 'form-control')
+        self.fields["users"].widget.attrs.setdefault("class", "form-control")
 
-        self.fields['groups'] = ModelMultipleChoiceField(
+        self.fields["groups"] = ModelMultipleChoiceField(
             queryset=group_queryset,
             required=False,
             initial=self._groups_with_perms,
         )
-        self.fields['groups'].widget.attrs.setdefault('class', 'form-control')
+        self.fields["groups"].widget.attrs.setdefault("class", "form-control")
 
     def __repr__(self):
         return "<%s: %s?%s>" % (
             self.__class__.__name__,
             self.permission.codename,
-            urlencode({
-                'staff_only': self.staff_only,
-                'max_checkboxes': self.max_checkboxes,
-            }))
+            urlencode(
+                {
+                    "staff_only": self.staff_only,
+                    "max_checkboxes": self.max_checkboxes,
+                }
+            ),
+        )
 
     @cached_property
     def _users_with_perms(self):
@@ -107,7 +117,7 @@ class PermissionForm(ModelForm):
             permission=self.permission,
             object_pk=self.instance.pk,
             content_type=self.content_type,
-        ).values_list('user', flat=True)
+        ).values_list("user", flat=True)
         return get_user_model().objects.filter(pk__in=pks)
 
     @cached_property
@@ -116,16 +126,16 @@ class PermissionForm(ModelForm):
             permission=self.permission,
             object_pk=self.instance.pk,
             content_type=self.content_type,
-        ).values_list('group', flat=True)
+        ).values_list("group", flat=True)
         return Group.objects.filter(pk__in=pks)
 
     def save(self, *args, **kwargs):
         if self.has_changed():
             # work out our before and after state
             users_before = self._users_with_perms
-            users_after = self.cleaned_data['users']
+            users_after = self.cleaned_data["users"]
             groups_before = self._groups_with_perms
-            groups_after = self.cleaned_data['groups']
+            groups_after = self.cleaned_data["groups"]
 
             # determine who has had their per object permissions rescinded
             rescind_users = set(users_before).difference(users_after)
@@ -176,17 +186,20 @@ def permissionformset_factory(
     if max_checkboxes is None:
         max_checkboxes = PermissionForm.max_checkboxes
 
-    meta = type('Meta', (), {'model': model, 'fields': ('id',)})
+    meta = type("Meta", (), {"model": model, "fields": ("id",)})
     form_class = type(
-        '%sPermissionForm' % model.__name__,
+        "%sPermissionForm" % model.__name__,
         (PermissionForm,),
         {
-            'Meta': meta,
-            'staff_only': staff_only,
-            'max_checkboxes': max_checkboxes,
-        }
+            "Meta": meta,
+            "staff_only": staff_only,
+            "max_checkboxes": max_checkboxes,
+        },
     )
     formset_base = formset_factory(form_class)
-    formset_class = type('%sPermissionFormSet' % model.__name__,
-                         (PermissionFormSetMixin, formset_base), {})
+    formset_class = type(
+        "%sPermissionFormSet" % model.__name__,
+        (PermissionFormSetMixin, formset_base),
+        {},
+    )
     return formset_class

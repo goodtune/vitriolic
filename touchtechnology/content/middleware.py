@@ -3,8 +3,8 @@ import logging
 import os.path
 from urllib.parse import urlunparse
 
+import django.urls
 from django.conf import settings
-from django.conf.urls import include, url
 from django.conf.urls.static import static
 from django.contrib.sitemaps.views import sitemap
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
@@ -14,11 +14,15 @@ from django.core.files.storage import default_storage
 from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.template import RequestContext, TemplateDoesNotExist
-from django.urls import reverse_lazy
+from django.urls import include, path, reverse_lazy
 from django.utils.deprecation import MiddlewareMixin
 from guardian.conf import settings as guardian_settings
 from mptt.utils import tree_item_iterator
-from touchtechnology.common.default_settings import SITEMAP_HTTPS_OPTION, SITEMAP_ROOT
+
+from touchtechnology.common.default_settings import (
+    SITEMAP_HTTPS_OPTION,
+    SITEMAP_ROOT,
+)
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.sitemaps import NodeSitemap
 from touchtechnology.common.sites import AccountsSite
@@ -59,7 +63,13 @@ class SitemapNodeMiddleware(MiddlewareMixin):
             except ObjectDoesNotExist:
                 root = None
             dehydrated.append(
-                {"regex": r"^p/", "site": protect, "kwargs": {"node": root,},}
+                {
+                    "regex": r"^p/",
+                    "site": protect,
+                    "kwargs": {
+                        "node": root,
+                    },
+                }
             )
 
             enabled_nodes = SitemapNode._tree_manager.all()
@@ -89,14 +99,14 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                     continue
 
                 if node.is_root_node() and node.slug == SITEMAP_ROOT:
-                    path = ""
+                    part = ""
                 elif node.is_root_node():
-                    path = node.slug
+                    part = node.slug
                 else:
-                    path = get_absolute_url(node, struct)
+                    part = get_absolute_url(node, struct)
 
-                if path and settings.APPEND_SLASH:
-                    path += "/"
+                if part and settings.APPEND_SLASH:
+                    part += "/"
 
                 if (
                     node.content_type is not None
@@ -106,12 +116,12 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                         app = node.object.site(node)
                     except (AttributeError, ImportError, ValueError):
                         logger.exception(
-                            "Application is unavailable, " "disabling this node."
+                            "Application is unavailable, disabling this node."
                         )
                         node.disable()
                     else:
                         pattern = {
-                            "regex": r"^%s" % path,
+                            "regex": part,
                             "site": app,
                             "kwargs": dict(node=node, **node.kwargs),
                             "name": app.name,
@@ -132,21 +142,20 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 elif node.object_id is None:
                     dehydrated.append(
                         {
-                            "regex": r"^%s$" % path,
+                            "regex": part,
                             "view": dispatch,
-                            "kwargs": dict(node=node, url=path),
-                            "name": "folder_%d" % node.pk,
+                            "kwargs": dict(node=node, url=part),
+                            "name": f"folder_{node.pk}",
                         }
                     )
 
                 else:
                     dehydrated.append(
                         {
-                            "regex": r"^%s$" % path,
+                            "regex": part,
                             "view": dispatch,
-                            "kwargs": dict(page_id=node.object_id, node=node, url=path),
-                            "name": "page_%d"
-                            % (node.object_id if node.object_id else None,),
+                            "kwargs": dict(page_id=node.object_id, node=node, url=part),
+                            "name": f"page_{node.object_id if node.object_id else None}",
                         }
                     )
 
@@ -154,15 +163,15 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 DEHYDRATED_URLPATTERNS_KEY,
                 dehydrated,
                 timeout=DEHYDRATED_URLPATTERNS_TIMEOUT,
-                **v_kw
+                **v_kw,
             )
 
         # Always start with the project wide ROOT_URLCONF and add our
         # sitemap.xml view
         urlpatterns = [
-            url(r"^", include(settings.ROOT_URLCONF)),
-            url(
-                r"^sitemap\.xml",
+            django.urls.path("", include(settings.ROOT_URLCONF)),
+            django.urls.path(
+                "sitemap.xml",
                 sitemap,
                 {"sitemaps": {"nodes": NodeSitemap}},
                 name="sitemap",
@@ -175,11 +184,11 @@ class SitemapNodeMiddleware(MiddlewareMixin):
         # fly from cache... rehydrating it ;)
         for node in dehydrated:
             try:
-                pattern = url(
+                pattern = path(
                     node["regex"], node["view"], node["kwargs"], name=node.get("name")
                 )
             except KeyError:
-                pattern = url(
+                pattern = path(
                     node["regex"],
                     node["site"].urls,
                     node["kwargs"],
@@ -256,7 +265,7 @@ def redirect_middleware(get_response):
     def middleware(request):
         try:
             obj = Redirect.objects.get(source_url__exact=request.path)
-        except Redirect.DoesNotExist:
+        except ObjectDoesNotExist:
             response = get_response(request)
         else:
             response = redirect(obj.destination_url, obj.permanent)

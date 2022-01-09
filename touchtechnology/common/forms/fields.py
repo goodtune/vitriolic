@@ -10,15 +10,21 @@ from django.conf import settings
 from django.db.models import Min
 from django.utils import timezone
 from django.utils.encoding import smart_str
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from mptt.forms import TreeNodeChoiceField
 from namedentities import named_entities
+
 from touchtechnology.common.forms.iter import TemplateChoiceIterator
 from touchtechnology.common.forms.mixins import LabelFromInstanceMixin
 from touchtechnology.common.forms.widgets import (
-    BootstrapGoogleMapsWidget, HTMLWidget, SelectDateHiddenWidget,
-    SelectDateTimeHiddenWidget, SelectDateTimeWidget, SelectDateWidget,
-    SelectTimeHiddenWidget, SelectTimeWidget,
+    BootstrapGoogleMapsWidget,
+    HTMLWidget,
+    SelectDateHiddenWidget,
+    SelectDateTimeHiddenWidget,
+    SelectDateTimeWidget,
+    SelectDateWidget,
+    SelectTimeHiddenWidget,
+    SelectTimeWidget,
 )
 
 

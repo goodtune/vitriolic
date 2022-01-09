@@ -1,5 +1,6 @@
-from django.conf.urls import include, url
+from django.urls import include, path
 from example_app import sites, views
+
 from touchtechnology.common.sites import AccountsSite
 from touchtechnology.news.sites import NewsSite
 
@@ -13,13 +14,13 @@ accounts = AccountsSite()
 news = NewsSite()
 
 urlpatterns = [
-    url(r'^context-processors/', test_context_processors.urls),
-    url(r'^date-time-field/', test_date_time_field.urls),
-    url(r'^generic/', test_generic_views.urls),
-    url(r'^query-string/', test_query_string.urls),
-    url(r'^pagination/', test_pagination.urls),
-    url(r'^accounts/', accounts.urls),  # can't login without it
-    url(r'^news/', news.urls),
-    url(r'^', include('touchtechnology.common.urls')),
-    url(r'^$', views.index, name='index'),
+    path("context-processors/", test_context_processors.urls),
+    path("date-time-field/", test_date_time_field.urls),
+    path("generic/", test_generic_views.urls),
+    path("query-string/", test_query_string.urls),
+    path("pagination/", test_pagination.urls),
+    path("accounts/", accounts.urls),  # can't login without it
+    path("news/", news.urls),
+    path("", include("touchtechnology.common.urls")),
+    path("", views.index, name="index"),
 ]

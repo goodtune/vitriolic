@@ -10,13 +10,18 @@ from django.contrib.auth.models import Group
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
-from django.db.models import DateTimeField, ForeignKey as TreeField, ManyToManyField
+from django.db.models import (
+    DateTimeField,
+    ForeignKey as TreeField,
+    ManyToManyField,
+)
 from django.db.models.signals import post_save
 from django.urls import reverse_lazy
 from django.utils.functional import cached_property
 from django.utils.safestring import mark_safe
 from django.utils.text import slugify
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
+
 from touchtechnology.common.db.models import BooleanField
 from touchtechnology.common.default_settings import SITEMAP_ROOT
 from touchtechnology.common.mixins import NodeRelationMixin

@@ -1,11 +1,16 @@
-from django.shortcuts import get_object_or_404
-from django.urls import path, include
-from django.utils.translation import ugettext_lazy as _
 from urllib.parse import urljoin
+
+from django.shortcuts import get_object_or_404
+from django.urls import include, path
+from django.utils.translation import gettext_lazy as _
 
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.common.decorators import staff_login_required_m
-from touchtechnology.news.forms import ArticleForm, CategoryForm, TranslationForm
+from touchtechnology.news.forms import (
+    ArticleForm,
+    CategoryForm,
+    TranslationForm,
+)
 from touchtechnology.news.models import Article, Category, Translation
 
 
@@ -35,7 +40,8 @@ class NewsAdminComponent(AdminComponent):
                 path("<int:pk>/delete/", self.delete_article, name="delete"),
                 path("<int:pk>/permission/", self.perms_article, name="perms"),
                 path(
-                    "<int:pk>/", include(translation_patterns, namespace="translation"),
+                    "<int:pk>/",
+                    include(translation_patterns, namespace="translation"),
                 ),
             ],
             self.app_name,

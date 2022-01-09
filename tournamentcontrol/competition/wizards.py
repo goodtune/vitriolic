@@ -7,11 +7,13 @@ from dateutil.parser import parse
 from django import forms
 from django.db.models import Q
 from django.http import HttpResponse, HttpResponseRedirect
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from first import first
 from formtools.wizard.views import SessionWizardView
+
 from touchtechnology.common.forms.fields import (
-    ModelChoiceField, ModelMultipleChoiceField,
+    ModelChoiceField,
+    ModelMultipleChoiceField,
 )
 from tournamentcontrol.competition.models import Season
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
@@ -244,7 +246,9 @@ class DrawGenerationWizard(SessionWizardView):
         )
         context.update(self.extra_context)
         context.update(
-            {"model": self.stage.matches.none(),}
+            {
+                "model": self.stage.matches.none(),
+            }
         )
         return context
 

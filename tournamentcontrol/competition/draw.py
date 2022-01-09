@@ -12,13 +12,21 @@ from dateutil.rrule import DAILY, WEEKLY, rrule, rruleset
 from django.conf import settings
 from django.db.models import Max
 from django.utils import timezone
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from first import first
+
 from tournamentcontrol.competition.models import (
-    Match, Stage, StageGroup, Team, UndecidedTeam,
+    Match,
+    Stage,
+    StageGroup,
+    Team,
+    UndecidedTeam,
 )
 from tournamentcontrol.competition.utils import (
-    ceiling, final_series_rounds, grouper, round_robin_format,
+    ceiling,
+    final_series_rounds,
+    grouper,
+    round_robin_format,
     single_elimination_final_format,
 )
 
@@ -177,7 +185,10 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1, min_per_d
     """
     number_of_teams = len(seeded_team_list)
     number_of_pools = optimum_tournament_pool_count(
-        number_of_teams, days_available, max_per_day, min_per_day,
+        number_of_teams,
+        days_available,
+        max_per_day,
+        min_per_day,
     )
 
     if isinstance(first(seeded_team_list), str):
@@ -241,7 +252,8 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1, min_per_d
         {
             "label": _("Final Series (%s pools)") % number_of_pools,
             "format": single_elimination_final_format(
-                number_of_pools, bronze_playoff=_("Bronze Medal"),
+                number_of_pools,
+                bronze_playoff=_("Bronze Medal"),
             ),
         }
     ]

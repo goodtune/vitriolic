@@ -38,7 +38,7 @@
 					<td><a href="{% url 'ranking:team' year=day.year month=day|date:"b" day=day|date:"j" slug=object.slug team=match.home_team.club.slug %}">{{ match.home_team }}</a></td>
 				{% endif %}
 				<td>
-					{% ifnotequal points_decay points %}{{ points|stringformat:".1f" }} →{% endifnotequal %}
+					{% if points_decay != points %}{{ points|stringformat:".1f" }} →{% endif %}
 					{{ points_decay|stringformat:".3f" }}
 				</td>
 			</tr>

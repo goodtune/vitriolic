@@ -6,17 +6,21 @@ from django import forms
 from django.conf import settings
 from django.forms import widgets
 from django.utils import timezone
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from froala_editor.widgets import FroalaEditor
+
 from touchtechnology.common.forms.tz import (
-    DAY_CHOICES, HOUR_CHOICES, MINUTE_CHOICES, MONTH_CHOICES, TIMEZONE_CHOICES,
+    DAY_CHOICES,
+    HOUR_CHOICES,
+    MINUTE_CHOICES,
+    MONTH_CHOICES,
+    TIMEZONE_CHOICES,
 )
 
 logger = logging.getLogger(__name__)
 
 
 class MultiWidget(widgets.MultiWidget):
-
     def build_attrs(self, *args, **kwargs):
         """
         In the underlying render process for the widget, build_attrs will be
@@ -30,37 +34,37 @@ class MultiWidget(widgets.MultiWidget):
         continue passing across versions 1.8-1.10.
         """
         import django
+
         attrs = super(MultiWidget, self).build_attrs(*args, **kwargs)
         if django.VERSION >= (1, 10):
-            attrs.pop('required', None)
+            attrs.pop("required", None)
         return attrs
 
 
 class HTMLWidget(FroalaEditor):
-
     def trigger_froala(self, el_id, options):
         """
         We don't want to do inline scripts, we'll handle the loading once from
         froala.js, so return an empty string to overload the base FroalaEditor
         implementation.
         """
-        return ''
+        return ""
 
     class Media:
         css = {
-            'all': (
-                'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.3.0/'
-                'codemirror.min.css',
-                'touchtechnology/common/css/froala_themes/dark.min.css',
-                'touchtechnology/common/css/froala_themes/gray.min.css',
-                'touchtechnology/common/css/froala_themes/red.min.css',
-                'touchtechnology/common/css/froala_themes/royal.min.css',
+            "all": (
+                "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.3.0/"
+                "codemirror.min.css",
+                "touchtechnology/common/css/froala_themes/dark.min.css",
+                "touchtechnology/common/css/froala_themes/gray.min.css",
+                "touchtechnology/common/css/froala_themes/red.min.css",
+                "touchtechnology/common/css/froala_themes/royal.min.css",
             ),
         }
         js = (
-            'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.3.0/'
-            'codemirror.min.js',
-            'touchtechnology/common/js/froala.js',
+            "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.3.0/"
+            "codemirror.min.js",
+            "touchtechnology/common/js/froala.js",
         )
 
 
@@ -79,28 +83,29 @@ class GoogleMapsWidget(MultiWidget):
 
     def decompress(self, value):
         if value:
-            return value.split(',')
-        return ('', '', '')
+            return value.split(",")
+        return ("", "", "")
 
     class Media:
-        css = {
-            'all': ('touchtechnology/common/css/location_widget.css',)
-        }
+        css = {"all": ("touchtechnology/common/css/location_widget.css",)}
         js = (
-            '//maps.googleapis.com/maps/api/js?v=3',
-            'touchtechnology/common/js/location_widget.js',
+            "//maps.googleapis.com/maps/api/js?v=3",
+            "touchtechnology/common/js/location_widget.js",
         )
 
 
 class BootstrapGoogleMapsWidget(GoogleMapsWidget):
     def render(self, *args, **kwargs):
         base = super(BootstrapGoogleMapsWidget, self).render(*args, **kwargs)
-        return '''
+        return """
             <div class="form-group">
                 <label class="control-label col-sm-3">%s</label>
                 <div class="col-sm-7">%s</div>
             </div>
-        ''' % (_("Location"), base)
+        """ % (
+            _("Location"),
+            base,
+        )
 
 
 class SelectDateWidget(MultiWidget):
@@ -167,36 +172,37 @@ class SelectDateTimeWidget(MultiWidget):
             forms.Select(choices=MINUTE_CHOICES, attrs=attrs),
         )
         if settings.USE_TZ:
-            widgets += (
-                forms.Select(choices=TIMEZONE_CHOICES, attrs=attrs),
-            )
+            widgets += (forms.Select(choices=TIMEZONE_CHOICES, attrs=attrs),)
         super(SelectDateTimeWidget, self).__init__(widgets, attrs)
 
     def decompress(self, value):
         if settings.USE_TZ:
             tzinfo = timezone.get_current_timezone()
             tzname = timezone.get_current_timezone_name()
-            logger.debug('USE_TZ is True, timezone is %s (%s)',
-                         tzinfo, tzname)
+            logger.debug("USE_TZ is True, timezone is %s (%s)", tzinfo, tzname)
 
             if value:
-                logger.debug('Value is set (%s)', value)
+                logger.debug("Value is set (%s)", value)
                 if timezone.is_naive(value):
-                    value = timezone.make_aware(
-                        value, timezone.get_default_timezone())
-                    logger.debug('Naive value, set default timezone (%s)',
-                                 value)
+                    value = timezone.make_aware(value, timezone.get_default_timezone())
+                    logger.debug("Naive value, set default timezone (%s)", value)
                 value = value.astimezone(tzinfo)
-                logger.debug('Ensure timezone is correctly set to %s (%s)',
-                             tzname, value)
-                values = (value.day, value.month, value.year,
-                          value.hour, value.minute, tzname)
+                logger.debug(
+                    "Ensure timezone is correctly set to %s (%s)", tzname, value
+                )
+                values = (
+                    value.day,
+                    value.month,
+                    value.year,
+                    value.hour,
+                    value.minute,
+                    tzname,
+                )
             else:
                 values = (None, None, None, None, None, None)
 
         elif value:
-            values = (value.day, value.month, value.year,
-                      value.hour, value.minute)
+            values = (value.day, value.month, value.year, value.hour, value.minute)
 
         else:
             values = (None, None, None, None, None)
@@ -208,9 +214,9 @@ class SelectDateTimeWidget(MultiWidget):
         time_part = " ".join(rendered_widgets[3:])
         output = """<span class="date_part">%(date_widget)s</span>
         <span class="time_part%(timezone)s">%(time_widget)s</span>""" % {
-            'date_widget': date_part,
-            'time_widget': time_part,
-            'timezone': ' tz' if settings.USE_TZ else '',
+            "date_widget": date_part,
+            "time_widget": time_part,
+            "timezone": " tz" if settings.USE_TZ else "",
         }
         return output
 
@@ -225,7 +231,5 @@ class SelectDateTimeHiddenWidget(SelectDateTimeWidget):
             forms.HiddenInput(),
         )
         if settings.USE_TZ:
-            widgets += (
-                forms.HiddenInput(),
-            )
+            widgets += (forms.HiddenInput(),)
         super(SelectDateTimeWidget, self).__init__(widgets, attrs)

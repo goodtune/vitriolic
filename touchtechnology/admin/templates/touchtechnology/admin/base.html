@@ -111,7 +111,7 @@
 						{% for verbose_name, app_name, url, c, schemas in admin.get_components|allowed:request %}
 							{% if c.visible %}
 								{% if c.dropdowns %}
-									<li class="dropdown{% ifequal component c %} active{% endifequal %}">
+									<li class="dropdown{% if component == c %} active{% endif %}">
 										<a href="{# url #}" class="dropdown-toggle" data-toggle="dropdown" data-hover="dropdown">{{ verbose_name }}</a>
 										<ul class="dropdown-menu" role="menu">
 											{% for label, url, fa in c.dropdowns %}
@@ -120,7 +120,7 @@
 										</ul>
 									</li>
 								{% else %}
-									<li class="{% ifequal component c %}active{% endifequal %}"><a href="{{ url }}">{{ verbose_name }}</a></li>
+									<li class="{% if component == c %}active{% endif %}"><a href="{{ url }}">{{ verbose_name }}</a></li>
 								{% endif %}
 							{% endif %}
 						{% endfor %}

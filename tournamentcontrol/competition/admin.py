@@ -8,7 +8,6 @@ from functools import reduce
 
 from django.apps import apps
 from django.conf import settings
-from django.conf.urls import include, url
 from django.contrib import messages
 from django.db import models
 from django.db.models import Case, F, Q, Sum, When
@@ -16,38 +15,92 @@ from django.forms.models import _get_foreign_key
 from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
-from django.urls import reverse
+from django.urls import include, path, re_path, reverse
 from django.utils import timezone
-from django.utils.translation import ugettext_lazy as _, ungettext
+from django.utils.translation import gettext_lazy as _, ngettext
+
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.sites import site
-from touchtechnology.common.decorators import csrf_exempt_m, staff_login_required_m
+from touchtechnology.common.decorators import (
+    csrf_exempt_m,
+    staff_login_required_m,
+)
 from touchtechnology.common.prince import prince
 from tournamentcontrol.competition.dashboard import (
-    BasicResultWidget, DetailResultWidget, MostValuableWidget, ProgressStageWidget,
+    BasicResultWidget,
+    DetailResultWidget,
+    MostValuableWidget,
+    ProgressStageWidget,
     ScoresheetWidget,
 )
-from tournamentcontrol.competition.decorators import competition_by_pk_m, registration
+from tournamentcontrol.competition.decorators import (
+    competition_by_pk_m,
+    registration,
+)
 from tournamentcontrol.competition.forms import (
-    ClubAssociationForm, ClubRoleForm, CompetitionForm, DivisionForm, DrawFormatForm,
-    DrawGenerationFormSet, DrawGenerationMatchFormSet, GroundForm, MatchEditForm,
-    MatchScheduleFormSet, MatchWashoutFormSet, PersonEditForm, PersonMergeForm,
-    ProgressMatchesFormSet, ProgressTeamsFormSet, RescheduleDateFormSet,
-    SeasonAssociationFormSet, SeasonForm, SeasonMatchTimeFormSet, StageForm,
-    StageGroupForm, TeamAssociationForm, TeamAssociationFormSet, TeamForm, TeamRoleForm,
-    UndecidedTeamForm, VenueForm,
+    ClubAssociationForm,
+    ClubRoleForm,
+    CompetitionForm,
+    DivisionForm,
+    DrawFormatForm,
+    DrawGenerationFormSet,
+    DrawGenerationMatchFormSet,
+    GroundForm,
+    MatchEditForm,
+    MatchScheduleFormSet,
+    MatchWashoutFormSet,
+    PersonEditForm,
+    PersonMergeForm,
+    ProgressMatchesFormSet,
+    ProgressTeamsFormSet,
+    RescheduleDateFormSet,
+    SeasonAssociationFormSet,
+    SeasonForm,
+    SeasonMatchTimeFormSet,
+    StageForm,
+    StageGroupForm,
+    TeamAssociationForm,
+    TeamAssociationFormSet,
+    TeamForm,
+    TeamRoleForm,
+    UndecidedTeamForm,
+    VenueForm,
 )
 from tournamentcontrol.competition.models import (
-    Club, ClubAssociation, ClubRole, Competition, Division, DivisionExclusionDate,
-    DrawFormat, Ground, LadderEntry, LadderSummary, Match, MatchScoreSheet, Person,
-    Season, SeasonAssociation, SeasonExclusionDate, SeasonMatchTime, SeasonReferee,
-    SimpleScoreMatchStatistic, Stage, StageGroup, Team, TeamAssociation, TeamRole,
-    UndecidedTeam, Venue,
+    Club,
+    ClubAssociation,
+    ClubRole,
+    Competition,
+    Division,
+    DivisionExclusionDate,
+    DrawFormat,
+    Ground,
+    LadderEntry,
+    LadderSummary,
+    Match,
+    MatchScoreSheet,
+    Person,
+    Season,
+    SeasonAssociation,
+    SeasonExclusionDate,
+    SeasonMatchTime,
+    SeasonReferee,
+    SimpleScoreMatchStatistic,
+    Stage,
+    StageGroup,
+    Team,
+    TeamAssociation,
+    TeamRole,
+    UndecidedTeam,
+    Venue,
 )
 from tournamentcontrol.competition.sites import CompetitionAdminMixin
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.utils import (
-    generate_fixture_grid, generate_scorecards, legitimate_bye_match, match_unplayed,
+    generate_fixture_grid,
+    generate_scorecards,
+    legitimate_bye_match,
+    match_unplayed,
     team_needs_progressing,
 )
 from tournamentcontrol.competition.wizards import DrawGenerationWizard
@@ -101,796 +154,423 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     def render(self, request, templates, context, *args, **kwargs):
         context.update(
-            {"base": "tournamentcontrol/rego/admin/base.html",}
+            {
+                "base": "tournamentcontrol/rego/admin/base.html",
+            }
         )
         return super(CompetitionAdminComponent, self).render(
             request, templates, context, *args, **kwargs
         )
 
     def get_urls(self):
-        matchscoresheet_urls = (
+        stub_urls = (
+            # Used to prevent template rendering failures; all uses *should* be marked
+            # with a FIXME comment.
             [
-                url(r"add/$", self.edit_matchscoresheet, name="add"),
-                url(r"(?P<pk>[^/]+)/$", self.edit_matchscoresheet, name="edit"),
-                url(
-                    r"(?P<pk>[^/]+)/delete/$",
-                    self.delete_matchscoresheet,
-                    name="delete",
-                ),
+                path("add/", self.index, name="add"),
             ],
             self.app_name,
         )
 
-        match_urls = include(
-            (
-                [
-                    url(r"^add/$", self.edit_match, name="add"),
-                    url(
-                        r"^(?P<match_id>\d+)/",
-                        include(
-                            [
-                                url(r"^$", self.edit_match, name="edit"),
-                                url(r"^delete/$", self.delete_match, name="delete"),
-                                url(
-                                    r"^detail/$", self.edit_match_detail, name="detail"
-                                ),
-                                url(
-                                    r"^scoresheet/",
-                                    include(
-                                        matchscoresheet_urls,
-                                        namespace="matchscoresheet",
-                                    ),
-                                ),
-                                # FIXME - these just prevent template rendering failures
-                                url(
-                                    r"^ladder/",
-                                    include(
-                                        (
-                                            [url(r"^add/$", self.index, name="add"),],
-                                            self.app_name,
-                                        ),
-                                        namespace="ladderentry",
-                                    ),
-                                ),
-                                url(
-                                    r"^statistic/",
-                                    include(
-                                        (
-                                            [url(r"^add/$", self.index, name="add"),],
-                                            self.app_name,
-                                        ),
-                                        namespace="simplescorematchstatistic",
-                                    ),
-                                ),
-                            ]
-                        ),
-                    ),
-                ],
-                self.app_name,
-            ),
-            namespace="match",
+        matchscoresheet_urls = (
+            [
+                path("add/", self.edit_matchscoresheet, name="add"),
+                path("<int:pk>/", self.edit_matchscoresheet, name="edit"),
+                path("<int:pk>/delete/", self.delete_matchscoresheet, name="delete"),
+            ],
+            self.app_name,
+        )
+
+        match_urls = (
+            [
+                path("add/", self.edit_match, name="add"),
+                path("<int:match_id>/", self.edit_match, name="edit"),
+                path("<int:match_id>/delete/", self.delete_match, name="delete"),
+                path("<int:match_id>/detail/", self.edit_match_detail, name="detail"),
+                path(
+                    "<int:match_id>/scoresheet/",
+                    include(matchscoresheet_urls, namespace="matchscoresheet"),
+                ),
+                # FIXME - these just prevent template rendering failures
+                path(
+                    "<int:match_id>/ladder/",
+                    include(stub_urls, namespace="ladderentry"),
+                ),
+                path(
+                    "<int:match_id>/statistic/",
+                    include(stub_urls, namespace="simplescorematchstatistic"),
+                ),
+            ],
+            self.app_name,
         )
 
         role_patterns = (
             [
-                url(r"^add/$", self.edit_role, name="add"),
-                url(r"^(?P<pk>\d+)/$", self.edit_role, name="edit"),
-                url(r"^(?P<pk>\d+)/delete/$", self.delete_role, name="delete"),
+                path("add/", self.edit_role, name="add"),
+                path("<int:pk>/", self.edit_role, name="edit"),
+                path("<int:pk>/delete/", self.delete_role, name="delete"),
             ],
             self.app_name,
         )
 
+        timeslot_urls = (
+            [
+                path("add/", self.edit_timeslot, name="add"),
+                path("<int:pk>/", self.edit_timeslot, name="edit"),
+                path("<int:pk>/delete/", self.delete_timeslot, name="delete"),
+            ],
+            self.app_name,
+        )
+
+        referees_urls = (
+            [
+                path("add/", self.edit_seasonreferee, name="add"),
+                path("<int:pk>/", self.edit_seasonreferee, name="edit"),
+                path("<int:pk>/delete/", self.delete_seasonreferee, name="delete"),
+            ],
+            self.app_name,
+        )
+
+        ground_urls = (
+            [
+                path(r"add/", self.edit_ground, name="add"),
+                path("<int:ground_id>/", self.edit_ground, name="edit"),
+                path("<int:ground_id>/delete/", self.delete_ground, name="delete"),
+            ],
+            self.app_name,
+        )
+
+        venue_urls = (
+            [
+                path("add/", self.edit_venue, name="add"),
+                path("<int:venue_id>/", self.edit_venue, name="edit"),
+                path("<int:venue_id>/delete/", self.delete_venue, name="delete"),
+                path(
+                    "<int:venue_id>/ground/", include(ground_urls, namespace="ground")
+                ),
+            ],
+            self.app_name,
+        )
+
+        seasonexclusion_urls = (
+            [
+                path("add/", self.edit_seasonexclusiondate, name="add"),
+                path("<int:pk>/", self.edit_seasonexclusiondate, name="edit"),
+                path(
+                    "<int:pk>/delete/", self.delete_seasonexclusiondate, name="delete"
+                ),
+            ],
+            self.app_name,
+        )
+
+        divisionexclusion_urls = (
+            [
+                path("add/", self.edit_divisionexclusiondate, name="add"),
+                path("<int:pk>/", self.edit_divisionexclusiondate, name="edit"),
+                path(
+                    "<int:pk>/delete/", self.delete_divisionexclusiondate, name="delete"
+                ),
+            ],
+            self.app_name,
+        )
+
+        draw_urls = (
+            [
+                # path("", self.list_draw, name="list"),
+                path("build/", self.generate_draw, name="build"),
+                path("undo/", self.undo_draw, name="undo"),
+                path("progress/", self.progress_teams, name="progress"),
+            ],
+            self.app_name,
+        )
+
+        undecidedteam_urls = (
+            [
+                path(r"add/", self.edit_team, name="add"),
+                path(r"<int:team_id>/", self.edit_team, name="edit"),
+                path(r"<int:team_id>/delete/", self.delete_team, name="delete"),
+                path(r"<int:team_id>/match/", include(match_urls, namespace="match")),
+            ],
+            self.app_name,
+        )
+
+        stagegroup_urls = (
+            [
+                # path("", self.list_pools, name="list"),
+                path("add/", self.edit_pool, name="add"),
+                path("<int:pool_id>/", self.edit_pool, name="edit"),
+                path("<int:pool_id>/delete/", self.delete_pool, name="delete"),
+                path("<int:pool_id>/match/", include(match_urls, namespace="match")),
+            ],
+            self.app_name,
+        )
+
+        stage_urls = (
+            [
+                path("add/", self.edit_stage, name="add"),
+                path("<int:stage_id>/", self.edit_stage, name="edit"),
+                path("<int:stage_id>/delete/", self.delete_stage, name="delete"),
+                path("<int:stage_id>/match/", include(match_urls, namespace="match")),
+                path("<int:stage_id>/draw/", include(draw_urls, namespace="draw")),
+                path(
+                    "<int:stage_id>/team/",
+                    include(undecidedteam_urls, namespace="undecidedteam"),
+                ),
+                path(
+                    "<int:stage_id>/scorecards.<mode>",
+                    self.scorecards,
+                    name="scorecards",
+                ),
+                path(
+                    "<int:stage_id>/pool/",
+                    include(stagegroup_urls, namespace="stagegroup"),
+                ),
+            ],
+            self.app_name,
+        )
+
+        teamassociation_urls = (
+            [
+                path("add/", self.edit_teamassociation, name="add"),
+                path("<int:pk>/", self.edit_teamassociation, name="edit"),
+                path("<int:pk>/delete/", self.delete_teamassociation, name="delete"),
+            ],
+            self.app_name,
+        )
+
+        team_urls = (
+            [
+                path("add/", self.edit_team, name="add"),
+                path("<int:team_id>/", self.edit_team, name="edit"),
+                path("<int:team_id>/delete/", self.delete_team, name="delete"),
+                path("<int:team_id>/permissions/", self.perms_team, name="perms"),
+                path("<int:team_id>/match/", include(match_urls, namespace="match")),
+                path(
+                    "<int:team_id>/association/",
+                    include(teamassociation_urls, namespace="teamassociation"),
+                ),
+            ],
+            self.app_name,
+        )
+
+        division_urls = (
+            [
+                path(r"add/", self.edit_division, name="add"),
+                path("<int:division_id>/", self.edit_division, name="edit"),
+                path("<int:division_id>/delete/", self.delete_division, name="delete"),
+                path(
+                    "<int:division_id>/stage/", include(stage_urls, namespace="stage")
+                ),
+                path("<int:division_id>/teams/", include(team_urls, namespace="team")),
+                path(
+                    "<int:division_id>/scorers/",
+                    self.highest_point_scorer,
+                    name="scorers",
+                ),
+                path(
+                    "<int:division_id>/exclusion/",
+                    include(divisionexclusion_urls, namespace="divisionexclusiondate"),
+                ),
+            ],
+            self.app_name,
+        )
+
+        season_urls = (
+            [
+                path("add/", self.edit_season, name="add"),
+                path("<int:season_id>/", self.edit_season, name="edit"),
+                path("<int:season_id>/delete/", self.delete_season, name="delete"),
+                path(
+                    "<int:season_id>/reschedule/",
+                    self.match_reschedule,
+                    name="reschedule",
+                ),
+                path(
+                    "<int:season_id>/timeslot/",
+                    include(timeslot_urls, namespace="seasonmatchtime"),
+                ),
+                path(
+                    "<int:season_id>/referees/",
+                    include(referees_urls, namespace="seasonreferee"),
+                ),
+                path("<int:season_id>/permission/", self.perms_season, name="perms"),
+                path("<int:season_id>/venue/", include(venue_urls, namespace="venue")),
+                path(
+                    "<int:season_id>/exclusion/",
+                    include(seasonexclusion_urls, namespace="seasonexclusiondate"),
+                ),
+                path(
+                    "<int:season_id>/division/",
+                    include(division_urls, namespace="division"),
+                ),
+                path(
+                    "<int:season_id>/scorecards/<result_id>.pdf",
+                    self.scorecards_async,
+                    name="scorecards-async",
+                ),
+                # previously was not in this namespace
+                path("<int:season_id>/report.html", self.season_report, name="report"),
+                path(
+                    "<int:season_id>/summary.html", self.season_summary, name="summary"
+                ),
+                path(
+                    "<int:season_id>/matches/grid.<mode>",
+                    self.season_grid,
+                    name="match-grid",
+                ),
+            ],
+            self.app_name,
+        )
+
+        competition_urls = (
+            [
+                path("", self.list_competitions, name="list"),  # KEEP
+                path("add/", self.edit_competition, name="add"),
+                path("<int:competition_id>/", self.edit_competition, name="edit"),
+                path(
+                    "<int:competition_id>/delete/",
+                    self.delete_competition,
+                    name="delete",
+                ),
+                path(
+                    "<int:competition_id>/permission/",
+                    self.perms_competition,
+                    name="perms",
+                ),
+                path(
+                    "<int:competition_id>/seasons/",
+                    include(season_urls, namespace="season"),
+                ),
+                path(
+                    "<int:competition_id>/role-club/",
+                    include(role_patterns, namespace="clubrole"),
+                    {"cls": "club"},
+                ),
+                path(
+                    "<int:competition_id>/role-team/",
+                    include(role_patterns, namespace="teamrole"),
+                    {"cls": "team"},
+                ),
+            ],
+            self.app_name,
+        )
+
+        person_urls = (
+            [
+                path("add/", self.edit_person, name="add"),
+                path("<uuid:person_id>/", self.edit_person, name="edit"),
+                path("<uuid:person_id>/delete/", self.delete_person, name="delete"),
+                path("<uuid:person_id>/merge/", self.merge_person, name="merge"),
+            ],
+            self.app_name,
+        )
+
+        clubassociation_urls = (
+            [
+                path("add/", self.edit_clubassociation, name="add"),
+                path(
+                    "<int:clubassociation_id>/", self.edit_clubassociation, name="edit"
+                ),
+            ],
+            self.app_name,
+        )
+
+        club_urls = (
+            [
+                path("", self.list_clubs, name="list"),
+                path("add/", self.edit_club, name="add"),
+                path("<int:club_id>/", self.edit_club, name="edit"),
+                path("<int:club_id>/delete/", self.delete_club, name="delete"),
+                path("<int:club_id>/person/", include(person_urls, namespace="person")),
+                # From RegistrationBase
+                path(
+                    "<int:club_id>/officials/<season_id>/",
+                    self.officials,
+                    name="officials",
+                ),
+                path(
+                    "<int:club_id>/<season_id>/registration.<mode>",
+                    self.registration_form,
+                    name="registration-form",
+                ),
+                # FIXME should have a 'season' namespace
+                path(
+                    "<int:club_id>/<season_id>/team/",
+                    include(
+                        (
+                            [
+                                # path("add/", self.edit_team_members, name="add"),
+                                path(
+                                    "<int:team_id>/",
+                                    self.edit_team_members,
+                                    name="edit",
+                                ),
+                            ],
+                            self.app_name,
+                        ),
+                        namespace="team",
+                    ),
+                ),
+                path(
+                    "<int:club_id>/clubassociation/",
+                    include(clubassociation_urls, namespace="clubassociation"),
+                ),
+            ],
+            self.app_name,
+        )
+
+        drawformat_urls = (
+            [
+                path("", self.list_drawformat, name="list"),
+                path("add/", self.edit_drawformat, name="add"),
+                path("<int:pk>/", self.edit_drawformat, name="edit"),
+                path("<int:pk>/delete/", self.delete_drawformat, name="delete"),
+            ],
+            self.app_name,
+        )
+
+        matchdatetime_urls = [
+            path("results/", self.match_results, name="match-results"),
+            path(
+                "results:<int:division_id>/", self.match_results, name="match-results"
+            ),
+            path("washout/", self.match_washout, name="match-washout"),
+            path("schedule/", self.match_schedule, name="match-schedule"),
+            path(
+                "schedule/<int:division_id>/",
+                self.match_schedule,
+                name="match-schedule",
+            ),
+            path(
+                "schedule/<int:division_id>/<int:stage_id>/",
+                self.match_schedule,
+                name="match-schedule",
+            ),
+            path(
+                "schedule/<int:division_id>/<int:stage_id>/<int:round>/",
+                self.match_schedule,
+                name="match-schedule",
+            ),
+            path("scorecards.<mode>", self.scorecards, name="scorecards"),
+            path("runsheet.html", self.day_runsheet, name="match-runsheet"),
+            path("grid.<mode>", self.day_grid, name="match-grid"),
+        ]
+
         urlpatterns = [
-            url(r"^$", self.index, name="index"),
-            url(
-                r"^competition/",
-                include(
-                    (
-                        [
-                            url(r"^$", self.list_competitions, name="list"),  # KEEP
-                            url(r"^add/$", self.edit_competition, name="add"),
-                            url(
-                                r"^(?P<competition_id>\d+)/",
-                                include(
-                                    [
-                                        url(r"^$", self.edit_competition, name="edit"),
-                                        url(
-                                            r"^delete/$",
-                                            self.delete_competition,
-                                            name="delete",
-                                        ),
-                                        url(
-                                            r"^permission/$",
-                                            self.perms_competition,
-                                            name="perms",
-                                        ),
-                                        url(
-                                            r"^seasons/",
-                                            include(
-                                                (
-                                                    [
-                                                        url(
-                                                            r"^add/$",
-                                                            self.edit_season,
-                                                            name="add",
-                                                        ),
-                                                        url(
-                                                            r"^(?P<season_id>\d+)/",
-                                                            include(
-                                                                [
-                                                                    url(
-                                                                        r"^$",
-                                                                        self.edit_season,
-                                                                        name="edit",
-                                                                    ),
-                                                                    url(
-                                                                        r"^delete/$",
-                                                                        self.delete_season,
-                                                                        name="delete",
-                                                                    ),
-                                                                    url(
-                                                                        r"^reschedule/$",
-                                                                        self.match_reschedule,
-                                                                        name="reschedule",
-                                                                    ),
-                                                                    url(
-                                                                        r"^timeslot/",
-                                                                        include(
-                                                                            (
-                                                                                [
-                                                                                    url(
-                                                                                        r"^add/$",
-                                                                                        self.edit_timeslot,
-                                                                                        name="add",
-                                                                                    ),
-                                                                                    url(
-                                                                                        r"^(?P<pk>\d+)/$",
-                                                                                        self.edit_timeslot,
-                                                                                        name="edit",
-                                                                                    ),
-                                                                                    url(
-                                                                                        r"^(?P<pk>\d+)/delete/$",
-                                                                                        self.delete_timeslot,
-                                                                                        name="delete",
-                                                                                    ),
-                                                                                ],
-                                                                                self.app_name,
-                                                                            ),
-                                                                            namespace="seasonmatchtime",
-                                                                        ),
-                                                                    ),
-                                                                    url(
-                                                                        r"^referees/",
-                                                                        include(
-                                                                            (
-                                                                                [
-                                                                                    url(
-                                                                                        r"^add/$",
-                                                                                        self.edit_seasonreferee,
-                                                                                        name="add",
-                                                                                    ),
-                                                                                    url(
-                                                                                        r"^(?P<pk>\d+)/",
-                                                                                        include(
-                                                                                            [
-                                                                                                url(
-                                                                                                    r"^$",
-                                                                                                    self.edit_seasonreferee,
-                                                                                                    name="edit",
-                                                                                                ),
-                                                                                                url(
-                                                                                                    r"^delete/$",
-                                                                                                    self.delete_seasonreferee,
-                                                                                                    name="delete",
-                                                                                                ),
-                                                                                            ]
-                                                                                        ),
-                                                                                    ),
-                                                                                ],
-                                                                                self.app_name,
-                                                                            ),
-                                                                            namespace="seasonreferee",
-                                                                        ),
-                                                                    ),
-                                                                    url(
-                                                                        r"^permission/$",
-                                                                        self.perms_season,
-                                                                        name="perms",
-                                                                    ),
-                                                                    url(
-                                                                        r"^venue/",
-                                                                        include(
-                                                                            (
-                                                                                [
-                                                                                    url(
-                                                                                        r"^add/$",
-                                                                                        self.edit_venue,
-                                                                                        name="add",
-                                                                                    ),
-                                                                                    url(
-                                                                                        r"^(?P<venue_id>\d+)/",
-                                                                                        include(
-                                                                                            [
-                                                                                                url(
-                                                                                                    r"^$",
-                                                                                                    self.edit_venue,
-                                                                                                    name="edit",
-                                                                                                ),
-                                                                                                url(
-                                                                                                    r"^delete/$",
-                                                                                                    self.delete_venue,
-                                                                                                    name="delete",
-                                                                                                ),
-                                                                                                url(
-                                                                                                    r"^ground/",
-                                                                                                    include(
-                                                                                                        (
-                                                                                                            [
-                                                                                                                url(
-                                                                                                                    r"^add/$",
-                                                                                                                    self.edit_ground,
-                                                                                                                    name="add",
-                                                                                                                ),
-                                                                                                                url(
-                                                                                                                    r"^(?P<ground_id>\d+)/$",
-                                                                                                                    self.edit_ground,
-                                                                                                                    name="edit",
-                                                                                                                ),
-                                                                                                                url(
-                                                                                                                    r"^(?P<ground_id>\d+)/delete/$",
-                                                                                                                    self.delete_ground,
-                                                                                                                    name="delete",
-                                                                                                                ),
-                                                                                                            ],
-                                                                                                            self.app_name,
-                                                                                                        ),
-                                                                                                        namespace="ground",
-                                                                                                    ),
-                                                                                                ),
-                                                                                            ]
-                                                                                        ),
-                                                                                    ),
-                                                                                ],
-                                                                                self.app_name,
-                                                                            ),
-                                                                            namespace="venue",
-                                                                        ),
-                                                                    ),
-                                                                    url(
-                                                                        r"^exclusion/",
-                                                                        include(
-                                                                            (
-                                                                                [
-                                                                                    url(
-                                                                                        r"^add/$",
-                                                                                        self.edit_seasonexclusiondate,
-                                                                                        name="add",
-                                                                                    ),
-                                                                                    url(
-                                                                                        r"^(?P<pk>\d+)/$",
-                                                                                        self.edit_seasonexclusiondate,
-                                                                                        name="edit",
-                                                                                    ),
-                                                                                    url(
-                                                                                        r"^(?P<pk>\d+)/delete/$",
-                                                                                        self.delete_seasonexclusiondate,
-                                                                                        name="delete",
-                                                                                    ),
-                                                                                ],
-                                                                                self.app_name,
-                                                                            ),
-                                                                            namespace="seasonexclusiondate",
-                                                                        ),
-                                                                    ),
-                                                                    url(
-                                                                        r"^division/",
-                                                                        include(
-                                                                            (
-                                                                                [
-                                                                                    url(
-                                                                                        r"^add/$",
-                                                                                        self.edit_division,
-                                                                                        name="add",
-                                                                                    ),
-                                                                                    url(
-                                                                                        r"^(?P<division_id>\d+)/",
-                                                                                        include(
-                                                                                            [
-                                                                                                url(
-                                                                                                    r"^$",
-                                                                                                    self.edit_division,
-                                                                                                    name="edit",
-                                                                                                ),
-                                                                                                url(
-                                                                                                    r"^delete/$",
-                                                                                                    self.delete_division,
-                                                                                                    name="delete",
-                                                                                                ),
-                                                                                                url(
-                                                                                                    r"^stage/",
-                                                                                                    include(
-                                                                                                        (
-                                                                                                            [
-                                                                                                                url(
-                                                                                                                    r"^add/$",
-                                                                                                                    self.edit_stage,
-                                                                                                                    name="add",
-                                                                                                                ),
-                                                                                                                url(
-                                                                                                                    r"^(?P<stage_id>\d+)/",
-                                                                                                                    include(
-                                                                                                                        [
-                                                                                                                            url(
-                                                                                                                                r"^$",
-                                                                                                                                self.edit_stage,
-                                                                                                                                name="edit",
-                                                                                                                            ),
-                                                                                                                            url(
-                                                                                                                                r"^delete/$",
-                                                                                                                                self.delete_stage,
-                                                                                                                                name="delete",
-                                                                                                                            ),
-                                                                                                                            url(
-                                                                                                                                r"^match/",
-                                                                                                                                match_urls,
-                                                                                                                            ),  # is namespaces "match"
-                                                                                                                            url(
-                                                                                                                                r"^",
-                                                                                                                                include(
-                                                                                                                                    (
-                                                                                                                                        [
-                                                                                                                                            # url(r'^draw/$', self.index, name='list'),
-                                                                                                                                            url(
-                                                                                                                                                r"^draw/build/$",
-                                                                                                                                                self.generate_draw,
-                                                                                                                                                name="build",
-                                                                                                                                            ),
-                                                                                                                                            url(
-                                                                                                                                                r"^draw/undo/$",
-                                                                                                                                                self.undo_draw,
-                                                                                                                                                name="undo",
-                                                                                                                                            ),
-                                                                                                                                            url(
-                                                                                                                                                r"^progress/$",
-                                                                                                                                                self.progress_teams,
-                                                                                                                                                name="progress",
-                                                                                                                                            ),
-                                                                                                                                        ],
-                                                                                                                                        self.app_name,
-                                                                                                                                    ),
-                                                                                                                                    namespace="draw",
-                                                                                                                                ),
-                                                                                                                            ),
-                                                                                                                            url(
-                                                                                                                                r"^team/",
-                                                                                                                                include(
-                                                                                                                                    (
-                                                                                                                                        [
-                                                                                                                                            url(
-                                                                                                                                                r"^add/$",
-                                                                                                                                                self.edit_team,
-                                                                                                                                                name="add",
-                                                                                                                                            ),
-                                                                                                                                            url(
-                                                                                                                                                r"^(?P<team_id>\d+)/$",
-                                                                                                                                                self.edit_team,
-                                                                                                                                                name="edit",
-                                                                                                                                            ),
-                                                                                                                                            url(
-                                                                                                                                                r"^(?P<team_id>\d+)/delete/$",
-                                                                                                                                                self.delete_team,
-                                                                                                                                                name="delete",
-                                                                                                                                            ),
-                                                                                                                                            url(
-                                                                                                                                                r"^(?P<team_id>\d+)/match/",
-                                                                                                                                                match_urls,
-                                                                                                                                            ),  # is namespaces "match"
-                                                                                                                                        ],
-                                                                                                                                        self.app_name,
-                                                                                                                                    ),
-                                                                                                                                    namespace="undecidedteam",
-                                                                                                                                ),
-                                                                                                                            ),
-                                                                                                                            url(
-                                                                                                                                r"^scorecards.(?P<mode>(pdf|html))$",
-                                                                                                                                self.scorecards,
-                                                                                                                                name="scorecards",
-                                                                                                                            ),
-                                                                                                                            url(
-                                                                                                                                r"^pool/",
-                                                                                                                                include(
-                                                                                                                                    (
-                                                                                                                                        [
-                                                                                                                                            # url(r'^$', self.list_pools, name='list'),
-                                                                                                                                            url(
-                                                                                                                                                r"^add/$",
-                                                                                                                                                self.edit_pool,
-                                                                                                                                                name="add",
-                                                                                                                                            ),
-                                                                                                                                            url(
-                                                                                                                                                r"^(?P<pool_id>\d+)/",
-                                                                                                                                                include(
-                                                                                                                                                    [
-                                                                                                                                                        url(
-                                                                                                                                                            r"^$",
-                                                                                                                                                            self.edit_pool,
-                                                                                                                                                            name="edit",
-                                                                                                                                                        ),
-                                                                                                                                                        url(
-                                                                                                                                                            r"^delete/$",
-                                                                                                                                                            self.delete_pool,
-                                                                                                                                                            name="delete",
-                                                                                                                                                        ),
-                                                                                                                                                        url(
-                                                                                                                                                            r"^match/",
-                                                                                                                                                            match_urls,
-                                                                                                                                                        ),
-                                                                                                                                                    ]
-                                                                                                                                                ),
-                                                                                                                                            ),
-                                                                                                                                        ],
-                                                                                                                                        self.app_name,
-                                                                                                                                    ),
-                                                                                                                                    namespace="stagegroup",
-                                                                                                                                ),
-                                                                                                                            ),
-                                                                                                                        ]
-                                                                                                                    ),
-                                                                                                                ),
-                                                                                                            ],
-                                                                                                            self.app_name,
-                                                                                                        ),
-                                                                                                        namespace="stage",
-                                                                                                    ),
-                                                                                                ),
-                                                                                                url(
-                                                                                                    r"^teams/",
-                                                                                                    include(
-                                                                                                        (
-                                                                                                            [
-                                                                                                                url(
-                                                                                                                    r"^add/$",
-                                                                                                                    self.edit_team,
-                                                                                                                    name="add",
-                                                                                                                ),
-                                                                                                                url(
-                                                                                                                    r"^(?P<team_id>\d+)/",
-                                                                                                                    include(
-                                                                                                                        [
-                                                                                                                            url(
-                                                                                                                                r"^$",
-                                                                                                                                self.edit_team,
-                                                                                                                                name="edit",
-                                                                                                                            ),
-                                                                                                                            url(
-                                                                                                                                r"^delete/$",
-                                                                                                                                self.delete_team,
-                                                                                                                                name="delete",
-                                                                                                                            ),
-                                                                                                                            url(
-                                                                                                                                r"^permissions/$",
-                                                                                                                                self.perms_team,
-                                                                                                                                name="perms",
-                                                                                                                            ),
-                                                                                                                            url(
-                                                                                                                                r"^match/",
-                                                                                                                                match_urls,
-                                                                                                                            ),
-                                                                                                                            url(
-                                                                                                                                r"^association/",
-                                                                                                                                include(
-                                                                                                                                    (
-                                                                                                                                        [
-                                                                                                                                            url(
-                                                                                                                                                r"^add/$",
-                                                                                                                                                self.edit_teamassociation,
-                                                                                                                                                name="add",
-                                                                                                                                            ),
-                                                                                                                                            url(
-                                                                                                                                                r"^(?P<pk>\d+)/",
-                                                                                                                                                include(
-                                                                                                                                                    [
-                                                                                                                                                        url(
-                                                                                                                                                            r"^$",
-                                                                                                                                                            self.edit_teamassociation,
-                                                                                                                                                            name="edit",
-                                                                                                                                                        ),
-                                                                                                                                                        url(
-                                                                                                                                                            r"^delete/$",
-                                                                                                                                                            self.delete_teamassociation,
-                                                                                                                                                            name="delete",
-                                                                                                                                                        ),
-                                                                                                                                                    ]
-                                                                                                                                                ),
-                                                                                                                                            ),
-                                                                                                                                        ],
-                                                                                                                                        self.app_name,
-                                                                                                                                    ),
-                                                                                                                                    namespace="teamassociation",
-                                                                                                                                ),
-                                                                                                                            ),
-                                                                                                                        ]
-                                                                                                                    ),
-                                                                                                                ),
-                                                                                                            ],
-                                                                                                            self.app_name,
-                                                                                                        ),
-                                                                                                        namespace="team",
-                                                                                                    ),
-                                                                                                ),
-                                                                                                url(
-                                                                                                    r"^scorers/$",
-                                                                                                    self.highest_point_scorer,
-                                                                                                    name="scorers",
-                                                                                                ),
-                                                                                                # FIXME
-                                                                                                url(
-                                                                                                    r"^exclusion/",
-                                                                                                    include(
-                                                                                                        (
-                                                                                                            [
-                                                                                                                url(
-                                                                                                                    r"^add/$",
-                                                                                                                    self.edit_divisionexclusiondate,
-                                                                                                                    name="add",
-                                                                                                                ),
-                                                                                                                url(
-                                                                                                                    r"^(?P<pk>\d+)/$",
-                                                                                                                    self.edit_divisionexclusiondate,
-                                                                                                                    name="edit",
-                                                                                                                ),
-                                                                                                                url(
-                                                                                                                    r"^(?P<pk>\d+)/delete/$",
-                                                                                                                    self.delete_divisionexclusiondate,
-                                                                                                                    name="delete",
-                                                                                                                ),
-                                                                                                            ],
-                                                                                                            self.app_name,
-                                                                                                        ),
-                                                                                                        namespace="divisionexclusiondate",
-                                                                                                    ),
-                                                                                                ),
-                                                                                            ]
-                                                                                        ),
-                                                                                    ),
-                                                                                ],
-                                                                                self.app_name,
-                                                                            ),
-                                                                            namespace="division",
-                                                                        ),
-                                                                    ),
-                                                                    url(
-                                                                        r"^scorecards/(?P<result_id>[^/]+)\.pdf$",
-                                                                        self.scorecards_async,
-                                                                        name="scorecards-async",
-                                                                    ),
-                                                                ]
-                                                            ),
-                                                        ),
-                                                    ],
-                                                    self.app_name,
-                                                ),
-                                                namespace="season",
-                                            ),
-                                        ),
-                                        url(
-                                            r"^role-",
-                                            include(
-                                                [
-                                                    url(
-                                                        r"^club/",
-                                                        include(
-                                                            role_patterns,
-                                                            namespace="clubrole",
-                                                        ),
-                                                        {"cls": "club"},
-                                                    ),
-                                                    url(
-                                                        r"^team/",
-                                                        include(
-                                                            role_patterns,
-                                                            namespace="teamrole",
-                                                        ),
-                                                        {"cls": "team"},
-                                                    ),
-                                                ]
-                                            ),
-                                        ),
-                                    ]
-                                ),
-                            ),
-                        ],
-                        self.app_name,
-                    ),
-                    namespace="competition",
-                ),
+            path("", self.index, name="index"),
+            path("competition/", include(competition_urls, namespace="competition")),
+            path(
+                "competition/<int:competition_id>/seasons/<int:season_id>/<datestr>/",
+                include(matchdatetime_urls),
             ),
-            url(
-                r"^(?P<competition_id>\d+)/seasons/(?P<season_id>\d+)/report.html$",
-                self.season_report,
-                name="season-report",
+            path(
+                "<int:competition_id>/seasons/<int:season_id>:<timestr>/<datestr>/",
+                include(matchdatetime_urls),
             ),
-            url(
-                r"^(?P<competition_id>\d+)/seasons/(?P<season_id>\d+)/summary.html$",
-                self.season_summary,
-                name="season-summary",
-            ),
-            url(
-                r"^(?P<competition_id>\d+)/seasons/(?P<season_id>\d+)/matches/grid.(?P<mode>(pdf|html))$",
-                self.season_grid,
-                name="match-grid",
-            ),
-            url(
-                r"^(?P<competition_id>\d+)/seasons/(?P<season_id>\d+)/matches/(?P<datestr>\d{8})(?::(?P<timestr>\d{4}))?/",
-                include(
-                    [
-                        url(r"^results/$", self.match_results, name="match-results"),
-                        url(
-                            r"^results:(?P<division_id>\d+)/$",
-                            self.match_results,
-                            name="match-results",
-                        ),
-                        url(r"^washout/$", self.match_washout, name="match-washout"),
-                        url(r"^schedule/$", self.match_schedule, name="match-schedule"),
-                        url(
-                            r"^schedule/(?P<division_id>\d+)/$",
-                            self.match_schedule,
-                            name="match-schedule",
-                        ),
-                        url(
-                            r"^schedule/(?P<division_id>\d+)/(?P<stage_id>\d+)/$",
-                            self.match_schedule,
-                            name="match-schedule",
-                        ),
-                        url(
-                            r"^schedule/(?P<division_id>\d+)/(?P<stage_id>\d+)/(?P<round>\d+)/$",
-                            self.match_schedule,
-                            name="match-schedule",
-                        ),
-                        url(
-                            r"^scorecards.(?P<mode>(pdf|html))$",
-                            self.scorecards,
-                            name="scorecards",
-                        ),
-                        url(
-                            r"^runsheet.html$", self.day_runsheet, name="match-runsheet"
-                        ),
-                        url(
-                            r"^grid.(?P<mode>(pdf|html))$",
-                            self.day_grid,
-                            name="match-grid",
-                        ),
-                    ]
-                ),
-            ),
-            url(
-                r"^club/",
-                include(
-                    (
-                        [
-                            url(r"^$", self.list_clubs, name="list"),
-                            url(r"^add/$", self.edit_club, name="add"),
-                            url(r"^(?P<club_id>\d+)/$", self.edit_club, name="edit"),
-                            url(
-                                r"^(?P<club_id>\d+)/delete/$",
-                                self.delete_club,
-                                name="delete",
-                            ),
-                            url(
-                                r"^(?P<club_id>\d+)/",
-                                include(
-                                    [
-                                        url(
-                                            r"^person/",
-                                            include(
-                                                (
-                                                    [
-                                                        url(
-                                                            r"^add/$",
-                                                            self.edit_person,
-                                                            name="add",
-                                                        ),
-                                                        url(
-                                                            r"^(?P<person_id>[^/]+)/$",
-                                                            self.edit_person,
-                                                            name="edit",
-                                                        ),
-                                                        url(
-                                                            r"^(?P<person_id>[^/]+)/delete/$",
-                                                            self.delete_person,
-                                                            name="delete",
-                                                        ),
-                                                        url(
-                                                            r"^(?P<person_id>[^/]+)/merge/$",
-                                                            self.merge_person,
-                                                            name="merge",
-                                                        ),
-                                                    ],
-                                                    self.app_name,
-                                                ),
-                                                namespace="person",
-                                            ),
-                                        ),
-                                        # From RegistrationBase
-                                        url(
-                                            r"officials/(?P<season_id>\d+)/$",
-                                            self.officials,
-                                            name="officials",
-                                        ),
-                                        url(
-                                            r"(?P<season_id>\d+)/registration.(?P<mode>html|pdf)$",
-                                            self.registration_form,
-                                            name="registration-form",
-                                        ),
-                                        # FIXME should have a 'season' namespace
-                                        url(
-                                            r"^(?P<season_id>\d+)/team/(?P<team_id>\d+)/",
-                                            include(
-                                                (
-                                                    [
-                                                        url(
-                                                            r"^$",
-                                                            self.edit_team_members,
-                                                            name="edit",
-                                                        ),
-                                                        # url(r'^add/$', self.edit_team_members, name='add'),
-                                                    ],
-                                                    self.app_name,
-                                                ),
-                                                namespace="team",
-                                            ),
-                                        ),
-                                        url(
-                                            r"^clubassociation/",
-                                            include(
-                                                (
-                                                    [
-                                                        url(
-                                                            r"^add/$",
-                                                            self.edit_clubassociation,
-                                                            name="add",
-                                                        ),
-                                                        url(
-                                                            r"^(?P<clubassociation_id>\d+)/$",
-                                                            self.edit_clubassociation,
-                                                            name="edit",
-                                                        ),
-                                                    ],
-                                                    self.app_name,
-                                                ),
-                                                namespace="clubassociation",
-                                            ),
-                                        ),
-                                    ]
-                                ),
-                            ),
-                        ],
-                        self.app_name,
-                    ),
-                    namespace="club",
-                ),
-            ),
-            url(r"^scorecards/$", self.scorecard_report, name="scorecard-report"),
-            url(
-                r"^draw-format/",
-                include(
-                    (
-                        [
-                            url(r"^$", self.list_drawformat, name="list"),
-                            url(r"^add/$", self.edit_drawformat, name="add"),
-                            url(r"^(?P<pk>\d+)/$", self.edit_drawformat, name="edit"),
-                            url(
-                                r"^(?P<pk>\d+)/delete/$",
-                                self.delete_drawformat,
-                                name="delete",
-                            ),
-                        ],
-                        self.app_name,
-                    ),
-                    namespace="format",
-                ),
-            ),
-            url(
+            path("club/", include(club_urls, namespace="club")),
+            path("scorecards/", self.scorecard_report, name="scorecard-report"),
+            path("draw-format/", include(drawformat_urls, namespace="format")),
+            re_path(
                 r"^reorder/(?P<model>[^/:]+)(?::(?P<parent>[^/]+))?/(?P<pk>\d+)/(?P<direction>\w+)/$",
                 self.reorder,
                 name="reorder",
@@ -1127,7 +807,13 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             request,
             Season,
             instance=season,
-            related=("exclusions", "divisions", "venues", "timeslots", "referees",),
+            related=(
+                "exclusions",
+                "divisions",
+                "venues",
+                "timeslots",
+                "referees",
+            ),
             form_class=SeasonForm,
             form_kwargs={"user": request.user},
             post_save_redirect=self.redirect(competition.urls["edit"]),
@@ -1217,7 +903,13 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             season.timeslots,
             pk=pk,
             instance=instance,
-            form_fields=("start_date", "end_date", "start", "interval", "count",),
+            form_fields=(
+                "start_date",
+                "end_date",
+                "start",
+                "interval",
+                "count",
+            ),
             post_save_redirect=self.redirect(season.urls["edit"]),
             permission_required=True,
             extra_context=extra_context,
@@ -1356,7 +1048,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             request,
             Division,
             instance=division,
-            related=("teams", "stages", "exclusions",),
+            related=(
+                "teams",
+                "stages",
+                "exclusions",
+            ),
             form_class=DivisionForm,
             form_kwargs={"user": request.user},
             post_save_redirect=self.redirect(season.urls["edit"]),
@@ -1419,10 +1115,17 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
         return self.generic_edit(
             request,
-            division.stages.select_related("matches__home_team", "matches__away_team",),
+            division.stages.select_related(
+                "matches__home_team",
+                "matches__away_team",
+            ),
             pk=stage.pk,
             instance=stage,
-            related=("pools", "undecided_teams", "matches",),
+            related=(
+                "pools",
+                "undecided_teams",
+                "matches",
+            ),
             form_class=StageForm,
             form_kwargs={"user": request.user},
             post_save_callback=post_save_callback,
@@ -1538,7 +1241,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             Team,
             instance=team,
             post_save_redirect="admin:fixja:competition:season:" "division:team:list",
-            post_save_redirect_args=(competition.pk, season.pk, division.pk,),
+            post_save_redirect_args=(
+                competition.pk,
+                season.pk,
+                division.pk,
+            ),
             permission_required=True,
             **kwargs
         )
@@ -1594,7 +1301,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             team.people,
             instance=instance,
             form_class=TeamAssociationForm,
-            form_kwargs={"team": team,},
+            form_kwargs={
+                "team": team,
+            },
             post_save_redirect=self.redirect(team.urls["edit"]),
             permission_required=True,
             extra_context=extra_context,
@@ -1793,14 +1502,18 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
             generic_edit_kwargs = {
                 "formset_class": ProgressTeamsFormSet,
-                "formset_kwargs": {"stage": stage,},
+                "formset_kwargs": {
+                    "stage": stage,
+                },
                 "model_or_manager": teams.model,
                 "templates": self.template_path("progress_teams.html"),
             }
         else:
             generic_edit_kwargs = {
                 "formset_class": ProgressMatchesFormSet,
-                "formset_kwargs": {"queryset": matches,},
+                "formset_kwargs": {
+                    "queryset": matches,
+                },
                 "model_or_manager": matches.model,
                 "templates": self.template_path("progress_matches.html"),
             }
@@ -1832,11 +1545,14 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             if formset.is_valid():
                 changes = formset.save()
                 if changes:
-                    message = ungettext(
-                        "Your change to %(count)d match has been saved.",
-                        "Your changes to %(count)d matches have been saved.",
-                        changes,
-                    ) % {"count": changes}
+                    message = (
+                        ngettext(
+                            "Your change to %(count)d match has been saved.",
+                            "Your changes to %(count)d matches have been saved.",
+                            changes,
+                        )
+                        % {"count": changes}
+                    )
                     messages.success(request, message)
                 else:
                     messages.info(request, _("No matches were rescheduled."))
@@ -1959,7 +1675,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @staff_login_required_m
     def scorecard_report(self, request, **extra_context):
-        from .wizards import scorecardwizard_factory, SeasonForm, FilterForm
+        from .wizards import FilterForm, SeasonForm, scorecardwizard_factory
 
         ScorecardWizard = scorecardwizard_factory(app=self, extra_context=extra_context)
         wizard = ScorecardWizard.as_view(form_list=[SeasonForm, FilterForm])
@@ -2122,7 +1838,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 "slug",
                 "slug_locked",
             ),
-            related=("members", "teams",),
+            related=(
+                "members",
+                "teams",
+            ),
             permission_required=True,
             extra_context=extra_context,
         )
@@ -2199,7 +1918,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             ClubAssociation,
             pk=clubassociation_id,
             form_class=ClubAssociationForm,
-            form_kwargs={"user": request.user, "club": club,},
+            form_kwargs={
+                "user": request.user,
+                "club": club,
+            },
             permission_required=True,
             extra_context=extra_context,
         )
@@ -2245,7 +1967,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             SeasonAssociation,
             queryset=season.officials.filter(club=club),
             formset_class=SeasonAssociationFormSet,
-            formset_kwargs={"user": request.user, "club": club, "season": season,},
+            formset_kwargs={
+                "user": request.user,
+                "club": club,
+                "season": season,
+            },
             post_save_redirect="club-teams",
             post_save_redirect_kwargs={"club_id": club.pk},
             templates=templates,

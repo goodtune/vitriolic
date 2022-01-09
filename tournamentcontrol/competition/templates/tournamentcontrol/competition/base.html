@@ -9,7 +9,7 @@
 	{% timezone season.timezone|default:TIME_ZONE %}
 		{% get_current_timezone as SEASON_TIME_ZONE %}
 
-		{% ifnotequal TIME_ZONE SEASON_TIME_ZONE %}
+		{% if TIME_ZONE != SEASON_TIME_ZONE %}
 			{% block timezone %}
 				<div class="container_16">
 					<div class="grid_16">
@@ -17,7 +17,7 @@
 					</div>
 				</div>
 			{% endblock %}
-		{% endifnotequal %}
+		{% endif %}
 	{% endtimezone %}
 
 	{{ block.super }}
