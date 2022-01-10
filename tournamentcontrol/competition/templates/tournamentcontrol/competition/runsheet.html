@@ -47,15 +47,15 @@
 						<td class="play_at">{{ match.play_at.title|htmlentities }}</td>
 						<td class="team">
 							{{ match.get_home_team.title|htmlentities }}
-							{% ifnotequal match.home_team_score None %}
+							{% if match.home_team_score is not None %}
 								({{ match.home_team_score }})
-							{% endifnotequal %}
+							{% endif %}
 						</td>
 						<td class="team">
 							{{ match.get_away_team.title|htmlentities }}
-							{% ifnotequal match.away_team_score None %}
+							{% if match.away_team_score is not None %}
 								({{ match.away_team_score }})
-							{% endifnotequal %}
+							{% endif %}
 						</td>
 						<td class="referees">
 							{% for ref in match.referees.all %}

@@ -19,8 +19,9 @@ from django.urls import include, path, re_path
 from django.utils import timezone
 from django.utils.encoding import smart_bytes
 from django.utils.module_loading import import_string
-from django.utils.translation import ugettext, ugettext_lazy as _
+from django.utils.translation import gettext, gettext_lazy as _
 from icalendar import Calendar, Event
+
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
 from touchtechnology.common.utils import get_403_or_None, get_perms_for_model
@@ -51,7 +52,10 @@ from tournamentcontrol.competition.rank import (
     TeamView as RankTeam,
     YearView as RankYear,
 )
-from tournamentcontrol.competition.utils import FauxQueryset, team_needs_progressing
+from tournamentcontrol.competition.utils import (
+    FauxQueryset,
+    team_needs_progressing,
+)
 
 
 def permissions_required(
@@ -518,7 +522,10 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         )
         queryset = (
             Match.objects.select_related(
-                "stage__division", "home_team__club", "away_team__club", "play_at",
+                "stage__division",
+                "home_team__club",
+                "away_team__club",
+                "play_at",
             )
             .exclude(videos__isnull=True)
             .filter(stage__division__season=season)
@@ -944,7 +951,10 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         redirect = self.redirect(
             self.reverse(
                 "forfeit-list",
-                kwargs={"competition": competition.slug, "season": season.slug,},
+                kwargs={
+                    "competition": competition.slug,
+                    "season": season.slug,
+                },
             )
         )
 
@@ -1023,7 +1033,7 @@ class MultiCompetitionSite(CompetitionSite):
 
     @classmethod
     def verbose_name(cls):
-        return ugettext("Multiple Competitions")
+        return gettext("Multiple Competitions")
 
     def __init__(self, name="competition", app_name="competition", **kwargs):
         self.node = kwargs.get("node")  # store the node for future reference

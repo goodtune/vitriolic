@@ -1,13 +1,16 @@
 import os.path
 from urllib.parse import urlunparse
 
-from django.conf.urls import url
 from django.contrib import messages
 from django.http import HttpResponseRedirect
-from django.urls import reverse
+from django.urls import path, reverse
 from django.utils.encoding import smart_str
 from modelforms.forms import ModelForm
-from touchtechnology.common.decorators import never_cache_m, staff_login_required_m
+
+from touchtechnology.common.decorators import (
+    never_cache_m,
+    staff_login_required_m,
+)
 from touchtechnology.common.default_settings import SITEMAP_HTTPS_OPTION
 from touchtechnology.common.forms.mixins import BootstrapFormControlMixin
 from touchtechnology.common.sites import Application
@@ -103,7 +106,7 @@ class AdminComponent(AdminComponentMixin, Application):
 
     def get_urls(self):
         urlpatterns = [
-            url(r"^$", self.index, name="index"),
+            path("", self.index, name="index"),
         ]
         return urlpatterns
 
