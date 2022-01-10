@@ -39,9 +39,9 @@
 					<tr>
 						<th>&nbsp;</th>
 						{% for place in columns %}
-							{% ifequal place.ground.venue venue %}
+							{% if place.ground.venue == venue %}
 								<th>{% with title=place.abbreviation|default:place.title %}{% trans title %}{% endwith %}</th>
-							{% endifequal %}
+							{% endif %}
 						{% endfor %}
 					</tr>
 				</thead>
@@ -49,9 +49,9 @@
 					<tr>
 						<td>&nbsp;</td>
 						{% for place in columns %}
-							{% ifequal place.ground.venue venue %}
+							{% if place.ground.venue == venue %}
 								<th>{% with title=place.abbreviation|default:place.title %}{% trans title %}{% endwith %}</th>
-							{% endifequal %}
+							{% endif %}
 						{% endfor %}
 					</tr>
 				</tfoot>
@@ -60,7 +60,7 @@
 						<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
 							<th>{{ time|time }}</th>
 							{% for place, matches in data.items %}
-								{% ifequal place.ground.venue venue %}
+								{% if place.ground.venue == venue %}
 									<td>
 										{% for match in matches %}
 											{% with division=match.stage.division stage=match.stage home=match.get_home_team away=match.get_away_team %}
@@ -75,7 +75,7 @@
 											{% endwith %}
 										{% endfor %}
 									</td>
-								{% endifequal %}
+								{% endif %}
 							{% endfor %}
 						</tr>
 					{% endfor %}

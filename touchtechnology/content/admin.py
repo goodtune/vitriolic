@@ -9,15 +9,17 @@ from django.core.files.storage import default_storage
 from django.db.models import Q
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
-from django.urls import include, path, re_path
-from django.urls import resolve, reverse
+from django.urls import include, path, re_path, resolve, reverse
 from django.utils.functional import cached_property
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from first import first
 
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.mixins import AdminUrlMixin
-from touchtechnology.common.decorators import require_POST_m, staff_login_required_m
+from touchtechnology.common.decorators import (
+    require_POST_m,
+    staff_login_required_m,
+)
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.content.forms import (
     FileUploadForm,
@@ -33,7 +35,12 @@ from touchtechnology.content.forms import (
     RedirectEditForm,
     SitemapNodeForm,
 )
-from touchtechnology.content.models import Chunk, PageContent, Placeholder, Redirect
+from touchtechnology.content.models import (
+    Chunk,
+    PageContent,
+    Placeholder,
+    Redirect,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -378,7 +385,10 @@ class ContentAdminComponent(AdminComponent):
 
         context = {
             "form": form,
-            "formsets": {"kwargs": kw, "copy": copy,},
+            "formsets": {
+                "kwargs": kw,
+                "copy": copy,
+            },
             "formset_media": kw.media + copy.media,
             "node": instance,
             "model": Placeholder.objects.none(),

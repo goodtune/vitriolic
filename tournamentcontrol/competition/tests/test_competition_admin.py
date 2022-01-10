@@ -9,6 +9,7 @@ from django.conf import settings
 from django.template import Context, Template
 from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
+
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.models import Team
 from tournamentcontrol.competition.tests import factories
@@ -325,21 +326,25 @@ class GoodViewTests(TestCase):
     def test_season_report(self):
         season = factories.SeasonFactory.create()
         self.assertLoginRequired(
-            "admin:fixja:season-report", season.competition_id, season.pk
+            "admin:fixja:competition:season:report", season.competition_id, season.pk
         )
         with self.login(self.superuser):
             self.assertGoodView(
-                "admin:fixja:season-report", season.competition_id, season.pk
+                "admin:fixja:competition:season:report",
+                season.competition_id,
+                season.pk,
             )
 
     def test_season_summary(self):
         season = factories.SeasonFactory.create()
         self.assertLoginRequired(
-            "admin:fixja:season-summary", season.competition_id, season.pk
+            "admin:fixja:competition:season:summary", season.competition_id, season.pk
         )
         with self.login(self.superuser):
             self.assertGoodView(
-                "admin:fixja:season-summary", season.competition_id, season.pk
+                "admin:fixja:competition:season:summary",
+                season.competition_id,
+                season.pk,
             )
 
     def test_match_schedule_season(self):
@@ -359,18 +364,18 @@ class GoodViewTests(TestCase):
         division = factories.DivisionFactory.create()
         self.assertLoginRequired(
             "admin:fixja:match-schedule",
-            division.season.competition_id,
-            division.season_id,
-            "20170213",
-            division.pk,
+            competition_id=division.season.competition_id,
+            season_id=division.season_id,
+            datestr="20170213",
+            division_id=division.pk,
         )
         with self.login(self.superuser):
             self.assertGoodView(
                 "admin:fixja:match-schedule",
-                division.season.competition_id,
-                division.season_id,
-                "20170213",
-                division.pk,
+                competition_id=division.season.competition_id,
+                season_id=division.season_id,
+                datestr="20170213",
+                division_id=division.pk,
             )
 
     def test_progress_teams(self):
@@ -384,7 +389,9 @@ class GoodViewTests(TestCase):
         for round in round_robin(teams):
             for home_team, away_team in round:
                 factories.MatchFactory.create(
-                    stage=round_games, home_team=home_team, away_team=away_team,
+                    stage=round_games,
+                    home_team=home_team,
+                    away_team=away_team,
                 )
 
         # Easier to just build the 3 matches required for progression than to
@@ -507,7 +514,9 @@ class GoodViewTests(TestCase):
 
         # Check the database state after the merge.
         self.assertCountEqual(
-            [("Alice", "User", member2.user.pk, "F", date(1983, 4, 27)),],
+            [
+                ("Alice", "User", member2.user.pk, "F", date(1983, 4, 27)),
+            ],
             club.members.values_list(
                 "first_name", "last_name", "user", "gender", "date_of_birth"
             ),
@@ -659,7 +668,9 @@ class BackendTests(TestCase):
             self.assertResponseContains("Mixed 4", html=False)
 
         data.update(
-            {"title": "4th Division Mixed",}
+            {
+                "title": "4th Division Mixed",
+            }
         )
         division = season.divisions.latest("pk")
 
@@ -822,7 +833,10 @@ class BackendTests(TestCase):
         self.response_302()
 
         data.update(
-            {"matches-1-home_team_score": "5", "matches-1-away_team_score": "2",}
+            {
+                "matches-1-home_team_score": "5",
+                "matches-1-away_team_score": "2",
+            }
         )
         self.post(
             "admin:fixja:match-results",

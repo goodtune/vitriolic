@@ -1,11 +1,11 @@
 import pytz
 from dateutil.rrule import DAILY, WEEKLY
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 GENDER_CHOICES = (
-    ('M', _('Male')),
-    ('F', _('Female')),
-    ('X', _('Unspecified')),
+    ("M", _("Male")),
+    ("F", _("Female")),
+    ("X", _("Unspecified")),
 )
 
 SEASON_MODE_CHOICES = (
@@ -14,8 +14,8 @@ SEASON_MODE_CHOICES = (
 )
 
 WIN_LOSE = {
-    'W': _("Winner"),
-    'L': _("Loser"),
+    "W": _("Winner"),
+    "L": _("Loser"),
 }
 
 ###################
@@ -34,7 +34,7 @@ See https://bitbucket.org/touchtechnology/common/issue/16/
 """
 
 
-PYTZ_TIME_ZONE_CHOICES = [('\x20Standard', (('UTC', 'UTC'), ('GMT', 'GMT')))]
+PYTZ_TIME_ZONE_CHOICES = [("\x20Standard", (("UTC", "UTC"), ("GMT", "GMT")))]
 for iso, name in pytz.country_names.items():
     values = sorted(pytz.country_timezones.get(iso, []))
     names = [s.rsplit("/", 1)[1].replace("_", " ") for s in values]

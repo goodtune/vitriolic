@@ -1,9 +1,12 @@
-from django.conf.urls import include, url
+from django.urls import include, path
 
 urlpatterns = [
-    url(
-        r"v1/",
-        include(("tournamentcontrol.competition.rest.v1.urls", "api"), namespace="v1"),
+    path(
+        "v1/",
+        include(
+            ("tournamentcontrol.competition.rest.v1.urls", "api"),
+            namespace="v1",
+        ),
     ),
-    url(r"^api-auth/", include("rest_framework.urls")),
+    path("api-auth/", include("rest_framework.urls")),
 ]

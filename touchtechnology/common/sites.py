@@ -22,15 +22,19 @@ from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.utils.http import urlencode
 from django.utils.module_loading import import_string
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from django.views.decorators.cache import patch_cache_control
 from modelforms.forms import ModelForm
+
 from touchtechnology.common.decorators import (
     login_required_m,
     node2extracontext,
     require_POST_m,
 )
-from touchtechnology.common.default_settings import PAGINATE_BY, PROFILE_FORM_CLASS
+from touchtechnology.common.default_settings import (
+    PAGINATE_BY,
+    PROFILE_FORM_CLASS,
+)
 from touchtechnology.common.utils import (
     get_403_or_None,
     get_all_perms_for_model_cached,
@@ -180,7 +184,9 @@ class Application(object):
             return has_permission
 
         extra_context.update(
-            {"model": model,}
+            {
+                "model": model,
+            }
         )
 
         content_type = ContentType.objects.get_for_model(model)
@@ -199,7 +205,10 @@ class Application(object):
             model,
             queryset=queryset,
             formset_class=formset_class,
-            formset_kwargs={"instance": instance, "queryset": queryset,},
+            formset_kwargs={
+                "instance": instance,
+                "queryset": queryset,
+            },
             post_save_redirect=post_save_redirect,
             templates=templates,
             extra_context=extra_context,
@@ -239,9 +248,9 @@ class Application(object):
         if search is not None:
             terms = request.GET.get("search")
             if terms is not None:
-                queryset = queryset.annotate(search=SearchVector(*search),).filter(
-                    search=terms
-                )
+                queryset = queryset.annotate(
+                    search=SearchVector(*search),
+                ).filter(search=terms)
 
         # Implement permission checking for list of objects, will filter the
         # list to those objects the user is entitled to work on if we do not
@@ -1014,7 +1023,9 @@ class AccountsSite(Application):
         )
         form_class = kwargs.pop("set_password_form", self.set_password_form)
         view = views.PasswordResetConfirmView.as_view(
-            form_class=form_class, success_url=success_url, extra_context=extra_context,
+            form_class=form_class,
+            success_url=success_url,
+            extra_context=extra_context,
         )
         return view(request, *args, **kwargs)
 

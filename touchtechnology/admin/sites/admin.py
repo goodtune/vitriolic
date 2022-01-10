@@ -4,7 +4,6 @@ import collections
 import logging
 
 from django.conf import settings
-from django.conf.urls import url
 from django.contrib.admin.sites import (
     AdminSite as DjangoAdminSite,
     AlreadyRegistered,
@@ -14,9 +13,10 @@ from django.db import connection
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
-from django.urls import reverse_lazy
+from django.urls import path, re_path, reverse_lazy
 from django.utils.encoding import smart_str
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
+
 from touchtechnology.common.decorators import staff_login_required_m
 from touchtechnology.common.models import SitemapNode
 
@@ -88,8 +88,8 @@ class AdminSite(DjangoAdminSite):
 
     def get_urls(self):
         urlpatterns = [
-            url(r"^$", self.index, name="index"),
-            url(
+            path("", self.index, name="index"),
+            re_path(
                 r"^sitemapnode/move/(?P<id>\d+)/(?P<direction>(up|down))/$",
                 self.reorder,
                 name="reorder",
@@ -104,8 +104,8 @@ class AdminSite(DjangoAdminSite):
             # content.SitemapNodeMiddleware but it might require quite lots of
             # refactoring.
             urlpatterns += [
-                url(
-                    r"^%s/" % component.name,
+                path(
+                    component.name + "/",
                     component.urls,
                     {"admin": self, "component": component},
                 ),

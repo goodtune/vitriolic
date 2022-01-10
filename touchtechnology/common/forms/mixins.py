@@ -1,6 +1,6 @@
 from django.forms import widgets
 from django.utils.encoding import smart_str
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 
 class BootstrapFormControlMixin(object):

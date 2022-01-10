@@ -11,12 +11,20 @@ from django.db import models
 from django.db.models import DateTimeField
 from django.utils.module_loading import import_string
 from django.utils.text import slugify
-from django.utils.translation import ugettext, ugettext_lazy as _
+from django.utils.translation import gettext, gettext_lazy as _
 from first import first
+
 from touchtechnology.admin.mixins import AdminUrlMixin
-from touchtechnology.common.db.models import BooleanField, HTMLField, TemplatePathField
+from touchtechnology.common.db.models import (
+    BooleanField,
+    HTMLField,
+    TemplatePathField,
+)
 from touchtechnology.content.app_settings import (
-    NODE_CACHE, PAGE_CONTENT_CLASSES, PAGE_TEMPLATE_BASE, PAGE_TEMPLATE_FOLDER,
+    NODE_CACHE,
+    PAGE_CONTENT_CLASSES,
+    PAGE_TEMPLATE_BASE,
+    PAGE_TEMPLATE_FOLDER,
     PAGE_TEMPLATE_REGEX,
 )
 
@@ -160,7 +168,7 @@ class Placeholder(models.Model):
         try:
             cls = import_string(self.path)
         except (ImportError, ValueError):
-            return ugettext("Not installed")
+            return gettext("Not installed")
         return cls.verbose_name()
 
     def _install(self, parent=None):
