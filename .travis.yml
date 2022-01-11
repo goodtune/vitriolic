@@ -43,6 +43,11 @@ jobs:
       env: DJANGO=4.0
   fast_finish: true
 
+branches:
+  only:
+    - develop
+    - master
+
 deploy:
   provider: pypi
   user: goodtune
