@@ -47,6 +47,7 @@ branches:
   only:
     - develop
     - master
+    - /\d+\.\d+\.\d+/
 
 deploy:
   provider: pypi
