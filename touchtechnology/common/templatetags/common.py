@@ -1,5 +1,3 @@
-from __future__ import unicode_literals
-
 import logging
 import operator
 import os
@@ -18,10 +16,19 @@ from django.db.models import Model, Q
 from django.db.models.query import QuerySet
 from django.forms.boundfield import BoundField
 from django.forms.widgets import (
-    CheckboxInput, CheckboxSelectMultiple, FileInput, MultiWidget, PasswordInput,
-    RadioSelect, Select, Textarea, TextInput,
+    CheckboxInput,
+    CheckboxSelectMultiple,
+    FileInput,
+    MultiWidget,
+    NumberInput,
+    PasswordInput,
+    RadioSelect,
+    Select,
+    Textarea,
+    TextInput,
 )
-from django.template import Library, Node
+from django.template.base import Node
+from django.template.library import Library
 from django.template.loader import get_template, render_to_string
 from django.urls import Resolver404, resolve, reverse
 from django.utils import timezone
@@ -32,11 +39,14 @@ from django.utils.safestring import mark_safe
 from django.utils.text import slugify
 from guardian.core import ObjectPermissionChecker
 from namedentities import named_entities
+
 from touchtechnology.common.default_settings import CURRENCY_SYMBOL
 from touchtechnology.common.exceptions import NotModelManager
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.utils import (
-    create_exclude_filter, get_all_perms_for_model_cached, model_and_manager,
+    create_exclude_filter,
+    get_all_perms_for_model_cached,
+    model_and_manager,
     tree_for_node,
 )
 from tournamentcontrol.competition.utils import FauxQueryset
@@ -211,7 +221,7 @@ def do_navigation(
     current_node=None,
     expand_all_nodes=None,
     template_name=None,
-    **kwargs
+    **kwargs,
 ):
     nodes = SitemapNode._tree_manager.select_related("content_type", "parent")
 
@@ -348,7 +358,7 @@ def field(bf, label=None):
 
     if label:
         if isinstance(
-            widget, (TextInput, PasswordInput, FileInput, Textarea, Select)
+            widget, (FileInput, NumberInput, PasswordInput, Select, TextInput, Textarea)
         ) and not isinstance(
             widget, (CheckboxInput, RadioSelect, CheckboxSelectMultiple, MultiWidget)
         ):
@@ -461,6 +471,7 @@ def islice_(value, arg):
 @register.inclusion_tag("touchtechnology/common/templatetags/version.html")
 def version(package, url=None):
     environment = pkg_resources.Environment()
+    context = {}
     try:
         if package == "python":
             context = {

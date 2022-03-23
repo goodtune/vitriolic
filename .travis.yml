@@ -46,8 +46,7 @@ jobs:
 branches:
   only:
     - develop
-    - master
-    - /\d+\.\d+\.\d+/
+    - /^\d+\.\d+\.\d+$/
 
 deploy:
   provider: pypi
