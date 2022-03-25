@@ -18,14 +18,11 @@ from django.forms.boundfield import BoundField
 from django.forms.widgets import (
     CheckboxInput,
     CheckboxSelectMultiple,
-    FileInput,
+    Input,
     MultiWidget,
-    NumberInput,
-    PasswordInput,
     RadioSelect,
     Select,
     Textarea,
-    TextInput,
 )
 from django.template.base import Node
 from django.template.library import Library
@@ -357,18 +354,15 @@ def field(bf, label=None):
         radio_checkbox_input = False
 
     if label:
-        if isinstance(
-            widget, (FileInput, NumberInput, PasswordInput, Select, TextInput, Textarea)
-        ) and not isinstance(
+        if isinstance(widget, (Input, Select, Textarea),) and not isinstance(
             widget, (CheckboxInput, RadioSelect, CheckboxSelectMultiple, MultiWidget)
         ):
             # Use a <label> tag
             caption = bf.label_tag(label, attrs={"class": "field_name"})
         else:
             # Don't use a <label> tag
-            label = label.decode("utf8") if type(label) is bytes else label
             label_suffix = bf.form.label_suffix or ""
-            caption = '<span class="field_name">' "%s%s</span>" % (label, label_suffix)
+            caption = f'<span class="field_name">{label}{label_suffix}</span>'
     else:
         caption = ""
 
