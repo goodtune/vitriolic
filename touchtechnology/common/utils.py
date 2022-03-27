@@ -2,26 +2,18 @@ from __future__ import unicode_literals
 
 import functools
 import logging
-from functools import reduce
 from operator import attrgetter, or_
 
-import guardian.shortcuts
 import pytz
 from django.apps import apps
-from django.conf import settings
-from django.contrib.auth import REDIRECT_FIELD_NAME
-from django.contrib.auth.views import redirect_to_login
 from django.core.cache import cache
-from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import connection
 from django.db.models import Model, Q
-from django.http import Http404, HttpRequest, HttpResponseForbidden
-from django.shortcuts import render
-from django.template import RequestContext, TemplateDoesNotExist
+from django.http import Http404, HttpRequest
 from django.template.loader import select_template
 from first import first
-from guardian.conf import settings as guardian_settings
+
 from touchtechnology.common.exceptions import NotModelManager
 from touchtechnology.common.mixins import NodeRelationMixin
 
@@ -29,14 +21,12 @@ logger = logging.getLogger(__name__)
 
 
 class FauxNodeMeta(object):
-
     left_attr = "lft"
     right_attr = "rght"
     level_attr = "level"
 
 
 class FauxNode(NodeRelationMixin):
-
     REPR_FMT = "<{class}: {title} ({tree_id}:{lft},{rght})>"
 
     def __init__(
@@ -135,79 +125,6 @@ def create_exclude_filter(queryset):
         return Q(tree_id=node.tree_id, lft__gte=node.lft, lft__lte=node.rght)
 
     return functools.reduce(or_, [_filter(n) for n in queryset], Q())
-
-
-def get_403_or_None(
-    request,
-    perms,
-    obj=None,
-    login_url=None,
-    redirect_field_name=None,
-    return_403=False,
-    accept_global_perms=False,
-    any_perm=False,
-):
-    """
-    Copied from django-guardian (v1.2.5) and added the ability to decide if we
-    are willing to accept ANY of the listed perms or they must ALL be included
-    (the default).
-    """
-    login_url = login_url or settings.LOGIN_URL
-    redirect_field_name = redirect_field_name or REDIRECT_FIELD_NAME
-
-    # Handles both original and with object provided permission check
-    # as ``obj`` defaults to None
-    check = any if any_perm else all
-
-    has_permissions = False
-
-    if accept_global_perms:
-        has_permissions = check([request.user.has_perm(perm) for perm in perms])
-
-    if not has_permissions:
-        has_permissions = check([request.user.has_perm(perm, obj) for perm in perms])
-
-    if not has_permissions:
-        if return_403:
-            if guardian_settings.RENDER_403:
-                try:
-                    response = render(
-                        request,
-                        guardian_settings.TEMPLATE_403,
-                        {},
-                        RequestContext(request),
-                    )
-                    response.status_code = 403
-                    return response
-                except TemplateDoesNotExist as e:
-                    if settings.DEBUG:
-                        raise e
-            elif guardian_settings.RAISE_403:
-                raise PermissionDenied
-            return HttpResponseForbidden()
-        else:
-            return redirect_to_login(
-                request.get_full_path(), login_url, redirect_field_name
-            )
-
-
-def get_objects_for_user(
-    user, perms, model_or_manager, use_groups=True, any_perm=False, with_superuser=True
-):
-    """
-    The get_objects_for_user shortcut does not take into account any globally
-    granted permissions, we want to check these first and then defer decision
-    to django-guardian only if required.
-    """
-    model, manager = model_and_manager(model_or_manager)
-
-    check = any if any_perm else all
-    if check([user.has_perm(p) for p in perms]):
-        return manager.all()
-
-    return guardian.shortcuts.get_objects_for_user(
-        user, perms, klass=model, any_perm=True
-    )
 
 
 def get_perms_for_model(model, add=False, change=False, delete=False, *extra):

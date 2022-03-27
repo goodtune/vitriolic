@@ -6,8 +6,11 @@ from django import template
 from django.db import models
 from django.template import loader
 from django.urls import resolve, reverse_lazy
+from guardian.shortcuts import get_objects_for_user
+
 from touchtechnology.common.utils import (
-    get_all_perms_for_model_cached, get_objects_for_user, model_and_manager,
+    get_all_perms_for_model_cached,
+    model_and_manager,
 )
 
 logger = logging.getLogger(__name__)
