@@ -23,7 +23,7 @@ setup(
     install_requires=[
         "django-classy-tags<0.9",
         "django-froala-editor",
-        "django-guardian",
+        "django-guardian>=2.4",
         "django-modelforms",
         "django-mptt",
         "django>=2.2,<4.1,!=3.0.*,!=3.1.*",

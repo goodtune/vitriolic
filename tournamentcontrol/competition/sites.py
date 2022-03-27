@@ -24,7 +24,7 @@ from icalendar import Calendar, Event
 
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
-from touchtechnology.common.utils import get_403_or_None, get_perms_for_model
+from touchtechnology.common.utils import get_perms_for_model
 from tournamentcontrol.competition.dashboard import (
     matches_require_basic_results,
     matches_require_details_results,
@@ -77,9 +77,9 @@ def permissions_required(
             perms = get_perms_for_model(model, add=True)
 
     # Determine the user's permission to edit this object using the
-    # get_403_or_None - saves decorating view method with
+    # get_40x_or_None - saves decorating view method with
     # @permission_required_or_403
-    has_permission = get_403_or_None(
+    has_permission = get_40x_or_None(
         request,
         perms,
         obj=instance,

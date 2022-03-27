@@ -24,6 +24,8 @@ from django.utils.http import urlencode
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.cache import patch_cache_control
+from guardian.shortcuts import get_objects_for_user
+from guardian.utils import get_40x_or_None
 from modelforms.forms import ModelForm
 
 from touchtechnology.common.decorators import (
@@ -36,9 +38,7 @@ from touchtechnology.common.default_settings import (
     PROFILE_FORM_CLASS,
 )
 from touchtechnology.common.utils import (
-    get_403_or_None,
     get_all_perms_for_model_cached,
-    get_objects_for_user,
     get_perms_for_model,
     model_and_manager,
     select_template_name,
@@ -52,7 +52,6 @@ class AlreadyRegistered(Exception):
 
 
 class Application(object):
-
     kwargs_form_class = None
     model_form_bases = (ModelForm,)
 
@@ -171,13 +170,12 @@ class Application(object):
             instance = get_object_or_404(model, pk=pk)
 
         perms = get_perms_for_model(model, add=True)
-        has_permission = get_403_or_None(
+        has_permission = get_40x_or_None(
             request,
             perms,
             instance,
             return_403=True,
             accept_global_perms=True,
-            any_perm=False,
         )
 
         if has_permission and not request.user.is_superuser:
@@ -237,7 +235,7 @@ class Application(object):
 
         # If not explicitly declared, redirect the user to login if they are
         # currently anonymous. If they are already identified, we can safely
-        # return a HTTP 403 Forbidden.
+        # return an HTTP 403 Forbidden.
         if return_403 is None:
             return_403 = not request.user.is_anonymous
 
@@ -254,15 +252,15 @@ class Application(object):
 
         # Implement permission checking for list of objects, will filter the
         # list to those objects the user is entitled to work on if we do not
-        # throw a HTTP 403 for no permission.
+        # throw an HTTP 403 for no permission.
         if permission_required:
             if perms is None:
                 perms = get_all_perms_for_model_cached(model)
 
             # Determine the user's permission to see the list using the
-            # get_403_or_None - saves decorating view method with
+            # get_40x_or_None - saves decorating view method with
             # @permission_required_or_403
-            has_permission = get_403_or_None(
+            has_permission = get_40x_or_None(
                 request,
                 perms,
                 return_403=return_403,
@@ -298,8 +296,8 @@ class Application(object):
             # Always tack the mvp theme version on the end as a fallback.
             list_templates.append("mvp/list.inc.html")
 
-        # Determine the namespace of this Application so we can construct view
-        # names to pass to the template engine to reverse CRUD URI's.
+        # Determine the namespace of this Application, so we can construct
+        # view names to pass to the template engine to reverse CRUD URI's.
         create_url_name = "%s:add" % request.resolver_match.namespace
         create_url_kwargs = request.resolver_match.kwargs.copy()
         create_url_kwargs.pop("admin", None)
@@ -331,7 +329,7 @@ class Application(object):
             # Is search enabled?
             "searchable": bool(search),
             "search": request.GET.get("search", ""),
-            # Pass to template the name permissions so we can re-use template
+            # Pass to template the name permissions, so we can re-use template
             # code to generically list and add/change/delete objects
             "add_perm": "%s.add_%s" % (model._meta.app_label, model._meta.model_name),
             "view_perm": "%s.view_%s" % (model._meta.app_label, model._meta.model_name),
@@ -421,7 +419,7 @@ class Application(object):
 
         # If not explicitly declared, redirect the user to login if they are
         # currently anonymous. If they are already identified, we can safely
-        # return a HTTP 403 Forbidden.
+        # return an HTTP 403 Forbidden.
         if return_403 is None:
             return_403 = not request.user.is_anonymous
 
@@ -438,9 +436,9 @@ class Application(object):
             redirect_to = urljoin(request.path, "..") if pk is None else request.path
             post_save_redirect = self.redirect(redirect_to)
 
-        # Implement permission checking for specified object instance, throw a
-        # HTTP 403 (using django-guardian configuration) when the user is not
-        # entitled to edit the instance.
+        # Implement permission checking for specified object instance, throw
+        # an HTTP 403 (using django-guardian configuration) when the user is
+        # not entitled to edit the instance.
         if permission_required:
 
             # If no perms are specified, build sensible default using built in
@@ -454,9 +452,9 @@ class Application(object):
                     perms = get_perms_for_model(model, add=True)
 
             # Determine the user's permission to edit this object using the
-            # get_403_or_None - saves decorating view method with
+            # get_40x_or_None - saves decorating view method with
             # @permission_required_or_403
-            has_permission = get_403_or_None(
+            has_permission = get_40x_or_None(
                 request,
                 perms,
                 obj=instance,
@@ -574,7 +572,7 @@ class Application(object):
 
         # If not explicitly declared, redirect the user to login if they are
         # currently anonymous. If they are already identified, we can safely
-        # return a HTTP 403 Forbidden.
+        # return an HTTP 403 Forbidden.
         if return_403 is None:
             return_403 = not request.user.is_anonymous
 
@@ -584,15 +582,15 @@ class Application(object):
 
         # Implement permission checking for list of objects, will filter the
         # list to those objects the user is entitled to work on if we do not
-        # throw a HTTP 403 for no permission.
+        # throw an HTTP 403 for no permission.
         if permission_required:
             if perms is None:
                 perms = get_all_perms_for_model_cached(model)
 
             # Determine the user's permission to see the list using the
-            # get_403_or_None - saves decorating view method with
+            # get_40x_or_None - saves decorating view method with
             # @permission_required_or_403
-            has_permission = get_403_or_None(
+            has_permission = get_40x_or_None(
                 request,
                 perms,
                 return_403=return_403,
@@ -836,13 +834,13 @@ class Application(object):
 
         # If not explicitly declared, redirect the user to login if they are
         # currently anonymous. If they are already identified, we can safely
-        # return a HTTP 403 Forbidden.
+        # return an HTTP 403 Forbidden.
         if return_403 is None:
             return_403 = not request.user.is_anonymous
 
-        # Implement permission checking for specified object instance, throw a
-        # HTTP 403 (using django-guardian configuration) when the user is not
-        # entitled to edit the instance.
+        # Implement permission checking for specified object instance, throw
+        # an HTTP 403 (using django-guardian configuration) when the user is
+        # not entitled to edit the instance.
         if permission_required:
 
             # If no perms are specified, build sensible default using built in
@@ -851,9 +849,9 @@ class Application(object):
                 perms = get_perms_for_model(model, delete=True)
 
             # Determine the user's permission to edit this object using the
-            # get_403_or_None - saves decorating view method with
+            # get_40x_or_None - saves decorating view method with
             # @permission_required_or_403
-            has_permission = get_403_or_None(
+            has_permission = get_40x_or_None(
                 request,
                 perms,
                 obj=instance,
