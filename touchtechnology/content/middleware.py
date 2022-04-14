@@ -1,9 +1,9 @@
-import imp
 import logging
 import os.path
+from importlib.machinery import ModuleSpec
+from importlib.util import module_from_spec
 from urllib.parse import urlunparse
 
-import django.urls
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.sitemaps.views import sitemap
@@ -19,10 +19,7 @@ from django.utils.deprecation import MiddlewareMixin
 from guardian.conf import settings as guardian_settings
 from mptt.utils import tree_item_iterator
 
-from touchtechnology.common.default_settings import (
-    SITEMAP_HTTPS_OPTION,
-    SITEMAP_ROOT,
-)
+from touchtechnology.common.default_settings import SITEMAP_HTTPS_OPTION, SITEMAP_ROOT
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.sitemaps import NodeSitemap
 from touchtechnology.common.sites import AccountsSite
@@ -63,13 +60,7 @@ class SitemapNodeMiddleware(MiddlewareMixin):
             except ObjectDoesNotExist:
                 root = None
             dehydrated.append(
-                {
-                    "regex": r"^p/",
-                    "site": protect,
-                    "kwargs": {
-                        "node": root,
-                    },
-                }
+                {"route": "p/", "site": protect, "kwargs": {"node": root}}
             )
 
             enabled_nodes = SitemapNode._tree_manager.all()
@@ -121,7 +112,7 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                         node.disable()
                     else:
                         pattern = {
-                            "regex": part,
+                            "route": part,
                             "site": app,
                             "kwargs": dict(node=node, **node.kwargs),
                             "name": app.name,
@@ -142,7 +133,7 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 elif node.object_id is None:
                     dehydrated.append(
                         {
-                            "regex": part,
+                            "route": part,
                             "view": dispatch,
                             "kwargs": dict(node=node, url=part),
                             "name": f"folder_{node.pk}",
@@ -152,7 +143,7 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 else:
                     dehydrated.append(
                         {
-                            "regex": part,
+                            "route": part,
                             "view": dispatch,
                             "kwargs": dict(page_id=node.object_id, node=node, url=part),
                             "name": f"page_{node.object_id if node.object_id else None}",
@@ -166,16 +157,15 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 **v_kw,
             )
 
-        # Always start with the project wide ROOT_URLCONF and add our
-        # sitemap.xml view
+        # Always start with the project wide ROOT_URLCONF and add our sitemap.xml view
         urlpatterns = [
-            django.urls.path("", include(settings.ROOT_URLCONF)),
-            django.urls.path(
+            path(
                 "sitemap.xml",
                 sitemap,
                 {"sitemaps": {"nodes": NodeSitemap}},
                 name="sitemap",
             ),
+            path("", include(settings.ROOT_URLCONF)),
         ]
 
         # Construct the cache of url pattern definitions. We are not keeping
@@ -185,11 +175,14 @@ class SitemapNodeMiddleware(MiddlewareMixin):
         for node in dehydrated:
             try:
                 pattern = path(
-                    node["regex"], node["view"], node["kwargs"], name=node.get("name")
+                    node["route"],
+                    node["view"],
+                    node["kwargs"],
+                    name=node.get("name"),
                 )
             except KeyError:
                 pattern = path(
-                    node["regex"],
+                    node["route"],
                     node["site"].urls,
                     node["kwargs"],
                     name=node["site"].name,
@@ -203,11 +196,10 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 document_root=default_storage.path(""),
                 show_indexes=True,
             )
-
             urlpatterns += staticfiles_urlpatterns()
 
         # Create a new module on the fly and attach the rehydrated urlpatterns
-        dynamic_urls = imp.new_module("dynamic_urls")
+        dynamic_urls = module_from_spec(ModuleSpec("dynamic_urls", None))
         dynamic_urls.urlpatterns = urlpatterns
 
         # Attach the module to the request
