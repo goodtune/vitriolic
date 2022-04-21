@@ -189,15 +189,6 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 )
             urlpatterns.append(pattern)
 
-        # For development, add the MEDIA_URL and STATIC_URL to the project
-        if settings.DEBUG:
-            urlpatterns += static(
-                settings.MEDIA_URL,
-                document_root=default_storage.path(""),
-                show_indexes=True,
-            )
-            urlpatterns += staticfiles_urlpatterns()
-
         # Create a new module on the fly and attach the rehydrated urlpatterns
         dynamic_urls = module_from_spec(ModuleSpec("dynamic_urls", None))
         dynamic_urls.urlpatterns = urlpatterns
