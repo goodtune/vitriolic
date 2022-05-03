@@ -7,6 +7,7 @@ import logging
 import re
 from collections import defaultdict
 from decimal import Decimal
+from typing import Optional
 
 from dateutil.rrule import DAILY, WEEKLY, rrule, rruleset
 from django.conf import settings
@@ -101,9 +102,7 @@ def tournament_date_generator(stage, start_date=None, games_per_day=None):
         ruleset.exdate(exclusion)
         logger.debug("EXCLUSION (%s) %s", stage.division.title, exclusion)
 
-    for dates in itertools.imap(
-        lambda dt: itertools.repeat(dt.date(), games_per_day), ruleset
-    ):
+    for dates in map(lambda dt: itertools.repeat(dt.date(), games_per_day), ruleset):
         for date in dates:
             yield date
 
@@ -312,7 +311,7 @@ class MatchDescriptor(object):
             include_in_ladder=include_in_ladder,
             round=round.count,
             date=date,
-            **stages
+            **stages,
         )
 
         setattr(match, "descriptor", self)
@@ -400,7 +399,6 @@ class MatchCollection(object):
 
 
 class DrawGenerator(object):
-
     regex = re.compile(
         r"""  # noqa
         (?:
@@ -420,7 +418,7 @@ class DrawGenerator(object):
         re.VERBOSE,
     )
 
-    def __init__(self, stage, start_date=None):
+    def __init__(self, stage: Stage, start_date: Optional[datetime.date] = None):
         self.rounds = []
         self.stage = stage
         self.start_date = start_date
