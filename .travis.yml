@@ -50,22 +50,11 @@ branches:
 
 deploy:
   provider: pypi
-  user: goodtune
+  user: "__token__"
   distributions: sdist bdist_wheel
   skip_existing: true
   password:
-    secure: "tXwXDzgSdnd+mOuXn9KXhowHy+x0ZZQZiAqkfdooTyC5yTLT+LL9keCsN9dm\
-             JwEaNTtsp/1vxmX26WhKTMXNrJmvWqgGKut8eRg0atZVD4SmOxl2Ek/QNj4D\
-             /fZ8qgzMkVavZFBr82UOj9SIJ7l4HTwf18CGFSWihqPbVrofL86VmyznBPUo\
-             4ZBpiBgdtL9QP4qkrr7ECJrwnUY7mobBY+6KE91ELEi7MDUyx/Z2FuSADEJ2\
-             xL4lHn5esYZo8isZOsnIbmRFle02ziDdyVPB+5OqHNF+QgqwhBQIrf6rrB3J\
-             5ebfEnJwTfvNwx0qeiSd+XxM3xkCKgBqLj37MHkAoTflSu/R146PHuE/QqFs\
-             lY90knxibFJuBYNpVkVIaHaeccpZwELKSbzc534sKBe69XRac6g4g3AOootW\
-             E7dq/+LpdMlCuQhoowfdRd8asAw8f3n4Oz91GnzYT46BzZBL8eOAK4SFfVSx\
-             46ASnhV1pAlUUKIie3IHKVIDBhj72pGVYCRcXpbmP33Kvdpa4fDg5wyHJrH8\
-             jTEjyu5bKE68JTNFKTfAosZt/KpATYxq+VlZkdtECXoaiTjMW19jWYc7YOL9\
-             LSY7HRq9TzTHQRY98XXbtGFr0dmM7T2zl6kNJJq9MnxCAJjsG9ULUbLhKF58\
-             863/LtxhNnwxpECeDboGC+Q="
+    secure: j9mx+j9F+Un/KpkOC3R1lcHL0NB1MSv2me5+kIzKw7P3HOe/CgquTRsu7YXM0VC8SX3pDoSbEu8d0m1HJ+B9JZKZHnMkMLh3/1QhnLijZtpH6F5z1uwnsH7SCMZGmAjUn6LMY69AF0Eqvw2P5b/xFm0DZ3ifO+Vtf5rrZp2cjuIiQC1QMuqlj4tb1YOQ4GKriNWLMIvPQ2Xo3mn76KwRVwjRthCIh9IAaUb5xAkKFq+YvbRtHeem3foggZyo05svjcVyGFOZTAGTfKLMBNnjw2dyutZmsqqhfdluLMRHdZj8Syhb2FCtrY3LeWxnJgqzApxn5+3UylN9y5WvaMRQPkk+VrvcHXPx1/Tf51nUflrzbpLTjopQzhPMSinTJgsINLBnAHPZ9M4h6tTxQa/UcMLCJ3UCCBILgBna/pJOv6JBW/ailOPy138U5PPrUN6UpU3wogx/kMl7H5BCgwY/ThCPto1dpP9KNdY8sLmk+Vw8klZlVnNRbGn5oUGSug4ifYELcnN4/yezjqSjf90rUlmSxVibbouY73BaGgqQtbxazymJ76VAF9fyBdxB5wWvdRjIwhFzU9vGQ7X018CRI+vXzMwdHPBZP+sLzD/yn5NfRb9gNI8Eu7ne3wshK7kOtacM7Ou0/mx2rfnBXKsOQRizD7ZdJD49tl8RK3dWV1U=
   on:
     tags: true
     repo: goodtune/vitriolic
