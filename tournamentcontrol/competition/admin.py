@@ -1731,8 +1731,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 "matches": matches.values_list("pk"),
                 "templates": templates,
                 "extra_context": extra_context,
-                "stage": stage.pk,
             }
+            if stage is not None:
+                kw["stage"] = stage.pk
             if hasattr(request, "tenant"):
                 kw["_schema_name"] = request.tenant.schema_name
                 kw["base_url"] = request.build_absolute_uri("/")
