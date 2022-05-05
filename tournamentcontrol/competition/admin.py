@@ -1728,12 +1728,12 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
         if mode == "pdf":
             kw = {
-                "matches": matches.values_list("pk"),
+                "match_pks": [pk for pk in matches.values_list("pk", flat=True)],
                 "templates": templates,
                 "extra_context": extra_context,
             }
             if stage is not None:
-                kw["stage"] = stage.pk
+                kw["stage_pk"] = stage.pk
             if hasattr(request, "tenant"):
                 kw["_schema_name"] = request.tenant.schema_name
                 kw["base_url"] = request.build_absolute_uri("/")
