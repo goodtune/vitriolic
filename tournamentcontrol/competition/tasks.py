@@ -1,5 +1,6 @@
 from celery import shared_task
 
+from tournamentcontrol.competition.models import Match, Stage
 from tournamentcontrol.competition.utils import generate_scorecards
 
 
