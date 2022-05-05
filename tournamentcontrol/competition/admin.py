@@ -4,7 +4,6 @@ import collections
 import functools
 import logging
 import operator
-from functools import reduce
 
 from django.apps import apps
 from django.conf import settings
@@ -20,7 +19,6 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _, ngettext
 
 from touchtechnology.admin.base import AdminComponent
-from touchtechnology.admin.sites import site
 from touchtechnology.common.decorators import (
     csrf_exempt_m,
     staff_login_required_m,
@@ -841,7 +839,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             Season,
             instance=season,
             post_save_redirect=post_save_redirect,
-            **kwargs
+            **kwargs,
         )
 
     @competition_by_pk_m
@@ -1192,7 +1190,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         extra_context,
         stage=None,
         team=None,
-        **kwargs
+        **kwargs,
     ):
         """
         This view gets mounted twice, first at the division level and secondly
@@ -1247,7 +1245,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 division.pk,
             ),
             permission_required=True,
-            **kwargs
+            **kwargs,
         )
 
     @competition_by_pk_m
@@ -1261,7 +1259,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         team,
         extra_context,
         stage=None,
-        **kwargs
+        **kwargs,
     ):
         if team.matches.exists():
             return HttpResponseGone("The team has matches associated with it.")
@@ -1397,7 +1395,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         stage,
         extra_context,
         match=None,
-        **kwargs
+        **kwargs,
     ):
         if match is None:
             match = Match(stage=stage, include_in_ladder=stage.keep_ladder)
@@ -1434,7 +1432,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             match=match,
             extra_context=extra_context,
             redirect_to=redirect_to,
-            **kwargs
+            **kwargs,
         )
 
     @competition_by_pk_m
@@ -1523,7 +1521,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_save_redirect=self.redirect(season.urls["edit"]),
             permission_required=False,
             extra_context=extra_context,
-            **generic_edit_kwargs
+            **generic_edit_kwargs,
         )
 
     @competition_by_pk_m
@@ -1585,7 +1583,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         division=None,
         stage=None,
         round=None,
-        **kwargs
+        **kwargs,
     ):
         where = Q(date=date, is_bye=False)
 
@@ -1625,7 +1623,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         extra_context,
         division=None,
         time=None,
-        **kwargs
+        **kwargs,
     ):
         redirect_to = reverse("admin:index", current_app=self.app)
         return super(CompetitionAdminComponent, self).match_results(
@@ -1637,7 +1635,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             division=division,
             time=time,
             redirect_to=redirect_to,
-            **kwargs
+            **kwargs,
         )
 
     # FIXME
@@ -1692,7 +1690,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         stage=None,
         date=None,
         time=None,
-        **kwargs
+        **kwargs,
     ):
         if stage is not None:
             if stage.matches_needing_printing.count():
@@ -1728,12 +1726,12 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
         if mode == "pdf":
             kw = {
-                "matches": matches.values_list("pk"),
+                "match_pks": [pk for pk in matches.values_list("pk", flat=True)],
                 "templates": templates,
                 "extra_context": extra_context,
             }
             if stage is not None:
-                kw["stage"] = stage.pk
+                kw["stage_pk"] = stage.pk
             if hasattr(request, "tenant"):
                 kw["_schema_name"] = request.tenant.schema_name
                 kw["base_url"] = request.build_absolute_uri("/")
