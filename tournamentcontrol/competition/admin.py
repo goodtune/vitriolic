@@ -198,6 +198,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     "<int:match_id>/statistic/",
                     include(stub_urls, namespace="simplescorematchstatistic"),
                 ),
+                path(
+                    "<int:match_id>/ladder/",
+                    include(stub_urls, namespace="matchevent"),
+                ),
             ],
             self.app_name,
         )
@@ -847,8 +851,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def season_report(self, request, season, extra_context, **kwargs):
         teams = (
             Team.objects.filter(division__season=season)
-            .order_by("club", "division", "order")
-            .select_related("club")
+                .order_by("club", "division", "order")
+                .select_related("club")
         )
         return self.generic_list(
             request,
@@ -864,9 +868,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def season_summary(self, request, competition, season, extra_context, **kwargs):
         teams = (
             Team.objects.select_related("club", "division")
-            .filter(division__season=season)
-            .order_by("club__title", "division__order")
-            .annotate(
+                .filter(division__season=season)
+                .order_by("club__title", "division__order")
+                .annotate(
                 player_count=Sum(
                     Case(
                         When(people__is_player=True, then=1),
@@ -1780,8 +1784,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             )
 
         people = (
-            Person.objects  # .select_related("club")
-            .defer(
+            Person.objects.defer(
                 "uuid",
                 "date_of_birth",
                 "email",
@@ -1790,12 +1793,12 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 "mobile_phone",
                 "club_id",
             )
-            .annotate(
+                .annotate(
                 played=_get_clause("statistics__played"),
                 points=_get_clause("statistics__points"),
                 mvp=_get_clause("statistics__mvp"),
             )
-            .exclude(played=None)
+                .exclude(played=None)
         )
 
         scorers = people.order_by("-points", "played")

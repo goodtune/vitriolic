@@ -26,7 +26,7 @@ from icalendar import Calendar, Event
 
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
-from touchtechnology.common.utils import get_403_or_None, get_perms_for_model
+from touchtechnology.common.utils import get_perms_for_model
 from tournamentcontrol.competition.constants import MATCH_TIMELINE_EVENTS
 from tournamentcontrol.competition.dashboard import (
     matches_require_basic_results,
