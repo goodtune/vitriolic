@@ -7,7 +7,6 @@ import logging
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from operator import attrgetter
 
 import django
 import pytz
@@ -190,7 +189,6 @@ class TwitterField(models.CharField):
 
 
 class OrderedSitemapNode(SitemapNodeBase):
-
     copy = HTMLField(blank=True)
     order = models.PositiveIntegerField(default=1)
 
@@ -206,7 +204,6 @@ class OrderedSitemapNode(SitemapNodeBase):
 
 
 class Competition(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
-
     enabled = BooleanField(default=True)
     clubs = ManyToManyField("Club", blank=True, related_name="competitions")
 
@@ -218,7 +215,6 @@ class Competition(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 
 
 class Club(AdminUrlMixin, SitemapNodeBase):
-
     email = models.EmailField(max_length=255, blank=True)
     website = models.URLField(max_length=255, blank=True)
     twitter = TwitterField(
@@ -364,7 +360,6 @@ class Club(AdminUrlMixin, SitemapNodeBase):
 
 
 class RankDivision(AdminUrlMixin, OrderedSitemapNode):
-
     enabled = BooleanField(default=True)
 
     class Meta(OrderedSitemapNode.Meta):
@@ -372,7 +367,6 @@ class RankDivision(AdminUrlMixin, OrderedSitemapNode):
 
 
 class RankTeam(models.Model):
-
     club = models.ForeignKey(Club, on_delete=CASCADE)
     division = models.ForeignKey(RankDivision, on_delete=CASCADE)
 
@@ -391,7 +385,6 @@ class RankTeam(models.Model):
 
 
 class RankPoints(models.Model):
-
     team = models.ForeignKey(RankTeam, on_delete=CASCADE)
     points = models.DecimalField(default=0, max_digits=6, decimal_places=3)
     date = models.DateField()
@@ -646,7 +639,6 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 
 
 class Place(AdminUrlMixin, OrderedSitemapNode):
-
     abbreviation = models.CharField(max_length=20, blank=True, null=True)
     latlng = LocationField(max_length=100)
     timezone = TimeZoneField(max_length=50, blank=True, null=True)
@@ -928,17 +920,21 @@ class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     def matches_by_date(self):
         tzinfo = timezone.get_current_timezone()
         res = collections.OrderedDict()
-        for match in self.matches.select_related(
-            "play_at",
-            "stage__division",
-            "home_team__club",
-            "home_team__division",
-            "away_team__club",
-            "away_team__division",
-        ).annotate(
-            statistics_count=Count("statistics"),
-            videos_count=Count("videos"),
-            referee_count=Count("referees"),
+        for match in (
+            self.matches.select_related(
+                "play_at",
+                "stage__division",
+                "home_team__club",
+                "home_team__division",
+                "away_team__club",
+                "away_team__division",
+            )
+            .annotate(
+                statistics_count=Count("statistics"),
+                videos_count=Count("videos"),
+                referee_count=Count("referees"),
+            )
+            .order_by("datetime", "date", "time", "round")
         ):
             res.setdefault(self, collections.OrderedDict()).setdefault(
                 match.get_date(tzinfo), []
@@ -1910,7 +1906,6 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
 
 
 class LadderBase(models.Model):
-
     played = models.SmallIntegerField(default=0)
     win = models.SmallIntegerField(default=0)
     loss = models.SmallIntegerField(default=0)
@@ -1931,7 +1926,6 @@ class LadderBase(models.Model):
 
 
 class LadderEntry(LadderBase):
-
     match = ForeignKey(Match, related_name="ladder_entries", on_delete=CASCADE)
     team = ForeignKey(
         Team,
@@ -1948,7 +1942,6 @@ class LadderEntry(LadderBase):
 
 
 class LadderSummary(LadderBase):
-
     stage = ForeignKey(Stage, related_name="ladder_summary", on_delete=CASCADE)
     stage_group = ForeignKey(
         StageGroup, null=True, related_name="ladder_summary", on_delete=CASCADE
@@ -1969,7 +1962,6 @@ class LadderSummary(LadderBase):
 
 
 class DrawFormat(AdminUrlMixin, models.Model):
-
     name = models.CharField(max_length=50)
     text = models.TextField(verbose_name="Formula")
     teams = models.PositiveIntegerField(blank=True, null=True)
@@ -2009,7 +2001,6 @@ class ExclusionDateBase(AdminUrlMixin, models.Model):
 
 
 class SeasonExclusionDate(ExclusionDateBase):
-
     season = ForeignKey("Season", related_name="exclusions", on_delete=CASCADE)
 
     class Meta(ExclusionDateBase.Meta):
@@ -2024,7 +2015,6 @@ class SeasonExclusionDate(ExclusionDateBase):
 
 
 class DivisionExclusionDate(ExclusionDateBase):
-
     division = ForeignKey("Division", related_name="exclusions", on_delete=CASCADE)
 
     class Meta:
@@ -2073,7 +2063,6 @@ class MatchTimeBase(models.Model):
 
 
 class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
-
     season = ForeignKey("Season", related_name="timeslots", on_delete=CASCADE)
     start_date = DateField(verbose_name="From", blank=True, null=True)
     end_date = DateField(verbose_name="Until", blank=True, null=True)
@@ -2092,7 +2081,6 @@ class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
 
 
 class MatchScoreSheet(AdminUrlMixin, models.Model):
-
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     match = models.ForeignKey(Match, related_name="scoresheets", on_delete=CASCADE)
     image = CloudinaryField(verbose_name=_("Image"))
@@ -2115,7 +2103,6 @@ class MatchScoreSheet(AdminUrlMixin, models.Model):
 
 
 class MatchStatisticBase(models.Model):
-
     match = ForeignKey("Match", related_name="statistics", on_delete=PROTECT)
     player = ForeignKey("Person", related_name="statistics", on_delete=PROTECT)
     number = models.IntegerField(blank=True, null=True)
@@ -2136,7 +2123,6 @@ class MatchStatisticBase(models.Model):
 
 
 class SimpleScoreMatchStatistic(MatchStatisticBase):
-
     played = models.SmallIntegerField(
         default=0,
         blank=True,
