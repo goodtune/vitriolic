@@ -42,14 +42,6 @@ class MultiWidget(widgets.MultiWidget):
 
 
 class HTMLWidget(FroalaEditor):
-    def trigger_froala(self, el_id, options):
-        """
-        We don't want to do inline scripts, we'll handle the loading once from
-        froala.js, so return an empty string to overload the base FroalaEditor
-        implementation.
-        """
-        return ""
-
     class Media:
         css = {
             "all": (
