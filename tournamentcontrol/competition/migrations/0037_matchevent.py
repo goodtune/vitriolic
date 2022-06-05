@@ -39,7 +39,7 @@ class Migration(migrations.Migration):
                         max_length=20,
                     ),
                 ),
-                ("details", django.contrib.postgres.fields.jsonb.JSONField()),
+                ("details", models.JSONField()),
                 (
                     "match",
                     touchtechnology.common.db.models.ForeignKey(

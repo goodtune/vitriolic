@@ -18,42 +18,6 @@ WIN_LOSE = {
     "L": _("Loser"),
 }
 
-TIMELINE_TYPE_CHOICES = (
-    ('TOSS', _('Coin Toss')),
-    ('TIME', _('Timing Event')),
-    ('SCORE', _('Scoring Event')),
-    ('DISCIPLINE', _('Discipline Event')),
-)
-
-TIMELINE_TIME_CHOICES = (
-    ('START', _('Started')),
-    (
-        _('Break in play'),
-        ('QUARTER', _('Quarter break')),
-        ('HALF', _('Half-time break')),
-        ('PERIOD', _('Period break')),
-        ('BREAK', _('Break')),
-        ('RESUME', _('Play resumed')),
-    ),
-    ('FINISH', _('Completed')),
-)
-
-TIMELINE_SCORE_CHOICES = (
-    ('HOME', _('Home team')),
-    ('AWAY', _('Away team')),
-)
-
-TIMELINE_DISCIPLINE_CHOICES = (
-    # Touch specific
-    ('FORCE', _('Forced Substitution')),
-    ('PERIOD', _('Period of Time')),
-    ('SENDOFF', _('Sent off')),
-    # General
-    ('SINBIN', _('Sin Bin')),
-    ('YELLOW', _('Yellow Card')),
-    ('RED', _('Red Card')),
-)
-
 ##########
 # RawSQL #
 ##########
