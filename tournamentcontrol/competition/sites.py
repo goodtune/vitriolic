@@ -22,6 +22,7 @@ from django.utils import timezone
 from django.utils.encoding import smart_bytes
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext, gettext_lazy as _
+from guardian.utils import get_40x_or_None
 from icalendar import Calendar, Event
 
 from touchtechnology.common.decorators import login_required_m
@@ -131,7 +132,7 @@ class CompetitionAdminMixin(object):
         redirect_to,
         division=None,
         time=None,
-        **kwargs
+        **kwargs,
     ):
         matches = Match.objects.filter(
             stage__division__season=season,
@@ -196,18 +197,22 @@ class CompetitionAdminMixin(object):
 
     def edit_match_live(self, request, match, **extra_context):
         instance = get_object_or_404(
-            Match,
-            pk=match, home_team__isnull=False, away_team__isnull=False
+            Match, pk=match, home_team__isnull=False, away_team__isnull=False
         )
 
-        home_team_players = instance.home_team.people.filter(is_player=True).select_related("person")
+        home_team_players = instance.home_team.people.filter(
+            is_player=True
+        ).select_related("person")
         home_team_players_map = {ta.number: ta.person for ta in home_team_players}
 
-        away_team_players = instance.away_team.people.filter(is_player=True).select_related("person")
+        away_team_players = instance.away_team.people.filter(
+            is_player=True
+        ).select_related("person")
         away_team_players_map = {ta.number: ta.person for ta in away_team_players}
 
         scoring_events = MatchEvent.objects.raw(
-            MATCH_TIMELINE_EVENTS, params=(instance.uuid,),
+            MATCH_TIMELINE_EVENTS,
+            params=(instance.uuid,),
         )
 
         scores_kwargs = {
@@ -217,7 +222,8 @@ class CompetitionAdminMixin(object):
                         type="SCORE",
                         team=F("match__home_team"),
                         then=Cast(
-                            KeyTextTransform("points", "details"), IntegerField(),
+                            KeyTextTransform("points", "details"),
+                            IntegerField(),
                         ),
                     ),
                     default=0,
@@ -229,10 +235,11 @@ class CompetitionAdminMixin(object):
                         type="SCORE",
                         team=F("match__away_team"),
                         then=Cast(
-                            KeyTextTransform("points", "details"), IntegerField(),
+                            KeyTextTransform("points", "details"),
+                            IntegerField(),
                         ),
                     ),
-                    default = 0,
+                    default=0,
                 )
             ),
         }
@@ -420,7 +427,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         season=None,
         division=None,
         *args,
-        **kwargs
+        **kwargs,
     ):
         # We need to "pop" the node keyword argument
         return sitemaps_views.index(request, *args, **kwargs)
@@ -433,7 +440,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         season=None,
         division=None,
         *args,
-        **kwargs
+        **kwargs,
     ):
         # We need to "pop" the node keyword argument
         return sitemaps_views.sitemap(request, *args, **kwargs)
@@ -562,7 +569,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             time=time,
             extra_context=extra_context,
             redirect_to=redirect_to,
-            **kwargs
+            **kwargs,
         )
 
     @login_required_m
@@ -586,7 +593,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             match=match,
             extra_context=extra_context,
             redirect_to=redirect_to,
-            **kwargs
+            **kwargs,
         )
 
     @competition_by_slug_m
@@ -707,7 +714,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         stage,
         pool,
         extra_context,
-        **kwargs
+        **kwargs,
     ):
         # FIXME sadly the template name was not changed when we refactored
         #       pools to be subordinates of Stage.
@@ -950,7 +957,9 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             # Temporary, realistically nobody should ever have this URL but we
             # will use GONE so that Google removes it from their index.
             return HttpResponseGone()
-        extra_context["timeline"] = MatchEvent.objects.raw(MATCH_TIMELINE_EVENTS, params=(match.uuid,))
+        extra_context["timeline"] = MatchEvent.objects.raw(
+            MATCH_TIMELINE_EVENTS, params=(match.uuid,)
+        )
         templates = self.template_path(
             "match.html", competition.slug, season.slug, division.slug
         )

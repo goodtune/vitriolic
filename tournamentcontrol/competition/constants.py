@@ -28,7 +28,8 @@ SELECT
     , COUNT(DISTINCT e.timestamp) period
     , MAX(e.timestamp) period_timestamp
     , AGE(m.timestamp, MAX(e.timestamp)) relative_timestamp
-    , s.home_score, s.away_score
+    , CASE WHEN (s.home_score IS NULL) THEN 0 ELSE s.home_score END
+    , CASE WHEN (s.away_score IS NULL) THEN 0 ELSE s.away_score END
 FROM
     competition_matchevent m
 LEFT OUTER JOIN

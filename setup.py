@@ -56,6 +56,7 @@ setup(
             "django-eventstream",
             "django-formtools",
             "django-mathfilters",
+            "django-polymorphic",
             "djangorestframework>=3.11",
             "drf-nested-routers",
             "icalendar",

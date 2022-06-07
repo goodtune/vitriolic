@@ -28,6 +28,7 @@ from django.utils import timezone
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
+from polymorphic.models import PolymorphicModel
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
 from touchtechnology.common.db.models import (
@@ -1904,39 +1905,48 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     def __repr__(self):
         return "<Match: %s: %s>" % (self.round, self)
 
+    def live_event__start(self):
+        return TimeEvent.objects.create(match=self, type=TimeEvent.Event.START)
 
-class MatchEvent(models.Model):
+    def live_event__home_score(self):
+        return ScoreEvent.objects.create(match=self, team=self.home_team)
+
+    def live_event__away_score(self):
+        return ScoreEvent.objects.create(match=self, team=self.away_team)
+
+
+class MatchEvent(PolymorphicModel):
     """
     A timeline of Events for a Match.
     """
 
-    class EventType(models.TextChoices):
-        TOSS = _("Coin Toss")
-        TIME = _("Timing Event")
-        SCORE = _("Scoring Event")
-        DISCIPLINE = _("Discipline Event")
-
-    class TimeEvent(models.TextChoices):
-        START = _("Started")
-        QUARTER = _("Quarter break")
-        HALF = _("Half-time break")
-        PERIOD = _("Period break")
-        BREAK = _("Break")
-        FINISH = _("Completed")
-
-    class ScoreEvent(models.TextChoices):
-        HOME = _("Home team score")
-        AWAY = _("Away team score")
-
-    class DisciplineEvent(models.TextChoices):
-        # Touch specific
-        FORCE = _("Forced Substitution")
-        PERIOD = _("Period of Time")
-        SENDOFF = _("Sent Off")
-        # General
-        SINBIN = _("Sin Bin")
-        YELLOW = _("Yellow Card")
-        RED = _("Red Card")
+    # class EventType(models.TextChoices):
+    #     TOSS = "TOSS", _("Coin Toss")
+    #     TIME = "TIME", _("Timing Event")
+    #     SCORE = "SCORE", _("Scoring Event")
+    #     DISCIPLINE = "DISCIPLINE", _("Discipline Event")
+    #
+    # class TimeEvent(models.TextChoices):
+    #     START = "START", _("Started")
+    #     QUARTER = "QTR", _("Quarter break")
+    #     HALF = "HALF", _("Half-time break")
+    #     PERIOD = "PERIOD", _("Period break")
+    #     BREAK = "BREAK", _("Break")
+    #     FINISH = "FINISH", _("Completed")
+    #
+    # class ScoreEvent(models.TextChoices):
+    #     HOME = "HOME", _("Home team score")
+    #     AWAY = "AWAY", _("Away team score")
+    #
+    # class DisciplineEvent(models.TextChoices):
+    #     # Touch specific
+    #     FORCE = "FORCE", _("Forced Substitution")
+    #     PERIOD = "PERIOD", _("Period of Time")
+    #     SENDOFF = "SENDOFF", _("Remainder of Game")
+    #     # General
+    #     SINBIN = "SINBIN", _("Sin Bin")
+    #     YELLOW = "YELLOW", _("Yellow Card")
+    #     RED = "RED", _("Red Card")
 
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     timestamp = DateTimeField(auto_now_add=True, db_index=True)
@@ -1946,19 +1956,16 @@ class MatchEvent(models.Model):
         Match, related_name="timeline", to_field="uuid", on_delete=PROTECT
     )
 
-    type = models.TextField(max_length=20, choices=EventType.choices, db_index=True)
+    # type = models.TextField(max_length=20, choices=EventType.choices, db_index=True)
 
     # Using JSONField more or less turns this into a NoSQL object. I've chosen not to
     # use the HStoreField because values need to be strings, and I'd like to use
     # aggregation when type=SCORE.
     # Read: https://dev.to/saschalalala/aggregation-in-django-jsonfields-4kg5
-    team = ForeignKey(
-        Team, blank=True, null=True, related_name="timeline", on_delete=PROTECT
-    )
-    details = models.JSONField()
-
-    def __str__(self):
-        return f"{self.type} {self.details}"
+    # team = ForeignKey(
+    #     Team, blank=True, null=True, related_name="timeline", on_delete=PROTECT
+    # )
+    # details = models.JSONField()
 
     @cached_property
     def template_name_live(self):
@@ -1967,6 +1974,26 @@ class MatchEvent(models.Model):
     @cached_property
     def template_name(self):
         return f"tournamentcontrol/competition/match_{self.type}.html"
+
+
+class ScoreEvent(MatchEvent):
+    team = models.ForeignKey(Team, on_delete=PROTECT)
+    player = models.ForeignKey(
+        TeamAssociation, blank=True, null=True, on_delete=PROTECT
+    )
+
+
+class TimeEvent(MatchEvent):
+    class Event(models.TextChoices):
+        START = "START", _("Started")
+        RESUME = "RESUME", _("Resume")
+        QUARTER = "QTR", _("Quarter break")
+        HALF = "HALF", _("Half-time break")
+        PERIOD = "PERIOD", _("Period break")
+        BREAK = "BREAK", _("Break")
+        FINISH = "FINISH", _("Completed")
+
+    type = models.TextField(choices=Event.choices)
 
 
 class LadderBase(models.Model):
