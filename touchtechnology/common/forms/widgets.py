@@ -17,6 +17,11 @@ from touchtechnology.common.forms.tz import (
     TIMEZONE_CHOICES,
 )
 
+try:
+    from importlib import metadata
+except ImportError:  # Python 3.6
+    import importlib_metadata as metadata
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,6 +47,19 @@ class MultiWidget(widgets.MultiWidget):
 
 
 class HTMLWidget(FroalaEditor):
+    def trigger_froala(self, *args, **kwargs):
+        """
+        We don't want to do inline scripts, we'll handle the loading once from
+        froala.js, so return an empty string to overload the base FroalaEditor
+        implementation.
+
+        Note: required for django-froala-editor<3 AFAICT
+        """
+        version = metadata.version("django-froala-editor")
+        if int(version.split(".")[0]) < 3:
+            return ""
+        return super().trigger_froala(*args, **kwargs)
+
     class Media:
         css = {
             "all": (
