@@ -20,6 +20,7 @@ from django.utils import timezone
 from django.utils.encoding import smart_bytes
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext, gettext_lazy as _
+from guardian.utils import get_40x_or_None
 from icalendar import Calendar, Event
 
 from touchtechnology.common.decorators import login_required_m
