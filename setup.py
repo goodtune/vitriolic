@@ -22,7 +22,7 @@ setup(
     use_scm_version=True,
     install_requires=[
         "django-classy-tags<0.9",
-        "django-froala-editor~=4.0",
+        "django-froala-editor~=3.0",
         "django-guardian>=2.4",
         "django-modelforms",
         "django-mptt",
