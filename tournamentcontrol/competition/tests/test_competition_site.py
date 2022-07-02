@@ -23,9 +23,14 @@ class GoodViewTests(TestCase):
 
     def test_season_calendar(self):
         # TODO load matches to see if the query count is scaled properly
-        season = factories.SeasonFactory.create()
+        stage = factories.StageFactory.create()
+        matches = factories.MatchFactory.create_batch(
+            5, stage=stage, date="2022-07-02", time="09:00", datetime="2022-07-02 09:00"
+        )
         self.assertGoodView(
-            "competition:calendar", season.competition.slug, season.slug
+            "competition:calendar",
+            stage.division.season.competition.slug,
+            stage.division.season.slug,
         )
 
     def test_season_videos(self):
