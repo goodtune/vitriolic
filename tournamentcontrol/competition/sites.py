@@ -1,7 +1,7 @@
 from __future__ import unicode_literals
 
-import base64
 import functools
+import logging
 import operator
 from datetime import timedelta
 from operator import or_
@@ -15,9 +15,9 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Case, Count, F, Q, Sum, When
 from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
-from django.urls import include, path, re_path
+from django.urls import include, path, re_path, reverse
+from django.urls.exceptions import NoReverseMatch
 from django.utils import timezone
-from django.utils.encoding import smart_bytes
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext, gettext_lazy as _
 from guardian.utils import get_40x_or_None
@@ -57,6 +57,8 @@ from tournamentcontrol.competition.utils import (
     FauxQueryset,
     team_needs_progressing,
 )
+
+LOG = logging.getLogger(__name__)
 
 
 def permissions_required(
@@ -128,7 +130,7 @@ class CompetitionAdminMixin(object):
         redirect_to,
         division=None,
         time=None,
-        **kwargs
+        **kwargs,
     ):
         matches = Match.objects.filter(
             stage__division__season=season,
@@ -347,7 +349,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         season=None,
         division=None,
         *args,
-        **kwargs
+        **kwargs,
     ):
         # We need to "pop" the node keyword argument
         return sitemaps_views.index(request, *args, **kwargs)
@@ -360,7 +362,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         season=None,
         division=None,
         *args,
-        **kwargs
+        **kwargs,
     ):
         # We need to "pop" the node keyword argument
         return sitemaps_views.sitemap(request, *args, **kwargs)
@@ -489,7 +491,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             time=time,
             extra_context=extra_context,
             redirect_to=redirect_to,
-            **kwargs
+            **kwargs,
         )
 
     @login_required_m
@@ -513,7 +515,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             match=match,
             extra_context=extra_context,
             redirect_to=redirect_to,
-            **kwargs
+            **kwargs,
         )
 
     @competition_by_slug_m
@@ -634,7 +636,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         stage,
         pool,
         extra_context,
-        **kwargs
+        **kwargs,
     ):
         # FIXME sadly the template name was not changed when we refactored
         #       pools to be subordinates of Stage.
@@ -833,36 +835,33 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         cal.add("version", "2.0")
 
         for match in matches.order_by("datetime", "play_at"):
-            # Determine the resource path to the detailed match view
-            path = self.reverse(
-                "match",
-                kwargs={
-                    "match": match.pk,
-                    "division": match.stage.division.slug,
-                    "season": match.stage.division.season.slug,
-                    "competition": match.stage.division.season.competition.slug,
-                },
-            )
-
-            # Combine the resource path with our current request context
-            url = request.build_absolute_uri(str(path))
-
             event = Event()
-            event["uid"] = "%s@%s" % (
-                base64.b64encode(smart_bytes(url)),
-                request.get_host(),
-            )
+            event["uid"] = match.uuid.hex
             event.add("summary", match.title)
-            event.add(
-                "location",
-                "{0} ({1})".format(match.stage.division.title, match.stage.title),
-            )
-            event.add("description", url)
+            event.add("location", f"{match.stage.division.title} ({match.stage.title})")
             event.add("dtstart", match.datetime)
+
             # FIXME match duration should not be hardcoded
             event.add("dtend", match.datetime + timedelta(minutes=45))
             # FIXME should be the last modified time of the match
             event.add("dtstamp", timezone.now())
+
+            try:
+                # Determine the resource uri to the detailed match view
+                uri = reverse(
+                    "competition:match",
+                    kwargs={
+                        "match": match.pk,
+                        "division": match.stage.division.slug,
+                        "season": match.stage.division.season.slug,
+                        "competition": match.stage.division.season.competition.slug,
+                    },
+                )
+            except NoReverseMatch:
+                LOG.exception("Unable to resolve url for %r", match)
+            else:
+                # Combine the resource uri with our current request context
+                event.add("description", request.build_absolute_uri(uri))
 
             cal.add_component(event)
 

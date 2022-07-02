@@ -18,7 +18,7 @@ setup(
     ),
     long_description=long_description,
     packages=find_packages(),
-    setup_requires=["setuptools_scm"],
+    setup_requires=["setuptools_scm<7"],
     use_scm_version=True,
     install_requires=[
         "django-classy-tags<0.9",
