@@ -447,7 +447,15 @@ def generate_fixture_grid(
     play_at = season.get_places()
 
     for date in dates:
-        matches = season.matches.filter(date=date)
+        matches = season.matches.select_related(
+            "stage_group",
+            "stage",
+            "stage__division",
+            "home_team",
+            "home_team__club",
+            "away_team",
+            "away_team__club",
+        ).filter(date=date)
 
         times = sorted(
             {m.time for m in matches if m.time is not None}.union(

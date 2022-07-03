@@ -38,7 +38,7 @@ def prince(html, base_url=None, ttl=300, **kwargs):
         for key, value in headers.items():
             logger.debug("header: %s=%s", key, value)
 
-        res = requests.post("http://%s/" % SERVER, data=html, headers=headers)
+        res = requests.post(f"https://{SERVER}/", data=html, headers=headers)
         res.raise_for_status()
 
         out = res.content
