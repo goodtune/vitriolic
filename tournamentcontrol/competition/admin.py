@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import base64
 import collections
 import functools
 import logging
@@ -1760,7 +1761,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         result = generate_pdf_scorecards.AsyncResult(result_id)
 
         if result.ready():
-            return HttpResponse(result.wait(), content_type="application/pdf")
+            data = result.wait()
+            return HttpResponse(base64.b64decode(data), content_type="application/pdf")
 
         templates = self.template_path("wait.html", "scorecards")
         response = self.render(request, templates, extra_context)
