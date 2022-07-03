@@ -1,3 +1,5 @@
+import base64
+
 from celery import shared_task
 
 from tournamentcontrol.competition.models import Match, Stage
@@ -12,6 +14,9 @@ def generate_pdf_scorecards(
     stage = None
     if stage_pk is not None:
         stage = Stage.objects.get(pk=stage_pk)
-    return generate_scorecards(
+    data = generate_scorecards(
         matches, templates, "pdf", extra_context, stage, **kwargs
     )
+    # We can't JSON encode bytes, so we need to base64 encode the
+    # PDF document before handing it back to the result backend.
+    return base64.b64encode(data).decode("utf8")

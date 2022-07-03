@@ -1,6 +1,5 @@
 import datetime
 import functools
-from functools import reduce
 from operator import add, or_
 
 from dateutil.parser import parse
@@ -18,6 +17,7 @@ from touchtechnology.common.forms.fields import (
 from tournamentcontrol.competition.models import Season
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.utils import generate_scorecards
+
 
 ##############################################################################
 # Scorecard Report
@@ -166,7 +166,7 @@ class ScorecardWizardBase(SessionWizardView):
 
     def done(self, form_list, **kwargs):
         data = self.get_all_cleaned_data()
-        format = data.get("format")
+        mode = data.get("format")
         season = data.pop("season")
         matches = data.pop("matches")
         template = data.pop("template")
@@ -180,17 +180,15 @@ class ScorecardWizardBase(SessionWizardView):
             template, season.competition.slug, season.slug
         )
 
-        if format == "pdf":
-            kw = {
-                "matches": matches,
-                "templates": templates,
-                "extra_context": extra_context,
-            }
+        if mode == "pdf":
+            kw = {}
             if hasattr(self.request, "tenant"):
                 kw["_schema_name"] = self.request.tenant.schema_name
                 kw["base_url"] = self.request.build_absolute_uri("/")
 
-            result = generate_pdf_scorecards.delay(**kw)
+            result = generate_pdf_scorecards.delay(
+                matches, templates, extra_context, **kw
+            )
 
             reverse_kwargs = {
                 "competition_id": season.competition_id,
@@ -219,7 +217,6 @@ def scorecardwizard_factory(**kwargs):
 
 
 class DrawGenerationWizard(SessionWizardView):
-
     extra_context = {}
     redirect_to = None
     stage = None
