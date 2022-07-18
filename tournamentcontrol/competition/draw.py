@@ -512,16 +512,16 @@ class DrawGenerator(object):
                 # update the related match values and store only the W or L
                 for team in ("home", "away"):
                     team_eval = win_lose_re.match(
-                        getattr(match, team + "_team_eval") or ""
+                        getattr(match, f"{team}_team_eval") or ""
                     )
                     if team_eval:
                         decode = team_eval.groupdict()
                         setattr(
                             match,
-                            team + "_team_eval_related",
+                            f"{team}_team_eval_related",
                             matches.get_latest(**decode),
                         )
-                        setattr(match, team + "_team_eval", decode.get("result"))
+                        setattr(match, f"{team}_team_eval", decode.get("result"))
 
         return matches
 

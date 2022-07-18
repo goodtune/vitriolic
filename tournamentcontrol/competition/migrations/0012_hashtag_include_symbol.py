@@ -8,7 +8,7 @@ from django.db import migrations, models
 def prefix_with_hash(apps, schema_editor):
     Season = apps.get_model("competition", "Season")
     for season in Season.objects.exclude(hashtag__isnull=True):
-        season.hashtag = "#" + season.hashtag
+        season.hashtag = f"#{season.hashtag}"
         season.save()
 
 

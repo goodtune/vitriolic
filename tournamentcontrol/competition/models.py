@@ -1766,13 +1766,13 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         if team:
             return team
 
-        team_undecided = getattr(self, field + "_undecided")
+        team_undecided = getattr(self, f"{field}_undecided")
         if team_undecided:
             team_eval = team_undecided.formula
             team_eval_related = None
         else:
-            team_eval = getattr(self, field + "_eval")
-            team_eval_related = getattr(self, field + "_eval_related")
+            team_eval = getattr(self, f"{field}_eval")
+            team_eval_related = getattr(self, f"{field}_eval_related")
 
         try:
             stage, group, position = stage_group_position_re.match(team_eval).groups()
@@ -1784,7 +1784,9 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
             stage = self.stage.comes_after
 
         if team_undecided and stage is None:
-            return team_undecided
+            if plain:
+                return str(team_undecided)
+            return {"title": str(team_undecided)}
         elif team_eval in WIN_LOSE:
             context = {
                 "position": WIN_LOSE[team_eval],
@@ -1805,7 +1807,9 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                         "title": mark_safe('<span class="error">ERROR</span>'),
                     }
                     context.setdefault("errors", []).append("Invalid group.")
-        return {"title": template.render(context)}
+        if plain:
+            return template.render(context).strip()
+        return {"title": template.render(context).strip()}
 
     def get_home_team(self):
         return self._get_team("home_team")
@@ -1869,13 +1873,13 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         for index, field in enumerate(("home_team", "away_team")):
             team = self._get_team(field)
             if not lazy or not isinstance(team, Team):
-                team_undecided = getattr(self, field + "_undecided")
+                team_undecided = getattr(self, f"{field}_undecided")
                 if team_undecided:
                     team_eval = team_undecided.formula
                     team_eval_related = None
                 else:
-                    team_eval = getattr(self, field + "_eval")
-                    team_eval_related = getattr(self, field + "_eval_related")
+                    team_eval = getattr(self, f"{field}_eval")
+                    team_eval_related = getattr(self, f"{field}_eval_related")
                 if team_eval in WIN_LOSE:
                     team = team_eval_related._winner_loser(team_eval)
                 else:
