@@ -225,7 +225,7 @@ class ConstructFormMixin(object):
             auto_id=self.auto_id,
             prefix=self.add_prefix("__prefix__"),
             empty_permitted=True,
-            **defaults
+            **defaults,
         )
         self.add_fields(form, None)
         return form
@@ -781,7 +781,7 @@ class BaseMatchFormMixin(BootstrapFormControlMixin):
 
         for prefix in ("home", "away"):
             for suffix, ids in (("", team_ids), ("_undecided", undecided_team_ids)):
-                field = prefix + "_team" + suffix
+                field = f"{prefix}_team{suffix}"
                 if field in self.fields:
                     self.fields[field].queryset = self.fields[field].queryset.filter(
                         id__in=ids
@@ -1195,7 +1195,7 @@ class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
 
         def label_from_instance(obj):
             try:
-                label = "-" * 3 + " " + obj.ground.title
+                label = f"{'-' * 3} {obj.ground.title}"
             except ObjectDoesNotExist:
                 label = obj.venue.title
             if settings.USE_TZ:
@@ -1241,7 +1241,7 @@ class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
         time = self.cleaned_data.get("time")
         if not self.ignore_clashes:
             for field in ("home", "away"):
-                team = getattr(self.instance, field + "_team")
+                team = getattr(self.instance, f"{field}_team")
                 after = getattr(team, "timeslots_after", None)
                 before = getattr(team, "timeslots_before", None)
                 # Check for team time preferences, does not rely on other

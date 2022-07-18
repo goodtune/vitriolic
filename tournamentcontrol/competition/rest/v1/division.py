@@ -34,7 +34,7 @@ class ListMatchSerializer(serializers.ModelSerializer):
         return obj.label or "Round {}".format(obj.round)
 
     def _get_team(self, obj, home_or_away):
-        team = getattr(obj, "get_{}_team".format(home_or_away))()
+        team = getattr(obj, f"get_{home_or_away}_team_plain")()
         if isinstance(team, (models.Team, models.ByeTeam)):
             return team.pk
         return team
