@@ -1,11 +1,12 @@
-from __future__ import unicode_literals
-
 import base64
 import collections
 import functools
 import logging
 import operator
 
+import httplib2
+from apiclient.discovery import build
+from dateutil.relativedelta import relativedelta
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
@@ -18,6 +19,7 @@ from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _, ngettext
+from oauth2client.contrib.django_util import get_storage
 
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.common.decorators import (
@@ -47,6 +49,7 @@ from tournamentcontrol.competition.forms import (
     GroundForm,
     MatchEditForm,
     MatchScheduleFormSet,
+    MatchStreamForm,
     MatchWashoutFormSet,
     PersonEditForm,
     PersonMergeForm,
@@ -1401,12 +1404,98 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         if match is None:
             match = Match(stage=stage, include_in_ladder=stage.keep_ladder)
 
+        def pre_save_callback(obj):
+            storage = get_storage(request)
+            credentials = storage.get()
+
+            if credentials is None or credentials.invalid:
+                return self.redirect(reverse("google_oauth:authorize"))
+
+            if obj.label:
+                title = f"{division} | {obj.label}: {obj.get_home_team_plain()} vs {obj.get_away_team_plain()} | {competition} {season}"
+            else:
+                title = f"{division} | {obj.get_home_team_plain()} vs {obj.get_away_team_plain()} | {competition} {season}"
+
+            description = (
+                f"Live stream of the {division} division of {competition} {season} from {obj.play_at.ground.venue}.\n"
+                f"\n"
+                f"Watch {obj.get_home_team_plain()} take on {obj.get_away_team_plain()} on {obj.play_at}.\n"
+                f"\n"
+                f"Full match details are available at {request.build_absolute_uri(reverse('competition:match-video', kwargs={'competition': competition.slug, 'season': season.slug, 'division': division.slug, 'match': obj.pk}))}\n"
+                f"\n"
+                f"Subscribe to receive notifications of upcoming matches."
+            )
+
+            start_time = obj.get_datetime(timezone.utc).isoformat()
+            stop_time = (
+                obj.get_datetime(timezone.utc)
+                + relativedelta(minutes=50)  # FIXME hard coded
+            ).isoformat()
+
+            body = {
+                "snippet": {
+                    "title": title,
+                    "description": description,
+                    "scheduledStartTime": start_time,
+                    "scheduledEndTime": stop_time,
+                },
+                "status": {
+                    "privacyStatus": season.live_stream_privacy,
+                },
+            }
+
+            youtube = build(
+                "youtube", "v3", http=credentials.authorize(httplib2.Http())
+            )
+
+            if obj.external_identifier:
+                # If we have disabled live streaming where it was previously enabled, we
+                # need to remove it using the YouTube API.
+                if not obj.live_stream:
+                    video_id = obj.external_identifier
+                    youtube.liveBroadcasts().delete(id=video_id).execute()
+                    if obj.videos is not None:
+                        obj.videos.remove(f"https://youtu.be/{video_id}")
+                    if not obj.videos:
+                        obj.videos = None
+                    obj.external_identifier = None
+                    log.info("YouTube video %(id)r deleted", video_id)
+
+                # Alternatively we're making sure the representation on the backend is
+                # consistent with the current status.
+                else:
+                    body["id"] = obj.external_identifier
+                    broadcast = (
+                        youtube.liveBroadcasts()
+                        .update(part="snippet,status", body=body)
+                        .execute()
+                    )
+                    log.info("YouTube video %(id)r updated", broadcast)
+
+            # If we have enabled live streaming, but don't have an external id, we need
+            # to create an event with the YouTube API and store the external id.
+            elif obj.live_stream:
+                broadcast = (
+                    youtube.liveBroadcasts()
+                    .insert(part="snippet,status", body=body)
+                    .execute()
+                )
+                obj.external_identifier = broadcast["id"]
+                video_link = f"https://youtu.be/{obj.external_identifier}"
+                obj.videos = (
+                    [video_link]
+                    if obj.videos is None
+                    else obj.videos.append(video_link)
+                )
+                log.info("YouTube video %(id)r inserted", broadcast)
+
         return self.generic_edit(
             request,
             Match,
             instance=match,
-            form_class=MatchEditForm,
+            form_class=MatchStreamForm if season.live_stream else MatchEditForm,
             post_save_redirect=self.redirect(stage.urls["edit"]),
+            pre_save_callback=pre_save_callback if season.live_stream else lambda o: o,
             permission_required=True,
             extra_context=extra_context,
         )

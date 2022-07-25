@@ -378,6 +378,8 @@ class SeasonForm(
             "copy",
             "hashtag",
             "enabled",
+            "live_stream",
+            "live_stream_privacy",
             "timezone",
             "start_date",
             "mode",
@@ -1033,6 +1035,29 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
             "date",
             "include_in_ladder",
             "videos",
+        )
+        labels = {
+            "home_team_undecided": _("Home team"),
+            "away_team_undecided": _("Away team"),
+        }
+
+
+class MatchStreamForm(MatchEditForm):
+    class Meta:
+        model = Match
+        fields = (
+            "stage_group",
+            "home_team",
+            "away_team",
+            "home_team_undecided",
+            "away_team_undecided",
+            "referees",
+            "label",
+            "round",
+            "date",
+            "include_in_ladder",
+            "live_stream",
+            # "external_identifier",
         )
         labels = {
             "home_team_undecided": _("Home team"),

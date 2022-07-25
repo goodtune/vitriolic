@@ -40,6 +40,7 @@ from touchtechnology.common.db.models import (
 from touchtechnology.common.models import SitemapNodeBase
 from tournamentcontrol.competition.constants import (
     GENDER_CHOICES,
+    LiveStreamPrivacy,
     PYTZ_TIME_ZONE_CHOICES,
     SEASON_MODE_CHOICES,
     WIN_LOSE,
@@ -534,6 +535,14 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             "show at all times."
         ),
     )
+
+    live_stream = BooleanField(default=False)
+    live_stream_privacy = models.CharField(
+        max_length=20,
+        choices=LiveStreamPrivacy.choices,
+        default=LiveStreamPrivacy.PRIVATE,
+    )
+
     complete = BooleanField(
         default=False,
         help_text=_(
@@ -1597,6 +1606,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         models.URLField(),
         null=True,
     )
+    live_stream = BooleanField(default=False)
 
     objects = MatchManager()
 
