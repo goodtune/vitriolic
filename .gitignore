@@ -1,5 +1,9 @@
 *.swp
+/*.egg-info
 /.eggs
+/.idea
+/.python-version
 /.tox
 /build
 /dist
+__pycache__

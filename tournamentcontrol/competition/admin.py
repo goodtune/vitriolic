@@ -10,6 +10,7 @@ from dateutil.relativedelta import relativedelta
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Case, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
@@ -19,6 +20,7 @@ from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _, ngettext
+from googleapiclient.errors import HttpError
 from oauth2client.contrib.django_util import get_storage
 
 from touchtechnology.admin.base import AdminComponent
@@ -1448,46 +1450,50 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 "youtube", "v3", http=credentials.authorize(httplib2.Http())
             )
 
-            if obj.external_identifier:
-                # If we have disabled live streaming where it was previously enabled, we
-                # need to remove it using the YouTube API.
-                if not obj.live_stream:
-                    video_id = obj.external_identifier
-                    youtube.liveBroadcasts().delete(id=video_id).execute()
-                    if obj.videos is not None:
-                        obj.videos.remove(f"https://youtu.be/{video_id}")
-                    if not obj.videos:
-                        obj.videos = None
-                    obj.external_identifier = None
-                    log.info("YouTube video %(id)r deleted", video_id)
+            try:
+                if obj.external_identifier:
+                    # If we have disabled live-streaming where it was previously
+                    # enabled, we need to remove it using the YouTube API.
+                    if not obj.live_stream:
+                        video_id = obj.external_identifier
+                        youtube.liveBroadcasts().delete(id=video_id).execute()
+                        if obj.videos is not None:
+                            obj.videos.remove(f"https://youtu.be/{video_id}")
+                        if not obj.videos:
+                            obj.videos = None
+                        obj.external_identifier = None
+                        log.info("YouTube video %(id)r deleted", video_id)
 
-                # Alternatively we're making sure the representation on the backend is
-                # consistent with the current status.
-                else:
-                    body["id"] = obj.external_identifier
+                    # Alternatively we're making sure the representation on the backend
+                    # is consistent with the current status.
+                    else:
+                        body["id"] = obj.external_identifier
+                        broadcast = (
+                            youtube.liveBroadcasts()
+                            .update(part="snippet,status", body=body)
+                            .execute()
+                        )
+                        log.info("YouTube video %(id)r updated", broadcast)
+
+                # If we have enabled live-streaming, but don't have an external id, we
+                # need to create an event with the YouTube API and store the external
+                # id.
+                elif obj.live_stream:
                     broadcast = (
                         youtube.liveBroadcasts()
-                        .update(part="snippet,status", body=body)
+                        .insert(part="snippet,status", body=body)
                         .execute()
                     )
-                    log.info("YouTube video %(id)r updated", broadcast)
-
-            # If we have enabled live streaming, but don't have an external id, we need
-            # to create an event with the YouTube API and store the external id.
-            elif obj.live_stream:
-                broadcast = (
-                    youtube.liveBroadcasts()
-                    .insert(part="snippet,status", body=body)
-                    .execute()
-                )
-                obj.external_identifier = broadcast["id"]
-                video_link = f"https://youtu.be/{obj.external_identifier}"
-                obj.videos = (
-                    [video_link]
-                    if obj.videos is None
-                    else obj.videos.append(video_link)
-                )
-                log.info("YouTube video %(id)r inserted", broadcast)
+                    obj.external_identifier = broadcast["id"]
+                    video_link = f"https://youtu.be/{obj.external_identifier}"
+                    obj.videos = (
+                        [video_link]
+                        if obj.videos is None
+                        else obj.videos.append(video_link)
+                    )
+                    log.info("YouTube video %(id)r inserted", broadcast)
+            except HttpError as exc:
+                raise ValidationError(exc.reason)
 
         return self.generic_edit(
             request,
@@ -1630,14 +1636,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             if formset.is_valid():
                 changes = formset.save()
                 if changes:
-                    message = (
-                        ngettext(
-                            "Your change to %(count)d match has been saved.",
-                            "Your changes to %(count)d matches have been saved.",
-                            changes,
-                        )
-                        % {"count": changes}
-                    )
+                    message = ngettext(
+                        "Your change to %(count)d match has been saved.",
+                        "Your changes to %(count)d matches have been saved.",
+                        changes,
+                    ) % {"count": changes}
                     messages.success(request, message)
                 else:
                     messages.info(request, _("No matches were rescheduled."))
