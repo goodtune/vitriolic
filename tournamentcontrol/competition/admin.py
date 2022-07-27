@@ -1493,7 +1493,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     )
                     log.info("YouTube video %(id)r inserted", broadcast)
             except HttpError as exc:
-                raise ValidationError(exc.reason)
+                messages.error(request, exc.reason)
+                return self.redirect(".")
 
         return self.generic_edit(
             request,

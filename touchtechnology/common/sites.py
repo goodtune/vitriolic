@@ -8,7 +8,6 @@ from django.contrib.auth import forms, get_user_model, views
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.search import SearchVector
-from django.core.exceptions import ValidationError
 from django.core.paginator import EmptyPage, Paginator
 from django.db import transaction
 from django.forms import ModelForm as BaseModelForm
@@ -499,30 +498,24 @@ class Application(object):
         if request.method == "POST":
             form = form_class(data=request.POST, files=request.FILES, **form_kwargs)
             if form.is_valid():
-                try:
-                    replace = dict(
-                        model=smart_str(model._meta.verbose_name),
-                        models=smart_str(model._meta.verbose_name_plural),
-                    )
-                    if form.has_changed():
-                        # If anything goes wrong in the pre_save_callback, it should
-                        # raise a ValidationError so that we can put the user back to
-                        # the page that they started with, but with failure context.
-                        res = pre_save_callback(form.instance)
-                        if isinstance(res, HttpResponse):
-                            return res
-                        obj = form.save()
-                        callback_res = post_save_callback(obj)
-                        for level, message in changed_messages:
-                            messages.add_message(request, level, message.format(**replace))
-                        if callback_res is not None:
-                            return callback_res
-                    else:
-                        for level, message in unchanged_messages:
-                            messages.add_message(request, level, message.format(**replace))
-                    return post_save_redirect
-                except ValidationError as err:
-                    form.add_error(None, err)
+                replace = dict(
+                    model=smart_str(model._meta.verbose_name),
+                    models=smart_str(model._meta.verbose_name_plural),
+                )
+                if form.has_changed():
+                    res = pre_save_callback(form.instance)
+                    if isinstance(res, HttpResponse):
+                        return res
+                    obj = form.save()
+                    callback_res = post_save_callback(obj)
+                    for level, message in changed_messages:
+                        messages.add_message(request, level, message.format(**replace))
+                    if callback_res is not None:
+                        return callback_res
+                else:
+                    for level, message in unchanged_messages:
+                        messages.add_message(request, level, message.format(**replace))
+                return post_save_redirect
         else:
             form = form_class(**form_kwargs)
 
