@@ -69,15 +69,18 @@
 								</a>
 							{% endblock %}
 							{% if match.videos %}
-								{% if match.live_stream and not match.live_stream_bind %}
-									<a href="{{ match.urls.edit }}?next={{ request.path }}">
-										<span class="glyphicon glyphicon-exclamation-sign" aria-hidden="true"></span>
-									</a>
-								{% else %}
 									<a href="{{ match.videos|first }}">
-										<span class="glyphicon glyphicon-facetime-video" aria-hidden="true"></span>
+											<span class="glyphicon glyphicon-facetime-video" aria-hidden="true"></span>
 									</a>
-								{% endif %}
+							{% endif %}
+							{% if match.live_stream and not match.live_stream_bind %}
+									<a href="{{ match.urls.edit }}?next={{ request.path }}">
+											<span class="glyphicon glyphicon-exclamation-sign" aria-hidden="true"></span>
+									</a>
+							{% elif match.play_at.ground.live_stream and not match.live_stream %}
+									<a href="{{ match.urls.edit }}?next={{ request.path }}">
+											<span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+									</a>
 							{% endif %}
 						</td>
 					</tr>
