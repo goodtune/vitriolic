@@ -1585,7 +1585,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             instance=match,
             form_class=MatchStreamForm if season.live_stream else MatchEditForm,
             always_save=season.live_stream,
-            post_save_redirect=self.redirect(stage.urls["edit"]),
+            post_save_redirect=self.redirect(
+                request.GET.get("next") or stage.urls["edit"]
+            ),
             pre_save_callback=pre_save_callback if season.live_stream else lambda o: o,
             permission_required=True,
             extra_context=extra_context,

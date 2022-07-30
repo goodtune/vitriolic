@@ -69,9 +69,15 @@
 								</a>
 							{% endblock %}
 							{% if match.videos %}
-								<a href="{{ match.videos|first }}">
-									<span class="glyphicon glyphicon-facetime-video" aria-hidden="true"></span>
-								</a>
+								{% if match.live_stream and not match.live_stream_bind %}
+									<a href="{{ match.urls.edit }}?next={{ request.path }}">
+										<span class="glyphicon glyphicon-exclamation-sign" aria-hidden="true"></span>
+									</a>
+								{% else %}
+									<a href="{{ match.videos|first }}">
+										<span class="glyphicon glyphicon-facetime-video" aria-hidden="true"></span>
+									</a>
+								{% endif %}
 							{% endif %}
 						</td>
 					</tr>
