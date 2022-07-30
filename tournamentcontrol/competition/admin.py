@@ -1550,7 +1550,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 elif obj.live_stream:
                     broadcast = (
                         youtube.liveBroadcasts()
-                        .insert(part="snippet,status,contentDetails", body=body)
+                        .insert(part="id,snippet,status,contentDetails", body=body)
                         .execute()
                     )
                     obj.external_identifier = broadcast["id"]

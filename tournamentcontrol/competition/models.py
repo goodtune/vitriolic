@@ -1615,7 +1615,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     )
     live_stream = BooleanField(default=False)
     live_stream_bind = models.CharField(
-        max_length=50, blank=True, null=True, unique=True, db_index=True
+        max_length=50, blank=True, null=True, db_index=True
     )
 
     objects = MatchManager()

@@ -6,8 +6,11 @@ import operator
 from datetime import timedelta
 from operator import or_
 
+import httplib2
 import pytz
+from apiclient.discovery import build
 from dateutil.relativedelta import relativedelta
+from django import forms
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.sitemaps import views as sitemaps_views
@@ -19,9 +22,12 @@ from django.urls import include, path, re_path, reverse
 from django.urls.exceptions import NoReverseMatch
 from django.utils import timezone
 from django.utils.module_loading import import_string
+from django.utils.safestring import mark_safe
 from django.utils.translation import gettext, gettext_lazy as _
+from googleapiclient.errors import HttpError
 from guardian.utils import get_40x_or_None
 from icalendar import Calendar, Event
+from oauth2client.contrib.django_util import get_storage
 
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
@@ -193,6 +199,91 @@ class CompetitionAdminMixin(object):
         templates = self.template_path("match_results.html")
         return self.render(request, templates, context)
 
+    def stream_control(
+        self,
+        request,
+        competition,
+        season,
+        date,
+        extra_context,
+        redirect_to,
+        time,
+        **kwargs,
+    ):
+        # FIXME: absolute hack view in order to get this going in time for Euros
+        match_queryset = Match.objects.filter(
+            stage__division__season=season,
+            stage__division__season__competition=competition,
+            date=date,
+            time=time,
+            external_identifier__isnull=False,
+        ).order_by("play_at")
+
+        class StreamControlForm(forms.Form):
+            status = forms.ChoiceField(
+                label="Live Streaming Control",
+                choices=(
+                    ("live", "Start streaming"),
+                    ("complete", "Stop streaming"),
+                ),
+                widget=forms.RadioSelect,
+                required=True,
+                help_text=mark_safe(
+                    "Start streams about 1 minute before matches start.<br/>"
+                    "Stop streams about 1 minute after matches conclude."
+                ),
+            )
+
+            def save(slf):
+                storage = get_storage(request)
+                credentials = storage.get()
+                if credentials is None or credentials.invalid:
+                    return self.redirect(reverse("google_oauth:authorize"))
+
+                youtube = build(
+                    "youtube", "v3", http=credentials.authorize(httplib2.Http())
+                )
+
+                broadcast_status = slf.cleaned_data["status"]
+
+                for match in match_queryset:
+                    try:
+                        youtube.liveBroadcasts().transition(
+                            broadcastStatus=broadcast_status,
+                            id=match.external_identifier,
+                            part="snippet,status",
+                        ).execute()
+                    except HttpError as exc:
+                        messages.error(request, f"{match}: {exc.reason}")
+                    else:
+                        messages.success(
+                            request, f"{match}: broadcast is {broadcast_status!r}"
+                        )
+
+        if request.method == "POST":
+            form = StreamControlForm(data=request.POST)
+
+            if form.is_valid():
+                res = form.save()
+                if isinstance(res, HttpResponse):
+                    return res
+                return self.redirect(redirect_to)
+        else:
+            form = StreamControlForm()
+
+        context = {
+            "competition": competition,
+            "season": season,
+            "date": date,
+            "form": form,
+            "matches": match_queryset,
+            "cancel_url": redirect_to,
+        }
+        context.update(extra_context)
+
+        templates = self.template_path("stream_control.html")
+        return self.render(request, templates, context)
+
     def edit_match_detail(
         self, request, stage, match, extra_context, redirect_to, **kwargs
     ):
@@ -294,6 +385,17 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             re_path(r"^(?P<datestr>\d{8})/$", self.day_runsheet, name="runsheet"),
         ]
 
+    def stream_urls(self):
+        return [
+            path("", self.stream, name="stream"),
+            re_path(r"^(?P<datestr>\d{8})/$", self.stream, name="stream"),
+            re_path(
+                r"^(?P<datestr>\d{8})/(?P<timestr>\d{4})/$",
+                self.stream_control,
+                name="stream-control",
+            ),
+        ]
+
     def season_urls(self):
         return [
             path("", self.season, name="season"),
@@ -304,6 +406,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             path("club:<slug:club>.ics", self.calendar, name="calendar"),
             path("results/", include(self.result_urls())),
             path("runsheet/", include(self.runsheet_urls())),
+            path("stream/", include(self.stream_urls())),
             path("<slug:division>.ics", self.calendar, name="calendar"),
             path("<slug:division>/", self.division, name="division"),
             path("<slug:division>:<slug:stage>/", self.stage, name="stage"),
@@ -476,6 +579,37 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
     @competition_by_slug_m
     @login_required_m
+    def stream(self, request, competition, season, extra_context, date=None, **kwargs):
+        has_permission = permissions_required(request, Match, return_403=False)
+        if has_permission is not None:
+            return has_permission
+
+        if date is not None:
+            matches = season.matches.filter(date=date)
+        else:
+            matches = season.matches
+
+        # Allow super-user accounts visibility to look 1 year into the future.
+        if request.user.is_superuser:
+            now = timezone.now() + relativedelta(years=1)
+        else:
+            now = None
+
+        # Filter the list of matches to those which require streaming control
+        stream_start = matches.exclude(external_identifier__isnull=True)
+
+        context = {
+            "datetimes": [
+                timezone.localtime(each, pytz.timezone(season.timezone))
+                for each in stream_start.datetimes("datetime", "minute")
+            ],
+        }
+        context.update(extra_context)
+        templates = self.template_path("stream.html", competition.slug, season.slug)
+        return self.render(request, templates, context)
+
+    @competition_by_slug_m
+    @login_required_m
     def match_results(
         self, request, competition, season, date, time, extra_context, **kwargs
     ):
@@ -484,6 +618,26 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             return has_permission
         redirect_to = self.reverse("results", args=(competition.slug, season.slug))
         return super().match_results(
+            request,
+            competition=competition,
+            season=season,
+            date=date,
+            time=time,
+            extra_context=extra_context,
+            redirect_to=redirect_to,
+            **kwargs,
+        )
+
+    @competition_by_slug_m
+    @login_required_m
+    def stream_control(
+        self, request, competition, season, date, time, extra_context, **kwargs
+    ):
+        has_permission = permissions_required(request, Match, return_403=False)
+        if has_permission is not None:
+            return has_permission
+        redirect_to = self.reverse("stream", args=(competition.slug, season.slug))
+        return super().stream_control(
             request,
             competition=competition,
             season=season,
