@@ -700,6 +700,13 @@ class Ground(Place):
     """
 
     venue = ForeignKey(Venue, related_name="grounds", on_delete=PROTECT)
+    live_stream = BooleanField(default=False)
+    external_identifier = models.CharField(
+        max_length=50, blank=True, null=True, unique=True, db_index=True
+    )
+    stream_key = models.CharField(
+        max_length=50, blank=True, null=True, unique=True, db_index=True
+    )
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:venue:ground"
@@ -1607,6 +1614,9 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         null=True,
     )
     live_stream = BooleanField(default=False)
+    live_stream_bind = models.CharField(
+        max_length=50, blank=True, null=True, unique=True, db_index=True
+    )
 
     objects = MatchManager()
 

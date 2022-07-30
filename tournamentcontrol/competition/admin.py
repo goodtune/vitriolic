@@ -10,7 +10,6 @@ from dateutil.relativedelta import relativedelta
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
-from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Case, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
@@ -1010,12 +1009,70 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
-    def edit_ground(self, request, venue, extra_context, ground=None, **kwargs):
+    def edit_ground(self, request, season, venue, extra_context, ground=None, **kwargs):
         if ground is None:
             ground = next_related_factory(Ground, venue, "venue")
             # By default timezone and geo should inherit from the venue
             ground.timezone = venue.timezone
             ground.latlng = venue.latlng
+
+        def pre_save_callback(obj: Ground):
+            storage = get_storage(request)
+            credentials = storage.get()
+
+            if credentials is None or credentials.invalid:
+                return self.redirect(reverse("google_oauth:authorize"))
+
+            body = {
+                "snippet": {
+                    "title": f"{venue.season.competition} {venue.season} ({obj.title})",
+                },
+                "cdn": {
+                    "ingestionType": "rtmp",
+                    "frameRate": "variable",
+                    "resolution": "variable",
+                },
+            }
+
+            youtube = build(
+                "youtube", "v3", http=credentials.authorize(httplib2.Http())
+            )
+
+            try:
+                stream = None
+                if obj.external_identifier:
+                    if not obj.live_stream:
+                        stream_id = obj.external_identifier
+                        youtube.liveStreams().delete(
+                            id=obj.external_identifier
+                        ).execute()
+                        obj.external_identifier = None
+                        log.info("YouTube stream %(id)r deleted", stream_id)
+                        return
+
+                    else:
+                        body["id"] = obj.external_identifier
+                        stream = (
+                            youtube.liveStreams()
+                            .update(part="snippet,cdn", body=body)
+                            .execute()
+                        )
+                        log.info("YouTube stream %(id)r updated", stream)
+
+                elif obj.live_stream:
+                    stream = (
+                        youtube.liveStreams()
+                        .insert(part="snippet,cdn", body=body)
+                        .execute()
+                    )
+                    obj.external_identifier = stream["id"]
+                    log.info("YouTube stream %(id)r inserted", stream)
+
+                obj.stream_key = stream["cdn"]["ingestionInfo"]["streamName"]
+
+            except HttpError as exc:
+                messages.error(request, exc.reason)
+                return self.redirect(".")
 
         return self.generic_edit(
             request,
@@ -1024,6 +1081,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             related=(),
             form_class=GroundForm,
             form_kwargs={"user": request.user},
+            always_save=season.live_stream,
+            pre_save_callback=pre_save_callback if season.live_stream else lambda o: o,
             post_save_redirect=self.redirect(venue.urls["edit"]),
             permission_required=True,
             extra_context=extra_context,
@@ -1406,7 +1465,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         if match is None:
             match = Match(stage=stage, include_in_ladder=stage.keep_ladder)
 
-        def pre_save_callback(obj):
+        def pre_save_callback(obj: Match):
             storage = get_storage(request)
             credentials = storage.get()
 
@@ -1443,6 +1502,15 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 },
                 "status": {
                     "privacyStatus": season.live_stream_privacy,
+                    "selfDeclaredMadeForKids": False,
+                },
+                "contentDetails": {
+                    "enableAutoStart": False,
+                    "enableAutoStop": False,
+                    "monitorStream": {
+                        "broadcastStreamDelayMs": 0,
+                        "enableMonitorStream": True,
+                    },
                 },
             }
 
@@ -1463,6 +1531,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                             obj.videos = None
                         obj.external_identifier = None
                         log.info("YouTube video %(id)r deleted", video_id)
+                        return
 
                     # Alternatively we're making sure the representation on the backend
                     # is consistent with the current status.
@@ -1470,7 +1539,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                         body["id"] = obj.external_identifier
                         broadcast = (
                             youtube.liveBroadcasts()
-                            .update(part="snippet,status", body=body)
+                            .update(part="snippet,status,contentDetails", body=body)
                             .execute()
                         )
                         log.info("YouTube video %(id)r updated", broadcast)
@@ -1481,7 +1550,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 elif obj.live_stream:
                     broadcast = (
                         youtube.liveBroadcasts()
-                        .insert(part="snippet,status", body=body)
+                        .insert(part="snippet,status,contentDetails", body=body)
                         .execute()
                     )
                     obj.external_identifier = broadcast["id"]
@@ -1492,6 +1561,20 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                         else obj.videos.append(video_link)
                     )
                     log.info("YouTube video %(id)r inserted", broadcast)
+
+                # We need to bind to a liveStream resource. This is only supported on
+                # a Ground, not a Venue.
+                bind = (
+                    youtube.liveBroadcasts()
+                    .bind(
+                        part="id,snippet,contentDetails,status",
+                        id=obj.external_identifier,
+                        streamId=obj.play_at.ground.external_identifier,
+                    )
+                    .execute()
+                )
+                obj.live_stream_bind = bind["contentDetails"].get("boundStreamId")
+
             except HttpError as exc:
                 messages.error(request, exc.reason)
                 return self.redirect(".")
@@ -1501,6 +1584,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             Match,
             instance=match,
             form_class=MatchStreamForm if season.live_stream else MatchEditForm,
+            always_save=season.live_stream,
             post_save_redirect=self.redirect(stage.urls["edit"]),
             pre_save_callback=pre_save_callback if season.live_stream else lambda o: o,
             permission_required=True,

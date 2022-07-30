@@ -414,6 +414,7 @@ class Application(object):
         return_403=None,
         related=None,
         extra_context=None,
+        always_save=False,
     ):
 
         model, manager = model_and_manager(model_or_manager)
@@ -502,7 +503,7 @@ class Application(object):
                     model=smart_str(model._meta.verbose_name),
                     models=smart_str(model._meta.verbose_name_plural),
                 )
-                if form.has_changed():
+                if always_save or form.has_changed():
                     res = pre_save_callback(form.instance)
                     if isinstance(res, HttpResponse):
                         return res

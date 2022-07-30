@@ -426,10 +426,16 @@ class GroundForm(SuperUserSlugMixin, TimezoneMixin, ModelForm):
             "latlng",
             "slug",
             "slug_locked",
+            "live_stream",
         )
         labels = {
             "latlng": _("Map"),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.venue.season.live_stream:
+            self.fields.pop("live_stream")
 
 
 BaseGroundFormSet = inlineformset_factory(
