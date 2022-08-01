@@ -1,8 +1,8 @@
 from tournamentcontrol.competition.rest.v1._routers import (
-    router,
     competition_router,
-    season_router,
     division_router,
+    router,
+    season_router,
 )
 
 urlpatterns = (
