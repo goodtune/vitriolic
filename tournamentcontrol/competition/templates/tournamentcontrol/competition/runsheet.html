@@ -72,6 +72,11 @@
 									<a href="{{ match.videos|first }}">
 											<span class="glyphicon glyphicon-facetime-video" aria-hidden="true"></span>
 									</a>
+									{% if match.live_stream %}
+										<a href="https://studio.youtube.com/video/{{ match.external_identifier }}/livestreaming">
+											<span class="glyphicon glyphicon-cog" aria-hidden="true"></span>
+										</a>
+									{% endif %}
 							{% endif %}
 							{% if match.live_stream and not match.live_stream_bind %}
 									<a href="{{ match.urls.edit }}?next={{ request.path }}">
