@@ -223,6 +223,7 @@ class CompetitionAdminMixin(object):
             status = forms.ChoiceField(
                 label="Live Streaming Control",
                 choices=(
+                    ("testing", "Testing"),
                     ("live", "Start streaming"),
                     ("complete", "Stop streaming"),
                 ),
