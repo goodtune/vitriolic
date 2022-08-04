@@ -1592,8 +1592,8 @@ class ProgressTeamsFormSet(BaseProgressTeamsFormSet):
 
     def save(self, *args, **kwargs):
         res = super(ProgressTeamsFormSet, self).save(*args, **kwargs)
-        self.stage.matches_needing_printing = self.stage.matches.exclude(
-            legitimate_bye_match
+        self.stage.matches_needing_printing.set(
+            self.stage.matches.exclude(legitimate_bye_match)
         )
         return res
 
