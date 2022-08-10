@@ -6,11 +6,8 @@ import operator
 from datetime import timedelta
 from operator import or_
 
-import httplib2
 import pytz
-from apiclient.discovery import build
 from dateutil.relativedelta import relativedelta
-from django import forms
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.sitemaps import views as sitemaps_views
@@ -22,12 +19,9 @@ from django.urls import include, path, re_path, reverse
 from django.urls.exceptions import NoReverseMatch
 from django.utils import timezone
 from django.utils.module_loading import import_string
-from django.utils.safestring import mark_safe
 from django.utils.translation import gettext, gettext_lazy as _
-from googleapiclient.errors import HttpError
 from guardian.utils import get_40x_or_None
 from icalendar import Calendar, Event
-from oauth2client.contrib.django_util import get_storage
 
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
@@ -44,6 +38,7 @@ from tournamentcontrol.competition.forms import (
     MatchStatisticFormset,
     MultiConfigurationForm,
     RankingConfigurationForm,
+    StreamControlForm,
 )
 from tournamentcontrol.competition.models import (
     Competition,
@@ -219,53 +214,11 @@ class CompetitionAdminMixin(object):
             external_identifier__isnull=False,
         ).order_by("play_at")
 
-        class StreamControlForm(forms.Form):
-            status = forms.ChoiceField(
-                label="Live Streaming Control",
-                choices=(
-                    ("testing", "Testing"),
-                    ("live", "Start streaming"),
-                    ("complete", "Stop streaming"),
-                ),
-                widget=forms.RadioSelect,
-                required=True,
-                help_text=mark_safe(
-                    "Start streams about 1 minute before matches start.<br/>"
-                    "Stop streams about 1 minute after matches conclude."
-                ),
-            )
-
-            def save(slf):
-                storage = get_storage(request)
-                credentials = storage.get()
-                if credentials is None or credentials.invalid:
-                    return self.redirect(reverse("google_oauth:authorize"))
-
-                youtube = build(
-                    "youtube", "v3", http=credentials.authorize(httplib2.Http())
-                )
-
-                broadcast_status = slf.cleaned_data["status"]
-
-                for match in match_queryset:
-                    try:
-                        youtube.liveBroadcasts().transition(
-                            broadcastStatus=broadcast_status,
-                            id=match.external_identifier,
-                            part="snippet,status",
-                        ).execute()
-                    except HttpError as exc:
-                        messages.error(request, f"{match}: {exc.reason}")
-                    else:
-                        messages.success(
-                            request, f"{match}: broadcast is {broadcast_status!r}"
-                        )
-
         if request.method == "POST":
             form = StreamControlForm(data=request.POST)
 
             if form.is_valid():
-                res = form.save()
+                res = form.save(request, season.youtube, match_queryset)
                 if isinstance(res, HttpResponse):
                     return res
                 return self.redirect(redirect_to)

@@ -16,10 +16,12 @@
 {% block empty-row-colspan %}4{% endblock %}
 
 {% block row-buttons-extra %}
-<a class="btn btn-default btn-sm" href="#" role="button">
-    <i class="fa fa-star-o text-warning"></i>
-    <span class="hidden-xs hidden-sm">&nbsp;{% trans "Favourite" %}</span>
+{% if obj.live_stream %}
+<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:competition:season:authorize' obj.competition.pk obj.pk %}" role="button">
+    <i class="fa fa-youtube"></i>
+    <span class="hidden-xs hidden-sm">&nbsp;{% trans "YouTube" %}</span>
 </a>
+{% endif %}
 <a class="btn btn-default btn-sm" href="{% url 'admin:fixja:competition:season:report' obj.competition.pk obj.pk %}" role="button">
     <i class="fa fa-paperclip"></i>
     <span class="hidden-xs hidden-sm">&nbsp;{% trans "Report" %}</span>

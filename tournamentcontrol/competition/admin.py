@@ -4,8 +4,6 @@ import functools
 import logging
 import operator
 
-import httplib2
-from apiclient.discovery import build
 from dateutil.relativedelta import relativedelta
 from django.apps import apps
 from django.conf import settings
@@ -20,7 +18,6 @@ from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _, ngettext
 from googleapiclient.errors import HttpError
-from oauth2client.contrib.django_util import get_storage
 
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.common.decorators import (
@@ -382,6 +379,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             [
                 path("add/", self.edit_season, name="add"),
                 path("<int:season_id>/", self.edit_season, name="edit"),
+                path(
+                    "<int:season_id>/authorize", self.oauth_authorize, name="authorize"
+                ),
+                path("<int:season_id>/callback", self.oauth_callback, name="callback"),
                 path("<int:season_id>/delete/", self.delete_season, name="delete"),
                 path(
                     "<int:season_id>/reschedule/",
@@ -826,6 +827,65 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
+    def oauth_authorize(self, request, competition, season, **kwargs):
+        if not (
+            season.live_stream_client_id
+            and season.live_stream_client_secret
+            and season.live_stream_project_id
+        ):
+            messages.error(request, "OAuth2 application is not configured.")
+            return self.redirect(season.urls["edit"])
+        flow = season.flow()
+        flow.redirect_uri = request.build_absolute_uri(
+            self.reverse(
+                "competition:season:callback", args=(competition.pk, season.pk)
+            )
+        )
+        authorization_url, state = flow.authorization_url(
+            # Enable offline access so that you can refresh an access token without
+            # re-prompting the user for permission.
+            access_type="offline",
+            # Provide a hint to the Google Authentication Server. This is an
+            # authenticated page so provide the user email address.
+            login_hint=request.user.email,
+            # Prompt the user to select an account.
+            prompt="consent",  # Needs to be consent to get refresh token?
+        )
+        request.session["oauth_state"] = state
+        return self.redirect(authorization_url)
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def oauth_callback(self, request, competition, season, **kwargs):
+        state = request.session["oauth_state"]
+        flow = season.flow(state=state)
+        flow.redirect_uri = request.build_absolute_uri(
+            self.reverse(
+                "competition:season:callback", args=(competition.pk, season.pk)
+            )
+        )
+        authorization_response = (
+            f"{request.build_absolute_uri(request.path)}?{request.META['QUERY_STRING']}"
+        )
+        flow.fetch_token(authorization_response=authorization_response)
+        season.live_stream_refresh_token = flow.credentials.refresh_token
+        season.live_stream_token_uri = flow.credentials.token_uri
+        season.live_stream_client_id = flow.credentials.client_id
+        season.live_stream_client_secret = flow.credentials.client_secret
+        season.live_stream_scopes = flow.credentials.scopes
+        season.save(
+            update_fields=[
+                "live_stream_refresh_token",
+                "live_stream_token_uri",
+                "live_stream_client_id",
+                "live_stream_client_secret",
+                "live_stream_scopes",
+            ]
+        )
+        return self.redirect(season.urls["edit"])
+
+    @competition_by_pk_m
+    @staff_login_required_m
     def delete_season(self, request, extra_context, season, **kwargs):
         return self.generic_delete(
             request,
@@ -1017,12 +1077,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             ground.latlng = venue.latlng
 
         def pre_save_callback(obj: Ground):
-            storage = get_storage(request)
-            credentials = storage.get()
-
-            if credentials is None or credentials.invalid:
-                return self.redirect(reverse("google_oauth:authorize"))
-
             body = {
                 "snippet": {
                     "title": f"{venue.season.competition} {venue.season} ({obj.title})",
@@ -1034,16 +1088,12 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 },
             }
 
-            youtube = build(
-                "youtube", "v3", http=credentials.authorize(httplib2.Http())
-            )
-
             try:
                 stream = None
                 if obj.external_identifier:
                     if not obj.live_stream:
                         stream_id = obj.external_identifier
-                        youtube.liveStreams().delete(
+                        season.youtube.liveStreams().delete(
                             id=obj.external_identifier
                         ).execute()
                         obj.external_identifier = None
@@ -1053,7 +1103,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     else:
                         body["id"] = obj.external_identifier
                         stream = (
-                            youtube.liveStreams()
+                            season.youtube.liveStreams()
                             .update(part="snippet,cdn", body=body)
                             .execute()
                         )
@@ -1061,7 +1111,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
                 elif obj.live_stream:
                     stream = (
-                        youtube.liveStreams()
+                        season.youtube.liveStreams()
                         .insert(part="snippet,cdn", body=body)
                         .execute()
                     )
@@ -1514,17 +1564,13 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 },
             }
 
-            youtube = build(
-                "youtube", "v3", http=credentials.authorize(httplib2.Http())
-            )
-
             try:
                 if obj.external_identifier:
                     # If we have disabled live-streaming where it was previously
                     # enabled, we need to remove it using the YouTube API.
                     if not obj.live_stream:
                         video_id = obj.external_identifier
-                        youtube.liveBroadcasts().delete(id=video_id).execute()
+                        season.youtube.liveBroadcasts().delete(id=video_id).execute()
                         if obj.videos is not None:
                             obj.videos.remove(f"https://youtu.be/{video_id}")
                         if not obj.videos:
@@ -1538,7 +1584,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     else:
                         body["id"] = obj.external_identifier
                         broadcast = (
-                            youtube.liveBroadcasts()
+                            season.youtube.liveBroadcasts()
                             .update(part="snippet,status,contentDetails", body=body)
                             .execute()
                         )
@@ -1549,7 +1595,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 # id.
                 elif obj.live_stream:
                     broadcast = (
-                        youtube.liveBroadcasts()
+                        season.youtube.liveBroadcasts()
                         .insert(part="id,snippet,status,contentDetails", body=body)
                         .execute()
                     )
@@ -1565,7 +1611,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 # We need to bind to a liveStream resource. This is only supported on
                 # a Ground, not a Venue.
                 bind = (
-                    youtube.liveBroadcasts()
+                    season.youtube.liveBroadcasts()
                     .bind(
                         part="id,snippet,contentDetails,status",
                         id=obj.external_identifier,

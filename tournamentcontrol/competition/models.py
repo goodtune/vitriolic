@@ -7,6 +7,8 @@ import logging
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 
 import django
 import pytz
@@ -28,6 +30,7 @@ from django.utils import timezone
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
+from google_auth_oauthlib.flow import Flow
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
 from touchtechnology.common.db.models import (
@@ -543,6 +546,14 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         default=LiveStreamPrivacy.PRIVATE,
     )
 
+    live_stream_project_id = models.CharField(max_length=100, blank=True, null=True)
+    live_stream_client_id = models.CharField(max_length=200, blank=True, null=True)
+    live_stream_client_secret = models.CharField(max_length=100, blank=True, null=True)
+    live_stream_token = models.CharField(max_length=1000, null=True)
+    live_stream_refresh_token = models.CharField(max_length=200, null=True)
+    live_stream_token_uri = models.URLField(null=True)
+    live_stream_scopes = PG.ArrayField(models.CharField(max_length=200), null=True)
+
     complete = BooleanField(
         default=False,
         help_text=_(
@@ -587,6 +598,45 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 
     def __repr__(self):
         return "<Season: {} - {}>".format(self.competition, self)
+
+    def flow(self, **kwargs):
+        "Generate an authorization Flow"
+        return Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": self.live_stream_client_id,
+                    "project_id": self.live_stream_project_id,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                    "client_secret": self.live_stream_client_secret,
+                    "redirect_uris": [],
+                }
+            },
+            scopes=[
+                "https://www.googleapis.com/auth/youtube",
+                "https://www.googleapis.com/auth/youtube.force-ssl",
+                "https://www.googleapis.com/auth/youtube.readonly",
+                "https://www.googleapis.com/auth/youtube.upload",
+                "https://www.googleapis.com/auth/youtubepartner",
+            ],
+            **kwargs,
+        )
+
+    @cached_property
+    def youtube(self):
+        return build(
+            "youtube",
+            "v3",
+            credentials=Credentials(
+                client_id=self.live_stream_client_id,
+                client_secret=self.live_stream_client_secret,
+                token=self.live_stream_token,
+                refresh_token=self.live_stream_refresh_token,
+                token_uri=self.live_stream_token_uri,
+                scopes=self.live_stream_scopes,
+            ),
+        )
 
     @property
     def datetimes(self):
