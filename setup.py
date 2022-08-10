@@ -59,6 +59,7 @@ setup(
             "djangorestframework>=3.11",
             "drf-nested-routers",
             "google-api-python-client",
+            "google-auth-oauthlib",
             "icalendar",
             "internationaltouch-oauth2client",
             "pyparsing",
