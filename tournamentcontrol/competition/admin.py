@@ -1516,12 +1516,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             match = Match(stage=stage, include_in_ladder=stage.keep_ladder)
 
         def pre_save_callback(obj: Match):
-            storage = get_storage(request)
-            credentials = storage.get()
-
-            if credentials is None or credentials.invalid:
-                return self.redirect(reverse("google_oauth:authorize"))
-
             if obj.label:
                 title = f"{division} | {obj.label}: {obj.get_home_team_plain()} vs {obj.get_away_team_plain()} | {competition} {season}"
             else:
