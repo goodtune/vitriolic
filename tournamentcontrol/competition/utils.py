@@ -102,21 +102,29 @@ class SumDict(dict):
 #
 
 
-def ceiling(value, factor=1):
+def ceiling(
+    value: Union[Decimal, int, float],
+    factor: Union[Decimal, int, float] = 1,
+) -> Decimal:
     """
-    For a Decimal value, round it up to the nearest multiple of ``factor``.
+    For a numerical ``value``, round it up to the nearest multiple of ``factor``.
 
+        >>> ceiling(Decimal("3.5"))
+        Decimal('4')
+        >>> ceiling(13, 5)
+        Decimal('15')
         >>> ceiling(3.5)
         Decimal('4')
-        >>> ceiling(3.5, 0.75)
+        >>> ceiling(3.5, Decimal("0.75"))
         Decimal('3.75')
 
     :param value: number to be rounded up
     :param factor: multiplier to round up to
-    :return: Decimal
     """
-    value = Decimal(str(value))
-    factor = Decimal(str(factor))
+    if not isinstance(value, Decimal):
+        value = Decimal(str(value))
+    if not isinstance(factor, Decimal):
+        factor = Decimal(str(factor))
     return (value / factor).quantize(1, rounding="ROUND_UP") * factor
 
 
