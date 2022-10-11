@@ -289,14 +289,14 @@ def final_series_rounds(pools):
     return rounds + 1
 
 
-def final_series_round_label(number_of_matches):
-    if number_of_matches >= 8:
-        return "Round of %d" % (number_of_matches * 2)
-    if number_of_matches == 4:
-        return "Quarter Final"
+def final_series_round_label(number_of_matches: int) -> str:
     if number_of_matches == 2:
-        return "Semi Final"
-    return "Final"
+        return _("Semi Final")
+    if number_of_matches == 4:
+        return _("Quarter Final")
+    if number_of_matches >= 8:
+        return _("Round of %d") % (number_of_matches * 2)
+    return _("Final")
 
 
 def single_elimination_final_format(number_of_pools, bronze_playoff=None):
