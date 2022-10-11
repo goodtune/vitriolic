@@ -1,5 +1,6 @@
 import collections
 import logging
+import math
 import re
 from datetime import datetime
 from decimal import Decimal
@@ -156,28 +157,34 @@ def floor(
     return (value / factor).quantize(1, rounding="ROUND_DOWN") * factor
 
 
-def revpow(n, base):
+def revpow(n: int, base: int) -> int:
     """
     Reverse of ``pow`` built-in function.
 
-        >>> for i in range(4):
-        ...     revpow(pow(2, i), 2) == i
-        ...
-        True
-        True
-        True
-        True
+        >>> revpow(1, 2)
+        0
+        >>> revpow(2, 2)
+        1
+        >>> revpow(4, 2)
+        2
+        >>> revpow(8, 2)
+        3
+        >>> revpow(16, 2)
+        4
+        >>> revpow(32, 2)
+        5
+        >>> revpow(3, 2)
+        Traceback (most recent call last):
+          ...
+        ValueError: 3 is not a power of 2
 
     :param n: number that is a power of base
     :param base: the base
-    :return: int
     """
-    res = 0
-    intermediate = n // base
-    if intermediate:
-        res += 1
-        res += revpow(intermediate, base)
-    return res
+    res: float = math.log(n, base)
+    if not res.is_integer():
+        raise ValueError(f"{n} is not a power of {base}")
+    return int(res)
 
 
 #
