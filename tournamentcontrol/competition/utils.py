@@ -128,21 +128,31 @@ def ceiling(
     return (value / factor).quantize(1, rounding="ROUND_UP") * factor
 
 
-def floor(value, factor=1):
+def floor(
+    value: Union[Decimal, int, float],
+    factor: Union[Decimal, int, float] = 1,
+):
     """
-    For a Decimal value, round it down to the nearest multiple of ``factor``.
+    For a numeric ``value``, round it down to the nearest multiple of ``factor``.
 
+        >>> floor(Decimal("3.5"), Decimal("1.5"))
+        Decimal('3.0')
+        >>> floor(3, 2)
+        Decimal('2')
         >>> floor(3.5)
         Decimal('3')
+        >>> floor(Decimal("3.5"), 1.5)
+        Decimal('3.0')
         >>> floor(2.5, 0.6)
         Decimal('2.4')
 
     :param value: number to be rounded down
     :param factor: multiplier to round down to
-    :return: Decimal
     """
-    value = Decimal(str(value))
-    factor = Decimal(str(factor))
+    if not isinstance(value, Decimal):
+        value = Decimal(str(value))
+    if not isinstance(factor, Decimal):
+        factor = Decimal(str(factor))
     return (value / factor).quantize(1, rounding="ROUND_DOWN") * factor
 
 
