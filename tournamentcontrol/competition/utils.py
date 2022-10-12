@@ -275,17 +275,28 @@ def round_robin_format(teams, rounds=None):
     return s.strip()
 
 
-def final_series_rounds(pools):
+def final_series_rounds(pools: int) -> int:
     """
-    For a given number of pools determine the correct number of rounds to
-    play in a final series to fairly determine a winner.
+    For a given number of pools, determine the correct number of rounds to play in a
+    final series to fairly determine a winner.
 
-    :param pools: number of pools
-    :return: int
+        >>> final_series_rounds(1)
+        1
+        >>> final_series_rounds(2)
+        2
+        >>> final_series_rounds(3)  # stupid number
+        Traceback (most recent call last):
+          ...
+        ValueError: Number of pools (3) is not a power of 2.
+        >>> final_series_rounds(4)
+        3
+        >>> final_series_rounds(8)
+        4
     """
-    rounds = revpow(pools, 2)
-    if rounds <= 1:
-        return 2
+    try:
+        rounds = revpow(pools, 2)
+    except ValueError as exc:
+        raise ValueError(f"Number of pools ({pools}) is not a power of 2.") from exc
     return rounds + 1
 
 
