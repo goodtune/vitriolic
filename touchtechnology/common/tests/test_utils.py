@@ -1,6 +1,4 @@
-from __future__ import unicode_literals
-
-import mock
+from unittest import mock
 from test_plus import TestCase
 from touchtechnology.common.forms.fields import boolean_choice_field_coerce
 from touchtechnology.common.forms.tz import timezone_choice
@@ -8,7 +6,6 @@ from touchtechnology.common.utils import get_base_url, get_mod_func
 
 
 class BooleanChoiceFieldCoerce(TestCase):
-
     def test_true_boolean(self):
         result = boolean_choice_field_coerce(True)
         self.assertTrue(result)
@@ -49,21 +46,19 @@ class GetModFunc(TestCase):
 
 
 class TimeZoneChoice(TestCase):
-
     def test_one_part(self):
-        self.assertEqual(
-            timezone_choice('UTC'),
-            ('UTC', 'UTC'))
+        self.assertEqual(timezone_choice("UTC"), ("UTC", "UTC"))
 
     def test_two_parts(self):
         self.assertEqual(
-            timezone_choice('Australia/Sydney'),
-            ('Australia/Sydney', 'Sydney'))
+            timezone_choice("Australia/Sydney"), ("Australia/Sydney", "Sydney")
+        )
 
     def test_three_parts(self):
         self.assertEqual(
-            timezone_choice('America/Indiana/Indianapolis'),
-            ('America/Indiana/Indianapolis', 'Indianapolis (Indiana)'))
+            timezone_choice("America/Indiana/Indianapolis"),
+            ("America/Indiana/Indianapolis", "Indianapolis (Indiana)"),
+        )
 
 
 class GetBaseUrl(TestCase):
