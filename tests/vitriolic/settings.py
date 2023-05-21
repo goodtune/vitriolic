@@ -101,7 +101,6 @@ TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
         "DIRS": [],
-        "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
                 "django.template.context_processors.debug",
@@ -116,6 +115,10 @@ TEMPLATES = [
                 "touchtechnology.common.context_processors.query_string",
                 "touchtechnology.common.context_processors.site",
                 "touchtechnology.common.context_processors.tz",
+            ],
+            "loaders": [
+                "django.template.loaders.filesystem.Loader",
+                "django.template.loaders.app_directories.Loader",
             ],
         },
     },

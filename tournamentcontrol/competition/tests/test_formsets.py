@@ -8,7 +8,7 @@ from tournamentcontrol.competition.tests import factories
 
 class DrawGenerationMatchFormSetTest(TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpTestData(cls):
         cls.superuser = UserFactory.create(is_staff=True, is_superuser=True)
 
         factories.DrawFormatFactory.reset_sequence()
@@ -19,10 +19,6 @@ class DrawGenerationMatchFormSetTest(TestCase):
 
         factories.TeamFactory.reset_sequence()
         cls.teams = factories.TeamFactory.create_batch(4, division=cls.stage.division)
-
-    @classmethod
-    def tearDownClass(cls):
-        pass
 
     def test_draw_format_name(self):
         self.assertEqual(self.draw_format.name, "Round Robin (3/4 teams)")
@@ -114,11 +110,13 @@ class DrawGenerationMatchFormSetTest(TestCase):
                 "<Match: 3: %s vs %s>" % (team1, team2),
                 "<Match: 3: %s vs %s>" % (team3, team4),
             ],
+            transform=repr,
         )
 
     def test_draw_generation_match_form_set_progression_save(self):
         stage = factories.StageFactory.create(
-            division=self.stage.division, follows=self.stage,
+            division=self.stage.division,
+            follows=self.stage,
         )
 
         draw_format = factories.DrawFormatFactory.create(
