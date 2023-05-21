@@ -1,0 +1,65 @@
+[project]
+name = "vitriolic"
+urls = { "Source Code" = "https://github.com/goodtune/vitriolic" }
+description = "A suite of packages for the Django framework to provide integrated Content Management and Sports Administration functionality for sporting associations."
+readme = "README.md"
+license = { "type" = "BSD-3-Clause", "file" = "LICENSE" }
+authors = [
+    { "name" = "Gary Reynolds", "email" = "gary@touch.asn.au" }
+]
+classifiers = []
+requires-python = ">=3.6"
+dependencies = [
+    "django-classy-tags<0.9",
+    "django-froala-editor>=2.9",
+    "django-guardian>=2.4",
+    "django-modelforms",
+    "django-mptt",
+    "django>=3.2",
+    "first",
+    'importlib-metadata;python_version<"3.7"',
+    "namedentities",
+    "pillow",
+    "psycopg2-binary",
+    "python-dateutil",
+    "pytz",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+test = ["coverage", "django-environ", "django-test-plus", "factory_boy", "freezegun"]
+redis = ["django-redis-cache", "redis"]
+admin = ["django-bootstrap3", "django-gravatar2"]
+content = []
+news = ["django-imagekit", "python-magic"]
+competition = ["celery", "cloudinary", "django-embed-video", "django-formtools", "django-mathfilters", "djangorestframework>3.11", "drf-nested-routers", "icalendar", "pyparsing"]
+
+[build-system]
+requires = ["setuptools>=61", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+zip-safe = false
+
+[tool.setuptools.packages.find]
+include = ["touchtechnology*", "tournamentcontrol*"]
+
+[tool.setuptools_scm]
+
+[tool.isort]
+combine_as_imports = true
+default_section = "THIRDPARTY"
+include_trailing_comma = true
+multi_line_output = 5
+
+[tool.mypy]
+exclude = ["migrations", "tests"]
+max-line-length = 88
+
+[tool.mypy.plugins.django-stubs]
+django_settings_module = "vitriolic.settings"
+
+[tool.black]
+line-length = 88
+target-version = ["py36", "py39", "py312"]

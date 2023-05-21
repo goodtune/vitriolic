@@ -123,6 +123,7 @@ class TestPermissionFormSet(TestCase):
         self.assertQuerysetEqual(
             formset.forms[0].fields["users"].queryset,
             (repr(o) for o in self.UserModel.objects.filter(is_staff=True)),
+            transform=repr,
         )
 
     def test_all_users(self):
@@ -131,6 +132,7 @@ class TestPermissionFormSet(TestCase):
         self.assertQuerysetEqual(
             formset.forms[0].fields["users"].queryset.order_by("pk"),
             (repr(o) for o in self.UserModel.objects.order_by("pk")),
+            transform=repr,
         )
 
     def test_user_widget_checkbox_lte(self):

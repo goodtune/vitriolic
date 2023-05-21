@@ -1451,9 +1451,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         for key, val in request.GET.items():
             extra_context.setdefault(key, val)
 
-        return generate_fixture_grid(
-            season, format=mode, request=request, extra_context=extra_context
-        )
+        return generate_fixture_grid(season, format=mode, extra_context=extra_context)
 
     @competition_by_pk_m
     @csrf_exempt_m
@@ -1462,7 +1460,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         return generate_fixture_grid(
             season,
             format=mode,
-            request=request,
             extra_context=extra_context,
             dates=[date],
         )

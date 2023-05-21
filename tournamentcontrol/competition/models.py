@@ -887,7 +887,7 @@ class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     def teams(self):
         if self.order > 1:
             team_ids = set()
-            for (home_team, away_team) in self.matches.values_list(
+            for home_team, away_team in self.matches.values_list(
                 "home_team", "away_team"
             ):
                 if home_team is not None:
@@ -1906,7 +1906,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         return self.title
 
     def __repr__(self):
-        return "<Match: %s: %s>" % (self.round, self)
+        return f"<Match: {self.round!s}: {self!s}>"
 
 
 class LadderBase(models.Model):

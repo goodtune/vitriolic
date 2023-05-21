@@ -401,7 +401,7 @@ def generate_scorecards(
     format="html",
     extra_context=None,
     stage=None,
-    **kwargs
+    **kwargs,
 ):
     if extra_context is None:
         extra_context = {}
@@ -429,10 +429,18 @@ def generate_fixture_grid(
     dates=None,
     templates=None,
     format="html",
-    request=None,
     extra_context=None,
-    **kwargs
+    **kwargs,
 ):
+    logger.info(
+        "season=%r dates=%r templates=%r format=%r extra_context=%r kwargs=%r",
+        season,
+        dates,
+        templates,
+        format,
+        extra_context,
+        kwargs,
+    )
     if dates is None:
         dates = season.matches.dates("date", "day")
 
