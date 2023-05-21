@@ -402,6 +402,7 @@ class Application(object):
         form_kwargs=None,
         form_fields="__all__",
         form_widgets=None,
+        pre_save_callback=lambda o: o,
         post_save_callback=lambda o: None,
         post_save_redirect=None,
         templates=None,
@@ -413,6 +414,7 @@ class Application(object):
         return_403=None,
         related=None,
         extra_context=None,
+        always_save=False,
     ):
 
         model, manager = model_and_manager(model_or_manager)
@@ -501,7 +503,10 @@ class Application(object):
                     model=smart_str(model._meta.verbose_name),
                     models=smart_str(model._meta.verbose_name_plural),
                 )
-                if form.has_changed():
+                if always_save or form.has_changed():
+                    res = pre_save_callback(form.instance)
+                    if isinstance(res, HttpResponse):
+                        return res
                     obj = form.save()
                     callback_res = post_save_callback(obj)
                     for level, message in changed_messages:

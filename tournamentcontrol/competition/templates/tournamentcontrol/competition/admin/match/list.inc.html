@@ -5,6 +5,7 @@
 	<th>{% trans "ID" %}</th>
 	<th>{% trans "Date" %}</th>
 	<th>{% trans "Time" %}</th>
+	<th>{% trans "Play at" %}</th>
 	<th>{% trans "Home Team" %}</th>
 	<th>{% trans "Away Team" %}</th>
 	<th>{% trans "Videos" %}</th>
@@ -21,8 +22,9 @@
 	</td>
 	<td>{{ obj.date|default_if_none:tbc }}</td>
 	<td>{{ obj.time|default_if_none:tbc }}</td>
-	<td>{{ obj.get_home_team.title }}</td>
-	<td>{{ obj.get_away_team.title }}</td>
+	<td>{{ obj.play_at|default_if_none:"-" }}</td>
+	<td>{{ obj.get_home_team_plain }}</td>
+	<td>{{ obj.get_away_team_plain }}</td>
 	<td>{{ obj.videos|length }}</td>
 {% endblock %}
 

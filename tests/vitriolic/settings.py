@@ -182,6 +182,12 @@ USE_TZ = True
 STATIC_URL = "/static/"
 
 
+# OAuth2
+
+GOOGLE_OAUTH2_CLIENT_ID = ""
+GOOGLE_OAUTH2_CLIENT_SECRET = ""
+
+
 # Logging setup. Adjust handlers as required.
 
 LOGGING = {

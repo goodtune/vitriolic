@@ -32,7 +32,20 @@ redis = ["django-redis-cache", "redis"]
 admin = ["django-bootstrap3", "django-gravatar2"]
 content = []
 news = ["django-imagekit", "python-magic"]
-competition = ["celery", "cloudinary", "django-embed-video", "django-formtools", "django-mathfilters", "djangorestframework>3.11", "drf-nested-routers", "icalendar", "pyparsing"]
+competition = [
+    "celery",
+    "cloudinary",
+    "django-embed-video",
+    "django-formtools",
+    "django-mathfilters",
+    "djangorestframework>3.11",
+    "drf-nested-routers",
+    "google-api-python-client",
+    "google-auth-oauthlib",
+    "icalendar",
+    "internationaltouch-oauth2client",
+    "pyparsing",
+]
 
 [build-system]
 requires = ["setuptools>=61", "setuptools_scm[toml]>=6.2"]
