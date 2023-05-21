@@ -4,7 +4,8 @@ import math
 import re
 from datetime import datetime
 from decimal import Decimal
-from operator import and_, attrgetter, or_
+from operator import and_, or_
+from typing import Union
 
 import pytz
 from django.apps import apps
@@ -13,6 +14,8 @@ from django.db.models import F, Q
 from django.http import HttpResponse
 from django.template.loader import select_template
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
+
 from touchtechnology.common.prince import prince
 
 try:
