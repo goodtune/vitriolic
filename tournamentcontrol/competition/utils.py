@@ -1,9 +1,11 @@
 import collections
 import logging
+import math
 import re
 from datetime import datetime
 from decimal import Decimal
-from operator import and_, attrgetter, or_
+from operator import and_, or_
+from typing import Union
 
 import pytz
 from django.apps import apps
@@ -12,6 +14,8 @@ from django.db.models import F, Q
 from django.http import HttpResponse
 from django.template.loader import select_template
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
+
 from touchtechnology.common.prince import prince
 
 try:
@@ -102,64 +106,88 @@ class SumDict(dict):
 #
 
 
-def ceiling(value, factor=1):
+def ceiling(
+    value: Union[Decimal, int, float],
+    factor: Union[Decimal, int, float] = 1,
+) -> Decimal:
     """
-    For a Decimal value, round it up to the nearest multiple of ``factor``.
+    For a numerical ``value``, round it up to the nearest multiple of ``factor``.
 
+        >>> ceiling(Decimal("3.5"))
+        Decimal('4')
+        >>> ceiling(13, 5)
+        Decimal('15')
         >>> ceiling(3.5)
         Decimal('4')
-        >>> ceiling(3.5, 0.75)
+        >>> ceiling(3.5, Decimal("0.75"))
         Decimal('3.75')
 
     :param value: number to be rounded up
     :param factor: multiplier to round up to
-    :return: Decimal
     """
-    value = Decimal(str(value))
-    factor = Decimal(str(factor))
+    if not isinstance(value, Decimal):
+        value = Decimal(str(value))
+    if not isinstance(factor, Decimal):
+        factor = Decimal(str(factor))
     return (value / factor).quantize(1, rounding="ROUND_UP") * factor
 
 
-def floor(value, factor=1):
+def floor(
+    value: Union[Decimal, int, float],
+    factor: Union[Decimal, int, float] = 1,
+):
     """
-    For a Decimal value, round it down to the nearest multiple of ``factor``.
+    For a numeric ``value``, round it down to the nearest multiple of ``factor``.
 
+        >>> floor(Decimal("3.5"), Decimal("1.5"))
+        Decimal('3.0')
+        >>> floor(3, 2)
+        Decimal('2')
         >>> floor(3.5)
         Decimal('3')
+        >>> floor(Decimal("3.5"), 1.5)
+        Decimal('3.0')
         >>> floor(2.5, 0.6)
         Decimal('2.4')
 
     :param value: number to be rounded down
     :param factor: multiplier to round down to
-    :return: Decimal
     """
-    value = Decimal(str(value))
-    factor = Decimal(str(factor))
+    if not isinstance(value, Decimal):
+        value = Decimal(str(value))
+    if not isinstance(factor, Decimal):
+        factor = Decimal(str(factor))
     return (value / factor).quantize(1, rounding="ROUND_DOWN") * factor
 
 
-def revpow(n, base):
+def revpow(n: int, base: int) -> int:
     """
     Reverse of ``pow`` built-in function.
 
-        >>> for i in range(4):
-        ...     revpow(pow(2, i), 2) == i
-        ...
-        True
-        True
-        True
-        True
+        >>> revpow(1, 2)
+        0
+        >>> revpow(2, 2)
+        1
+        >>> revpow(4, 2)
+        2
+        >>> revpow(8, 2)
+        3
+        >>> revpow(16, 2)
+        4
+        >>> revpow(32, 2)
+        5
+        >>> revpow(3, 2)
+        Traceback (most recent call last):
+          ...
+        ValueError: 3 is not a power of 2
 
     :param n: number that is a power of base
     :param base: the base
-    :return: int
     """
-    res = 0
-    intermediate = n // base
-    if intermediate:
-        res += 1
-        res += revpow(intermediate, base)
-    return res
+    res: float = math.log(n, base)
+    if not res.is_integer():
+        raise ValueError(f"{n} is not a power of {base}")
+    return int(res)
 
 
 #
@@ -250,28 +278,39 @@ def round_robin_format(teams, rounds=None):
     return s.strip()
 
 
-def final_series_rounds(pools):
+def final_series_rounds(pools: int) -> int:
     """
-    For a given number of pools determine the correct number of rounds to
-    play in a final series to fairly determine a winner.
+    For a given number of pools, determine the correct number of rounds to play in a
+    final series to fairly determine a winner.
 
-    :param pools: number of pools
-    :return: int
+        >>> final_series_rounds(1)
+        1
+        >>> final_series_rounds(2)
+        2
+        >>> final_series_rounds(3)  # stupid number
+        Traceback (most recent call last):
+          ...
+        ValueError: Number of pools (3) is not a power of 2.
+        >>> final_series_rounds(4)
+        3
+        >>> final_series_rounds(8)
+        4
     """
-    rounds = revpow(pools, 2)
-    if rounds <= 1:
-        return 2
+    try:
+        rounds = revpow(pools, 2)
+    except ValueError as exc:
+        raise ValueError(f"Number of pools ({pools}) is not a power of 2.") from exc
     return rounds + 1
 
 
-def final_series_round_label(number_of_matches):
-    if number_of_matches >= 8:
-        return "Round of %d" % (number_of_matches * 2)
-    if number_of_matches == 4:
-        return "Quarter Final"
+def final_series_round_label(number_of_matches: int) -> str:
     if number_of_matches == 2:
-        return "Semi Final"
-    return "Final"
+        return _("Semi Final")
+    if number_of_matches == 4:
+        return _("Quarter Final")
+    if number_of_matches >= 8:
+        return _("Round of %d") % (number_of_matches * 2)
+    return _("Final")
 
 
 def single_elimination_final_format(number_of_pools, bronze_playoff=None):
