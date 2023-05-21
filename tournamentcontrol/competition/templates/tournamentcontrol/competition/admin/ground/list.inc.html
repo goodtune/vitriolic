@@ -1,0 +1,28 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	<th>{% trans "Title" %}</th>
+    <th>{% trans "Abbreviation" %}</th>
+    {% if obj.venue.season.live_stream %}
+        <th>{% trans "Streaming" %}</th>
+    {% endif %}
+{% endblock %}
+
+{% block table-columns %}
+	<td>
+		{% if change_perm in object_perms %}
+			<a href="{{ obj.urls.edit }}">{{ obj.title|default:obj.pk }}</a>&nbsp;
+		{% else %}
+			<span>{{ obj.title|default:obj.pk }}</span>
+		{% endif %}
+	</td>
+    <td>{{ obj.abbreviation }}</td>
+    {% if obj.venue.season.live_stream %}
+        <td>
+            {% if obj.external_identifier %}<em class="fa fa-youtube"></em> {{ obj.stream_key }}{% endif %}
+        </td>
+    {% endif %}
+{% endblock %}
+
+{% block empty-row-colspan %}{{ obj.venue.season.live_stream|yesno:"4,3" }}{% endblock %}

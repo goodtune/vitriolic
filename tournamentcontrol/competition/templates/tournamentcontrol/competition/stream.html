@@ -1,0 +1,40 @@
+{% extends "tournamentcontrol/competition/season.html" %}
+{% load i18n tz %}
+
+{% block content %}
+	{% regroup datetimes by date as dates %}
+
+	<h2>{% trans "Live Stream Control Panel" %}</h2>
+
+    {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+                <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>
+                    {% if message.level == DEFAULT_MESSAGE_LEVELS.ERROR %}Important: {% endif %}
+                    {{ message }}
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+	{% block streams %}
+		{% timezone season.timezone %}
+			<ul>
+				{% for group in dates %}
+					<li>
+						<a href="{% url application.name|add:":stream" competition=competition.slug season=season.slug datestr=group.grouper|date:"Ymd" %}">{{ group.grouper|date:"l jS F" }}</a>
+						<ul>
+							{% for datetime in group.list %}
+								<li>
+									<a href="{% url application.name|add:":stream-control" competition=competition.slug season=season.slug datestr=datetime|date:"Ymd" timestr=datetime|time:"Hi" %}">
+										{{ datetime|time }}
+									</a>
+								</li>
+							{% endfor %}
+						</ul>
+					</li>
+				{% endfor %}
+			</ul>
+		{% endtimezone %}
+	{% endblock streams %}
+{% endblock %}

@@ -9,6 +9,7 @@ from dateutil.parser import parse
 from dateutil.rrule import DAILY, WEEKLY
 from django import forms
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.forms import array as PGA
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
@@ -18,8 +19,8 @@ from django.forms.formsets import (
     DELETION_FIELD_NAME,
     INITIAL_FORM_COUNT,
     MAX_NUM_FORM_COUNT,
-    TOTAL_FORM_COUNT,
     ManagementForm,
+    TOTAL_FORM_COUNT,
     formset_factory,
 )
 from django.forms.models import (
@@ -30,8 +31,10 @@ from django.forms.models import (
 )
 from django.urls import reverse_lazy
 from django.utils import timezone
+from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _, ngettext
 from first import first
+from googleapiclient.errors import HttpError
 from modelforms.forms import ModelForm
 from pyparsing import ParseException
 
@@ -307,7 +310,6 @@ class PersonEditForm(BootstrapFormControlMixin, ModelForm):
 
 
 class PersonMergeForm(PersonEditForm):
-
     merge = ModelMultipleChoiceField(
         label=_("Duplicates"),
         queryset=Person.objects.all(),
@@ -378,6 +380,11 @@ class SeasonForm(
             "copy",
             "hashtag",
             "enabled",
+            "live_stream",
+            "live_stream_privacy",
+            "live_stream_project_id",
+            "live_stream_client_id",
+            "live_stream_client_secret",
             "timezone",
             "start_date",
             "mode",
@@ -390,10 +397,32 @@ class SeasonForm(
         )
         labels = {
             "copy": _("Notes (Public)"),
+            "live_stream_project_id": _("Project ID"),
+            "live_stream_client_id": _("Client ID"),
         }
         help_texts = {
             "copy": _("Optional. Will be displayed in the front end if provided."),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["live_stream_client_secret"] = forms.CharField(
+            label=_("Client Secret"),
+            widget=forms.PasswordInput,
+            help_text=_("Leave this blank to retain the previously set value."),
+            required=False,
+        )
+        self.fields["live_stream_client_secret"].widget.attrs["class"] = "form-control"
+        self.fields["live_stream_client_secret"].widget.attrs["placeholder"] = "*" * 10
+
+    def clean_live_stream_client_secret(self):
+        project_id = self.cleaned_data.get("live_stream_project_id")
+        client_id = self.cleaned_data.get("live_stream_client_id")
+        data = self.cleaned_data.get("live_stream_client_secret")
+        original = self.instance.live_stream_client_secret
+        if not data and original and (project_id or client_id):
+            return original
+        return data
 
 
 class VenueForm(SuperUserSlugMixin, TimezoneMixin, ModelForm):
@@ -424,10 +453,16 @@ class GroundForm(SuperUserSlugMixin, TimezoneMixin, ModelForm):
             "latlng",
             "slug",
             "slug_locked",
+            "live_stream",
         )
         labels = {
             "latlng": _("Map"),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.venue.season.live_stream:
+            self.fields.pop("live_stream")
 
 
 BaseGroundFormSet = inlineformset_factory(
@@ -529,7 +564,6 @@ class StageForm(SuperUserSlugMixin, ModelForm):
 
 
 class StageGroupForm(SuperUserSlugMixin, ModelForm):
-
     teams = ModelMultipleChoiceField(queryset=None)
 
     def __init__(self, *args, **kwargs):
@@ -1033,6 +1067,29 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
             "date",
             "include_in_ladder",
             "videos",
+        )
+        labels = {
+            "home_team_undecided": _("Home team"),
+            "away_team_undecided": _("Away team"),
+        }
+
+
+class MatchStreamForm(MatchEditForm):
+    class Meta:
+        model = Match
+        fields = (
+            "stage_group",
+            "home_team",
+            "away_team",
+            "home_team_undecided",
+            "away_team_undecided",
+            "referees",
+            "label",
+            "round",
+            "date",
+            "include_in_ladder",
+            "live_stream",
+            # "external_identifier",
         )
         labels = {
             "home_team_undecided": _("Home team"),
@@ -1561,14 +1618,13 @@ class ProgressTeamsFormSet(BaseProgressTeamsFormSet):
 
     def save(self, *args, **kwargs):
         res = super(ProgressTeamsFormSet, self).save(*args, **kwargs)
-        self.stage.matches_needing_printing = self.stage.matches.exclude(
-            legitimate_bye_match
+        self.stage.matches_needing_printing.set(
+            self.stage.matches.exclude(legitimate_bye_match)
         )
         return res
 
 
 class DrawGenerationForm(BootstrapFormControlMixin, forms.Form):
-
     start_date = SelectDateField()
     format = ModelChoiceField(queryset=DrawFormat.objects.all())
     rounds = forms.IntegerField(required=False, min_value=1)
@@ -1917,7 +1973,6 @@ SeasonMatchTimeFormSet = inlineformset_factory(
 
 
 class TournamentScheduleForm(BootstrapFormControlMixin, forms.Form):
-
     team_hook = forms.CharField(
         widget=forms.Textarea,
         label="Teams",
@@ -1958,7 +2013,6 @@ class TournamentScheduleForm(BootstrapFormControlMixin, forms.Form):
 
 
 class DivisionTournamentScheduleForm(TournamentScheduleForm):
-
     team_hook = ModelChoiceField(
         queryset=(
             Division.objects.filter(teams__isnull=False)
@@ -1988,3 +2042,35 @@ class DivisionTournamentScheduleForm(TournamentScheduleForm):
 
     def get_teams(self):
         return self.cleaned_data["team_hook"].teams.order_by("order")
+
+
+class StreamControlForm(forms.Form):
+    status = forms.ChoiceField(
+        label="Live Streaming Control",
+        choices=(
+            ("testing", "Testing"),
+            ("live", "Start streaming"),
+            ("complete", "Stop streaming"),
+        ),
+        widget=forms.RadioSelect,
+        required=True,
+        help_text=mark_safe(
+            "Start streams about 1 minute before matches start.<br/>"
+            "Stop streams about 1 minute after matches conclude."
+        ),
+    )
+
+    def save(self, request, youtube, queryset):
+        broadcast_status = self.cleaned_data["status"]
+
+        for match in queryset:
+            try:
+                youtube.liveBroadcasts().transition(
+                    broadcastStatus=broadcast_status,
+                    id=match.external_identifier,
+                    part="snippet,status",
+                ).execute()
+            except HttpError as exc:
+                messages.error(request, f"{match}: {exc.reason}")
+            else:
+                messages.success(request, f"{match}: broadcast is {broadcast_status!r}")

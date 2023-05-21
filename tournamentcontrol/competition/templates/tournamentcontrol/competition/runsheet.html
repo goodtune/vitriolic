@@ -69,9 +69,23 @@
 								</a>
 							{% endblock %}
 							{% if match.videos %}
-								<a href="{{ match.videos|first }}">
-									<span class="glyphicon glyphicon-facetime-video" aria-hidden="true"></span>
-								</a>
+									<a href="{{ match.videos|first }}">
+											<span class="glyphicon glyphicon-facetime-video" aria-hidden="true"></span>
+									</a>
+									{% if match.live_stream and user.is_superuser %}
+										<a href="https://studio.youtube.com/video/{{ match.external_identifier }}/livestreaming">
+											<span class="glyphicon glyphicon-cog" aria-hidden="true"></span>
+										</a>
+									{% endif %}
+							{% endif %}
+							{% if match.live_stream and not match.live_stream_bind %}
+									<a href="{{ match.urls.edit }}?next={{ request.path }}">
+											<span class="glyphicon glyphicon-exclamation-sign" aria-hidden="true"></span>
+									</a>
+							{% elif match.play_at.ground.live_stream and not match.live_stream %}
+									<a href="{{ match.urls.edit }}?next={{ request.path }}">
+											<span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+									</a>
 							{% endif %}
 						</td>
 					</tr>

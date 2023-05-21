@@ -1,11 +1,10 @@
-from __future__ import unicode_literals
-
 import base64
 import collections
 import functools
 import logging
 import operator
 
+from dateutil.relativedelta import relativedelta
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
@@ -18,6 +17,7 @@ from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _, ngettext
+from googleapiclient.errors import HttpError
 
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.common.decorators import (
@@ -47,6 +47,7 @@ from tournamentcontrol.competition.forms import (
     GroundForm,
     MatchEditForm,
     MatchScheduleFormSet,
+    MatchStreamForm,
     MatchWashoutFormSet,
     PersonEditForm,
     PersonMergeForm,
@@ -378,6 +379,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             [
                 path("add/", self.edit_season, name="add"),
                 path("<int:season_id>/", self.edit_season, name="edit"),
+                path(
+                    "<int:season_id>/authorize", self.oauth_authorize, name="authorize"
+                ),
+                path("<int:season_id>/callback", self.oauth_callback, name="callback"),
                 path("<int:season_id>/delete/", self.delete_season, name="delete"),
                 path(
                     "<int:season_id>/reschedule/",
@@ -822,6 +827,65 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
+    def oauth_authorize(self, request, competition, season, **kwargs):
+        if not (
+            season.live_stream_client_id
+            and season.live_stream_client_secret
+            and season.live_stream_project_id
+        ):
+            messages.error(request, "OAuth2 application is not configured.")
+            return self.redirect(season.urls["edit"])
+        flow = season.flow()
+        flow.redirect_uri = request.build_absolute_uri(
+            self.reverse(
+                "competition:season:callback", args=(competition.pk, season.pk)
+            )
+        )
+        authorization_url, state = flow.authorization_url(
+            # Enable offline access so that you can refresh an access token without
+            # re-prompting the user for permission.
+            access_type="offline",
+            # Provide a hint to the Google Authentication Server. This is an
+            # authenticated page so provide the user email address.
+            login_hint=request.user.email,
+            # Prompt the user to select an account.
+            prompt="consent",  # Needs to be consent to get refresh token?
+        )
+        request.session["oauth_state"] = state
+        return self.redirect(authorization_url)
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def oauth_callback(self, request, competition, season, **kwargs):
+        state = request.session["oauth_state"]
+        flow = season.flow(state=state)
+        flow.redirect_uri = request.build_absolute_uri(
+            self.reverse(
+                "competition:season:callback", args=(competition.pk, season.pk)
+            )
+        )
+        authorization_response = (
+            f"{request.build_absolute_uri(request.path)}?{request.META['QUERY_STRING']}"
+        )
+        flow.fetch_token(authorization_response=authorization_response)
+        season.live_stream_refresh_token = flow.credentials.refresh_token
+        season.live_stream_token_uri = flow.credentials.token_uri
+        season.live_stream_client_id = flow.credentials.client_id
+        season.live_stream_client_secret = flow.credentials.client_secret
+        season.live_stream_scopes = flow.credentials.scopes
+        season.save(
+            update_fields=[
+                "live_stream_refresh_token",
+                "live_stream_token_uri",
+                "live_stream_client_id",
+                "live_stream_client_secret",
+                "live_stream_scopes",
+            ]
+        )
+        return self.redirect(season.urls["edit"])
+
+    @competition_by_pk_m
+    @staff_login_required_m
     def delete_season(self, request, extra_context, season, **kwargs):
         return self.generic_delete(
             request,
@@ -1005,12 +1069,60 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
-    def edit_ground(self, request, venue, extra_context, ground=None, **kwargs):
+    def edit_ground(self, request, season, venue, extra_context, ground=None, **kwargs):
         if ground is None:
             ground = next_related_factory(Ground, venue, "venue")
             # By default timezone and geo should inherit from the venue
             ground.timezone = venue.timezone
             ground.latlng = venue.latlng
+
+        def pre_save_callback(obj: Ground):
+            body = {
+                "snippet": {
+                    "title": f"{venue.season.competition} {venue.season} ({obj.title})",
+                },
+                "cdn": {
+                    "ingestionType": "rtmp",
+                    "frameRate": "variable",
+                    "resolution": "variable",
+                },
+            }
+
+            try:
+                stream = None
+                if obj.external_identifier:
+                    if not obj.live_stream:
+                        stream_id = obj.external_identifier
+                        season.youtube.liveStreams().delete(
+                            id=obj.external_identifier
+                        ).execute()
+                        obj.external_identifier = None
+                        log.info("YouTube stream %(id)r deleted", stream_id)
+                        return
+
+                    else:
+                        body["id"] = obj.external_identifier
+                        stream = (
+                            season.youtube.liveStreams()
+                            .update(part="snippet,cdn", body=body)
+                            .execute()
+                        )
+                        log.info("YouTube stream %(id)r updated", stream)
+
+                elif obj.live_stream:
+                    stream = (
+                        season.youtube.liveStreams()
+                        .insert(part="snippet,cdn", body=body)
+                        .execute()
+                    )
+                    obj.external_identifier = stream["id"]
+                    log.info("YouTube stream %(id)r inserted", stream)
+
+                obj.stream_key = stream["cdn"]["ingestionInfo"]["streamName"]
+
+            except HttpError as exc:
+                messages.error(request, exc.reason)
+                return self.redirect(".")
 
         return self.generic_edit(
             request,
@@ -1019,6 +1131,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             related=(),
             form_class=GroundForm,
             form_kwargs={"user": request.user},
+            always_save=season.live_stream,
+            pre_save_callback=pre_save_callback if season.live_stream else lambda o: o,
             post_save_redirect=self.redirect(venue.urls["edit"]),
             permission_required=True,
             extra_context=extra_context,
@@ -1401,12 +1515,120 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         if match is None:
             match = Match(stage=stage, include_in_ladder=stage.keep_ladder)
 
+        def pre_save_callback(obj: Match):
+            if obj.label:
+                title = f"{division} | {obj.label}: {obj.get_home_team_plain()} vs {obj.get_away_team_plain()} | {competition} {season}"
+            else:
+                title = f"{division} | {obj.get_home_team_plain()} vs {obj.get_away_team_plain()} | {competition} {season}"
+
+            description = (
+                f"Live stream of the {division} division of {competition} {season} from {obj.play_at.ground.venue}.\n"
+                f"\n"
+                f"Watch {obj.get_home_team_plain()} take on {obj.get_away_team_plain()} on {obj.play_at}.\n"
+                f"\n"
+                f"Full match details are available at {request.build_absolute_uri(reverse('competition:match-video', kwargs={'competition': competition.slug, 'season': season.slug, 'division': division.slug, 'match': obj.pk}))}\n"
+                f"\n"
+                f"Subscribe to receive notifications of upcoming matches."
+            )
+
+            start_time = obj.get_datetime(timezone.utc).isoformat()
+            stop_time = (
+                obj.get_datetime(timezone.utc)
+                + relativedelta(minutes=50)  # FIXME hard coded
+            ).isoformat()
+
+            body = {
+                "snippet": {
+                    "title": title,
+                    "description": description,
+                    "scheduledStartTime": start_time,
+                    "scheduledEndTime": stop_time,
+                },
+                "status": {
+                    "privacyStatus": season.live_stream_privacy,
+                    "selfDeclaredMadeForKids": False,
+                },
+                "contentDetails": {
+                    "enableAutoStart": False,
+                    "enableAutoStop": False,
+                    "monitorStream": {
+                        "broadcastStreamDelayMs": 0,
+                        "enableMonitorStream": True,
+                    },
+                },
+            }
+
+            try:
+                if obj.external_identifier:
+                    # If we have disabled live-streaming where it was previously
+                    # enabled, we need to remove it using the YouTube API.
+                    if not obj.live_stream:
+                        video_id = obj.external_identifier
+                        season.youtube.liveBroadcasts().delete(id=video_id).execute()
+                        if obj.videos is not None:
+                            obj.videos.remove(f"https://youtu.be/{video_id}")
+                        if not obj.videos:
+                            obj.videos = None
+                        obj.external_identifier = None
+                        log.info("YouTube video %(id)r deleted", video_id)
+                        return
+
+                    # Alternatively we're making sure the representation on the backend
+                    # is consistent with the current status.
+                    else:
+                        body["id"] = obj.external_identifier
+                        broadcast = (
+                            season.youtube.liveBroadcasts()
+                            .update(part="snippet,status,contentDetails", body=body)
+                            .execute()
+                        )
+                        log.info("YouTube video %(id)r updated", broadcast)
+
+                # If we have enabled live-streaming, but don't have an external id, we
+                # need to create an event with the YouTube API and store the external
+                # id.
+                elif obj.live_stream:
+                    broadcast = (
+                        season.youtube.liveBroadcasts()
+                        .insert(part="id,snippet,status,contentDetails", body=body)
+                        .execute()
+                    )
+                    obj.external_identifier = broadcast["id"]
+                    video_link = f"https://youtu.be/{obj.external_identifier}"
+                    obj.videos = (
+                        [video_link]
+                        if obj.videos is None
+                        else obj.videos.append(video_link)
+                    )
+                    log.info("YouTube video %(id)r inserted", broadcast)
+
+                # We need to bind to a liveStream resource. This is only supported on
+                # a Ground, not a Venue.
+                bind = (
+                    season.youtube.liveBroadcasts()
+                    .bind(
+                        part="id,snippet,contentDetails,status",
+                        id=obj.external_identifier,
+                        streamId=obj.play_at.ground.external_identifier,
+                    )
+                    .execute()
+                )
+                obj.live_stream_bind = bind["contentDetails"].get("boundStreamId")
+
+            except HttpError as exc:
+                messages.error(request, exc.reason)
+                return self.redirect(".")
+
         return self.generic_edit(
             request,
             Match,
             instance=match,
-            form_class=MatchEditForm,
-            post_save_redirect=self.redirect(stage.urls["edit"]),
+            form_class=MatchStreamForm if season.live_stream else MatchEditForm,
+            always_save=season.live_stream,
+            post_save_redirect=self.redirect(
+                request.GET.get("next") or stage.urls["edit"]
+            ),
+            pre_save_callback=pre_save_callback if season.live_stream else lambda o: o,
             permission_required=True,
             extra_context=extra_context,
         )
@@ -1541,14 +1763,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             if formset.is_valid():
                 changes = formset.save()
                 if changes:
-                    message = (
-                        ngettext(
-                            "Your change to %(count)d match has been saved.",
-                            "Your changes to %(count)d matches have been saved.",
-                            changes,
-                        )
-                        % {"count": changes}
-                    )
+                    message = ngettext(
+                        "Your change to %(count)d match has been saved.",
+                        "Your changes to %(count)d matches have been saved.",
+                        changes,
+                    ) % {"count": changes}
                     messages.success(request, message)
                 else:
                     messages.info(request, _("No matches were rescheduled."))

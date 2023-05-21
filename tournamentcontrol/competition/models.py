@@ -7,6 +7,8 @@ import logging
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 
 import django
 import pytz
@@ -28,6 +30,7 @@ from django.utils import timezone
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
+from google_auth_oauthlib.flow import Flow
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
 from touchtechnology.common.db.models import (
@@ -40,6 +43,7 @@ from touchtechnology.common.db.models import (
 from touchtechnology.common.models import SitemapNodeBase
 from tournamentcontrol.competition.constants import (
     GENDER_CHOICES,
+    LiveStreamPrivacy,
     PYTZ_TIME_ZONE_CHOICES,
     SEASON_MODE_CHOICES,
     WIN_LOSE,
@@ -534,6 +538,22 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             "show at all times."
         ),
     )
+
+    live_stream = BooleanField(default=False)
+    live_stream_privacy = models.CharField(
+        max_length=20,
+        choices=LiveStreamPrivacy.choices,
+        default=LiveStreamPrivacy.PRIVATE,
+    )
+
+    live_stream_project_id = models.CharField(max_length=100, blank=True, null=True)
+    live_stream_client_id = models.CharField(max_length=200, blank=True, null=True)
+    live_stream_client_secret = models.CharField(max_length=100, blank=True, null=True)
+    live_stream_token = models.CharField(max_length=1000, null=True)
+    live_stream_refresh_token = models.CharField(max_length=200, null=True)
+    live_stream_token_uri = models.URLField(null=True)
+    live_stream_scopes = PG.ArrayField(models.CharField(max_length=200), null=True)
+
     complete = BooleanField(
         default=False,
         help_text=_(
@@ -578,6 +598,45 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 
     def __repr__(self):
         return "<Season: {} - {}>".format(self.competition, self)
+
+    def flow(self, **kwargs):
+        "Generate an authorization Flow"
+        return Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": self.live_stream_client_id,
+                    "project_id": self.live_stream_project_id,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                    "client_secret": self.live_stream_client_secret,
+                    "redirect_uris": [],
+                }
+            },
+            scopes=[
+                "https://www.googleapis.com/auth/youtube",
+                "https://www.googleapis.com/auth/youtube.force-ssl",
+                "https://www.googleapis.com/auth/youtube.readonly",
+                "https://www.googleapis.com/auth/youtube.upload",
+                "https://www.googleapis.com/auth/youtubepartner",
+            ],
+            **kwargs,
+        )
+
+    @cached_property
+    def youtube(self):
+        return build(
+            "youtube",
+            "v3",
+            credentials=Credentials(
+                client_id=self.live_stream_client_id,
+                client_secret=self.live_stream_client_secret,
+                token=self.live_stream_token,
+                refresh_token=self.live_stream_refresh_token,
+                token_uri=self.live_stream_token_uri,
+                scopes=self.live_stream_scopes,
+            ),
+        )
 
     @property
     def datetimes(self):
@@ -691,6 +750,13 @@ class Ground(Place):
     """
 
     venue = ForeignKey(Venue, related_name="grounds", on_delete=PROTECT)
+    live_stream = BooleanField(default=False)
+    external_identifier = models.CharField(
+        max_length=50, blank=True, null=True, unique=True, db_index=True
+    )
+    stream_key = models.CharField(
+        max_length=50, blank=True, null=True, unique=True, db_index=True
+    )
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:venue:ground"
@@ -1596,6 +1662,10 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     videos = PG.ArrayField(
         models.URLField(),
         null=True,
+    )
+    live_stream = BooleanField(default=False)
+    live_stream_bind = models.CharField(
+        max_length=50, blank=True, null=True, db_index=True
     )
 
     objects = MatchManager()
