@@ -95,7 +95,10 @@ from tournamentcontrol.competition.models import (
     Venue,
 )
 from tournamentcontrol.competition.sites import CompetitionAdminMixin
-from tournamentcontrol.competition.tasks import generate_pdf_scorecards
+from tournamentcontrol.competition.tasks import (
+    generate_pdf_grid,
+    generate_pdf_scorecards,
+)
 from tournamentcontrol.competition.utils import (
     generate_fixture_grid,
     generate_scorecards,
@@ -1473,7 +1476,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def generate_draw(
         self, request, competition, season, division, stage, extra_context, **kwargs
     ):
-
         form_list = [
             DrawGenerationFormSet,
             DrawGenerationMatchFormSet,
@@ -1673,12 +1675,42 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         for key, val in request.GET.items():
             extra_context.setdefault(key, val)
 
+        if (
+            getattr(settings, "TOURNAMENTCONTROL_ASYNC_PDF_GRID", False)
+            and mode == "pdf"
+        ):
+            result = generate_pdf_grid.delay(season, extra_context)
+            redirect_to = self.reverse(
+                "competition:season:scorecards-async",
+                kwargs={
+                    "competition_id": season.competition_id,
+                    "season_id": season.pk,
+                    "result_id": result.id,
+                },
+            )
+            return self.redirect(redirect_to)
+
         return generate_fixture_grid(season, format=mode, extra_context=extra_context)
 
     @competition_by_pk_m
     @csrf_exempt_m
     @staff_login_required_m
     def day_grid(self, request, season, date, mode, extra_context, **kwargs):
+        if (
+            getattr(settings, "TOURNAMENTCONTROL_ASYNC_PDF_GRID", False)
+            and mode == "pdf"
+        ):
+            result = generate_pdf_grid.delay(season, extra_context, date)
+            redirect_to = self.reverse(
+                "competition:season:scorecards-async",
+                kwargs={
+                    "competition_id": season.competition_id,
+                    "season_id": season.pk,
+                    "result_id": result.id,
+                },
+            )
+            return self.redirect(redirect_to)
+
         return generate_fixture_grid(
             season,
             format=mode,
