@@ -3,7 +3,10 @@ import base64
 from celery import shared_task
 
 from tournamentcontrol.competition.models import Match, Stage
-from tournamentcontrol.competition.utils import generate_scorecards
+from tournamentcontrol.competition.utils import (
+    generate_fixture_grid,
+    generate_scorecards,
+)
 
 
 @shared_task
@@ -17,6 +20,17 @@ def generate_pdf_scorecards(
     data = generate_scorecards(
         matches, templates, "pdf", extra_context, stage, **kwargs
     )
+    # We can't JSON encode bytes, so we need to base64 encode the
+    # PDF document before handing it back to the result backend.
+    return base64.b64encode(data).decode("utf8")
+
+
+@shared_task
+def generate_pdf_grid(season, extra_context, date=None):
+    kwargs = {"format": "pdf", "extra_context": extra_context}
+    if date is not None:
+        kwargs["dates"] = [date]
+    data = generate_fixture_grid(season, **kwargs)
     # We can't JSON encode bytes, so we need to base64 encode the
     # PDF document before handing it back to the result backend.
     return base64.b64encode(data).decode("utf8")
