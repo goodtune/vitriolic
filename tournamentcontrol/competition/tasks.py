@@ -27,10 +27,14 @@ def generate_pdf_scorecards(
 
 @shared_task
 def generate_pdf_grid(season, extra_context, date=None):
-    kwargs = {"format": "pdf", "extra_context": extra_context}
-    if date is not None:
-        kwargs["dates"] = [date]
-    data = generate_fixture_grid(season, **kwargs)
+    dates = [date] if date is not None else None
+    data: bytes = generate_fixture_grid(
+        season,
+        dates=dates,
+        format="pdf",
+        extra_context=extra_context,
+        http_response=False,  # Get bytes back, not a response object
+    )
     # We can't JSON encode bytes, so we need to base64 encode the
     # PDF document before handing it back to the result backend.
     return base64.b64encode(data).decode("utf8")

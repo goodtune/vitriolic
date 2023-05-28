@@ -425,6 +425,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     self.season_grid,
                     name="match-grid",
                 ),
+                path(
+                    "<int:season_id>/matches/<result_id>.pdf",
+                    self.grid_async,
+                    name="grid-async",
+                ),
             ],
             self.app_name,
         )
@@ -1681,7 +1686,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         ):
             result = generate_pdf_grid.delay(season, extra_context)
             redirect_to = self.reverse(
-                "competition:season:scorecards-async",
+                "competition:season:grid-async",
                 kwargs={
                     "competition_id": season.competition_id,
                     "season_id": season.pk,
@@ -1700,9 +1705,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             getattr(settings, "TOURNAMENTCONTROL_ASYNC_PDF_GRID", False)
             and mode == "pdf"
         ):
+            extra_context.pop("admin", None)
+            extra_context.pop("component", None)
             result = generate_pdf_grid.delay(season, extra_context, date)
             redirect_to = self.reverse(
-                "competition:season:scorecards-async",
+                "competition:season:grid-async",
                 kwargs={
                     "competition_id": season.competition_id,
                     "season_id": season.pk,
@@ -1717,6 +1724,20 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
             dates=[date],
         )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def grid_async(self, request, result_id, extra_context, **kwargs):
+        result = generate_pdf_grid.AsyncResult(result_id)
+
+        if result.ready():
+            data = result.wait()
+            return HttpResponse(base64.b64decode(data), content_type="application/pdf")
+
+        templates = self.template_path("wait.html", "scorecards")
+        response = self.render(request, templates, extra_context)
+        response["Refresh"] = SCORECARD_PDF_WAIT
+        return response
 
     @competition_by_pk_m
     @staff_login_required_m

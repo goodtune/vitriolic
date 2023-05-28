@@ -469,6 +469,8 @@ def generate_fixture_grid(
     templates=None,
     format="html",
     extra_context=None,
+    *,
+    http_response=True,
     **kwargs,
 ):
     logger.info(
@@ -534,11 +536,13 @@ def generate_fixture_grid(
 
     if format == "pdf":
         pdf = prince(html, **kwargs)
-        response = HttpResponse(pdf, content_type="application/pdf")
-    else:
-        response = HttpResponse(html)
+        if http_response:
+            return HttpResponse(pdf, content_type="application/pdf")
+        return pdf
 
-    return response
+    if http_response:
+        return HttpResponse(html)
+    return html
 
 
 #
