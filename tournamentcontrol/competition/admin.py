@@ -98,6 +98,7 @@ from tournamentcontrol.competition.sites import CompetitionAdminMixin
 from tournamentcontrol.competition.tasks import (
     generate_pdf_grid,
     generate_pdf_scorecards,
+    set_youtube_thumbnail,
 )
 from tournamentcontrol.competition.utils import (
     generate_fixture_grid,
@@ -1589,10 +1590,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                             .update(part="snippet,status,contentDetails", body=body)
                             .execute()
                         )
-                        season.youtube.thumbnails().set(
-                            videoId=obj.external_identifier,
-                            media_body=obj.live_stream_thumbnail_media_body,
-                        ).execute()
+                        set_youtube_thumbnail.delay(obj.pk)
                         log.info("YouTube video %(id)r updated", broadcast)
 
                 # If we have enabled live-streaming, but don't have an external id, we
@@ -1608,10 +1606,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                         .execute()
                     )
                     obj.external_identifier = broadcast["id"]
-                    season.youtube.thumbnails().set(
-                        videoId=obj.external_identifier,
-                        media_body=obj.live_stream_thumbnail_media_body,
-                    ).execute()
+                    set_youtube_thumbnail.delay(obj.pk)
                     video_link = f"https://youtu.be/{obj.external_identifier}"
                     obj.videos = (
                         [video_link]

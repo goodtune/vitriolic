@@ -629,20 +629,6 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         )
 
     @cached_property
-    def live_stream_thumbnail_media_body(self):
-        try:
-            res = requests.get(self.live_stream_thumbnail)
-            res.raise_for_status()
-        except HTTPError:
-            return None
-        media = MediaInMemoryUpload(
-            res.content,
-            mimetype=res.headers["Content-Type"],
-            resumable=True,
-        )
-        return media
-
-    @cached_property
     def youtube(self):
         return build(
             "youtube",
@@ -1689,22 +1675,6 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     live_stream_thumbnail = models.URLField(blank=True, null=True)
 
     objects = MatchManager()
-
-    @cached_property
-    def live_stream_thumbnail_media_body(self):
-        if not self.live_stream_thumbnail:
-            return self.stage.division.season.live_stream_thumbnail_media_body
-        try:
-            res = requests.get(self.live_stream_thumbnail)
-            res.raise_for_status()
-        except HTTPError:
-            return None
-        media = MediaInMemoryUpload(
-            res.content,
-            mimetype=res.headers["Content-Type"],
-            resumable=True,
-        )
-        return media
 
     class Meta:
         get_latest_by = "datetime"
