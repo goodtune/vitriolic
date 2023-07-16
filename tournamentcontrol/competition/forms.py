@@ -34,7 +34,6 @@ from django.utils import timezone
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _, ngettext
 from first import first
-from googleapiclient.errors import HttpError
 from modelforms.forms import ModelForm
 from pyparsing import ParseException
 
@@ -2070,7 +2069,7 @@ class StreamControlForm(forms.Form):
                     id=match.external_identifier,
                     part="snippet,status",
                 ).execute()
-            except HttpError as exc:
+            except Exception as exc:
                 messages.error(request, f"{match}: {exc.reason}")
             else:
                 messages.success(request, f"{match}: broadcast is {broadcast_status!r}")

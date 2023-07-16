@@ -17,7 +17,6 @@ from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _, ngettext
-from googleapiclient.errors import HttpError
 
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.common.decorators import (
@@ -1128,7 +1127,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
                 obj.stream_key = stream["cdn"]["ingestionInfo"]["streamName"]
 
-            except HttpError as exc:
+            except Exception as exc:
                 messages.error(request, exc.reason)
                 return self.redirect(".")
 
@@ -1622,7 +1621,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 )
                 obj.live_stream_bind = bind["contentDetails"].get("boundStreamId")
 
-            except HttpError as exc:
+            except Exception as exc:
                 messages.error(request, exc.reason)
                 return self.redirect(".")
 

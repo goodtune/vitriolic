@@ -7,8 +7,6 @@ import logging
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
 
 import django
 import pytz
@@ -30,7 +28,6 @@ from django.utils import timezone
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
-from google_auth_oauthlib.flow import Flow
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
 from touchtechnology.common.db.models import (
