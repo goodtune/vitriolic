@@ -385,6 +385,7 @@ class SeasonForm(
             "live_stream_project_id",
             "live_stream_client_id",
             "live_stream_client_secret",
+            "live_stream_thumbnail",
             "timezone",
             "start_date",
             "mode",
@@ -399,9 +400,13 @@ class SeasonForm(
             "copy": _("Notes (Public)"),
             "live_stream_project_id": _("Project ID"),
             "live_stream_client_id": _("Client ID"),
+            "live_stream_thumbnail": _("Thumbnail URL"),
         }
         help_texts = {
             "copy": _("Optional. Will be displayed in the front end if provided."),
+            "live_stream_thumbnail": _(
+                "URL to the default thumbnail image for all live streams."
+            ),
         }
 
     def __init__(self, *args, **kwargs):
@@ -1089,11 +1094,19 @@ class MatchStreamForm(MatchEditForm):
             "date",
             "include_in_ladder",
             "live_stream",
+            "live_stream_thumbnail",
             # "external_identifier",
         )
         labels = {
             "home_team_undecided": _("Home team"),
             "away_team_undecided": _("Away team"),
+            "live_stream_thumbnail": _("Thumbnail URL"),
+        }
+        help_texts = {
+            "live_stream_thumbnail": _(
+                "URL to the thumbnail image for the live stream. "
+                "If not set for the match, the season default will be used."
+            ),
         }
 
 
