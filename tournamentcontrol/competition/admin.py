@@ -1589,6 +1589,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                             .update(part="snippet,status,contentDetails", body=body)
                             .execute()
                         )
+                        season.youtube.thumbnails().set(
+                            videoId=obj.external_identifier,
+                            media_body=obj.live_stream_thumbnail_media_body,
+                        ).execute()
                         log.info("YouTube video %(id)r updated", broadcast)
 
                 # If we have enabled live-streaming, but don't have an external id, we
@@ -1597,10 +1601,17 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 elif obj.live_stream:
                     broadcast = (
                         season.youtube.liveBroadcasts()
-                        .insert(part="id,snippet,status,contentDetails", body=body)
+                        .insert(
+                            part="id,snippet,status,contentDetails",
+                            body=body,
+                        )
                         .execute()
                     )
                     obj.external_identifier = broadcast["id"]
+                    season.youtube.thumbnails().set(
+                        videoId=obj.external_identifier,
+                        media_body=obj.live_stream_thumbnail_media_body,
+                    ).execute()
                     video_link = f"https://youtu.be/{obj.external_identifier}"
                     obj.videos = (
                         [video_link]

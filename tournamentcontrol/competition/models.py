@@ -7,8 +7,11 @@ import logging
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
+
+import requests
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaInMemoryUpload
 
 import django
 import pytz
@@ -31,6 +34,7 @@ from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 from google_auth_oauthlib.flow import Flow
+from requests import HTTPError
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
 from touchtechnology.common.db.models import (
@@ -553,6 +557,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     live_stream_refresh_token = models.CharField(max_length=200, null=True)
     live_stream_token_uri = models.URLField(null=True)
     live_stream_scopes = PG.ArrayField(models.CharField(max_length=200), null=True)
+    live_stream_thumbnail = models.URLField(null=True)
 
     complete = BooleanField(
         default=False,
@@ -622,6 +627,20 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             ],
             **kwargs,
         )
+
+    @cached_property
+    def live_stream_thumbnail_media_body(self):
+        try:
+            res = requests.get(self.live_stream_thumbnail)
+            res.raise_for_status()
+        except HTTPError:
+            return None
+        media = MediaInMemoryUpload(
+            res.content,
+            mimetype=res.headers["Content-Type"],
+            resumable=True,
+        )
+        return media
 
     @cached_property
     def youtube(self):
@@ -1667,8 +1686,25 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     live_stream_bind = models.CharField(
         max_length=50, blank=True, null=True, db_index=True
     )
+    live_stream_thumbnail = models.URLField(blank=True, null=True)
 
     objects = MatchManager()
+
+    @cached_property
+    def live_stream_thumbnail_media_body(self):
+        if not self.live_stream_thumbnail:
+            return self.stage.division.season.live_stream_thumbnail_media_body
+        try:
+            res = requests.get(self.live_stream_thumbnail)
+            res.raise_for_status()
+        except HTTPError:
+            return None
+        media = MediaInMemoryUpload(
+            res.content,
+            mimetype=res.headers["Content-Type"],
+            resumable=True,
+        )
+        return media
 
     class Meta:
         get_latest_by = "datetime"
