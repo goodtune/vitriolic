@@ -1853,6 +1853,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         try:
             stage, group, position = stage_group_position_re.match(team_eval).groups()
         except (AttributeError, TypeError):
+            logger.exception("Failed evaluating `stage_group_position` %s for %s", team_eval, self)
             if not team_undecided and self.is_bye:
                 return ByeTeam()
             stage = group = position = None
@@ -1930,7 +1931,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         try:
             stage = self.stage.comes_after
         except Stage.DoesNotExist:
-            logger.warn(
+            logger.warning(
                 "Stage is first, %r should not be attempting to be " "evaluated.", self
             )
             return (self.home_team, self.away_team)
@@ -1948,7 +1949,10 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         res = [None, None]
         for index, field in enumerate(("home_team", "away_team")):
             team = self._get_team(field)
-            if not lazy or not isinstance(team, Team):
+            is_team_model = not isinstance(team, Team)
+            if not is_team_model:
+                logger.warning("%r is not a Team instance.", team)
+            if not lazy or not is_team_model:
                 team_undecided = getattr(self, f"{field}_undecided")
                 if team_undecided:
                     team_eval = team_undecided.formula
@@ -1964,7 +1968,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                             team_eval
                         ).groups()
                     except (AttributeError, TypeError):
-                        pass
+                        logger.exception("Failed evaluating `stage_group_position` %s for %s", team_eval, self)
                     else:
                         try:
                             try:
