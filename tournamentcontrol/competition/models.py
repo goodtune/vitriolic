@@ -557,7 +557,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     live_stream_refresh_token = models.CharField(max_length=200, null=True)
     live_stream_token_uri = models.URLField(null=True)
     live_stream_scopes = PG.ArrayField(models.CharField(max_length=200), null=True)
-    live_stream_thumbnail = models.URLField(null=True)
+    live_stream_thumbnail = models.URLField(blank=True, null=True)
 
     complete = BooleanField(
         default=False,
