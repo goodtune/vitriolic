@@ -1853,7 +1853,6 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         try:
             stage, group, position = stage_group_position_re.match(team_eval).groups()
         except (AttributeError, TypeError):
-            logger.exception("Failed evaluating `stage_group_position` %s for %s", team_eval, self)
             if not team_undecided and self.is_bye:
                 return ByeTeam()
             stage = group = position = None
