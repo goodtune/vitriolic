@@ -75,4 +75,4 @@ django_settings_module = "vitriolic.settings"
 
 [tool.black]
 line-length = 88
-target-version = ["py36", "py39", "py312"]
+target-version = ["py39", "py312"]
