@@ -786,9 +786,10 @@ class TeamForm(SuperUserSlugMixin, ModelForm):
     def clean_title(self):
         club = self.cleaned_data.get("club")
         title = self.cleaned_data.get("title")
-        if not title and club:
-            self.data["title"] = club.title
-            return club.title
+        if not title:
+            if club:
+                return club.title
+            raise forms.ValidationError(_("You must specify a name for this team."))
         return title
 
 
