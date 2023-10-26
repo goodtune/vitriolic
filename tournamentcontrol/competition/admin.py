@@ -1516,7 +1516,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def undo_draw(self, request, division, stage, **kwargs):
         LadderSummary.objects.filter(stage=stage).delete()
         LadderEntry.objects.filter(match__stage=stage).delete()
-        Match.objects.filter(stage=stage).delete()
+        # We need to make sure we delete the matches in the stage that depend on other matches first.
+        matches = Match.objects.filter(stage=stage)
+        matches.filter(Q(home_team_eval_related__isnull=False) | Q(away_team_eval_related__isnull=False)).delete()
+        matches.delete()
         messages.success(request, _("Your draw has been undone."))
         return self.redirect(division.urls["edit"])
 
