@@ -1920,7 +1920,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     winner = property(lambda self: self._winner_loser("W"))
     loser = property(lambda self: self._winner_loser("L"))
 
-    def eval(self, lazy=True):
+    def eval(self, lazy=False):
         """
         Attempt to populate the `home_team` and `away_team` fields as
         appropriate.
