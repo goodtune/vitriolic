@@ -8,9 +8,6 @@ from itertools import islice, zip_longest
 from urllib.parse import parse_qsl
 
 import pkg_resources
-from classytags.arguments import Argument
-from classytags.core import Options
-from classytags.helpers import AsTag
 from django.conf import settings
 from django.db.models import Model, Q
 from django.db.models.query import QuerySet
@@ -584,17 +581,3 @@ def hostname():
     hostname = socket.gethostname()
     host, domain = hostname.split(".", 1)
     return dict(hostname=hostname, host=host, domain=domain)
-
-
-class Login(AsTag):
-    options = Options("as", Argument("varname", required=False, resolve=False))
-
-    def get_value(self, context):
-        request = context.get("request")
-        url = reverse("accounts:login")
-        if request:
-            url += "?next=" + request.path
-        return url
-
-
-register.tag(Login)
