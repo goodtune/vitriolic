@@ -10,7 +10,7 @@ authors = [
 classifiers = []
 requires-python = ">=3.6"
 dependencies = [
-    "django-classy-tags<0.9",
+    "django-classy-tags<4.2",
     "django-froala-editor>=2.9",
     "django-guardian>=2.4",
     "django-modelforms",
