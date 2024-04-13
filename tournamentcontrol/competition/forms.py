@@ -611,9 +611,9 @@ class StageGroupForm(SuperUserSlugMixin, ModelForm):
     def save(self, *args, **kwargs):
         if self.instance.pk and "teams" in self.fields:
             if self._undecided:
-                self.instance.undecided_teams = self.cleaned_data.get("teams")
+                self.instance.undecided_teams.set(self.cleaned_data.get("teams"))
             else:
-                self.instance.teams = self.cleaned_data.get("teams")
+                self.instance.teams.set(self.cleaned_data.get("teams"))
         return super(StageGroupForm, self).save(*args, **kwargs)
 
     class Meta:
