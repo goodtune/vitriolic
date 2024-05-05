@@ -1078,6 +1078,14 @@ class StageGroup(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             "home_team__division",
             "away_team__club",
             "away_team__division",
+        ).order_by(
+            "date",
+            "stage",
+            "round",
+            "is_bye",
+            "time",
+            "play_at__ground__order",
+            "pk",
         )
         for match in matches.annotate(
             statistics_count=Count("statistics"),
@@ -1287,6 +1295,14 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
             "home_team__division",
             "away_team__club",
             "away_team__division",
+        ).order_by(
+            "date",
+            "stage",
+            "round",
+            "is_bye",
+            "time",
+            "play_at__ground__order",
+            "pk",
         )
         for m in matches.annotate(
             statistics_count=Count("statistics"), videos_count=Count("videos")
