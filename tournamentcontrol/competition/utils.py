@@ -504,6 +504,7 @@ def generate_fixture_grid(
             "home_team__club",
             "away_team",
             "away_team__club",
+            "play_at",
         ).filter(date=date)
 
         times = sorted(

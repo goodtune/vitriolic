@@ -829,7 +829,7 @@ class BaseMatchFormMixin(BootstrapFormControlMixin):
 
         # If the season has timeslot rules, substitute the default SelectTime
         # field for a drop-down list of timeslots.
-        if self.instance.stage.division.season.timeslots.count():
+        if self.instance.stage.division.season.timeslots.exists():
             timeslots = self.instance.stage.division.season.get_timeslots(
                 self.instance.date
             )
@@ -1279,7 +1279,7 @@ class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
         for venue in self.instance.stage.division.season.venues.all():
             venues.setdefault(venue, [])
 
-        for ground in Ground.objects.filter(venue__in=venues):
+        for ground in Ground.objects.select_related("venue").filter(venue__in=venues):
             venues[ground.venue].append(ground)
 
         places = FauxQueryset(Place)

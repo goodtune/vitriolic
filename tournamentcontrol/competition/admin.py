@@ -1875,8 +1875,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         if time is not None:
             where &= Q(time=time)
 
-        queryset = manager.filter(where).order_by(
-            "stage__division__order", "round", "datetime", "play_at"
+        queryset = (
+            manager.select_related("stage__division__season")
+            .filter(where)
+            .order_by("stage__division__order", "round", "datetime", "play_at")
         )
 
         return self.generic_edit_multiple(
