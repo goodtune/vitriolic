@@ -1257,7 +1257,7 @@ MatchWashoutFormSet = modelformset_factory(Match, extra=0, form=MatchWashoutForm
 
 
 class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
-    def __init__(self, ignore_clashes=False, *args, **kwargs):
+    def __init__(self, ignore_clashes=False, places=None, *args, **kwargs):
         super(MatchScheduleForm, self).__init__(*args, **kwargs)
         self.ignore_clashes = ignore_clashes
 
@@ -1275,18 +1275,21 @@ class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
                     label += " ({tz})".format(tz=tz)
             return label
 
-        venues = collections.OrderedDict()
-        for venue in self.instance.stage.division.season.venues.all():
-            venues.setdefault(venue, [])
+        if places is None:
+            venues = collections.OrderedDict()
+            for venue in self.instance.stage.division.season.venues.all():
+                venues.setdefault(venue, [])
 
-        for ground in Ground.objects.select_related("venue").filter(venue__in=venues):
-            venues[ground.venue].append(ground)
+            for ground in Ground.objects.select_related("venue").filter(
+                venue__in=venues
+            ):
+                venues[ground.venue].append(ground)
 
-        places = FauxQueryset(Place)
-        for venue, grounds in venues.items():
-            places.append(venue)
-            for ground in grounds:
-                places.append(ground)
+            places = FauxQueryset(Place)
+            for venue, grounds in venues.items():
+                places.append(venue)
+                for ground in grounds:
+                    places.append(ground)
 
         self.fields["play_at"].queryset = places
         self.fields["play_at"].label_from_instance = label_from_instance
@@ -1355,6 +1358,10 @@ BaseMatchScheduleFormSet = modelformset_factory(Match, extra=0, form=MatchSchedu
 
 
 class MatchScheduleFormSet(BaseMatchScheduleFormSet):
+    def __init__(self, places, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.places = places
+
     def _management_form(self):
         """
         Taken directly from ``django.forms.formsets.BaseFormSet`` and adjusted
@@ -1395,7 +1402,7 @@ class MatchScheduleFormSet(BaseMatchScheduleFormSet):
         ignore_clashes = bool(mfcd.get("ignore_clashes", False))
         # construct the form with our additional keyword arguments
         return super(MatchScheduleFormSet, self)._construct_form(
-            i, ignore_clashes=ignore_clashes, **kwargs
+            i, ignore_clashes=ignore_clashes, places=self.places, **kwargs
         )
 
     def clean(self):
