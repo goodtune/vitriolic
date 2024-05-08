@@ -80,6 +80,7 @@ from tournamentcontrol.competition.models import (
     Match,
     MatchScoreSheet,
     Person,
+    Place,
     Season,
     SeasonAssociation,
     SeasonExclusionDate,
@@ -101,6 +102,7 @@ from tournamentcontrol.competition.tasks import (
     set_youtube_thumbnail,
 )
 from tournamentcontrol.competition.utils import (
+    FauxQueryset,
     generate_fixture_grid,
     generate_scorecards,
     legitimate_bye_match,
@@ -1881,10 +1883,24 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             .order_by("stage__division__order", "round", "datetime", "play_at")
         )
 
+        venues = collections.OrderedDict()
+        for venue in season.venues.all():
+            venues.setdefault(venue, [])
+
+        for ground in Ground.objects.select_related("venue").filter(venue__in=venues):
+            venues[ground.venue].append(ground)
+
+        places = FauxQueryset(Place)
+        for venue, grounds in venues.items():
+            places.append(venue)
+            for ground in grounds:
+                places.append(ground)
+
         return self.generic_edit_multiple(
             request,
             queryset,
             formset_class=MatchScheduleFormSet,
+            formset_kwargs={"places": places},
             post_save_redirect=self.redirect(season.urls["edit"]),
             templates=self.template_path("match/schedule.html"),
             extra_context=extra_context,
