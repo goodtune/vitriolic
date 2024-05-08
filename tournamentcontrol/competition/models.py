@@ -684,7 +684,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             .difference(grounds.values_list("venue", flat=True))
             .union(grounds.values_list("pk", flat=True))
         )
-        return Place.objects.filter(pk__in=pks)
+        return Place.objects.filter(pk__in=pks).select_related("venue", "ground__venue")
 
     def get_timeslots(self, date=None):
         # work out the timeslot rules to exclude
