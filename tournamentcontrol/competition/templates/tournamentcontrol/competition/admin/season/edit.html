@@ -52,10 +52,27 @@
 										<i class="fa fa-clock-o fa-fw"></i>
 										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Run Sheet" %}</span>
 									</a>
-									<a href="{% url 'admin:fixja:match-grid' object.competition.pk object.pk date|date:"Ymd" "pdf" %}" class="btn btn-default btn-sm" role="button">
+									<div class="btn-group">
+										<button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-expanded="false">
 										<i class="fa fa-table fa-fw"></i>
 										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Matrix" %}</span>
-									</a>
+											<span class="caret"></span>
+										</button>
+										<ul class="dropdown-menu dropdown-menu-right" role="menu">
+											<li role="presentation">
+												<a href="{% url 'admin:fixja:match-grid' object.competition.pk object.pk date|date:"Ymd" "html" %}" role="button">
+													<i class="fa fa-html5 fa-fw"></i>
+													<span class="hidden-sm hidden-xs">&nbsp;{% trans "HTML" %}</span>
+												</a>
+											</li>
+											<li role="presentation">
+												<a href="{% url 'admin:fixja:match-grid' object.competition.pk object.pk date|date:"Ymd" "pdf" %}" role="button">
+													<i class="fa fa-file-pdf-o fa-fw"></i>
+													<span class="hidden-sm hidden-xs">&nbsp;{% trans "PDF" %}</span>
+												</a>
+											</li>
+										</ul>
+									</div>
 									<a href="{% url 'admin:competition:match-washout' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
 										<i class="fa fa-umbrella fa-fw"></i>
 										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Washout" %}</span>
