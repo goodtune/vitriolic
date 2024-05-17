@@ -371,7 +371,7 @@ class MatchCollection(object):
         return len(self.iterable)
 
     def __repr__(self):
-        return repr(self.iterable)
+        return f"<MatchCollection: {self.iterable!r}>"
 
     def add(self, match_id, match):
         self.keyed.setdefault(match_id, []).append(match)

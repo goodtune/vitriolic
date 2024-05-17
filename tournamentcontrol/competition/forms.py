@@ -810,7 +810,7 @@ class DrawFormatForm(BootstrapFormControlMixin, ModelForm):
 
 
 class BaseMatchFormMixin(BootstrapFormControlMixin):
-    def __init__(self, timeslots, *args, **kwargs):
+    def __init__(self, timeslots=None, *args, **kwargs):
         super(BaseMatchFormMixin, self).__init__(*args, **kwargs)
 
         # set the queryset of the `home_team` and `away_team` fields
