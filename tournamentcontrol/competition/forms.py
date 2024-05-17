@@ -810,7 +810,7 @@ class DrawFormatForm(BootstrapFormControlMixin, ModelForm):
 
 
 class BaseMatchFormMixin(BootstrapFormControlMixin):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, timeslots=None, *args, **kwargs):
         super(BaseMatchFormMixin, self).__init__(*args, **kwargs)
 
         # set the queryset of the `home_team` and `away_team` fields
@@ -829,11 +829,7 @@ class BaseMatchFormMixin(BootstrapFormControlMixin):
 
         # If the season has timeslot rules, substitute the default SelectTime
         # field for a drop-down list of timeslots.
-        if self.instance.stage.division.season.timeslots.exists():
-            timeslots = self.instance.stage.division.season.get_timeslots(
-                self.instance.date
-            )
-
+        if timeslots:
             if self.instance.home_team and self.instance.home_team.timeslots_after:
                 timeslots = [
                     timeslot
@@ -1262,13 +1258,16 @@ class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
         self.ignore_clashes = ignore_clashes
 
         tzinfo = timezone.get_current_timezone()
-        __, tzname = timezone_choice(tzinfo.zone)
+        __, tzname = timezone_choice(str(tzinfo))
 
         def label_from_instance(obj):
-            try:
-                label = f"{'-' * 3} {obj.ground.title}"
-            except ObjectDoesNotExist:
-                label = obj.venue.title
+            if isinstance(obj, Venue):
+                label = obj.title
+            elif isinstance(obj, Ground):
+                label = f"{'-' * 3} {obj.title}"
+            else:
+                label = f"{obj}"
+
             if settings.USE_TZ:
                 __, tz = timezone_choice(obj.timezone)
                 if tz != tzname:
@@ -1358,9 +1357,10 @@ BaseMatchScheduleFormSet = modelformset_factory(Match, extra=0, form=MatchSchedu
 
 
 class MatchScheduleFormSet(BaseMatchScheduleFormSet):
-    def __init__(self, places, *args, **kwargs):
+    def __init__(self, places, timeslots, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.places = places
+        self.timeslots = timeslots
 
     def _management_form(self):
         """
@@ -1402,7 +1402,11 @@ class MatchScheduleFormSet(BaseMatchScheduleFormSet):
         ignore_clashes = bool(mfcd.get("ignore_clashes", False))
         # construct the form with our additional keyword arguments
         return super(MatchScheduleFormSet, self)._construct_form(
-            i, ignore_clashes=ignore_clashes, places=self.places, **kwargs
+            i,
+            ignore_clashes=ignore_clashes,
+            places=self.places,
+            timeslots=self.timeslots,
+            **kwargs,
         )
 
     def clean(self):

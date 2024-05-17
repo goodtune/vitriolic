@@ -1815,6 +1815,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         )
 
         dates = matches.dates("date", "day")
+
+        if not dates:
+            messages.error(request, _("No matches are available for rescheduling."))
+            return self.redirect(season.urls["edit"])
+
         redirect_to = season.urls["edit"]
 
         if request.method == "POST":
@@ -1900,7 +1905,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             request,
             queryset,
             formset_class=MatchScheduleFormSet,
-            formset_kwargs={"places": places},
+            formset_kwargs={
+                "places": places,
+                "timeslots": season.get_timeslots(date),
+            },
             post_save_redirect=self.redirect(season.urls["edit"]),
             templates=self.template_path("match/schedule.html"),
             extra_context=extra_context,
