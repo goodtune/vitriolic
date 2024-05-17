@@ -1815,6 +1815,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         )
 
         dates = matches.dates("date", "day")
+
+        if not dates:
+            messages.error(request, _("No matches are available for rescheduling."))
+            return self.redirect(season.urls["edit"])
+
         redirect_to = season.urls["edit"]
 
         if request.method == "POST":
