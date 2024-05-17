@@ -1900,7 +1900,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             request,
             queryset,
             formset_class=MatchScheduleFormSet,
-            formset_kwargs={"places": places},
+            formset_kwargs={
+                "places": places,
+                "timeslots": season.get_timeslots(date),
+            },
             post_save_redirect=self.redirect(season.urls["edit"]),
             templates=self.template_path("match/schedule.html"),
             extra_context=extra_context,
