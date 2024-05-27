@@ -4,6 +4,8 @@ from django.db.models.query import QuerySet
 from django.utils import timezone
 from django.utils.module_loading import import_string
 
+from tournamentcontrol.competition.utils import team_title_case_clause
+
 
 class DivisionQuerySet(QuerySet):
     """
@@ -30,6 +32,15 @@ class MatchQuerySet(QuerySet):
 
     def videos(self):
         return self.filter(videos__isnull=False).order_by("datetime").distinct()
+
+    def _team_titles(self):
+        """
+        Calculate a placeholder title for teams that will require progression.
+        """
+        return self.annotate(
+            home_team_title=team_title_case_clause("home_team"),
+            away_team_title=team_title_case_clause("away_team"),
+        )
 
     def _rank_importance(self):
         """
