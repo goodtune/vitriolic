@@ -10,7 +10,7 @@ from typing import Union
 import pytz
 from django.apps import apps
 from django.contrib.auth import get_user_model
-from django.db.models import F, Q
+from django.db.models import F, Func, Q
 from django.http import HttpResponse
 from django.template.loader import select_template
 from django.utils import timezone
@@ -59,6 +59,10 @@ stage_group_position_re = re.compile(
     """,
     re.VERBOSE,
 )
+
+
+class StageGroupPosition(Func):
+    function = "vitriolic_stage_group_position"
 
 
 class FauxQueryset(list):
