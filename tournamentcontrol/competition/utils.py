@@ -11,7 +11,8 @@ from zoneinfo import ZoneInfo
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
-from django.db.models import F, Func, Q
+from django.db.models import Case, F, Func, Q, Value, When
+from django.db.models.functions import Concat
 from django.http import HttpResponse
 from django.template.loader import select_template
 from django.utils import timezone
@@ -58,6 +59,54 @@ stage_group_position_re = re.compile(
 
 class StageGroupPosition(Func):
     function = "vitriolic_stage_group_position"
+
+
+def team_title_case_clause(team):
+    return Case(
+        When(
+            Q(**{f"{team}__isnull": False}),
+            then=F(f"{team}__title"),
+        ),
+        When(
+            Q(**{f"{team}_eval__isnull": False}),
+            then=Case(
+                When(
+                    Q(**{f"{team}_eval": "W"}),
+                    then=Concat(
+                        Value("Winner "),
+                        F(f"{team}_eval_related__label"),
+                    ),
+                ),
+                When(
+                    Q(**{f"{team}_eval": "L"}),
+                    then=Concat(
+                        Value("Loser "),
+                        F(f"{team}_eval_related__label"),
+                    ),
+                ),
+                default=StageGroupPosition(F(f"{team}_eval")),
+            ),
+        ),
+        When(
+            Q(**{f"{team}_undecided__isnull": False}),
+            then=Case(
+                When(
+                    ~Q(**{f"{team}_undecided__label": ""}),
+                    then=F(f"{team}_undecided__label"),
+                ),
+                When(
+                    ~Q(**{f"{team}_undecided__formula": ""}),
+                    then=StageGroupPosition(f"{team}_undecided__formula"),
+                ),
+                default=None,
+            ),
+        ),
+        When(
+            is_bye=True,
+            then=Value('<span class="bye" title="Bye">Bye</span>'),
+        ),
+        default=None,
+    )
 
 
 class FauxQueryset(list):
