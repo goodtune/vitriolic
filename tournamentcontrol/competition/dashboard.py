@@ -127,27 +127,7 @@ def matches_progression_possible():
         # If there are any unplayed or unprocessed matches in the preceding
         # stage, then we do not want to consider this match as viable for
         # progression.
-        logger.debug(
-            "Evaluate %r - home_team=%s home_team_eval=%s home_team_eval_related=%s",
-            match,
-            match.home_team,
-            match.home_team_eval,
-            match.home_team_eval_related,
-        )
-        logger.debug(
-            "Evaluate %r - away_team=%s away_team_eval=%s away_team_eval_related=%s",
-            match,
-            match.away_team,
-            match.away_team_eval,
-            match.away_team_eval_related,
-        )
         if _stage_cache[match.stage_id]:
-            logger.warning(
-                "Can't eval %s from stage %r (%s matches)",
-                match,
-                match.stage,
-                _stage_cache[match.stage_id],
-            )
             return False
 
         # If the home or away team can be determined we would want to progress
@@ -160,16 +140,8 @@ def matches_progression_possible():
             return True
 
         if match.stage.undecided_teams.exists() and _stage_cache[match.stage_id] == 0:
-            logger.warning(
-                "Found undecided teams and no matches left for %s in stage %r",
-                match,
-                match.stage,
-            )
             return True
 
-        logger.warning(
-            "Can't evaluate %r - home_team=%r away_team=%r", match, home_team, away_team
-        )
         return False
 
     matches = [m for m in matches if _can_evaluate(m)]
