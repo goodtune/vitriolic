@@ -31,23 +31,6 @@ ALLOWED_HOSTS = []
 SITE_ID = 1
 
 
-class DisableMigrations(object):
-    """
-    Disable the database migrations machinery to speed up test suite.
-
-    Trick learned at http://bit.ly/2vjVpNc
-    """
-
-    def __contains__(self, item):
-        return True
-
-    def __getitem__(self, item):
-        return None
-
-
-MIGRATION_MODULES = DisableMigrations()
-
-
 # Application definition
 
 INSTALLED_APPS = [

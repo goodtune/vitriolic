@@ -63,8 +63,6 @@ version_re = re.compile(
     re.VERBOSE,
 )
 
-FORM_FIELD_TEMPLATE = get_template("touchtechnology/common/templatetags/field.html")
-
 register = Library()
 
 
@@ -374,7 +372,7 @@ def field(bf, label=None):
         "no_label": not bool(label),
     }
 
-    return FORM_FIELD_TEMPLATE.render(context)
+    return render_to_string("touchtechnology/common/templatetags/field.html", context)
 
 
 @register.inclusion_tag("touchtechnology/common/templatetags/analytics.html")
