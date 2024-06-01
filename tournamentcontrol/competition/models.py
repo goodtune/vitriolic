@@ -8,13 +8,9 @@ import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
-import requests
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaInMemoryUpload
-
 import django
 import pytz
+import requests
 from cloudinary.models import CloudinaryField
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
@@ -33,7 +29,10 @@ from django.utils import timezone
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
+from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaInMemoryUpload
 from requests import HTTPError
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
@@ -47,15 +46,12 @@ from touchtechnology.common.db.models import (
 from touchtechnology.common.models import SitemapNodeBase
 from tournamentcontrol.competition.constants import (
     GENDER_CHOICES,
-    LiveStreamPrivacy,
     PYTZ_TIME_ZONE_CHOICES,
     SEASON_MODE_CHOICES,
     WIN_LOSE,
+    LiveStreamPrivacy,
 )
-from tournamentcontrol.competition.managers import (
-    LadderEntryManager,
-    MatchManager,
-)
+from tournamentcontrol.competition.managers import LadderEntryManager, MatchManager
 from tournamentcontrol.competition.mixins import ModelDiffMixin
 from tournamentcontrol.competition.query import (
     DivisionQuerySet,
@@ -1967,7 +1963,9 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
             is_team_model = not isinstance(team, Team)
             if not is_team_model:
                 logger.warning("%r is not a Team instance.", team)
-            if not lazy or not is_team_model:
+            if not lazy:
+                team = getattr(self, f"{field}_title")
+            elif not is_team_model:
                 team_undecided = getattr(self, f"{field}_undecided")
                 if team_undecided:
                     team_eval = team_undecided.formula
@@ -1983,7 +1981,11 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                             team_eval
                         ).groups()
                     except (AttributeError, TypeError):
-                        logger.exception("Failed evaluating `stage_group_position` %s for %s", team_eval, self)
+                        logger.exception(
+                            "Failed evaluating `stage_group_position` %s for %s",
+                            team_eval,
+                            self,
+                        )
                     else:
                         try:
                             try:
