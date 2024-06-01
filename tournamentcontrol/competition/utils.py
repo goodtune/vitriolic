@@ -11,8 +11,8 @@ from zoneinfo import ZoneInfo
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
-from django.db.models import Case, F, Func, Q, Value, When
-from django.db.models.functions import Concat
+from django.db.models import Case, CharField, F, Func, Q, Value, When
+from django.db.models.functions import Cast, Concat
 from django.http import HttpResponse
 from django.template.loader import select_template
 from django.utils import timezone
@@ -84,7 +84,9 @@ def team_title_case_clause(team):
                         F(f"{team}_eval_related__label"),
                     ),
                 ),
-                default=StageGroupPosition(F(f"{team}_eval")),
+                default=StageGroupPosition(
+                    Cast(f"{team}_eval", output_field=CharField())
+                ),
             ),
         ),
         When(

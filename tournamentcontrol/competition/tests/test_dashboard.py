@@ -7,8 +7,13 @@ from test_plus import TestCase
 
 from tournamentcontrol.competition.dashboard import (
     matches_require_basic_results,
+    matches_require_progression,
 )
-from tournamentcontrol.competition.tests.factories import MatchFactory
+from tournamentcontrol.competition.tests.factories import (
+    MatchFactory,
+    StageFactory,
+    TeamFactory,
+)
 
 
 class BasicResultTests(TestCase):
@@ -54,3 +59,51 @@ class BasicResultTests(TestCase):
             away_team_score=4,
         )
         self.assertCountEqual(matches_require_basic_results(), [match])
+
+
+@freeze_time("2019-07-15 09:30 UTC")
+class RequireProgression(TestCase):
+    def test_trivial(self):
+        # Need two match times, one in the past and one in the future.
+        dt1 = datetime(2019, 7, 15, 8, 30, tzinfo=timezone.utc)
+        dt2 = datetime(2019, 7, 15, 10, 30, tzinfo=timezone.utc)
+
+        # Create a stage with four teams to play each other and then progress
+        # the winners to a final.
+        stage = StageFactory.create(division__season__timezone="UTC")
+        t1, t2, t3, t4 = TeamFactory.create_batch(4, division=stage.division)
+
+        # Semi Final
+        m1 = MatchFactory.create(
+            home_team=t1, away_team=t4, datetime=dt1, label="Semi 1"
+        )
+        m2 = MatchFactory.create(
+            home_team=t2, away_team=t3, datetime=dt1, label="Semi 2"
+        )
+        # Final
+        m3 = MatchFactory.create(
+            home_team=None,
+            away_team=None,
+            home_team_eval="W",
+            home_team_eval_related=m1,
+            away_team_eval="W",
+            away_team_eval_related=m2,
+            datetime=dt2,
+            label="Final",
+        )
+
+        result_required = matches_require_basic_results()
+        require_progression = matches_require_progression()
+        self.assertCountEqual(result_required, [m1, m2])
+        self.assertCountEqual(require_progression, [])
+
+        # Home teams win both matches 4-3
+        for match in result_required:
+            match.home_team = 4
+            match.away_team = 3
+            match.save()
+
+        result_required = matches_require_basic_results()
+        require_progression = matches_require_progression()
+        self.assertCountEqual(result_required, [])
+        self.assertCountEqual(require_progression, [m3])

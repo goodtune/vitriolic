@@ -1942,7 +1942,9 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
             is_team_model = not isinstance(team, Team)
             if not is_team_model:
                 logger.warning("%r is not a Team instance.", team)
-            if not lazy or not is_team_model:
+            if not lazy:
+                team = getattr(self, f"{field}_title")
+            elif not is_team_model:
                 team_undecided = getattr(self, f"{field}_undecided")
                 if team_undecided:
                     team_eval = team_undecided.formula

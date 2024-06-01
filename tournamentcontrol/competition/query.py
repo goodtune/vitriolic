@@ -1,5 +1,14 @@
 from django.conf import settings
-from django.db.models import Case, ExpressionWrapper, F, FloatField, Func, When
+from django.db.models import (
+    Case,
+    ExpressionWrapper,
+    F,
+    FloatField,
+    Func,
+    OuterRef,
+    Subquery,
+    When,
+)
 from django.db.models.query import QuerySet
 from django.utils import timezone
 from django.utils.module_loading import import_string
@@ -19,6 +28,24 @@ class DivisionQuerySet(QuerySet):
 class StageQuerySet(QuerySet):
     def with_ladder(self):
         return self.filter(keep_ladder=True, ladder_summary__isnull=False).distinct()
+
+    def _comes_after(self):
+        return self.annotate(
+            comes_after_x=Case(
+                When(
+                    follows__isnull=True,
+                    then=Subquery(
+                        self.model.objects.filter(
+                            division=OuterRef("division"),
+                            order__lt=OuterRef("order"),
+                        )
+                        .order_by("-order")
+                        .values("id")[:1],
+                    ),
+                ),
+                default=F("follows"),
+            )
+        )
 
 
 class MatchQuerySet(QuerySet):

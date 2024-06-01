@@ -23,7 +23,7 @@ from django.forms.widgets import (
 )
 from django.template.base import Node
 from django.template.library import Library
-from django.template.loader import get_template, render_to_string
+from django.template.loader import render_to_string
 from django.urls import Resolver404, resolve, reverse
 from django.utils import timezone
 from django.utils.encoding import smart_str

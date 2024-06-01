@@ -4,7 +4,6 @@ import logging
 from django.conf import settings
 from django.db.models import Count, Q
 from django.utils import timezone
-from django.utils.functional import lazy
 from django.utils.translation import gettext_lazy as _
 
 from touchtechnology.admin.base import DashboardWidget
@@ -164,9 +163,6 @@ def stages_require_progression():
     return stages
 
 
-lazy_stages_require_progression = lazy(stages_require_progression, dict)
-
-
 #
 # Dashboard Widgets
 #
@@ -215,7 +211,7 @@ class ProgressStageWidget(DashboardWidget):
     template = "tournamentcontrol/competition/admin/widgets/progress/stages.html"
 
     def _get_context(self):
-        stages = lazy_stages_require_progression()
+        stages = stages_require_progression()
 
         context = {"stages": stages}
         return context

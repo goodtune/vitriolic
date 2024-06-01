@@ -199,3 +199,13 @@ class DrawGenerationMatchFormSetTest(TestCase):
                 ({"title": "Winner Semi Final 1"}, {"title": "Winner Semi Final 2"}),
             ],
         )
+
+        self.assertCountEqual(
+            [(m.home_team_title, m.away_team_title) for m in Match.objects.all()],
+            [
+                ("1st", "4th"),
+                ("2nd", "3rd"),
+                ("Loser Semi Final 1", "Loser Semi Final 2"),
+                ("Winner Semi Final 1", "Winner Semi Final 2"),
+            ],
+        )

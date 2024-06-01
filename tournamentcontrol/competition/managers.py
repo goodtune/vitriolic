@@ -1,6 +1,9 @@
 from django.db import models
 
-from tournamentcontrol.competition.query import LadderEntryQuerySet, MatchQuerySet
+from tournamentcontrol.competition.query import (
+    LadderEntryQuerySet,
+    MatchQuerySet,
+)
 
 
 class LadderEntryManager(models.Manager.from_queryset(LadderEntryQuerySet)):
