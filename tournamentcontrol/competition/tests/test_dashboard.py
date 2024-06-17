@@ -95,15 +95,23 @@ class RequireProgression(TestCase):
         result_required = matches_require_basic_results()
         require_progression = matches_require_progression()
         self.assertCountEqual(result_required, [m1, m2])
-        self.assertCountEqual(require_progression, [])
+        self.assertCountEqual(require_progression, [m3])
 
         # Home teams win both matches 4-3
-        for match in result_required:
-            match.home_team = 4
-            match.away_team = 3
+        for match in [m1, m2]:
+            match.home_team_score = 4
+            match.away_team_score = 3
             match.save()
 
         result_required = matches_require_basic_results()
         require_progression = matches_require_progression()
         self.assertCountEqual(result_required, [])
         self.assertCountEqual(require_progression, [m3])
+
+        m3.home_team, m3.away_team = m1.home_team, m2.home_team
+        m3.save()
+
+        result_required = matches_require_basic_results()
+        require_progression = matches_require_progression()
+        self.assertCountEqual(result_required, [])
+        self.assertCountEqual(require_progression, [])

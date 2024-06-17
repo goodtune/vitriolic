@@ -1921,10 +1921,14 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         try:
             stage = self.stage.comes_after
         except Stage.DoesNotExist:
-            logger.warning(
-                "Stage is first, %r should not be attempting to be " "evaluated.", self
-            )
-            return (self.home_team, self.away_team)
+            if self.home_team_eval_related or self.away_team_eval_related:
+                # This is a match that depends on the result of matches in the same stage.
+                stage = self.stage
+            else:
+                logger.warning(
+                    "Stage is first, %r should not be attempting to be evaluated.", self
+                )
+                return (self.home_team, self.away_team)
 
         positions = {
             index + 1: team
