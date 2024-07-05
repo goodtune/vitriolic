@@ -1592,7 +1592,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                             .update(part="snippet,status,contentDetails", body=body)
                             .execute()
                         )
-                        set_youtube_thumbnail.delay(obj.pk)
+                        set_youtube_thumbnail.s(obj.pk).apply_async(countdown=10)
                         log.info("YouTube video %(id)r updated", broadcast)
 
                 # If we have enabled live-streaming, but don't have an external id, we
@@ -1608,7 +1608,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                         .execute()
                     )
                     obj.external_identifier = broadcast["id"]
-                    set_youtube_thumbnail.delay(obj.pk)
+                    set_youtube_thumbnail.s(obj.pk).apply_async(countdown=10)
                     video_link = f"https://youtu.be/{obj.external_identifier}"
                     obj.videos = (
                         [video_link]
