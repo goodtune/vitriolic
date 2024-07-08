@@ -68,6 +68,11 @@
 									<span class="glyphicon glyphicon-stats" aria-hidden="true"></span>
 								</a>
 							{% endblock %}
+							{% block referees_link %}
+								<a href="{% url 'admin:fixja:competition:season:division:stage:match:referees' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">
+									<span class="glyphicon glyphicon-flag" aria-hidden="true"></span>
+								</a>
+							{% endblock %}
 							{% if match.videos %}
 									<a href="{{ match.videos|first }}">
 											<span class="glyphicon glyphicon-facetime-video" aria-hidden="true"></span>

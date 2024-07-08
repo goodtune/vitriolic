@@ -46,6 +46,7 @@ from tournamentcontrol.competition.forms import (
     DrawGenerationMatchFormSet,
     GroundForm,
     MatchEditForm,
+    MatchRefereeForm,
     MatchScheduleFormSet,
     MatchStreamForm,
     MatchWashoutFormSet,
@@ -193,6 +194,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path("<int:match_id>/", self.edit_match, name="edit"),
                 path("<int:match_id>/delete/", self.delete_match, name="delete"),
                 path("<int:match_id>/detail/", self.edit_match_detail, name="detail"),
+                path(
+                    "<int:match_id>/referee/",
+                    self.referee_appointments,
+                    name="referees",
+                ),
                 path(
                     "<int:match_id>/scoresheet/",
                     include(matchscoresheet_urls, namespace="matchscoresheet"),
@@ -1644,6 +1650,32 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 request.GET.get("next") or stage.urls["edit"]
             ),
             pre_save_callback=pre_save_callback if season.live_stream else lambda o: o,
+            permission_required=True,
+            extra_context=extra_context,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def referee_appointments(
+        self,
+        request,
+        competition,
+        season,
+        division,
+        stage,
+        extra_context,
+        match,
+        **kwargs,
+    ):
+        return self.generic_edit(
+            request,
+            Match,
+            instance=match,
+            form_class=MatchRefereeForm,
+            always_save=season.live_stream,
+            post_save_redirect=self.redirect(
+                request.GET.get("next") or stage.urls["edit"]
+            ),
             permission_required=True,
             extra_context=extra_context,
         )

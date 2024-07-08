@@ -921,9 +921,9 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
 
         # restrict the list of referees to those registered this season
         if "referees" in self.fields:
-            self.fields[
-                "referees"
-            ].queryset = self.instance.stage.division.season.referees.all()
+            self.fields["referees"].queryset = (
+                self.instance.stage.division.season.referees.all()
+            )
 
         # remove `stage_group` field if the `division` has no children
         if not self.instance.stage.pools.count():
@@ -1063,7 +1063,6 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
             "away_team",
             "home_team_undecided",
             "away_team_undecided",
-            "referees",
             "label",
             "round",
             "date",
@@ -1085,7 +1084,6 @@ class MatchStreamForm(MatchEditForm):
             "away_team",
             "home_team_undecided",
             "away_team_undecided",
-            "referees",
             "label",
             "round",
             "date",
@@ -1105,6 +1103,18 @@ class MatchStreamForm(MatchEditForm):
                 "If not set for the match, the season default will be used."
             ),
         }
+
+
+class MatchRefereeForm(MatchEditForm):
+    class Meta:
+        model = Match
+        fields = (
+            "home_team",
+            "away_team",
+            "home_team_undecided",
+            "away_team_undecided",
+            "referees",
+        )
 
 
 class DrawGenerationMatchForm(MatchEditForm):
