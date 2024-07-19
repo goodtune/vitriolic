@@ -1058,14 +1058,11 @@ class StageGroup(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     @property
     def ladder(self):
         team_ids = set()
-        try:
-            for m in matches:
-                if m.home_team is not None:
-                    team_ids.add(m.home_team_id)
-                if m.away_team is not None:
-                    team_ids.add(m.away_team_id)
-        except Exception:
-            pass
+        for m in self.matches.all():
+            if m.home_team is not None:
+                team_ids.add(m.home_team_id)
+            if m.away_team is not None:
+                team_ids.add(m.away_team_id)
         return LadderSummary.objects.filter(stage=self.stage, team__in=team_ids)
 
     def ladders(self):

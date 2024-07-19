@@ -30,10 +30,10 @@
 								<td class="hidden-xs">{{ form.id }}{{ match.stage.title }}</td>
 								<td>{% if match.label %}{{ match.label }}{% else %}{% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}{% endif %}</td>
 								{% with match.get_home_team.title|default:match.get_home_team_plain as home_team %}
-									<td class="team {{ match.home_team.club.slug|cssify|default:"tba" }}">{% if form.home_team %}{{ form.home_team }}{% else %}{{ match.get_home_team.title }}{% endif %}</td>
+									<td class="team {{ match.home_team.club.slug|cssify|default:"tba" }}">{% if form.home_team %}{{ match.get_home_team.title }}<br/>{{ form.home_team }}{% else %}{{ match.get_home_team.title }}{% endif %}</td>
 								{% endwith %}
 								{% with match.get_away_team.title|default:match.get_away_team_plain as away_team %}
-									<td class="team {{ match.away_team.club.slug|cssify|default:"tba" }}">{% if form.away_team %}{{ form.away_team }}{% else %}{{ match.get_away_team.title }}{% endif %}</td>
+									<td class="team {{ match.away_team.club.slug|cssify|default:"tba" }}">{% if form.away_team %}{{ match.get_away_team.title }}<br/>{{ form.away_team }}{% else %}{{ match.get_away_team.title }}{% endif %}</td>
 								{% endwith %}
 							</tr>
 						{% endwith %}
