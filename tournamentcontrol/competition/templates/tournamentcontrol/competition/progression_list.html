@@ -1,0 +1,68 @@
+<!DOCTYPE html>{% load i18n static tz %}{% load common %}
+<html>
+<head>
+    <title>{% blocktrans %}Stage Progression{% endblocktrans %}</title>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <!-- Latest compiled and minified CSS -->
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+    <!-- Optional theme -->
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap-theme.min.css">
+    <!-- Latest compiled and minified JavaScript -->
+    <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
+    <!-- get rid of links on print layout -->
+    <style type="text/css">
+        @media print { a[href]:after { content: none; } }
+    </style>
+</head>
+<body>
+
+{% timezone season.timezone %}
+<div class="container">
+    <div class="page-header">
+        <h1>{% trans "Stage Progression" %}</h1>
+    </div>
+
+    <div class="panel panel-default">
+        <div class="panel-heading">
+            <h3 class="panel-title">{{ competition }} &mdash; {{ season }}</h3>
+        </div>
+
+        <table class="table table-condensed table-striped" id="match_list">
+            <thead>
+                <tr>
+                    <th class="division">{% trans "Division" %}</th>
+                    <th class="stage">{% trans "Stage" %}</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for stage in stages %}
+                    <tr{% ifchanged stage.division %} class="group"{% endifchanged %}>
+                        <td>{{ stage.division }}</td>
+                        <td class="stage"><span title="{{ stage.pk }}">{{ stage }}</span></td>
+                        <td>
+                            {% if stage.awaiting_progression %}
+                                <a href="{% block progress_link %}{% url application.name|add:":progress-teams" competition.slug season.slug stage.division.slug stage.slug %}{% endblock %}">
+                                    <span class="glyphicon glyphicon-fast-forward" aria-hidden="true"></span>
+                                </a>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="panel-footer">
+            {% now "r" %}
+            {% if user.is_authenticated %}
+                by {{ user.get_full_name|default:user.email }}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endtimezone %}
+
+</body>
+</html>

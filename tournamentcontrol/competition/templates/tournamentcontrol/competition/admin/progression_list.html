@@ -1,0 +1,3 @@
+{% extends "tournamentcontrol/competition/progression_list.html" %}
+
+{% block progress_link %}{% url 'admin:fixja:competition:season:division:stage:draw:progress' competition.pk season.pk stage.division.pk stage.pk %}{% endblock %}

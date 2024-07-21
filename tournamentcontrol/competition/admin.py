@@ -439,6 +439,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     self.grid_async,
                     name="grid-async",
                 ),
+                path(
+                    "<int:season_id>/progress/",
+                    self.progression_list,
+                    name="progression-list",
+                ),
             ],
             self.app_name,
         )
@@ -1707,6 +1712,20 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
+    def progression_list(self, request, competition, season, extra_context, **kwargs):
+        return super().progression_list(request, competition, season, extra_context, **kwargs)
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def progress_teams(
+        self, request, competition, season, division, stage, extra_context, **kwargs
+    ):
+        return super().progress_teams(
+            request, competition, season, division, stage, extra_context, **kwargs
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
     def day_runsheet(self, request, season, date, extra_context, **kwargs):
         return super(CompetitionAdminComponent, self).day_runsheet(
             request, season, date, extra_context, **kwargs
@@ -1778,64 +1797,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         response = self.render(request, templates, extra_context)
         response["Refresh"] = SCORECARD_PDF_WAIT
         return response
-
-    @competition_by_pk_m
-    @staff_login_required_m
-    def progress_teams(
-        self, request, competition, season, division, stage, extra_context, **kwargs
-    ):
-        matches = stage.matches.filter(team_needs_progressing).exclude(
-            legitimate_bye_match
-        )
-        teams = stage.undecided_teams.all()
-
-        if not matches:
-            return HttpResponseGone()
-
-        elif matches.filter(
-            Q(home_team_undecided__isnull=False, home_team__isnull=True)
-            | Q(away_team_undecided__isnull=False, away_team__isnull=True)
-        ):
-            follows = stage.comes_after
-
-            ladders = collections.OrderedDict()
-            if follows.pools.count():
-                for pool in follows.pools.all():
-                    ladders.setdefault(
-                        pool, pool.ladder_summary.select_related("team__club")
-                    )
-            else:
-                ladders.setdefault(
-                    None, follows.ladder_summary.select_related("team__club")
-                )
-
-            extra_context["ladders"] = ladders
-
-            generic_edit_kwargs = {
-                "formset_class": ProgressTeamsFormSet,
-                "formset_kwargs": {
-                    "stage": stage,
-                },
-                "model_or_manager": teams.model,
-                "templates": self.template_path("progress_teams.html"),
-            }
-        else:
-            generic_edit_kwargs = {
-                "formset_class": ProgressMatchesFormSet,
-                "formset_kwargs": {
-                    "queryset": matches,
-                },
-                "model_or_manager": matches.model,
-                "templates": self.template_path("progress_matches.html"),
-            }
-
-        return self.generic_edit_multiple(
-            request,
-            post_save_redirect=self.redirect(season.urls["edit"]),
-            permission_required=False,
-            extra_context=extra_context,
-            **generic_edit_kwargs,
-        )
 
     @competition_by_pk_m
     @staff_login_required_m

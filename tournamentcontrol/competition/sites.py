@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import collections
 import functools
 import logging
 import operator
@@ -37,14 +38,17 @@ from tournamentcontrol.competition.forms import (
     MatchResultFormSet,
     MatchStatisticFormset,
     MultiConfigurationForm,
+    ProgressMatchesFormSet,
     RankingConfigurationForm,
     StreamControlForm,
+    ProgressTeamsFormSet,
 )
 from tournamentcontrol.competition.models import (
     Competition,
     Match,
     Person,
     SimpleScoreMatchStatistic,
+    Stage,
 )
 from tournamentcontrol.competition.rank import (
     DayView as RankDay,
@@ -57,6 +61,7 @@ from tournamentcontrol.competition.rank import (
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
     team_needs_progressing,
+    legitimate_bye_match,
 )
 
 LOG = logging.getLogger(__name__)
@@ -309,6 +314,88 @@ class CompetitionAdminMixin(object):
         templates = self.template_path("match_detail.html")
         return self.render(request, templates, context)
 
+    def progression_list(self, request, competition, season, extra_context, **kwargs):
+        stages = (
+            Stage.objects.filter(division__season=season, order__gt=1)
+            .select_related("division")
+            .order_by("division__order", "order")
+            .annotate(
+                awaiting_progression=Count(
+                    Case(
+                        When(
+                            Q(matches__home_team__isnull=True)
+                            | Q(matches__away_team__isnull=True),
+                            then=1,
+                        )
+                    )
+                ),
+            )
+        )
+        context = {
+            "competition": competition,
+            "season": season,
+            "stages": stages,
+        }
+        context.update(extra_context)
+        templates = self.template_path("progression_list.html")
+        return self.render(request, templates, context)
+
+    def progress_teams(
+        self, request, competition, season, division, stage, extra_context, **kwargs
+    ):
+        matches = stage.matches.filter(team_needs_progressing).exclude(
+            legitimate_bye_match
+        )
+        teams = stage.undecided_teams.all()
+
+        if not matches:
+            return HttpResponseGone()
+
+        elif matches.filter(
+            Q(home_team_undecided__isnull=False, home_team__isnull=True)
+            | Q(away_team_undecided__isnull=False, away_team__isnull=True)
+        ):
+            follows = stage.comes_after
+
+            ladders = collections.OrderedDict()
+            if follows.pools.count():
+                for pool in follows.pools.all():
+                    ladders.setdefault(
+                        pool, pool.ladder_summary.select_related("team__club")
+                    )
+            else:
+                ladders.setdefault(
+                    None, follows.ladder_summary.select_related("team__club")
+                )
+
+            extra_context["ladders"] = ladders
+
+            generic_edit_kwargs = {
+                "formset_class": ProgressTeamsFormSet,
+                "formset_kwargs": {
+                    "stage": stage,
+                },
+                "model_or_manager": teams.model,
+                "templates": self.template_path("progress_teams.html"),
+            }
+        else:
+            generic_edit_kwargs = {
+                "formset_class": ProgressMatchesFormSet,
+                "formset_kwargs": {
+                    "queryset": matches,
+                },
+                "model_or_manager": matches.model,
+                "templates": self.template_path("progress_matches.html"),
+            }
+
+        return self.generic_edit_multiple(
+            request,
+            post_save_redirect=self.redirect(season.urls["edit"]),
+            permission_required=False,
+            extra_context=extra_context,
+            **generic_edit_kwargs,
+        )
+
 
 class CompetitionSite(CompetitionAdminMixin, Application):
     kwargs_form_class = ConfigurationForm
@@ -330,6 +417,12 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                 r"^(?P<datestr>\d{8})/(?P<timestr>\d{4})/$",
                 self.match_results,
                 name="match-results",
+            ),
+            path("progress/", self.progression_list, name="progression-list"),
+            path(
+                "progress/<slug:division>/<slug:stage>/",
+                self.progress_teams,
+                name="progress-teams",
             ),
         ]
 
@@ -533,6 +626,11 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
     @competition_by_slug_m
     @login_required_m
+    def progression_list(self, request, competition, season, **kwargs):
+        return super().progression_list(request, competition, season, **kwargs)
+
+    @competition_by_slug_m
+    @login_required_m
     def stream(self, request, competition, season, extra_context, date=None, **kwargs):
         has_permission = permissions_required(request, Match, return_403=False)
         if has_permission is not None:
@@ -624,6 +722,18 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             extra_context=extra_context,
             redirect_to=redirect_to,
             **kwargs,
+        )
+
+    @competition_by_slug_m
+    @login_required_m
+    def progress_teams(
+        self, request, competition, season, division, stage, extra_context, **kwargs
+    ):
+        has_permission = permissions_required(request, Match, return_403=False)
+        if has_permission is not None:
+            return has_permission
+        return super().progress_teams(
+            request, competition, season, division, stage, extra_context, **kwargs
         )
 
     @competition_by_slug_m
