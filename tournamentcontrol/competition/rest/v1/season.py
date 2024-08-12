@@ -6,6 +6,12 @@ from tournamentcontrol.competition import models
 from .viewsets import SlugViewSet
 
 
+class PlaceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Place
+        fields = ("id", "title", "abbreviation", "timezone")
+
+
 class RefereeClubSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Club

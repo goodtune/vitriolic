@@ -4,6 +4,7 @@ from rest_framework_nested.serializers import NestedHyperlinkedModelSerializer
 from tournamentcontrol.competition import models
 
 from .club import ClubSerializer
+from .season import PlaceSerializer
 from .viewsets import SlugViewSet
 
 
@@ -11,6 +12,7 @@ class ListMatchSerializer(serializers.ModelSerializer):
     round = serializers.SerializerMethodField(read_only=True)
     home_team = serializers.SerializerMethodField(read_only=True)
     away_team = serializers.SerializerMethodField(read_only=True)
+    play_at = PlaceSerializer(read_only=True)
 
     class Meta:
         model = models.Match
@@ -29,6 +31,7 @@ class ListMatchSerializer(serializers.ModelSerializer):
             "away_team_score",
             "referees",
             "videos",
+            "play_at",
         )
 
     def get_round(self, obj):
