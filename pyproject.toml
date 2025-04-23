@@ -44,6 +44,9 @@ competition = [
     "icalendar",
     "internationaltouch-oauth2client",
     "pyparsing",
+    "faiss-cpu>=1.7.4",
+    "fasttext>=0.9.3",
+    "numpy>=1.19.5",
 ]
 
 [build-system]

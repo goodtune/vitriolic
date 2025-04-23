@@ -984,6 +984,19 @@ class BackendTests(TestCase):
             ["Team with this Title already exists."],
         )
 
+    def test_bug_XXX_match_edit(self):
+        """
+        Use case where matches are scheduled and set to be included in the ladder,
+        but we need to change that because for some reason (eg. ineligible players)
+        so we don't change the event schedule, but we also can ignore the results.
+        """
+        venue = factories.VenueFactory.create()
+        match = factories.MatchFactory.create(stage__division__season=venue.season, play_at=venue)
+        namespace = match._get_admin_namespace()
+        args = match._get_url_args()
+        self.assertGoodEditView(f"{namespace}:edit", *args, data={})
+
+
     def test_team_add(self):
         division = factories.DivisionFactory.create()
         data = {
