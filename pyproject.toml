@@ -24,7 +24,7 @@ dependencies = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
-dj42 = ["Django~=4.2.0"]
+dj42 = ["Django~=5.2.0"]
 dj52 = ["Django~=5.2.0"]
 
 [dependency-groups]
