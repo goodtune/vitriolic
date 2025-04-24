@@ -219,14 +219,8 @@ def select_template_name(templates):
     Return the template name that wins template resolution for an iterable of
     template names.
     """
-    try:
-        # Django 1.8+
-        template = select_template(templates)
-        template_name = template.template.name
-    except AttributeError:
-        # Django 1.7
-        template_name = template.name
-    return template_name
+    template = select_template(templates)
+    return template.template.name
 
 
 def get_timezone_from_request(request):

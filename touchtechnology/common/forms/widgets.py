@@ -1,4 +1,5 @@
 import logging
+from importlib import metadata
 
 from django import forms
 from django.conf import settings
@@ -14,11 +15,6 @@ from touchtechnology.common.forms.tz import (
     MONTH_CHOICES,
     TIMEZONE_CHOICES,
 )
-
-try:
-    from importlib import metadata
-except ImportError:  # Python 3.6
-    import importlib_metadata as metadata
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +32,8 @@ class MultiWidget(widgets.MultiWidget):
         This method is used to restore the pre-1.10 behaviour so our tests can
         continue passing across versions 1.8-1.10.
         """
-        import django
-
-        attrs = super(MultiWidget, self).build_attrs(*args, **kwargs)
-        if django.VERSION >= (1, 10):
-            attrs.pop("required", None)
+        attrs = super().build_attrs(*args, **kwargs)
+        attrs.pop("required", None)
         return attrs
 
 

@@ -52,7 +52,9 @@ def template_path(base, filename, *args):
 
 def get_media_storage(request):
     if hasattr(request, "tenant"):
-        from tenant_schemas.utils import get_public_schema_name
+        get_public_schema_name = import_string(
+            "tenant_schemas.utils.get_public_schema_name"
+        )
 
         public = request.tenant.schema_name == get_public_schema_name()
         if not public or (public and not TENANT_MEDIA_PUBLIC):

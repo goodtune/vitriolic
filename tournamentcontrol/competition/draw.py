@@ -142,7 +142,7 @@ def optimum_tournament_pool_count(
         # Make sure we are playing enough games per day through preliminary
         # stage of the tournament.
         if preliminary_rounds / max_per_day > days_available - elimination_days:
-            logger.warn(
+            logger.warning(
                 "Too many games (%s) to be played before the finals " "with %s pools.",
                 preliminary_rounds,
                 number_of_pools,
@@ -151,7 +151,7 @@ def optimum_tournament_pool_count(
 
         # Make sure we are playing enough games during the preliminary stages
         if preliminary_rounds / max_per_day > days_available - elimination_days:
-            logger.warn(
+            logger.warning(
                 "Not enough time (%s days) to play %s games at %s " "games per day.",
                 days_available - elimination_days,
                 preliminary_rounds,

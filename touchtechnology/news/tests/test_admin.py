@@ -1,18 +1,13 @@
 import base64
 import copy
 import os.path
+from io import BytesIO
 
 from django.test.utils import override_settings
 from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
 from touchtechnology.news.models import Article
-
-try:
-    from io import BytesIO
-except ImportError:
-    from StringIO import StringIO as BytesIO
-
 
 TEST_DIR = os.path.join(os.path.dirname(__file__), "html")
 

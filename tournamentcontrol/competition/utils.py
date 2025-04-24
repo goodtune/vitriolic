@@ -4,6 +4,7 @@ import math
 import re
 from datetime import datetime
 from decimal import Decimal
+from itertools import zip_longest
 from operator import and_, or_
 from typing import Union
 from zoneinfo import ZoneInfo
@@ -17,12 +18,6 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from touchtechnology.common.prince import prince
-
-try:
-    from itertools import zip_longest
-except ImportError:
-    from itertools import izip_longest as zip_longest
-
 
 logger = logging.getLogger(__name__)
 

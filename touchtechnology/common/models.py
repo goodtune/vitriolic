@@ -11,6 +11,7 @@ from django.db import models
 from django.db.models import (
     DateTimeField,
     ForeignKey as TreeField,
+    JSONField,
     ManyToManyField,
 )
 from django.db.models.signals import post_save
@@ -23,11 +24,6 @@ from django.utils.translation import gettext_lazy as _
 from touchtechnology.common.db.models import BooleanField
 from touchtechnology.common.default_settings import SITEMAP_ROOT
 from touchtechnology.common.mixins import NodeRelationMixin
-
-try:
-    from django.db.models import JSONField
-except ImportError:  # Django 2.2 support
-    from django.contrib.postgres.fields import JSONField
 
 logger = logging.getLogger(__name__)
 

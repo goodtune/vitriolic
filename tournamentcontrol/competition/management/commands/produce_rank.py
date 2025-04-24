@@ -12,8 +12,7 @@ def decay_function(path):
     try:
         return import_string(path)
     except ImportError:
-        msg = 'Invalid decay function "{}" specified'.format(path)
-        raise argparse.ArgumentTypeError(msg)
+        raise argparse.ArgumentTypeError(f'Invalid decay function "{path}" specified')
 
 
 class Command(BaseCommand):
@@ -44,9 +43,7 @@ class Command(BaseCommand):
         with transaction.atomic():
             for d in dates:
                 if sys.stdout.isatty():
-                    print(
-                        "Producing ranking points for %s..." % (d.strftime("%Y-%m-%d"),)
-                    )
+                    print(f"Producing ranking points for {d:%Y-%m-%d}...")
                 if not json:
                     rank(start=start, at=d, decay=decay)
                 else:

@@ -108,7 +108,7 @@ class Application(object):
             try:
                 ver = import_string("%s.__version__" % mod)
             except ImportError:
-                logger.warn('"__version__" not found at "%s"', mod)
+                logger.warning('"__version__" not found at "%s"', mod)
             else:
                 logger.debug('Identified version "%s" for "%s"', ver, mod)
                 break

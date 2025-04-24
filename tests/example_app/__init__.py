@@ -1,7 +1,7 @@
 INSTALL = (
-    'TestContextProcessorsSite',
-    'TestDateTimeFieldSite',
-    'TestGenericViewsSite',
-    'TestPaginationSite',
-    'TestQueryStringSite',
+    "TestContextProcessorsSite",
+    "TestDateTimeFieldSite",
+    "TestGenericViewsSite",
+    "TestPaginationSite",
+    "TestQueryStringSite",
 )

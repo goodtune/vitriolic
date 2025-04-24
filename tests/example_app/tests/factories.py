@@ -21,6 +21,6 @@ class RelativeFactory(DjangoModelFactory):
     class Meta:
         model = models.Relative
 
-    name = factory.Sequence(lambda n: 'Sample %d' % n)
+    name = factory.Sequence(lambda n: "Sample %d" % n)
 
     link = factory.SubFactory(TestDateTimeFieldFactory)

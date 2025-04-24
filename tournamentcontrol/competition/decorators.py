@@ -2,6 +2,7 @@ import datetime
 import inspect
 import logging
 import time
+from urllib.parse import ParseResult
 
 from dateutil.parser import parse
 from django.db.models import Count
@@ -10,11 +11,6 @@ from django.utils.decorators import method_decorator
 from django.utils.functional import wraps
 
 from tournamentcontrol.competition.models import Club, Competition, Season
-
-try:
-    from urllib.parse import ParseResult
-except ImportError:
-    from urlparse import ParseResult
 
 logger = logging.getLogger(__name__)
 
