@@ -20,9 +20,7 @@ class BasicResultTests(TestCase):
     @freeze_time("2019-07-15 09:00 UTC")
     def test_bare_all_in_utc(self):
         match = MatchFactory.create(
-            datetime=datetime.datetime(
-                2019, 7, 15, 8, 30, tzinfo=datetime.timezone.utc
-            ),
+            datetime=datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC")),
             stage__division__season__timezone="UTC",
         )
         self.assertCountEqual(matches_require_basic_results(), [match])
