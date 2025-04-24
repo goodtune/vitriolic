@@ -284,7 +284,7 @@ class Club(AdminUrlMixin, SitemapNodeBase):
             ORDER BY
                 "competition_person"."last_name" ASC,
                 "competition_person"."first_name" ASC
-        """ % {
+        """ % {  # noqa: E501
             "user": get_user_model()._meta.db_table
         }
         params = {
@@ -588,7 +588,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
                     "project_id": self.live_stream_project_id,
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
-                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",  # noqa: E501
                     "client_secret": self.live_stream_client_secret,
                     "redirect_uris": [],
                 }
@@ -1922,7 +1922,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
             stage = self.stage.comes_after
         except Stage.DoesNotExist:
             if self.home_team_eval_related or self.away_team_eval_related:
-                # This is a match that depends on the result of matches in the same stage.
+                # This match depends on the result of matches in the same stage.
                 stage = self.stage
             else:
                 logger.warning(

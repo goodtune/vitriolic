@@ -65,8 +65,8 @@ class BasicResultTests(TestCase):
 class RequireProgression(TestCase):
     def test_trivial(self):
         # Need two match times, one in the past and one in the future.
-        dt1 = datetime(2019, 7, 15, 8, 30, tzinfo=timezone.utc)
-        dt2 = datetime(2019, 7, 15, 10, 30, tzinfo=timezone.utc)
+        dt1 = datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC"))
+        dt2 = datetime.datetime(2019, 7, 15, 10, 30, tzinfo=ZoneInfo("UTC"))
 
         # Create a stage with four teams to play each other and then progress
         # the winners to a final.

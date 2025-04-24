@@ -156,7 +156,7 @@ class LadderEntryQuerySet(QuerySet):
                     then=F("match__stage__division__season__rank_importance"),
                 ),
                 When(
-                    match__stage__division__season__competition__rank_importance__isnull=False,
+                    match__stage__division__season__competition__rank_importance__isnull=False,  # noqa: E501
                     then=F(
                         "match__stage__division__season__competition__rank_importance"
                     ),
