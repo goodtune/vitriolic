@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 
 import django.db.models.deletion
-import tournamentcontrol.competition.models
 from django.db import migrations, models
+
+import tournamentcontrol.competition.models
 
 
 class Migration(migrations.Migration):
@@ -85,7 +85,10 @@ class Migration(migrations.Migration):
                 ("order", models.PositiveIntegerField(default=1)),
                 ("enabled", models.BooleanField(default=True)),
             ],
-            options={"ordering": ("order",), "abstract": False,},
+            options={
+                "ordering": ("order",),
+                "abstract": False,
+            },
             bases=(tournamentcontrol.competition.models.AdminUrlMixin, models.Model),
         ),
         migrations.CreateModel(
@@ -106,7 +109,9 @@ class Migration(migrations.Migration):
                 ),
                 ("date", models.DateField()),
             ],
-            options={"ordering": ("-date", "team", "-points"),},
+            options={
+                "ordering": ("-date", "team", "-points"),
+            },
         ),
         migrations.CreateModel(
             name="RankTeam",
@@ -121,7 +126,9 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("division",),},
+            options={
+                "ordering": ("division",),
+            },
         ),
         migrations.AddField(
             model_name="division",
@@ -159,7 +166,8 @@ class Migration(migrations.Migration):
             ),
         ),
         migrations.AlterUniqueTogether(
-            name="rankteam", unique_together=set([("club", "division")]),
+            name="rankteam",
+            unique_together=set([("club", "division")]),
         ),
         migrations.AddField(
             model_name="rankpoints",

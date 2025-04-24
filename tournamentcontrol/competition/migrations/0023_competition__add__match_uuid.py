@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 
 from django.db import migrations, models
 
@@ -7,13 +6,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('competition', '0022_competition__remove__person_id'),
+        ("competition", "0022_competition__remove__person_id"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='match',
-            name='uuid',
+            model_name="match",
+            name="uuid",
             field=models.UUIDField(
                 null=True,
                 editable=False,
@@ -21,5 +20,4 @@ class Migration(migrations.Migration):
                 db_index=True,
             ),
         ),
-
     ]

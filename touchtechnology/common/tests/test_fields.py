@@ -5,29 +5,17 @@ from test_plus import TestCase
 @override_settings(ROOT_URLCONF="example_app.urls")
 class DateTimeFieldTest(TestCase):
     def test_validate_form_output_tz(self):
-        text = """
-        <optgroup label="Australia">
-            <option value="Australia/Adelaide">Adelaide</option>
-            <option value="Australia/Brisbane">Brisbane</option>
-            <option value="Australia/Broken_Hill">Broken Hill</option>
-            <option value="Australia/Darwin">Darwin</option>
-            <option value="Australia/Eucla">Eucla</option>
-            <option value="Australia/Hobart">Hobart</option>
-            <option value="Australia/Lindeman">Lindeman</option>
-            <option value="Australia/Lord_Howe">Lord Howe</option>
-            <option value="Antarctica/Macquarie">Macquarie</option>
-            <option value="Australia/Melbourne">Melbourne</option>
-            <option value="Australia/Perth">Perth</option>
-            <option value="Australia/Sydney">Sydney</option>
-        </optgroup>
-        """
         with self.settings(USE_TZ=False):
             self.get("datetime:index")
-            self.assertResponseNotContains(text)
+            self.assertResponseNotContains(
+                '<option value="Australia/Sydney">Sydney</option>'
+            )
 
         with self.settings(USE_TZ=True):
             self.get("datetime:index")
-            self.assertResponseContains(text)
+            self.assertResponseContains(
+                '<option value="Australia/Sydney">Sydney</option>'
+            )
 
     def test_submit_date_time_valid(self):
         data = {

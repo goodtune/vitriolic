@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import argparse
 import sys
 from datetime import date
@@ -21,23 +19,23 @@ def decay_function(path):
 class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
-            '--decay',
-            default='tournamentcontrol.competition.rank.no_decay',
+            "--decay",
+            default="tournamentcontrol.competition.rank.no_decay",
             type=decay_function,
         )
-        parser.add_argument('--start', type=date_parse)
-        parser.add_argument('--at', type=date_parse)
-        parser.add_argument('--json', type=argparse.FileType('wb'))
-        parser.add_argument('--rebuild', action='store_true', default=False)
+        parser.add_argument("--start", type=date_parse)
+        parser.add_argument("--at", type=date_parse)
+        parser.add_argument("--json", type=argparse.FileType("wb"))
+        parser.add_argument("--rebuild", action="store_true", default=False)
 
     def handle(self, start, at, decay, json, rebuild, *args, **kwargs):
         from tournamentcontrol.competition.models import RankPoints
-        from tournamentcontrol.competition.rank import rank, json_rank
+        from tournamentcontrol.competition.rank import json_rank, rank
 
         if rebuild and at:
-            dates = RankPoints.objects.filter(date__gte=at).dates('date', 'day')
+            dates = RankPoints.objects.filter(date__gte=at).dates("date", "day")
         elif rebuild:
-            dates = RankPoints.objects.dates('date', 'day')
+            dates = RankPoints.objects.dates("date", "day")
         elif at is not None:
             dates = [at]
         else:

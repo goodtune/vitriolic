@@ -4,6 +4,7 @@ import os.path
 
 from django.test.utils import override_settings
 from test_plus import TestCase
+
 from touchtechnology.common.tests.factories import UserFactory
 from touchtechnology.news.models import Article
 
@@ -40,10 +41,9 @@ class ImageFieldTestCase(TestCase):
     def test_image_required_no_image(self):
         with self.login(self.superuser):
             self.post("admin:news:article:add", data=self.data_no_image)
-        self.assertFormError(
-            self.last_response, "form", "image", "This field is required."
-        )
-        self.assertEqual(0, Article.objects.count())
+        form = self.get_context("form")
+        self.assertFormError(form, "image", "This field is required.")
+        self.assertQuerySetEqual(Article.objects.all(), [])
 
     def test_image_required_with_image(self):
         with self.login(self.superuser):

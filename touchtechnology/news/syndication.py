@@ -1,6 +1,6 @@
-import magic
 from django.contrib.syndication.views import Feed
 from django.utils.feedgenerator import Rss201rev2Feed
+
 from touchtechnology.news.models import Article
 
 
@@ -37,26 +37,7 @@ class NewsFeed(Feed):
     def item_pubdate(self, item):
         return item.published
 
-    def item_enclosure_url(self, item):
-        try:
-            return request.build_absolute_uri(item.image.url)
-        except Exception:
-            pass
-
-    def item_enclosure_length(self, item):
-        try:
-            return item.image.size
-        except Exception:
-            pass
-
-    def item_enclosure_mime_type(self, item):
-        try:
-            return magic.from_file(item.image.path, mime=True)
-        except Exception:
-            pass
-
     def item_extra_kwargs(self, item):
         return {
-            "content_encoded": "<blockquote>%(abstract)s</blockquote>\n%(copy)s"
-            % vars(item)
+            "content_encoded": f"<blockquote>{item.abstract}</blockquote>\n{item.copy}"
         }

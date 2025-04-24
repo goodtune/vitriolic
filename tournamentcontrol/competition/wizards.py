@@ -18,7 +18,6 @@ from tournamentcontrol.competition.models import Season
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.utils import generate_scorecards
 
-
 ##############################################################################
 # Scorecard Report
 ##############################################################################

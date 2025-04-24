@@ -1,12 +1,10 @@
-from __future__ import unicode_literals
-
-
 class NodeRelationMixin(object):
     """
     A mixin to allow a Node subclass to determine the type of
     relationship it has with another. Used by the ``navigation``
     template tag.
     """
+
     def rel(self, other):
         """
         Returns the relationship as an uppercase string. Allowed values
@@ -31,40 +29,41 @@ class NodeRelationMixin(object):
         from .utils import FauxNode
 
         if other == self:
-            return 'ME'
+            return "ME"
 
         if self.parent and other == self.parent:
-            return 'PARENT'
+            return "PARENT"
 
         if other.parent == self.parent:
-            return 'SIBLING'
+            return "SIBLING"
 
         if other.parent and other.parent == self:
-            return 'DESCENDANT'
+            return "DESCENDANT"
 
         if self.parent:
             prel = self.parent.rel(other)
 
-            if prel == 'SIBLING':
-                return 'UNCLE'
+            if prel == "SIBLING":
+                return "UNCLE"
 
-            if prel == 'PARENT':
-                return 'ANCESTOR'
+            if prel == "PARENT":
+                return "ANCESTOR"
 
-            if prel == 'ANCESTOR':
+            if prel == "ANCESTOR":
                 return prel
 
         if other.parent is None:
-            return 'ROOT'
+            return "ROOT"
 
         if other.tree_id == self.tree_id:
             if other.level < self.level:
-                return 'ANCESTOR'
+                return "ANCESTOR"
 
         if isinstance(other, SitemapNode):
-            return 'SITEMAP'
+            return "SITEMAP"
         if isinstance(other, FauxNode):
-            return 'FAUX'
+            return "FAUX"
 
-        raise ValueError('You must provide a "SitemapNode" or '
-                         '"FauxNode" for comparison.')
+        raise ValueError(
+            'You must provide a "SitemapNode" or ' '"FauxNode" for comparison.'
+        )

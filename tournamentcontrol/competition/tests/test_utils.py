@@ -1,6 +1,7 @@
 import textwrap
 
 from django.test import TestCase
+
 from tournamentcontrol.competition import utils
 
 
@@ -14,7 +15,6 @@ class UtilTests(TestCase):
     def test_round_robin_odd(self):
         self.assertEqual(
             [[(1, 0), (2, 3)], [(1, 3), (0, 2)], [(1, 2), (3, 0)]],
-            
             utils.round_robin(range(1, 4)),
         )
 
@@ -42,4 +42,4 @@ class UtilTests(TestCase):
         self.assertEqual(d1 + d2, utils.SumDict({"a": 1, "b": 3, "c": 2}))
 
     def test_revpow(self):
-        self.assertEqual(utils.revpow(2 ** 4, 2), 4)
+        self.assertEqual(utils.revpow(2**4, 2), 4)

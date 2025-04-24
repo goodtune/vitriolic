@@ -1,6 +1,7 @@
 import pickle
 
 from django.test import TestCase
+
 from touchtechnology.common.sites import AccountsSite
 
 

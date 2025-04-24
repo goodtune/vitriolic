@@ -11,7 +11,7 @@ class RedefineModelForm(ModelForm):
         for field, _kw in self.Meta.redefine:
             kw = {}
             for key, val in _kw.items():
-                if callable(val) and not type(val) == type:
+                if callable(val) and not isinstance(val, type):
                     kw[key] = val(self.fields[field])
                 else:
                     kw[key] = val

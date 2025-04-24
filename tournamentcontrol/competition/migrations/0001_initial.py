@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 
 import django.db.models.deletion
-import touchtechnology.common.db.models
 from django.db import migrations, models
+
+import touchtechnology.common.db.models
 
 
 class Migration(migrations.Migration):
@@ -57,7 +57,9 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("title",),},
+            options={
+                "ordering": ("title",),
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -81,7 +83,9 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("person__last_name", "person__first_name"),},
+            options={
+                "ordering": ("person__last_name", "person__first_name"),
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -98,7 +102,9 @@ class Migration(migrations.Migration):
                 ),
                 ("name", models.CharField(max_length=50)),
             ],
-            options={"ordering": ("name",),},
+            options={
+                "ordering": ("name",),
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -141,7 +147,10 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("order",), "abstract": False,},
+            options={
+                "ordering": ("order",),
+                "abstract": False,
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -190,7 +199,10 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("order",), "abstract": False,},
+            options={
+                "ordering": ("order",),
+                "abstract": False,
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -215,7 +227,9 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"verbose_name": "Exclusion Date",},
+            options={
+                "verbose_name": "Exclusion Date",
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -235,7 +249,9 @@ class Migration(migrations.Migration):
                 ("teams", models.PositiveIntegerField(null=True, blank=True)),
                 ("is_final", models.BooleanField(default=False)),
             ],
-            options={"ordering": ("is_final", "teams", "name"),},
+            options={
+                "ordering": ("is_final", "teams", "name"),
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -265,7 +281,9 @@ class Migration(migrations.Migration):
                     models.DecimalField(default=0, max_digits=6, decimal_places=3),
                 ),
             ],
-            options={"abstract": False,},
+            options={
+                "abstract": False,
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -410,7 +428,9 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("last_name", "first_name"),},
+            options={
+                "ordering": ("last_name", "first_name"),
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -451,7 +471,10 @@ class Migration(migrations.Migration):
                 ),
                 ("timezone", models.CharField(blank=True, max_length=50, null=True)),
             ],
-            options={"ordering": ("order",), "abstract": False,},
+            options={
+                "ordering": ("order",),
+                "abstract": False,
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -469,7 +492,10 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("order",), "abstract": False,},
+            options={
+                "ordering": ("order",),
+                "abstract": False,
+            },
             bases=("competition.place",),
         ),
         migrations.CreateModel(
@@ -555,7 +581,10 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("order",), "abstract": False,},
+            options={
+                "ordering": ("order",),
+                "abstract": False,
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -632,7 +661,9 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"verbose_name": "Exclusion Date",},
+            options={
+                "verbose_name": "Exclusion Date",
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -671,7 +702,9 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"abstract": False,},
+            options={
+                "abstract": False,
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -707,7 +740,10 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("match", "number"), "abstract": False,},
+            options={
+                "ordering": ("match", "number"),
+                "abstract": False,
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -797,7 +833,9 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("order",),},
+            options={
+                "ordering": ("order",),
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -845,7 +883,10 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("order",), "verbose_name": "Pool",},
+            options={
+                "ordering": ("order",),
+                "verbose_name": "Pool",
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -943,7 +984,9 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("division__order", "stage_group__order", "order"),},
+            options={
+                "ordering": ("division__order", "stage_group__order", "order"),
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -1001,7 +1044,9 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("name",),},
+            options={
+                "ordering": ("name",),
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -1038,7 +1083,10 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("stage_group", "formula"), "verbose_name": "team",},
+            options={
+                "ordering": ("stage_group", "formula"),
+                "verbose_name": "team",
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -1064,7 +1112,10 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("order",), "abstract": False,},
+            options={
+                "ordering": ("order",),
+                "abstract": False,
+            },
             bases=("competition.place",),
         ),
         migrations.AddField(
@@ -1086,22 +1137,28 @@ class Migration(migrations.Migration):
             preserve_default=True,
         ),
         migrations.AlterUniqueTogether(
-            name="teamassociation", unique_together=set([("team", "person")]),
+            name="teamassociation",
+            unique_together=set([("team", "person")]),
         ),
         migrations.AlterUniqueTogether(
-            name="team", unique_together=set([("title", "division")]),
+            name="team",
+            unique_together=set([("title", "division")]),
         ),
         migrations.AlterUniqueTogether(
-            name="stagegroup", unique_together=set([("stage", "order")]),
+            name="stagegroup",
+            unique_together=set([("stage", "order")]),
         ),
         migrations.AlterUniqueTogether(
-            name="stage", unique_together=set([("division", "slug")]),
+            name="stage",
+            unique_together=set([("division", "slug")]),
         ),
         migrations.AlterUniqueTogether(
-            name="seasonexclusiondate", unique_together=set([("season", "date")]),
+            name="seasonexclusiondate",
+            unique_together=set([("season", "date")]),
         ),
         migrations.AlterUniqueTogether(
-            name="seasonassociation", unique_together=set([("season", "person")]),
+            name="seasonassociation",
+            unique_together=set([("season", "person")]),
         ),
         migrations.AddField(
             model_name="match",
@@ -1253,7 +1310,8 @@ class Migration(migrations.Migration):
             preserve_default=True,
         ),
         migrations.AlterUniqueTogether(
-            name="laddersummary", unique_together=set([("stage", "team")]),
+            name="laddersummary",
+            unique_together=set([("stage", "team")]),
         ),
         migrations.AddField(
             model_name="ladderentry",
@@ -1296,7 +1354,8 @@ class Migration(migrations.Migration):
             preserve_default=True,
         ),
         migrations.AlterUniqueTogether(
-            name="divisionexclusiondate", unique_together=set([("division", "date")]),
+            name="divisionexclusiondate",
+            unique_together=set([("division", "date")]),
         ),
         migrations.AddField(
             model_name="division",
@@ -1335,7 +1394,8 @@ class Migration(migrations.Migration):
             preserve_default=True,
         ),
         migrations.AlterUniqueTogether(
-            name="clubassociation", unique_together=set([("club", "person")]),
+            name="clubassociation",
+            unique_together=set([("club", "person")]),
         ),
         migrations.AddField(
             model_name="club",
@@ -1354,7 +1414,9 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="ByeTeam",
             fields=[],
-            options={"proxy": True,},
+            options={
+                "proxy": True,
+            },
             bases=("competition.team",),
         ),
     ]

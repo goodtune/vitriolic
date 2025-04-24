@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 
 from django.db import migrations
 
@@ -12,7 +11,7 @@ def set_draft_false(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('competition', '0002_division_draft'),
+        ("competition", "0002_division_draft"),
     ]
 
     operations = [

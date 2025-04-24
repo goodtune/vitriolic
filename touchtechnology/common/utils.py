@@ -1,10 +1,8 @@
-from __future__ import unicode_literals
-
 import functools
 import logging
 from operator import attrgetter, or_
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-import pytz
 from django.apps import apps
 from django.core.cache import cache
 from django.core.paginator import Paginator
@@ -236,8 +234,8 @@ def get_timezone_from_request(request):
         tzname = request.session.get("django_timezone", None)
         if tzname is not None:
             try:
-                tzinfo = pytz.timezone(tzname)
-            except pytz.UnknownTimeZoneError:
+                tzinfo = ZoneInfo(tzname)
+            except ZoneInfoNotFoundError:
                 tzinfo = None
             return tzinfo
 

@@ -1,8 +1,6 @@
-from __future__ import unicode_literals
-
+import zoneinfo
 from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
-import pytz
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.utils.http import urlencode
@@ -13,7 +11,9 @@ from touchtechnology.common.forms.tz import SelectTimezoneForm
 try:
     from django.utils.http import url_has_allowed_host_and_scheme
 except ImportError:  # Django 2.2
-    from django.utils.http import is_safe_url as url_has_allowed_host_and_scheme
+    from django.utils.http import (
+        is_safe_url as url_has_allowed_host_and_scheme,
+    )
 
 
 def login(request, to, *args, **kwargs):
@@ -33,7 +33,7 @@ def set_timezone(request):
     form = SelectTimezoneForm(data=request.POST)
     if form.is_valid():
         tzname = form.cleaned_data.get("timezone")
-        if tzname in pytz.all_timezones_set:
+        if tzname in zoneinfo.available_timezones():
             if hasattr(request, "session"):
                 request.session["django_timezone"] = tzname
             else:

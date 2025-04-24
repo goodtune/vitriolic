@@ -1,6 +1,3 @@
-import unittest
-
-import django
 from test_plus import TestCase
 
 from tournamentcontrol.competition.admin import next_related_factory
@@ -9,7 +6,6 @@ from tournamentcontrol.competition.models import Team
 from tournamentcontrol.competition.tests import factories
 
 
-@unittest.skipIf(django.VERSION < (4, 1), "Django 4.1+ required")
 class TeamFormTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -32,4 +28,4 @@ class TeamFormTests(TestCase):
             data={"club": self.clubs[0].pk},
         )
         self.assertFormError(form, "title", [])
-        self.assertQuerysetEqual(Team.objects.all(), [form.save()])
+        self.assertQuerySetEqual(Team.objects.all(), [form.save()])

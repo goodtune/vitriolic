@@ -19,11 +19,8 @@ class AdminUrlMixin(object):
         namespace = self._get_admin_namespace()
         args = self._get_url_args()
         crud = {
-            'edit': reverse_lazy(
-                '%s:edit' % namespace, args=args),
-            'delete': reverse_lazy(
-                '%s:delete' % namespace, args=args),
-            'perms': reverse_lazy(
-                '%s:perms' % namespace, args=args),
+            "edit": reverse_lazy("%s:edit" % namespace, args=args),
+            "delete": reverse_lazy("%s:delete" % namespace, args=args),
+            "perms": reverse_lazy("%s:perms" % namespace, args=args),
         }
         return crud

@@ -1,43 +1,51 @@
-from __future__ import division
-
 import decimal
 import operator
 
 from pyparsing import (
-    Forward, Literal, Optional, StringEnd, Word, ZeroOrMore, alphanums, alphas,
+    Forward,
+    Literal,
+    Optional,
+    StringEnd,
+    Word,
+    ZeroOrMore,
+    alphanums,
+    alphas,
     nums,
 )
 
-__all__ = ('Calculator', 'BonusPointCalculator')
+__all__ = ("Calculator", "BonusPointCalculator")
 
 Zero = decimal.Decimal(0)
 
 # Atoms
 
-Identifier = Word(alphas, alphanums + '_').setName('identifier')
-Integer = (Optional('-') + Word(nums)).setParseAction(
-    lambda s, loc, toks: ''.join(toks)).setName('integer')
+Identifier = Word(alphas, alphanums + "_").setName("identifier")
+Integer = (
+    (Optional("-") + Word(nums))
+    .setParseAction(lambda s, loc, toks: "".join(toks))
+    .setName("integer")
+)
 
 # Literals
 
-LeftParenthesis = Literal('(')
-RightParenthesis = Literal(')')
+LeftParenthesis = Literal("(")
+RightParenthesis = Literal(")")
 
-LeftBracket = Literal('[')
-RightBracket = Literal(']')
+LeftBracket = Literal("[")
+RightBracket = Literal("]")
 
-Colon = Literal(':')
-Comma = Literal(',')
+Colon = Literal(":")
+Comma = Literal(",")
 
 # Groups of Literals (all OR cases)
 # Note: order matters, longer tokens must be listed first!
 #   eg. '>=' before '>'
 
-Addition = (Literal('+') | Literal('-')).setName('addop')
-Multiplication = (Literal('*') | Literal('/')).setName('mulop')
+Addition = (Literal("+") | Literal("-")).setName("addop")
+Multiplication = (Literal("*") | Literal("/")).setName("mulop")
 Comparison = (
-    Literal('=') | Literal('>=') | Literal('<=') | Literal('>') | Literal('<')
-).setName('comparison')
+    Literal("=") | Literal(">=") | Literal("<=") | Literal(">") | Literal("<")
+).setName("comparison")
 
 
 class Calculator(object):
@@ -45,13 +53,13 @@ class Calculator(object):
     def __init__(self, instance, *args, **kwargs):
         Expression = Forward()
         Atom = (
-            (Identifier | Integer).setParseAction(self._push) |
-            (LeftParenthesis + Expression.suppress() + RightParenthesis)
-        ).setName('atom')
-        Terminal = Atom + ZeroOrMore((Multiplication + Atom)
-                                     .setParseAction(self._push))
-        Expression << Terminal + ZeroOrMore((Addition + Terminal)
-                                            .setParseAction(self._push))
+            (Identifier | Integer).setParseAction(self._push)
+            | (LeftParenthesis + Expression.suppress() + RightParenthesis)
+        ).setName("atom")
+        Terminal = Atom + ZeroOrMore((Multiplication + Atom).setParseAction(self._push))
+        Expression << Terminal + ZeroOrMore(
+            (Addition + Terminal).setParseAction(self._push)
+        )
 
         self.Operators = {
             "+": operator.add,
@@ -99,39 +107,40 @@ class BonusPointCalculator(Calculator):
         Super 14 Rugby
         "[tries>=4: 1] + [loss=1, margin<=7: 1]"
     """
+
     def __init__(self, *args, **kwargs):
         super(BonusPointCalculator, self).__init__(*args, **kwargs)
 
-        self.Operators.update({
-            "=": operator.eq,
-            ">": operator.gt,
-            "<": operator.lt,
-            ">=": operator.ge,
-            "<=": operator.le,
-            ",": operator.and_,
-            "[": lambda a, b: a and b or Zero,
-            "]": lambda a, b: a and b or Zero,
-        })
+        self.Operators.update(
+            {
+                "=": operator.eq,
+                ">": operator.gt,
+                "<": operator.lt,
+                ">=": operator.ge,
+                "<=": operator.le,
+                ",": operator.and_,
+                "[": lambda a, b: a and b or Zero,
+                "]": lambda a, b: a and b or Zero,
+            }
+        )
 
         BonusPointAddition = Addition | Comparison
 
         Expression = Forward()
-        Atom = (
-            (Identifier | Integer).setParseAction(self._push) |
-            (LeftParenthesis + Expression.suppress() + RightParenthesis)
+        Atom = (Identifier | Integer).setParseAction(self._push) | (
+            LeftParenthesis + Expression.suppress() + RightParenthesis
         )
-        Terminal = Atom + ZeroOrMore((Multiplication + Atom)
-                                     .setParseAction(self._push))
-        Expression << Terminal + ZeroOrMore((BonusPointAddition + Terminal)
-                                            .setParseAction(self._push))
-        Condition = Expression + ZeroOrMore((Comma + Expression)
-                                            .setParseAction(self._push))
+        Terminal = Atom + ZeroOrMore((Multiplication + Atom).setParseAction(self._push))
+        Expression << Terminal + ZeroOrMore(
+            (BonusPointAddition + Terminal).setParseAction(self._push)
+        )
+        Condition = Expression + ZeroOrMore(
+            (Comma + Expression).setParseAction(self._push)
+        )
 
-        Rule = (LeftBracket +
-                Condition +
-                Colon +
-                Expression +
-                RightBracket).setParseAction(self._push)
+        Rule = (
+            LeftBracket + Condition + Colon + Expression + RightBracket
+        ).setParseAction(self._push)
         Chain = Rule + ZeroOrMore((Addition + Rule).setParseAction(self._push))
 
         self.pattern = Chain + StringEnd()

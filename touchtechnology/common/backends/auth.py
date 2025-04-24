@@ -8,7 +8,8 @@ class UserSubclassBackend(ModelBackend):
         UserModel = get_user_model()
         try:
             return UserModel.objects.exclude(
-                password__startswith=UNUSABLE_PASSWORD_PREFIX).get(pk=user_id)
+                password__startswith=UNUSABLE_PASSWORD_PREFIX
+            ).get(pk=user_id)
         except UserModel.DoesNotExist:
             return None
 

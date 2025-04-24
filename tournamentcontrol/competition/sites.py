@@ -1,13 +1,11 @@
-from __future__ import unicode_literals
-
 import collections
 import functools
 import logging
 import operator
 from datetime import timedelta
 from operator import or_
+from zoneinfo import ZoneInfo
 
-import pytz
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.contrib import messages
@@ -39,9 +37,9 @@ from tournamentcontrol.competition.forms import (
     MatchStatisticFormset,
     MultiConfigurationForm,
     ProgressMatchesFormSet,
+    ProgressTeamsFormSet,
     RankingConfigurationForm,
     StreamControlForm,
-    ProgressTeamsFormSet,
 )
 from tournamentcontrol.competition.models import (
     Competition,
@@ -60,8 +58,8 @@ from tournamentcontrol.competition.rank import (
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
-    team_needs_progressing,
     legitimate_bye_match,
+    team_needs_progressing,
 )
 
 LOG = logging.getLogger(__name__)
@@ -615,7 +613,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
         context = {
             "datetimes": [
-                timezone.localtime(each, pytz.timezone(season.timezone))
+                timezone.localtime(each, ZoneInfo(season.timezone))
                 for each in basic_results.datetimes("datetime", "minute")
             ],
             "details": details_results,
@@ -641,18 +639,12 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         else:
             matches = season.matches
 
-        # Allow super-user accounts visibility to look 1 year into the future.
-        if request.user.is_superuser:
-            now = timezone.now() + relativedelta(years=1)
-        else:
-            now = None
-
         # Filter the list of matches to those which require streaming control
         stream_start = matches.exclude(external_identifier__isnull=True)
 
         context = {
             "datetimes": [
-                timezone.localtime(each, pytz.timezone(season.timezone))
+                timezone.localtime(each, ZoneInfo(season.timezone))
                 for each in stream_start.datetimes("datetime", "minute")
             ],
         }

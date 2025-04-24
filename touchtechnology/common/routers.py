@@ -27,8 +27,11 @@ class AppRouter(object):
     @cached_property
     def route(self):
         from collections import defaultdict
+
         from django.db import DEFAULT_DB_ALIAS
+
         from .default_settings import APP_ROUTING
+
         return defaultdict(lambda: DEFAULT_DB_ALIAS, APP_ROUTING)
 
     def _route(self, model, **hints):

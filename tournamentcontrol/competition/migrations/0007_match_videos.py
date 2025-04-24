@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 
 import django.db.models.deletion
-import touchtechnology.common.db.models
 from django.conf import settings
 from django.db import migrations, models
+
+import touchtechnology.common.db.models
 
 
 class Migration(migrations.Migration):

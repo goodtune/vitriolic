@@ -1,9 +1,8 @@
 import unittest
 from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
 
-import pytz
 from django import VERSION
-from django.conf import settings
 from django.template import Context, Template
 from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
@@ -63,7 +62,7 @@ class TemplateTests(TestCase):
             date=date(2017, 2, 13),
             time=time(9, 0),
             play_at=ground,
-            datetime=datetime(2017, 2, 13, 9, tzinfo=pytz.utc),
+            datetime=datetime(2017, 2, 13, 9, tzinfo=ZoneInfo("UTC")),
         )
         factories.MatchFactory.create(
             home_team=cls.team,
@@ -74,7 +73,7 @@ class TemplateTests(TestCase):
             date=date(2017, 2, 13),
             time=time(10, 0),
             play_at=ground,
-            datetime=datetime(2017, 2, 13, 10, tzinfo=pytz.utc),
+            datetime=datetime(2017, 2, 13, 10, tzinfo=ZoneInfo("UTC")),
         )
         cls.stage = stage2
         cls.division = stage2.division
@@ -429,7 +428,7 @@ class GoodViewTests(TestCase):
 
         self.assertLoginRequired(
             round_games._get_admin_namespace() + ":draw:progress",
-            *round_games._get_url_args()
+            *round_games._get_url_args(),
         )
 
         with self.login(self.superuser):
@@ -437,7 +436,7 @@ class GoodViewTests(TestCase):
             # therefore can't have any undecided teams.
             self.get(
                 round_games._get_admin_namespace() + ":draw:progress",
-                *round_games._get_url_args()
+                *round_games._get_url_args(),
             )
             self.response_410()
 
@@ -458,7 +457,7 @@ class GoodViewTests(TestCase):
             # The final series progression should now be accessible.
             self.get(
                 finals._get_admin_namespace() + ":draw:progress",
-                *finals._get_url_args()
+                *finals._get_url_args(),
             )
             self.response_200()
 
@@ -553,11 +552,11 @@ class GoodViewTests(TestCase):
         team = factories.TeamFactory.create()
         self.assertLoginRequired(
             team.division.season.competition._get_admin_namespace() + ":perms",
-            *team._get_url_args()[:1]
+            *team._get_url_args()[:1],
         )
         self.assertLoginRequired(
             team.division.season._get_admin_namespace() + ":perms",
-            *team._get_url_args()[:2]
+            *team._get_url_args()[:2],
         )
         # self.assertLoginRequired(
         #     team.division._get_admin_namespace() + ':perms',
@@ -569,11 +568,11 @@ class GoodViewTests(TestCase):
         with self.login(self.superuser):
             self.assertGoodView(
                 team.division.season.competition._get_admin_namespace() + ":perms",
-                *team._get_url_args()[:1]
+                *team._get_url_args()[:1],
             )
             self.assertGoodView(
                 team.division.season._get_admin_namespace() + ":perms",
-                *team._get_url_args()[:2]
+                *team._get_url_args()[:2],
             )
             # self.assertGoodView(
             #     team.division._get_admin_namespace() + ':perms',
@@ -643,7 +642,7 @@ class BackendTests(TestCase):
         self.post(
             season._get_admin_namespace() + ":division:add",
             *season._get_url_args(),
-            data=data
+            data=data,
         )
         self.response_302()
 
@@ -667,7 +666,7 @@ class BackendTests(TestCase):
         self.post(
             division._get_admin_namespace() + ":edit",
             *division._get_url_args(),
-            data=data
+            data=data,
         )
         self.response_302()
 
@@ -977,12 +976,8 @@ class BackendTests(TestCase):
         self.post(
             team._get_admin_namespace() + ":add", *team._get_url_args()[:-1], data=data
         )
-        self.assertFormError(
-            self.last_response,
-            "form",
-            "title",
-            ["Team with this Title already exists."],
-        )
+        form = self.get_context("form")
+        self.assertFormError(form, "title", ["Team with this Title already exists."])
 
     def test_team_add(self):
         division = factories.DivisionFactory.create()
@@ -997,7 +992,7 @@ class BackendTests(TestCase):
         self.post(
             division._get_admin_namespace() + ":team:add",
             *division._get_url_args(),
-            data=data
+            data=data,
         )
         self.response_302()
         # Ensure that the team was created and that it has a slug
@@ -1051,11 +1046,7 @@ class BackendTests(TestCase):
         self.post(
             stage._get_admin_namespace() + ":add",
             *stage._get_url_args()[:-1],
-            data=data
+            data=data,
         )
-        self.assertFormError(
-            self.last_response,
-            "form",
-            "title",
-            ["Stage with this Title already exists."],
-        )
+        form = self.get_context("form")
+        self.assertFormError(form, "title", ["Stage with this Title already exists."])

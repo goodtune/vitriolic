@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
+
+from django.db import migrations, models
 
 import touchtechnology.common.db.models
 import touchtechnology.common.mixins
-from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
@@ -31,7 +31,9 @@ class Migration(migrations.Migration):
                 ("latest", models.CharField(max_length=20)),
                 ("active", models.BooleanField(default=True)),
             ],
-            options={"ordering": ("name",),},
+            options={
+                "ordering": ("name",),
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -136,7 +138,9 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("tree_id", "lft"),},
+            options={
+                "ordering": ("tree_id", "lft"),
+            },
             bases=(touchtechnology.common.mixins.NodeRelationMixin, models.Model),
         ),
     ]

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from rest_framework_nested.serializers import NestedHyperlinkedModelSerializer
+
 from tournamentcontrol.competition import models
 
 from .club import ClubSerializer

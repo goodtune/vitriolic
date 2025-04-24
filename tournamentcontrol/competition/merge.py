@@ -25,11 +25,11 @@ def merge_model_objects(primary_object, alias_objects=[], keep_old=False):
     primary_class = primary_object.__class__
 
     if not issubclass(primary_class, Model):
-        raise TypeError('Only django.db.models.Model subclasses can be merged')
+        raise TypeError("Only django.db.models.Model subclasses can be merged")
 
     for alias_object in alias_objects:
         if not isinstance(alias_object, primary_class):
-            raise TypeError('Only models of same class can be merged')
+            raise TypeError("Only models of same class can be merged")
 
     # Get a list of all GenericForeignKeys in all models
     # TODO: this is a bit of a hack, since the generics framework should provide a similar
@@ -45,16 +45,17 @@ def merge_model_objects(primary_object, alias_objects=[], keep_old=False):
     blank_local_fields = {
         field.attname
         for field in primary_object._meta.local_fields
-        if getattr(primary_object, field.attname) in {None, ''}
+        if getattr(primary_object, field.attname) in {None, ""}
     }
 
     # Loop through all alias objects and migrate their data to the primary object.
     for alias_object in alias_objects:
         # Migrate all foreign key references from alias object to primary object.
         for related_object in [
-                f for f in alias_object._meta.get_fields()
-                if (f.one_to_many or f.one_to_one) and
-                f.auto_created and not f.concrete]:
+            f
+            for f in alias_object._meta.get_fields()
+            if (f.one_to_many or f.one_to_one) and f.auto_created and not f.concrete
+        ]:
             # The variable name on the alias_object model.
             alias_varname = related_object.get_accessor_name()
             if isinstance(related_object.field, OneToOneField):
@@ -68,8 +69,10 @@ def merge_model_objects(primary_object, alias_objects=[], keep_old=False):
 
         # Migrate all many to many references from alias object to primary object.
         for related_many_object in [
-                f for f in alias_object._meta.get_fields(include_hidden=True)
-                if f.many_to_many and f.auto_created]:
+            f
+            for f in alias_object._meta.get_fields(include_hidden=True)
+            if f.many_to_many and f.auto_created
+        ]:
             alias_varname = related_many_object.get_accessor_name()
             obj_varname = related_many_object.field.name
 
@@ -96,7 +99,7 @@ def merge_model_objects(primary_object, alias_objects=[], keep_old=False):
         filled_up = set()
         for field_name in blank_local_fields:
             val = getattr(alias_object, field_name)
-            if val not in [None, '']:
+            if val not in [None, ""]:
                 setattr(primary_object, field_name, val)
                 filled_up.add(field_name)
         blank_local_fields -= filled_up

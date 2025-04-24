@@ -1,11 +1,7 @@
-from __future__ import unicode_literals
+import zoneinfo
 
-from operator import itemgetter
-
-import pytz
 from django import forms
 from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
 
 
 def timezone_choice(tzname, country=None):
@@ -34,17 +30,6 @@ def timezone_choice(tzname, country=None):
     return (tzname, rest)
 
 
-def timezone_choices(countries, timezones, key):
-    yield "", ""
-    for iso3166, country in sorted(countries.items(), key=key):
-        zones = timezones.get(iso3166, [])
-        zones = [timezone_choice(zone, country) for zone in zones]
-        zones.sort(key=key)
-        yield country, zones
-
-
-DAY_CHOICES = [("", "")] + list(zip(*[range(1, 32)] * 2))
-
 MONTH_CHOICES = (
     ("", ""),
     (1, "January"),
@@ -61,27 +46,13 @@ MONTH_CHOICES = (
     (12, "December"),
 )
 
-HOUR_CHOICES = [("", "")] + list(zip(*[range(0, 24, 1)] * 2))
-
-MINUTES = range(0, 60)
-
-MINUTE_CHOICES = [("", "")] + list(zip(MINUTES, ["%02d" % m for m in MINUTES]))
-
-TIMEZONE_CHOICES = list(
-    timezone_choices(pytz.country_names, pytz.country_timezones, itemgetter(1))
-)
-
-# Add UTC and MGT
-TIMEZONE_CHOICES.insert(
-    1,
-    (
-        _("Universal"),
-        [
-            ("UTC", _("Coordinated Universal Time")),
-            ("GMT", _("Greenwich Mean Time")),
-        ],
-    ),
-)
+DAY_CHOICES = [("", "")] + [(day, day) for day in range(1, 32)]
+HOUR_CHOICES = [("", "")] + [(h, h) for h in range(24)]
+MINUTE_CHOICES = [("", "")] + [(m, f"{m:02d}") for m in range(60)]
+TIMEZONE_CHOICES = [
+    timezone_choice(tz, tz.split("/", 1)[0])
+    for tz in sorted(zoneinfo.available_timezones())
+]
 
 
 class SelectTimezoneForm(forms.Form):

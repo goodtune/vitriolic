@@ -119,7 +119,9 @@ def ladder(context, stage):
         template_name = "tournamentcontrol/competition/ladder/standard.html"
 
     context.update(
-        {"summary": summary,}
+        {
+            "summary": summary,
+        }
     )
 
     tpl = get_template(template_name)

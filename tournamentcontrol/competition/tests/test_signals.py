@@ -7,7 +7,7 @@ from tournamentcontrol.competition.tests import factories
 class SignalHandlerTests(TestCase):
     def test_ladder_entry_match_no_score(self):
         factories.MatchFactory.create()
-        self.assertQuerysetEqual(LadderEntry.objects.all(), LadderEntry.objects.none())
+        self.assertQuerySetEqual(LadderEntry.objects.all(), LadderEntry.objects.none())
 
     def test_ladder_entry_match_with_score(self):
         factories.MatchFactory.create(home_team_score=5, away_team_score=2)

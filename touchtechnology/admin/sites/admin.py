@@ -1,5 +1,3 @@
-from __future__ import unicode_literals
-
 import collections
 import logging
 
@@ -22,7 +20,7 @@ from touchtechnology.common.models import SitemapNode
 
 try:
     from tenant_schemas.utils import get_public_schema_name
-except ImportError as exc:
+except ImportError:
     pass
 
 logger = logging.getLogger(__name__)

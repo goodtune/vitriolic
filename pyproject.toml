@@ -3,12 +3,12 @@ name = "vitriolic"
 urls = { "Source Code" = "https://github.com/goodtune/vitriolic" }
 description = "A suite of packages for the Django framework to provide integrated Content Management and Sports Administration functionality for sporting associations."
 readme = "README.md"
-license = { "type" = "BSD-3-Clause", "file" = "LICENSE" }
+license = "BSD-3-Clause"
 authors = [
     { "name" = "Gary Reynolds", "email" = "gary@touch.asn.au" }
 ]
 classifiers = []
-requires-python = ">=3.6"
+requires-python = ">=3.11"
 dependencies = [
     "django-froala-editor>=2.9",
     "django-guardian>=2.4",
@@ -18,21 +18,28 @@ dependencies = [
     "first",
     'importlib-metadata;python_version<"3.7"',
     "namedentities",
-    "pillow",
-    "psycopg2-binary",
-    "python-dateutil",
-    "pytz",
+    "psycopg",
+    "setuptools", # pkg_resources in touchtechnology.common.templatetags.common
 ]
 dynamic = ["version"]
 
 [project.optional-dependencies]
-test = ["coverage", "django-environ", "django-test-plus", "factory_boy", "freezegun"]
+dj42 = ["Django~=4.2.0"]
+dj52 = ["Django~=5.2.0"]
+
+[dependency-groups]
+test = ["coverage", "django-environ", "django-test-plus", "factory_boy", "freezegun", "tblib"]
 redis = ["django-redis-cache", "redis"]
 admin = ["django-bootstrap3", "django-gravatar2"]
+common = []
 content = []
-news = ["django-imagekit", "python-magic"]
+news = [
+    "django-imagekit",
+    "python-dateutil",
+    "python-magic",
+]
 competition = [
-    "celery",
+    "celery>5",
     "cloudinary",
     "django-embed-video",
     "django-formtools",
@@ -44,10 +51,11 @@ competition = [
     "icalendar",
     "internationaltouch-oauth2client",
     "pyparsing",
+    "python-dateutil",
 ]
 
 [build-system]
-requires = ["setuptools>=61", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools", "setuptools-scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -64,13 +72,6 @@ combine_as_imports = true
 default_section = "THIRDPARTY"
 include_trailing_comma = true
 multi_line_output = 5
-
-[tool.mypy]
-exclude = ["migrations", "tests"]
-max-line-length = 88
-
-[tool.mypy.plugins.django-stubs]
-django_settings_module = "vitriolic.settings"
 
 [tool.black]
 line-length = 88

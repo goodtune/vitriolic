@@ -1,9 +1,6 @@
-from __future__ import unicode_literals
-
 import logging
 import os
 
-from django.conf import settings
 from django.contrib import messages
 from django.core.files.storage import default_storage
 from django.db.models import Q
@@ -169,7 +166,7 @@ class ContentAdminComponent(AdminComponent):
         child_formset_class=None,
         post_save_redirect=None,
         *args,
-        **kwargs
+        **kwargs,
     ):
         if pk is not None:
             instance = get_object_or_404(parent_model, pk=pk)
@@ -256,7 +253,7 @@ class ContentAdminComponent(AdminComponent):
             child_form_class=PageForm,
             child_formset_class=PageContentFormset,
             post_save_redirect=post_save_redirect,
-            **extra_context
+            **extra_context,
         )
 
     @staff_login_required_m
@@ -591,7 +588,7 @@ class ContentAdminComponent(AdminComponent):
             def is_leaf_node(self):
                 listdir = default_storage.listdir(self.path)
                 logger.debug(listdir)
-                return not any([l for l in listdir if l])
+                return not any([item for item in listdir if item])
 
         fullpath = os.path.join(path or "", filename or "")
 

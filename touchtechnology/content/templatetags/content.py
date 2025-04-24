@@ -2,6 +2,7 @@ import logging
 
 from django.template import Library
 from django.utils.safestring import mark_safe
+
 from touchtechnology.content.models import Chunk
 
 logger = logging.getLogger(__name__)

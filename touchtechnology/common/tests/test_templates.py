@@ -1,11 +1,10 @@
-from __future__ import unicode_literals
-
 from urllib.parse import urlparse, urlunparse
 
 from django.template import Context, Template
 from django.test.utils import override_settings
 from django.utils.http import urlencode
 from test_plus import TestCase
+
 from touchtechnology.common.models import SitemapNode
 
 CSSIFY_TEMPLATE = Template("{% load common %}{{ value|cssify }}")
@@ -30,8 +29,6 @@ class CssifyTest(TestCase):
 
 
 class NavigationTest(TestCase):
-    maxDiff = None
-
     @classmethod
     def setUpClass(cls):
         cls.home = SitemapNode.objects.create(title="Home Page", slug="home")

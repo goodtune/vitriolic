@@ -40,7 +40,10 @@ class RelatedFilterTest(TestCase):
 
     def test_related_specific_whitelist(self):
         rel = RelativeFactory()
-        context = self._get_context(rel.link, ("relative_set",),)
+        context = self._get_context(
+            rel.link,
+            ("relative_set",),
+        )
         output = self.template.render(context).strip()
         self.assertEqual(
             output, "<dl>" "<dt>relative_set</dt>" "<dd>RelatedManager (1)</dd>" "</dl>"

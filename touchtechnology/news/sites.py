@@ -25,10 +25,22 @@ class NewsSite(Application):
 
     def get_urls(self):
         return [
-            path("", self.index, name="index",),
+            path(
+                "",
+                self.index,
+                name="index",
+            ),
             path("<int:year>/", self.archive_year, name="year"),
-            path("<int:year>/<str:month>/", self.archive_month, name="month",),
-            path("<int:year>/<str:month>/<int:day>/", self.archive_day, name="day",),
+            path(
+                "<int:year>/<str:month>/",
+                self.archive_month,
+                name="month",
+            ),
+            path(
+                "<int:year>/<str:month>/<int:day>/",
+                self.archive_day,
+                name="day",
+            ),
             path(
                 "<int:year>/<str:month>/<int:day>/<slug:slug>/",
                 self.article,
@@ -70,7 +82,10 @@ class NewsSite(Application):
         if category is not None:
             queryset = queryset.filter(categories__slug=category)
         return self.generic_list(
-            request, Article, queryset=queryset, extra_context=extra_context,
+            request,
+            Article,
+            queryset=queryset,
+            extra_context=extra_context,
         )
 
     @date_view
@@ -93,7 +108,10 @@ class NewsSite(Application):
             slug=slug,
         )
         return self.generic_detail(
-            request, article.translations, locale=locale, extra_context=extra_context,
+            request,
+            article.translations,
+            locale=locale,
+            extra_context=extra_context,
         )
 
     @date_view
@@ -131,7 +149,10 @@ class NewsSite(Application):
             published__range=(date, date + YEAR_DELTA)
         ).live()
         extra_context.update(
-            {"date_list": queryset.dates("published", "month"), "year": date.year,}
+            {
+                "date_list": queryset.dates("published", "month"),
+                "year": date.year,
+            }
         )
         return self.generic_list(
             request,
@@ -159,7 +180,10 @@ class NewsSite(Application):
 
     def feeds(self, request, **kwargs):
         context = {
-            "feeds": {"ATOM": "atom", "RSS": "rss",},
+            "feeds": {
+                "ATOM": "atom",
+                "RSS": "rss",
+            },
         }
         context.update(kwargs)
         templates = self.template_path("feeds.html")

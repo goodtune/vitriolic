@@ -351,7 +351,10 @@ def field(bf, label=None):
         radio_checkbox_input = False
 
     if label:
-        if isinstance(widget, (Input, Select, Textarea),) and not isinstance(
+        if isinstance(
+            widget,
+            (Input, Select, Textarea),
+        ) and not isinstance(
             widget, (CheckboxInput, RadioSelect, CheckboxSelectMultiple, MultiWidget)
         ):
             # Use a <label> tag

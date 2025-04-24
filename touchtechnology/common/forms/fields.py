@@ -1,10 +1,8 @@
-from __future__ import unicode_literals
-
 import json
 import re
 from datetime import date, datetime, time
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-import pytz
 from django import forms
 from django.conf import settings
 from django.db.models import Min
@@ -165,7 +163,7 @@ class SelectTimeField(forms.MultiValueField):
                 except ValueError as e:
                     raise forms.ValidationError(smart_str(e).capitalize())
 
-            except TypeError as e:
+            except TypeError:
                 raise forms.ValidationError("Please enter a valid time.")
 
         except forms.ValidationError:
@@ -210,11 +208,11 @@ class SelectDateTimeField(forms.MultiValueField):
             value = datetime(year, month, day, hour, minute)
             if settings.USE_TZ:
                 try:
-                    tzinfo = pytz.timezone(data[5])
+                    tzinfo = ZoneInfo(data[5])
                 except IndexError:
                     raise forms.ValidationError("Please select a time zone.")
-                except pytz.exceptions.UnknownTimeZoneError:
-                    raise forms.ValidationError("Please select a valid time " "zone.")
+                except (ValueError, ZoneInfoNotFoundError):
+                    raise forms.ValidationError("Please select a valid time zone.")
                 value = timezone.make_aware(value, tzinfo)
         except ValueError:
             raise forms.ValidationError("Please enter a valid date and time.")
@@ -241,7 +239,7 @@ class TemplatePathFormField(forms.ChoiceField):
         # arguments.
         max_length=None,
         *args,
-        **kwargs
+        **kwargs,
     ):
 
         super(TemplatePathFormField, self).__init__(
@@ -251,7 +249,7 @@ class TemplatePathFormField(forms.ChoiceField):
             initial=initial,
             help_text=help_text,
             *args,
-            **kwargs
+            **kwargs,
         )
 
         self.template_base = template_base
@@ -271,7 +269,7 @@ class TemplatePathFormField(forms.ChoiceField):
     def _get_choices(self):
         return TemplateChoiceIterator(self)
 
-    choices = property(_get_choices, forms.ChoiceField._set_choices)
+    choices = property(_get_choices, forms.ChoiceField.choices.fset)
 
 
 class ModelChoiceField(LabelFromInstanceMixin, forms.ModelChoiceField):

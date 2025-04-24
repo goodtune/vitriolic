@@ -6,8 +6,8 @@ from datetime import datetime
 from decimal import Decimal
 from operator import and_, or_
 from typing import Union
+from zoneinfo import ZoneInfo
 
-import pytz
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.db.models import F, Q
@@ -225,7 +225,7 @@ def combine_and_localize(date, time, tz):
     """
     combined = datetime.combine(date, time)
     if isinstance(tz, str):
-        tz = pytz.timezone(tz)
+        tz = ZoneInfo(tz)
     return timezone.make_aware(combined, tz)
 
 
@@ -345,7 +345,9 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
 
         for pool in range(number_of_pools):
             match = MatchDescriptor(
-                pool + 1, "G%dP1" % (pool + 1), "G%dP2" % (number_of_pools - pool),
+                pool + 1,
+                "G%dP1" % (pool + 1),
+                "G%dP2" % (number_of_pools - pool),
             )
             initial.add(match)
 

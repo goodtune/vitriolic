@@ -1,5 +1,6 @@
 from django.test.utils import override_settings
 from test_plus import TestCase
+
 from tournamentcontrol.competition.models import LadderSummary
 from tournamentcontrol.competition.tests import factories
 

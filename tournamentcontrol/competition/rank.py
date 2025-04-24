@@ -211,9 +211,11 @@ def base(ladder_entry, win=15, draw=10, loss=5, forfeit_against=-20):
             win * 2 if ladder_entry.win and ladder_entry.margin > 15 else 0,
             win if ladder_entry.win and ladder_entry.margin > 10 else 0,
             win * Constants.HALF if ladder_entry.win and ladder_entry.margin > 5 else 0,
-            loss * Constants.HALF
-            if ladder_entry.loss and ladder_entry.margin < 2
-            else 0,
+            (
+                loss * Constants.HALF
+                if ladder_entry.loss and ladder_entry.margin < 2
+                else 0
+            ),
         ]
     )
 
