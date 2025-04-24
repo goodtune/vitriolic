@@ -6,5 +6,6 @@
   "enabledManagers": [
     "github-actions",
     "pep621"
-  ]
+  ],
+  "automerge": true
 }
