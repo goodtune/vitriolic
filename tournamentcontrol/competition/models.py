@@ -1,20 +1,13 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import unicode_literals
 
 import collections
 import logging
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-import requests
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaInMemoryUpload
-
-import django
-import pytz
 from cloudinary.models import CloudinaryField
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
@@ -33,8 +26,9 @@ from django.utils import timezone
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
+from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
-from requests import HTTPError
+from googleapiclient.discovery import build
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
 from touchtechnology.common.db.models import (
@@ -44,13 +38,13 @@ from touchtechnology.common.db.models import (
     LocationField,
     ManyToManyField,
 )
+from touchtechnology.common.forms.tz import TIMEZONE_CHOICES
 from touchtechnology.common.models import SitemapNodeBase
 from tournamentcontrol.competition.constants import (
     GENDER_CHOICES,
-    LiveStreamPrivacy,
-    PYTZ_TIME_ZONE_CHOICES,
     SEASON_MODE_CHOICES,
     WIN_LOSE,
+    LiveStreamPrivacy,
 )
 from tournamentcontrol.competition.managers import (
     LadderEntryManager,
@@ -140,39 +134,20 @@ class RankImportanceMixin(models.Model):
 
 
 class TimeZoneChoiceField(forms.ChoiceField):
-    """
-    Simple customisation of a ``forms.ChoiceField`` that allows a default
-    declaration of ``PYTZ_TIME_ZONE_CHOICES`` to fill the ``choices`` without
-    the need to add this on the model field declaration.
-
-    ``PYTZ_TIME_ZONE_CHOICES`` is dependant upon the currently installed
-    version of ``pytz`` and this was affecting the migrations framework.
-    """
-
     def __init__(self, max_length=None, *args, **kwargs):
-        choices = kwargs.pop("choices", PYTZ_TIME_ZONE_CHOICES)
-        if django.VERSION[:2] >= (1, 11):
-            kwargs.pop("empty_value", None)
-        super(TimeZoneChoiceField, self).__init__(choices=choices, *args, **kwargs)
+        choices = kwargs.pop("choices", TIMEZONE_CHOICES)
+        kwargs.pop("empty_value", None)
+        super().__init__(choices=choices, *args, **kwargs)
 
 
 class TimeZoneField(models.CharField):
-    """
-    Simple customisation of a ``models.CharField`` that allows a default
-    declaration of ``PYTZ_TIME_ZONE_CHOICES`` to fill the ``choices`` without
-    the need to add this on the model field declaration.
-
-    ``PYTZ_TIME_ZONE_CHOICES`` is dependant upon the currently installed
-    version of ``pytz`` and this was affecting the migrations framework.
-    """
-
     def deconstruct(self):
-        name, path, args, kwargs = super(TimeZoneField, self).deconstruct()
+        name, _, args, kwargs = super().deconstruct()
         return name, "django.db.models.CharField", args, kwargs
 
     def formfield(self, form_class=TimeZoneChoiceField, *args, **kwargs):
         required = kwargs.pop("required", settings.USE_TZ)
-        return super(TimeZoneField, self).formfield(
+        return super().formfield(
             form_class=form_class, required=required, *args, **kwargs
         )
 
@@ -1213,8 +1188,8 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
 
     def __cmp__(self, other):
         if self.division_id == other.division_id:
-            return cmp(self.order, other.order)
-        return cmp(self.division, other.division)
+            return (self.order > other.order) - (self.order < other.order)
+        return (self.division > other.division) - (self.division < other.division)
 
     def __repr__(self):
         return "<Team: %s>" % self.title
@@ -1839,8 +1814,8 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
 
         if self.datetime is not None and settings.USE_TZ:
             try:
-                tzinfo = pytz.timezone(self.play_at.timezone)
-            except (AttributeError, pytz.UnknownTimeZoneError):
+                tzinfo = ZoneInfo(self.play_at.timezone)
+            except (AttributeError, ZoneInfoNotFoundError):
                 tzinfo = timezone.get_default_timezone()
             else:
                 self.datetime = timezone.make_aware(self.datetime, tzinfo)
@@ -1983,7 +1958,11 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                             team_eval
                         ).groups()
                     except (AttributeError, TypeError):
-                        logger.exception("Failed evaluating `stage_group_position` %s for %s", team_eval, self)
+                        logger.exception(
+                            "Failed evaluating `stage_group_position` %s for %s",
+                            team_eval,
+                            self,
+                        )
                     else:
                         try:
                             try:

@@ -57,7 +57,9 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("-published",),},
+            options={
+                "ordering": ("-published",),
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -97,7 +99,9 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("sequence",),},
+            options={
+                "ordering": ("sequence",),
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(

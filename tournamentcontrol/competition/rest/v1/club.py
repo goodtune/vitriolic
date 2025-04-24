@@ -1,4 +1,5 @@
 from rest_framework import serializers
+
 from tournamentcontrol.competition import models
 from tournamentcontrol.competition.rest.v1.viewsets import SlugViewSet
 

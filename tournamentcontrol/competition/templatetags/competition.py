@@ -1,4 +1,5 @@
 from datetime import timedelta
+from itertools import zip_longest
 
 from dateutil.parser import parse
 from dateutil.rrule import DAILY, WEEKLY
@@ -8,11 +9,6 @@ from django.db.models import Case, F, Q, Sum, When
 from django.template.loader import get_template
 from django.utils import timezone
 from first import first
-
-try:
-    from itertools import zip_longest
-except ImportError:
-    from itertools import izip_longest as zip_longest
 
 register = template.Library()
 
@@ -119,7 +115,9 @@ def ladder(context, stage):
         template_name = "tournamentcontrol/competition/ladder/standard.html"
 
     context.update(
-        {"summary": summary,}
+        {
+            "summary": summary,
+        }
     )
 
     tpl = get_template(template_name)

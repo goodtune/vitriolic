@@ -57,7 +57,7 @@ class ParentChildModelForm(BootstrapFormControlMixin, ModelForm):
         child_attr="object",
         instance=None,
         *args,
-        **kwargs
+        **kwargs,
     ):
         # we are initiated with the parent instance, but this form is
         # fundamentally that of the child form; track the parent.
@@ -75,7 +75,7 @@ class ParentChildModelForm(BootstrapFormControlMixin, ModelForm):
             instance=parent,
             data=self.data if self.is_bound else None,
             prefix="parent-%s" % self.prefix,
-            **pfkw
+            **pfkw,
         )
 
     def is_valid(self):

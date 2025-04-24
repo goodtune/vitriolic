@@ -2,18 +2,15 @@ import datetime
 import inspect
 import logging
 import time
+from urllib.parse import ParseResult
 
 from dateutil.parser import parse
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.utils.functional import wraps
-from tournamentcontrol.competition.models import Club, Competition, Season
 
-try:
-    from urllib.parse import ParseResult
-except ImportError:
-    from urlparse import ParseResult
+from tournamentcontrol.competition.models import Club, Competition, Season
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +83,9 @@ def competition_by_pk(f, *a, **kw):
             kwargs["competition"] = competition
             if season_id:
                 season = get_object_or_404(
-                    competition.seasons.select_related("competition",).prefetch_related(
+                    competition.seasons.select_related(
+                        "competition",
+                    ).prefetch_related(
                         "divisions__rank_division",
                         "referees__person__user",
                         "referees__club",

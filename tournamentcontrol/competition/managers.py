@@ -1,6 +1,8 @@
 from django.db import models
+
 from tournamentcontrol.competition.query import (
-    LadderEntryQuerySet, MatchQuerySet,
+    LadderEntryQuerySet,
+    MatchQuerySet,
 )
 
 

@@ -1,8 +1,6 @@
 from datetime import datetime
 from os.path import dirname, join
-from unittest import skipIf
 
-from django import VERSION
 from django.test.utils import modify_settings, override_settings
 from django.utils import timezone
 from django.utils.encoding import smart_str
@@ -12,8 +10,6 @@ from touchtechnology.common.tests.test_timezone_forms import TestForm1
 
 
 class TimeZoneTests(TestCase):
-    maxDiff = None
-
     def get_html(self, filename):
         with open(join(dirname(__file__), "test_html", filename)) as fp:
             html = fp.read()
@@ -51,7 +47,6 @@ class TimeZoneTests(TestCase):
             timezone.make_naive(timestamp, timezone.get_current_timezone()),
         )
 
-    @skipIf(VERSION < (4, 1), "Django < 4.1")
     @override_settings(TIME_ZONE="Australia/Sydney")
     def test_select_date_time_field_initial_tz(self):
         timestamp = timezone.make_aware(
@@ -65,9 +60,9 @@ class TimeZoneTests(TestCase):
 
         # check that the HTML output is as expected for a naked
         # form renderer.
-        html1 = smart_str(form)
-        html2 = self.get_html("select_date_time_field_initial_tz.html")
-        self.assertHTMLEqual(html1, html2)
+        haystack = smart_str(form)
+        needle = self.get_html("select_date_time_field_initial_tz.html")
+        self.assertInHTML(needle, haystack)
 
 
 @override_settings(ROOT_URLCONF="example_app.urls")

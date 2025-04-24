@@ -80,7 +80,8 @@ def touchtechnology_assumptions(app_configs, **kwargs):
     else:
         errors.append(
             checks.Warning(
-                "Make sure the appropriate middleware is listed first.", hint=None,
+                "Make sure the appropriate middleware is listed first.",
+                hint=None,
             )
         )
 

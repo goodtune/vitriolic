@@ -5,7 +5,6 @@ from datetime import datetime
 from decimal import Decimal
 from statistics import StatisticsError, mean
 
-import django
 from dateutil.parser import parse as date_parse
 from dateutil.relativedelta import relativedelta
 from django.core.serializers import get_serializer
@@ -24,8 +23,6 @@ from tournamentcontrol.competition.models import (
 )
 
 logger = logging.getLogger(__name__)
-
-OUTPUT_FIELD = FloatField() if django.VERSION[:2] >= (3, 2) else None
 
 # Filter to determine which LadderEntry records get a rank_points attribute.
 RANK_POINTS_Q = Q(match__is_bye=False, match__is_forfeit=False) | (
@@ -211,9 +208,11 @@ def base(ladder_entry, win=15, draw=10, loss=5, forfeit_against=-20):
             win * 2 if ladder_entry.win and ladder_entry.margin > 15 else 0,
             win if ladder_entry.win and ladder_entry.margin > 10 else 0,
             win * Constants.HALF if ladder_entry.win and ladder_entry.margin > 5 else 0,
-            loss * Constants.HALF
-            if ladder_entry.loss and ladder_entry.margin < 2
-            else 0,
+            (
+                loss * Constants.HALF
+                if ladder_entry.loss and ladder_entry.margin < 2
+                else 0
+            ),
         ]
     )
 
@@ -231,7 +230,7 @@ def correct_points_func(win=15.0, draw=10.0, loss=5.0, forfeit_against=-20.0):
             When(Q(win=1, margin__gt=5), then=win * 0.5),
             When(Q(loss=1, margin__lt=2), then=loss * 0.5),
             default=0,
-            output_field=OUTPUT_FIELD,
+            output_field=FloatField(),
         )
     )
     return ExpressionWrapper(
@@ -256,7 +255,7 @@ def points_func(win=15.0, draw=10.0, loss=5.0, forfeit_against=-20.0):
             When(Q(win=1, margin__gt=5), then=win * 0.5),
             When(Q(loss=1, margin__lt=2), then=loss * 0.5),
             default=0,
-            output_field=OUTPUT_FIELD,
+            output_field=FloatField(),
         )
     )
     return ExpressionWrapper(

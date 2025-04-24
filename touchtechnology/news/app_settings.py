@@ -8,7 +8,10 @@ __all__ = (
     "THUMBNAIL_IMAGE_PROCESSORS",
 )
 
-S = lambda n, d=None: getattr(settings, "TOUCHTECHNOLOGY_NEWS_" + n, d) or d
+
+def S(name, default=None):
+    return getattr(settings, "TOUCHTECHNOLOGY_NEWS_" + name, default) or default
+
 
 DEFAULT_DETAIL_IMAGE_KWARGS = {}
 DEFAULT_DETAIL_IMAGE_PROCESSORS = (

@@ -1,10 +1,10 @@
 import unittest
-from datetime import datetime
+from datetime import datetime, timezone
 
 from django.test.utils import override_settings
-from django.utils import timezone
 from freezegun import freeze_time
 from test_plus import TestCase
+
 from tournamentcontrol.competition.tests import factories
 
 
@@ -24,7 +24,7 @@ class GoodViewTests(TestCase):
     def test_season_calendar(self):
         # TODO load matches to see if the query count is scaled properly
         stage = factories.StageFactory.create()
-        matches = factories.MatchFactory.create_batch(
+        factories.MatchFactory.create_batch(
             5, stage=stage, date="2022-07-02", time="09:00", datetime="2022-07-02 09:00"
         )
         self.assertGoodView(

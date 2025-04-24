@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 
 import django.db.models.deletion
-import touchtechnology.common.db.models
 from django.db import migrations, models
+
+import touchtechnology.common.db.models
 
 
 class Migration(migrations.Migration):
@@ -20,13 +20,21 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "Officials",
             },
         ),
-        migrations.AlterModelOptions(name="competition", options={},),
-        migrations.AlterModelOptions(name="division", options={},),
         migrations.AlterModelOptions(
-            name="divisionexclusiondate", options={"verbose_name": "exclusion date"},
+            name="competition",
+            options={},
         ),
         migrations.AlterModelOptions(
-            name="drawformat", options={"ordering": ("teams", "name")},
+            name="division",
+            options={},
+        ),
+        migrations.AlterModelOptions(
+            name="divisionexclusiondate",
+            options={"verbose_name": "exclusion date"},
+        ),
+        migrations.AlterModelOptions(
+            name="drawformat",
+            options={"ordering": ("teams", "name")},
         ),
         migrations.AlterModelOptions(
             name="match",
@@ -51,21 +59,36 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "people",
             },
         ),
-        migrations.AlterModelOptions(name="season", options={},),
         migrations.AlterModelOptions(
-            name="seasonexclusiondate",
-            options={"ordering": ("date",), "verbose_name": "exclusion date",},
+            name="season",
+            options={},
         ),
         migrations.AlterModelOptions(
-            name="seasonmatchtime", options={"verbose_name": "time slot",},
+            name="seasonexclusiondate",
+            options={
+                "ordering": ("date",),
+                "verbose_name": "exclusion date",
+            },
+        ),
+        migrations.AlterModelOptions(
+            name="seasonmatchtime",
+            options={
+                "verbose_name": "time slot",
+            },
         ),
         migrations.AlterModelOptions(
             name="simplescorematchstatistic",
-            options={"get_latest_by": "match", "ordering": ("match", "number"),},
+            options={
+                "get_latest_by": "match",
+                "ordering": ("match", "number"),
+            },
         ),
         migrations.AlterModelOptions(
             name="stagegroup",
-            options={"ordering": ("order",), "verbose_name": "pool",},
+            options={
+                "ordering": ("order",),
+                "verbose_name": "pool",
+            },
         ),
         migrations.AlterModelOptions(
             name="team",
@@ -92,7 +115,8 @@ class Migration(migrations.Migration):
             },
         ),
         migrations.AlterModelOptions(
-            name="undecidedteam", options={"ordering": ("stage_group", "formula")},
+            name="undecidedteam",
+            options={"ordering": ("stage_group", "formula")},
         ),
         migrations.AlterField(
             model_name="club",
@@ -194,13 +218,19 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="simplescorematchstatistic",
             name="mvp",
-            field=models.SmallIntegerField(verbose_name="MVP", null=True, blank=True,),
+            field=models.SmallIntegerField(
+                verbose_name="MVP",
+                null=True,
+                blank=True,
+            ),
         ),
         migrations.AlterField(
             model_name="simplescorematchstatistic",
             name="points",
             field=models.SmallIntegerField(
-                verbose_name="Points", null=True, blank=True,
+                verbose_name="Points",
+                null=True,
+                blank=True,
             ),
         ),
         migrations.AlterField(

@@ -19,7 +19,7 @@ def prince(html, base_url=None, ttl=300, **kwargs):
     # weird. This has bitten once in production so lets log it and see else
     # might cause grief.
     for kw, arg in kwargs.items():
-        logger.warn("Unexpected keyword argument: %s=%r", kw, arg)
+        logger.warning("Unexpected keyword argument: %s=%r", kw, arg)
 
     logger.debug("base_url: %s", base_url)
     logger.debug("ttl: %s", ttl)

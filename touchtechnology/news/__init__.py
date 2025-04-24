@@ -1,5 +1,3 @@
-default_app_config = 'touchtechnology.news.apps.NewsConfig'
+default_app_config = "touchtechnology.news.apps.NewsConfig"
 
-INSTALL = (
-    'NewsSite',
-)
+INSTALL = ("NewsSite",)

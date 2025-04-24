@@ -1,8 +1,15 @@
 from rest_framework.routers import APIRootView, DefaultRouter
 from rest_framework_nested import routers
 
-from tournamentcontrol.competition.rest.v1 import *
-from tournamentcontrol.competition.rest.v1 import _247, _birdi
+from tournamentcontrol.competition.rest.v1 import (
+    _247,
+    _birdi,
+    club,
+    competition,
+    division,
+    season,
+    stage,
+)
 
 
 class TournamentControl(APIRootView):

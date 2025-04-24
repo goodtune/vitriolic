@@ -1,5 +1,3 @@
-from __future__ import unicode_literals
-
 import collections
 import datetime
 import json
@@ -12,15 +10,15 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.forms import array as PGA
-from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.forms import BooleanField as BooleanChoiceField
 from django.forms.formsets import (
     DELETION_FIELD_NAME,
     INITIAL_FORM_COUNT,
     MAX_NUM_FORM_COUNT,
-    ManagementForm,
     TOTAL_FORM_COUNT,
+    ManagementForm,
     formset_factory,
 )
 from django.forms.models import (
@@ -1811,9 +1809,9 @@ class TeamAssociationForm(UserMixin, ModelForm):
     def __init__(self, team, *args, **kwargs):
         super(TeamAssociationForm, self).__init__(*args, **kwargs)
         self.fields["person"].queryset = team.club.members.all()
-        self.fields[
-            "roles"
-        ].queryset = team.division.season.competition.team_roles.all()
+        self.fields["roles"].queryset = (
+            team.division.season.competition.team_roles.all()
+        )
 
     class Meta:
         model = TeamAssociation
@@ -1969,16 +1967,13 @@ class MatchStatisticFormset(BaseMatchStatisticFormset):
         players = len([f for f in self.forms if f.cleaned_data["played"]])
         maximum = 14  # FIXME this maximum should not be hard-coded
         if players > maximum:
-            message = (
-                ngettext(
-                    "A maximum of %(max)d players may participate in a match, "
-                    "there is %(count)d selected.",
-                    "A maximum of %(max)d players may participate in a match, "
-                    "there are %(count)d selected.",
-                    players,
-                )
-                % {"max": maximum, "count": players}
-            )
+            message = ngettext(
+                "A maximum of %(max)d players may participate in a match, "
+                "there is %(count)d selected.",
+                "A maximum of %(max)d players may participate in a match, "
+                "there are %(count)d selected.",
+                players,
+            ) % {"max": maximum, "count": players}
             raise forms.ValidationError(message)
 
     def save(self, *args, **kwargs):

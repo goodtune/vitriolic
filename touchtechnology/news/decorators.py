@@ -1,3 +1,5 @@
+import datetime
+
 from dateutil.parser import parse as parse_datetime
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
@@ -20,14 +22,14 @@ def date_view(f, *a, **kw):
         month = kwargs.pop("month", "jan")
         day = kwargs.pop("day", 1)
         try:
-            datetime = parse_datetime("{0}-{1}-{2}".format(year, month, day))
+            dt = parse_datetime(f"{year}-{month}-{day}")
         except ValueError:
             raise Http404
 
         if settings.USE_TZ:
-            datetime = timezone.make_aware(datetime, timezone.utc)
+            dt = timezone.make_aware(dt, datetime.timezone.utc)
 
-        kwargs["date"] = datetime
+        kwargs["date"] = dt
 
         # So we can run an optimal query for finding the last modified time for
         # a view in other decorators, pass in the "delta" that should be used

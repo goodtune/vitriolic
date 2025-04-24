@@ -1,6 +1,5 @@
-from __future__ import unicode_literals
-
 from test_plus import TestCase
+
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.models import Match
 from tournamentcontrol.competition.tests import factories
@@ -100,7 +99,7 @@ class DrawGenerationMatchFormSetTest(TestCase):
         self.assertEqual(Match.objects.count(), 6)
 
         team1, team2, team3, team4 = self.teams
-        self.assertQuerysetEqual(
+        self.assertQuerySetEqual(
             Match.objects.all(),
             [
                 "<Match: 1: %s vs %s>" % (team1, team4),

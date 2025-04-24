@@ -1,7 +1,7 @@
 import itertools
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
-from pytz import UTC
 from test_plus import TestCase
 
 from tournamentcontrol.competition.draw import (
@@ -52,11 +52,11 @@ class DrawGenerationUtilities(TestCase):
             self.assertCountEqual(
                 itertools.islice(res, 5),
                 [
-                    datetime(2022, 8, 2, tzinfo=UTC),
-                    datetime(2022, 8, 9, tzinfo=UTC),
-                    datetime(2022, 8, 16, tzinfo=UTC),
-                    datetime(2022, 8, 23, tzinfo=UTC),
-                    datetime(2022, 8, 30, tzinfo=UTC),
+                    datetime(2022, 8, 2, tzinfo=ZoneInfo("UTC")),
+                    datetime(2022, 8, 9, tzinfo=ZoneInfo("UTC")),
+                    datetime(2022, 8, 16, tzinfo=ZoneInfo("UTC")),
+                    datetime(2022, 8, 23, tzinfo=ZoneInfo("UTC")),
+                    datetime(2022, 8, 30, tzinfo=ZoneInfo("UTC")),
                 ],
             )
 

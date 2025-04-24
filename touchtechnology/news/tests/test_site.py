@@ -1,7 +1,7 @@
-import factory
 from django.db import transaction
 from django.test.utils import override_settings
 from test_plus import TestCase
+
 from touchtechnology.news.tests import factories
 
 
@@ -40,7 +40,7 @@ class SiteTest(TestCase):
             month=article.published.strftime("%b").lower(),
             day=article.published.day,
             slug=article.slug,
-            **kwargs
+            **kwargs,
         )
 
     def test_article(self):

@@ -10,12 +10,13 @@ def strict_show_toolbar_callback(request):
     :param request: HttpRequest
     :return: bool
     """
-    if hasattr(request, 'user') and \
-       request.user.has_perm('debug_toolbar.show'):
+    if hasattr(request, "user") and request.user.has_perm("debug_toolbar.show"):
 
-        logger.debug('DjDT allowed for "%s" <%s>',
-                     request.user.get_full_name(),
-                     request.user.email)
+        logger.debug(
+            'DjDT allowed for "%s" <%s>',
+            request.user.get_full_name(),
+            request.user.email,
+        )
 
         return show_toolbar_callback(request)
 
@@ -51,16 +52,16 @@ def show_toolbar_callback(request):
     :param request: HttpRequest
     :return: bool
     """
-    ua = request.META.get('HTTP_USER_AGENT', '')
-    if ua.find('DjangoDebugToolbar') >= 0:
+    ua = request.META.get("HTTP_USER_AGENT", "")
+    if ua.find("DjangoDebugToolbar") >= 0:
         logger.info('Enable DjDT by User-Agent "%s"', ua)
         return True
 
-    show = request.META.get('HTTP_X_DJDT_SHOW')
+    show = request.META.get("HTTP_X_DJDT_SHOW")
     if show is not None:
         show = show.lower()
-        logger.debug('HTTP_X_DJDT_SHOW: %s', show)
-    if show in ('1', 'true', 'on', 'yes'):
+        logger.debug("HTTP_X_DJDT_SHOW: %s", show)
+    if show in ("1", "true", "on", "yes"):
         logger.info('Enable DjDT by X-DjDT-SHOW header "%s"', show)
         return True
 

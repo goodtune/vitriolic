@@ -42,7 +42,9 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"unique_together": {("article", "locale")},},
+            options={
+                "unique_together": {("article", "locale")},
+            },
             bases=(touchtechnology.admin.mixins.AdminUrlMixin, models.Model),
         ),
     ]

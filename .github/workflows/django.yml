@@ -1,4 +1,4 @@
-name: tox
+name: Unit Test
 
 on:
   push:
@@ -11,44 +11,22 @@ on:
       - develop
 
 jobs:
-  build:
-
+  test:
+    name: dj${{ matrix.django }}-py${{ matrix.python }}
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:14.9
-        env:
-          POSTGRES_USER: vitriolic
-          POSTGRES_PASSWORD: vitriolic
-          POSTGRES_DB: vitriolic
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     strategy:
-      max-parallel: 4
+      fail-fast: false
       matrix:
-        python-version:
-          - 3.9
+        django: [42, 52]
+        python: [311, 312]
 
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install tox tox-docker
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Run Tests
-        run: |
-          pg_dump $DATABASE_URL
-          tox
+        run: uvx tox
         env:
-          DATABASE_URL: postgres://vitriolic:vitriolic@localhost:5432/vitriolic
+          TOXENV: dj${{ matrix.django }}-py${{ matrix.python }}

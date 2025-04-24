@@ -1,7 +1,9 @@
 import logging
 
 from django.contrib.auth.decorators import (
-    login_required, permission_required, user_passes_test,
+    login_required,
+    permission_required,
+    user_passes_test,
 )
 from django.utils.decorators import method_decorator
 from django.utils.functional import wraps

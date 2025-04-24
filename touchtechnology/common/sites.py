@@ -108,7 +108,7 @@ class Application(object):
             try:
                 ver = import_string("%s.__version__" % mod)
             except ImportError:
-                logger.warn('"__version__" not found at "%s"', mod)
+                logger.warning('"__version__" not found at "%s"', mod)
             else:
                 logger.debug('Identified version "%s" for "%s"', ver, mod)
                 break
@@ -160,7 +160,7 @@ class Application(object):
         templates=None,
         staff_only=None,
         max_checkboxes=None,
-        **extra_context
+        **extra_context,
     ):
         # avoid circular import
         from touchtechnology.common.forms.auth import permissionformset_factory
@@ -228,7 +228,7 @@ class Application(object):
         return_403=None,
         search=None,
         *args,
-        **kwargs
+        **kwargs,
     ):
 
         model, manager = model_and_manager(model_or_manager)
@@ -555,7 +555,7 @@ class Application(object):
         accept_global_perms=True,
         return_403=None,
         *args,
-        **kwargs
+        **kwargs,
     ):
 
         if extra_context is None:
@@ -639,7 +639,7 @@ class Application(object):
                 data=request.POST,
                 files=request.FILES,
                 queryset=queryset,
-                **formset_kwargs
+                **formset_kwargs,
             )
             if formset.is_valid():
                 replace = dict(
@@ -752,7 +752,7 @@ class Application(object):
                     data=request.POST,
                     files=request.FILES,
                     instance=obj,
-                    **formset_kwargs
+                    **formset_kwargs,
                 )
 
                 if formset.is_valid():
@@ -795,7 +795,7 @@ class Application(object):
                     data=request.POST,
                     files=request.FILES,
                     instance=instance,
-                    **formset_kwargs
+                    **formset_kwargs,
                 )
 
         else:
@@ -830,7 +830,7 @@ class Application(object):
         permission_required=False,
         accept_global_perms=True,
         return_403=None,
-        **kwargs
+        **kwargs,
     ):
 
         model, manager = model_and_manager(model_or_manager)

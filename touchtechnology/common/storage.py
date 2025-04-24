@@ -3,9 +3,12 @@ import os.path
 from urllib.parse import urljoin
 
 from django.core.files.base import ContentFile
-from django.core.files.storage import FileSystemStorage as FileSystemStorageBase
+from django.core.files.storage import (
+    FileSystemStorage as FileSystemStorageBase,
+)
 from django.db.models.fields.files import ImageFieldFile
 from PIL import Image
+
 from touchtechnology.common.default_settings import STORAGE_FOLDER, STORAGE_URL
 
 try:

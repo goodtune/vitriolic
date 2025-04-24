@@ -1,12 +1,12 @@
 # encoding=utf8
 
-from __future__ import unicode_literals
 
 import re
 from urllib.parse import urlparse
 
 from django.core import mail
 from test_plus import TestCase
+
 from touchtechnology.common.tests import factories
 
 # Based on regular expression found at https://gist.github.com/gruber/8891611
@@ -69,7 +69,10 @@ class PasswordResetTests(TestCase):
         self.assertGoodView("accounts:login")
 
     def test_logout(self):
-        self.assertGoodView("accounts:logout")
+        # In Django 5.0 the logout view was changed to not allow GET requests.
+        with self.login(self.regular), self.assertNumQueriesLessThan(50):
+            self.post("accounts:logout")
+        self.response_200()
 
     def test_password_change(self):
         with self.login(self.regular):

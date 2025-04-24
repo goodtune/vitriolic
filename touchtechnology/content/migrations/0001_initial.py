@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
+
+from django.db import migrations, models
 
 import touchtechnology.common.db.models
-from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
@@ -161,7 +161,9 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            options={"ordering": ("sequence",),},
+            options={
+                "ordering": ("sequence",),
+            },
             bases=(models.Model,),
         ),
         migrations.CreateModel(
@@ -260,10 +262,13 @@ class Migration(migrations.Migration):
                     models.BooleanField(default=False, verbose_name="Permanent"),
                 ),
             ],
-            options={"ordering": ("destination_url",),},
+            options={
+                "ordering": ("destination_url",),
+            },
             bases=(models.Model,),
         ),
         migrations.AlterUniqueTogether(
-            name="placeholderkeywordargument", unique_together=set([("node", "key")]),
+            name="placeholderkeywordargument",
+            unique_together=set([("node", "key")]),
         ),
     ]

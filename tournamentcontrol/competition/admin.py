@@ -1,5 +1,6 @@
 import base64
 import collections
+import datetime
 import functools
 import logging
 import operator
@@ -52,8 +53,6 @@ from tournamentcontrol.competition.forms import (
     MatchWashoutFormSet,
     PersonEditForm,
     PersonMergeForm,
-    ProgressMatchesFormSet,
-    ProgressTeamsFormSet,
     RescheduleDateFormSet,
     SeasonAssociationFormSet,
     SeasonForm,
@@ -87,7 +86,6 @@ from tournamentcontrol.competition.models import (
     SeasonExclusionDate,
     SeasonMatchTime,
     SeasonReferee,
-    SimpleScoreMatchStatistic,
     Stage,
     StageGroup,
     Team,
@@ -108,7 +106,6 @@ from tournamentcontrol.competition.utils import (
     generate_scorecards,
     legitimate_bye_match,
     match_unplayed,
-    team_needs_progressing,
 )
 from tournamentcontrol.competition.wizards import DrawGenerationWizard
 
@@ -825,8 +822,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def edit_season(self, request, competition, extra_context, season=None, **kwargs):
         if season is None:
             season = next_related_factory(Season, competition)
+            dates = []
+        else:
+            dates = season.matches.dates("date", "day")
 
-        dates = season.matches.dates("date", "day")
         extra_context.setdefault("dates", dates)
 
         return self.generic_edit(
@@ -1552,9 +1551,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 f"Subscribe to receive notifications of upcoming matches."
             )
 
-            start_time = obj.get_datetime(timezone.utc).isoformat()
+            start_time = obj.get_datetime(datetime.timezone.utc).isoformat()
             stop_time = (
-                obj.get_datetime(timezone.utc)
+                obj.get_datetime(datetime.timezone.utc)
                 + relativedelta(minutes=50)  # FIXME hard coded
             ).isoformat()
 
@@ -1713,7 +1712,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def progression_list(self, request, competition, season, extra_context, **kwargs):
-        return super().progression_list(request, competition, season, extra_context, **kwargs)
+        return super().progression_list(
+            request, competition, season, extra_context, **kwargs
+        )
 
     @competition_by_pk_m
     @staff_login_required_m
@@ -2150,13 +2151,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def edit_person(self, request, club, extra_context, person=None, **kwargs):
         if person is None:
             person = Person(club=club)
-        # todo
-        readonly_fields = (
-            "first_name",
-            "last_name",
-            "gender",
-            "date_of_birth",
-        )
         return self.generic_edit(
             request,
             club.members,
@@ -2275,11 +2269,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @registration
     def edit_team_members(self, request, club, team, extra_context, **kwargs):
-        statistics = SimpleScoreMatchStatistic.objects.filter(
-            Q(player__teamassociation__team=team) & Q(match__home_team=team)
-            | Q(match__away_team=team)
-        )
-
         # FIXME this is a hangover from before we had permissions on generics
         read_only, scheduled_read_only = request.user.is_superuser, False
 

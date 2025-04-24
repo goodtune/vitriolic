@@ -13,7 +13,8 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.AlterModelOptions(
-            name="category", options={"verbose_name_plural": "categories"},
+            name="category",
+            options={"verbose_name_plural": "categories"},
         ),
         migrations.AlterField(
             model_name="article",

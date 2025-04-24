@@ -57,12 +57,12 @@ class Article(AdminUrlModel):
     thumbnail = ImageSpecField(
         source="image",
         processors=processor_factory(THUMBNAIL_IMAGE_PROCESSORS),
-        **THUMBNAIL_IMAGE_KWARGS
+        **THUMBNAIL_IMAGE_KWARGS,
     )
     detail_image = ImageSpecField(
         source="image",
         processors=processor_factory(DETAIL_IMAGE_PROCESSORS),
-        **DETAIL_IMAGE_KWARGS
+        **DETAIL_IMAGE_KWARGS,
     )
 
     last_modified = DateTimeField(auto_now=True)

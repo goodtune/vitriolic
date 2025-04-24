@@ -1,10 +1,8 @@
-from __future__ import unicode_literals
-
 import functools
 import logging
 from operator import attrgetter, or_
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-import pytz
 from django.apps import apps
 from django.core.cache import cache
 from django.core.paginator import Paginator
@@ -221,14 +219,8 @@ def select_template_name(templates):
     Return the template name that wins template resolution for an iterable of
     template names.
     """
-    try:
-        # Django 1.8+
-        template = select_template(templates)
-        template_name = template.template.name
-    except AttributeError:
-        # Django 1.7
-        template_name = template.name
-    return template_name
+    template = select_template(templates)
+    return template.template.name
 
 
 def get_timezone_from_request(request):
@@ -236,8 +228,8 @@ def get_timezone_from_request(request):
         tzname = request.session.get("django_timezone", None)
         if tzname is not None:
             try:
-                tzinfo = pytz.timezone(tzname)
-            except pytz.UnknownTimeZoneError:
+                tzinfo = ZoneInfo(tzname)
+            except ZoneInfoNotFoundError:
                 tzinfo = None
             return tzinfo
 

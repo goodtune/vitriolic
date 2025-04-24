@@ -5,12 +5,9 @@ from importlib.util import module_from_spec
 from urllib.parse import urlunparse
 
 from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib.sitemaps.views import sitemap
-from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
-from django.core.files.storage import default_storage
 from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.template import RequestContext, TemplateDoesNotExist
@@ -19,7 +16,10 @@ from django.utils.deprecation import MiddlewareMixin
 from guardian.conf import settings as guardian_settings
 from mptt.utils import tree_item_iterator
 
-from touchtechnology.common.default_settings import SITEMAP_HTTPS_OPTION, SITEMAP_ROOT
+from touchtechnology.common.default_settings import (
+    SITEMAP_HTTPS_OPTION,
+    SITEMAP_ROOT,
+)
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.sitemaps import NodeSitemap
 from touchtechnology.common.sites import AccountsSite

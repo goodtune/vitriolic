@@ -1,5 +1,3 @@
-from __future__ import unicode_literals
-
 import collections
 import logging
 
@@ -15,15 +13,11 @@ from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import path, re_path, reverse_lazy
 from django.utils.encoding import smart_str
+from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
 
 from touchtechnology.common.decorators import staff_login_required_m
 from touchtechnology.common.models import SitemapNode
-
-try:
-    from tenant_schemas.utils import get_public_schema_name
-except ImportError as exc:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +51,10 @@ class AdminSite(DjangoAdminSite):
         if "tenant_schemas" not in settings.INSTALLED_APPS:
             # Only hide components when we are not in multi-tenant mode
             return False
+
+        get_public_schema_name = import_string(
+            "tenant_schemas.utils.get_public_schema_name"
+        )
 
         # For components only registered for specific schemas, return solely
         # based on that option. That is, you can't disable an explicitly

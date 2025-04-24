@@ -139,7 +139,7 @@ class NewsAdminComponent(AdminComponent):
             Translation,
             instance=instance,
             post_save_redirect=self.redirect(instance.article.urls["edit"]),
-            **extra_context
+            **extra_context,
         )
 
     # Category views
@@ -180,5 +180,5 @@ class NewsAdminComponent(AdminComponent):
             post_save_redirect=self.redirect(
                 self.reverse("category:edit", kwargs={"pk": pk})
             ),
-            **extra_context
+            **extra_context,
         )

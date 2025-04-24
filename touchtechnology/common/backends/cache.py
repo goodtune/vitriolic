@@ -23,16 +23,24 @@ class RedisCache(BaseRedisCache):
         unavailable.
         """
         try:
-            hit = super(RedisCache, self).get(
-                key, default=default, version=version)
+            hit = super(RedisCache, self).get(key, default=default, version=version)
         except ConnectionError as exc:
             hit = default
-            logger.error('redis="get", key="%s", default="%s", version="%s", '
-                         'result="miss", exception="%s"',
-                         key, default, version, exc)
+            logger.error(
+                'redis="get", key="%s", default="%s", version="%s", '
+                'result="miss", exception="%s"',
+                key,
+                default,
+                version,
+                exc,
+            )
         else:
-            logger.debug('redis="get", key="%s", default="%s", version="%s", '
-                         'result="hit"', key, default, version)
+            logger.debug(
+                'redis="get", key="%s", default="%s", version="%s", ' 'result="hit"',
+                key,
+                default,
+                version,
+            )
         return hit
 
     def set(self, key, value, timeout=DEFAULT_TIMEOUT, version=None):
@@ -44,15 +52,23 @@ class RedisCache(BaseRedisCache):
             timeout = self.default_timeout
 
         try:
-            super(RedisCache, self).set(
-                key, value, timeout=timeout, version=version)
+            super(RedisCache, self).set(key, value, timeout=timeout, version=version)
         except ConnectionError as exc:
-            logger.error('redis="set", key="%s", version="%s", timeout="%s", '
-                         'result="miss", exception="%s"',
-                         key, version, timeout, exc)
+            logger.error(
+                'redis="set", key="%s", version="%s", timeout="%s", '
+                'result="miss", exception="%s"',
+                key,
+                version,
+                timeout,
+                exc,
+            )
         else:
-            logger.debug('redis="set", key="%s", version="%s", timeout="%s", '
-                         'result="hit"', key, version, timeout)
+            logger.debug(
+                'redis="set", key="%s", version="%s", timeout="%s", ' 'result="hit"',
+                key,
+                version,
+                timeout,
+            )
 
     def delete(self, key, version=None):
         """
@@ -62,9 +78,13 @@ class RedisCache(BaseRedisCache):
         try:
             super(RedisCache, self).delete(key, version=version)
         except ConnectionError as exc:
-            logger.error('redis="delete", key="%s", version="%s", '
-                         'result="miss", exception="%s"',
-                         key, version, exc)
+            logger.error(
+                'redis="delete", key="%s", version="%s", '
+                'result="miss", exception="%s"',
+                key,
+                version,
+                exc,
+            )
 
     def clear(self):
         """
