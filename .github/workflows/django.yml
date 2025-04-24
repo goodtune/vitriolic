@@ -1,4 +1,4 @@
-name: tox
+name: Unit Test
 
 on:
   push:
@@ -11,9 +11,14 @@ on:
       - develop
 
 jobs:
-  build:
-
+  test:
+    name: dj${{ matrix.django }}-py${{ matrix.python }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        django: [42, 52]
+        python: [311, 312]
 
     steps:
       - uses: actions/checkout@v4
@@ -22,5 +27,6 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Run Tests
-        run: |
-          uvx tox
+        run: uvx tox
+        env:
+          TOXENV: dj${{ matrix.django }}-py${{ matrix.python }}
