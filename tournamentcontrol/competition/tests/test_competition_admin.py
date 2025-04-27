@@ -1050,3 +1050,32 @@ class BackendTests(TestCase):
         )
         form = self.get_context("form")
         self.assertFormError(form, "title", ["Stage with this Title already exists."])
+
+    def test_bug_85_add_match_season_live_stream(self):
+        """
+        When the Season is set to live stream, the Match form changes.
+
+        The ability to manually add a match under this configuration should be possible,
+        but there is a bug caused by accessing unset relations.
+
+        Refs: https://github.com/goodtune/vitriolic/issues/85
+        """
+        stage = factories.StageFactory.create(division__season__live_stream=True)
+        team1 = factories.TeamFactory.create(division=stage.division)
+        team2 = factories.TeamFactory.create(division=stage.division)
+        data = {
+            "home_team": team1.pk,
+            "away_team": team2.pk,
+            "label": "",
+            "round": 1,
+            "date": "2025-04-28",
+            "include_in_ladder": "0",
+            "live_stream": "0",
+            "thumbnail_url": "",
+        }
+        self.post(
+            stage._get_admin_namespace() + ":match:add",
+            *stage._get_url_args(),
+            data=data,
+        )
+        self.response_302()
