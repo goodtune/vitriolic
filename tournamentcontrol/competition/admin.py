@@ -1653,7 +1653,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_save_redirect=self.redirect(
                 request.GET.get("next") or stage.urls["edit"]
             ),
-            pre_save_callback=pre_save_callback if season.live_stream else lambda o: o,
+            pre_save_callback=(
+                pre_save_callback
+                if season.live_stream and match.live_stream
+                else lambda o: o
+            ),
             permission_required=True,
             extra_context=extra_context,
         )
