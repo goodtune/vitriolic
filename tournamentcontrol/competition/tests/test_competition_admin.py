@@ -1079,3 +1079,13 @@ class BackendTests(TestCase):
             data=data,
         )
         self.response_302()
+
+    def test_bug_100_add_stagegroup(self):
+        """
+        Adding a Pool (StageGroup) should not fail to render.
+        """
+        stage = factories.StageFactory.create()
+        self.get_check_200(
+            stage._get_admin_namespace() + ":stagegroup:add",
+            *stage._get_url_args(),
+        )
