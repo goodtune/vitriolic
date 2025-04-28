@@ -15,7 +15,7 @@ from namedentities import named_entities
 from touchtechnology.common.forms.iter import TemplateChoiceIterator
 from touchtechnology.common.forms.mixins import LabelFromInstanceMixin
 from touchtechnology.common.forms.widgets import (
-    BootstrapGoogleMapsWidget,
+    GoogleMapsWidget,
     HTMLWidget,
     SelectDateHiddenWidget,
     SelectDateTimeHiddenWidget,
@@ -73,8 +73,8 @@ class GoogleMapsField(forms.MultiValueField):
             forms.CharField(max_length=25, required=False),
             forms.IntegerField(required=False),
         )
-        kwargs["widget"] = BootstrapGoogleMapsWidget(height, width, zoom)
-        super(GoogleMapsField, self).__init__(fields, *args, **kwargs)
+        kwargs["widget"] = GoogleMapsWidget(height, width, zoom)
+        super().__init__(fields, *args, **kwargs)
 
     def compress(self, data_list):
         return ",".join([smart_str(d) for d in data_list])
@@ -82,7 +82,7 @@ class GoogleMapsField(forms.MultiValueField):
     def clean(self, data):
         if [d for d in data if d]:
             return ",".join(data)
-        return super(GoogleMapsField, self).clean(data)
+        return super().clean(data)
 
 
 class SelectDateField(forms.MultiValueField):

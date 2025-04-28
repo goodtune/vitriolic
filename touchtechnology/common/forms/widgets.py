@@ -71,42 +71,23 @@ class HTMLWidget(FroalaEditor):
 
 class GoogleMapsWidget(MultiWidget):
     def __init__(self, height, width, zoom, attrs=None):
-        self.attrs = attrs or {}
+        if attrs is None:
+            attrs = {}
+        self.attrs = attrs
         self.height = height
         self.width = width
         self.zoom = zoom
         widgets = (
-            forms.HiddenInput(attrs=attrs),
-            forms.HiddenInput(attrs=attrs),
-            forms.HiddenInput(attrs=attrs),
+            forms.TextInput(attrs=dict(placeholder="Latitude", **attrs)),
+            forms.TextInput(attrs=dict(placeholder="Longitude", **attrs)),
+            forms.TextInput(attrs=dict(placeholder="Zoom", **attrs)),
         )
-        super(GoogleMapsWidget, self).__init__(widgets, attrs)
+        super().__init__(widgets, attrs)
 
     def decompress(self, value):
         if value:
             return value.split(",")
         return ("", "", "")
-
-    class Media:
-        css = {"all": ("touchtechnology/common/css/location_widget.css",)}
-        js = (
-            "//maps.googleapis.com/maps/api/js?v=3",
-            "touchtechnology/common/js/location_widget.js",
-        )
-
-
-class BootstrapGoogleMapsWidget(GoogleMapsWidget):
-    def render(self, *args, **kwargs):
-        base = super(BootstrapGoogleMapsWidget, self).render(*args, **kwargs)
-        return """
-            <div class="form-group">
-                <label class="control-label col-sm-3">%s</label>
-                <div class="col-sm-7">%s</div>
-            </div>
-        """ % (
-            _("Location"),
-            base,
-        )
 
 
 class SelectDateWidget(MultiWidget):
