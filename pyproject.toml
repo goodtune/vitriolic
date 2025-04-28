@@ -29,7 +29,6 @@ dj52 = ["Django~=5.2.0"]
 test = ["coverage", "django-environ", "django-test-plus", "factory_boy", "freezegun", "tblib"]
 
 [project.optional-dependencies]
-redis = ["django-redis-cache", "redis"]
 admin = ["django-bootstrap3", "django-gravatar2"]
 common = []
 content = []
@@ -53,6 +52,8 @@ competition = [
     "pyparsing",
     "python-dateutil",
 ]
+# Deprecated optional dependencies
+redis = []
 
 [build-system]
 requires = ["setuptools", "setuptools-scm[toml]>=6.2"]
