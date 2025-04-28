@@ -576,34 +576,34 @@ class StageGroupForm(SuperUserSlugMixin, ModelForm):
         # to this pool or not assigned to any other pools in this stage
         other_pools = self.instance.stage.pools.exclude(pk=self.instance.pk)
 
-        if self.instance.stage.order > 1 and not self.instance.teams.count():
+        if not self.instance.pk:
+            initial = queryset = Team.objects.none()
+        elif self.instance.stage.order > 1 and not self.instance.teams.count():
             self._undecided = True
             queryset = self.instance.stage.undecided_teams.exclude(
                 stage_group__in=other_pools
             )
-            label_from_instance = "title"
             initial = self.instance.undecided_teams.all()
         else:
             self._undecided = False
             queryset = self.instance.stage.division.teams.exclude(
                 stage_group__in=other_pools
             )
-            label_from_instance = "title"
             initial = self.instance.teams.all()
 
-        self.fields["teams"] = ModelMultipleChoiceField(
-            queryset=queryset.order_by(*queryset.model._meta.ordering),
-            initial=initial,
-            required=False,
-            label_from_instance=label_from_instance,
-            help_text=_(
-                "Teams can only belong to one pool per stage. Once "
-                "selected in any pool a team will no longer appear "
-                "for selection here."
-            ),
-        )
-
-        if self.instance.matches.exists():
+        if self.instance.pk and not self.instance.matches.exists():
+            self.fields["teams"] = ModelMultipleChoiceField(
+                queryset=queryset.order_by(*queryset.model._meta.ordering),
+                initial=initial,
+                required=False,
+                label_from_instance="title",
+                help_text=_(
+                    "Teams can only belong to one pool per stage. Once "
+                    "selected in any pool a team will no longer appear "
+                    "for selection here."
+                ),
+            )
+        else:
             self.fields.pop("teams", None)
 
     def save(self, *args, **kwargs):
