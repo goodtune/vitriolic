@@ -912,8 +912,6 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
      * that both the `home_team` and `away_team` are in the `division`
     """
 
-    formfield_callback = _match_edit_form_formfield_callback
-
     def __init__(self, *args, **kwargs):
         super(MatchEditForm, self).__init__(*args, **kwargs)
 
@@ -1071,6 +1069,7 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
             "home_team_undecided": _("Home team"),
             "away_team_undecided": _("Away team"),
         }
+        formfield_callback = _match_edit_form_formfield_callback
 
 
 class MatchStreamForm(MatchEditForm):
