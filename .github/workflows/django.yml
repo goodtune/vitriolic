@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         django: [42, 52]
-        python: [311, 312]
+        python: [311, 312, 313]
 
     steps:
       - uses: actions/checkout@v4
