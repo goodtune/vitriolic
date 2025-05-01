@@ -29,3 +29,13 @@
 {% endblock %}
 
 {% block empty-row-colspan %}7{% endblock %}
+
+{% block row-buttons-items %}
+<li role="presentation">
+	<a role="button" href="{{ obj.urls.referees }}">
+		<i class="fa fa-flag fa-fw"></i>
+		{% trans "Referees" %}
+	</a>
+</li>
+{{ block.super }}
+{% endblock row-buttons-items %}

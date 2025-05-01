@@ -8,7 +8,9 @@
 	<div class="heading-block">
 		<h3>
 			{{ match.stage.division }}: {{ match }}
-			<span class="pull-right hidden-xs">{{ match.datetime|timezone:match.play_at.timezone|date:"l jS F Y, g:i a e" }}</span>
+			{% with tz=match.play_at.timezone|default:match.stage.division.season.timezone %}
+				<span class="pull-right hidden-xs">{{ match.datetime|timezone:tz|date:"l jS F Y, g:i a e" }}</span>
+			{% endwith %}
 		</h3>
 	</div>
 

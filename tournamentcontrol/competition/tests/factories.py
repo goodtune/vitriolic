@@ -243,6 +243,15 @@ class TeamAssociationFactory(DjangoModelFactory):
     person = factory.SubFactory(PersonFactory)
 
 
+class SeasonRefereeFactory(DjangoModelFactory):
+    class Meta:
+        model = models.SeasonReferee
+
+    season = factory.SubFactory(SeasonFactory)
+    club = factory.SubFactory(ClubFactory)
+    person = factory.SubFactory(PersonFactory)
+
+
 class DrawFormatFactory(DjangoModelFactory):
     class Meta:
         model = models.DrawFormat
