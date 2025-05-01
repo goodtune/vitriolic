@@ -170,20 +170,38 @@ class SelectDateTimeField(forms.MultiValueField):
             forms.IntegerField(required=False),
             forms.IntegerField(required=False),
             forms.IntegerField(required=False),
-            forms.CharField(required=True),
+            forms.CharField(required=False),
         )
         super().__init__(fields, *args, **kwargs)
 
     def compress(self, data_list):
-        if not data_list:
-            return None
+        day, month, year, hour, minute, tz = data_list
+        return timezone.make_aware(
+            datetime(year, month, day, hour, minute),
+            ZoneInfo(tz),
+        )
+
+    def clean(self, data):
+        if data is None:
+            data = ["", "", "", "", "", ""]
         try:
-            day, month, year, hour, minute, tzname = data_list
+            if self.required and not any(data):
+                raise forms.ValidationError("This field is required.")
+            if self.required and not all(data):
+                raise forms.ValidationError("Please enter a valid date and time.")
+            try:
+                day, month, year, hour, minute = (int(value) for value in data[:-1])
+            except TypeError:
+                if not self.required:
+                    return None
+                raise forms.ValidationError("Please enter a valid date and time.")
             value = datetime(year, month, day, hour, minute)
-            tzinfo = ZoneInfo(tzname)
-            return timezone.make_aware(value, tzinfo)
-        except (ValueError, ZoneInfoNotFoundError):
+            tzinfo = ZoneInfo(data[-1])
+        except ZoneInfoNotFoundError as exc:
+            raise forms.ValidationError(*exc.args)
+        except ValueError:
             raise forms.ValidationError("Please enter a valid date and time.")
+        return timezone.make_aware(value, tzinfo)
 
 
 class TemplatePathFormField(forms.ChoiceField):
