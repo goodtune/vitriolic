@@ -81,14 +81,6 @@ class CustomFormField(TestCase):
         optional = SelectTimeField(required=False)
         self.assertEqual(optional.clean(input), None)
 
-    @override_settings(USE_TZ=False)
-    def test_select_date_time_field(self):
-        valid = {
-            ("25", "9", "2013", "10", "15"): datetime(2013, 9, 25, 10, 15),
-        }
-        self.assertFieldOutput(SelectDateTimeField, valid, {}, empty_value=None)
-
-    @override_settings(USE_TZ=True)
     def test_select_date_time_field_tz(self):
         dt = datetime(2013, 9, 25, 10, 15)
         utc_dt = make_aware(dt, ZoneInfo("UTC"))

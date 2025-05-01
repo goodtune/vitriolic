@@ -2,7 +2,6 @@ import logging
 from importlib import metadata
 
 from django import forms
-from django.conf import settings
 from django.forms import widgets
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -63,8 +62,7 @@ class HTMLWidget(FroalaEditor):
             ),
         }
         js = (
-            "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.3.0/"
-            "codemirror.min.js",
+            "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.3.0/codemirror.min.js",
             "touchtechnology/common/js/froala.js",
         )
 
@@ -97,7 +95,7 @@ class SelectDateWidget(MultiWidget):
             forms.Select(choices=MONTH_CHOICES, attrs=attrs),
             forms.TextInput(attrs=attrs),
         )
-        super(SelectDateWidget, self).__init__(widgets, attrs)
+        super().__init__(widgets, attrs)
 
     def decompress(self, value):
         if value:
@@ -115,7 +113,7 @@ class SelectDateHiddenWidget(SelectDateWidget):
             forms.HiddenInput(attrs=attrs),
             forms.HiddenInput(attrs=attrs),
         )
-        super(SelectDateWidget, self).__init__(widgets, attrs)
+        super().__init__(widgets, attrs)
 
 
 class SelectTimeWidget(MultiWidget):
@@ -124,7 +122,7 @@ class SelectTimeWidget(MultiWidget):
             forms.Select(choices=HOUR_CHOICES, attrs=attrs),
             forms.Select(choices=MINUTE_CHOICES, attrs=attrs),
         )
-        super(SelectTimeWidget, self).__init__(widgets, attrs)
+        super().__init__(widgets, attrs)
 
     def decompress(self, value):
         if value is not None:
@@ -141,7 +139,7 @@ class SelectTimeHiddenWidget(SelectTimeWidget):
             forms.HiddenInput(attrs=attrs),
             forms.HiddenInput(attrs=attrs),
         )
-        super(SelectTimeWidget, self).__init__(widgets, attrs)
+        super().__init__(widgets, attrs)
 
 
 class SelectDateTimeWidget(MultiWidget):
@@ -152,55 +150,42 @@ class SelectDateTimeWidget(MultiWidget):
             forms.TextInput(attrs=attrs),
             forms.Select(choices=HOUR_CHOICES, attrs=attrs),
             forms.Select(choices=MINUTE_CHOICES, attrs=attrs),
+            forms.Select(choices=TIMEZONE_CHOICES, attrs=attrs),
         )
-        if settings.USE_TZ:
-            widgets += (forms.Select(choices=TIMEZONE_CHOICES, attrs=attrs),)
-        super(SelectDateTimeWidget, self).__init__(widgets, attrs)
+        super().__init__(widgets, attrs)
 
     def decompress(self, value):
-        if settings.USE_TZ:
-            tzinfo = timezone.get_current_timezone()
-            tzname = timezone.get_current_timezone_name()
-            logger.debug("USE_TZ is True, timezone is %s (%s)", tzinfo, tzname)
+        tzinfo = timezone.get_current_timezone()
+        tzname = timezone.get_current_timezone_name()
+        logger.debug("Timezone is %s (%s)", tzinfo, tzname)
 
-            if value:
-                logger.debug("Value is set (%s)", value)
-                if timezone.is_naive(value):
-                    value = timezone.make_aware(value, timezone.get_default_timezone())
-                    logger.debug("Naive value, set default timezone (%s)", value)
-                value = value.astimezone(tzinfo)
-                logger.debug(
-                    "Ensure timezone is correctly set to %s (%s)", tzname, value
-                )
-                values = (
-                    value.day,
-                    value.month,
-                    value.year,
-                    value.hour,
-                    value.minute,
-                    tzname,
-                )
-            else:
-                values = (None, None, None, None, None, None)
-
-        elif value:
-            values = (value.day, value.month, value.year, value.hour, value.minute)
-
+        if value:
+            logger.debug("Value is set (%s)", value)
+            if timezone.is_naive(value):
+                value = timezone.make_aware(value, timezone.get_default_timezone())
+                logger.debug("Naive value, set default timezone (%s)", value)
+            value = value.astimezone(tzinfo)
+            logger.debug("Ensure timezone is correctly set to %s (%s)", tzname, value)
+            values = (
+                value.day,
+                value.month,
+                value.year,
+                value.hour,
+                value.minute,
+                tzname,
+            )
         else:
-            values = (None, None, None, None, None)
+            values = (None, None, None, None, None, None)
 
         return values
 
     def format_output(self, rendered_widgets):
         date_part = " ".join(rendered_widgets[:3])
         time_part = " ".join(rendered_widgets[3:])
-        output = """<span class="date_part">%(date_widget)s</span>
-        <span class="time_part%(timezone)s">%(time_widget)s</span>""" % {
-            "date_widget": date_part,
-            "time_widget": time_part,
-            "timezone": " tz" if settings.USE_TZ else "",
-        }
-        return output
+        return (
+            f'<span class="date_part">{date_part}</span>'
+            f'<span class="time_part tz">{time_part}</span>'
+        )
 
 
 class SelectDateTimeHiddenWidget(SelectDateTimeWidget):
@@ -211,7 +196,6 @@ class SelectDateTimeHiddenWidget(SelectDateTimeWidget):
             forms.HiddenInput(),
             forms.HiddenInput(),
             forms.HiddenInput(),
+            forms.HiddenInput(),
         )
-        if settings.USE_TZ:
-            widgets += (forms.HiddenInput(),)
-        super(SelectDateTimeWidget, self).__init__(widgets, attrs)
+        super().__init__(widgets, attrs)

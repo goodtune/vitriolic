@@ -124,7 +124,7 @@ class LadderPointsWidget(forms.MultiWidget):
         widgets = tuple(
             [ladder_points_widget(n, **self.attrs) for n in valid_ladder_identifiers]
         )
-        super(LadderPointsWidget, self).__init__(widgets, attrs)
+        super().__init__(widgets, attrs)
 
     def decompress(self, value):
         if not value:
@@ -140,16 +140,14 @@ class LadderPointsWidget(forms.MultiWidget):
     def format_output(self, rendered_widgets):
         output = ""
         for label, widget in zip(valid_ladder_identifiers.values(), rendered_widgets):
-            output += """
+            output += f"""
                 <div class="field_wrapper">
                     <label class="field_name">{label}</label>
                     <div class="field text_input short">
                         {widget}
                     </div>
                 </div>
-            """.format(
-                label=label, widget=widget
-            )
+            """
         return output
 
 
@@ -163,7 +161,7 @@ class MatchPlayedWidget(forms.widgets.Select):
 
     def __init__(self, attrs=None):
         choices = (("1", _("Yes")), ("0", _("No")))
-        super(MatchPlayedWidget, self).__init__(attrs, choices)
+        super().__init__(attrs, choices)
 
     def value_from_datadict(self, data, files, name):
         value = data.get(name, None)
@@ -181,7 +179,7 @@ class LadderPointsField(forms.MultiValueField):
             )
         )
         kwargs["widget"] = LadderPointsWidget()
-        super(LadderPointsField, self).__init__(fields, *args, **kwargs)
+        super().__init__(fields, *args, **kwargs)
 
     def compress(self, data_list):
         parts = [
@@ -240,7 +238,7 @@ class ConfigurationForm(PlaceholderConfigurationBase):
     """
 
     def __init__(self, *args, **kwargs):
-        super(ConfigurationForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         competitions = Competition.objects.values_list("slug", "title")
         self.fields["competition"] = forms.ChoiceField(
@@ -273,7 +271,7 @@ class ConfigurationForm(PlaceholderConfigurationBase):
 
 class MultiConfigurationForm(PlaceholderConfigurationBase):
     def __init__(self, *args, **kwargs):
-        super(MultiConfigurationForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         competitions = Competition.objects.values_list("slug", "title")
         self.fields["competition"] = forms.MultipleChoiceField(
@@ -286,7 +284,7 @@ class MultiConfigurationForm(PlaceholderConfigurationBase):
 
 class RankingConfigurationForm(PlaceholderConfigurationBase):
     def __init__(self, *args, **kwargs):
-        super(RankingConfigurationForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.fields["start"] = forms.CharField(required=False)
         self.fields["decay"] = forms.CharField(required=False)
 
@@ -323,7 +321,7 @@ class PersonMergeForm(PersonEditForm):
     )
 
     def __init__(self, *args, **kwargs):
-        super(PersonMergeForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.fields["merge"].queryset = self.instance.club.members.exclude(
             pk=self.instance.pk
         )
@@ -355,21 +353,7 @@ class CompetitionForm(SuperUserSlugMixin, ModelForm):
         }
 
 
-class TimezoneMixin(object):
-    """
-    Mixin to remove the timezone field if we are not operating in a timezone
-    aware state.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super(TimezoneMixin, self).__init__(*args, **kwargs)
-        if not settings.USE_TZ:
-            self.fields.pop("timezone", None)
-
-
-class SeasonForm(
-    SuperUserSlugMixin, TimezoneMixin, BootstrapFormControlMixin, ModelForm
-):
+class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
     class Meta:
         model = Season
         fields = (
@@ -428,7 +412,7 @@ class SeasonForm(
         return data
 
 
-class VenueForm(SuperUserSlugMixin, TimezoneMixin, ModelForm):
+class VenueForm(SuperUserSlugMixin, ModelForm):
     class Meta:
         model = Venue
         fields = (
@@ -445,7 +429,7 @@ class VenueForm(SuperUserSlugMixin, TimezoneMixin, ModelForm):
         }
 
 
-class GroundForm(SuperUserSlugMixin, TimezoneMixin, ModelForm):
+class GroundForm(SuperUserSlugMixin, ModelForm):
     class Meta:
         model = Ground
         fields = (
@@ -482,7 +466,7 @@ class GroundFormSet(BaseGroundFormSet):
 
 class DivisionForm(SuperUserSlugMixin, ModelForm):
     def __init__(self, *args, **kwargs):
-        super(DivisionForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if self.instance.season.mode != DAILY:
             self.fields.pop("games_per_day", None)
 
@@ -538,7 +522,7 @@ class DivisionForm(SuperUserSlugMixin, ModelForm):
 
 class StageForm(SuperUserSlugMixin, ModelForm):
     def __init__(self, *args, **kwargs):
-        super(StageForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if self.instance.order <= 1:
             self.fields.pop("follows")
         else:
@@ -570,7 +554,7 @@ class StageGroupForm(SuperUserSlugMixin, ModelForm):
     teams = ModelMultipleChoiceField(queryset=None)
 
     def __init__(self, *args, **kwargs):
-        super(StageGroupForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # build a queryset of teams in the division that are either assigned
         # to this pool or not assigned to any other pools in this stage
@@ -629,7 +613,7 @@ class StageGroupForm(SuperUserSlugMixin, ModelForm):
 
 class StageGroupFormSetForm(ModelForm):
     def __init__(self, stage, *args, **kwargs):
-        super(StageGroupFormSetForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     class Meta:
         model = StageGroup
@@ -644,7 +628,7 @@ BaseStageGroupFormSet = inlineformset_factory(
 class StageGroupFormSet(ConstructFormMixin, BaseStageGroupFormSet):
     def __init__(self, stage, *args, **kwargs):
         self.stage = stage
-        super(StageGroupFormSet, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def get_defaults(self):
         return {"stage": self.stage}
@@ -696,7 +680,7 @@ class UndecidedTeamForm(UserMixin, ModelForm):
 
 class TeamForm(SuperUserSlugMixin, ModelForm):
     def __init__(self, division, *args, **kwargs):
-        super(TeamForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if not division.season.competition.clubs.count():
             self.fields.pop("club")
         else:
@@ -774,7 +758,7 @@ class TeamForm(SuperUserSlugMixin, ModelForm):
         help_texts = {
             "copy": _("Optional. Will be displayed in the front end if provided."),
             "short_title": _(
-                "The abbreviated version will be used in draws " "to save space."
+                "The abbreviated version will be used in draws to save space."
             ),
         }
 
@@ -809,7 +793,7 @@ class DrawFormatForm(BootstrapFormControlMixin, ModelForm):
 
 class BaseMatchFormMixin(BootstrapFormControlMixin):
     def __init__(self, timeslots=None, *args, **kwargs):
-        super(BaseMatchFormMixin, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # set the queryset of the `home_team` and `away_team` fields
         team_ids = self.instance.stage.division.teams.values_list("id", flat=True)
@@ -913,13 +897,13 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
     """
 
     def __init__(self, *args, **kwargs):
-        super(MatchEditForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # restrict the list of referees to those registered this season
         if "referees" in self.fields:
-            self.fields["referees"].queryset = (
-                self.instance.stage.division.season.referees.all()
-            )
+            self.fields[
+                "referees"
+            ].queryset = self.instance.stage.division.season.referees.all()
 
         # remove `stage_group` field if the `division` has no children
         if not self.instance.stage.pools.count():
@@ -1172,7 +1156,7 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
     """
 
     def __init__(self, *args, **kwargs):
-        super(MatchResultForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         home_team = self.instance.home_team
         away_team = self.instance.away_team
         if self.instance.is_bye:
@@ -1261,7 +1245,7 @@ MatchWashoutFormSet = modelformset_factory(Match, extra=0, form=MatchWashoutForm
 
 class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
     def __init__(self, ignore_clashes=False, places=None, *args, **kwargs):
-        super(MatchScheduleForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.ignore_clashes = ignore_clashes
 
         tzinfo = timezone.get_current_timezone()
@@ -1275,10 +1259,9 @@ class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
             else:
                 label = f"{obj}"
 
-            if settings.USE_TZ:
-                __, tz = timezone_choice(obj.timezone)
-                if tz != tzname:
-                    label += " ({tz})".format(tz=tz)
+            __, tz = timezone_choice(obj.timezone)
+            if tz != tzname:
+                label += f" ({tz})"
             return label
 
         if places is None:
@@ -1299,16 +1282,6 @@ class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
 
         self.fields["play_at"].queryset = places
         self.fields["play_at"].label_from_instance = label_from_instance
-        if not settings.USE_TZ:
-            self.fields["play_at"].help_text = (
-                _(
-                    "If not set, the timezone "
-                    "for this match will be "
-                    "assumed to be "
-                    "<em>%s</em>."
-                )
-                % tzname
-            )
 
     class Meta:
         model = Match
@@ -1408,7 +1381,7 @@ class MatchScheduleFormSet(BaseMatchScheduleFormSet):
         # determine form properties
         ignore_clashes = bool(mfcd.get("ignore_clashes", False))
         # construct the form with our additional keyword arguments
-        return super(MatchScheduleFormSet, self)._construct_form(
+        return super()._construct_form(
             i,
             ignore_clashes=ignore_clashes,
             places=self.places,
@@ -1444,9 +1417,7 @@ class MatchScheduleFormSet(BaseMatchScheduleFormSet):
             if play_at and time:
                 key = (play_at, time)
                 if scheduled.get(key):
-                    err = _(
-                        "Another match is already scheduled for " "this time & place."
-                    )
+                    err = _("Another match is already scheduled for this time & place.")
                     self.forms[i].add_error("play_at", err)
                 scheduled.setdefault(key, []).append(match)
 
@@ -1467,14 +1438,14 @@ class RescheduleDateForm(forms.Form):
     def __init__(self, matches, date, *args, **kwargs):
         self.original = date
         self.matches = matches.filter(date=date)
-        super(RescheduleDateForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.fields["date"] = SelectDateField(initial=date)
 
     def clean(self):
         errors = {}
 
         try:
-            super(RescheduleDateForm, self).clean()
+            super().clean()
         except ValidationError as e:
             e.update_error_dict(errors)
 
@@ -1502,7 +1473,7 @@ class RescheduleDateFormSet(ConstructFormMixin, RescheduleDateFormSetBase):
     def __init__(self, matches, dates, *args, **kwargs):
         self.matches = matches
         self.dates = dates
-        super(RescheduleDateFormSet, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def total_form_count(self):
         return len(self.dates)
@@ -1535,7 +1506,7 @@ class RescheduleDateFormSet(ConstructFormMixin, RescheduleDateFormSetBase):
 
 class ProgressMatchesForm(BaseMatchFormMixin, ModelForm):
     def __init__(self, instance, *args, **kwargs):
-        super(ProgressMatchesForm, self).__init__(instance=instance, *args, **kwargs)
+        super().__init__(instance=instance, *args, **kwargs)
         instance.evaluated = True
         home_team, away_team = instance.eval()
 
@@ -1602,7 +1573,7 @@ ProgressMatchesFormSet = modelformset_factory(Match, form=ProgressMatchesForm, e
 
 class ProgressTeamsForm(ModelForm):
     def __init__(self, *args, **kwargs):
-        super(ProgressTeamsForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         teams = self.instance.choices.order_by("title")
         self.fields["team"] = ModelChoiceField(
             queryset=teams, label_from_instance="title"
@@ -1627,7 +1598,7 @@ BaseProgressTeamsFormSet = modelformset_factory(
 class ProgressTeamsFormSet(BaseProgressTeamsFormSet):
     def __init__(self, stage, *args, **kwargs):
         self.stage = stage
-        super(ProgressTeamsFormSet, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def get_queryset(self):
         qs = super(ProgressTeamsFormSet, self).get_queryset()
@@ -1663,7 +1634,7 @@ class DrawGenerationForm(BootstrapFormControlMixin, forms.Form):
     offset = forms.IntegerField(required=False)
 
     def __init__(self, initial, *args, **kwargs):
-        super(DrawGenerationForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.instance = initial
 
         # ensure we have an even number for filtering the `DrawFormat` table
@@ -1753,7 +1724,7 @@ class ImportCsvForm(forms.Form):
     csv = forms.FileField(
         label=_("File"),
         help_text=_(
-            "Any columns in your data file that " "are unknown will be discarded."
+            "Any columns in your data file that are unknown will be discarded."
         ),
     )
 
@@ -1783,7 +1754,7 @@ class BaseSeasonAssociationFormSet(UserMixin, ConstructFormMixin, BaseModelFormS
     def __init__(self, club, season, *args, **kwargs):
         self.club = club
         self.season = season
-        super(BaseSeasonAssociationFormSet, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def get_defaults(self):
         return {"user": self.user, "club": self.club, "season": self.season}
@@ -1791,7 +1762,7 @@ class BaseSeasonAssociationFormSet(UserMixin, ConstructFormMixin, BaseModelFormS
 
 class ClubAssociationForm(UserMixin, ModelForm):
     def __init__(self, club, *args, **kwargs):
-        super(ClubAssociationForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.fields["person"].queryset = club.members.all()
         if self.instance.person_id is None:
             self.fields["person"].required = False
@@ -1806,11 +1777,11 @@ class ClubAssociationForm(UserMixin, ModelForm):
 
 class TeamAssociationForm(UserMixin, ModelForm):
     def __init__(self, team, *args, **kwargs):
-        super(TeamAssociationForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.fields["person"].queryset = team.club.members.all()
-        self.fields["roles"].queryset = (
-            team.division.season.competition.team_roles.all()
-        )
+        self.fields[
+            "roles"
+        ].queryset = team.division.season.competition.team_roles.all()
 
     class Meta:
         model = TeamAssociation
@@ -1824,7 +1795,7 @@ class TeamAssociationForm(UserMixin, ModelForm):
 
 class SeasonAssociationForm(UserMixin, ModelForm):
     def __init__(self, club, season, *args, **kwargs):
-        super(SeasonAssociationForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.fields["person"].queryset = club.members.all()
         self.fields["roles"].queryset = season.competition.club_roles.all()
 
@@ -1931,7 +1902,7 @@ BaseMatchStatisticFormset = modelformset_factory(
 
 class MatchStatisticFormset(BaseMatchStatisticFormset):
     def __init__(self, score, *args, **kwargs):
-        super(MatchStatisticFormset, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.score = score
 
     def _construct_form(self, i, **kwargs):
@@ -1942,7 +1913,7 @@ class MatchStatisticFormset(BaseMatchStatisticFormset):
     def clean(self):
         if any(self.errors):
             raise forms.ValidationError(
-                _("There are errors you must fix " "before we can verify the scores.")
+                _("There are errors you must fix before we can verify the scores.")
             )
 
         if self.score is None:

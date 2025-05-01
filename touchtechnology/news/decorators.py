@@ -1,9 +1,8 @@
 import datetime
+import logging
 
 from dateutil.parser import parse as parse_datetime
 from dateutil.relativedelta import relativedelta
-from django.conf import settings
-from django.core.exceptions import ObjectDoesNotExist
 from django.http import Http404
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -13,6 +12,8 @@ from django.views.decorators.http import last_modified
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.news.models import Article, Category
 
+logger = logging.getLogger(__name__)
+
 
 @method_decorator
 def date_view(f, *a, **kw):
@@ -21,15 +22,17 @@ def date_view(f, *a, **kw):
         year = kwargs.pop("year")
         month = kwargs.pop("month", "jan")
         day = kwargs.pop("day", 1)
+
         try:
-            dt = parse_datetime(f"{year}-{month}-{day}")
-        except ValueError:
-            raise Http404
+            value = timezone.make_aware(
+                parse_datetime(f"{year}-{month}-{day}"),
+                datetime.timezone.utc,
+            )
+        except ValueError as exc:
+            logger.exception("invalid date value in path %s", args[0].path)
+            raise Http404(str(exc))
 
-        if settings.USE_TZ:
-            dt = timezone.make_aware(dt, datetime.timezone.utc)
-
-        kwargs["date"] = dt
+        kwargs["date"] = value
 
         # So we can run an optimal query for finding the last modified time for
         # a view in other decorators, pass in the "delta" that should be used
@@ -51,20 +54,20 @@ def news_last_modified(request, **kwargs):
         last_modified_datetimes.append(
             Article.objects.live().latest("last_modified").last_modified
         )
-    except ObjectDoesNotExist:
-        pass
+    except Article.DoesNotExist:
+        ...
     try:
         last_modified_datetimes.append(
             Category.objects.latest("last_modified").last_modified
         )
-    except ObjectDoesNotExist:
-        pass
+    except Category.DoesNotExist:
+        ...
     try:
         last_modified_datetimes.append(
             SitemapNode.objects.latest("last_modified").last_modified
         )
-    except ObjectDoesNotExist:
-        pass
+    except SitemapNode.DoesNotExist:
+        ...
     return max(last_modified_datetimes)
 
 

@@ -1,17 +1,22 @@
 from datetime import datetime
-from os.path import dirname, join
+from pathlib import Path
 
+from django import forms
 from django.test.utils import modify_settings, override_settings
 from django.utils import timezone
 from django.utils.encoding import smart_str
 from test_plus import TestCase
 
-from touchtechnology.common.tests.test_timezone_forms import TestForm1
+from touchtechnology.common.forms.fields import SelectDateTimeField
+
+
+class TestForm1(forms.Form):
+    timestamp = SelectDateTimeField()
 
 
 class TimeZoneTests(TestCase):
     def get_html(self, filename):
-        with open(join(dirname(__file__), "test_html", filename)) as fp:
+        with open(Path(__file__).parent / "test_html" / filename) as fp:
             html = fp.read()
         return smart_str(html)
 
@@ -28,12 +33,11 @@ class TimeZoneTests(TestCase):
 
         # with only date fields completed validation should fail
         form = TestForm1(data=data)
-        self.assertFalse(form.is_valid())
-        self.assertEqual(
-            form.errors["timestamp"], ["Please enter a valid date and time."]
-        )
+        self.assertFormError(form, "timestamp", ["Please enter a valid date and time."])
 
-        data.update({"timestamp_3": "7", "timestamp_4": "49"})
+        # add time fields to complete the datetime input
+        data["timestamp_3"] = "7"  # hour
+        data["timestamp_4"] = "49"  # minute
 
         # time fields added should allow validation to succeed
         form = TestForm1(data=data)
@@ -50,13 +54,11 @@ class TimeZoneTests(TestCase):
     @override_settings(TIME_ZONE="Australia/Sydney")
     def test_select_date_time_field_initial_tz(self):
         timestamp = timezone.make_aware(
-            datetime(2013, 3, 24, 14, 30), timezone.get_current_timezone()
+            datetime(2013, 3, 24, 14, 30),
+            timezone.get_current_timezone(),
         )
 
-        initial = {
-            "timestamp": timestamp,
-        }
-        form = TestForm1(initial=initial)
+        form = TestForm1(initial={"timestamp": timestamp})
 
         # check that the HTML output is as expected for a naked
         # form renderer.
@@ -73,17 +75,18 @@ class TestTimezoneMiddleware(TestCase):
     def test_set_timezone(self):
         "Ensure time zone is correct before, during and after a set request"
         self.assertEqual(
-            timezone.get_current_timezone_name(), timezone.get_default_timezone_name()
+            timezone.get_current_timezone_name(),
+            timezone.get_default_timezone_name(),
         )
 
-        data = {
-            "timezone": "Australia/Sydney",
-        }
+        data = {"timezone": "Australia/Sydney"}
         self.post("set-timezone", data=data, follow=True)
+
         self.assertResponseContains(
             '<option value="Australia/Sydney" selected>Sydney</option>'
         )
 
         self.assertEqual(
-            timezone.get_current_timezone_name(), timezone.get_default_timezone_name()
+            timezone.get_current_timezone_name(),
+            timezone.get_default_timezone_name(),
         )

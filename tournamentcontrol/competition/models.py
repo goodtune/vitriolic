@@ -146,10 +146,7 @@ class TimeZoneField(models.CharField):
         return name, "django.db.models.CharField", args, kwargs
 
     def formfield(self, form_class=TimeZoneChoiceField, *args, **kwargs):
-        required = kwargs.pop("required", settings.USE_TZ)
-        return super().formfield(
-            form_class=form_class, required=required, *args, **kwargs
-        )
+        return super().formfield(form_class=form_class, required=True, *args, **kwargs)
 
 
 class LadderPointsField(models.TextField):
@@ -1717,7 +1714,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                 siblings = siblings.filter(stage_group=self.stage_group)
             if siblings:
                 res = max([s.datetime for s in siblings])
-        if res is not None and settings.USE_TZ and tzinfo is not None:
+        if res is not None and tzinfo is not None:
             return timezone.localtime(res, tzinfo)
         return res
 
@@ -1813,7 +1810,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         except TypeError:
             self.datetime = None
 
-        if self.datetime is not None and settings.USE_TZ:
+        if self.datetime is not None:
             try:
                 tzinfo = ZoneInfo(self.play_at.timezone)
             except (AttributeError, ZoneInfoNotFoundError):
