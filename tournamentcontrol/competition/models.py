@@ -203,7 +203,7 @@ class Club(AdminUrlMixin, SitemapNodeBase):
     twitter = TwitterField(
         max_length=50,
         blank=True,
-        help_text=_("Official Twitter name for use in " 'social "mentions"'),
+        help_text=_('Official Twitter name for use in social "mentions"'),
     )
     facebook = models.URLField(max_length=255, blank=True)
     youtube = models.URLField(max_length=255, blank=True)
@@ -214,19 +214,19 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         related_name="+",
         verbose_name=_("Primary contact"),
         label_from_instance="get_full_name",
-        help_text=_("Appears on the front-end with other " "club information."),
+        help_text=_("Appears on the front-end with other club information."),
         on_delete=PROTECT,
     )
     primary_position = models.CharField(
         max_length=200,
         blank=True,
         verbose_name=_("Position"),
-        help_text=_("Position of the primary " "contact"),
+        help_text=_("Position of the primary contact"),
     )
     abbreviation = models.CharField(
         max_length=3,
         blank=True,
-        help_text=_("Optional 3-letter " "abbreviation to be used on " "scoreboards."),
+        help_text=_("Optional 3-letter abbreviation to be used on scoreboards."),
     )
 
     class Meta:
@@ -284,9 +284,7 @@ class Club(AdminUrlMixin, SitemapNodeBase):
             ORDER BY
                 "competition_person"."last_name" ASC,
                 "competition_person"."first_name" ASC
-        """ % {
-            "user": get_user_model()._meta.db_table
-        }
+        """ % {"user": get_user_model()._meta.db_table}
         params = {
             "club": self.pk,
         }
@@ -483,7 +481,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         validators=[validate_hashtag],
         verbose_name="Hash Tag",
         help_text=mark_safe(
-            _("Your official <em>hash tag</em> " "for social media promotions.")
+            _("Your official <em>hash tag</em> for social media promotions.")
         ),
     )
     enabled = BooleanField(default=True)
@@ -1148,7 +1146,7 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
         verbose_name=_("Don't clash"),
         label_from_instance=team_and_division,
         symmetrical=True,
-        help_text=_("Select any teams that must " "not play at the same time."),
+        help_text=_("Select any teams that must not play at the same time."),
     )
 
     class Meta:
@@ -1692,6 +1690,9 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
             self.pk,
         )
 
+    def _get_url_names(self):
+        return super()._get_url_names() + ["referees"]
+
     def get_date(self, tzinfo):
         dt = self.get_datetime(tzinfo)
         if dt is not None:
@@ -1922,7 +1923,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
             stage = self.stage.comes_after
         except Stage.DoesNotExist:
             logger.warning(
-                "Stage is first, %r should not be attempting to be " "evaluated.", self
+                "Stage is first, %r should not be attempting to be evaluated.", self
             )
             return (self.home_team, self.away_team)
 

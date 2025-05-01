@@ -1089,3 +1089,66 @@ class BackendTests(TestCase):
             stage._get_admin_namespace() + ":stagegroup:add",
             *stage._get_url_args(),
         )
+
+    def test_edit_match_referee_appointments(self):
+        """
+        Test that referee appointments work correctly with and without live streaming
+        enabled at the division or match level.
+        """
+        # Create a season with live streaming disabled and no YouTube config
+        stage = factories.StageFactory.create(
+            title="Test Stage",
+            division__title="Test Division",
+            division__season__title="Test Season",
+            division__season__live_stream=False,
+            division__season__live_stream_project_id=None,
+            division__season__live_stream_client_id=None,
+            division__season__live_stream_client_secret=None,
+        )
+
+        referees = factories.SeasonRefereeFactory.create_batch(
+            3,
+            season=stage.division.season,
+            person__last_name="Referee",
+        )
+
+        match = factories.MatchFactory.create(
+            stage=stage,
+            home_team__title="Home Team",
+            home_team__division=stage.division,
+            away_team__title="Away Team",
+            away_team__division=stage.division,
+            date=date(2025, 5, 1),
+            include_in_ladder=True,
+        )
+
+        view = match.url_names["referees"]
+
+        for season_stream, match_stream, referee in [
+            (False, False, 0),
+            (True, False, 1),
+            (True, True, 2),
+        ]:
+            with self.subTest(season_stream=season_stream, match_stream=match_stream):
+                stage.division.season.live_stream = season_stream
+                stage.division.season.save()
+
+                match.live_stream = match_stream
+                match.videos = ["http://example.com/"] if match_stream else []
+                match.referees.set([])
+                match.save()
+
+                self.post(
+                    view["url_name"],
+                    *view["args"],
+                    data={
+                        "home_team": match.home_team.pk,
+                        "away_team": match.away_team.pk,
+                        "referees": [referees[referee].pk],
+                    },
+                )
+                self.assertRedirects(self.last_response, stage.urls["edit"])
+                self.assertCountEqual(
+                    match.referees.values_list("person__first_name", flat=True),
+                    [referees[referee].person.first_name],
+                )
