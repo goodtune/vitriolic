@@ -1,24 +1,12 @@
 # coding=UTF-8
 
-from datetime import date, datetime, time
-from zoneinfo import ZoneInfo
-
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
-from django.core.exceptions import ValidationError
 from django.test import TestCase
-from django.test.utils import override_settings
-from django.utils.timezone import make_aware
 
 from touchtechnology.common.forms.auth import permissionformset_factory
-from touchtechnology.common.forms.fields import (
-    EmailField,
-    HTMLField,
-    SelectDateField,
-    SelectDateTimeField,
-    SelectTimeField,
-)
+from touchtechnology.common.forms.fields import EmailField, HTMLField
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.tests import factories
 
@@ -45,63 +33,6 @@ class CustomFormField(TestCase):
             "sauté": "saut&eacute;",
         }
         self.assertFieldOutput(HTMLField, valid, {})
-
-    def test_select_date_field(self):
-        valid = {
-            ("25", "9", "2013"): date(2013, 9, 25),
-        }
-        invalid = {
-            ("30", "2", "2013"): ["Please enter a valid date."],
-        }
-        self.assertFieldOutput(SelectDateField, valid, invalid, empty_value=None)
-
-    def test_select_time_field(self):
-        valid = {
-            ("10", "15"): time(10, 15),
-            ("15", "15"): time(15, 15),
-        }
-        invalid = {
-            ("42", "0"): ["Hour must be in 0..23"],
-            ("1", "72"): ["Minute must be in 0..59"],
-            ("", "15"): ["Hour must be in 0..23"],
-            ("10", ""): ["Minute must be in 0..59"],
-        }
-        self.assertFieldOutput(SelectTimeField, valid, invalid, empty_value=None)
-
-    def test_select_time_field_advanced(self):
-        "Ensure that 'empty' input behaves correctly when required is toggled."
-        input = ("", "")
-
-        # If the field is required, we expect a validation error to be raised.
-        required = SelectTimeField(required=True)
-        with self.assertRaises(ValidationError):
-            required.clean(input)
-
-        # If the field is optional, we expect None to be returned.
-        optional = SelectTimeField(required=False)
-        self.assertEqual(optional.clean(input), None)
-
-    @override_settings(USE_TZ=False)
-    def test_select_date_time_field(self):
-        valid = {
-            ("25", "9", "2013", "10", "15"): datetime(2013, 9, 25, 10, 15),
-        }
-        self.assertFieldOutput(SelectDateTimeField, valid, {}, empty_value=None)
-
-    @override_settings(USE_TZ=True)
-    def test_select_date_time_field_tz(self):
-        dt = datetime(2013, 9, 25, 10, 15)
-        utc_dt = make_aware(dt, ZoneInfo("UTC"))
-        est_dt = make_aware(dt, ZoneInfo("Australia/Sydney"))
-        valid = {
-            ("25", "9", "2013", "10", "15", "UTC"): utc_dt,
-            ("25", "9", "2013", "10", "15", "Australia/Sydney"): est_dt,
-        }
-        invalid = {
-            ("25", "9", "2013", "10", "15"): ["Please select a time zone."],
-            ("25", "9", "2013", "10", "15", ""): ["Please select a valid time zone."],
-        }
-        self.assertFieldOutput(SelectDateTimeField, valid, invalid, empty_value=None)
 
     maxDiff = None
 

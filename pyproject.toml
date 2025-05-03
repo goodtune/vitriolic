@@ -14,9 +14,9 @@ dependencies = [
     "django-guardian>=2.4",
     "django-modelforms",
     "django-mptt",
+    "django-timezone-field",
     "django>=3.2",
     "first",
-    'importlib-metadata;python_version<"3.7"',
     "namedentities",
     "psycopg",
     "setuptools", # pkg_resources in touchtechnology.common.templatetags.common

@@ -40,16 +40,12 @@ def coerce_datetime(start_date):
     our plain old date instances to datetime instances before handing them
     to the rruleset.
 
-    If USE_TZ is True and the datetime isn't aware (it may have been passed
-    in as an aware datetime) then also set the time zone to UTC.
+    The datetime will be set to the current timezone.
     """
     if isinstance(start_date, datetime.date):
         start_date = datetime.datetime.combine(start_date, datetime.time())
-    if settings.USE_TZ:
-        if not timezone.is_aware(start_date):
-            start_date = timezone.make_aware(
-                start_date, timezone.get_current_timezone()
-            )
+    if not timezone.is_aware(start_date):
+        start_date = timezone.make_aware(start_date, timezone.get_current_timezone())
     return start_date
 
 
@@ -143,7 +139,7 @@ def optimum_tournament_pool_count(
         # stage of the tournament.
         if preliminary_rounds / max_per_day > days_available - elimination_days:
             logger.warning(
-                "Too many games (%s) to be played before the finals " "with %s pools.",
+                "Too many games (%s) to be played before the finals with %s pools.",
                 preliminary_rounds,
                 number_of_pools,
             )
@@ -152,7 +148,7 @@ def optimum_tournament_pool_count(
         # Make sure we are playing enough games during the preliminary stages
         if preliminary_rounds / max_per_day > days_available - elimination_days:
             logger.warning(
-                "Not enough time (%s days) to play %s games at %s " "games per day.",
+                "Not enough time (%s days) to play %s games at %s games per day.",
                 days_available - elimination_days,
                 preliminary_rounds,
                 max_per_day,

@@ -29,6 +29,7 @@ from django.utils.translation import gettext_lazy as _
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from timezone_field.fields import TimeZoneField
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
 from touchtechnology.common.db.models import (
@@ -38,7 +39,6 @@ from touchtechnology.common.db.models import (
     LocationField,
     ManyToManyField,
 )
-from touchtechnology.common.forms.tz import TIMEZONE_CHOICES
 from touchtechnology.common.models import SitemapNodeBase
 from tournamentcontrol.competition.constants import (
     GENDER_CHOICES,
@@ -131,25 +131,6 @@ class RankImportanceMixin(models.Model):
 
     class Meta:
         abstract = True
-
-
-class TimeZoneChoiceField(forms.ChoiceField):
-    def __init__(self, max_length=None, *args, **kwargs):
-        choices = kwargs.pop("choices", TIMEZONE_CHOICES)
-        kwargs.pop("empty_value", None)
-        super().__init__(choices=choices, *args, **kwargs)
-
-
-class TimeZoneField(models.CharField):
-    def deconstruct(self):
-        name, _, args, kwargs = super().deconstruct()
-        return name, "django.db.models.CharField", args, kwargs
-
-    def formfield(self, form_class=TimeZoneChoiceField, *args, **kwargs):
-        required = kwargs.pop("required", settings.USE_TZ)
-        return super().formfield(
-            form_class=form_class, required=required, *args, **kwargs
-        )
 
 
 class LadderPointsField(models.TextField):
@@ -284,7 +265,9 @@ class Club(AdminUrlMixin, SitemapNodeBase):
             ORDER BY
                 "competition_person"."last_name" ASC,
                 "competition_person"."first_name" ASC
-        """ % {"user": get_user_model()._meta.db_table}
+        """ % {
+            "user": get_user_model()._meta.db_table
+        }
         params = {
             "club": self.pk,
         }
@@ -550,7 +533,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             "match of tournament has taken place."
         ),
     )
-    timezone = TimeZoneField(max_length=50, blank=True, null=True)
+    timezone = TimeZoneField(max_length=50, blank=True, null=True, use_pytz=False)
 
     forfeit_notifications = ManyToManyField(
         settings.AUTH_USER_MODEL,
@@ -678,7 +661,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 class Place(AdminUrlMixin, OrderedSitemapNode):
     abbreviation = models.CharField(max_length=20, blank=True, null=True)
     latlng = LocationField(max_length=100)
-    timezone = TimeZoneField(max_length=50, blank=True, null=True)
+    timezone = TimeZoneField(max_length=50, blank=True, null=True, use_pytz=False)
 
     class Meta(OrderedSitemapNode.Meta):
         pass
@@ -1717,7 +1700,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                 siblings = siblings.filter(stage_group=self.stage_group)
             if siblings:
                 res = max([s.datetime for s in siblings])
-        if res is not None and settings.USE_TZ and tzinfo is not None:
+        if res is not None and tzinfo is not None:
             return timezone.localtime(res, tzinfo)
         return res
 
@@ -1813,7 +1796,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         except TypeError:
             self.datetime = None
 
-        if self.datetime is not None and settings.USE_TZ:
+        if self.datetime is not None:
             try:
                 tzinfo = ZoneInfo(self.play_at.timezone)
             except (AttributeError, ZoneInfoNotFoundError):

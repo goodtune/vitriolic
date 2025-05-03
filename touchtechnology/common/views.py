@@ -1,4 +1,3 @@
-import zoneinfo
 from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
 from django.http import Http404, HttpResponseRedirect
@@ -25,12 +24,11 @@ def set_timezone(request):
 
     form = SelectTimezoneForm(data=request.POST)
     if form.is_valid():
-        tzname = form.cleaned_data.get("timezone")
-        if tzname in zoneinfo.available_timezones():
-            if hasattr(request, "session"):
-                request.session["django_timezone"] = tzname
-            else:
-                response.set_cookie("django_timezone", tzname)
+        tz = form.cleaned_data["tz"]
+        if hasattr(request, "session"):
+            request.session["django_timezone"] = str(tz)
+        else:
+            response.set_cookie("django_timezone", str(tz))
 
     if not url_has_allowed_host_and_scheme(url, request.get_host()):
         raise Http404
