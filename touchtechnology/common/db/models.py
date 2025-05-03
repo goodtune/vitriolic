@@ -9,9 +9,7 @@ from touchtechnology.common.forms.fields import (
     HTMLField as HTMLFormField,
     ModelChoiceField,
     ModelMultipleChoiceField,
-    SelectDateField,
     SelectDateTimeField,
-    SelectTimeField,
     SitemapNodeModelChoiceField,
     TemplatePathFormField,
 )
@@ -26,9 +24,7 @@ class BooleanField(models.BooleanField):
         return super(BooleanField, self).formfield(**defaults)
 
 
-class DateField(models.DateField):
-    def formfield(self, form_class=SelectDateField, **kwargs):
-        return super(DateField, self).formfield(form_class=form_class, **kwargs)
+class DateField(models.DateField): ...
 
 
 class EmailField(models.EmailField):
@@ -54,22 +50,12 @@ class EmailField(models.EmailField):
         )
 
 
-class TimeField(models.TimeField):
-    def formfield(self, form_class=SelectTimeField, **kwargs):
-        return super(TimeField, self).formfield(form_class=form_class, **kwargs)
+class TimeField(models.TimeField): ...
 
 
 class DateTimeField(models.DateTimeField):
     def formfield(self, form_class=SelectDateTimeField, **kwargs):
-        return super(DateTimeField, self).formfield(form_class=form_class, **kwargs)
-
-    def to_python(self, value):
-        # See #13. When turning the database serialized value back into
-        # a Python datetime if the value is '' or null an exception was
-        # being raised. Explicitly check for these situations.
-        if not value and (self.blank or self.null):
-            return None
-        return super(DateTimeField, self).to_python(value)
+        return super().formfield(form_class=form_class, **kwargs)
 
 
 class LocationField(models.CharField):
@@ -184,7 +170,6 @@ class TemplatePathField(models.CharField):
 
 
 class UUIDField(models.CharField):
-
     def __init__(self, verbose_name=None, name=None, auto=False, **kwargs):
         self.auto = auto
         # Fixed length, we're storing the UUIDs as text.

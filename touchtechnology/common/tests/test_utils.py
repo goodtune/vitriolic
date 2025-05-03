@@ -3,7 +3,6 @@ from unittest import mock
 from test_plus import TestCase
 
 from touchtechnology.common.forms.fields import boolean_choice_field_coerce
-from touchtechnology.common.forms.tz import timezone_choice
 from touchtechnology.common.utils import get_base_url, get_mod_func
 
 
@@ -34,7 +33,6 @@ class BooleanChoiceFieldCoerce(TestCase):
 
 
 class GetModFunc(TestCase):
-
     def test_get_mod_func(self):
         mod_name, func_name = get_mod_func(
             "django.contrib.auth.tokens.default_token_generator"
@@ -48,24 +46,7 @@ class GetModFunc(TestCase):
         self.assertEqual(func_name, "")
 
 
-class TimeZoneChoice(TestCase):
-    def test_one_part(self):
-        self.assertEqual(timezone_choice("UTC"), ("UTC", "UTC"))
-
-    def test_two_parts(self):
-        self.assertEqual(
-            timezone_choice("Australia/Sydney"), ("Australia/Sydney", "Sydney")
-        )
-
-    def test_three_parts(self):
-        self.assertEqual(
-            timezone_choice("America/Indiana/Indianapolis"),
-            ("America/Indiana/Indianapolis", "Indianapolis (Indiana)"),
-        )
-
-
 class GetBaseUrl(TestCase):
-
     @mock.patch("touchtechnology.common.utils.connection")
     def test_tenant_no_prepend_www(self, connection):
         connection.tenant = mock.Mock(["domain_url"])

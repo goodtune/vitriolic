@@ -39,14 +39,12 @@ from pyparsing import ParseException
 from touchtechnology.common.forms.fields import (
     ModelChoiceField,
     ModelMultipleChoiceField,
-    SelectDateField,
 )
 from touchtechnology.common.forms.mixins import (
     BootstrapFormControlMixin,
     SuperUserSlugMixin,
     UserMixin,
 )
-from touchtechnology.common.forms.tz import timezone_choice
 from touchtechnology.common.forms.widgets import (
     SelectDateTimeWidget as SelectDateTimeWidgetBase,
 )
@@ -901,9 +899,9 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
 
         # restrict the list of referees to those registered this season
         if "referees" in self.fields:
-            self.fields[
-                "referees"
-            ].queryset = self.instance.stage.division.season.referees.all()
+            self.fields["referees"].queryset = (
+                self.instance.stage.division.season.referees.all()
+            )
 
         # remove `stage_group` field if the `division` has no children
         if not self.instance.stage.pools.count():
@@ -1249,7 +1247,6 @@ class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
         self.ignore_clashes = ignore_clashes
 
         tzinfo = timezone.get_current_timezone()
-        __, tzname = timezone_choice(str(tzinfo))
 
         def label_from_instance(obj):
             if isinstance(obj, Venue):
@@ -1259,9 +1256,8 @@ class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
             else:
                 label = f"{obj}"
 
-            __, tz = timezone_choice(obj.timezone)
-            if tz != tzname:
-                label += f" ({tz})"
+            if obj.timezone != tzinfo:
+                label += f" ({str(tzinfo)})"
             return label
 
         if places is None:
@@ -1439,7 +1435,7 @@ class RescheduleDateForm(forms.Form):
         self.original = date
         self.matches = matches.filter(date=date)
         super().__init__(*args, **kwargs)
-        self.fields["date"] = SelectDateField(initial=date)
+        self.fields["date"] = forms.DateField(initial=date)
 
     def clean(self):
         errors = {}
@@ -1628,7 +1624,7 @@ class ProgressTeamsFormSet(BaseProgressTeamsFormSet):
 
 
 class DrawGenerationForm(BootstrapFormControlMixin, forms.Form):
-    start_date = SelectDateField()
+    start_date = forms.DateField()
     format = ModelChoiceField(queryset=DrawFormat.objects.all())
     rounds = forms.IntegerField(required=False, min_value=1)
     offset = forms.IntegerField(required=False)
@@ -1779,9 +1775,9 @@ class TeamAssociationForm(UserMixin, ModelForm):
     def __init__(self, team, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["person"].queryset = team.club.members.all()
-        self.fields[
-            "roles"
-        ].queryset = team.division.season.competition.team_roles.all()
+        self.fields["roles"].queryset = (
+            team.division.season.competition.team_roles.all()
+        )
 
     class Meta:
         model = TeamAssociation

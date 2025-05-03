@@ -1,7 +1,6 @@
 import json
 import re
-from datetime import date, datetime, time
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from datetime import datetime
 
 from django import forms
 from django.conf import settings
@@ -11,18 +10,15 @@ from django.utils.encoding import smart_str
 from django.utils.translation import gettext_lazy as _
 from mptt.forms import TreeNodeChoiceField
 from namedentities import named_entities
+from timezone_field import TimeZoneFormField
 
 from touchtechnology.common.forms.iter import TemplateChoiceIterator
 from touchtechnology.common.forms.mixins import LabelFromInstanceMixin
 from touchtechnology.common.forms.widgets import (
     GoogleMapsWidget,
     HTMLWidget,
-    SelectDateHiddenWidget,
     SelectDateTimeHiddenWidget,
     SelectDateTimeWidget,
-    SelectDateWidget,
-    SelectTimeHiddenWidget,
-    SelectTimeWidget,
 )
 
 
@@ -82,126 +78,58 @@ class GoogleMapsField(forms.MultiValueField):
         return super().clean(data)
 
 
-class SelectDateField(forms.MultiValueField):
-    widget = SelectDateWidget
-    hidden_widget = SelectDateHiddenWidget
-
-    def __init__(self, *args, **kwargs):
-        fields = (
-            forms.IntegerField(required=False),
-            forms.IntegerField(required=False),
-            forms.IntegerField(required=False),
-        )
-        super().__init__(fields, *args, **kwargs)
-
-    def compress(self, data_list):
-        return date(data_list[2], data_list[1], data_list[0])
-
-    def clean(self, data):
-        if data is None:
-            data = ["", "", ""]
-        if not any(data):
-            if self.required:
-                raise forms.ValidationError("This field is required.")
-            return None
-        try:
-            day, month, year = (int(value) for value in data)
-            return date(year, month, day)
-        except ValueError:
-            raise forms.ValidationError("Please enter a valid date.")
-
-
-class SelectTimeField(forms.MultiValueField):
-    widget = SelectTimeWidget
-    hidden_widget = SelectTimeHiddenWidget
-
-    def __init__(self, *args, **kwargs):
-        fields = (
-            forms.IntegerField(required=False),
-            forms.IntegerField(required=False),
-        )
-        super().__init__(fields, *args, **kwargs)
-
-    def compress(self, data_list):
-        return time(data_list[0], data_list[1])
-
-    def clean(self, data):
-        if not data:
-            if self.required:
-                raise forms.ValidationError("This field is required.")
-            data = ("", "")
-        value = None
-        try:
-            try:
-                try:
-                    hour, minute = data
-                except ValueError:
-                    raise forms.ValidationError(repr(data))
-                try:
-                    hour = int(hour)
-                    assert 0 <= hour <= 23
-                except (AssertionError, ValueError):
-                    raise forms.ValidationError("Hour must be in 0..23")
-                try:
-                    minute = int(minute)
-                    assert 0 <= minute <= 59
-                except (AssertionError, ValueError):
-                    raise forms.ValidationError("Minute must be in 0..59")
-                try:
-                    value = time(hour, minute)
-                except ValueError as e:
-                    raise forms.ValidationError(smart_str(e).capitalize())
-            except TypeError:
-                raise forms.ValidationError("Please enter a valid time.")
-        except forms.ValidationError:
-            if self.required or any(data):
-                raise
-        return value
-
-
 class SelectDateTimeField(forms.MultiValueField):
     widget = SelectDateTimeWidget
     hidden_widget = SelectDateTimeHiddenWidget
+    default_error_messages = {
+        "invalid_date": _("Enter a valid date."),
+        "invalid_time": _("Enter a valid time."),
+        "invalid_tz": _("Enter a valid time zone."),
+    }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *, input_date_formats=None, input_time_formats=None, **kwargs):
+        errors = self.default_error_messages.copy()
+        if "error_messages" in kwargs:
+            errors.update(kwargs["error_messages"])
+        localize = kwargs.get("localize", False)
         fields = (
-            forms.IntegerField(required=False),
-            forms.IntegerField(required=False),
-            forms.IntegerField(required=False),
-            forms.IntegerField(required=False),
-            forms.IntegerField(required=False),
-            forms.CharField(required=False),
+            forms.DateField(
+                input_formats=input_date_formats,
+                error_messages={"invalid": errors["invalid_date"]},
+                localize=localize,
+            ),
+            forms.TimeField(
+                input_formats=input_time_formats,
+                error_messages={"invalid": errors["invalid_time"]},
+                localize=localize,
+            ),
+            TimeZoneFormField(
+                use_pytz=False,
+                choices_display="WITH_GMT_OFFSET",
+                error_messages={"required": errors["invalid_tz"]},
+            ),
         )
-        super().__init__(fields, *args, **kwargs)
+        super().__init__(fields, **kwargs)
 
     def compress(self, data_list):
-        day, month, year, hour, minute, tz = data_list
-        return timezone.make_aware(
-            datetime(year, month, day, hour, minute),
-            ZoneInfo(tz),
-        )
-
-    def clean(self, data):
-        if data is None:
-            data = ["", "", "", "", "", ""]
-        try:
-            if self.required and not any(data):
-                raise forms.ValidationError("This field is required.")
-            if self.required and not all(data):
-                raise forms.ValidationError("Please enter a valid date and time.")
-            try:
-                day, month, year, hour, minute = (int(value) for value in data[:-1])
-            except TypeError:
-                if not self.required:
-                    return None
-                raise forms.ValidationError("Please enter a valid date and time.")
-            value = datetime(year, month, day, hour, minute)
-            tzinfo = ZoneInfo(data[-1])
-        except ZoneInfoNotFoundError as exc:
-            raise forms.ValidationError(*exc.args)
-        except ValueError:
-            raise forms.ValidationError("Please enter a valid date and time.")
-        return timezone.make_aware(value, tzinfo)
+        if data_list:
+            # Raise a validation error if time or date is empty
+            # (possible if SplitDateTimeField has required=False).
+            if data_list[0] in self.empty_values:
+                raise forms.ValidationError(
+                    self.error_messages["invalid_date"], code="invalid_date"
+                )
+            if data_list[1] in self.empty_values:
+                raise forms.ValidationError(
+                    self.error_messages["invalid_time"], code="invalid_time"
+                )
+            if data_list[2] in self.empty_values:
+                raise forms.ValidationError(
+                    self.error_messages["invalid_tz"], code="invalid_tz"
+                )
+            result = datetime.combine(*data_list[:-1])
+            return timezone.make_aware(result, data_list[-1])
+        return None
 
 
 class TemplatePathFormField(forms.ChoiceField):
