@@ -63,7 +63,6 @@ version_re = re.compile(
     re.VERBOSE,
 )
 
-FORM_FIELD_TEMPLATE = get_template("touchtechnology/common/templatetags/field.html")
 
 register = Library()
 
@@ -100,7 +99,7 @@ def camel_case_to_underscores(s):
         if match.start() == 0:
             return content
         else:
-            return "_%s" % content
+            return f"_{content}"
 
     return camel_case_re.sub(convert, s).lower()
 
@@ -117,7 +116,7 @@ def camel_case_split(s):
         if match.start() == 0:
             return content
         else:
-            return " %s" % content
+            return f" {content}"
 
     return camel_case_re.sub(convert, s)
 
@@ -374,7 +373,9 @@ def field(bf, label=None):
         "no_label": not bool(label),
     }
 
-    return FORM_FIELD_TEMPLATE.render(context)
+    template = get_template("touchtechnology/common/templatetags/field.html")
+
+    return template.render(context)
 
 
 @register.inclusion_tag("touchtechnology/common/templatetags/analytics.html")
