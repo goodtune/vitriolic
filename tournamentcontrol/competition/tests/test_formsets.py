@@ -53,7 +53,7 @@ class DrawGenerationMatchFormSetTest(TestCase):
 
         with self.login(self.superuser):
             self.post(
-                "admin:fixja:competition:season:division:stage:draw:build",
+                "admin:fixja:competition:season:division:stage:build",
                 self.stage.division.season.competition.pk,
                 self.stage.division.season.pk,
                 self.stage.division.pk,
@@ -85,7 +85,7 @@ class DrawGenerationMatchFormSetTest(TestCase):
                 )
 
             self.post(
-                "admin:fixja:competition:season:division:stage:draw:build",
+                "admin:fixja:competition:season:division:stage:build",
                 self.stage.division.season.competition.pk,
                 self.stage.division.season.pk,
                 self.stage.division.pk,
@@ -145,7 +145,7 @@ class DrawGenerationMatchFormSetTest(TestCase):
 
         with self.login(self.superuser):
             self.post(
-                "admin:fixja:competition:season:division:stage:draw:build",
+                "admin:fixja:competition:season:division:stage:build",
                 stage.division.season.competition.pk,
                 stage.division.season.pk,
                 stage.division.pk,
@@ -177,7 +177,7 @@ class DrawGenerationMatchFormSetTest(TestCase):
                 )
 
             self.post(
-                "admin:fixja:competition:season:division:stage:draw:build",
+                "admin:fixja:competition:season:division:stage:build",
                 stage.division.season.competition.pk,
                 stage.division.season.pk,
                 stage.division.pk,

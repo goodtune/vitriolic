@@ -461,7 +461,7 @@ class GoodViewTests(TestCase):
             #
             # # The final series can't be progressed because there are results
             # # that need to be entered for matches in the preceding stage.
-            # self.get(finals._get_admin_namespace() + ':draw:progress',
+            # self.get(finals._get_admin_namespace() + ':progress',
             #          *finals._get_url_args())
             # self.response_410()
             #
