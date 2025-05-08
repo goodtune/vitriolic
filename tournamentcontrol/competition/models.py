@@ -1797,12 +1797,12 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
             self.datetime = None
 
         if self.datetime is not None:
-            try:
-                tzinfo = ZoneInfo(self.play_at.timezone)
-            except (AttributeError, ZoneInfoNotFoundError):
-                tzinfo = timezone.get_default_timezone()
-            else:
-                self.datetime = timezone.make_aware(self.datetime, tzinfo)
+            tzinfo = (
+                self.play_at.timezone
+                if self.play_at is not None
+                else self.stage.division.season.timezone
+            )
+            self.datetime = timezone.make_aware(self.datetime, tzinfo)
 
     @cached_property
     def title(self):
