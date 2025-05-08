@@ -349,16 +349,33 @@ class GoodViewTests(TestCase):
 
     def test_match_schedule_season(self):
         season = factories.SeasonFactory.create()
-        self.assertLoginRequired(
-            "admin:fixja:match-schedule", season.competition_id, season.pk, "20170213"
+        ground = factories.GroundFactory.create(venue__season=season)
+        match = factories.MatchFactory.create(
+            date=date(2017, 2, 13),
+            stage__division__season=season,
         )
+        args = (season.competition_id, season.pk, match.date.strftime("%Y%m%d"))
+        self.assertLoginRequired("admin:fixja:match-schedule", *args)
         with self.login(self.superuser):
-            self.assertGoodView(
-                "admin:fixja:match-schedule",
-                season.competition_id,
-                season.pk,
-                "20170213",
+            self.assertGoodView("admin:fixja:match-schedule", *args)
+            self.assertResponseContains(
+                '<input type="hidden" name="form-TOTAL_FORMS" value="1" id="id_form-TOTAL_FORMS">'
             )
+            self.post(
+                "admin:fixja:match-schedule",
+                *args,
+                data={
+                    "form-ignore_clashes": "0",
+                    "form-TOTAL_FORMS": "1",
+                    "form-INITIAL_FORMS": "1",
+                    "form-MIN_NUM_FORMS": "",
+                    "form-MAX_NUM_FORMS": "1000",
+                    "form-0-id": match.pk,
+                    "form-0-time": "10:00",
+                    "form-0-play_at": ground.pk,
+                },
+            )
+            self.response_302()
 
     def test_match_schedule_division(self):
         division = factories.DivisionFactory.create()
