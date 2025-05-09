@@ -900,45 +900,45 @@ class BackendTests(TestCase):
             stage=stage, home_team=home, away_team=None, away_team_undecided=away
         )
 
-        edit_away = away.url_names["edit"]
-        delete_away = away.url_names["delete"]
-        delete_url = away.urls["delete"]
+        delete_url = self.reverse(
+            away._get_admin_namespace() + ":delete", *away._get_url_args()
+        )
 
         # Ensure the edit view response does not include a delete button.
-        self.get(edit_away.url_name, *edit_away.args)
+        self.get(away._get_admin_namespace() + ":edit", *away._get_url_args())
         self.assertResponseNotContains(delete_url, html=False)
 
         # Ensure that visiting the delete view does not respond when matches
         # are associated with the Team.
-        self.get(delete_away.url_name, *delete_away.args)
+        self.get(away._get_admin_namespace() + ":delete", *away._get_url_args())
         self.response_410()
 
         # Ensure that POST to the delete view fails the same as for GET.
-        self.post(delete_away.url_name, *delete_away.args)
+        self.post(away._get_admin_namespace() + ":delete", *away._get_url_args())
         self.response_410()
 
         # Create a new UndecidedTeam and re-check the scenarios.
         team = factories.UndecidedTeamFactory.create(stage=stage)
 
-        edit_team = team.url_names["edit"]
-        delete_team = team.url_names["delete"]
-        delete_url = team.urls["delete"]
+        delete_url = self.reverse(
+            team._get_admin_namespace() + ":delete", *team._get_url_args()
+        )
 
         # Ensure the edit view response *does* include a delete button.
-        self.get(edit_team.url_name, *edit_team.args)
+        self.get(stage._get_admin_namespace() + ":edit", *stage._get_url_args())
         self.assertResponseContains(delete_url, html=False)
 
         # Ensure that visiting the delete view is not allowed when there are no
         # matches but you use a GET request.
-        self.get(delete_team.url_name, *delete_team.args)
+        self.get(team._get_admin_namespace() + ":delete", *team._get_url_args())
         self.response_405()
 
         # Ensure that POST to the delete view redirects.
-        self.post(delete_team.url_name, *delete_team.args)
+        self.post(team._get_admin_namespace() + ":delete", *team._get_url_args())
         self.response_302()
 
         # Subsequent GET request to the edit view should be a 404.
-        self.get(delete_team.url_name, *delete_team.args)
+        self.get(team._get_admin_namespace() + ":delete", *team._get_url_args())
         self.response_404()
 
     @unittest.skipIf(
