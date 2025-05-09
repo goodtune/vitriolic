@@ -403,6 +403,9 @@ class GoodViewTests(TestCase):
             division=division, size=2
         )
 
+        url_rounds = round_games.url_names["progress"]
+        url_finals = finals.url_names["progress"]
+
         for round in round_robin(teams):
             for home_team, away_team in round:
                 factories.MatchFactory.create(
@@ -443,18 +446,12 @@ class GoodViewTests(TestCase):
             away_team_eval_related=semi_2,
         )
 
-        self.assertLoginRequired(
-            round_games._get_admin_namespace() + ":draw:progress",
-            *round_games._get_url_args(),
-        )
+        self.assertLoginRequired(url_rounds["url_name"], *url_rounds["args"])
 
         with self.login(self.superuser):
             # The round games cannot be progressed, it's the first stage and
             # therefore can't have any undecided teams.
-            self.get(
-                round_games._get_admin_namespace() + ":draw:progress",
-                *round_games._get_url_args(),
-            )
+            self.get(url_rounds["url_name"], *url_rounds["args"])
             self.response_410()
 
             # FIXME
@@ -472,10 +469,7 @@ class GoodViewTests(TestCase):
             #     m.away_team_score = random.randint(0, 20)
 
             # The final series progression should now be accessible.
-            self.get(
-                finals._get_admin_namespace() + ":draw:progress",
-                *finals._get_url_args(),
-            )
+            self.get(url_finals["url_name"], *url_finals["args"])
             self.response_200()
 
     def test_edit_person(self):
