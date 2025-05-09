@@ -907,6 +907,9 @@ class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             self.pk,
         )
 
+    def _get_url_names(self):
+        return super()._get_url_names() + ["build", "undo", "progress"]
+
     def __str__(self):
         return self.title
 
