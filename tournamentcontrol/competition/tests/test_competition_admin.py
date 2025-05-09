@@ -8,7 +8,7 @@ from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.common.tests.factories import UserFactory
-from tournamentcontrol.competition.models import Team
+from tournamentcontrol.competition.models import Match, StageGroup, Team
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin
 
@@ -446,12 +446,12 @@ class GoodViewTests(TestCase):
             away_team_eval_related=semi_2,
         )
 
-        self.assertLoginRequired(url_rounds["url_name"], *url_rounds["args"])
+        self.assertLoginRequired(url_rounds.url_name, *url_rounds.args)
 
         with self.login(self.superuser):
             # The round games cannot be progressed, it's the first stage and
             # therefore can't have any undecided teams.
-            self.get(url_rounds["url_name"], *url_rounds["args"])
+            self.get(url_rounds.url_name, *url_rounds.args)
             self.response_410()
 
             # FIXME
@@ -469,7 +469,7 @@ class GoodViewTests(TestCase):
             #     m.away_team_score = random.randint(0, 20)
 
             # The final series progression should now be accessible.
-            self.get(url_finals["url_name"], *url_finals["args"])
+            self.get(url_finals.url_name, *url_finals.args)
             self.response_200()
 
     def test_edit_person(self):
@@ -968,9 +968,8 @@ class BackendTests(TestCase):
             "slug_locked": "0",
             "carry_ladder": "0",
         }
-        self.post(
-            pool._get_admin_namespace() + ":add", *pool._get_url_args()[:-1], data=data
-        )
+        add_pool = pool.url_names["add"]
+        self.post(add_pool.url_name, *add_pool.args, data=data)
         self.response_302()
         z = pool.stage.pools.latest("order")
         self.assertEqual(z.order, pool.order + 1)
@@ -981,33 +980,28 @@ class BackendTests(TestCase):
         second one because of database integrity constraints.
         """
         team = factories.TeamFactory.create()
-        data = {
-            "title": team.title,
-        }
-        self.post(
-            team._get_admin_namespace() + ":add", *team._get_url_args()[:-1], data=data
-        )
+        data = {"title": team.title}
+        add_team = team.url_names["add"]
+        self.post(add_team.url_name, *add_team.args[:-1], data=data)
         form = self.get_context("form")
         self.assertFormError(form, "title", ["Team with this Title already exists."])
 
     def test_team_add(self):
         division = factories.DivisionFactory.create()
         data = {
-            "title": "New Team",  # current value
+            "title": "New Team",
             "short_title": "",
             "names_locked": "0",
             "timeslots_after": "",
             "timeslots_before": "",
             "team_clashes": [],
         }
-        self.post(
-            division._get_admin_namespace() + ":team:add",
-            *division._get_url_args(),
-            data=data,
-        )
+        # Unsaved instance means we don't have to trim the final positional argument.
+        add_team = Team(division=division).url_names["add"]
+        self.post(add_team.url_name, *add_team.args, data=data)
         self.response_302()
         # Ensure that the team was created and that it has a slug
-        team = Team.objects.get(title="New Team")
+        team = division.teams.get(title="New Team")
         self.assertEqual(team.slug, "new-team")
 
     def test_team_edit(self):
@@ -1021,9 +1015,8 @@ class BackendTests(TestCase):
             "team_clashes": [],
         }
 
-        self.post(
-            team._get_admin_namespace() + ":edit", *team._get_url_args(), data=data
-        )
+        edit_team = team.url_names["edit"]
+        self.post(edit_team.url_name, *edit_team.args, data=data)
         self.response_302()
 
         # Ensure that the team was updated
@@ -1034,9 +1027,8 @@ class BackendTests(TestCase):
 
         # Try again, update the title and make sure the slug changes
         data["title"] = "Magenta"
-        self.post(
-            blue._get_admin_namespace() + ":edit", *blue._get_url_args(), data=data
-        )
+        edit_blue = blue.url_names["edit"]
+        self.post(edit_blue.url_name, *edit_blue.args, data=data)
         self.response_302()
 
         magenta = Team.objects.get(title="Magenta")
@@ -1051,14 +1043,9 @@ class BackendTests(TestCase):
         constraints.
         """
         stage = factories.StageFactory.create()
-        data = {
-            "title": stage.title,
-        }
-        self.post(
-            stage._get_admin_namespace() + ":add",
-            *stage._get_url_args()[:-1],
-            data=data,
-        )
+        data = {"title": stage.title}
+        add_stage = stage.url_names["add"]
+        self.post(add_stage.url_name, *add_stage.args[:-1], data=data)
         form = self.get_context("form")
         self.assertFormError(form, "title", ["Stage with this Title already exists."])
 
@@ -1084,11 +1071,9 @@ class BackendTests(TestCase):
             "live_stream": "0",
             "thumbnail_url": "",
         }
-        self.post(
-            stage._get_admin_namespace() + ":match:add",
-            *stage._get_url_args(),
-            data=data,
-        )
+        # Unsaved instance means we don't have to trim the final positional argument.
+        add_match = Match(stage=stage).url_names["add"]
+        self.post(add_match.url_name, *add_match.args, data=data)
         self.response_302()
 
     def test_bug_100_add_stagegroup(self):
@@ -1096,10 +1081,8 @@ class BackendTests(TestCase):
         Adding a Pool (StageGroup) should not fail to render.
         """
         stage = factories.StageFactory.create()
-        self.get_check_200(
-            stage._get_admin_namespace() + ":stagegroup:add",
-            *stage._get_url_args(),
-        )
+        add_pool = StageGroup(stage=stage).url_names["add"]
+        self.get_check_200(add_pool.url_name, *add_pool.args)
 
     def test_edit_match_referee_appointments(self):
         """
@@ -1133,7 +1116,7 @@ class BackendTests(TestCase):
             include_in_ladder=True,
         )
 
-        view = match.url_names["referees"]
+        referee_appointments_view = match.url_names["referees"]
 
         for season_stream, match_stream, referee in [
             (False, False, 0),
@@ -1150,8 +1133,8 @@ class BackendTests(TestCase):
                 match.save()
 
                 self.post(
-                    view["url_name"],
-                    *view["args"],
+                    referee_appointments_view.url_name,
+                    *referee_appointments_view.args,
                     data={
                         "home_team": match.home_team.pk,
                         "away_team": match.away_team.pk,
