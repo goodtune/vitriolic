@@ -8,7 +8,7 @@ from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.common.tests.factories import UserFactory
-from tournamentcontrol.competition.models import Match, StageGroup, Team
+from tournamentcontrol.competition.models import Division, Match, StageGroup, Team
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin
 
@@ -561,36 +561,28 @@ class GoodViewTests(TestCase):
 
     def test_perms_views(self):
         team = factories.TeamFactory.create()
-        self.assertLoginRequired(
-            team.division.season.competition._get_admin_namespace() + ":perms",
-            *team._get_url_args()[:1],
-        )
-        self.assertLoginRequired(
-            team.division.season._get_admin_namespace() + ":perms",
-            *team._get_url_args()[:2],
-        )
-        # self.assertLoginRequired(
-        #     team.division._get_admin_namespace() + ':perms',
-        #     *team._get_url_args()[:3])
-        self.assertLoginRequired(
-            team._get_admin_namespace() + ":perms", *team._get_url_args()
-        )
+
+        perms_competition = team.division.season.competition.url_names["perms"]
+        self.assertLoginRequired(perms_competition.url_name, *perms_competition.args)
+
+        perms_season = team.division.season.url_names["perms"]
+        self.assertLoginRequired(perms_season.url_name, *perms_season.args)
+
+        # perms_division = team.division.url_names["perms"]
+        # self.assertLoginRequired(perms_division.url_name, *perms_division.args)
+
+        perms_team = team.url_names["perms"]
+        self.assertLoginRequired(perms_team.url_name, *perms_team.args)
 
         with self.login(self.superuser):
+            self.assertGoodView(perms_competition.url_name, *perms_competition.args)
+            self.assertGoodView(perms_season.url_name, *perms_season.args)
+            # self.assertGoodView(perms_division.url_name, *perms_division.args)
             self.assertGoodView(
-                team.division.season.competition._get_admin_namespace() + ":perms",
-                *team._get_url_args()[:1],
+                perms_team.url_name,
+                *perms_team.args,
+                test_query_count=100,
             )
-            self.assertGoodView(
-                team.division.season._get_admin_namespace() + ":perms",
-                *team._get_url_args()[:2],
-            )
-            # self.assertGoodView(
-            #     team.division._get_admin_namespace() + ':perms',
-            #     *team._get_url_args()[:3])
-            with self.assertNumQueriesLessThan(100):
-                self.get(team._get_admin_namespace() + ":perms", *team._get_url_args())
-            self.response_200()
 
     def test_registration_form(self):
         club = factories.ClubFactory.create()
@@ -650,11 +642,8 @@ class BackendTests(TestCase):
             "slug": "",
             "slug_locked": "0",
         }
-        self.post(
-            season._get_admin_namespace() + ":division:add",
-            *season._get_url_args(),
-            data=data,
-        )
+        add_division = Division(season=season).url_names["add"]
+        self.post(add_division.url_name, *add_division.args, data=data)
         self.response_302()
 
         with self.settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls"):
@@ -674,11 +663,8 @@ class BackendTests(TestCase):
         )
         division = season.divisions.latest("pk")
 
-        self.post(
-            division._get_admin_namespace() + ":edit",
-            *division._get_url_args(),
-            data=data,
-        )
+        edit_division = division.url_names["edit"]
+        self.post(edit_division.url_name, *edit_division.args, data=data)
         self.response_302()
 
         with self.settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls"):
@@ -860,45 +846,45 @@ class BackendTests(TestCase):
             stage=stage, home_team=home, away_team=None, away_team_undecided=away
         )
 
-        delete_url = self.reverse(
-            home._get_admin_namespace() + ":delete", *home._get_url_args()
-        )
+        edit_home = home.url_names["edit"]
+        delete_home = home.url_names["delete"]
+        delete_url = home.urls["delete"]
 
         # Ensure the edit view response does not include a delete button.
-        self.get(home._get_admin_namespace() + ":edit", *home._get_url_args())
+        self.get(edit_home.url_name, *edit_home.args)
         self.assertResponseNotContains(delete_url, html=False)
 
         # Ensure that visiting the delete view does not respond when matches
         # are associated with the Team.
-        self.get(home._get_admin_namespace() + ":delete", *home._get_url_args())
+        self.get(delete_home.url_name, *delete_home.args)
         self.response_410()
 
         # Ensure that POST to the delete view fails the same as for GET.
-        self.post(home._get_admin_namespace() + ":delete", *home._get_url_args())
+        self.post(delete_home.url_name, *delete_home.args)
         self.response_410()
 
         # Create a new Team and re-check the scenarios.
         team = factories.TeamFactory.create(division=stage.division)
 
-        delete_url = self.reverse(
-            team._get_admin_namespace() + ":delete", *team._get_url_args()
-        )
+        edit_team = team.url_names["edit"]
+        delete_team = team.url_names["delete"]
+        delete_url = team.urls["delete"]
 
         # Ensure the edit view response does not include a delete button.
-        self.get(team._get_admin_namespace() + ":edit", *team._get_url_args())
+        self.get(edit_team.url_name, *edit_team.args)
         self.assertResponseNotContains(delete_url, html=False)
 
         # Ensure that visiting the delete view is not allowed when there are no
         # matches but you use a GET request.
-        self.get(team._get_admin_namespace() + ":delete", *team._get_url_args())
+        self.get(delete_team.url_name, *delete_team.args)
         self.response_405()
 
         # Ensure that POST to the delete view redirects.
-        self.post(team._get_admin_namespace() + ":delete", *team._get_url_args())
+        self.post(delete_team.url_name, *delete_team.args)
         self.response_302()
 
         # Subsequent GET request to the edit view should be a 404.
-        self.get(team._get_admin_namespace() + ":edit", *team._get_url_args())
+        self.get(edit_team.url_name, *edit_team.args)
         self.response_404()
 
     def test_enhancement_0024_undecidedteam(self):
@@ -914,45 +900,45 @@ class BackendTests(TestCase):
             stage=stage, home_team=home, away_team=None, away_team_undecided=away
         )
 
-        delete_url = self.reverse(
-            away._get_admin_namespace() + ":delete", *away._get_url_args()
-        )
+        edit_away = away.url_names["edit"]
+        delete_away = away.url_names["delete"]
+        delete_url = away.urls["delete"]
 
         # Ensure the edit view response does not include a delete button.
-        self.get(away._get_admin_namespace() + ":edit", *away._get_url_args())
+        self.get(edit_away.url_name, *edit_away.args)
         self.assertResponseNotContains(delete_url, html=False)
 
         # Ensure that visiting the delete view does not respond when matches
         # are associated with the Team.
-        self.get(away._get_admin_namespace() + ":delete", *away._get_url_args())
+        self.get(delete_away.url_name, *delete_away.args)
         self.response_410()
 
         # Ensure that POST to the delete view fails the same as for GET.
-        self.post(away._get_admin_namespace() + ":delete", *away._get_url_args())
+        self.post(delete_away.url_name, *delete_away.args)
         self.response_410()
 
         # Create a new UndecidedTeam and re-check the scenarios.
         team = factories.UndecidedTeamFactory.create(stage=stage)
 
-        delete_url = self.reverse(
-            team._get_admin_namespace() + ":delete", *team._get_url_args()
-        )
+        edit_team = team.url_names["edit"]
+        delete_team = team.url_names["delete"]
+        delete_url = team.urls["delete"]
 
         # Ensure the edit view response *does* include a delete button.
-        self.get(stage._get_admin_namespace() + ":edit", *stage._get_url_args())
+        self.get(edit_team.url_name, *edit_team.args)
         self.assertResponseContains(delete_url, html=False)
 
         # Ensure that visiting the delete view is not allowed when there are no
         # matches but you use a GET request.
-        self.get(team._get_admin_namespace() + ":delete", *team._get_url_args())
+        self.get(delete_team.url_name, *delete_team.args)
         self.response_405()
 
         # Ensure that POST to the delete view redirects.
-        self.post(team._get_admin_namespace() + ":delete", *team._get_url_args())
+        self.post(delete_team.url_name, *delete_team.args)
         self.response_302()
 
         # Subsequent GET request to the edit view should be a 404.
-        self.get(team._get_admin_namespace() + ":delete", *team._get_url_args())
+        self.get(delete_team.url_name, *delete_team.args)
         self.response_404()
 
     @unittest.skipIf(
