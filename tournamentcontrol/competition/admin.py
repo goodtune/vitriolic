@@ -1131,7 +1131,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     obj.external_identifier = stream["id"]
                     log.info("YouTube stream %(id)r inserted", stream)
 
-                obj.stream_key = stream["cdn"]["ingestionInfo"]["streamName"]
+                if stream is not None:
+                    obj.stream_key = stream["cdn"]["ingestionInfo"]["streamName"]
 
             except HttpError as exc:
                 messages.error(request, exc.reason)

@@ -8,7 +8,13 @@ from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.common.tests.factories import UserFactory
-from tournamentcontrol.competition.models import Division, Match, StageGroup, Team
+from tournamentcontrol.competition.models import (
+    Division,
+    Ground,
+    Match,
+    StageGroup,
+    Team,
+)
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin
 
@@ -1132,3 +1138,25 @@ class BackendTests(TestCase):
                     match.referees.values_list("person__first_name", flat=True),
                     [referees[referee].person.first_name],
                 )
+
+    def test_bug_116_add_ground(self):
+        """
+        Adding a Ground to a Venue in a Season with live_stream=True should not fail.
+        """
+        venue = factories.VenueFactory.create(season__live_stream=True)
+        add_ground = Ground(venue=venue).url_names["add"]
+        self.get_check_200(add_ground.url_name, *add_ground.args)
+        data = {
+            "title": "Test Ground",
+            "short_title": "",
+            "abbreviation": "",
+            "timezone": "Australia/Brisbane",
+            "latlng_0": "-27.470125",
+            "latlng_1": "153.021072",
+            "latlng_2": "0",
+            "slug": "test-ground",
+            "slug_locked": "0",
+            "live_stream": "0",
+        }
+        self.post(add_ground.url_name, *add_ground.args, data=data)
+        self.assertRedirects(self.last_response, venue.urls["edit"])
