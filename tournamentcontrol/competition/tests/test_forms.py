@@ -1,7 +1,7 @@
 from test_plus import TestCase
 
 from tournamentcontrol.competition.admin import next_related_factory
-from tournamentcontrol.competition.forms import TeamForm
+from tournamentcontrol.competition.forms import DrawFormatForm, TeamForm
 from tournamentcontrol.competition.models import Team
 from tournamentcontrol.competition.tests import factories
 
@@ -29,3 +29,19 @@ class TeamFormTests(TestCase):
         )
         self.assertFormError(form, "title", [])
         self.assertQuerySetEqual(Team.objects.all(), [form.save()])
+
+    def test_drawformat_invalid(self):
+        "When the draw format is invalid, an error is raised."
+        form = DrawFormatForm(
+            data={
+                "name": "Test Draw Format",
+                "text": "ROUND\n1: 1v2\n",
+                "teams": 4,
+                "is_final": "0",
+            },
+        )
+        self.assertFormError(
+            form,
+            "text",
+            ["Draw formula is invalid: line(s) '1' are not in the correct format."],
+        )
