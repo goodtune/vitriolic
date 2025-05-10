@@ -6,7 +6,6 @@ import logging
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from cloudinary.models import CloudinaryField
 from dateutil.relativedelta import relativedelta

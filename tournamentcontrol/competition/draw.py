@@ -8,7 +8,6 @@ from decimal import Decimal
 from typing import Optional
 
 from dateutil.rrule import DAILY, WEEKLY, rrule, rruleset
-from django.conf import settings
 from django.db.models import Max
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
