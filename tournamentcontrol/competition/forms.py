@@ -1246,8 +1246,6 @@ class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
         super().__init__(*args, **kwargs)
         self.ignore_clashes = ignore_clashes
 
-        tzinfo = timezone.get_current_timezone()
-
         def label_from_instance(obj):
             if isinstance(obj, Venue):
                 label = obj.title
@@ -1256,8 +1254,8 @@ class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
             else:
                 label = f"{obj}"
 
-            if obj.timezone != tzinfo:
-                label += f" ({str(tzinfo)})"
+            if obj.timezone != self.instance.stage.division.season.timezone:
+                label += f" ({str(obj.timezone)})"
             return label
 
         if places is None:
