@@ -20,7 +20,7 @@
 								<ul>
 									{% for stage in object_list %}
 										{% with competition=stage.division.season.competition season=stage.division.season division=stage.division %}
-											<li><a href="{% url 'admin:fixja:competition:season:division:stage:draw:progress' competition.pk season.pk division.pk stage.pk %}">{{ stage.title }}</a></li>
+											<li><a href="{% url 'admin:fixja:competition:season:division:stage:progress' competition.pk season.pk division.pk stage.pk %}">{{ stage.title }}</a></li>
 										{% endwith %}
 									{% endfor %}
 								</ul>

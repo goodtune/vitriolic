@@ -10,14 +10,12 @@ from touchtechnology.common.tests import factories
 
 @override_settings(ROOT_URLCONF="example_app.urls")
 class TestCase(BTC):
-
     def setUp(self):
         self.staff = factories.UserFactory.create(is_staff=True, is_superuser=True)
         self.regular = factories.UserFactory.create()
 
 
 class GenericListTests(TestCase):
-
     def test_vanilla(self):
         self.assertGoodView("generic:vanilla:list")
         self.assertResponseContains("<title>test date time field</title>")
@@ -36,7 +34,6 @@ class GenericListTests(TestCase):
 
 
 class GenericDetailTests(TestCase):
-
     def setUp(self):
         super().setUp()
         TestDateTimeFieldFactory.reset_sequence()
@@ -56,18 +53,14 @@ class GenericDetailTests(TestCase):
 
 
 class GenericEditTests(TestCase):
-
     def test_vanilla(self):
         self.assertGoodView("generic:vanilla:add")
         self.assertResponseContains("<title>Edit test date time field</title>")
 
         data = {
-            "datetime_0": "1",
-            "datetime_1": "1",
-            "datetime_2": "2015",
-            "datetime_3": "9",
-            "datetime_4": "0",
-            "datetime_5": "UTC",
+            "datetime_0": "2015-1-1",
+            "datetime_1": "9:00",
+            "datetime_2": "UTC",
         }
         res = self.post("generic:vanilla:add", data=data)
         self.assertEqual(1, TestDateTimeField.objects.count())
@@ -82,12 +75,9 @@ class GenericEditTests(TestCase):
         self.assertLoginRequired("generic:permissions:add")
 
         data = {
-            "datetime_0": "1",
-            "datetime_1": "1",
-            "datetime_2": "2015",
-            "datetime_3": "9",
-            "datetime_4": "0",
-            "datetime_5": "UTC",
+            "datetime_0": "2015-1-1",
+            "datetime_1": "9:00",
+            "datetime_2": "UTC",
         }
 
         with self.login(self.regular):
@@ -103,7 +93,6 @@ class GenericEditTests(TestCase):
 
 
 class GenericDeleteTests(TestCase):
-
     def setUp(self):
         super(GenericDeleteTests, self).setUp()
         self.object = TestDateTimeFieldFactory.create()
@@ -127,7 +116,6 @@ class GenericDeleteTests(TestCase):
 
 
 class GenericPermissionsTests(TestCase):
-
     def setUp(self):
         super(GenericPermissionsTests, self).setUp()
         self.object = TestDateTimeFieldFactory.create()
@@ -157,7 +145,6 @@ class GenericPermissionsTests(TestCase):
 
 
 class GenericEditMultipleTests(TestCase):
-
     def test_vanilla(self):
         self.assertGoodView("generic:vanilla:edit")
         self.assertResponseContains(
@@ -170,18 +157,12 @@ class GenericEditMultipleTests(TestCase):
             "form-INITIAL_FORMS": 0,
             "form-MIN_NUM_FORMS": 0,
             "form-MAX_NUM_FORMS": 1000,
-            "form-0-datetime_0": "1",
-            "form-0-datetime_1": "1",
-            "form-0-datetime_2": "2015",
-            "form-0-datetime_3": "9",
-            "form-0-datetime_4": "0",
-            "form-0-datetime_5": "UTC",
-            "form-1-datetime_0": "3",
-            "form-1-datetime_1": "3",
-            "form-1-datetime_2": "2016",
-            "form-1-datetime_3": "9",
-            "form-1-datetime_4": "0",
-            "form-1-datetime_5": "UTC",
+            "form-0-datetime_0": "2015-1-1",
+            "form-0-datetime_1": "9:00",
+            "form-0-datetime_2": "UTC",
+            "form-1-datetime_0": "2016-3-3",
+            "form-1-datetime_1": "9:00",
+            "form-1-datetime_2": "UTC",
         }
         res = self.post("generic:vanilla:edit", data=data)
         self.assertEqual(2, TestDateTimeField.objects.count())
@@ -206,18 +187,12 @@ class GenericEditMultipleTests(TestCase):
             "form-INITIAL_FORMS": 0,
             "form-MIN_NUM_FORMS": 0,
             "form-MAX_NUM_FORMS": 1000,
-            "form-0-datetime_0": "1",
-            "form-0-datetime_1": "1",
-            "form-0-datetime_2": "2015",
-            "form-0-datetime_3": "9",
-            "form-0-datetime_4": "0",
-            "form-0-datetime_5": "UTC",
-            "form-1-datetime_0": "3",
-            "form-1-datetime_1": "3",
-            "form-1-datetime_2": "2016",
-            "form-1-datetime_3": "9",
-            "form-1-datetime_4": "0",
-            "form-1-datetime_5": "UTC",
+            "form-0-datetime_0": "2015-1-1",
+            "form-0-datetime_1": "9:00",
+            "form-0-datetime_2": "UTC",
+            "form-1-datetime_0": "2016-3-3",
+            "form-1-datetime_1": "9:00",
+            "form-1-datetime_2": "UTC",
         }
 
         with self.login(self.regular):

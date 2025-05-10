@@ -11,6 +11,10 @@ Version: 3.5.2 Timestamp: Sat Nov  1 14:43:36 EDT 2014
     vertical-align: middle;
 }
 
+.select_multiple .select2-container {
+    width: 100%;
+}
+
 .select2-container,
 .select2-drop,
 .select2-search,

@@ -246,12 +246,10 @@ class SitemapNodeMiddleware(MiddlewareMixin):
 
 def redirect_middleware(get_response):
     def middleware(request):
-        try:
-            obj = Redirect.objects.get(source_url__exact=request.path)
-        except ObjectDoesNotExist:
-            response = get_response(request)
-        else:
-            response = redirect(obj.destination_url, obj.permanent)
-        return response
+        objects = Redirect.objects.filter(source_url__exact=request.path)
+        if objects.exists():
+            instance = objects.first()
+            return redirect(instance.destination_url, instance.permanent)
+        return get_response(request)
 
     return middleware

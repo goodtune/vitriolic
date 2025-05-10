@@ -19,6 +19,6 @@ This project will now forever remind me of the day that America shat the bed.
 The aim is to only support LTS versions of Django. I don't work on this project all the time, so I need it to be as
 stable as possible for as long as possible.
 
-As of this release, we target and test against the 4.2 and 5.2 releases.
+As of this release, we target and test against the 4.2 and 5.2 releases with Python 3.11, 3.12, and 3.13.
 
 [wiktionary word of the day]: https://en.wiktionary.org/wiki/Wiktionary:Word_of_the_day

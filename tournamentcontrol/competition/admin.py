@@ -283,16 +283,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             self.app_name,
         )
 
-        draw_urls = (
-            [
-                # path("", self.list_draw, name="list"),
-                path("build/", self.generate_draw, name="build"),
-                path("undo/", self.undo_draw, name="undo"),
-                path("progress/", self.progress_teams, name="progress"),
-            ],
-            self.app_name,
-        )
-
         undecidedteam_urls = (
             [
                 path(r"add/", self.edit_team, name="add"),
@@ -318,9 +308,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             [
                 path("add/", self.edit_stage, name="add"),
                 path("<int:stage_id>/", self.edit_stage, name="edit"),
+                path("<int:stage_id>/build/", self.generate_draw, name="build"),
+                path("<int:stage_id>/undo/", self.undo_draw, name="undo"),
+                path("<int:stage_id>/progress/", self.progress_teams, name="progress"),
                 path("<int:stage_id>/delete/", self.delete_stage, name="delete"),
                 path("<int:stage_id>/match/", include(match_urls, namespace="match")),
-                path("<int:stage_id>/draw/", include(draw_urls, namespace="draw")),
                 path(
                     "<int:stage_id>/team/",
                     include(undecidedteam_urls, namespace="undecidedteam"),
@@ -1139,7 +1131,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     obj.external_identifier = stream["id"]
                     log.info("YouTube stream %(id)r inserted", stream)
 
-                obj.stream_key = stream["cdn"]["ingestionInfo"]["streamName"]
+                if stream is not None:
+                    obj.stream_key = stream["cdn"]["ingestionInfo"]["streamName"]
 
             except HttpError as exc:
                 messages.error(request, exc.reason)
@@ -1652,7 +1645,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_save_redirect=self.redirect(
                 request.GET.get("next") or stage.urls["edit"]
             ),
-            pre_save_callback=pre_save_callback if season.live_stream else lambda o: o,
+            pre_save_callback=(
+                pre_save_callback
+                if season.live_stream and match.live_stream
+                else lambda o: o
+            ),
             permission_required=True,
             extra_context=extra_context,
         )

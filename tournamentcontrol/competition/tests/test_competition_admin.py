@@ -8,7 +8,13 @@ from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.common.tests.factories import UserFactory
-from tournamentcontrol.competition.models import Team
+from tournamentcontrol.competition.models import (
+    Division,
+    Ground,
+    Match,
+    StageGroup,
+    Team,
+)
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin
 
@@ -349,16 +355,33 @@ class GoodViewTests(TestCase):
 
     def test_match_schedule_season(self):
         season = factories.SeasonFactory.create()
-        self.assertLoginRequired(
-            "admin:fixja:match-schedule", season.competition_id, season.pk, "20170213"
+        ground = factories.GroundFactory.create(venue__season=season)
+        match = factories.MatchFactory.create(
+            date=date(2017, 2, 13),
+            stage__division__season=season,
         )
+        args = (season.competition_id, season.pk, match.date.strftime("%Y%m%d"))
+        self.assertLoginRequired("admin:fixja:match-schedule", *args)
         with self.login(self.superuser):
-            self.assertGoodView(
-                "admin:fixja:match-schedule",
-                season.competition_id,
-                season.pk,
-                "20170213",
+            self.assertGoodView("admin:fixja:match-schedule", *args)
+            self.assertResponseContains(
+                '<input type="hidden" name="form-TOTAL_FORMS" value="1" id="id_form-TOTAL_FORMS">'
             )
+            self.post(
+                "admin:fixja:match-schedule",
+                *args,
+                data={
+                    "form-ignore_clashes": "0",
+                    "form-TOTAL_FORMS": "1",
+                    "form-INITIAL_FORMS": "1",
+                    "form-MIN_NUM_FORMS": "",
+                    "form-MAX_NUM_FORMS": "1000",
+                    "form-0-id": match.pk,
+                    "form-0-time": "10:00",
+                    "form-0-play_at": ground.pk,
+                },
+            )
+            self.response_302()
 
     def test_match_schedule_division(self):
         division = factories.DivisionFactory.create()
@@ -385,6 +408,9 @@ class GoodViewTests(TestCase):
         round_games, finals = factories.StageFactory.create_batch(
             division=division, size=2
         )
+
+        url_rounds = round_games.url_names["progress"]
+        url_finals = finals.url_names["progress"]
 
         for round in round_robin(teams):
             for home_team, away_team in round:
@@ -426,25 +452,19 @@ class GoodViewTests(TestCase):
             away_team_eval_related=semi_2,
         )
 
-        self.assertLoginRequired(
-            round_games._get_admin_namespace() + ":draw:progress",
-            *round_games._get_url_args(),
-        )
+        self.assertLoginRequired(url_rounds.url_name, *url_rounds.args)
 
         with self.login(self.superuser):
             # The round games cannot be progressed, it's the first stage and
             # therefore can't have any undecided teams.
-            self.get(
-                round_games._get_admin_namespace() + ":draw:progress",
-                *round_games._get_url_args(),
-            )
+            self.get(url_rounds.url_name, *url_rounds.args)
             self.response_410()
 
             # FIXME
             #
             # # The final series can't be progressed because there are results
             # # that need to be entered for matches in the preceding stage.
-            # self.get(finals._get_admin_namespace() + ':draw:progress',
+            # self.get(finals._get_admin_namespace() + ':progress',
             #          *finals._get_url_args())
             # self.response_410()
             #
@@ -455,10 +475,7 @@ class GoodViewTests(TestCase):
             #     m.away_team_score = random.randint(0, 20)
 
             # The final series progression should now be accessible.
-            self.get(
-                finals._get_admin_namespace() + ":draw:progress",
-                *finals._get_url_args(),
-            )
+            self.get(url_finals.url_name, *url_finals.args)
             self.response_200()
 
     def test_edit_person(self):
@@ -550,36 +567,28 @@ class GoodViewTests(TestCase):
 
     def test_perms_views(self):
         team = factories.TeamFactory.create()
-        self.assertLoginRequired(
-            team.division.season.competition._get_admin_namespace() + ":perms",
-            *team._get_url_args()[:1],
-        )
-        self.assertLoginRequired(
-            team.division.season._get_admin_namespace() + ":perms",
-            *team._get_url_args()[:2],
-        )
-        # self.assertLoginRequired(
-        #     team.division._get_admin_namespace() + ':perms',
-        #     *team._get_url_args()[:3])
-        self.assertLoginRequired(
-            team._get_admin_namespace() + ":perms", *team._get_url_args()
-        )
+
+        perms_competition = team.division.season.competition.url_names["perms"]
+        self.assertLoginRequired(perms_competition.url_name, *perms_competition.args)
+
+        perms_season = team.division.season.url_names["perms"]
+        self.assertLoginRequired(perms_season.url_name, *perms_season.args)
+
+        # perms_division = team.division.url_names["perms"]
+        # self.assertLoginRequired(perms_division.url_name, *perms_division.args)
+
+        perms_team = team.url_names["perms"]
+        self.assertLoginRequired(perms_team.url_name, *perms_team.args)
 
         with self.login(self.superuser):
+            self.assertGoodView(perms_competition.url_name, *perms_competition.args)
+            self.assertGoodView(perms_season.url_name, *perms_season.args)
+            # self.assertGoodView(perms_division.url_name, *perms_division.args)
             self.assertGoodView(
-                team.division.season.competition._get_admin_namespace() + ":perms",
-                *team._get_url_args()[:1],
+                perms_team.url_name,
+                *perms_team.args,
+                test_query_count=100,
             )
-            self.assertGoodView(
-                team.division.season._get_admin_namespace() + ":perms",
-                *team._get_url_args()[:2],
-            )
-            # self.assertGoodView(
-            #     team.division._get_admin_namespace() + ':perms',
-            #     *team._get_url_args()[:3])
-            with self.assertNumQueriesLessThan(100):
-                self.get(team._get_admin_namespace() + ":perms", *team._get_url_args())
-            self.response_200()
 
     def test_registration_form(self):
         club = factories.ClubFactory.create()
@@ -639,11 +648,8 @@ class BackendTests(TestCase):
             "slug": "",
             "slug_locked": "0",
         }
-        self.post(
-            season._get_admin_namespace() + ":division:add",
-            *season._get_url_args(),
-            data=data,
-        )
+        add_division = Division(season=season).url_names["add"]
+        self.post(add_division.url_name, *add_division.args, data=data)
         self.response_302()
 
         with self.settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls"):
@@ -663,11 +669,8 @@ class BackendTests(TestCase):
         )
         division = season.divisions.latest("pk")
 
-        self.post(
-            division._get_admin_namespace() + ":edit",
-            *division._get_url_args(),
-            data=data,
-        )
+        edit_division = division.url_names["edit"]
+        self.post(edit_division.url_name, *edit_division.args, data=data)
         self.response_302()
 
         with self.settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls"):
@@ -849,45 +852,45 @@ class BackendTests(TestCase):
             stage=stage, home_team=home, away_team=None, away_team_undecided=away
         )
 
-        delete_url = self.reverse(
-            home._get_admin_namespace() + ":delete", *home._get_url_args()
-        )
+        edit_home = home.url_names["edit"]
+        delete_home = home.url_names["delete"]
+        delete_url = home.urls["delete"]
 
         # Ensure the edit view response does not include a delete button.
-        self.get(home._get_admin_namespace() + ":edit", *home._get_url_args())
+        self.get(edit_home.url_name, *edit_home.args)
         self.assertResponseNotContains(delete_url, html=False)
 
         # Ensure that visiting the delete view does not respond when matches
         # are associated with the Team.
-        self.get(home._get_admin_namespace() + ":delete", *home._get_url_args())
+        self.get(delete_home.url_name, *delete_home.args)
         self.response_410()
 
         # Ensure that POST to the delete view fails the same as for GET.
-        self.post(home._get_admin_namespace() + ":delete", *home._get_url_args())
+        self.post(delete_home.url_name, *delete_home.args)
         self.response_410()
 
         # Create a new Team and re-check the scenarios.
         team = factories.TeamFactory.create(division=stage.division)
 
-        delete_url = self.reverse(
-            team._get_admin_namespace() + ":delete", *team._get_url_args()
-        )
+        edit_team = team.url_names["edit"]
+        delete_team = team.url_names["delete"]
+        delete_url = team.urls["delete"]
 
         # Ensure the edit view response does not include a delete button.
-        self.get(team._get_admin_namespace() + ":edit", *team._get_url_args())
+        self.get(edit_team.url_name, *edit_team.args)
         self.assertResponseNotContains(delete_url, html=False)
 
         # Ensure that visiting the delete view is not allowed when there are no
         # matches but you use a GET request.
-        self.get(team._get_admin_namespace() + ":delete", *team._get_url_args())
+        self.get(delete_team.url_name, *delete_team.args)
         self.response_405()
 
         # Ensure that POST to the delete view redirects.
-        self.post(team._get_admin_namespace() + ":delete", *team._get_url_args())
+        self.post(delete_team.url_name, *delete_team.args)
         self.response_302()
 
         # Subsequent GET request to the edit view should be a 404.
-        self.get(team._get_admin_namespace() + ":edit", *team._get_url_args())
+        self.get(edit_team.url_name, *edit_team.args)
         self.response_404()
 
     def test_enhancement_0024_undecidedteam(self):
@@ -957,9 +960,8 @@ class BackendTests(TestCase):
             "slug_locked": "0",
             "carry_ladder": "0",
         }
-        self.post(
-            pool._get_admin_namespace() + ":add", *pool._get_url_args()[:-1], data=data
-        )
+        add_pool = pool.url_names["add"]
+        self.post(add_pool.url_name, *add_pool.args, data=data)
         self.response_302()
         z = pool.stage.pools.latest("order")
         self.assertEqual(z.order, pool.order + 1)
@@ -970,33 +972,28 @@ class BackendTests(TestCase):
         second one because of database integrity constraints.
         """
         team = factories.TeamFactory.create()
-        data = {
-            "title": team.title,
-        }
-        self.post(
-            team._get_admin_namespace() + ":add", *team._get_url_args()[:-1], data=data
-        )
+        data = {"title": team.title}
+        add_team = team.url_names["add"]
+        self.post(add_team.url_name, *add_team.args[:-1], data=data)
         form = self.get_context("form")
         self.assertFormError(form, "title", ["Team with this Title already exists."])
 
     def test_team_add(self):
         division = factories.DivisionFactory.create()
         data = {
-            "title": "New Team",  # current value
+            "title": "New Team",
             "short_title": "",
             "names_locked": "0",
             "timeslots_after": "",
             "timeslots_before": "",
             "team_clashes": [],
         }
-        self.post(
-            division._get_admin_namespace() + ":team:add",
-            *division._get_url_args(),
-            data=data,
-        )
+        # Unsaved instance means we don't have to trim the final positional argument.
+        add_team = Team(division=division).url_names["add"]
+        self.post(add_team.url_name, *add_team.args, data=data)
         self.response_302()
         # Ensure that the team was created and that it has a slug
-        team = Team.objects.get(title="New Team")
+        team = division.teams.get(title="New Team")
         self.assertEqual(team.slug, "new-team")
 
     def test_team_edit(self):
@@ -1010,9 +1007,8 @@ class BackendTests(TestCase):
             "team_clashes": [],
         }
 
-        self.post(
-            team._get_admin_namespace() + ":edit", *team._get_url_args(), data=data
-        )
+        edit_team = team.url_names["edit"]
+        self.post(edit_team.url_name, *edit_team.args, data=data)
         self.response_302()
 
         # Ensure that the team was updated
@@ -1023,9 +1019,8 @@ class BackendTests(TestCase):
 
         # Try again, update the title and make sure the slug changes
         data["title"] = "Magenta"
-        self.post(
-            blue._get_admin_namespace() + ":edit", *blue._get_url_args(), data=data
-        )
+        edit_blue = blue.url_names["edit"]
+        self.post(edit_blue.url_name, *edit_blue.args, data=data)
         self.response_302()
 
         magenta = Team.objects.get(title="Magenta")
@@ -1040,13 +1035,128 @@ class BackendTests(TestCase):
         constraints.
         """
         stage = factories.StageFactory.create()
-        data = {
-            "title": stage.title,
-        }
-        self.post(
-            stage._get_admin_namespace() + ":add",
-            *stage._get_url_args()[:-1],
-            data=data,
-        )
+        data = {"title": stage.title}
+        add_stage = stage.url_names["add"]
+        self.post(add_stage.url_name, *add_stage.args[:-1], data=data)
         form = self.get_context("form")
         self.assertFormError(form, "title", ["Stage with this Title already exists."])
+
+    def test_bug_85_add_match_season_live_stream(self):
+        """
+        When the Season is set to live stream, the Match form changes.
+
+        The ability to manually add a match under this configuration should be possible,
+        but there is a bug caused by accessing unset relations.
+
+        Refs: https://github.com/goodtune/vitriolic/issues/85
+        """
+        stage = factories.StageFactory.create(division__season__live_stream=True)
+        team1 = factories.TeamFactory.create(division=stage.division)
+        team2 = factories.TeamFactory.create(division=stage.division)
+        data = {
+            "home_team": team1.pk,
+            "away_team": team2.pk,
+            "label": "",
+            "round": 1,
+            "date": "2025-04-28",
+            "include_in_ladder": "0",
+            "live_stream": "0",
+            "thumbnail_url": "",
+        }
+        # Unsaved instance means we don't have to trim the final positional argument.
+        add_match = Match(stage=stage).url_names["add"]
+        self.post(add_match.url_name, *add_match.args, data=data)
+        self.response_302()
+
+    def test_bug_100_add_stagegroup(self):
+        """
+        Adding a Pool (StageGroup) should not fail to render.
+        """
+        stage = factories.StageFactory.create()
+        add_pool = StageGroup(stage=stage).url_names["add"]
+        self.get_check_200(add_pool.url_name, *add_pool.args)
+
+    def test_edit_match_referee_appointments(self):
+        """
+        Test that referee appointments work correctly with and without live streaming
+        enabled at the division or match level.
+        """
+        # Create a season with live streaming disabled and no YouTube config
+        stage = factories.StageFactory.create(
+            title="Test Stage",
+            division__title="Test Division",
+            division__season__title="Test Season",
+            division__season__live_stream=False,
+            division__season__live_stream_project_id=None,
+            division__season__live_stream_client_id=None,
+            division__season__live_stream_client_secret=None,
+        )
+
+        referees = factories.SeasonRefereeFactory.create_batch(
+            3,
+            season=stage.division.season,
+            person__last_name="Referee",
+        )
+
+        match = factories.MatchFactory.create(
+            stage=stage,
+            home_team__title="Home Team",
+            home_team__division=stage.division,
+            away_team__title="Away Team",
+            away_team__division=stage.division,
+            date=date(2025, 5, 1),
+            include_in_ladder=True,
+        )
+
+        referee_appointments_view = match.url_names["referees"]
+
+        for season_stream, match_stream, referee in [
+            (False, False, 0),
+            (True, False, 1),
+            (True, True, 2),
+        ]:
+            with self.subTest(season_stream=season_stream, match_stream=match_stream):
+                stage.division.season.live_stream = season_stream
+                stage.division.season.save()
+
+                match.live_stream = match_stream
+                match.videos = ["http://example.com/"] if match_stream else []
+                match.referees.set([])
+                match.save()
+
+                self.post(
+                    referee_appointments_view.url_name,
+                    *referee_appointments_view.args,
+                    data={
+                        "home_team": match.home_team.pk,
+                        "away_team": match.away_team.pk,
+                        "referees": [referees[referee].pk],
+                    },
+                )
+                self.assertRedirects(self.last_response, stage.urls["edit"])
+                self.assertCountEqual(
+                    match.referees.values_list("person__first_name", flat=True),
+                    [referees[referee].person.first_name],
+                )
+
+    def test_bug_116_add_ground(self):
+        """
+        Adding a Ground to a Venue in a Season with live_stream=True should not fail.
+        """
+        venue = factories.VenueFactory.create(season__live_stream=True)
+        add_ground = Ground(venue=venue).url_names["add"]
+        self.get_check_200(add_ground.url_name, *add_ground.args)
+        data = {
+            "title": "Test Ground",
+            "short_title": "",
+            "abbreviation": "",
+            "timezone": "Australia/Brisbane",
+            "latlng_0": "-27.470125",
+            "latlng_1": "153.021072",
+            "latlng_2": "0",
+            "slug": "test-ground",
+            "slug_locked": "0",
+            "live_stream": "0",
+        }
+        self.post(add_ground.url_name, *add_ground.args, data=data)
+        self.assertRedirects(self.last_response, venue.urls["edit"])

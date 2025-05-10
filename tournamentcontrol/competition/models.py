@@ -6,7 +6,6 @@ import logging
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from cloudinary.models import CloudinaryField
 from dateutil.relativedelta import relativedelta
@@ -29,6 +28,7 @@ from django.utils.translation import gettext_lazy as _
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from timezone_field.fields import TimeZoneField
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
 from touchtechnology.common.db.models import (
@@ -38,7 +38,6 @@ from touchtechnology.common.db.models import (
     LocationField,
     ManyToManyField,
 )
-from touchtechnology.common.forms.tz import TIMEZONE_CHOICES
 from touchtechnology.common.models import SitemapNodeBase
 from tournamentcontrol.competition.constants import (
     GENDER_CHOICES,
@@ -133,25 +132,6 @@ class RankImportanceMixin(models.Model):
         abstract = True
 
 
-class TimeZoneChoiceField(forms.ChoiceField):
-    def __init__(self, max_length=None, *args, **kwargs):
-        choices = kwargs.pop("choices", TIMEZONE_CHOICES)
-        kwargs.pop("empty_value", None)
-        super().__init__(choices=choices, *args, **kwargs)
-
-
-class TimeZoneField(models.CharField):
-    def deconstruct(self):
-        name, _, args, kwargs = super().deconstruct()
-        return name, "django.db.models.CharField", args, kwargs
-
-    def formfield(self, form_class=TimeZoneChoiceField, *args, **kwargs):
-        required = kwargs.pop("required", settings.USE_TZ)
-        return super().formfield(
-            form_class=form_class, required=required, *args, **kwargs
-        )
-
-
 class LadderPointsField(models.TextField):
     def formfield(self, form_class=None, **kwargs):
         from tournamentcontrol.competition.forms import (
@@ -203,7 +183,7 @@ class Club(AdminUrlMixin, SitemapNodeBase):
     twitter = TwitterField(
         max_length=50,
         blank=True,
-        help_text=_("Official Twitter name for use in " 'social "mentions"'),
+        help_text=_('Official Twitter name for use in social "mentions"'),
     )
     facebook = models.URLField(max_length=255, blank=True)
     youtube = models.URLField(max_length=255, blank=True)
@@ -214,19 +194,19 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         related_name="+",
         verbose_name=_("Primary contact"),
         label_from_instance="get_full_name",
-        help_text=_("Appears on the front-end with other " "club information."),
+        help_text=_("Appears on the front-end with other club information."),
         on_delete=PROTECT,
     )
     primary_position = models.CharField(
         max_length=200,
         blank=True,
         verbose_name=_("Position"),
-        help_text=_("Position of the primary " "contact"),
+        help_text=_("Position of the primary contact"),
     )
     abbreviation = models.CharField(
         max_length=3,
         blank=True,
-        help_text=_("Optional 3-letter " "abbreviation to be used on " "scoreboards."),
+        help_text=_("Optional 3-letter abbreviation to be used on scoreboards."),
     )
 
     class Meta:
@@ -483,7 +463,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         validators=[validate_hashtag],
         verbose_name="Hash Tag",
         help_text=mark_safe(
-            _("Your official <em>hash tag</em> " "for social media promotions.")
+            _("Your official <em>hash tag</em> for social media promotions.")
         ),
     )
     enabled = BooleanField(default=True)
@@ -552,7 +532,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             "match of tournament has taken place."
         ),
     )
-    timezone = TimeZoneField(max_length=50, blank=True, null=True)
+    timezone = TimeZoneField(max_length=50, blank=True, null=True, use_pytz=False)
 
     forfeit_notifications = ManyToManyField(
         settings.AUTH_USER_MODEL,
@@ -680,7 +660,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 class Place(AdminUrlMixin, OrderedSitemapNode):
     abbreviation = models.CharField(max_length=20, blank=True, null=True)
     latlng = LocationField(max_length=100)
-    timezone = TimeZoneField(max_length=50, blank=True, null=True)
+    timezone = TimeZoneField(max_length=50, blank=True, null=True, use_pytz=False)
 
     class Meta(OrderedSitemapNode.Meta):
         pass
@@ -926,6 +906,9 @@ class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             self.pk,
         )
 
+    def _get_url_names(self):
+        return super()._get_url_names() + ["build", "undo", "progress"]
+
     def __str__(self):
         return self.title
 
@@ -1148,7 +1131,7 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
         verbose_name=_("Don't clash"),
         label_from_instance=team_and_division,
         symmetrical=True,
-        help_text=_("Select any teams that must " "not play at the same time."),
+        help_text=_("Select any teams that must not play at the same time."),
     )
 
     class Meta:
@@ -1692,6 +1675,9 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
             self.pk,
         )
 
+    def _get_url_names(self):
+        return super()._get_url_names() + ["referees"]
+
     def get_date(self, tzinfo):
         dt = self.get_datetime(tzinfo)
         if dt is not None:
@@ -1716,7 +1702,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                 siblings = siblings.filter(stage_group=self.stage_group)
             if siblings:
                 res = max([s.datetime for s in siblings])
-        if res is not None and settings.USE_TZ and tzinfo is not None:
+        if res is not None and tzinfo is not None:
             return timezone.localtime(res, tzinfo)
         return res
 
@@ -1812,13 +1798,13 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         except TypeError:
             self.datetime = None
 
-        if self.datetime is not None and settings.USE_TZ:
-            try:
-                tzinfo = ZoneInfo(self.play_at.timezone)
-            except (AttributeError, ZoneInfoNotFoundError):
-                tzinfo = timezone.get_default_timezone()
-            else:
-                self.datetime = timezone.make_aware(self.datetime, tzinfo)
+        if self.datetime is not None:
+            tzinfo = (
+                self.play_at.timezone
+                if self.play_at is not None
+                else self.stage.division.season.timezone
+            )
+            self.datetime = timezone.make_aware(self.datetime, tzinfo)
 
     @cached_property
     def title(self):

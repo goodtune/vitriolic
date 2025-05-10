@@ -63,6 +63,7 @@ version_re = re.compile(
     re.VERBOSE,
 )
 
+
 register = Library()
 
 
@@ -98,7 +99,7 @@ def camel_case_to_underscores(s):
         if match.start() == 0:
             return content
         else:
-            return "_%s" % content
+            return f"_{content}"
 
     return camel_case_re.sub(convert, s).lower()
 
@@ -115,7 +116,7 @@ def camel_case_split(s):
         if match.start() == 0:
             return content
         else:
-            return " %s" % content
+            return f" {content}"
 
     return camel_case_re.sub(convert, s)
 

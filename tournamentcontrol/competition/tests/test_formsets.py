@@ -45,9 +45,7 @@ class DrawGenerationMatchFormSetTest(TestCase):
             "0-INITIAL_FORMS": "1",
             "0-MIN_NUM_FORMS": "0",
             "0-MAX_NUM_FORMS": "1000",
-            "0-0-start_date_0": "8",
-            "0-0-start_date_1": "8",
-            "0-0-start_date_2": "2018",
+            "0-0-start_date": "2018-8-8",
             "0-0-format": str(self.draw_format.pk),
             "0-0-rounds": "",
             "0-0-offset": "",
@@ -55,7 +53,7 @@ class DrawGenerationMatchFormSetTest(TestCase):
 
         with self.login(self.superuser):
             self.post(
-                "admin:fixja:competition:season:division:stage:draw:build",
+                "admin:fixja:competition:season:division:stage:build",
                 self.stage.division.season.competition.pk,
                 self.stage.division.season.pk,
                 self.stage.division.pk,
@@ -87,7 +85,7 @@ class DrawGenerationMatchFormSetTest(TestCase):
                 )
 
             self.post(
-                "admin:fixja:competition:season:division:stage:draw:build",
+                "admin:fixja:competition:season:division:stage:build",
                 self.stage.division.season.competition.pk,
                 self.stage.division.season.pk,
                 self.stage.division.pk,
@@ -139,9 +137,7 @@ class DrawGenerationMatchFormSetTest(TestCase):
             "0-INITIAL_FORMS": "1",
             "0-MIN_NUM_FORMS": "0",
             "0-MAX_NUM_FORMS": "1000",
-            "0-0-start_date_0": "8",
-            "0-0-start_date_1": "8",
-            "0-0-start_date_2": "2018",
+            "0-0-start_date": "2018-8-8",
             "0-0-format": str(draw_format.pk),
             "0-0-rounds": "",
             "0-0-offset": "",
@@ -149,7 +145,7 @@ class DrawGenerationMatchFormSetTest(TestCase):
 
         with self.login(self.superuser):
             self.post(
-                "admin:fixja:competition:season:division:stage:draw:build",
+                "admin:fixja:competition:season:division:stage:build",
                 stage.division.season.competition.pk,
                 stage.division.season.pk,
                 stage.division.pk,
@@ -181,7 +177,7 @@ class DrawGenerationMatchFormSetTest(TestCase):
                 )
 
             self.post(
-                "admin:fixja:competition:season:division:stage:draw:build",
+                "admin:fixja:competition:season:division:stage:build",
                 stage.division.season.competition.pk,
                 stage.division.season.pk,
                 stage.division.pk,

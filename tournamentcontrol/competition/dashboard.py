@@ -1,7 +1,6 @@
 import collections
 import logging
 
-from django.conf import settings
 from django.db.models import Count, Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -21,7 +20,7 @@ def matches_require_basic_results(now=None, matches=None):
         now = timezone.now()
         now = now.replace(second=0, microsecond=0)
 
-    if settings.USE_TZ and timezone.is_naive(now):
+    if timezone.is_naive(now):
         timezone.make_aware(now, timezone.get_default_timezone())
 
     # If not provided up front, build a base queryset of matches that take

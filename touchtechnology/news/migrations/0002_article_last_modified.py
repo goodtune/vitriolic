@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+import datetime
+from datetime import timezone
+
 from django.db import migrations
 
 import touchtechnology.common.db.models
