@@ -780,7 +780,7 @@ class DrawFormatForm(BootstrapFormControlMixin, ModelForm):
         try:
             DrawGenerator.validate(text)
         except ValueError as e:
-            raise forms.ValidationError(e.message)
+            raise forms.ValidationError(str(e))
         return text
 
     class Meta:
