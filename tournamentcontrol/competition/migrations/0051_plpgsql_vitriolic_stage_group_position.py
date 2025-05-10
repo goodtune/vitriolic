@@ -15,7 +15,7 @@ with backwards_sql_file.open("r") as file:
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("competition", "0049_match_live_stream_thumbnail"),
+        ("competition", "0050_alter_place_timezone_and_more"),
     ]
 
     operations = [migrations.RunSQL(forwards_sql, backwards_sql)]
