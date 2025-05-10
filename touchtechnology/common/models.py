@@ -8,12 +8,6 @@ from django.contrib.auth.models import Group
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
-from django.db.models import (
-    DateTimeField,
-    ForeignKey as TreeField,
-    JSONField,
-    ManyToManyField,
-)
 from django.db.models.signals import post_save
 from django.urls import reverse_lazy
 from django.utils.functional import cached_property
@@ -37,7 +31,7 @@ class SitemapNodeBase(models.Model):
         blank=True,
         verbose_name=_("Short title"),
         help_text=_(
-            "This is used in navigation menus instead of the longer " "title value."
+            "This is used in navigation menus instead of the longer title value."
         ),
     )
 
@@ -63,7 +57,7 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
     Base class which can be used to represent the structure of the site.
     """
 
-    parent = TreeField(
+    parent = models.ForeignKey(
         "self",
         blank=True,
         null=True,
@@ -81,7 +75,7 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
     object = GenericForeignKey("content_type", "object_id")
 
     # Migrate from related table in the content application.
-    kwargs = JSONField(default=dict)
+    kwargs = models.JSONField(default=dict)
 
     require_https = BooleanField(
         default=False,
@@ -94,7 +88,7 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         default=True,
         verbose_name=_("Enabled"),
         help_text=_(
-            "Set this to 'No' to disable this object and it's " "children on the site."
+            "Set this to 'No' to disable this object and it's children on the site."
         ),
     )
 
@@ -129,7 +123,7 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         ),
     )
 
-    restrict_to_groups = ManyToManyField(
+    restrict_to_groups = models.ManyToManyField(
         to="auth.Group",
         blank=True,
         verbose_name=_("Restrict to Groups"),
@@ -140,7 +134,7 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         ),
     )
 
-    last_modified = DateTimeField(auto_now=True)
+    last_modified = models.DateTimeField(auto_now=True)
 
     def __hash__(self):
         return hash(repr(self))
