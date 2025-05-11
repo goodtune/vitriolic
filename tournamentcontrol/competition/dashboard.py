@@ -131,7 +131,7 @@ def matches_progression_possible():
         # If the home or away team can be determined we would want to progress
         # the match. This should only catch Px, GxPx, Wx, Lx - for
         # UndecidedTeam cases we need to catch them all together.
-        home_team, away_team = match.eval()
+        home_team, away_team = match.eval(lazy=True)
         if match.home_team is None and isinstance(home_team, Team):
             return True
         elif match.away_team is None and isinstance(away_team, Team):
@@ -149,16 +149,9 @@ def matches_progression_possible():
 
 def stages_require_progression():
     matches = matches_progression_possible()
-
-    # Turn the list of matches with progressions into a nested OrderedDict
-    # for use in the template. Use of OrderedDict means our ordering set
-    # above will not be lost.
-    stages = collections.OrderedDict()
+    stages = {}
     for m in matches:
-        stages.setdefault(m.stage.division, collections.OrderedDict()).setdefault(
-            m.stage, []
-        ).append(m)
-
+        stages.setdefault(m.stage.division, {}).setdefault(m.stage, []).append(m)
     return stages
 
 

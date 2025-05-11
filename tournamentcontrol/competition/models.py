@@ -1929,7 +1929,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         res = [None, None]
         for index, field in enumerate(("home_team", "away_team")):
             team = self._get_team(field)
-            is_team_model = not isinstance(team, Team)
+            is_team_model = isinstance(team, Team)
             if not is_team_model:
                 logger.warning("%r is not a Team instance.", team)
             if not lazy:
