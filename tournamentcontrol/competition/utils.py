@@ -75,6 +75,7 @@ def team_title_case_clause(team):
                     then=Concat(
                         Value("Winner "),
                         F(f"{team}_eval_related__label"),
+                        output_field=CharField(),
                     ),
                 ),
                 When(
@@ -82,6 +83,7 @@ def team_title_case_clause(team):
                     then=Concat(
                         Value("Loser "),
                         F(f"{team}_eval_related__label"),
+                        output_field=CharField(),
                     ),
                 ),
                 default=StageGroupPosition(
@@ -100,6 +102,7 @@ def team_title_case_clause(team):
                     ~Q(**{f"{team}_undecided__formula": ""}),
                     then=StageGroupPosition(f"{team}_undecided__formula"),
                 ),
+                output_field=CharField(),
                 default=None,
             ),
         ),

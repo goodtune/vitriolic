@@ -9,7 +9,7 @@ from dateutil.relativedelta import relativedelta
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Case, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
 from django.http import Http404, HttpResponse, HttpResponseGone
@@ -1501,7 +1501,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             form_list, extra_context=extra_context, redirect_to=redirect_to, stage=stage
         )
 
-        return view(request)
+        with transaction.atomic():
+            return view(request)
 
     @competition_by_pk_m
     @staff_login_required_m

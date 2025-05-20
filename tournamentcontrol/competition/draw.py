@@ -401,11 +401,11 @@ class DrawGenerator(object):
         |                                                               # OR
 
         (?:
-            (?P<match_id>\d+):\s*                                       # match ID (with whitespace)
-            (?P<home_team>(?:(?:S\d+)?(?:(?:G\d+)?P|[WL])|[PWL])?\d+)   # home team ID
-            \s*vs\s*                                                    # versus literal (with whitespace)
-            (?P<away_team>(?:(?:S\d+)?(?:(?:G\d+)?P|[WL])|[PWL])?\d+)   # away team ID
-            \ *(?P<match_label>[\S ]+)?                                 # match label (optional)
+            (?P<match_id>\d+):\s*                                                   # match ID (with whitespace)
+            (?P<home_team>(?:(?:(?:S\d+)?(?:(?:G\d+)?P|[WL])|[PWL])?\d+)|"[^"]+")   # home team ID
+            \s*vs\s*                                                                # versus literal (with whitespace)
+            (?P<away_team>(?:(?:(?:S\d+)?(?:(?:G\d+)?P|[WL])|[PWL])?\d+)|"[^"]+")   # away team ID
+            \ *(?P<match_label>[\S ]+)?                                             # match label (optional)
         )
         """,
         re.VERBOSE,

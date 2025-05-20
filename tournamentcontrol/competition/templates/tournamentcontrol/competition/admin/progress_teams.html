@@ -9,6 +9,8 @@
 		<h1>{% trans "Progress Teams" %} - {{ stage.division.title }} ({{ stage.title }})</h1>
 	{% endif %}
 
+	<xmp>{{ matches_with_undecided_teams }}/{{ object_list.count }}</xmp>
+
 	<form action="" method="post">
 		{% csrf_token %}
 		{% regroup formset.forms by instance.stage_group as pools %}

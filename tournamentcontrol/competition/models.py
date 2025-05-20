@@ -3,6 +3,7 @@
 
 import collections
 import logging
+import re
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -1315,7 +1316,6 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
 
     class Meta:
         ordering = ("stage_group", "formula")
-        # verbose_name = 'team'
 
     def __str__(self):
         return self.title
@@ -1338,7 +1338,9 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
             __, group, __ = stage_group_position(self.stage, self.formula)
             if group is not None:
                 return group.teams
-        return self.stage.division.teams
+        if self.label:
+            return self.stage.division.teams
+        return self.__class__._default_manager.none()
 
     @property
     def title(self):
@@ -1846,6 +1848,8 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                 "match": team_eval_related,
             }
             template = win_lose_team_tpl
+        elif re.match(r'^"[^"]+"$', team_eval):
+            return {"title": team_eval[1:-1]}
         else:
             context = {
                 "position": position,

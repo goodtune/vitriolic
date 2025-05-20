@@ -11,6 +11,8 @@
 		{% endif %}
 	</div>
 
+	<xmp>{{ matches_with_undecided_teams }}/{{ object_list.count }}</xmp>
+
 	<form action="" method="post">
 		{% csrf_token %}
 		{{ formset.management_form }}

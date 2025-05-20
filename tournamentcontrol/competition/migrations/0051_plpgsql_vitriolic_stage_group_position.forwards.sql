@@ -55,4 +55,11 @@ BEGIN
 
     RETURN trim(result_str);
 END;
-$$ LANGUAGE plpgsql;
+-- $$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION vitriolic_stage_group_position(input_str VARCHAR)
+RETURNS TEXT AS $$
+BEGIN
+    RETURN vitriolic_stage_group_position(input_str::TEXT);
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;

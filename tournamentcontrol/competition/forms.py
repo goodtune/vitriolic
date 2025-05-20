@@ -2,6 +2,7 @@ import collections
 import datetime
 import json
 import logging
+import re
 
 from dateutil.parser import parse
 from dateutil.rrule import DAILY, WEEKLY
@@ -1134,7 +1135,22 @@ class DrawGenerationMatchFormSet(BaseDrawGenerationMatchFormSet):
 
     def save(self, *args, **kwargs):
         matches = []
+        undecided_re = re.compile(r'^"[^"]+"$')
         for form in self.forms:
+            if form.instance.home_team_eval:
+                if undecided_re.match(form.instance.home_team_eval):
+                    team, _ = form.instance.stage.undecided_teams.get_or_create(
+                        label=form.instance.get_home_team()["title"]
+                    )
+                    form.instance.home_team_eval = None
+                    form.instance.home_team_undecided = team
+            if form.instance.away_team_eval:
+                if undecided_re.match(form.instance.away_team_eval):
+                    team, _ = form.instance.stage.undecided_teams.get_or_create(
+                        label=form.instance.get_away_team()["title"]
+                    )
+                    form.instance.away_team_eval = None
+                    form.instance.away_team_undecided = team
             if form.instance.home_team_eval_related is not None:
                 form.instance.home_team_eval_related = Match.objects.get(
                     uuid=form.instance.home_team_eval_related.uuid
@@ -1501,22 +1517,19 @@ class ProgressMatchesForm(BaseMatchFormMixin, ModelForm):
     def __init__(self, instance, *args, **kwargs):
         super().__init__(instance=instance, *args, **kwargs)
         instance.evaluated = True
-        home_team, away_team = instance.eval()
+        home_team, away_team = instance.eval(lazy=True)
 
-        # lazily move this into the init so we can remove RedefineModelForm
-        self.fields["home_team"].empty_label = ""
-        self.fields["away_team"].empty_label = ""
+        self.fields["home_team"].empty_label = (
+            instance.get_home_team()["title"] if home_team else "---"
+        )
+        self.fields["away_team"].empty_label = (
+            instance.get_away_team()["title"] if away_team else "---"
+        )
 
-        # set initial form values when available, prevents need for client
-        # side javascript hack used previously.
         self.initial["home_team"] = home_team
         self.initial["away_team"] = away_team
 
-        if (
-            isinstance(home_team, ByeTeam)
-            or self.instance.home_team
-            or home_team is None
-        ):
+        if isinstance(home_team, ByeTeam) or self.instance.home_team:
             self.fields.pop("home_team", None)
         elif self.instance.home_team_eval_related:
             self.fields["home_team"].queryset = self.fields[
@@ -1528,11 +1541,7 @@ class ProgressMatchesForm(BaseMatchFormMixin, ModelForm):
                 )
             )
 
-        if (
-            isinstance(away_team, ByeTeam)
-            or self.instance.away_team
-            or away_team is None
-        ):
+        if isinstance(away_team, ByeTeam) or self.instance.away_team:
             self.fields.pop("away_team", None)
         elif self.instance.away_team_eval_related:
             self.fields["away_team"].queryset = self.fields[

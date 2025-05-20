@@ -47,6 +47,7 @@ from tournamentcontrol.competition.models import (
     Person,
     SimpleScoreMatchStatistic,
     Stage,
+    UndecidedTeam,
 )
 from tournamentcontrol.competition.rank import (
     DayView as RankDay,
@@ -344,7 +345,14 @@ class CompetitionAdminMixin(object):
         matches = stage.matches.filter(team_needs_progressing).exclude(
             legitimate_bye_match
         )
-        teams = stage.undecided_teams.all()
+
+        matches_with_undecided_teams = matches.exclude(
+            Q(home_team_undecided__isnull=True) | Q(away_team_undecided__isnull=True)
+        )
+
+        extra_context["matches_with_undecided_teams"] = (
+            matches_with_undecided_teams.count()
+        )
 
         if not matches:
             return HttpResponseGone()
@@ -373,7 +381,7 @@ class CompetitionAdminMixin(object):
                 "formset_kwargs": {
                     "stage": stage,
                 },
-                "model_or_manager": teams.model,
+                "model_or_manager": stage.undecided_teams,
                 "templates": self.template_path("progress_teams.html"),
             }
         else:
