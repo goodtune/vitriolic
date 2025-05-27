@@ -2223,3 +2223,94 @@ class SimpleScoreMatchStatistic(MatchStatisticBase):
             self.number,
             self.played,
         )
+
+
+class MatchEventType(models.Model):
+    """
+    A model to represent the type of a match event.
+
+    This is used to categorize events in the match timeline, such as scores,
+    assists, send-offs, injuries, and substitutions.
+    """
+
+    code = models.CharField(max_length=20, primary_key=True)
+    name = models.CharField(max_length=50, unique=True)
+
+
+class MatchEvent(models.Model):
+    """
+    Chronological, sport-agnostic record of *one* incident that occurred
+    during a fixture.
+
+    The model sits at the heart of the live-scoring timeline: every score,
+    assist, substitution, injury or disciplinary action is stored here in
+    the exact order it happened.  A simple ``type`` discriminator plus an
+    open-ended ``payload`` JSON field allow new event flavours to be added
+    without further schema changes.
+
+    Parameters
+    ----------
+    uuid : uuid.UUID
+        Unique identifier for this event, generated automatically.
+    type : MatchEventType
+        Type of the event, such as SCORE, ASSIST, SEND_OFF, INJURY, etc.
+    match : Match
+        The fixture the event belongs to.
+    period : int
+        1-based match segment (e.g. halves, quarters, overtime periods).
+    offset : datetime.timedelta
+        Elapsed time *from the start of the given period* when the event
+        occurred.
+    team : Team, optional
+        Team associated with the event (scoring side, offending side, etc.).
+    player : Person, optional
+        Primary player involved (scorer, sent-off player, injured player …).
+    related_player : Person, optional
+        Secondary player (assister, fouled player, replacement substitute …).
+    payload : dict
+        Arbitrary event-specific data stored as JSON
+        (e.g. ``{"points": 2}``, ``{"card": "yellow"}``).
+
+    Notes
+    -----
+    * Default ordering (`period`, `offset`, `pk`) ensures a queryset of
+      events is always time-ascending.
+    * Light validation lives in :meth:`clean`—domain-specific rules
+      (e.g. “a SCORE must have a scorer”) are enforced there, while
+      heavy business logic (updating ladders, broadcasting websockets)
+      is delegated to service helpers and signals.
+    * The single-table design keeps queries simple and plays well with
+      Postgres partitioning if timelines ever need sharding by match.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    type = models.ForeignKey(MatchEventType, on_delete=models.PROTECT)
+    match = models.ForeignKey("Match", related_name="events", on_delete=models.PROTECT)
+    period = models.PositiveSmallIntegerField(default=1)
+    offset = models.DurationField()
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.PROTECT)
+    player = models.ForeignKey(
+        Person,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="timeline",
+    )
+    related_player = models.ForeignKey(
+        Person,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="timeline_related",
+    )
+    payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ("period", "offset", "pk")
+        indexes = [
+            models.Index(fields=("match", "period", "offset")),
+            models.Index(fields=("type",)),
+        ]
+
+    def __str__(self):
+        return f"{self.match} – {self.type.name} @ {self.offset}"
