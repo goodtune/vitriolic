@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     "touchtechnology.content",
     "touchtechnology.news",
     "tournamentcontrol.competition",
+    "tournamentcontrol.highlights",
     "example_app",
 ]
 
