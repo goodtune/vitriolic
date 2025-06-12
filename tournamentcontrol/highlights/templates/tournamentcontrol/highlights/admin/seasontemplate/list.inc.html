@@ -1,0 +1,22 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+    <th>{% trans "Name" %}</th>
+    <th>{% trans "Season" %}</th>
+    <th>{% trans "Base" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+    <td>
+        {% if change_perm in object_perms %}
+            <a href="{{ obj.urls.edit }}">{{ obj.name|default:obj.base.name }}</a>
+        {% else %}
+            <span>{{ obj.name|default:obj.base.name }}</span>
+        {% endif %}
+    </td>
+    <td>{{ obj.season }}</td>
+    <td>{{ obj.base }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}3{% endblock %}
