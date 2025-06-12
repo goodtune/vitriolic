@@ -5,7 +5,6 @@ from touchtechnology.admin.base import AdminComponent
 from touchtechnology.common.decorators import staff_login_required_m
 
 from .models import BaseTemplate, SeasonTemplate
-from .forms import BaseTemplateForm, SeasonTemplateForm
 
 
 class HighlightsAdminComponent(AdminComponent):
@@ -64,7 +63,7 @@ class HighlightsAdminComponent(AdminComponent):
             request,
             BaseTemplate,
             pk=pk,
-            form_class=BaseTemplateForm,
+            fields=["name", "slug", "template_type", "svg"],
             post_save_redirect=self.redirect(self.reverse("base:list")),
             extra_context=extra_context,
         )
@@ -83,7 +82,7 @@ class HighlightsAdminComponent(AdminComponent):
             request,
             SeasonTemplate,
             pk=pk,
-            form_class=SeasonTemplateForm,
+            fields=["season", "base", "name", "svg", "config"],
             post_save_redirect=self.redirect(self.reverse("season:list")),
             extra_context=extra_context,
         )
