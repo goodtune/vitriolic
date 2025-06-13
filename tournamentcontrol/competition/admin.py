@@ -141,6 +141,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             (_("Competitions"), self.reverse("competition:list"), "trophy"),
             (_("Clubs"), self.reverse("club:list"), "shield"),
             (_("Draw Formats"), self.reverse("format:list"), "wrench"),
+            (_("Highlights"), self.reverse("highlights:base:list"), "image"),
             (_("Reports"), self.reverse("scorecard-report"), "book"),
         )
         return dl

@@ -11,6 +11,7 @@ class HighlightsAdminComponent(AdminComponent):
     """Admin component for managing highlight templates."""
 
     verbose_name = _("Highlights")
+    visible = False
     unprotected = False
 
     def __init__(self, app, name="highlights", app_name="highlights"):

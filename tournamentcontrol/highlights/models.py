@@ -3,10 +3,12 @@ from django.template import Context, Template
 
 from tournamentcontrol.competition.models import Season
 
+from touchtechnology.admin.mixins import AdminUrlMixin
+
 from .constants import HighlightTemplateType
 
 
-class BaseTemplate(models.Model):
+class BaseTemplate(AdminUrlMixin, models.Model):
     name = models.CharField(max_length=100)
     slug = models.SlugField(unique=True)
     template_type = models.CharField(max_length=20, choices=HighlightTemplateType.choices)
@@ -25,8 +27,14 @@ class BaseTemplate(models.Model):
         template = Template(self.svg)
         return template.render(Context(context or {}))
 
+    def _get_admin_namespace(self):
+        return "admin:highlights:base"
 
-class SeasonTemplate(models.Model):
+    def _get_url_args(self):
+        return (self.pk,)
+
+
+class SeasonTemplate(AdminUrlMixin, models.Model):
     season = models.ForeignKey(Season, related_name="highlight_templates", on_delete=models.CASCADE)
     base = models.ForeignKey(BaseTemplate, related_name="season_templates", on_delete=models.CASCADE)
     name = models.CharField(max_length=100, blank=True)
@@ -50,3 +58,9 @@ class SeasonTemplate(models.Model):
         svg = self.svg or self.base.svg
         template = Template(svg)
         return template.render(Context(data))
+
+    def _get_admin_namespace(self):
+        return "admin:highlights:season"
+
+    def _get_url_args(self):
+        return (self.pk,)
