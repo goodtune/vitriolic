@@ -1,9 +1,9 @@
 from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
-from tournamentcontrol.highlights.models import BaseTemplate, SeasonTemplate
-from tournamentcontrol.highlights.constants import HighlightTemplateType
 from tournamentcontrol.competition.tests.factories import SeasonFactory
+from tournamentcontrol.highlights.constants import HighlightTemplateType
+from tournamentcontrol.highlights.models import BaseTemplate, SeasonTemplate
 
 
 class HighlightsAdminTests(TestCase):
@@ -12,9 +12,9 @@ class HighlightsAdminTests(TestCase):
 
     def test_manage_base_template(self):
         with self.login(self.superuser):
-            self.assertGoodView("admin:highlights:base:list")
+            self.assertGoodView("admin:highlights:basetemplate:list")
             self.post(
-                "admin:highlights:base:add",
+                "admin:highlights:basetemplate:add",
                 data={
                     "name": "Score",
                     "slug": "score",

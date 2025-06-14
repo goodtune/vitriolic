@@ -1,8 +1,8 @@
 from test_plus import TestCase
 
+from tournamentcontrol.competition.tests.factories import SeasonFactory
 from tournamentcontrol.highlights.constants import HighlightTemplateType
 from tournamentcontrol.highlights.models import BaseTemplate, SeasonTemplate
-from tournamentcontrol.competition.tests.factories import SeasonFactory
 
 
 class HighlightTemplateTests(TestCase):

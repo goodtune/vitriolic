@@ -1,24 +1,24 @@
 from django.db import models
 from django.template import Context, Template
 
-from tournamentcontrol.competition.models import Season
-
 from touchtechnology.admin.mixins import AdminUrlMixin
-
-from .constants import HighlightTemplateType
+from tournamentcontrol.competition.models import Season
+from tournamentcontrol.highlights.constants import HighlightTemplateType
 
 
 class BaseTemplate(AdminUrlMixin, models.Model):
     name = models.CharField(max_length=100)
     slug = models.SlugField(unique=True)
-    template_type = models.CharField(max_length=20, choices=HighlightTemplateType.choices)
+    template_type = models.CharField(
+        max_length=20, choices=HighlightTemplateType.choices
+    )
     svg = models.TextField()
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "Highlight template"
-        verbose_name_plural = "Highlight templates"
+        verbose_name = "Template"
+        verbose_name_plural = "Templates"
 
     def __str__(self):
         return self.name
@@ -28,15 +28,19 @@ class BaseTemplate(AdminUrlMixin, models.Model):
         return template.render(Context(context or {}))
 
     def _get_admin_namespace(self):
-        return "admin:highlights:base"
+        return "admin:highlights:basetemplate"
 
     def _get_url_args(self):
         return (self.pk,)
 
 
 class SeasonTemplate(AdminUrlMixin, models.Model):
-    season = models.ForeignKey(Season, related_name="highlight_templates", on_delete=models.CASCADE)
-    base = models.ForeignKey(BaseTemplate, related_name="season_templates", on_delete=models.CASCADE)
+    season = models.ForeignKey(
+        Season, related_name="highlight_templates", on_delete=models.CASCADE
+    )
+    base = models.ForeignKey(
+        BaseTemplate, related_name="season_templates", on_delete=models.CASCADE
+    )
     name = models.CharField(max_length=100, blank=True)
     svg = models.TextField(blank=True)
     config = models.JSONField(default=dict, blank=True)
@@ -44,8 +48,8 @@ class SeasonTemplate(AdminUrlMixin, models.Model):
     modified = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "Season highlight template"
-        verbose_name_plural = "Season highlight templates"
+        verbose_name = "Season template"
+        verbose_name_plural = "Season templates"
 
     def __str__(self):
         return self.name or f"{self.season}: {self.base.name}"

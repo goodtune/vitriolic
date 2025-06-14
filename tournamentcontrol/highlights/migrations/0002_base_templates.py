@@ -32,7 +32,9 @@ def load_templates(apps, schema_editor):
 
 def unload_templates(apps, schema_editor):
     BaseTemplate = apps.get_model("highlights", "BaseTemplate")
-    BaseTemplate.objects.filter(slug__in=["match-score", "ground-day-schedule", "team-schedule"]).delete()
+    BaseTemplate.objects.filter(
+        slug__in=["match-score", "ground-day-schedule", "team-schedule"]
+    ).delete()
 
 
 class Migration(migrations.Migration):
