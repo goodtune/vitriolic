@@ -1,0 +1,22 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+    <th>{% trans "Name" %}</th>
+    <th>{% trans "Slug" %}</th>
+    <th>{% trans "Type" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+    <td>
+        {% if change_perm in object_perms %}
+            <a href="{{ obj.urls.edit }}">{{ obj.name }}</a>
+        {% else %}
+            <span>{{ obj.name }}</span>
+        {% endif %}
+    </td>
+    <td>{{ obj.slug }}</td>
+    <td>{{ obj.get_template_type_display }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}3{% endblock %}
