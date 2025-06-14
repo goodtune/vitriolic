@@ -27,23 +27,20 @@ class HighlightsAdminTests(TestCase):
 
     def test_manage_season_template(self):
         season = SeasonFactory.create()
-        base = BaseTemplate.objects.create(
+        base_template = BaseTemplate.objects.create(
             name="Base",
             slug="base",
             template_type=HighlightTemplateType.MATCH_SCORE,
             svg="<svg></svg>",
         )
         with self.login(self.superuser):
-            self.assertGoodView("admin:highlights:season:list")
+            self.assertGoodView(
+                "admin:highlights:basetemplate:seasontemplate:list", base_template.pk
+            )
             self.post(
-                "admin:highlights:season:add",
-                data={
-                    "season": season.pk,
-                    "base": base.pk,
-                    "name": "",
-                    "svg": "",
-                    "config": "{}",
-                },
+                "admin:highlights:basetemplate:seasontemplate:add",
+                base_template.pk,
+                data={"season": season.pk, "name": "", "config": "{}"},
             )
             self.response_302()
             self.assertEqual(1, SeasonTemplate.objects.count())

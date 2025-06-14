@@ -1,9 +1,12 @@
+from django.shortcuts import get_object_or_404
 from django.urls import include, path
 from django.utils.translation import gettext_lazy as _
 
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.common.decorators import staff_login_required_m
-from tournamentcontrol.highlights.models import BaseTemplate
+from tournamentcontrol.competition.admin import next_related_factory
+from tournamentcontrol.competition.models import Season
+from tournamentcontrol.highlights.models import BaseTemplate, SeasonTemplate
 
 
 class HighlightsAdminComponent(AdminComponent):
@@ -85,10 +88,14 @@ class HighlightsAdminComponent(AdminComponent):
 
     @staff_login_required_m
     def edit_season(self, request, template_id, pk=None, **extra_context):
+        base = get_object_or_404(BaseTemplate, pk=template_id)
+        instance = SeasonTemplate(base=base) if pk is None else None
+
         return self.generic_edit(
             request,
-            BaseTemplate.objects.get(pk=template_id).season_templates,
+            base.season_templates,
             pk=pk,
+            instance=instance,
             form_fields=["season", "name", "config"],
             post_save_redirect=self.redirect(
                 self.reverse(
