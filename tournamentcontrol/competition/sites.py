@@ -444,10 +444,12 @@ class CompetitionSite(CompetitionAdminMixin, Application):
     def venue_urls(self):
         return [
             path("<slug:venue>/", self.venue, name="venue"),
-            re_path(r"^(?P<venue>[^/]+)/(?P<datestr>\d{8})/$", self.venue, name="venue"),
-            path("<slug:venue>/<slug:ground>/", self.ground, name="ground"),
             re_path(
-                r"^(?P<venue>[^/]+)/(?P<ground>[^/]+)/(?P<datestr>\d{8})/$",
+                r"^(?P<venue>[^/]+)/(?P<datestr>\d{8})/$", self.venue, name="venue"
+            ),
+            path("<slug:venue>/ground/<slug:ground>/", self.ground, name="ground"),
+            re_path(
+                r"^(?P<venue>[^/]+)/ground/(?P<ground>[^/]+)/(?P<datestr>\d{8})/$",
                 self.ground,
                 name="ground",
             ),
@@ -464,7 +466,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             path("results/", include(self.result_urls())),
             path("runsheet/", include(self.runsheet_urls())),
             path("stream/", include(self.stream_urls())),
-            path("", include(self.venue_urls())),
+            path("venue/", include(self.venue_urls())),
             path("<slug:division>.ics", self.calendar, name="calendar"),
             path("<slug:division>/", self.division, name="division"),
             path("<slug:division>:<slug:stage>/", self.stage, name="stage"),

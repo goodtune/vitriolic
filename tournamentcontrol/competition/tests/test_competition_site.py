@@ -201,21 +201,20 @@ class GoodViewTests(TestCase):
 
     def test_ground_date(self):
         ground = factories.GroundFactory.create()
-        match = factories.MatchFactory.create(
+        factories.MatchFactory.create(
             play_at=ground,
             stage__division__season=ground.venue.season,
             date="2025-03-13",
             time="10:00",
             datetime="2025-03-13 10:00",
         )
-        datestr = match.date.strftime("%Y%m%d")
         self.assertGoodView(
             "competition:ground",
             ground.venue.season.competition.slug,
             ground.venue.season.slug,
             ground.venue.slug,
             ground.slug,
-            datestr,
+            "20250313",
         )
 
 
