@@ -441,6 +441,18 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             ),
         ]
 
+    def venue_urls(self):
+        return [
+            path("<slug:venue>/", self.venue, name="venue"),
+            re_path(r"^(?P<venue>[^/]+)/(?P<datestr>\d{8})/$", self.venue, name="venue"),
+            path("<slug:venue>/<slug:ground>/", self.ground, name="ground"),
+            re_path(
+                r"^(?P<venue>[^/]+)/(?P<ground>[^/]+)/(?P<datestr>\d{8})/$",
+                self.ground,
+                name="ground",
+            ),
+        ]
+
     def season_urls(self):
         return [
             path("", self.season, name="season"),
@@ -452,6 +464,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             path("results/", include(self.result_urls())),
             path("runsheet/", include(self.runsheet_urls())),
             path("stream/", include(self.stream_urls())),
+            path("", include(self.venue_urls())),
             path("<slug:division>.ics", self.calendar, name="calendar"),
             path("<slug:division>/", self.division, name="division"),
             path("<slug:division>:<slug:stage>/", self.stage, name="stage"),
@@ -922,6 +935,101 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             request,
             division.teams,
             slug=team.slug,
+            templates=templates,
+            extra_context=extra_context,
+        )
+
+    @competition_by_slug_m
+    def venue(
+        self, request, competition, season, venue, extra_context, date=None, **kwargs
+    ):
+        templates = self.template_path(
+            "venue.html", competition.slug, season.slug, venue.slug
+        )
+
+        matches = season.matches.filter(
+            Q(play_at=venue) | Q(play_at__ground__venue=venue)
+        )
+        if date is not None:
+            matches = matches.filter(date=date)
+
+        matches = matches.select_related(
+            "play_at",
+            "stage__division",
+            "home_team__club",
+            "away_team__club",
+        ).order_by("datetime", "date", "time", "pk")
+
+        dates = list(matches.dates("date", "day"))
+        tzinfo = timezone.get_current_timezone()
+        matches_by_date = collections.OrderedDict()
+        for m in matches:
+            matches_by_date.setdefault(m.get_date(tzinfo), []).append(m)
+
+        extra_context.update(
+            {
+                "grounds": venue.grounds.all(),
+                "dates": dates,
+                "matches_by_date": matches_by_date,
+            }
+        )
+
+        return self.generic_detail(
+            request,
+            season.venues,
+            slug=venue.slug,
+            templates=templates,
+            extra_context=extra_context,
+        )
+
+    @competition_by_slug_m
+    def ground(
+        self,
+        request,
+        competition,
+        season,
+        venue,
+        ground,
+        extra_context,
+        date=None,
+        **kwargs,
+    ):
+        templates = self.template_path(
+            "ground.html",
+            competition.slug,
+            season.slug,
+            venue.slug,
+            ground.slug,
+        )
+
+        matches = season.matches.filter(play_at=ground)
+        if date is not None:
+            matches = matches.filter(date=date)
+
+        matches = matches.select_related(
+            "play_at",
+            "stage__division",
+            "home_team__club",
+            "away_team__club",
+        ).order_by("datetime", "date", "time", "pk")
+
+        dates = list(matches.dates("date", "day"))
+        tzinfo = timezone.get_current_timezone()
+        matches_by_date = collections.OrderedDict()
+        for m in matches:
+            matches_by_date.setdefault(m.get_date(tzinfo), []).append(m)
+
+        extra_context.update(
+            {
+                "dates": dates,
+                "matches_by_date": matches_by_date,
+            }
+        )
+
+        return self.generic_detail(
+            request,
+            venue.grounds,
+            slug=ground.slug,
             templates=templates,
             extra_context=extra_context,
         )

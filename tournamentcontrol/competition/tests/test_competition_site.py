@@ -165,6 +165,59 @@ class GoodViewTests(TestCase):
             )
             self.response_410()
 
+    def test_venue(self):
+        venue = factories.VenueFactory.create()
+        factories.MatchFactory.create(play_at=venue, stage__division__season=venue.season)
+        self.assertGoodView(
+            "competition:venue",
+            venue.season.competition.slug,
+            venue.season.slug,
+            venue.slug,
+        )
+
+    def test_venue_date(self):
+        match = factories.MatchFactory.create()
+        match.play_at = factories.VenueFactory.create(season=match.stage.division.season)
+        match.save()
+        datestr = match.date.strftime("%Y%m%d")
+        self.assertGoodView(
+            "competition:venue",
+            match.stage.division.season.competition.slug,
+            match.stage.division.season.slug,
+            match.play_at.slug,
+            datestr,
+        )
+
+    def test_ground(self):
+        ground = factories.GroundFactory.create()
+        factories.MatchFactory.create(play_at=ground, stage__division__season=ground.venue.season)
+        self.assertGoodView(
+            "competition:ground",
+            ground.venue.season.competition.slug,
+            ground.venue.season.slug,
+            ground.venue.slug,
+            ground.slug,
+        )
+
+    def test_ground_date(self):
+        ground = factories.GroundFactory.create()
+        match = factories.MatchFactory.create(
+            play_at=ground,
+            stage__division__season=ground.venue.season,
+            date="2025-03-13",
+            time="10:00",
+            datetime="2025-03-13 10:00",
+        )
+        datestr = match.date.strftime("%Y%m%d")
+        self.assertGoodView(
+            "competition:ground",
+            ground.venue.season.competition.slug,
+            ground.venue.season.slug,
+            ground.venue.slug,
+            ground.slug,
+            datestr,
+        )
+
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
 class FrontEndTests(TestCase):
