@@ -7,9 +7,17 @@ from .viewsets import SlugViewSet
 
 
 class PlaceSerializer(serializers.ModelSerializer):
+    timezone = serializers.SerializerMethodField()
+
     class Meta:
         model = models.Place
         fields = ("id", "title", "abbreviation", "timezone")
+
+    def get_timezone(self, obj):
+        tz = obj.timezone
+        if tz is None:
+            return None
+        return getattr(tz, "key", str(tz))
 
 
 class RefereeClubSerializer(serializers.ModelSerializer):
