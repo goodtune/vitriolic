@@ -19,7 +19,7 @@ class ClubSerializer(serializers.HyperlinkedModelSerializer):
             "website",
         )
         read_only_fields = ("slug", "abbreviation")
-        extra_kwargs = {"url": {"lookup_field": "slug"}}
+        extra_kwargs = {"url": {"lookup_field": "slug", "view_name": "v1:club-detail"}}
 
 
 class ClubViewSet(SlugViewSet):
