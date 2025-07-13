@@ -13,6 +13,7 @@ from tournamentcontrol.competition.models import (
     Division,
     Ground,
     Match,
+    Stage,
     StageGroup,
     Team,
 )
@@ -1185,7 +1186,7 @@ class BackendTests(TestCase):
         self.assertEqual(len(self.messages), 1)
         messages_list = list(self.messages)
         self.assertEqual(messages_list[0].level, messages.ERROR)
-        expected_message = f'Cannot delete division "{division.title}" because it is still referenced by: 1 stage: {stage.title}; 1 team: {team.title}. Please delete or move these related objects first.'
+        expected_message = f'Cannot delete {division._meta.verbose_name} "{division.title}" because it is still referenced by: 1 stage: {stage.title}; 1 team: {team.title}. Please delete or move these related objects first.'
         self.assertEqual(str(messages_list[0]), expected_message)
 
     def test_delete_division_without_protected_objects(self):
@@ -1211,4 +1212,30 @@ class BackendTests(TestCase):
         messages_list = list(self.messages)
         self.assertEqual(messages_list[0].level, messages.SUCCESS)
         expected_message = f'The {division._meta.verbose_name} has been deleted.'
+        self.assertEqual(str(messages_list[0]), expected_message)
+
+    def test_delete_stage_with_protected_objects(self):
+        """
+        Test that deleting a stage with related protected objects (Pools) shows a user-friendly error.
+        This demonstrates the generic ProtectedError handling works for different model types.
+        """
+        # Create stage with protected related objects (Pool)
+        stage = factories.StageFactory.create(title="Test Stage")
+        pool = factories.PoolFactory.create(stage=stage, title="Test Pool")
+        
+        # Try to delete the stage
+        delete_stage = stage.url_names["delete"]
+        self.post(delete_stage.url_name, *delete_stage.args)
+        
+        # Should redirect back to the stage edit page with error message  
+        self.assertRedirects(self.last_response, stage.urls["edit"])
+        
+        # Check that stage still exists
+        self.assertTrue(Stage.objects.filter(pk=stage.pk).exists())
+        
+        # Check that error message was displayed
+        self.assertEqual(len(self.messages), 1)
+        messages_list = list(self.messages)
+        self.assertEqual(messages_list[0].level, messages.ERROR)
+        expected_message = f'Cannot delete {stage._meta.verbose_name} "{stage.title}" because it is still referenced by: 1 pool: {pool.title}. Please delete or move these related objects first.'
         self.assertEqual(str(messages_list[0]), expected_message)
