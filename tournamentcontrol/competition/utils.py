@@ -100,14 +100,14 @@ def team_title_case_clause(team):
                     ~Q(**{f"{team}_undecided__formula": ""}),
                     then=StageGroupPosition(F(f"{team}_undecided__formula")),
                 ),
-                default=None,
+                default=Value(None, output_field=CharField()),
             ),
         ),
         When(
             is_bye=True,
             then=Value('<span class="bye" title="Bye">Bye</span>'),
         ),
-        default=None,
+        default=Value(None, output_field=CharField()),
     )
 
 
