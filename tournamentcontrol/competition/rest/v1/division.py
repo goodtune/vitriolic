@@ -62,7 +62,7 @@ class ListStageSerializer(NestedHyperlinkedModelSerializer):
     class Meta:
         model = models.Stage
         fields = ("title", "slug", "url", "matches")
-        extra_kwargs = {"url": {"lookup_field": "slug"}}
+        extra_kwargs = {"url": {"lookup_field": "slug", "view_name": "v1:stage-detail"}}
 
 
 class ListTeamSerializer(serializers.ModelSerializer):
@@ -84,7 +84,7 @@ class ListDivisionSerializer(NestedHyperlinkedModelSerializer):
         model = models.Division
         fields = ("title", "slug", "url")
         extra_kwargs = {
-            "url": {"lookup_field": "slug"},
+            "url": {"lookup_field": "slug", "view_name": "v1:division-detail"},
             "season": {"lookup_field": "slug"},
         }
 
