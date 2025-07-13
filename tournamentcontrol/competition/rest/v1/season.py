@@ -7,9 +7,17 @@ from .viewsets import SlugViewSet
 
 
 class PlaceSerializer(serializers.ModelSerializer):
+    timezone = serializers.SerializerMethodField()
+
     class Meta:
         model = models.Place
         fields = ("id", "title", "abbreviation", "timezone")
+
+    def get_timezone(self, obj):
+        tz = obj.timezone
+        if tz is None:
+            return None
+        return getattr(tz, "key", str(tz))
 
 
 class RefereeClubSerializer(serializers.ModelSerializer):
@@ -40,8 +48,8 @@ class ListDivisionSerializer(NestedHyperlinkedModelSerializer):
         model = models.Division
         fields = ("title", "slug", "url")
         extra_kwargs = {
-            "url": {"lookup_field": "slug"},
-            "division": {"lookup_field": "slug"},
+            "url": {"lookup_field": "slug", "view_name": "v1:division-detail"},
+            "season": {"lookup_field": "slug"},
         }
 
 
@@ -52,7 +60,7 @@ class ListSeasonSerializer(NestedHyperlinkedModelSerializer):
         model = models.Season
         fields = ("title", "slug", "url")
         extra_kwargs = {
-            "url": {"lookup_field": "slug"},
+            "url": {"lookup_field": "slug", "view_name": "v1:season-detail"},
             "competition": {"lookup_field": "slug"},
         }
 

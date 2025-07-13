@@ -12,14 +12,18 @@ class ListSeasonSerializer(NestedHyperlinkedModelSerializer):
     class Meta:
         model = models.Season
         fields = ("title", "slug", "url")
-        extra_kwargs = {"url": {"lookup_field": "slug"}}
+        extra_kwargs = {
+            "url": {"lookup_field": "slug", "view_name": "v1:season-detail"}
+        }
 
 
 class ListCompetitionSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = models.Competition
         fields = ("title", "slug", "url")
-        extra_kwargs = {"url": {"lookup_field": "slug"}}
+        extra_kwargs = {
+            "url": {"lookup_field": "slug", "view_name": "v1:competition-detail"}
+        }
 
 
 class CompetitionSerializer(ListCompetitionSerializer):
