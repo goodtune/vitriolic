@@ -1,10 +1,8 @@
 import unittest
 
 from django.test.utils import override_settings
-from django.urls import resolve
 from test_plus import TestCase
 
-from tournamentcontrol.competition.models import Match
 from tournamentcontrol.competition.tests import factories
 
 
@@ -71,9 +69,6 @@ class APITests(TestCase):
         self.get("v1:competition-detail", slug=self.competition.slug)
         self.response_200()
 
-    @unittest.skip(
-        'Could not resolve URL for hyperlinked relationship using view name "season-detail"'
-    )
     def test_season_list(self):
         """Test season-list endpoint"""
         self.get(
@@ -82,9 +77,6 @@ class APITests(TestCase):
         )
         self.response_200()
 
-    @unittest.skip(
-        'Could not resolve URL for hyperlinked relationship using view name "season-detail"'
-    )
     def test_season_detail(self):
         """Test season-detail endpoint"""
         self.get(
@@ -166,7 +158,9 @@ class APITests(TestCase):
                                 "round": f"Round {self.match.round}",
                                 "date": self.match.date.isoformat(),
                                 "time": self.match.time.isoformat(),
-                                "datetime": self.match.datetime.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                                "datetime": self.match.datetime.strftime(
+                                    "%Y-%m-%dT%H:%M:%S.%fZ"
+                                ),
                                 "is_bye": False,
                                 "is_washout": False,
                                 "home_team": self.team1.id,
