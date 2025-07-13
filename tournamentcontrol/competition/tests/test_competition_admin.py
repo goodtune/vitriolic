@@ -1182,13 +1182,11 @@ class BackendTests(TestCase):
         self.assertTrue(Division.objects.filter(pk=division.pk).exists())
         
         # Check that error message was displayed
+        self.assertEqual(len(self.messages), 1)
         messages_list = list(self.messages)
-        self.assertEqual(len(messages_list), 1)
         self.assertEqual(messages_list[0].level, messages.ERROR)
-        self.assertIn('Cannot delete division "Division', str(messages_list[0]))
-        self.assertIn('Test Stage', str(messages_list[0]))
-        self.assertIn('Test Team', str(messages_list[0]))
-        self.assertIn('Please delete or move these related objects first', str(messages_list[0]))
+        expected_message = f'Cannot delete division "{division.title}" because it is still referenced by: 1 stage: {stage.title}; 1 team: {team.title}. Please delete or move these related objects first.'
+        self.assertEqual(str(messages_list[0]), expected_message)
 
     def test_delete_division_without_protected_objects(self):
         """
@@ -1209,6 +1207,8 @@ class BackendTests(TestCase):
         self.assertFalse(Division.objects.filter(pk=division.pk).exists())
         
         # Check that success message was displayed
+        self.assertEqual(len(self.messages), 1)
         messages_list = list(self.messages)
-        self.assertEqual(len(messages_list), 1)
         self.assertEqual(messages_list[0].level, messages.SUCCESS)
+        expected_message = f'The {division._meta.verbose_name} has been deleted.'
+        self.assertEqual(str(messages_list[0]), expected_message)

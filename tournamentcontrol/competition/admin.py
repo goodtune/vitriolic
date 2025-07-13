@@ -11,7 +11,6 @@ from django.conf import settings
 from django.contrib import messages
 from django.db import models
 from django.db.models import Case, F, Q, Sum, When
-from django.db.models.deletion import ProtectedError
 from django.forms.models import _get_foreign_key
 from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
@@ -1192,45 +1191,13 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @staff_login_required_m
     def delete_division(self, request, season, division, **kwargs):
         post_delete_redirect = self.redirect(season.urls["edit"] + "#divisions-tab")
-        
-        try:
-            return self.generic_delete(
-                request,
-                Division,
-                pk=division.pk,
-                permission_required=True,
-                post_delete_redirect=post_delete_redirect,
-            )
-        except ProtectedError as e:
-            # Extract information about the protected objects
-            protected_objects = e.protected_objects
-            
-            # Group objects by type
-            object_types = {}
-            for obj in protected_objects:
-                obj_type = obj.__class__._meta.verbose_name
-                if obj_type not in object_types:
-                    object_types[obj_type] = []
-                object_types[obj_type].append(str(obj))
-            
-            # Build user-friendly error message
-            error_parts = []
-            for obj_type, objects in object_types.items():
-                if len(objects) == 1:
-                    error_parts.append(f"1 {obj_type}: {objects[0]}")
-                else:
-                    error_parts.append(f"{len(objects)} {obj_type}s: {', '.join(objects[:5])}")
-                    if len(objects) > 5:
-                        error_parts[-1] += f" and {len(objects) - 5} more"
-            
-            error_message = (
-                f'Cannot delete division "{division.title}" because it is still referenced by: ' + 
-                '; '.join(error_parts) + '. ' +
-                'Please delete or move these related objects first.'
-            )
-            
-            messages.error(request, error_message)
-            return self.redirect(division.urls["edit"])
+        return self.generic_delete(
+            request,
+            Division,
+            pk=division.pk,
+            permission_required=True,
+            post_delete_redirect=post_delete_redirect,
+        )
 
     @competition_by_pk_m
     @staff_login_required_m
