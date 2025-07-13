@@ -207,3 +207,65 @@ class GenericEditMultipleTests(TestCase):
             self.response_302()
 
         self.assertEqual(2, TestDateTimeField.objects.count())
+
+
+class GenericBulkCreateTests(TestCase):
+    def test_vanilla(self):
+        self.assertGoodView("generic:vanilla:bulk_create")
+        # The page should have a form for bulk creating multiple objects
+        self.assertResponseContains("<title>")  # Title will be set by template
+        
+        # Test creating multiple objects with bulk create
+        data = {
+            # management form hidden fields (default extra=3)
+            "form-TOTAL_FORMS": 3,
+            "form-INITIAL_FORMS": 0,
+            "form-MIN_NUM_FORMS": 0,
+            "form-MAX_NUM_FORMS": 1000,
+            "form-0-datetime_0": "2015-1-1",
+            "form-0-datetime_1": "9:00",
+            "form-0-datetime_2": "UTC",
+            "form-1-datetime_0": "2016-3-3",
+            "form-1-datetime_1": "10:00",
+            "form-1-datetime_2": "UTC",
+            # form-2 left empty to test partial submission
+        }
+        
+        res = self.post("generic:vanilla:bulk_create", data=data)
+        # Should create 2 objects (form-2 was empty)
+        self.assertEqual(2, TestDateTimeField.objects.count())
+        self.response_302()
+        self.assertRedirects(res, self.reverse("generic:vanilla:list"))
+
+        # Verify the objects were created correctly
+        objects = TestDateTimeField.objects.order_by("datetime")
+        self.assertEqual(str(objects[0].datetime), "2015-01-01 09:00:00+00:00")
+        self.assertEqual(str(objects[1].datetime), "2016-03-03 10:00:00+00:00")
+
+    def test_permissions_403(self):
+        "Ensure unprivileged user is denied, superuser may view and create"
+        self.assertLoginRequired("generic:permissions:bulk_create")
+
+        data = {
+            # management form hidden fields
+            "form-TOTAL_FORMS": 2,
+            "form-INITIAL_FORMS": 0,
+            "form-MIN_NUM_FORMS": 0,
+            "form-MAX_NUM_FORMS": 1000,
+            "form-0-datetime_0": "2015-1-1",
+            "form-0-datetime_1": "9:00",
+            "form-0-datetime_2": "UTC",
+        }
+
+        with self.login(self.regular):
+            self.get("generic:permissions:bulk_create")
+            self.response_403()
+            self.post("generic:permissions:bulk_create", data=data)
+            self.response_403()
+
+        with self.login(self.staff):
+            self.assertGoodView("generic:permissions:bulk_create")
+            self.post("generic:permissions:bulk_create", data=data)
+            self.response_302()
+
+        self.assertEqual(1, TestDateTimeField.objects.count())
