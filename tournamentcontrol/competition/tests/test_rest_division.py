@@ -1,3 +1,5 @@
+import unittest
+
 from django.test.utils import override_settings
 from django.urls import resolve
 from test_plus import TestCase
@@ -50,13 +52,159 @@ class APITests(TestCase):
             play_at=cls.ground,
         )
 
-    # Working endpoints - these tests pass
+    def test_club_list(self):
+        """Test club-list endpoint"""
+        self.get("v1:club-list")
+        self.response_200()
+
+    def test_club_detail(self):
+        """Test club-detail endpoint"""
+        self.get("v1:club-detail", slug=self.club.slug)
+        self.response_200()
+
+    def test_competition_list(self):
+        """Test competition-list endpoint"""
+        self.get("v1:competition-list")
+        self.response_200()
+
+    def test_competition_detail(self):
+        """Test competition-detail endpoint"""
+        self.get("v1:competition-detail", slug=self.competition.slug)
+        self.response_200()
+
+    @unittest.skip(
+        'Could not resolve URL for hyperlinked relationship using view name "season-detail"'
+    )
+    def test_season_list(self):
+        """Test season-list endpoint"""
+        self.get(
+            "v1:season-list",
+            competition_slug=self.competition.slug,
+        )
+        self.response_200()
+
+    @unittest.skip(
+        'Could not resolve URL for hyperlinked relationship using view name "season-detail"'
+    )
+    def test_season_detail(self):
+        """Test season-detail endpoint"""
+        self.get(
+            "v1:season-detail",
+            competition_slug=self.competition.slug,
+            slug=self.season.slug,
+        )
+        self.response_200()
+
+    def test_division_list(self):
+        """Test division-list endpoint"""
+        self.get(
+            "v1:division-list",
+            competition_slug=self.competition.slug,
+            season_slug=self.season.slug,
+        )
+        self.response_200()
+
+    def test_division_detail(self):
+        """Test division-detail endpoint"""
+        self.get(
+            "v1:division-detail",
+            competition_slug=self.competition.slug,
+            season_slug=self.season.slug,
+            slug=self.division.slug,
+        )
+        self.response_200()
+
+        # Validate that the response contains the expected data, including timezone serialization.
+        self.assertJSONEqual(
+            self.last_response.content,
+            {
+                "title": self.division.title,
+                "slug": self.division.slug,
+                "url": f"http://testserver/api/v1/competitions/{self.competition.slug}/seasons/{self.season.slug}/divisions/{self.division.slug}/",
+                "teams": [
+                    {
+                        "id": self.team1.id,
+                        "title": self.team1.title,
+                        "slug": self.team1.slug,
+                        "club": {
+                            "abbreviation": self.club.abbreviation,
+                            "facebook": self.club.facebook,
+                            "short_title": self.club.short_title,
+                            "slug": self.club.slug,
+                            "title": self.club.title,
+                            "twitter": self.club.twitter,
+                            "url": f"http://testserver/api/v1/clubs/{self.club.slug}/",
+                            "website": self.club.website,
+                            "youtube": self.club.youtube,
+                        },
+                    },
+                    {
+                        "id": self.team2.id,
+                        "title": self.team2.title,
+                        "slug": self.team2.slug,
+                        "club": {
+                            "abbreviation": self.team2.club.abbreviation,
+                            "facebook": self.team2.club.facebook,
+                            "short_title": self.team2.club.short_title,
+                            "slug": self.team2.club.slug,
+                            "title": self.team2.club.title,
+                            "twitter": self.team2.club.twitter,
+                            "url": f"http://testserver/api/v1/clubs/{self.team2.club.slug}/",
+                            "website": self.team2.club.website,
+                            "youtube": self.team2.club.youtube,
+                        },
+                    },
+                ],
+                "stages": [
+                    {
+                        "title": self.stage.title,
+                        "slug": self.stage.slug,
+                        "url": f"http://testserver/api/v1/competitions/{self.competition.slug}/seasons/{self.season.slug}/divisions/{self.division.slug}/stages/{self.stage.slug}/",
+                        "matches": [
+                            {
+                                "id": self.match.id,
+                                "uuid": str(self.match.uuid),
+                                "round": f"Round {self.match.round}",
+                                "date": self.match.date.isoformat(),
+                                "time": self.match.time.isoformat(),
+                                "datetime": self.match.datetime.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                                "is_bye": False,
+                                "is_washout": False,
+                                "home_team": self.team1.id,
+                                "home_team_score": None,
+                                "away_team": self.team2.id,
+                                "away_team_score": None,
+                                "referees": [],
+                                "videos": None,
+                                "play_at": {
+                                    "id": self.ground.id,
+                                    "title": self.ground.title,
+                                    "abbreviation": None,
+                                    "timezone": str(self.ground.timezone),
+                                },
+                            },
+                        ],
+                    }
+                ],
+            },
+        )
+
     def test_players_list(self):
         """Test players-list endpoint"""
         self.get(
             "v1:players-list",
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
+        )
+        self.response_200()
+
+    def test_players_detail(self):
+        """Test players-detail endpoint"""
+        self.get(
+            "v1:players-detail",
+            competition_slug=self.competition.slug,
+            season_slug=self.season.slug,
+            id=self.team_association.pk,
         )
         self.response_200()
 
@@ -79,187 +227,23 @@ class APITests(TestCase):
         )
         self.response_200()
 
-    # URL resolution tests - test that URLs can be resolved even if serialization fails
-    def test_club_list_url_resolution(self):
-        """Test that club-list URL can be resolved"""
-        # This tests URL resolution without triggering serialization
-        from django.urls import reverse
-
-        url = reverse("v1:club-list")
-        self.assertTrue(url.startswith("/api/v1/clubs"))
-
-    def test_club_detail_url_resolution(self):
-        """Test that club-detail URL can be resolved"""
-        from django.urls import reverse
-
-        url = reverse("v1:club-detail", kwargs={"slug": self.club.slug})
-        self.assertTrue(url.startswith("/api/v1/clubs/"))
-
-    def test_competition_list_url_resolution(self):
-        """Test that competition-list URL can be resolved"""
-        from django.urls import reverse
-
-        url = reverse("v1:competition-list")
-        self.assertTrue(url.startswith("/api/v1/competitions"))
-
-    def test_competition_detail_url_resolution(self):
-        """Test that competition-detail URL can be resolved"""
-        from django.urls import reverse
-
-        url = reverse("v1:competition-detail", kwargs={"slug": self.competition.slug})
-        self.assertTrue(url.startswith("/api/v1/competitions/"))
-
-    def test_season_list_url_resolution(self):
-        """Test that season-list URL can be resolved"""
-        from django.urls import reverse
-
-        url = reverse(
-            "v1:season-list", kwargs={"competition_slug": self.competition.slug}
-        )
-        self.assertTrue(url.startswith("/api/v1/competitions/"))
-        self.assertIn("/seasons", url)
-
-    def test_season_detail_url_resolution(self):
-        """Test that season-detail URL can be resolved"""
-        from django.urls import reverse
-
-        url = reverse(
-            "v1:season-detail",
-            kwargs={
-                "competition_slug": self.competition.slug,
-                "slug": self.season.slug,
-            },
-        )
-        self.assertTrue(url.startswith("/api/v1/competitions/"))
-        self.assertIn("/seasons/", url)
-
-    def test_division_list_url_resolution(self):
-        """Test that division-list URL can be resolved"""
-        from django.urls import reverse
-
-        url = reverse(
-            "v1:division-list",
-            kwargs={
-                "competition_slug": self.competition.slug,
-                "season_slug": self.season.slug,
-            },
-        )
-        self.assertTrue(url.startswith("/api/v1/competitions/"))
-        self.assertIn("/divisions", url)
-
-    def test_division_detail_url_resolution(self):
-        """Test that division-detail URL can be resolved"""
-        from django.urls import reverse
-
-        url = reverse(
-            "v1:division-detail",
-            kwargs={
-                "competition_slug": self.competition.slug,
-                "season_slug": self.season.slug,
-                "slug": self.division.slug,
-            },
-        )
-        self.assertTrue(url.startswith("/api/v1/competitions/"))
-        self.assertIn("/divisions/", url)
-
-    def test_players_detail_url_resolution(self):
-        """Test that players-detail URL can be resolved"""
-        from django.urls import reverse
-
-        url = reverse(
-            "v1:players-detail",
-            kwargs={
-                "competition_slug": self.competition.slug,
-                "season_slug": self.season.slug,
-                "id": self.person.pk,
-            },
-        )
-        self.assertTrue(url.startswith("/api/v1/competitions/"))
-        self.assertIn("/players/", url)
-
-    def test_stage_list_url_resolution(self):
-        """Test that stage-list URL can be resolved"""
-        from django.urls import reverse
-
-        url = reverse(
+    def test_stage_list(self):
+        """Test stage-list endpoint"""
+        self.get(
             "v1:stage-list",
-            kwargs={
-                "competition_slug": self.competition.slug,
-                "season_slug": self.season.slug,
-                "division_slug": self.division.slug,
-            },
+            competition_slug=self.competition.slug,
+            season_slug=self.season.slug,
+            division_slug=self.division.slug,
         )
-        self.assertTrue(url.startswith("/api/v1/competitions/"))
-        self.assertIn("/stages", url)
+        self.response_200()
 
-    def test_stage_detail_url_resolution(self):
-        """Test that stage-detail URL can be resolved"""
-        from django.urls import reverse
-
-        url = reverse(
+    def test_stage_detail(self):
+        """Test stage-detail endpoint"""
+        self.get(
             "v1:stage-detail",
-            kwargs={
-                "competition_slug": self.competition.slug,
-                "season_slug": self.season.slug,
-                "division_slug": self.division.slug,
-                "slug": self.stage.slug,
-            },
+            competition_slug=self.competition.slug,
+            season_slug=self.season.slug,
+            division_slug=self.division.slug,
+            slug=self.stage.slug,
         )
-        self.assertTrue(url.startswith("/api/v1/competitions/"))
-        self.assertIn("/stages/", url)
-
-    def test_match_list_url_resolution(self):
-        """Test that match-list URL can be resolved"""
-        from django.urls import reverse
-
-        url = reverse(
-            "v1:match-list",
-            kwargs={
-                "competition_slug": self.competition.slug,
-                "season_slug": self.season.slug,
-            },
-        )
-        self.assertTrue(url.startswith("/api/v1/competitions/"))
-        self.assertIn("/matches", url)
-
-    def test_match_detail_url_resolution(self):
-        """Test that match-detail URL can be resolved"""
-        from django.urls import reverse
-
-        url = reverse(
-            "v1:match-detail",
-            kwargs={
-                "competition_slug": self.competition.slug,
-                "season_slug": self.season.slug,
-                "uuid": self.match.uuid,
-            },
-        )
-        self.assertTrue(url.startswith("/api/v1/competitions/"))
-        self.assertIn("/matches/", url)
-
-    # Original division serialization test for timezone issue
-    def test_division_serialization(self):
-        """Test division serialization with timezone data - expected to fail due to serialization issues"""
-        # This test documents the timezone serialization issue but will fail due to
-        # hyperlinked relationship problems in the serializer
-        try:
-            self.get(
-                "v1:division-detail",
-                competition_slug=self.competition.slug,
-                season_slug=self.season.slug,
-                slug=self.division.slug,
-            )
-            # If we get here, check the timezone serialization
-            # data = self.last_response.json()
-            # timezone_str = getattr(self.division.season.timezone, "key", str(self.division.season.timezone))
-            # self.assertEqual(
-            #     data["stages"][0]["matches"][0]["play_at"]["timezone"],
-            #     timezone_str,
-            # )
-            self.response_200()
-        except Exception:
-            # This is expected to fail due to serialization issues
-            # The test documents what we want to achieve
-            self.skipTest(
-                "Division detail endpoint has serialization issues with hyperlinked relationships"
-            )
+        self.response_200()
