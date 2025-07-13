@@ -1,5 +1,6 @@
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from django.test.utils import override_settings
 from freezegun import freeze_time
@@ -206,7 +207,7 @@ class FrontEndTests(TestCase):
         division = factories.DivisionFactory.create()
         factories.MatchFactory.create_batch(
             stage__division=division,
-            datetime=datetime(2013, 11, 22, 10, tzinfo=timezone.utc),
+            datetime=datetime(2013, 11, 22, 10, tzinfo=ZoneInfo("UTC")),
             size=10,
         )
         self.assertGoodView(

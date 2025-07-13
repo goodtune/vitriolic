@@ -264,7 +264,7 @@ class Club(AdminUrlMixin, SitemapNodeBase):
             ORDER BY
                 "competition_person"."last_name" ASC,
                 "competition_person"."first_name" ASC
-        """ % {
+        """ % {  # noqa: E501
             "user": get_user_model()._meta.db_table
         }
         params = {
@@ -568,7 +568,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
                     "project_id": self.live_stream_project_id,
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
-                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",  # noqa: E501
                     "client_secret": self.live_stream_client_secret,
                     "redirect_uris": [],
                 }
@@ -1907,10 +1907,14 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         try:
             stage = self.stage.comes_after
         except Stage.DoesNotExist:
-            logger.warning(
-                "Stage is first, %r should not be attempting to be evaluated.", self
-            )
-            return (self.home_team, self.away_team)
+            if self.home_team_eval_related or self.away_team_eval_related:
+                # This match depends on the result of matches in the same stage.
+                stage = self.stage
+            else:
+                logger.warning(
+                    "Stage is first, %r should not be attempting to be evaluated.", self
+                )
+                return (self.home_team, self.away_team)
 
         positions = {
             index + 1: team
@@ -1928,7 +1932,9 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
             is_team_model = not isinstance(team, Team)
             if not is_team_model:
                 logger.warning("%r is not a Team instance.", team)
-            if not lazy or not is_team_model:
+            if not lazy:
+                team = getattr(self, f"{field}_title")
+            elif not is_team_model:
                 team_undecided = getattr(self, f"{field}_undecided")
                 if team_undecided:
                     team_eval = team_undecided.formula

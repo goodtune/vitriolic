@@ -1,4 +1,5 @@
 import datetime
+from zoneinfo import ZoneInfo
 
 import factory
 import factory.fuzzy
@@ -190,7 +191,7 @@ class MatchFactory(DjangoModelFactory):
     )
 
     datetime = factory.fuzzy.FuzzyDateTime(
-        datetime.datetime(2008, 1, 1, tzinfo=datetime.timezone.utc)
+        datetime.datetime(2008, 1, 1, tzinfo=ZoneInfo("UTC"))
     )
 
     date = factory.LazyAttribute(lambda o: o.datetime.date())
