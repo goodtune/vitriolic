@@ -3,6 +3,7 @@ from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
 from django import VERSION
+from django.contrib import messages
 from django.template import Context, Template
 from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
@@ -1160,3 +1161,54 @@ class BackendTests(TestCase):
         }
         self.post(add_ground.url_name, *add_ground.args, data=data)
         self.assertRedirects(self.last_response, venue.urls["edit"])
+
+    def test_delete_division_with_protected_objects(self):
+        """
+        Test that deleting a division with related protected objects shows a user-friendly error.
+        """
+        # Create division with protected related objects
+        division = factories.DivisionFactory.create()
+        stage = factories.StageFactory.create(division=division, title="Test Stage")
+        team = factories.TeamFactory.create(division=division, title="Test Team")
+        
+        # Try to delete the division
+        delete_division = division.url_names["delete"]
+        self.post(delete_division.url_name, *delete_division.args)
+        
+        # Should redirect back to the division edit page with error message
+        self.assertRedirects(self.last_response, division.urls["edit"])
+        
+        # Check that division still exists
+        self.assertTrue(Division.objects.filter(pk=division.pk).exists())
+        
+        # Check that error message was displayed
+        messages_list = list(self.messages)
+        self.assertEqual(len(messages_list), 1)
+        self.assertEqual(messages_list[0].level, messages.ERROR)
+        self.assertIn('Cannot delete division "Division', str(messages_list[0]))
+        self.assertIn('Test Stage', str(messages_list[0]))
+        self.assertIn('Test Team', str(messages_list[0]))
+        self.assertIn('Please delete or move these related objects first', str(messages_list[0]))
+
+    def test_delete_division_without_protected_objects(self):
+        """
+        Test that deleting a division without related objects works normally.
+        """
+        # Create division without any related objects
+        division = factories.DivisionFactory.create()
+        season = division.season
+        
+        # Try to delete the division
+        delete_division = division.url_names["delete"]
+        self.post(delete_division.url_name, *delete_division.args)
+        
+        # Should redirect back to season page
+        self.assertRedirects(self.last_response, season.urls["edit"] + "#divisions-tab")
+        
+        # Check that division was deleted
+        self.assertFalse(Division.objects.filter(pk=division.pk).exists())
+        
+        # Check that success message was displayed
+        messages_list = list(self.messages)
+        self.assertEqual(len(messages_list), 1)
+        self.assertEqual(messages_list[0].level, messages.SUCCESS)
