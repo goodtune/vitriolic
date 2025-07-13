@@ -3,7 +3,6 @@ import unittest
 from django.test.utils import override_settings
 from django.urls import resolve
 from test_plus import TestCase
-from traceback_with_variables import activate_by_import
 
 from tournamentcontrol.competition.models import Match
 from tournamentcontrol.competition.tests import factories
