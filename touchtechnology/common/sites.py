@@ -921,7 +921,8 @@ class Application(object):
                 model, 
                 form=form_class,
                 extra=extra, 
-                fields=formset_fields
+                fields=formset_fields,
+                can_delete=False  # Don't add delete checkbox
             )
 
         if post_save_redirect is None:
