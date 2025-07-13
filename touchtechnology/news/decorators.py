@@ -1,6 +1,8 @@
 import datetime
 import logging
 
+from babel import Locale
+from babel.dates import get_month_names
 from dateutil.parser import parse as parse_datetime
 from dateutil.relativedelta import relativedelta
 from django.http import Http404
@@ -19,8 +21,7 @@ def parse_month_name(month_str):
     """
     Parse month name from various formats including localized month names.
     
-    Uses Babel library for comprehensive international month name support,
-    with fallbacks to dateutil and numeric parsing.
+    Uses Babel library for comprehensive international month name support.
     
     Args:
         month_str (str): Month name in various formats (English short/full, localized)
@@ -45,67 +46,39 @@ def parse_month_name(month_str):
         pass
     
     # Use Babel for comprehensive international month name support
-    try:
-        from babel.dates import get_month_names
-        from babel import Locale
-        
-        # Create a lookup table from multiple locales
-        month_lookup = {}
-        
-        # Common locales to support - covers most major languages
-        locales = [
-            'en', 'fr', 'de', 'es', 'it', 'pt', 'zh', 'ja', 'ko', 'ru', 'nl', 
-            'da', 'sv', 'no', 'fi', 'pl', 'cs', 'hu', 'ro', 'bg', 'hr', 'sl',
-            'sk', 'lt', 'lv', 'et', 'ar', 'he', 'hi', 'th', 'vi', 'id', 'ms'
-        ]
-        
-        for locale_code in locales:
-            try:
-                locale = Locale(locale_code)
-                
-                # Get full month names
-                months = get_month_names('wide', locale=locale)
-                for month_num, month_name in months.items():
-                    if month_name:
-                        month_lookup[month_name.lower()] = month_num
-                        
-                # Get abbreviated month names
-                months_abbr = get_month_names('abbreviated', locale=locale)
-                for month_num, month_name in months_abbr.items():
-                    if month_name and month_name.lower() not in month_lookup:
-                        month_lookup[month_name.lower()] = month_num
-                        
-            except Exception:
-                # Skip this locale if it fails
-                continue
-        
-        # Look up the month name
-        month_lower = month_str.lower()
-        if month_lower in month_lookup:
-            return month_lookup[month_lower]
+    month_lookup = {}
+    
+    # Common locales to support - covers most major languages
+    locales = [
+        'en', 'fr', 'de', 'es', 'it', 'pt', 'zh', 'ja', 'ko', 'ru', 'nl', 
+        'da', 'sv', 'no', 'fi', 'pl', 'cs', 'hu', 'ro', 'bg', 'hr', 'sl',
+        'sk', 'lt', 'lv', 'et', 'ar', 'he', 'hi', 'th', 'vi', 'id', 'ms'
+    ]
+    
+    for locale_code in locales:
+        try:
+            locale = Locale(locale_code)
             
-    except ImportError:
-        # Babel not available, fall back to basic mappings
-        logger.warning("Babel not available for month name parsing, using basic fallback")
-        
-        # Basic English mappings as fallback
-        basic_month_names = {
-            'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
-            'apr': 4, 'april': 4, 'may': 5, 'jun': 6, 'june': 6, 'jul': 7, 'july': 7,
-            'aug': 8, 'august': 8, 'sep': 9, 'september': 9, 'oct': 10, 'october': 10,
-            'nov': 11, 'november': 11, 'dec': 12, 'december': 12,
-            
-            # Most common localized names for the original reported issue
-            '六月': 6,  # Chinese June
-            '6月': 6,   # Japanese June
-            'juin': 6,  # French June
-            'junio': 6, # Spanish June
-            'juni': 6,  # German/Dutch June
-        }
-        
-        month_lower = month_str.lower()
-        if month_lower in basic_month_names:
-            return basic_month_names[month_lower]
+            # Get full month names
+            months = get_month_names('wide', locale=locale)
+            for month_num, month_name in months.items():
+                if month_name:
+                    month_lookup[month_name.lower()] = month_num
+                    
+            # Get abbreviated month names
+            months_abbr = get_month_names('abbreviated', locale=locale)
+            for month_num, month_name in months_abbr.items():
+                if month_name and month_name.lower() not in month_lookup:
+                    month_lookup[month_name.lower()] = month_num
+                    
+        except Exception:
+            # Skip this locale if it fails
+            continue
+    
+    # Look up the month name
+    month_lower = month_str.lower()
+    if month_lower in month_lookup:
+        return month_lookup[month_lower]
     
     # Last resort: try dateutil's parser
     try:

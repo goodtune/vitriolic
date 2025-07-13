@@ -33,6 +33,7 @@ admin = ["django-bootstrap3", "django-gravatar2"]
 common = []
 content = []
 news = [
+    "babel",
     "django-imagekit",
     "python-dateutil",
     "python-magic",
