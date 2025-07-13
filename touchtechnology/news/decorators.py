@@ -1,6 +1,5 @@
 import datetime
 import logging
-import calendar
 
 from dateutil.parser import parse as parse_datetime
 from dateutil.relativedelta import relativedelta
@@ -20,6 +19,9 @@ def parse_month_name(month_str):
     """
     Parse month name from various formats including localized month names.
     
+    Uses Babel library for comprehensive international month name support,
+    with fallbacks to dateutil and numeric parsing.
+    
     Args:
         month_str (str): Month name in various formats (English short/full, localized)
     
@@ -32,72 +34,9 @@ def parse_month_name(month_str):
     if not month_str:
         raise ValueError("Month string cannot be empty")
     
-    month_str = str(month_str).strip().lower()
+    month_str = str(month_str).strip()
     
-    # Try English short names first (jan, feb, mar, etc.)
-    english_short_names = {
-        'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
-        'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
-    }
-    if month_str in english_short_names:
-        return english_short_names[month_str]
-    
-    # Try English full names (january, february, etc.)
-    english_full_names = {
-        'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
-        'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
-    }
-    if month_str in english_full_names:
-        return english_full_names[month_str]
-    
-    # Comprehensive localized month names mapping
-    localized_month_names = {
-        # Chinese (Traditional and Simplified)
-        '一月': 1, '二月': 2, '三月': 3, '四月': 4, '五月': 5, '六月': 6,
-        '七月': 7, '八月': 8, '九月': 9, '十月': 10, '十一月': 11, '十二月': 12,
-        
-        # Japanese
-        '1月': 1, '2月': 2, '3月': 3, '4月': 4, '5月': 5, '6月': 6,
-        '7月': 7, '8月': 8, '9月': 9, '10月': 10, '11月': 11, '12月': 12,
-        
-        # Spanish
-        'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
-        'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
-        
-        # French
-        'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4, 'mai': 5, 'juin': 6,
-        'juillet': 7, 'août': 8, 'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12,
-        
-        # German
-        'januar': 1, 'februar': 2, 'märz': 3, 'april': 4, 'mai': 5, 'juni': 6,
-        'juli': 7, 'august': 8, 'september': 9, 'oktober': 10, 'november': 11, 'dezember': 12,
-        
-        # Italian
-        'gennaio': 1, 'febbraio': 2, 'marzo': 3, 'aprile': 4, 'maggio': 5, 'giugno': 6,
-        'luglio': 7, 'agosto': 8, 'settembre': 9, 'ottobre': 10, 'novembre': 11, 'dicembre': 12,
-        
-        # Portuguese
-        'janeiro': 1, 'fevereiro': 2, 'março': 3, 'abril': 4, 'maio': 5, 'junho': 6,
-        'julho': 7, 'agosto': 8, 'setembro': 9, 'outubro': 10, 'novembro': 11, 'dezembro': 12,
-        
-        # Russian (transliterated)
-        'январь': 1, 'февраль': 2, 'март': 3, 'апрель': 4, 'май': 5, 'июнь': 6,
-        'июль': 7, 'август': 8, 'сентябрь': 9, 'октябрь': 10, 'ноябрь': 11, 'декабрь': 12,
-        
-        # Dutch
-        'januari': 1, 'februari': 2, 'maart': 3, 'april': 4, 'mei': 5, 'juni': 6,
-        'juli': 7, 'augustus': 8, 'september': 9, 'oktober': 10, 'november': 11, 'december': 12,
-        
-        # Korean
-        '1월': 1, '2월': 2, '3월': 3, '4월': 4, '5월': 5, '6월': 6,
-        '7월': 7, '8월': 8, '9월': 9, '10월': 10, '11월': 11, '12월': 12,
-    }
-    
-    # Check localized names (case-insensitive for ASCII, exact for non-ASCII)
-    if month_str in localized_month_names:
-        return localized_month_names[month_str]
-    
-    # Try numeric month (1-12)
+    # Try numeric month first (1-12)
     try:
         month_num = int(month_str)
         if 1 <= month_num <= 12:
@@ -105,9 +44,71 @@ def parse_month_name(month_str):
     except ValueError:
         pass
     
-    # Last resort: try dateutil's parser with just the month
+    # Use Babel for comprehensive international month name support
     try:
-        # Try with dateutil parser as fallback
+        from babel.dates import get_month_names
+        from babel import Locale
+        
+        # Create a lookup table from multiple locales
+        month_lookup = {}
+        
+        # Common locales to support - covers most major languages
+        locales = [
+            'en', 'fr', 'de', 'es', 'it', 'pt', 'zh', 'ja', 'ko', 'ru', 'nl', 
+            'da', 'sv', 'no', 'fi', 'pl', 'cs', 'hu', 'ro', 'bg', 'hr', 'sl',
+            'sk', 'lt', 'lv', 'et', 'ar', 'he', 'hi', 'th', 'vi', 'id', 'ms'
+        ]
+        
+        for locale_code in locales:
+            try:
+                locale = Locale(locale_code)
+                
+                # Get full month names
+                months = get_month_names('wide', locale=locale)
+                for month_num, month_name in months.items():
+                    if month_name:
+                        month_lookup[month_name.lower()] = month_num
+                        
+                # Get abbreviated month names
+                months_abbr = get_month_names('abbreviated', locale=locale)
+                for month_num, month_name in months_abbr.items():
+                    if month_name and month_name.lower() not in month_lookup:
+                        month_lookup[month_name.lower()] = month_num
+                        
+            except Exception:
+                # Skip this locale if it fails
+                continue
+        
+        # Look up the month name
+        month_lower = month_str.lower()
+        if month_lower in month_lookup:
+            return month_lookup[month_lower]
+            
+    except ImportError:
+        # Babel not available, fall back to basic mappings
+        logger.warning("Babel not available for month name parsing, using basic fallback")
+        
+        # Basic English mappings as fallback
+        basic_month_names = {
+            'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
+            'apr': 4, 'april': 4, 'may': 5, 'jun': 6, 'june': 6, 'jul': 7, 'july': 7,
+            'aug': 8, 'august': 8, 'sep': 9, 'september': 9, 'oct': 10, 'october': 10,
+            'nov': 11, 'november': 11, 'dec': 12, 'december': 12,
+            
+            # Most common localized names for the original reported issue
+            '六月': 6,  # Chinese June
+            '6月': 6,   # Japanese June
+            'juin': 6,  # French June
+            'junio': 6, # Spanish June
+            'juni': 6,  # German/Dutch June
+        }
+        
+        month_lower = month_str.lower()
+        if month_lower in basic_month_names:
+            return basic_month_names[month_lower]
+    
+    # Last resort: try dateutil's parser
+    try:
         test_date = parse_datetime(f"2000-{month_str}-01")
         return test_date.month
     except (ValueError, TypeError):
