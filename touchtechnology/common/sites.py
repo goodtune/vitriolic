@@ -820,6 +820,154 @@ class Application(object):
 
         return self.render(request, templates, context)
 
+    def generic_bulk_create(
+        self,
+        request,
+        model_or_manager,
+        extra_context=None,
+        form_class=None,
+        form_kwargs=None,
+        form_fields="__all__",
+        form_widgets=None,
+        formset_class=None,
+        formset_kwargs=None,
+        formset_fields=None,
+        extra=3,
+        post_save_callback=lambda o: None,
+        post_save_redirect=None,
+        templates=None,
+        changed_messages=None,
+        perms=None,
+        permission_required=False,
+        accept_global_perms=True,
+        return_403=None,
+        *args,
+        **kwargs,
+    ):
+        """
+        Generic view for bulk creating multiple new objects using a ModelFormSet.
+        
+        Similar to generic_edit but creates multiple new instances using formsets.
+        Useful for creating multiple related objects that share common properties.
+        """
+        
+        if extra_context is None:
+            extra_context = {}
+
+        if formset_kwargs is None:
+            formset_kwargs = {}
+
+        if changed_messages is None:
+            changed_messages = (
+                (messages.SUCCESS, _("Your {models} have been created.")),
+            )
+
+        # Use form_fields as default for formset_fields if not specified
+        if formset_fields is None:
+            formset_fields = form_fields
+
+        # If not explicitly declared, redirect the user to login if they are
+        # currently anonymous. If they are already identified, we can safely
+        # return an HTTP 403 Forbidden.
+        if return_403 is None:
+            return_403 = not request.user.is_anonymous
+
+        # Try and introspect the model if possible.
+        model, manager = model_and_manager(model_or_manager)
+
+        # Implement permission checking for creating objects
+        if permission_required:
+            if perms is None:
+                perms = get_perms_for_model(model, add=True)
+
+            # Determine the user's permission to create objects using the
+            # get_40x_or_None - saves decorating view method with
+            # @permission_required_or_403
+            has_permission = get_40x_or_None(
+                request,
+                perms,
+                return_403=return_403,
+                accept_global_perms=accept_global_perms,
+                any_perm=True,
+            )
+
+            # If permission is denied, return the response. May already have
+            # thrown an exception by now.
+            if has_permission is not None:
+                return has_permission
+
+        # If the developer has not provided a custom form, then dynamically
+        # construct a default ModelForm for them (used for formset base)
+        if form_class is None:
+            meta_class = type(
+                smart_str("Meta"),
+                (),
+                {"model": model, "fields": form_fields, "widgets": form_widgets},
+            )
+            form_class = type(
+                smart_str("BulkCreateForm"), self.model_form_bases, {"Meta": meta_class}
+            )
+
+        # Whether we've dynamically constructed our form_class or not, check to
+        # ensure that we've inherited from all the bases. Log when we haven't,
+        # but don't raise any exceptions.
+        for base in self.model_form_bases:
+            if not issubclass(form_class, base):
+                logger.error('"%s" does not inherit "%s"', form_class, base)
+
+        # If the developer has not provided a custom formset, then dynamically
+        # construct a default ModelFormSet for them.
+        if formset_class is None:
+            formset_class = modelformset_factory(
+                model, 
+                form=form_class,
+                extra=extra, 
+                fields=formset_fields,
+                can_delete=False  # Don't add delete checkbox
+            )
+
+        if post_save_redirect is None:
+            redirect_to = urljoin(request.path, "..")
+            post_save_redirect = self.redirect(redirect_to)
+
+        # Vanilla formset processing here, take the post data and files, create
+        # an instance of formset_class, save and redirect.
+        if request.method == "POST":
+            formset = formset_class(
+                data=request.POST,
+                files=request.FILES,
+                **formset_kwargs,
+            )
+            if formset.is_valid():
+                replace = dict(
+                    model=smart_str(model._meta.verbose_name),
+                    models=smart_str(model._meta.verbose_name_plural),
+                )
+                objects = formset.save()
+                for each in objects:
+                    post_save_callback(each)
+                for level, message in changed_messages:
+                    messages.add_message(request, level, message.format(**replace))
+                return post_save_redirect
+        else:
+            formset = formset_class(**formset_kwargs)
+
+        context = {
+            "model": manager.none(),
+            "formset": formset,
+            "object_list": manager.none(),  # Empty queryset for new objects
+        }
+        context.update(extra_context)
+
+        if templates is None:
+            templates = self.template_path("bulk_create.html", model._meta.model_name)
+            # Fallback to edit_multiple template if bulk_create template doesn't exist
+            templates.extend(self.template_path("edit_multiple.html", model._meta.model_name))
+            templates.append("bulk_create.html")
+            templates.append("edit_multiple.html")
+
+        return self.render(request, templates, context)
+
     @require_POST_m
     def generic_delete(
         self,
