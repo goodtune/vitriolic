@@ -4,8 +4,6 @@ from zoneinfo import ZoneInfo
 
 from django import VERSION
 from django.contrib import messages
-from django.contrib.messages import Message
-from django.contrib.messages.test import MessagesTestMixin
 from django.template import Context, Template
 from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
@@ -21,6 +19,11 @@ from tournamentcontrol.competition.models import (
 )
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin
+
+try:
+    from django.contrib.messages.test import MessagesTestMixin
+except ImportError:  # Django < 5.0
+    from tournamentcontrol.competition.tests.test_utils import MessagesTestMixin
 
 
 class TestCase(BaseTestCase):
@@ -1187,20 +1190,21 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.assertQuerySetEqual(Team.objects.all(), [team])
 
         # Check that error message was set
-        self.assertMessages(
-            self.last_response,
-            [
-                Message(
-                    level=messages.ERROR,
-                    message=(
-                        f'Cannot delete {division._meta.verbose_name} "{division.title}" '
-                        f"because it is still referenced by: "
-                        f"1 stage: {stage.title}; 1 team: {team.title}. "
-                        "Please delete or move these related objects first."
-                    ),
-                )
-            ],
-        )
+        if VERSION >= (5, 0):
+            self.assertMessages(
+                self.last_response,
+                [
+                    messages.Message(
+                        level=messages.ERROR,
+                        message=(
+                            f'Cannot delete {division._meta.verbose_name} "{division.title}" '
+                            f"because it is still referenced by: "
+                            f"1 stage: {stage.title}; 1 team: {team.title}. "
+                            "Please delete or move these related objects first."
+                        ),
+                    )
+                ],
+            )
 
     def test_delete_division_without_protected_objects(self):
         """
@@ -1221,15 +1225,16 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.assertQuerySetEqual(Division.objects.all(), [])
 
         # Check that success message was displayed
-        self.assertMessages(
-            self.last_response,
-            [
-                Message(
-                    level=messages.SUCCESS,
-                    message=f"The {division._meta.verbose_name} has been deleted.",
-                )
-            ],
-        )
+        if VERSION >= (5, 0):
+            self.assertMessages(
+                self.last_response,
+                [
+                    messages.Message(
+                        level=messages.SUCCESS,
+                        message=f"The {division._meta.verbose_name} has been deleted.",
+                    )
+                ],
+            )
 
     def test_delete_stage_with_protected_objects(self):
         """
@@ -1252,16 +1257,17 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.assertQuerySetEqual(StageGroup.objects.all(), [pool])
 
         # Check that error message was set
-        self.assertMessages(
-            self.last_response,
-            [
-                Message(
-                    level=messages.ERROR,
-                    message=(
-                        f'Cannot delete {stage._meta.verbose_name} "{stage.title}" because '
-                        f"it is still referenced by: 1 pool: {pool.title}. "
-                        "Please delete or move these related objects first."
-                    ),
-                )
-            ],
-        )
+        if VERSION >= (5, 0):
+            self.assertMessages(
+                self.last_response,
+                [
+                    messages.Message(
+                        level=messages.ERROR,
+                        message=(
+                            f'Cannot delete {stage._meta.verbose_name} "{stage.title}" because '
+                            f"it is still referenced by: 1 pool: {pool.title}. "
+                            "Please delete or move these related objects first."
+                        ),
+                    )
+                ],
+            )
