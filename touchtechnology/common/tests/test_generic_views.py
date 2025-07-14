@@ -212,9 +212,8 @@ class GenericEditMultipleTests(TestCase):
 class GenericBulkCreateTests(TestCase):
     def test_vanilla(self):
         self.assertGoodView("generic:vanilla:bulk_create")
-        # The page should have a form for bulk creating multiple objects
-        self.assertResponseContains("<title>")  # Title will be set by template
-        
+        self.assertResponseContains("<title>Bulk create test date time fields</title>")
+
         # Test creating multiple objects with bulk create
         data = {
             # management form hidden fields (default extra=3)
@@ -230,18 +229,20 @@ class GenericBulkCreateTests(TestCase):
             "form-1-datetime_2": "UTC",
             # form-2 left empty to test partial submission
         }
-        
+
         self.post("generic:vanilla:bulk_create", data=data)
         # Should create 2 objects (form-2 was empty)
         self.response_302()
         self.assertRedirects(self.last_response, self.reverse("generic:vanilla:list"))
 
         # Verify the objects were created correctly
-        expected_datetimes = ["2015-01-01 09:00:00+00:00", "2016-03-03 10:00:00+00:00"]
-        self.assertQuerysetEqual(
+        self.assertQuerySetEqual(
             TestDateTimeField.objects.order_by("datetime"),
-            expected_datetimes,
-            transform=lambda obj: str(obj.datetime)
+            [
+                "<TestDateTimeField: 2015-01-01 09:00:00+00:00>",
+                "<TestDateTimeField: 2016-03-03 10:00:00+00:00>",
+            ],
+            transform=repr,
         )
 
     def test_permissions_403(self):
@@ -260,31 +261,20 @@ class GenericBulkCreateTests(TestCase):
         }
 
         test_cases = [
-            ("regular_user_get", self.regular, "get", "generic:permissions:bulk_create", None, 403),
-            ("regular_user_post", self.regular, "post", "generic:permissions:bulk_create", data, 403),
-            ("staff_user_get", self.staff, "get", "generic:permissions:bulk_create", None, 200),
-            ("staff_user_post", self.staff, "post", "generic:permissions:bulk_create", data, 302),
+            ("regular_user_get", self.regular, self.get, None, self.response_403),
+            ("regular_user_post", self.regular, self.post, data, self.response_403),
+            ("staff_user_get", self.staff, self.get, None, self.response_200),
+            ("staff_user_post", self.staff, self.post, data, self.response_302),
         ]
 
-        for test_name, user, method, url, test_data, expected_status in test_cases:
-            with self.subTest(test_name=test_name):
-                with self.login(user):
-                    if method == "get":
-                        self.get(url)
-                    else:  # post
-                        self.post(url, data=test_data)
-                    
-                    if expected_status == 403:
-                        self.response_403()
-                    elif expected_status == 200:
-                        self.assertGoodView(url)
-                    elif expected_status == 302:
-                        self.response_302()
+        for test_name, user, method, test_data, assertion in test_cases:
+            with self.subTest(test_name=test_name), self.login(user):
+                method("generic:permissions:bulk_create", data=test_data)
+                assertion()
 
         # Verify that one object was created by the staff user
-        expected_datetime = ["2015-01-01 09:00:00+00:00"]
-        self.assertQuerysetEqual(
+        self.assertQuerySetEqual(
             TestDateTimeField.objects.all(),
-            expected_datetime,
-            transform=lambda obj: str(obj.datetime)
+            ["<TestDateTimeField: 2015-01-01 09:00:00+00:00>"],
+            transform=repr,
         )
