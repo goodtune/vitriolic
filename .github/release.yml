@@ -1,0 +1,19 @@
+changelog:
+  categories:
+    - title: ":loudspeaker: Updates"
+      labels:
+        - '*'
+      exclude:
+        labels:
+          - bug
+          - dependencies
+          - maintenance
+    - title: ":lady_beetle: Bug fixes"
+      labels:
+        - bug
+    - title: ":broom: Maintenance"
+      labels:
+        - maintenance
+    - title: ":wrench: Dependencies"
+      labels:
+        - dependencies
