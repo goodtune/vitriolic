@@ -24,14 +24,16 @@
 
 		<div class="box">
 			<h1>{% trans "Bulk Create Divisions" %}</h1>
-			<p>{% trans "Use this form to quickly create multiple divisions for this season. Only the division title is required - other fields will use sensible defaults." %}</p>
+			<p>{% trans "Use this form to quickly create multiple divisions for this season. Division title is required." %}</p>
 
 			<table>
 				<thead>
 					<tr>
 						<th>{% trans "Division Title" %}</th>
 						<th>{% trans "Short Title" %}</th>
-						<th>{% trans "Notes" %}</th>
+						<th>{% trans "Games per Day" %}</th>
+						<th>{% trans "Forfeit Win Score" %}</th>
+						<th>{% trans "Forfeit Loss Score" %}</th>
 						<th>{% trans "Draft" %}</th>
 						<th></th>
 					</tr>
@@ -41,13 +43,15 @@
 						<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
 							<td>{% field form.title "" %}</td>
 							<td>{% field form.short_title "" %}</td>
-							<td>{% field form.copy "" %}</td>
+							<td>{% field form.games_per_day "" %}</td>
+							<td>{% field form.forfeit_for_score "" %}</td>
+							<td>{% field form.forfeit_against_score "" %}</td>
 							<td>{% field form.draft %}</td>
 							<td>{{ form.id }}</td>
 						</tr>
 					{% empty %}
 						<tr class="first odd last">
-							<td colspan="5" class="no_results">{% blocktrans with title=season.title %}No divisions created yet for {{ title }}.{% endblocktrans %}</td>
+							<td colspan="7" class="no_results">{% blocktrans with title=season.title %}No divisions created yet for {{ title }}.{% endblocktrans %}</td>
 						</tr>
 					{% endfor %}
 				</tbody>
@@ -55,7 +59,9 @@
 					<tr class="empty">
 						<td>{% field formset.empty_form.title "" %}</td>
 						<td>{% field formset.empty_form.short_title "" %}</td>
-						<td>{% field formset.empty_form.copy "" %}</td>
+						<td>{% field formset.empty_form.games_per_day "" %}</td>
+						<td>{% field formset.empty_form.forfeit_for_score "" %}</td>
+						<td>{% field formset.empty_form.forfeit_against_score "" %}</td>
 						<td>{% field formset.empty_form.draft %}</td>
 						<td>{{ formset.empty_form.id }}</td>
 					</tr>

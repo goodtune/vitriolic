@@ -358,6 +358,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         division_urls = (
             [
                 path(r"add/", self.edit_division, name="add"),
+                path("bulk/", self.bulk_divisions, name="bulk"),
                 path("<int:division_id>/", self.edit_division, name="edit"),
                 path("<int:division_id>/delete/", self.delete_division, name="delete"),
                 path(
@@ -413,11 +414,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path(
                     "<int:season_id>/division/",
                     include(division_urls, namespace="division"),
-                ),
-                path(
-                    "<int:season_id>/bulk-divisions/",
-                    self.bulk_divisions,
-                    name="bulk-divisions",
                 ),
                 path(
                     "<int:season_id>/scorecards/<result_id>.pdf",
