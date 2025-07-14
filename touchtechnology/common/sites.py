@@ -10,6 +10,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.search import SearchVector
 from django.core.paginator import EmptyPage, Paginator
 from django.db import transaction
+from django.db.models.deletion import ProtectedError
 from django.forms import ModelForm as BaseModelForm
 from django.forms.models import inlineformset_factory, modelformset_factory
 from django.http import HttpResponse
@@ -1021,13 +1022,50 @@ class Application(object):
             redirect_to = urljoin(request.path, "../..")
             post_delete_redirect = self.redirect(redirect_to)
 
-        instance.delete()
-        messages.add_message(
-            request,
-            messages.SUCCESS,
-            _("The %s has been deleted.") % model._meta.verbose_name,
-        )
-        return post_delete_redirect
+        try:
+            instance.delete()
+            messages.add_message(
+                request,
+                messages.SUCCESS,
+                _("The %s has been deleted.") % model._meta.verbose_name,
+            )
+            return post_delete_redirect
+        except ProtectedError as e:
+            # Extract information about the protected objects
+            protected_objects = e.protected_objects
+            
+            # Group objects by type
+            object_types = {}
+            for obj in protected_objects:
+                obj_type = obj.__class__._meta.verbose_name
+                if obj_type not in object_types:
+                    object_types[obj_type] = []
+                object_types[obj_type].append(str(obj))
+            
+            # Build user-friendly error message
+            error_parts = []
+            for obj_type, objects in object_types.items():
+                if len(objects) == 1:
+                    error_parts.append(f"1 {obj_type}: {objects[0]}")
+                else:
+                    error_parts.append(f"{len(objects)} {obj_type}s: {', '.join(objects[:5])}")
+                    if len(objects) > 5:
+                        error_parts[-1] += f" and {len(objects) - 5} more"
+            
+            error_message = (
+                f'Cannot delete {model._meta.verbose_name} "{instance}" because it is still referenced by: ' + 
+                '; '.join(error_parts) + '. ' +
+                'Please delete or move these related objects first.'
+            )
+            
+            messages.error(request, error_message)
+            # Try to redirect to the object's edit page if it has one, otherwise use the default redirect
+            try:
+                if hasattr(instance, 'urls') and 'edit' in instance.urls:
+                    return self.redirect(instance.urls["edit"])
+            except (AttributeError, KeyError):
+                pass
+            return post_delete_redirect
 
     def context_instance(self, request, **kwargs):
         return RequestContext(request, current_app=self.current_app, **kwargs)

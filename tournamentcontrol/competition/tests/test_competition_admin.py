@@ -3,6 +3,9 @@ from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
 from django import VERSION
+from django.contrib import messages
+from django.contrib.messages import Message
+from django.contrib.messages.test import MessagesTestMixin
 from django.template import Context, Template
 from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
@@ -12,6 +15,7 @@ from tournamentcontrol.competition.models import (
     Division,
     Ground,
     Match,
+    Stage,
     StageGroup,
     Team,
 )
@@ -621,9 +625,9 @@ class GoodViewTests(TestCase):
             )
 
 
-class BackendTests(TestCase):
+class BackendTests(MessagesTestMixin, TestCase):
     def setUp(self):
-        super(BackendTests, self).setUp()
+        super().setUp()
         self.login(self.superuser)
 
     def test_add_division(self):
@@ -1160,3 +1164,104 @@ class BackendTests(TestCase):
         }
         self.post(add_ground.url_name, *add_ground.args, data=data)
         self.assertRedirects(self.last_response, venue.urls["edit"])
+
+    def test_delete_division_with_protected_objects(self):
+        """
+        Test that deleting a division with related protected objects shows a user-friendly error.
+        """
+        # Create division with protected related objects
+        division = factories.DivisionFactory.create()
+        stage = factories.StageFactory.create(division=division, title="Test Stage")
+        team = factories.TeamFactory.create(division=division, title="Test Team")
+
+        # Try to delete the division
+        delete_division = division.url_names["delete"]
+        self.post(delete_division.url_name, *delete_division.args)
+
+        # Should redirect back to the division edit page with error message
+        self.assertRedirects(self.last_response, division.urls["edit"])
+
+        # Check that objects still exists
+        self.assertQuerySetEqual(Division.objects.all(), [division])
+        self.assertQuerySetEqual(Stage.objects.all(), [stage])
+        self.assertQuerySetEqual(Team.objects.all(), [team])
+
+        # Check that error message was set
+        self.assertMessages(
+            self.last_response,
+            [
+                Message(
+                    level=messages.ERROR,
+                    message=(
+                        f'Cannot delete {division._meta.verbose_name} "{division.title}" '
+                        f"because it is still referenced by: "
+                        f"1 stage: {stage.title}; 1 team: {team.title}. "
+                        "Please delete or move these related objects first."
+                    ),
+                )
+            ],
+        )
+
+    def test_delete_division_without_protected_objects(self):
+        """
+        Test that deleting a division without related objects works normally.
+        """
+        # Create division without any related objects
+        division = factories.DivisionFactory.create()
+        season = division.season
+
+        # Try to delete the division
+        delete_division = division.url_names["delete"]
+        self.post(delete_division.url_name, *delete_division.args)
+
+        # Should redirect back to season page
+        self.assertRedirects(self.last_response, season.urls["edit"] + "#divisions-tab")
+
+        # Check that division was deleted
+        self.assertQuerySetEqual(Division.objects.all(), [])
+
+        # Check that success message was displayed
+        self.assertMessages(
+            self.last_response,
+            [
+                Message(
+                    level=messages.SUCCESS,
+                    message=f"The {division._meta.verbose_name} has been deleted.",
+                )
+            ],
+        )
+
+    def test_delete_stage_with_protected_objects(self):
+        """
+        Test that deleting a stage with related protected objects (Pools) shows a user-friendly error.
+        This demonstrates the generic ProtectedError handling works for different model types.
+        """
+        # Create stage with protected related objects (Pool)
+        stage = factories.StageFactory.create(title="Test Stage")
+        pool = factories.StageGroupFactory.create(stage=stage, title="Test Pool")
+
+        # Try to delete the stage
+        delete_stage = stage.url_names["delete"]
+        self.post(delete_stage.url_name, *delete_stage.args)
+
+        # Should redirect back to the stage edit page with error message
+        self.assertRedirects(self.last_response, stage.urls["edit"])
+
+        # Check that objects still exists
+        self.assertQuerySetEqual(Stage.objects.all(), [stage])
+        self.assertQuerySetEqual(StageGroup.objects.all(), [pool])
+
+        # Check that error message was set
+        self.assertMessages(
+            self.last_response,
+            [
+                Message(
+                    level=messages.ERROR,
+                    message=(
+                        f'Cannot delete {stage._meta.verbose_name} "{stage.title}" because '
+                        f"it is still referenced by: 1 pool: {pool.title}. "
+                        "Please delete or move these related objects first."
+                    ),
+                )
+            ],
+        )
