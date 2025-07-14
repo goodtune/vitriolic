@@ -5,6 +5,16 @@ from django.test import TestCase
 from tournamentcontrol.competition import utils
 
 
+class MessagesTestMixin:
+    """
+    Mixin stub for testing Django messages.
+
+    Drop once we no longer support Django < 5.0.
+    """
+
+    def assertMessages(self, *args, **kwargs): ...
+
+
 class UtilTests(TestCase):
     def test_round_robin_even(self):
         self.assertEqual(

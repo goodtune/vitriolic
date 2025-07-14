@@ -1,6 +1,6 @@
 from os.path import dirname, join
 
-from django.contrib import messages
+from django import VERSION
 from django.contrib.auth.models import Permission
 from test_plus.test import TestCase
 
@@ -108,16 +108,16 @@ class GoodViewTests(TestCase):
     def test_delete_redirect_with_protected_objects(self):
         """
         Test that deleting a redirect with protected objects shows a user-friendly error.
-        Note: This is a demonstration test - Redirect model may not actually have 
+        Note: This is a demonstration test - Redirect model may not actually have
         protected relationships, but shows the generic ProtectedError handling works.
         """
         redirect = factories.RedirectFactory.create()
-        
+
         with self.login(self.staff):
             # Try to delete the redirect - this might work normally if no protection exists
             # This test demonstrates the generic error handling is available
             self.post("admin:content:redirect:delete", pk=redirect.pk)
-            
+
             # If no ProtectedError is raised, this should succeed
             # If ProtectedError is raised, the generic handler will show an error message
             # This test mainly verifies no code crashes with the new generic handling
