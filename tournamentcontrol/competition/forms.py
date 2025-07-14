@@ -1965,6 +1965,59 @@ SeasonMatchTimeFormSet = inlineformset_factory(
 )
 
 
+class DivisionBulkCreateForm(ModelForm):
+    """
+    Simplified form for bulk creation of divisions with sensible defaults.
+    """
+    class Meta:
+        model = Division
+        fields = (
+            "title",
+            "short_title",
+            "copy",
+            "draft",
+        )
+        labels = {
+            "copy": _("Notes (Public)"),
+        }
+        help_texts = {
+            "copy": _("Optional. Will be displayed in the front end if provided."),
+            "title": _("Division name (required)"),
+            "short_title": _("Optional shorter name for display"),
+        }
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        # Set sensible defaults for bulk creation
+        if not instance.points_formula:
+            instance.points_formula = "3*win + 1*draw"
+        if instance.forfeit_for_score is None:
+            instance.forfeit_for_score = 5
+        if instance.forfeit_against_score is None:
+            instance.forfeit_against_score = 0
+        if commit:
+            instance.save()
+        return instance
+
+
+class BaseDivisionBulkCreateFormSet(UserMixin, BaseInlineFormSet):
+    def _construct_form(self, i, **kwargs):
+        if i >= self.initial_form_count():
+            kwargs["instance"] = self.model(season=self.instance, order=i + 1)
+        return super()._construct_form(i, **kwargs)
+
+
+DivisionBulkCreateFormSet = inlineformset_factory(
+    Season,
+    Division,
+    form=DivisionBulkCreateForm,
+    fk_name="season",
+    formset=BaseDivisionBulkCreateFormSet,
+    extra=3,
+    can_delete=False,
+)
+
+
 class TournamentScheduleForm(BootstrapFormControlMixin, forms.Form):
     team_hook = forms.CharField(
         widget=forms.Textarea,

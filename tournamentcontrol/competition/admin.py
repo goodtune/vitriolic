@@ -41,6 +41,7 @@ from tournamentcontrol.competition.forms import (
     ClubAssociationForm,
     ClubRoleForm,
     CompetitionForm,
+    DivisionBulkCreateFormSet,
     DivisionForm,
     DrawFormatForm,
     DrawGenerationFormSet,
@@ -395,6 +396,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     include(timeslot_urls, namespace="seasonmatchtime"),
                 ),
                 path(
+                    "<int:season_id>/timeslots/",
+                    self.timeslots,
+                    name="timeslots",
+                ),
+                path(
                     "<int:season_id>/referees/",
                     include(referees_urls, namespace="seasonreferee"),
                 ),
@@ -407,6 +413,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path(
                     "<int:season_id>/division/",
                     include(division_urls, namespace="division"),
+                ),
+                path(
+                    "<int:season_id>/bulk-divisions/",
+                    self.bulk_divisions,
+                    name="bulk-divisions",
                 ),
                 path(
                     "<int:season_id>/scorecards/<result_id>.pdf",
@@ -1043,6 +1054,20 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_save_redirect_args=(competition.pk, season.pk),
             post_save_redirect="competition:season:edit",
             templates=self.template_path("timeslots.html", "season"),
+            extra_context=extra_context,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def bulk_divisions(self, request, competition, season, extra_context, **kwargs):
+        return self.generic_edit_multiple(
+            request,
+            Division,
+            formset_class=DivisionBulkCreateFormSet,
+            formset_kwargs={"instance": season, "user": request.user},
+            post_save_redirect_args=(competition.pk, season.pk),
+            post_save_redirect="competition:season:edit",
+            templates=self.template_path("bulk_divisions.html", "season"),
             extra_context=extra_context,
         )
 
