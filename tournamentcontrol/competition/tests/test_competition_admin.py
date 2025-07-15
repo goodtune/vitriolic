@@ -2,6 +2,7 @@ import unittest
 from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
+from dateutil.rrule import DAILY
 from django import VERSION
 from django.contrib import messages
 from django.template import Context, Template
@@ -18,7 +19,7 @@ from tournamentcontrol.competition.models import (
     Team,
 )
 from tournamentcontrol.competition.tests import factories
-from tournamentcontrol.competition.utils import round_robin
+from tournamentcontrol.competition.utils import round_robin, round_robin_format
 
 try:
     from django.contrib.messages.test import MessagesTestMixin
@@ -1283,16 +1284,22 @@ class BackendTests(MessagesTestMixin, TestCase):
         was missing 1 required positional argument: 'initial'
         """
         # Create a Stage
-        stage = factories.StageFactory.create()
+        stage = factories.StageFactory.create(
+            division__season__mode=DAILY,
+            division__games_per_day=1,
+        )
 
         # Create a batch of four Teams in the Division
         teams = factories.TeamFactory.create_batch(4, division=stage.division)
 
-        # Create a DrawFormat that will put each team against each other once
-        from tournamentcontrol.competition.utils import round_robin_format
+        # Establish the expected matches for the teams using a round-robin format
+        matches = round_robin(teams)
 
+        # Create a DrawFormat that will put each team against each other once
         draw_format = factories.DrawFormatFactory.create(
-            teams=4, name="Round Robin (4 teams)", text=round_robin_format(range(1, 5))
+            name="Round Robin (4 teams)",
+            text=round_robin_format([1, 2, 3, 4]),
+            teams=4,
         )
 
         # Attempt to build the draw using the Wizard
@@ -1300,15 +1307,144 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # This should not raise TypeError anymore
         with self.login(self.superuser):
-            # The GET request should render the wizard template without errors
-            # Previously this would fail when the template tried to access
-            # {{ formset.empty_form.media }} due to the TypeError
+            # Step 0: Test that the first step renders without error
             self.get(build_url.url_name, *build_url.args)
             self.response_200()
 
-            # Verify the response contains the wizard form
-            self.assertResponseContains("draw_generation")
+            # Extract the formset from the context and test empty_form works
+            formset = self.get_context("form")
+            self.assertIsNotNone(formset)
 
-            # The template should be able to access formset.empty_form.media
-            # without raising TypeError
-            self.assertResponseContains("form-")  # Check for formset forms
+            # This should not raise TypeError - the main bug we're testing
+            empty_form = formset.empty_form
+            self.assertIsNotNone(empty_form)
+
+            # Test media property access (this was the original failing case)
+            media = empty_form.media
+            self.assertIsNotNone(media)
+
+            # Prepare step 0 data with a valid DrawFormat selection and date
+            step0_data = {
+                # Wizard management form data
+                "draw_generation_wizard-current_step": "0",
+            }
+
+            # Formset management form data
+            step0_data.update(
+                {
+                    "0-TOTAL_FORMS": "1",
+                    "0-INITIAL_FORMS": "1",
+                    "0-MIN_NUM_FORMS": "0",
+                    "0-MAX_NUM_FORMS": "1000",
+                    # Form 0 data
+                    "0-0-start_date": "2025-07-15",
+                    "0-0-format": draw_format.pk,
+                    "0-0-rounds": "",
+                    "0-0-offset": "",
+                }
+            )
+
+            # Submit step 0 to proceed to step 1
+            self.post(build_url.url_name, *build_url.args, data=step0_data)
+            self.response_200()
+
+            # Step 1: Test the second step
+            formset = self.get_context("form")
+            self.assertIsNotNone(formset)
+
+            # Test that empty_form works on step 1 - this is the main fix
+            empty_form = formset.empty_form
+            self.assertIsNotNone(empty_form)
+
+            # Test that we can access the media property without TypeError
+            media = empty_form.media
+            self.assertIsNotNone(media)
+
+            # Prepare step 1 data
+            step1_data = {
+                "draw_generation_wizard-current_step": "1",
+                "1-TOTAL_FORMS": "6",
+                "1-INITIAL_FORMS": "6",
+                "1-MIN_NUM_FORMS": "0",
+                "1-MAX_NUM_FORMS": "1000",
+                # Form 1 data
+                "1-0-round": "1",
+                "1-0-home_team": matches[0][0][0].pk,
+                "1-0-away_team": matches[0][0][1].pk,
+                "1-0-date": "2025-07-15",
+                # Form 2 data
+                "1-1-round": "1",
+                "1-1-home_team": matches[0][1][0].pk,
+                "1-1-away_team": matches[0][1][1].pk,
+                "1-1-date": "2025-07-15",
+                # Form 3 data
+                "1-2-round": "2",
+                "1-2-home_team": matches[1][0][0].pk,
+                "1-2-away_team": matches[1][0][1].pk,
+                "1-2-date": "2025-07-16",
+                # Form 4 data
+                "1-3-round": "2",
+                "1-3-home_team": matches[1][1][0].pk,
+                "1-3-away_team": matches[1][1][1].pk,
+                "1-3-date": "2025-07-16",
+                # Form 5 data
+                "1-4-round": "3",
+                "1-4-home_team": matches[2][0][0].pk,
+                "1-4-away_team": matches[2][0][1].pk,
+                "1-4-date": "2025-07-17",
+                # Form 6 data
+                "1-5-round": "3",
+                "1-5-home_team": matches[2][1][0].pk,
+                "1-5-away_team": matches[2][1][1].pk,
+                "1-5-date": "2025-07-17",
+            }
+
+            # Submit step 1 to complete the wizard
+            self.post(build_url.url_name, *build_url.args, data=step1_data)
+            self.response_302()
+
+            # If we have successfully moved through the wizard and been
+            # redirected, the following matches would have been created.
+            self.assertCountEqual(
+                Match.objects.values_list(
+                    "home_team__title", "away_team__title", "date", "round"
+                ).order_by("round", "date"),
+                [
+                    (
+                        matches[0][0][0].title,
+                        matches[0][0][1].title,
+                        date(2025, 7, 15),
+                        1,
+                    ),
+                    (
+                        matches[0][1][0].title,
+                        matches[0][1][1].title,
+                        date(2025, 7, 15),
+                        1,
+                    ),
+                    (
+                        matches[1][0][0].title,
+                        matches[1][0][1].title,
+                        date(2025, 7, 16),
+                        2,
+                    ),
+                    (
+                        matches[1][1][0].title,
+                        matches[1][1][1].title,
+                        date(2025, 7, 16),
+                        2,
+                    ),
+                    (
+                        matches[2][0][0].title,
+                        matches[2][0][1].title,
+                        date(2025, 7, 17),
+                        3,
+                    ),
+                    (
+                        matches[2][1][0].title,
+                        matches[2][1][1].title,
+                        date(2025, 7, 17),
+                        3,
+                    ),
+                ],
+            )

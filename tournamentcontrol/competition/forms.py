@@ -792,6 +792,11 @@ class BaseMatchFormMixin(BootstrapFormControlMixin):
     def __init__(self, timeslots=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # Skip field customization if instance doesn't have a stage
+        # (e.g., for empty forms)
+        if not self.instance or self.instance.stage is None:
+            return
+
         # set the queryset of the `home_team` and `away_team` fields
         team_ids = self.instance.stage.division.teams.values_list("id", flat=True)
         undecided_team_ids = self.instance.stage.undecided_teams.values_list(
@@ -895,6 +900,11 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # Skip field customization if instance doesn't have a stage
+        # (e.g., for empty forms)
+        if not self.instance or not self.instance.stage:
+            return
 
         # restrict the list of referees to those registered this season
         if "referees" in self.fields:
