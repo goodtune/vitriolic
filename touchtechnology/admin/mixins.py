@@ -1,7 +1,7 @@
+from dataclasses import dataclass
+
 from django.urls import reverse_lazy
 from django.utils.functional import cached_property
-
-from dataclasses import dataclass
 
 
 @dataclass
