@@ -2,11 +2,14 @@
 Test MCP Server Integration for Tournament Control Competition API.
 """
 
+from django.conf import settings
 from django.test.utils import override_settings
 from django.urls import reverse
 from test_plus import TestCase
 
+from tournamentcontrol.competition import mcp, models
 from tournamentcontrol.competition.tests import factories
+from tournamentcontrol.competition.tests.urls import urlpatterns
 
 
 @override_settings(ROOT_URLCONF="vitriolic.urls")
@@ -42,7 +45,7 @@ class MCPServerIntegrationTests(TestCase):
         """Test that the MCP endpoint is available and responds correctly."""
         # Try to access the MCP endpoint - should be available at /mcp/mcp
         # Based on mcp_server.urls, the pattern is 'mcp'
-        response = self.client.get("/mcp/mcp")
+        response = self.get("/mcp/mcp")
 
         # The MCP endpoint should be accessible, though it might return a specific response
         # based on the MCP protocol. For now, we just check it doesn't return 404.
@@ -50,15 +53,10 @@ class MCPServerIntegrationTests(TestCase):
 
     def test_mcp_server_in_apps(self):
         """Test that the MCP server app is properly installed."""
-        from django.conf import settings
-
         self.assertIn("mcp_server", settings.INSTALLED_APPS)
 
     def test_mcp_tools_registered(self):
         """Test that MCP tools are properly registered."""
-        # Import the MCP toolsets to ensure they are loaded
-        from tournamentcontrol.competition import mcp
-
         # Check that our MCP toolsets exist and are properly configured
         self.assertTrue(hasattr(mcp, "ClubQueryTool"))
         self.assertTrue(hasattr(mcp, "CompetitionQueryTool"))
@@ -70,8 +68,6 @@ class MCPServerIntegrationTests(TestCase):
         self.assertTrue(hasattr(mcp, "PersonQueryTool"))
 
         # Verify that the tools have the correct models assigned
-        from tournamentcontrol.competition import models
-
         self.assertEqual(mcp.ClubQueryTool.model, models.Club)
         self.assertEqual(mcp.CompetitionQueryTool.model, models.Competition)
         self.assertEqual(mcp.SeasonQueryTool.model, models.Season)
@@ -84,14 +80,10 @@ class MCPServerIntegrationTests(TestCase):
     def test_existing_drf_api_still_works(self):
         """Test that existing DRF API endpoints still work after MCP integration."""
         # Test some existing API endpoints to make sure they still work
-        from tournamentcontrol.competition.tests.urls import urlpatterns
-
         # The MCP integration should not break existing REST API functionality
         # Test that the API URLs are still accessible via the test URL configuration
         self.assertEqual(len(urlpatterns), 3)  # accounts, api, and competition URLs
 
         # Since we're using the main vitriolic.urls, let's just check that
         # the URL configuration loaded correctly and MCP didn't break it
-        from django.conf import settings
-
         self.assertEqual(settings.ROOT_URLCONF, "vitriolic.urls")
