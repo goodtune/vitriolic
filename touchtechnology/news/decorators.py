@@ -83,7 +83,6 @@ def parse_month_name(month_str):
         "vi",
         "id",
         "ms",
-        "ru",
     ]
 
     for locale_code in locales:
