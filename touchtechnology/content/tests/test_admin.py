@@ -1,6 +1,5 @@
 from os.path import dirname, join
 
-from django import VERSION
 from django.contrib.auth.models import Permission
 from test_plus.test import TestCase
 

@@ -332,7 +332,8 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
     :return: list
     """
     from tournamentcontrol.competition.draw import (
-        MatchDescriptor, RoundDescriptor,
+        MatchDescriptor,
+        RoundDescriptor,
     )
 
     # Start building our final series with the initial round. Each match is
