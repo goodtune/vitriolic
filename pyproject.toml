@@ -19,7 +19,6 @@ dependencies = [
     "first",
     "namedentities",
     "psycopg",
-    "setuptools", # pkg_resources in touchtechnology.common.templatetags.common
 ]
 dynamic = ["version"]
 
