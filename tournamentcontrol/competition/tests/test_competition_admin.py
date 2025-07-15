@@ -23,7 +23,9 @@ from tournamentcontrol.competition.utils import round_robin
 try:
     from django.contrib.messages.test import MessagesTestMixin
 except ImportError:  # Django < 5.0
-    from tournamentcontrol.competition.tests.test_utils import MessagesTestMixin
+    from tournamentcontrol.competition.tests.test_utils import (
+        MessagesTestMixin,
+    )
 
 
 class TestCase(BaseTestCase):
@@ -1271,3 +1273,42 @@ class BackendTests(MessagesTestMixin, TestCase):
                     )
                 ],
             )
+
+    def test_draw_generation_wizard_empty_form_bug(self):
+        """
+        Test that the draw generation wizard doesn't crash with TypeError when
+        accessing formset.empty_form.media in the template.
+
+        This reproduces the bug from issue #133 where DrawGenerationForm.__init__()
+        was missing 1 required positional argument: 'initial'
+        """
+        # Create a Stage
+        stage = factories.StageFactory.create()
+
+        # Create a batch of four Teams in the Division
+        teams = factories.TeamFactory.create_batch(4, division=stage.division)
+
+        # Create a DrawFormat that will put each team against each other once
+        from tournamentcontrol.competition.utils import round_robin_format
+
+        draw_format = factories.DrawFormatFactory.create(
+            teams=4, name="Round Robin (4 teams)", text=round_robin_format(range(1, 5))
+        )
+
+        # Attempt to build the draw using the Wizard
+        build_url = stage.url_names["build"]
+
+        # This should not raise TypeError anymore
+        with self.login(self.superuser):
+            # The GET request should render the wizard template without errors
+            # Previously this would fail when the template tried to access
+            # {{ formset.empty_form.media }} due to the TypeError
+            self.get(build_url.url_name, *build_url.args)
+            self.response_200()
+
+            # Verify the response contains the wizard form
+            self.assertResponseContains("draw_generation")
+
+            # The template should be able to access formset.empty_form.media
+            # without raising TypeError
+            self.assertResponseContains("form-")  # Check for formset forms
