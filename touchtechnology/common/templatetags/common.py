@@ -4,16 +4,10 @@ import os
 import platform
 import re
 import socket
-import sys
 from decimal import Decimal
+from importlib import metadata
 from itertools import islice, zip_longest
 from urllib.parse import parse_qsl
-
-try:
-    from importlib import metadata
-except ImportError:
-    # Python < 3.8 fallback
-    import importlib_metadata as metadata
 
 from django.conf import settings
 from django.db.models import Model, Q
