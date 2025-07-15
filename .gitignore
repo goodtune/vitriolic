@@ -6,5 +6,5 @@
 /.tox
 /build
 /dist
+/uv.lock
 __pycache__
-uv.lock
