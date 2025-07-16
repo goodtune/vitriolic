@@ -204,6 +204,10 @@ def competition_by_slug(f, *a, **kw):
         division_slug = kwargs.pop("division", None)
         pool_slug = kwargs.pop("pool", None)
         season_slug = kwargs.pop("season", None)
+
+        venue_slug = kwargs.pop("venue", None)
+        ground_slug = kwargs.pop("ground", None)
+
         stage_slug = kwargs.pop("stage", None)
         team_slug = kwargs.pop("team", None)
         match_pk = kwargs.pop("match", None)
@@ -245,6 +249,17 @@ def competition_by_slug(f, *a, **kw):
 
                 # List of venues setup for this season.
                 kwargs["venues"] = season.venues.all()
+
+                if venue_slug:
+                    venue = get_object_or_404(season.venues, slug=venue_slug)
+                    kwargs["venue"] = venue
+
+                    # List of grounds for this venue.
+                    kwargs["grounds"] = venue.grounds.all()
+
+                    if ground_slug:
+                        ground = get_object_or_404(venue.grounds, slug=ground_slug)
+                        kwargs["ground"] = ground
 
                 if division_slug:
                     division = get_object_or_404(season.divisions, slug=division_slug)
