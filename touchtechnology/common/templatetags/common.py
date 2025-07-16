@@ -1,13 +1,14 @@
 import logging
 import operator
 import os
+import platform
 import re
 import socket
 from decimal import Decimal
+from importlib import metadata
 from itertools import islice, zip_longest
 from urllib.parse import parse_qsl
 
-import pkg_resources
 from django.conf import settings
 from django.db.models import Model, Q
 from django.db.models.query import QuerySet
@@ -465,28 +466,27 @@ def islice_(value, arg):
 
 @register.inclusion_tag("touchtechnology/common/templatetags/version.html")
 def version(package, url=None):
-    environment = pkg_resources.Environment()
     context = {}
     try:
         if package == "python":
             context = {
                 "name": "Python",
                 "project": "Python",
-                "version": environment.python,
+                "version": platform.python_version(),
                 "release": None,
             }
         else:
-            distribution = environment[package][-1]
+            distribution = metadata.distribution(package)
             release = version_re.match(distribution.version).groupdict()
             context = {
-                "name": distribution.key,
-                "project": distribution.project_name,
+                "name": distribution.metadata["Name"].lower(),
+                "project": distribution.metadata["Name"],
                 "version": distribution.version,
                 "release": release.get("prerel"),
             }
-    except IndexError:
+    except metadata.PackageNotFoundError:
         logger.exception(
-            'Attempting to lookup version for package "%s" not ' "in pkg_resources",
+            'Attempting to lookup version for package "%s" not found',
             package,
         )
     if url:

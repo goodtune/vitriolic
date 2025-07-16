@@ -1,4 +1,3 @@
-import unittest
 
 from django.test.utils import override_settings
 from test_plus import TestCase

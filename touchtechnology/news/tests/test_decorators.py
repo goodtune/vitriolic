@@ -2,7 +2,6 @@ import datetime
 
 from django.test import TestCase
 from django.test.utils import override_settings
-from django.http import Http404
 from test_plus import TestCase as TestPlusCase
 
 from touchtechnology.news.decorators import parse_month_name
