@@ -231,9 +231,11 @@ class VersionTest(TestCase):
         """Test version tag for Django package."""
         template = Template("{% load common %}{% version 'django' %}")
         output = template.render(Context()).strip()
-        # Should contain a version div with Django info  
+        # Should contain a version div with Django info
         self.assertIn('class="version"', output)
-        self.assertIn('id="pkg_django"', output)  # name is lowercase for regular packages
+        self.assertIn(
+            'id="pkg_django"', output
+        )  # name is lowercase for regular packages
         self.assertIn("Django", output)
         # Should contain a version number
         self.assertRegex(output, r"\d+\.\d+")
