@@ -846,11 +846,11 @@ class Application(object):
     ):
         """
         Generic view for bulk creating multiple new objects using a ModelFormSet.
-        
+
         Similar to generic_edit but creates multiple new instances using formsets.
         Useful for creating multiple related objects that share common properties.
         """
-        
+
         if extra_context is None:
             extra_context = {}
 
@@ -919,11 +919,11 @@ class Application(object):
         # construct a default ModelFormSet for them.
         if formset_class is None:
             formset_class = modelformset_factory(
-                model, 
+                model,
                 form=form_class,
-                extra=extra, 
+                extra=extra,
                 fields=formset_fields,
-                can_delete=False  # Don't add delete checkbox
+                can_delete=False,  # Don't add delete checkbox
             )
 
         if post_save_redirect is None:
@@ -962,7 +962,9 @@ class Application(object):
         if templates is None:
             templates = self.template_path("bulk_create.html", model._meta.model_name)
             # Fallback to edit_multiple template if bulk_create template doesn't exist
-            templates.extend(self.template_path("edit_multiple.html", model._meta.model_name))
+            templates.extend(
+                self.template_path("edit_multiple.html", model._meta.model_name)
+            )
             templates.append("bulk_create.html")
             templates.append("edit_multiple.html")
 
@@ -1033,7 +1035,7 @@ class Application(object):
         except ProtectedError as e:
             # Extract information about the protected objects
             protected_objects = e.protected_objects
-            
+
             # Group objects by type
             object_types = {}
             for obj in protected_objects:
@@ -1041,27 +1043,30 @@ class Application(object):
                 if obj_type not in object_types:
                     object_types[obj_type] = []
                 object_types[obj_type].append(str(obj))
-            
+
             # Build user-friendly error message
             error_parts = []
             for obj_type, objects in object_types.items():
                 if len(objects) == 1:
                     error_parts.append(f"1 {obj_type}: {objects[0]}")
                 else:
-                    error_parts.append(f"{len(objects)} {obj_type}s: {', '.join(objects[:5])}")
+                    error_parts.append(
+                        f"{len(objects)} {obj_type}s: {', '.join(objects[:5])}"
+                    )
                     if len(objects) > 5:
                         error_parts[-1] += f" and {len(objects) - 5} more"
-            
+
             error_message = (
-                f'Cannot delete {model._meta.verbose_name} "{instance}" because it is still referenced by: ' + 
-                '; '.join(error_parts) + '. ' +
-                'Please delete or move these related objects first.'
+                f'Cannot delete {model._meta.verbose_name} "{instance}" because it is still referenced by: '
+                + "; ".join(error_parts)
+                + ". "
+                + "Please delete or move these related objects first."
             )
-            
+
             messages.error(request, error_message)
             # Try to redirect to the object's edit page if it has one, otherwise use the default redirect
             try:
-                if hasattr(instance, 'urls') and 'edit' in instance.urls:
+                if hasattr(instance, "urls") and "edit" in instance.urls:
                     return self.redirect(instance.urls["edit"])
             except (AttributeError, KeyError):
                 pass

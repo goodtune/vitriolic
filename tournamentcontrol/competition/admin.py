@@ -1621,17 +1621,18 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     log.info("YouTube video %(id)r inserted", broadcast)
 
                 # We need to bind to a liveStream resource. This is only supported on
-                # a Ground, not a Venue.
-                bind = (
-                    season.youtube.liveBroadcasts()
-                    .bind(
-                        part="id,snippet,contentDetails,status",
-                        id=obj.external_identifier,
-                        streamId=obj.play_at.ground.external_identifier,
+                # a Ground, not a Venue. Only attempt binding if external_identifier exists.
+                if obj.external_identifier and obj.play_at.ground.external_identifier:
+                    bind = (
+                        season.youtube.liveBroadcasts()
+                        .bind(
+                            part="id,snippet,contentDetails,status",
+                            id=obj.external_identifier,
+                            streamId=obj.play_at.ground.external_identifier,
+                        )
+                        .execute()
                     )
-                    .execute()
-                )
-                obj.live_stream_bind = bind["contentDetails"].get("boundStreamId")
+                    obj.live_stream_bind = bind["contentDetails"].get("boundStreamId")
 
             except HttpError as exc:
                 messages.error(request, exc.reason)
