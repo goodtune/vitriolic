@@ -1448,3 +1448,63 @@ class BackendTests(MessagesTestMixin, TestCase):
                     ),
                 ],
             )
+
+    def test_edit_match_without_external_identifier_youtube_api(self):
+        """
+        Test that editing a match with live streaming enabled but without 
+        external_identifier doesn't raise TypeError from YouTube API bind call.
+        
+        This reproduces the bug from issue #141 where the YouTube API .bind()
+        method was called without checking if obj.external_identifier exists.
+        """
+        # Create a season with live streaming enabled but no YouTube credentials
+        # This simulates the scenario where live_stream is True but no actual
+        # YouTube integration is configured
+        season = factories.SeasonFactory.create(
+            live_stream=True,
+            live_stream_project_id=None,
+            live_stream_client_id=None,
+            live_stream_client_secret=None,
+        )
+        
+        # Create a ground with external_identifier for stream binding
+        ground = factories.GroundFactory.create(
+            venue__season=season,
+            external_identifier="test_stream_id"
+        )
+        
+        # Create a match with live_stream=True but no external_identifier
+        match = factories.MatchFactory.create(
+            stage__division__season=season,
+            live_stream=True,
+            external_identifier=None,  # This is the key - no external ID
+            play_at=ground,
+        )
+        
+        # Access the edit URL
+        edit_match_url = match.url_names["edit"]
+        
+        with self.login(self.superuser):
+            # This GET request should not raise TypeError
+            # Before the fix, this would fail with:
+            # TypeError: Missing required parameter "id"
+            self.get(edit_match_url.url_name, *edit_match_url.args)
+            self.response_200()
+            
+            # Test that POST also works (simulating form submission)
+            data = {
+                'label': 'Test Match',
+                'live_stream': True,
+                'date': '2025-01-15',
+                'time': '14:00',
+                'round': 1,
+                'home_team': match.home_team.pk,
+                'away_team': match.away_team.pk,
+                'play_at': ground.pk,
+            }
+            
+            # This POST should also not raise TypeError
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            # Should redirect on successful save (302) or stay on page (200)
+            # depending on implementation details
+            self.assertIn(self.response.status_code, [200, 302])
