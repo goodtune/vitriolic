@@ -1458,31 +1458,32 @@ class BackendTests(MessagesTestMixin, TestCase):
         problematic state with live_stream=True but no external_identifier, and
         the user wants to turn off live streaming to fix it.
         """
-        # Create a season with live streaming enabled but no YouTube credentials
+        # Create a stage with live streaming enabled but no YouTube credentials
         # This simulates the scenario where live_stream is True but no actual
         # YouTube integration is configured
-        season = factories.SeasonFactory.create(
-            live_stream=True,
-            live_stream_project_id=None,
-            live_stream_client_id=None,
-            live_stream_client_secret=None,
+        stage = factories.StageFactory.create(
+            title="Test Stage",
+            division__title="Test Division",
+            division__season__title="Test Season",
+            division__season__live_stream=True,
+            division__season__live_stream_project_id=None,
+            division__season__live_stream_client_id=None,
+            division__season__live_stream_client_secret=None,
         )
 
         # Create a ground with external_identifier for stream binding
         ground = factories.GroundFactory.create(
-            venue__season=season, external_identifier="test_stream_id"
+            venue__season=stage.division.season, external_identifier="test_stream_id"
         )
-
-        # Create division and stage explicitly to ensure proper URL construction
-        division = factories.DivisionFactory.create(season=season)
-        stage = factories.StageFactory.create(division=division)
 
         # Create a match with live_stream=True but no external_identifier
         # This represents a problematic state that can occur in production
         match = factories.MatchFactory.create(
             stage=stage,
-            home_team__division=division,
-            away_team__division=division,
+            home_team__title="Home Team",
+            home_team__division=stage.division,
+            away_team__title="Away Team",
+            away_team__division=stage.division,
             live_stream=True,
             external_identifier=None,  # This is the key - no external ID
             play_at=ground,
