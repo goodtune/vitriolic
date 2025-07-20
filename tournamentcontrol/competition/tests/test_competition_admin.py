@@ -1473,10 +1473,16 @@ class BackendTests(MessagesTestMixin, TestCase):
             venue__season=season, external_identifier="test_stream_id"
         )
 
+        # Create division and stage explicitly to ensure proper URL construction
+        division = factories.DivisionFactory.create(season=season)
+        stage = factories.StageFactory.create(division=division)
+
         # Create a match with live_stream=True but no external_identifier
         # This represents a problematic state that can occur in production
         match = factories.MatchFactory.create(
-            stage__division__season=season,
+            stage=stage,
+            home_team__division=division,
+            away_team__division=division,
             live_stream=True,
             external_identifier=None,  # This is the key - no external ID
             play_at=ground,
