@@ -9,6 +9,7 @@ from django.template import Context, Template
 from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 
+from touchtechnology.admin.mixins import AdminUrlLookup
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.models import (
     Division,
@@ -1497,7 +1498,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         match.save()
 
         # Access the edit URL
-        edit_match_url = match.url_names["edit"]
+        edit_match_url: AdminUrlLookup = match.url_names["edit"]
 
         with self.login(self.superuser):
             # Test turning OFF live streaming to fix the problematic state
@@ -1518,5 +1519,4 @@ class BackendTests(MessagesTestMixin, TestCase):
 
             # This POST should not raise TypeError from YouTube API bind call
             self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
-            # The key test is that no TypeError occurs during processing
-            self.assertIn(self.last_response.status_code, [200, 302])
+            self.assertRedirects(self.last_response, stage.urls["edit"])
