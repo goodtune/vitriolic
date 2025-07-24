@@ -1,5 +1,6 @@
 import unittest
 from datetime import date, datetime, time
+from unittest import mock
 from zoneinfo import ZoneInfo
 
 from dateutil.rrule import DAILY
@@ -1450,23 +1451,42 @@ class BackendTests(MessagesTestMixin, TestCase):
                 ],
             )
 
-    def test_edit_match_without_external_identifier_youtube_api(self):
+    def test_edit_match_youtube_api_scenarios(self):
         """
-        Test that turning off live streaming for a match that has live_stream=True
-        but no external_identifier doesn't raise TypeError from YouTube API bind call.
+        Comprehensive test for YouTube API integration scenarios.
 
-        This reproduces the bug from issue #141 where a match could get into a
-        problematic state with live_stream=True but no external_identifier, and
-        the user wants to turn off live streaming to fix it.
+        Truth table covering different combinations:
+        - Season YouTube credentials (present/absent)
+        - Match stream (enabled/disabled)
+        - External identifier (present/absent)
+
+        | Credentials | Stream | External ID | Expected Behavior |
+        |-------------|--------|-------------|-------------------|
+        | No          | False  | None        | Early return, no API calls |
+        | No          | False  | Present     | Early return, no API calls |
+        | No          | True   | None        | Early return, no API calls |
+        | No          | True   | Present     | Early return, no API calls |
+        | Yes         | False  | None        | No API calls (stream disabled) |
+        | Yes         | False  | Present     | Delete broadcast via API |
+        | Yes         | True   | None        | Create new broadcast via API |
+        | Yes         | True   | Present     | Update existing broadcast via API |
         """
+
+        # Test scenarios without YouTube credentials (rows 1-4)
+        self._test_no_credentials_scenarios()
+
+        # Test scenarios with YouTube credentials (rows 5-8)
+        self._test_with_credentials_scenarios()
+
+    def _test_no_credentials_scenarios(self):
+        """Test scenarios where season has no YouTube credentials configured."""
+
         # Create a stage with live streaming enabled but no YouTube credentials
-        # This simulates the scenario where live_stream is True but no actual
-        # YouTube integration is configured
         stage = factories.StageFactory.create(
             title="Test Stage",
             division__title="Test Division",
             division__season__title="Test Season",
-            division__season__live_stream=False,  # Start with disabled to avoid issues
+            division__season__live_stream=True,
             division__season__live_stream_project_id=None,
             division__season__live_stream_client_id=None,
             division__season__live_stream_client_secret=None,
@@ -1477,46 +1497,271 @@ class BackendTests(MessagesTestMixin, TestCase):
             venue__season=stage.division.season, external_identifier="test_stream_id"
         )
 
-        # Create a match with live streaming enabled that will have the problematic state
-        match = factories.MatchFactory.create(
+        # Test Case 1: No credentials, stream disabled, no external ID
+        match1 = factories.MatchFactory.create(
             stage=stage,
-            home_team__title="Home Team",
+            home_team__title="Home Team 1",
             home_team__division=stage.division,
-            away_team__title="Away Team",
+            away_team__title="Away Team 1",
             away_team__division=stage.division,
             date=date(2025, 5, 1),
             include_in_ladder=True,
             play_at=ground,
+            live_stream=False,
+            external_identifier=None,
         )
 
-        # Now create the problematic state: Enable live streaming at season level
-        # and enable live streaming on match but without external_identifier
-        stage.division.season.live_stream = True
-        stage.division.season.save()
-        match.live_stream = True
-        match.external_identifier = None  # This is the key - no external ID
-        match.save()
+        edit_match_url = match1.url_names["edit"]
+        with self.login(self.superuser):
+            data = self._get_base_match_data(match1, ground, live_stream="0")
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            self.assertRedirects(self.last_response, stage.urls["edit"])
+            match1.refresh_from_db()
+            self.assertFalse(match1.live_stream)
+            self.assertIsNone(match1.external_identifier)
 
-        # Access the edit URL
-        edit_match_url: AdminUrlLookup = match.url_names["edit"]
+        # Test Case 2: No credentials, stream disabled, has external ID
+        match2 = factories.MatchFactory.create(
+            stage=stage,
+            home_team__title="Home Team 2",
+            home_team__division=stage.division,
+            away_team__title="Away Team 2",
+            away_team__division=stage.division,
+            date=date(2025, 5, 2),
+            include_in_ladder=True,
+            play_at=ground,
+            live_stream=False,
+            external_identifier="existing_broadcast_id",
+        )
 
+        edit_match_url = match2.url_names["edit"]
+        with self.login(self.superuser):
+            data = self._get_base_match_data(match2, ground, live_stream="0")
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            self.assertRedirects(self.last_response, stage.urls["edit"])
+            match2.refresh_from_db()
+            self.assertFalse(match2.live_stream)
+            self.assertEqual(
+                match2.external_identifier, "existing_broadcast_id"
+            )  # Unchanged
+
+        # Test Case 3: No credentials, stream enabled, no external ID (the original bug scenario)
+        match3 = factories.MatchFactory.create(
+            stage=stage,
+            home_team__title="Home Team 3",
+            home_team__division=stage.division,
+            away_team__title="Away Team 3",
+            away_team__division=stage.division,
+            date=date(2025, 5, 3),
+            include_in_ladder=True,
+            play_at=ground,
+            live_stream=True,
+            external_identifier=None,  # This was causing the TypeError
+        )
+
+        edit_match_url = match3.url_names["edit"]
         with self.login(self.superuser):
             # Test turning OFF live streaming to fix the problematic state
-            # This is a realistic scenario where an admin wants to disable
-            # live streaming for a match that got into a bad state
-            data = {
-                "home_team": match.home_team.pk,
-                "away_team": match.away_team.pk,
-                "label": match.label or "Test Match",
-                "round": match.round or 1,
-                "date": match.date.strftime("%Y-%m-%d"),
-                "time": match.time.strftime("%H:%M"),
-                "play_at": ground.pk,
-                "include_in_ladder": "1" if match.include_in_ladder else "0",
-                "live_stream": "0",  # Turn OFF live streaming to fix the state
-                "thumbnail_url": "",
-            }
-
+            data = self._get_base_match_data(match3, ground, live_stream="0")
             # This POST should not raise TypeError from YouTube API bind call
             self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
             self.assertRedirects(self.last_response, stage.urls["edit"])
+            match3.refresh_from_db()
+            self.assertFalse(match3.live_stream)
+            self.assertIsNone(match3.external_identifier)
+
+        # Test Case 4: No credentials, stream enabled, has external ID
+        match4 = factories.MatchFactory.create(
+            stage=stage,
+            home_team__title="Home Team 4",
+            home_team__division=stage.division,
+            away_team__title="Away Team 4",
+            away_team__division=stage.division,
+            date=date(2025, 5, 4),
+            include_in_ladder=True,
+            play_at=ground,
+            live_stream=True,
+            external_identifier="existing_broadcast_id_2",
+        )
+
+        edit_match_url = match4.url_names["edit"]
+        with self.login(self.superuser):
+            data = self._get_base_match_data(match4, ground, live_stream="1")
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            self.assertRedirects(self.last_response, stage.urls["edit"])
+            match4.refresh_from_db()
+            self.assertTrue(match4.live_stream)
+            self.assertEqual(
+                match4.external_identifier, "existing_broadcast_id_2"
+            )  # Unchanged
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def _test_with_credentials_scenarios(self, mock_build):
+        """Test scenarios where season has YouTube credentials configured."""
+
+        # Mock YouTube API client
+        mock_youtube = mock.Mock()
+        mock_build.return_value = mock_youtube
+
+        # Create a stage with YouTube credentials configured
+        stage = factories.StageFactory.create(
+            title="Test Stage With Creds",
+            division__title="Test Division With Creds",
+            division__season__title="Test Season With Creds",
+            division__season__live_stream=True,
+            division__season__live_stream_project_id="test_project_id",
+            division__season__live_stream_client_id="test_client_id",
+            division__season__live_stream_client_secret="test_client_secret",
+            division__season__live_stream_token="test_token",
+            division__season__live_stream_refresh_token="test_refresh_token",
+            division__season__live_stream_token_uri="https://oauth2.googleapis.com/token",
+        )
+
+        ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, external_identifier="test_stream_id"
+        )
+
+        # Test Case 5: Has credentials, stream disabled, no external ID
+        match5 = factories.MatchFactory.create(
+            stage=stage,
+            home_team__title="Home Team 5",
+            home_team__division=stage.division,
+            away_team__title="Away Team 5",
+            away_team__division=stage.division,
+            date=date(2025, 5, 5),
+            include_in_ladder=True,
+            play_at=ground,
+            live_stream=False,
+            external_identifier=None,
+        )
+
+        edit_match_url = match5.url_names["edit"]
+        with self.login(self.superuser):
+            data = self._get_base_match_data(match5, ground, live_stream="0")
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            self.assertRedirects(self.last_response, stage.urls["edit"])
+            # Should not call YouTube API since stream is disabled and no external ID
+            mock_youtube.liveBroadcasts().delete.assert_not_called()
+
+        # Test Case 6: Has credentials, stream disabled, has external ID (should delete)
+        mock_youtube.reset_mock()
+        mock_youtube.liveBroadcasts().delete().execute.return_value = None
+
+        match6 = factories.MatchFactory.create(
+            stage=stage,
+            home_team__title="Home Team 6",
+            home_team__division=stage.division,
+            away_team__title="Away Team 6",
+            away_team__division=stage.division,
+            date=date(2025, 5, 6),
+            include_in_ladder=True,
+            play_at=ground,
+            live_stream=True,  # Start enabled
+            external_identifier="broadcast_to_delete",
+            videos=["https://youtu.be/broadcast_to_delete"],
+        )
+
+        edit_match_url = match6.url_names["edit"]
+        with self.login(self.superuser):
+            # Turn OFF live streaming - should delete the broadcast
+            data = self._get_base_match_data(match6, ground, live_stream="0")
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            self.assertRedirects(self.last_response, stage.urls["edit"])
+            # Should call delete API
+            mock_youtube.liveBroadcasts().delete.assert_called_once_with(
+                id="broadcast_to_delete"
+            )
+            match6.refresh_from_db()
+            self.assertFalse(match6.live_stream)
+            self.assertIsNone(match6.external_identifier)
+            self.assertIsNone(match6.videos)
+
+        # Test Case 7: Has credentials, stream enabled, no external ID (should create)
+        mock_youtube.reset_mock()
+        mock_youtube.liveBroadcasts().insert().execute.return_value = {
+            "id": "new_broadcast_id",
+            "snippet": {"title": "Test Broadcast"},
+        }
+        mock_youtube.liveBroadcasts().bind().execute.return_value = {
+            "contentDetails": {"boundStreamId": "bound_stream_id"}
+        }
+
+        match7 = factories.MatchFactory.create(
+            stage=stage,
+            home_team__title="Home Team 7",
+            home_team__division=stage.division,
+            away_team__title="Away Team 7",
+            away_team__division=stage.division,
+            date=date(2025, 5, 7),
+            include_in_ladder=True,
+            play_at=ground,
+            live_stream=False,  # Start disabled
+            external_identifier=None,
+        )
+
+        edit_match_url = match7.url_names["edit"]
+        with self.login(self.superuser):
+            # Turn ON live streaming - should create new broadcast
+            data = self._get_base_match_data(match7, ground, live_stream="1")
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            self.assertRedirects(self.last_response, stage.urls["edit"])
+            # Should call insert and bind APIs
+            mock_youtube.liveBroadcasts().insert.assert_called_once()
+            mock_youtube.liveBroadcasts().bind.assert_called_once()
+            match7.refresh_from_db()
+            self.assertTrue(match7.live_stream)
+            self.assertEqual(match7.external_identifier, "new_broadcast_id")
+            self.assertEqual(match7.live_stream_bind, "bound_stream_id")
+            self.assertIn("https://youtu.be/new_broadcast_id", match7.videos)
+
+        # Test Case 8: Has credentials, stream enabled, has external ID (should update)
+        mock_youtube.reset_mock()
+        mock_youtube.liveBroadcasts().update().execute.return_value = {
+            "id": "existing_broadcast_id_3",
+            "snippet": {"title": "Updated Broadcast"},
+        }
+        mock_youtube.liveBroadcasts().bind().execute.return_value = {
+            "contentDetails": {"boundStreamId": "updated_bound_stream_id"}
+        }
+
+        match8 = factories.MatchFactory.create(
+            stage=stage,
+            home_team__title="Home Team 8",
+            home_team__division=stage.division,
+            away_team__title="Away Team 8",
+            away_team__division=stage.division,
+            date=date(2025, 5, 8),
+            include_in_ladder=True,
+            play_at=ground,
+            live_stream=True,
+            external_identifier="existing_broadcast_id_3",
+        )
+
+        edit_match_url = match8.url_names["edit"]
+        with self.login(self.superuser):
+            # Keep live streaming enabled - should update existing broadcast
+            data = self._get_base_match_data(match8, ground, live_stream="1")
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            self.assertRedirects(self.last_response, stage.urls["edit"])
+            # Should call update and bind APIs
+            mock_youtube.liveBroadcasts().update.assert_called_once()
+            mock_youtube.liveBroadcasts().bind.assert_called_once()
+            match8.refresh_from_db()
+            self.assertTrue(match8.live_stream)
+            self.assertEqual(match8.external_identifier, "existing_broadcast_id_3")
+            self.assertEqual(match8.live_stream_bind, "updated_bound_stream_id")
+
+    def _get_base_match_data(self, match, ground, live_stream="0"):
+        """Helper method to generate base form data for match editing."""
+        return {
+            "home_team": match.home_team.pk,
+            "away_team": match.away_team.pk,
+            "label": match.label or "Test Match",
+            "round": match.round or 1,
+            "date": match.date.strftime("%Y-%m-%d"),
+            "time": match.time.strftime("%H:%M"),
+            "play_at": ground.pk,
+            "include_in_ladder": "1" if match.include_in_ladder else "0",
+            "live_stream": live_stream,
+            "thumbnail_url": "",
+        }
