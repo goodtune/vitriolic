@@ -124,3 +124,98 @@ class UtilTests(TestCase):
 
     def test_revpow(self):
         self.assertEqual(utils.revpow(2**4, 2), 4)
+
+
+class StageGroupPositionTests(TestCase):
+    """
+    Tests for the stage_group_position function.
+    """
+
+    def test_stage_group_position_with_no_pools_raises_index_error(self):
+        """
+        Test that stage_group_position raises IndexError when trying to access
+        a pool that doesn't exist on a stage.
+        """
+        from tournamentcontrol.competition.tests.factories import (
+            DivisionFactory,
+            StageFactory,
+        )
+
+        # Create a division with multiple stages so we can reference one
+        division = DivisionFactory()
+        stage1 = StageFactory(division=division, order=1)
+        stage2 = StageFactory(division=division, order=2)
+
+        # Stage1 has no pools, but we try to access group 1 from stage1
+        # This should raise IndexError because stage1.pools.all() is empty
+        # and we try to access index 0 (int("1") - 1)
+        with self.assertRaises(IndexError) as cm:
+            utils.stage_group_position(stage2, "S1G1P1")
+
+        # Check that the error message includes better information
+        self.assertIn("Invalid group 1 for stage", str(cm.exception))
+        self.assertIn("stage has 0 pools", str(cm.exception))
+
+    def test_stage_group_position_with_insufficient_pools_raises_index_error(self):
+        """
+        Test that stage_group_position raises IndexError when trying to access
+        a pool index that is out of range.
+        """
+        from tournamentcontrol.competition.tests.factories import (
+            DivisionFactory,
+            StageFactory,
+            StageGroupFactory,
+        )
+
+        # Create a division with multiple stages
+        division = DivisionFactory()
+        stage1 = StageFactory(division=division, order=1)
+        stage2 = StageFactory(division=division, order=2)
+
+        # Stage1 has only 1 pool
+        StageGroupFactory(stage=stage1)  # Creates pool 1
+
+        # Try to access group 2 from stage1 (which doesn't exist)
+        # This should raise IndexError because stage1.pools.all() has only 1 item
+        # and we try to access index 1 (int("2") - 1)
+        with self.assertRaises(IndexError) as cm:
+            utils.stage_group_position(stage2, "S1G2P1")
+
+        # Check that the error message includes better information
+        self.assertIn("Invalid group 2 for stage", str(cm.exception))
+        self.assertIn("stage has 1 pools", str(cm.exception))
+
+    def test_stage_group_position_with_valid_pool_succeeds(self):
+        """
+        Test that stage_group_position works correctly when the pool exists.
+        """
+        from tournamentcontrol.competition.tests.factories import (
+            DivisionFactory,
+            StageFactory,
+            StageGroupFactory,
+        )
+
+        # Create a division with multiple stages
+        division = DivisionFactory()
+        stage1 = StageFactory(division=division, order=1)
+        stage2 = StageFactory(division=division, order=2)
+
+        # Stage1 has 2 pools
+        pool1 = StageGroupFactory(stage=stage1)
+        pool2 = StageGroupFactory(stage=stage1)
+
+        # Access group 1 from stage1 should work
+        result_stage, result_group, result_position = utils.stage_group_position(
+            stage2, "S1G1P1"
+        )
+        self.assertEqual(result_stage, stage1)
+        self.assertEqual(result_group, pool1)
+        self.assertEqual(result_position, 1)
+
+        # Access group 2 from stage1 should also work
+        result_stage, result_group, result_position = utils.stage_group_position(
+            stage2, "S1G2P3"
+        )
+        self.assertEqual(result_stage, stage1)
+        self.assertEqual(result_group, pool2)
+        self.assertEqual(result_position, 3)
