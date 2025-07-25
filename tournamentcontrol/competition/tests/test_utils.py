@@ -149,12 +149,11 @@ class StageGroupPositionTests(TestCase):
         # Stage1 has no pools, but we try to access group 1 from stage1
         # This should raise IndexError because stage1.pools.all() is empty
         # and we try to access index 0 (int("1") - 1)
-        with self.assertRaises(IndexError) as cm:
+        with self.assertRaisesRegex(
+            IndexError,
+            r"Invalid group 1 for stage .* \(stage has 0 pools\)"
+        ):
             utils.stage_group_position(stage2, "S1G1P1")
-
-        # Check that the error message includes better information
-        self.assertIn("Invalid group 1 for stage", str(cm.exception))
-        self.assertIn("stage has 0 pools", str(cm.exception))
 
     def test_stage_group_position_with_insufficient_pools_raises_index_error(self):
         """
@@ -172,12 +171,11 @@ class StageGroupPositionTests(TestCase):
         # Try to access group 2 from stage1 (which doesn't exist)
         # This should raise IndexError because stage1.pools.all() has only 1 item
         # and we try to access index 1 (int("2") - 1)
-        with self.assertRaises(IndexError) as cm:
+        with self.assertRaisesRegex(
+            IndexError,
+            r"Invalid group 2 for stage .* \(stage has 1 pools\)"
+        ):
             utils.stage_group_position(stage2, "S1G2P1")
-
-        # Check that the error message includes better information
-        self.assertIn("Invalid group 2 for stage", str(cm.exception))
-        self.assertIn("stage has 1 pools", str(cm.exception))
 
     def test_stage_group_position_with_valid_pool_succeeds(self):
         """
