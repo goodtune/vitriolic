@@ -33,41 +33,18 @@ def capture_timezone_before_save(sender, instance, **kwargs):
 
 
 @disable_for_loaddata
-def update_match_datetimes_on_venue_timezone_change(
+def update_match_datetimes_on_place_timezone_change(
     sender, instance, created, **kwargs
 ):
-    """Update Match.datetime when Venue timezone changes."""
+    """Update Match.datetime when Place (Venue/Ground) timezone changes."""
     if not created and hasattr(instance, "_old_timezone"):
-        from tournamentcontrol.competition.models import Match
-
         old_timezone = instance._old_timezone
         new_timezone = instance.timezone
 
         if old_timezone != new_timezone:
-            # Update all matches played at this venue
-            matches = Match.objects.filter(
-                play_at=instance, date__isnull=False, time__isnull=False
-            )
-            for match in matches:
-                match.clean()  # Recalculate datetime with new timezone
-                match.save(update_fields=["datetime"])
-
-
-@disable_for_loaddata
-def update_match_datetimes_on_ground_timezone_change(
-    sender, instance, created, **kwargs
-):
-    """Update Match.datetime when Ground timezone changes."""
-    if not created and hasattr(instance, "_old_timezone"):
-        from tournamentcontrol.competition.models import Match
-
-        old_timezone = instance._old_timezone
-        new_timezone = instance.timezone
-
-        if old_timezone != new_timezone:
-            # Update all matches played at this ground
-            matches = Match.objects.filter(
-                play_at=instance, date__isnull=False, time__isnull=False
+            # Update all matches played at this place (venue or ground)
+            matches = instance.match_set.filter(
+                date__isnull=False, time__isnull=False
             )
             for match in matches:
                 match.clean()  # Recalculate datetime with new timezone
