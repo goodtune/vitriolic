@@ -13,6 +13,8 @@ from tournamentcontrol.competition.signals.matches import (  # noqa
 from tournamentcontrol.competition.signals.places import (  # noqa
     set_ground_latlng,
     set_ground_timezone,
+    update_match_datetimes_on_ground_timezone_change,
+    update_match_datetimes_on_venue_timezone_change,
 )
 from tournamentcontrol.competition.signals.teams import delete_team  # noqa
 
