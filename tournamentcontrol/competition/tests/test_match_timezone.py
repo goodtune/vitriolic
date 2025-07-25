@@ -11,199 +11,171 @@ from tournamentcontrol.competition.tests.test_competition_admin import TestCase
 class TimezoneAdjustmentTestCase(TestCase):
     """Test timezone handling in Match datetime calculations."""
 
-    def test_match_datetime_calculation_with_venue_timezone(self):
-        """Test that Match.datetime is calculated correctly using venue timezone."""
-        # Create a season with a default timezone
-        season = factories.SeasonFactory.create(timezone=ZoneInfo("UTC"))
+    def setUp(self):
+        """Set up common test data."""
+        self.season = factories.SeasonFactory.create(timezone=ZoneInfo("UTC"))
+        self.division = factories.DivisionFactory.create(season=self.season)
+        self.stage = factories.StageFactory.create(division=self.division)
+        self.home_team = factories.TeamFactory.create(division=self.division)
+        self.away_team = factories.TeamFactory.create(division=self.division)
 
-        # Create a venue with a specific timezone
-        venue = factories.VenueFactory.create(
-            season=season, timezone=ZoneInfo("Australia/Brisbane")  # UTC+10
-        )
+    def test_match_datetime_calculation_scenarios(self):
+        """Test Match.datetime calculation with different timezone scenarios."""
 
-        # Create division, stage, and teams
-        division = factories.DivisionFactory.create(season=season)
-        stage = factories.StageFactory.create(division=division)
-        home_team = factories.TeamFactory.create(division=division)
-        away_team = factories.TeamFactory.create(division=division)
+        scenarios = [
+            {
+                "name": "venue_timezone",
+                "description": "venue timezone (Australia/Brisbane UTC+10)",
+                "setup": lambda: factories.VenueFactory.create(
+                    season=self.season, timezone=ZoneInfo("Australia/Brisbane")
+                ),
+                "date": date(2024, 1, 15),
+                "time": time(14, 30),  # 2:30 PM
+                "expected_utc": datetime(2024, 1, 15, 4, 30, tzinfo=ZoneInfo("UTC")),
+            },
+            {
+                "name": "ground_timezone",
+                "description": "ground timezone (Asia/Tokyo UTC+9) overriding venue (Europe/London UTC+0)",
+                "setup": lambda: factories.GroundFactory.create(
+                    venue=factories.VenueFactory.create(
+                        season=self.season, timezone=ZoneInfo("Europe/London")
+                    ),
+                    timezone=ZoneInfo("Asia/Tokyo"),
+                ),
+                "date": date(2024, 1, 15),
+                "time": time(18, 0),  # 6:00 PM
+                "expected_utc": datetime(2024, 1, 15, 9, 0, tzinfo=ZoneInfo("UTC")),
+            },
+            {
+                "name": "season_timezone_fallback",
+                "description": "season timezone fallback (America/New_York UTC-5) when no play_at",
+                "setup": lambda: None,
+                "season_timezone": ZoneInfo("America/New_York"),
+                "date": date(2024, 1, 15),
+                "time": time(20, 0),  # 8:00 PM
+                "expected_utc": datetime(2024, 1, 16, 1, 0, tzinfo=ZoneInfo("UTC")),
+            },
+        ]
 
-        # Create a match at the venue
-        match = Match(
-            stage=stage,
-            home_team=home_team,
-            away_team=away_team,
-            date=date(2024, 1, 15),
-            time=time(14, 30),  # 2:30 PM
-            play_at=venue,
-        )
+        for scenario in scenarios:
+            with self.subTest(scenario=scenario["name"]):
+                # Set up season timezone if specified
+                if "season_timezone" in scenario:
+                    season = factories.SeasonFactory.create(
+                        timezone=scenario["season_timezone"]
+                    )
+                    division = factories.DivisionFactory.create(season=season)
+                    stage = factories.StageFactory.create(division=division)
+                    home_team = factories.TeamFactory.create(division=division)
+                    away_team = factories.TeamFactory.create(division=division)
+                else:
+                    season = self.season
+                    stage = self.stage
+                    home_team = self.home_team
+                    away_team = self.away_team
 
-        # Test the clean method which calculates datetime
-        match.clean()
+                # Set up the play_at location
+                play_at = scenario["setup"]()
 
-        # Assert that datetime is correctly set with venue timezone
-        # 2:30 PM in Brisbane (UTC+10) should be 4:30 AM UTC
-        expected_utc = datetime(2024, 1, 15, 4, 30, tzinfo=ZoneInfo("UTC"))
-        self.assertEqual(match.datetime, expected_utc)
+                # Create match
+                match = Match(
+                    stage=stage,
+                    home_team=home_team,
+                    away_team=away_team,
+                    date=scenario["date"],
+                    time=scenario["time"],
+                    play_at=play_at,
+                )
 
-    def test_match_datetime_calculation_with_ground_timezone(self):
-        """Test that Match.datetime is calculated correctly using ground timezone."""
-        # Create a season with a default timezone
-        season = factories.SeasonFactory.create(timezone=ZoneInfo("UTC"))
+                # Test datetime calculation
+                match.clean()
 
-        # Create a venue
-        venue = factories.VenueFactory.create(
-            season=season, timezone=ZoneInfo("Europe/London")  # UTC+0 (GMT)
-        )
+                # Assert correct timezone calculation
+                self.assertEqual(
+                    match.datetime,
+                    scenario["expected_utc"],
+                    f"Failed for {scenario['description']}",
+                )
 
-        # Create a ground with a different timezone than venue
-        ground = factories.GroundFactory.create(
-            venue=venue, timezone=ZoneInfo("Asia/Tokyo")  # UTC+9
-        )
+    def test_timezone_change_updates_match_datetime_scenarios(self):
+        """Test that timezone changes update related match datetime values."""
 
-        # Create division, stage, and teams
-        division = factories.DivisionFactory.create(season=season)
-        stage = factories.StageFactory.create(division=division)
-        home_team = factories.TeamFactory.create(division=division)
-        away_team = factories.TeamFactory.create(division=division)
+        scenarios = [
+            {
+                "name": "venue_timezone_change",
+                "description": "venue timezone change from Australia/Brisbane to America/New_York",
+                "setup": lambda: factories.VenueFactory.create(
+                    season=self.season, timezone=ZoneInfo("Australia/Brisbane")
+                ),
+                "initial_timezone": ZoneInfo("Australia/Brisbane"),  # UTC+10
+                "new_timezone": ZoneInfo("America/New_York"),  # UTC-5
+                "date": date(2024, 1, 15),
+                "time": time(14, 30),  # 2:30 PM
+                "expected_utc_before": datetime(
+                    2024, 1, 15, 4, 30, tzinfo=ZoneInfo("UTC")
+                ),
+                "expected_utc_after": datetime(
+                    2024, 1, 15, 19, 30, tzinfo=ZoneInfo("UTC")
+                ),
+            },
+            {
+                "name": "ground_timezone_change",
+                "description": "ground timezone change from Asia/Tokyo to Australia/Sydney",
+                "setup": lambda: factories.GroundFactory.create(
+                    venue=factories.VenueFactory.create(
+                        season=self.season, timezone=ZoneInfo("Europe/London")
+                    ),
+                    timezone=ZoneInfo("Asia/Tokyo"),
+                ),
+                "initial_timezone": ZoneInfo("Asia/Tokyo"),  # UTC+9
+                "new_timezone": ZoneInfo("Australia/Sydney"),  # UTC+11
+                "date": date(2024, 1, 15),
+                "time": time(18, 0),  # 6:00 PM
+                "expected_utc_before": datetime(
+                    2024, 1, 15, 9, 0, tzinfo=ZoneInfo("UTC")
+                ),
+                "expected_utc_after": datetime(
+                    2024, 1, 15, 7, 0, tzinfo=ZoneInfo("UTC")
+                ),
+            },
+        ]
 
-        # Create a match at the ground
-        match = Match(
-            stage=stage,
-            home_team=home_team,
-            away_team=away_team,
-            date=date(2024, 1, 15),
-            time=time(18, 0),  # 6:00 PM
-            play_at=ground,
-        )
+        for scenario in scenarios:
+            with self.subTest(scenario=scenario["name"]):
+                # Set up the place (venue or ground)
+                place = scenario["setup"]()
 
-        # Test the clean method which calculates datetime
-        match.clean()
+                # Create match
+                match = factories.MatchFactory.create(
+                    stage=self.stage,
+                    home_team=self.home_team,
+                    away_team=self.away_team,
+                    date=scenario["date"],
+                    time=scenario["time"],
+                    play_at=place,
+                )
 
-        # Assert that datetime is correctly set with ground timezone (not venue timezone)
-        # 6:00 PM in Tokyo (UTC+9) should be 9:00 AM UTC
-        expected_utc = datetime(2024, 1, 15, 9, 0, tzinfo=ZoneInfo("UTC"))
-        self.assertEqual(match.datetime, expected_utc)
+                # Ensure datetime is calculated with initial timezone
+                match.clean()
+                match.save()
 
-    def test_match_datetime_fallback_to_season_timezone(self):
-        """Test that Match.datetime falls back to season timezone when play_at is None."""
-        # Create a season with a specific timezone
-        season = factories.SeasonFactory.create(
-            timezone=ZoneInfo("America/New_York")
-        )  # UTC-5
+                # Verify initial datetime
+                self.assertEqual(
+                    match.datetime,
+                    scenario["expected_utc_before"],
+                    f"Initial datetime incorrect for {scenario['description']}",
+                )
 
-        # Create division, stage, and teams
-        division = factories.DivisionFactory.create(season=season)
-        stage = factories.StageFactory.create(division=division)
-        home_team = factories.TeamFactory.create(division=division)
-        away_team = factories.TeamFactory.create(division=division)
+                # Update timezone - this should trigger the signal automatically
+                place.timezone = scenario["new_timezone"]
+                place.save()
 
-        # Create a match without a venue/ground
-        match = Match(
-            stage=stage,
-            home_team=home_team,
-            away_team=away_team,
-            date=date(2024, 1, 15),
-            time=time(20, 0),  # 8:00 PM
-            play_at=None,
-        )
+                # Refresh match from database
+                match.refresh_from_db()
 
-        # Test the clean method which calculates datetime
-        match.clean()
-
-        # Assert that datetime is correctly set with season timezone
-        # 8:00 PM in New York (UTC-5) should be 1:00 AM UTC next day
-        expected_utc = datetime(2024, 1, 16, 1, 0, tzinfo=ZoneInfo("UTC"))
-        self.assertEqual(match.datetime, expected_utc)
-
-    def test_venue_timezone_change_updates_match_datetime(self):
-        """Test that changing venue timezone updates related match datetime values."""
-        # Create a season
-        season = factories.SeasonFactory.create(timezone=ZoneInfo("UTC"))
-
-        # Create a venue with initial timezone
-        venue = factories.VenueFactory.create(
-            season=season, timezone=ZoneInfo("Australia/Brisbane")  # UTC+10
-        )
-
-        # Create division, stage, teams and match
-        division = factories.DivisionFactory.create(season=season)
-        stage = factories.StageFactory.create(division=division)
-        home_team = factories.TeamFactory.create(division=division)
-        away_team = factories.TeamFactory.create(division=division)
-
-        match = factories.MatchFactory.create(
-            stage=stage,
-            home_team=home_team,
-            away_team=away_team,
-            date=date(2024, 1, 15),
-            time=time(14, 30),  # 2:30 PM
-            play_at=venue,
-        )
-
-        # Ensure datetime is calculated with initial timezone
-        match.clean()
-        match.save()
-
-        # 2:30 PM in Brisbane (UTC+10) should be 4:30 AM UTC
-        expected_utc_before = datetime(2024, 1, 15, 4, 30, tzinfo=ZoneInfo("UTC"))
-        self.assertEqual(match.datetime, expected_utc_before)
-
-        # Update venue timezone - this should trigger the signal automatically
-        venue.timezone = ZoneInfo("America/New_York")  # UTC-5 (EST)
-        venue.save()
-
-        # Refresh match from database
-        match.refresh_from_db()
-
-        # Match datetime should be updated to reflect new timezone
-        # 2:30 PM in New York (UTC-5) should be 7:30 PM UTC
-        expected_utc_after = datetime(2024, 1, 15, 19, 30, tzinfo=ZoneInfo("UTC"))
-        self.assertEqual(match.datetime, expected_utc_after)
-
-    def test_ground_timezone_change_updates_match_datetime(self):
-        """Test that changing ground timezone updates related match datetime values."""
-        # Create a season and venue
-        season = factories.SeasonFactory.create(timezone=ZoneInfo("UTC"))
-        venue = factories.VenueFactory.create(
-            season=season, timezone=ZoneInfo("Europe/London")  # UTC+0 (GMT)
-        )
-
-        # Create a ground with initial timezone
-        ground = factories.GroundFactory.create(
-            venue=venue, timezone=ZoneInfo("Asia/Tokyo")  # UTC+9
-        )
-
-        # Create division, stage, teams and match
-        division = factories.DivisionFactory.create(season=season)
-        stage = factories.StageFactory.create(division=division)
-        home_team = factories.TeamFactory.create(division=division)
-        away_team = factories.TeamFactory.create(division=division)
-
-        match = factories.MatchFactory.create(
-            stage=stage,
-            home_team=home_team,
-            away_team=away_team,
-            date=date(2024, 1, 15),
-            time=time(18, 0),  # 6:00 PM
-            play_at=ground,
-        )
-
-        # Ensure datetime is calculated with initial timezone
-        match.clean()
-        match.save()
-
-        # 6:00 PM in Tokyo (UTC+9) should be 9:00 AM UTC
-        expected_utc_before = datetime(2024, 1, 15, 9, 0, tzinfo=ZoneInfo("UTC"))
-        self.assertEqual(match.datetime, expected_utc_before)
-
-        # Update ground timezone
-        ground.timezone = ZoneInfo("Australia/Sydney")  # UTC+11 (AEDT)
-        ground.save()
-
-        # Refresh match from database
-        match.refresh_from_db()
-
-        # Match datetime should be updated to reflect new timezone
-        # 6:00 PM in Sydney (UTC+11) should be 7:00 AM UTC
-        expected_utc_after = datetime(2024, 1, 15, 7, 0, tzinfo=ZoneInfo("UTC"))
-        self.assertEqual(match.datetime, expected_utc_after)
+                # Verify updated datetime
+                self.assertEqual(
+                    match.datetime,
+                    scenario["expected_utc_after"],
+                    f"Updated datetime incorrect for {scenario['description']}",
+                )
