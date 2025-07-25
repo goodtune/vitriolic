@@ -1,5 +1,6 @@
 import unittest
 from datetime import date, datetime, time
+from unittest import mock
 from zoneinfo import ZoneInfo
 
 from dateutil.rrule import DAILY
@@ -9,6 +10,7 @@ from django.template import Context, Template
 from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 
+from touchtechnology.admin.mixins import AdminUrlLookup
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.models import (
     Division,
@@ -1448,3 +1450,113 @@ class BackendTests(MessagesTestMixin, TestCase):
                     ),
                 ],
             )
+
+    def test_edit_match_without_external_identifier_youtube_api(self):
+        """
+        Test that editing a match with live streaming enabled but without
+        external_identifier doesn't cause TypeError when YouTube API bind() is called.
+
+        This test covers the original bug scenario where:
+        - A match has live_stream=True
+        - But obj.external_identifier is None
+        - The pre_save_callback tried to bind the stream without checking identifiers
+        - This caused TypeError: Missing required parameter "id"
+        """
+        # Create a stage with live streaming enabled but no YouTube credentials
+        # This simulates the guard clause scenario
+        stage = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_client_id=None,
+            division__season__live_stream_client_secret=None,
+        )
+
+        # Create a ground - doesn't need external_identifier for this test
+        ground = factories.GroundFactory.create(venue__season=stage.division.season)
+
+        # Create a match that has live streaming enabled but no external identifier
+        # This is the problematic state that caused the original bug
+        match = factories.MatchFactory.create(
+            stage=stage,
+            play_at=ground,
+            live_stream=True,
+            external_identifier=None,  # This is the key - no external ID
+        )
+
+        # Test editing the match - this should not raise TypeError
+        edit_match_url = match.url_names["edit"]
+        with self.login(self.superuser):
+            # Turn off live streaming to resolve the problematic state
+            data = {
+                "home_team": match.home_team.pk,
+                "away_team": match.away_team.pk,
+                "label": match.label or "Test Match",
+                "round": match.round or 1,
+                "date": match.date.strftime("%Y-%m-%d"),
+                "time": match.time.strftime("%H:%M"),
+                "play_at": ground.pk,
+                "include_in_ladder": "1" if match.include_in_ladder else "0",
+                "live_stream": "0",  # Turn OFF live streaming
+                "thumbnail_url": "",
+            }
+
+            # This should complete successfully without TypeError
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            self.response_302()  # Should redirect successfully
+
+            # Verify the match was updated
+            match.refresh_from_db()
+            self.assertFalse(match.live_stream)
+            self.assertIsNone(match.external_identifier)
+
+    def test_edit_match_youtube_api_basic_guard_clause(self):
+        """
+        Test that the YouTube API guard clauses work correctly.
+
+        This test covers scenarios where YouTube credentials may or may not
+        be configured, focusing on the original bug case where matches with
+        live_stream=True but no external_identifier could cause TypeErrors.
+        """
+        # Test Case 1: No credentials configured (guard clause should prevent API calls)
+        stage_no_creds = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_client_id=None,
+            division__season__live_stream_client_secret=None,
+        )
+
+        ground = factories.GroundFactory.create(
+            venue__season=stage_no_creds.division.season
+        )
+
+        # Create match with problematic state: live_stream=True, external_identifier=None
+        match = factories.MatchFactory.create(
+            stage=stage_no_creds,
+            play_at=ground,
+            live_stream=True,
+            external_identifier=None,
+        )
+
+        # Edit the match - should not cause TypeError due to guard clause
+        edit_match_url = match.url_names["edit"]
+        with self.login(self.superuser):
+            # Turn off live streaming
+            data = {
+                "home_team": match.home_team.pk,
+                "away_team": match.away_team.pk,
+                "label": match.label or "Test Match",
+                "round": match.round or 1,
+                "date": match.date.strftime("%Y-%m-%d"),
+                "time": match.time.strftime("%H:%M"),
+                "play_at": ground.pk,
+                "include_in_ladder": "1" if match.include_in_ladder else "0",
+                "live_stream": "0",
+                "thumbnail_url": "",
+            }
+
+            # This should complete successfully without TypeError
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            self.response_302()  # Should redirect successfully
+
+            # Verify the match was updated
+            match.refresh_from_db()
+            self.assertFalse(match.live_stream)
+            self.assertIsNone(match.external_identifier)

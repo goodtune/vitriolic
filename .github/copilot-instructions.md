@@ -4,11 +4,12 @@ This is a Python based repository, it provides a Django reusable application tha
 
 ### Required Before Each Commit
 
-- Run `uvx isort` and `uvx black` before committing any changes to ensure proper code formatting
+- Run `isort` and `black` before committing any changes to ensure proper code formatting
 
 ### Development Flow
 
-- Test: `uvx tox` to run the full test suite
+- Test: `tox` to run the full test suite
+- Test: `tox -l` to list the available `tox` environments - you can pick one for faster feedback or run them all for thoroughness
 
 ## Repository Structure
 
@@ -28,4 +29,4 @@ This is a Python based repository, it provides a Django reusable application tha
     - Always use `django-test-plus` style tests.
     - Avoid `assertTrue` and `assertFalse` in favor of `assertEqual` and `assertNotEqual`.
     - Use `assertCountEqual` to check lists and querysets.
-4. Use `uvx tox` for running tests across supported Python versions
+4. Use `tox` for running tests across supported Python versions

@@ -23,4 +23,8 @@ jobs:
         uses: astral-sh/setup-uv@v6
 
       - name: Sync dependencies
-        run: uv sync
+        run: |
+          uv sync
+          uv tool install black
+          uv tool install isort
+          uv tool install tox --with tox-docker,tox-uv
