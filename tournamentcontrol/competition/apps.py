@@ -28,8 +28,10 @@ class CompetitionConfig(AppConfig):
             Stage,
             StageGroup,
             Team,
+            Venue,
         )
         from tournamentcontrol.competition.signals import (
+            capture_timezone_before_save,
             changed_points_formula,
             delete_related,
             delete_team,
@@ -40,6 +42,7 @@ class CompetitionConfig(AppConfig):
             set_ground_latlng,
             set_ground_timezone,
             team_ladder_entry_aggregation,
+            update_match_datetimes_on_place_timezone_change,
         )
 
         site.register(CompetitionAdminComponent)
@@ -52,6 +55,14 @@ class CompetitionConfig(AppConfig):
 
         post_save.connect(set_ground_latlng, sender=Ground)
         post_save.connect(set_ground_timezone, sender=Ground)
+        
+        # Capture timezone before save to detect changes
+        pre_save.connect(capture_timezone_before_save, sender=Venue)
+        pre_save.connect(capture_timezone_before_save, sender=Ground)
+        
+        # Update match datetimes when timezone changes
+        post_save.connect(update_match_datetimes_on_place_timezone_change, sender=Venue)
+        post_save.connect(update_match_datetimes_on_place_timezone_change, sender=Ground)
 
         post_save.connect(changed_points_formula, sender=Division)
 
