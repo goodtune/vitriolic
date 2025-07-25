@@ -3,6 +3,11 @@ import textwrap
 from django.test import TestCase
 
 from tournamentcontrol.competition import utils
+from tournamentcontrol.competition.tests.factories import (
+    DivisionFactory,
+    StageFactory,
+    StageGroupFactory,
+)
 
 
 class MessagesTestMixin:
@@ -136,15 +141,10 @@ class StageGroupPositionTests(TestCase):
         Test that stage_group_position raises IndexError when trying to access
         a pool that doesn't exist on a stage.
         """
-        from tournamentcontrol.competition.tests.factories import (
-            DivisionFactory,
-            StageFactory,
-        )
-
         # Create a division with multiple stages so we can reference one
-        division = DivisionFactory()
-        stage1 = StageFactory(division=division, order=1)
-        stage2 = StageFactory(division=division, order=2)
+        division = DivisionFactory.create()
+        stage1 = StageFactory.create(division=division, order=1)
+        stage2 = StageFactory.create(division=division, order=2)
 
         # Stage1 has no pools, but we try to access group 1 from stage1
         # This should raise IndexError because stage1.pools.all() is empty
@@ -161,19 +161,13 @@ class StageGroupPositionTests(TestCase):
         Test that stage_group_position raises IndexError when trying to access
         a pool index that is out of range.
         """
-        from tournamentcontrol.competition.tests.factories import (
-            DivisionFactory,
-            StageFactory,
-            StageGroupFactory,
-        )
-
         # Create a division with multiple stages
-        division = DivisionFactory()
-        stage1 = StageFactory(division=division, order=1)
-        stage2 = StageFactory(division=division, order=2)
+        division = DivisionFactory.create()
+        stage1 = StageFactory.create(division=division, order=1)
+        stage2 = StageFactory.create(division=division, order=2)
 
         # Stage1 has only 1 pool
-        StageGroupFactory(stage=stage1)  # Creates pool 1
+        StageGroupFactory.create(stage=stage1)  # Creates pool 1
 
         # Try to access group 2 from stage1 (which doesn't exist)
         # This should raise IndexError because stage1.pools.all() has only 1 item
@@ -189,20 +183,14 @@ class StageGroupPositionTests(TestCase):
         """
         Test that stage_group_position works correctly when the pool exists.
         """
-        from tournamentcontrol.competition.tests.factories import (
-            DivisionFactory,
-            StageFactory,
-            StageGroupFactory,
-        )
-
         # Create a division with multiple stages
-        division = DivisionFactory()
-        stage1 = StageFactory(division=division, order=1)
-        stage2 = StageFactory(division=division, order=2)
+        division = DivisionFactory.create()
+        stage1 = StageFactory.create(division=division, order=1)
+        stage2 = StageFactory.create(division=division, order=2)
 
         # Stage1 has 2 pools
-        pool1 = StageGroupFactory(stage=stage1)
-        pool2 = StageGroupFactory(stage=stage1)
+        pool1 = StageGroupFactory.create(stage=stage1)
+        pool2 = StageGroupFactory.create(stage=stage1)
 
         # Access group 1 from stage1 should work
         result_stage, result_group, result_position = utils.stage_group_position(
