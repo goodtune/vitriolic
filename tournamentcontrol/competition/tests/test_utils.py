@@ -224,3 +224,66 @@ class StageGroupPositionTests(TestCase):
                 self.assertEqual(result_stage, expected_stage)
                 self.assertEqual(result_group, expected_group)
                 self.assertEqual(result_position, expected_position)
+
+    def test_edit_stage_view_with_undecided_teams_referencing_missing_pools(self):
+        """
+        Integration test that exercises the edit_stage admin view where UndecidedTeam
+        objects reference pools that don't exist, reproducing the original IndexError.
+
+        This test ensures that the admin view handles the error gracefully after
+        the fix, rather than crashing with an IndexError when rendering templates
+        that access UndecidedTeam.title or UndecidedTeam.choices properties.
+        """
+        from django.contrib.auth.models import User
+        from django.test import Client
+
+        from tournamentcontrol.competition.models import UndecidedTeam
+
+        # Create a superuser for admin access
+        superuser = User.objects.create_superuser("admin", "admin@test.com", "password")
+        client = Client()
+        client.login(username="admin", password="password")
+
+        # Create a division with multiple stages
+        division = DivisionFactory.create()
+        stage1 = StageFactory.create(division=division, order=1)
+        stage2 = StageFactory.create(division=division, order=2, follows=stage1)
+
+        # Create UndecidedTeam objects that reference pools that don't exist
+        # This reproduces the problematic scenario from the issue
+        undecided_team_1 = UndecidedTeam.objects.create(
+            stage=stage2,
+            formula="G1P1",  # References group 1, but stage1 has no pools
+            label="Winner Group 1",
+        )
+        undecided_team_2 = UndecidedTeam.objects.create(
+            stage=stage2,
+            formula="S1G2P1",  # References stage1 group 2, but stage1 has only 0 pools
+            label="Winner Group 2",
+        )
+
+        # Build the edit_stage URL using the same pattern as other admin tests
+        edit_stage_url = stage2.urls["edit"]
+
+        # Before the fix, accessing these properties would raise IndexError: list index out of range
+        # After the fix, they should raise IndexError with a descriptive message
+
+        # Test that the properties raise meaningful IndexError rather than crashing
+        with self.subTest(formula="G1P1"):
+            with self.assertRaisesRegex(
+                IndexError, r"Invalid group 1 for stage .* \(stage has 0 pools\)"
+            ):
+                _ = undecided_team_1.title  # This accesses stage_group_position
+
+        with self.subTest(formula="S1G2P1"):
+            with self.assertRaisesRegex(
+                IndexError, r"Invalid group 2 for stage .* \(stage has 0 pools\)"
+            ):
+                _ = undecided_team_2.title  # This accesses stage_group_position
+
+        # Test that accessing choices also provides meaningful error
+        with self.subTest(property="choices", formula="G1P1"):
+            with self.assertRaisesRegex(
+                IndexError, r"Invalid group 1 for stage .* \(stage has 0 pools\)"
+            ):
+                _ = undecided_team_1.choices  # This also accesses stage_group_position
