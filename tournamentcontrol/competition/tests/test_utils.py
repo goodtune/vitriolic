@@ -182,41 +182,45 @@ class StageGroupPositionTests(TestCase):
         # Create a division with multiple stages
         division = DivisionFactory.create()
         stage1 = StageFactory.create(division=division, order=1)
-        stage2 = StageFactory.create(division=division, order=2)
-        stage3 = StageFactory.create(division=division, order=3)
+        stage2 = StageFactory.create(division=division, order=2, follows=stage1)
+        stage3 = StageFactory.create(division=division, order=3, follows=stage1)
 
         # Stage1 has 2 pools
         pool1 = StageGroupFactory.create(stage=stage1)
         pool2 = StageGroupFactory.create(stage=stage1)
 
-        # Access group 1 from stage1 should work from stage2
-        result_stage, result_group, result_position = utils.stage_group_position(
-            stage2, "S1G1P1"
-        )
-        self.assertEqual(result_stage, stage1)
-        self.assertEqual(result_group, pool1)
-        self.assertEqual(result_position, 1)
+        # Test formulas both with and without explicit stage reference
+        test_cases = [
+            # (from_stage, with_stage_formula, without_stage_formula, expected_stage, expected_group, expected_position)
+            (stage2, "S1G1P1", "G1P1", stage1, pool1, 1),
+            (stage2, "S1G2P3", "G2P3", stage1, pool2, 3),
+            (stage3, "S1G1P1", "G1P1", stage1, pool1, 1),
+            (stage3, "S1G2P3", "G2P3", stage1, pool2, 3),
+        ]
 
-        # Access group 2 from stage1 should also work from stage2
-        result_stage, result_group, result_position = utils.stage_group_position(
-            stage2, "S1G2P3"
-        )
-        self.assertEqual(result_stage, stage1)
-        self.assertEqual(result_group, pool2)
-        self.assertEqual(result_position, 3)
+        for (
+            from_stage,
+            with_stage_formula,
+            without_stage_formula,
+            expected_stage,
+            expected_group,
+            expected_position,
+        ) in test_cases:
+            with self.subTest(from_stage=from_stage, formula=with_stage_formula):
+                # Test with explicit stage reference (e.g., "S1G1P1")
+                result_stage, result_group, result_position = (
+                    utils.stage_group_position(from_stage, with_stage_formula)
+                )
+                self.assertEqual(result_stage, expected_stage)
+                self.assertEqual(result_group, expected_group)
+                self.assertEqual(result_position, expected_position)
 
-        # Access group 1 from stage1 should work from stage3
-        result_stage, result_group, result_position = utils.stage_group_position(
-            stage3, "S1G1P1"
-        )
-        self.assertEqual(result_stage, stage1)
-        self.assertEqual(result_group, pool1)
-        self.assertEqual(result_position, 1)
-
-        # Access group 2 from stage1 should also work from stage3
-        result_stage, result_group, result_position = utils.stage_group_position(
-            stage3, "S1G2P3"
-        )
-        self.assertEqual(result_stage, stage1)
-        self.assertEqual(result_group, pool2)
-        self.assertEqual(result_position, 3)
+            with self.subTest(from_stage=from_stage, formula=without_stage_formula):
+                # Test without explicit stage reference (e.g., "G1P1")
+                # This should use from_stage.comes_after
+                result_stage, result_group, result_position = (
+                    utils.stage_group_position(from_stage, without_stage_formula)
+                )
+                self.assertEqual(result_stage, expected_stage)
+                self.assertEqual(result_group, expected_group)
+                self.assertEqual(result_position, expected_position)
