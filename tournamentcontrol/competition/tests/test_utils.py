@@ -150,8 +150,7 @@ class StageGroupPositionTests(TestCase):
         # This should raise IndexError because stage1.pools.all() is empty
         # and we try to access index 0 (int("1") - 1)
         with self.assertRaisesRegex(
-            IndexError,
-            r"Invalid group 1 for stage .* \(stage has 0 pools\)"
+            IndexError, r"Invalid group 1 for stage .* \(stage has 0 pools\)"
         ):
             utils.stage_group_position(stage2, "S1G1P1")
 
@@ -172,8 +171,7 @@ class StageGroupPositionTests(TestCase):
         # This should raise IndexError because stage1.pools.all() has only 1 item
         # and we try to access index 1 (int("2") - 1)
         with self.assertRaisesRegex(
-            IndexError,
-            r"Invalid group 2 for stage .* \(stage has 1 pools\)"
+            IndexError, r"Invalid group 2 for stage .* \(stage has 1 pools\)"
         ):
             utils.stage_group_position(stage2, "S1G2P1")
 
@@ -185,12 +183,13 @@ class StageGroupPositionTests(TestCase):
         division = DivisionFactory.create()
         stage1 = StageFactory.create(division=division, order=1)
         stage2 = StageFactory.create(division=division, order=2)
+        stage3 = StageFactory.create(division=division, order=3)
 
         # Stage1 has 2 pools
         pool1 = StageGroupFactory.create(stage=stage1)
         pool2 = StageGroupFactory.create(stage=stage1)
 
-        # Access group 1 from stage1 should work
+        # Access group 1 from stage1 should work from stage2
         result_stage, result_group, result_position = utils.stage_group_position(
             stage2, "S1G1P1"
         )
@@ -198,9 +197,25 @@ class StageGroupPositionTests(TestCase):
         self.assertEqual(result_group, pool1)
         self.assertEqual(result_position, 1)
 
-        # Access group 2 from stage1 should also work
+        # Access group 2 from stage1 should also work from stage2
         result_stage, result_group, result_position = utils.stage_group_position(
             stage2, "S1G2P3"
+        )
+        self.assertEqual(result_stage, stage1)
+        self.assertEqual(result_group, pool2)
+        self.assertEqual(result_position, 3)
+
+        # Access group 1 from stage1 should work from stage3
+        result_stage, result_group, result_position = utils.stage_group_position(
+            stage3, "S1G1P1"
+        )
+        self.assertEqual(result_stage, stage1)
+        self.assertEqual(result_group, pool1)
+        self.assertEqual(result_position, 1)
+
+        # Access group 2 from stage1 should also work from stage3
+        result_stage, result_group, result_position = utils.stage_group_position(
+            stage3, "S1G2P3"
         )
         self.assertEqual(result_stage, stage1)
         self.assertEqual(result_group, pool2)
