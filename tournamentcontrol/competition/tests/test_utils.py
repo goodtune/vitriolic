@@ -1,12 +1,17 @@
 import textwrap
 
-from django.test import TestCase
+from django.contrib.auth.models import User
+from django.test import Client
+from test_plus import TestCase
 
+from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition import utils
+from tournamentcontrol.competition.models import UndecidedTeam
 from tournamentcontrol.competition.tests.factories import (
     DivisionFactory,
     StageFactory,
     StageGroupFactory,
+    UndecidedTeamFactory,
 )
 
 
@@ -234,16 +239,9 @@ class StageGroupPositionTests(TestCase):
         the fix, rather than crashing with an IndexError when rendering templates
         that access UndecidedTeam.title or UndecidedTeam.choices properties.
         """
-        from django.contrib.auth.models import User
-        from django.test import Client
-
-        from tournamentcontrol.competition.models import UndecidedTeam
-
-        # Create a superuser for admin access
-        superuser = User.objects.create_superuser("admin", "admin@test.com", "password")
-        client = Client()
-        client.login(username="admin", password="password")
-
+        # Create a superuser for admin access using django-test-plus pattern
+        superuser = UserFactory.create(is_staff=True, is_superuser=True)
+        
         # Create a division with multiple stages
         division = DivisionFactory.create()
         stage1 = StageFactory.create(division=division, order=1)
@@ -251,12 +249,12 @@ class StageGroupPositionTests(TestCase):
 
         # Create UndecidedTeam objects that reference pools that don't exist
         # This reproduces the problematic scenario from the issue
-        undecided_team_1 = UndecidedTeam.objects.create(
+        undecided_team_1 = UndecidedTeamFactory.create(
             stage=stage2,
             formula="G1P1",  # References group 1, but stage1 has no pools
             label="Winner Group 1",
         )
-        undecided_team_2 = UndecidedTeam.objects.create(
+        undecided_team_2 = UndecidedTeamFactory.create(
             stage=stage2,
             formula="S1G2P1",  # References stage1 group 2, but stage1 has only 0 pools
             label="Winner Group 2",
