@@ -11,6 +11,7 @@ from tournamentcontrol.competition.tests.factories import (
     DivisionFactory,
     StageFactory,
     StageGroupFactory,
+    SuperUserFactory,
     UndecidedTeamFactory,
 )
 
@@ -141,8 +142,6 @@ class StageGroupPositionTests(TestCase):
     Tests for the stage_group_position function.
     """
 
-    user_factory = UserFactory
-
     def test_stage_group_position_with_no_pools_raises_index_error(self):
         """
         Test that stage_group_position raises IndexError when trying to access
@@ -241,11 +240,8 @@ class StageGroupPositionTests(TestCase):
         the fix, rather than crashing with an IndexError when rendering templates
         that access UndecidedTeam.title or UndecidedTeam.choices properties.
         """
-        # Create a superuser for admin access using django-test-plus pattern
-        superuser = self.make_user("superuser")
-        superuser.is_staff = True
-        superuser.is_superuser = True
-        superuser.save()
+        # Create a superuser for admin access using SuperUserFactory
+        superuser = SuperUserFactory.create()
 
         # Create a division with multiple stages
         division = DivisionFactory.create()

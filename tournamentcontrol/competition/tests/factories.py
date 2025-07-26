@@ -211,6 +211,13 @@ class UserFactory(DjangoModelFactory):
     is_active = True
 
 
+class SuperUserFactory(UserFactory):
+    """Factory for creating superuser accounts with staff and superuser privileges."""
+
+    is_staff = True
+    is_superuser = True
+
+
 class PersonFactory(DjangoModelFactory):
     class Meta:
         model = models.Person
