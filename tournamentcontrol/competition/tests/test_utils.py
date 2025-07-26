@@ -141,6 +141,8 @@ class StageGroupPositionTests(TestCase):
     Tests for the stage_group_position function.
     """
 
+    user_factory = UserFactory
+
     def test_stage_group_position_with_no_pools_raises_index_error(self):
         """
         Test that stage_group_position raises IndexError when trying to access
@@ -240,7 +242,10 @@ class StageGroupPositionTests(TestCase):
         that access UndecidedTeam.title or UndecidedTeam.choices properties.
         """
         # Create a superuser for admin access using django-test-plus pattern
-        superuser = UserFactory.create(is_staff=True, is_superuser=True)
+        superuser = self.make_user("superuser")
+        superuser.is_staff = True
+        superuser.is_superuser = True
+        superuser.save()
 
         # Create a division with multiple stages
         division = DivisionFactory.create()
