@@ -23,7 +23,19 @@ dependencies = [
 dynamic = ["version"]
 
 [dependency-groups]
-test = ["coverage", "django-environ", "django-test-plus", "factory_boy", "freezegun", "tblib"]
+dev = [
+    "black>=25.1.0",
+    "isort>=6.0.1",
+]
+test = [
+    "coverage",
+ "django-environ",
+ "django-test-plus",
+ "factory_boy",
+ "freezegun",
+ "packaging>=25.0",
+ "tblib",
+]
 
 [project.optional-dependencies]
 admin = ["django-bootstrap3", "django-gravatar2"]

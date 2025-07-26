@@ -426,11 +426,21 @@ def stage_group_position(stage, formula):
     if g is None:
         logger.debug("No group specified in formula %r", formula)
     else:
-        try:
-            g = s.pools.all()[int(g) - 1]
-        except IndexError:
-            logger.exception("Invalid group %r for stage %r", g, stage)
-            raise
+        pools = s.pools.all().order_by('order')
+        if pools.count() >= int(g):
+            try:
+                g = pools[int(g) - 1]
+            except IndexError:
+                logger.exception("Invalid group %r for stage %r", g, stage)
+                raise
+        else:
+            pool_count = pools.count()
+            logger.exception(
+                "Invalid group %r for stage %r (stage has %d pools)", g, s, pool_count
+            )
+            raise IndexError(
+                f"Invalid group {g} for stage {s} (stage has {pool_count} pools)"
+            )
     logger.debug("group=%r", g)
 
     p = int(p)
