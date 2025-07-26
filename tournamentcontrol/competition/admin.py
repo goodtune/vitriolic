@@ -1529,7 +1529,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             match = Match(stage=stage, include_in_ladder=stage.keep_ladder)
 
         def pre_save_callback(obj: Match):
-            # Check if YouTube credentials are configured before attempting API calls
+            # Check if YouTube credentials are configured before attempting anything else,
+            # we can't interact with the YouTube API without them.
             if not (season.live_stream_client_id and season.live_stream_client_secret):
                 return obj
 
@@ -1651,11 +1652,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_save_redirect=self.redirect(
                 request.GET.get("next") or stage.urls["edit"]
             ),
-            pre_save_callback=(
-                pre_save_callback
-                if season.live_stream and match.live_stream
-                else lambda o: o
-            ),
+            pre_save_callback=pre_save_callback if season.live_stream else lambda o: o,
             permission_required=True,
             extra_context=extra_context,
         )
