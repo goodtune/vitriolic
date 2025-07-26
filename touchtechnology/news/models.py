@@ -1,3 +1,5 @@
+"""[Developer API] Data models for the news application."""
+
 from django.db import models
 from django.db.models import DateTimeField, ManyToManyField
 from django.template.defaultfilters import slugify
@@ -18,6 +20,7 @@ from touchtechnology.news.query import ArticleQuerySet, CategoryQuerySet
 
 
 class AdminUrlModel(AdminUrlMixin, models.Model):
+    """Abstract base providing admin URL helpers."""
     class Meta:
         abstract = True
 
@@ -29,6 +32,7 @@ class AdminUrlModel(AdminUrlMixin, models.Model):
 
 
 class Article(AdminUrlModel):
+    """News article that can be published on the site."""
 
     headline = models.CharField(max_length=150, verbose_name=_("Headline"))
     slug = models.SlugField(max_length=150, verbose_name=_("Slug"))
@@ -92,6 +96,7 @@ class Article(AdminUrlModel):
 
 
 class Translation(AdminUrlModel):
+    """Language-specific version of an Article."""
 
     article = models.ForeignKey(
         Article, related_name="translations", on_delete=models.CASCADE
@@ -134,6 +139,7 @@ class Translation(AdminUrlModel):
 
 
 class Category(AdminUrlModel):
+    """Grouping of articles for navigation and filtering."""
 
     title = models.CharField(max_length=75, verbose_name=_("Title"))
     short_title = models.CharField(

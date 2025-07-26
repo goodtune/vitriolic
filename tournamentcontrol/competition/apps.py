@@ -1,3 +1,5 @@
+"""[User Facing] Django app configuration for competition logic."""
+
 from django.apps import AppConfig
 from django.db.models.signals import (
     post_delete,
@@ -8,9 +10,11 @@ from django.db.models.signals import (
 
 
 class CompetitionConfig(AppConfig):
+    """Connects signals and admin components for competitions."""
     name = "tournamentcontrol.competition"
 
     def ready(self):
+        """Wire up signal handlers and admin registration."""
         from touchtechnology.admin.sites import site
         from touchtechnology.content import utils
         from tournamentcontrol.competition.admin import (

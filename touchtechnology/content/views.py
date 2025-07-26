@@ -1,3 +1,5 @@
+"""[User Facing] Views for serving CMS content pages."""
+
 import logging
 from calendar import timegm
 
@@ -17,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def page_last_modified(request, page_id=None, **kwargs):
+    """Return the most recent modification timestamp of any page."""
     last_modified = SitemapNode.objects.aggregate(last_modified=Max("last_modified"))[
         "last_modified"
     ]
@@ -29,6 +32,7 @@ def page_last_modified(request, page_id=None, **kwargs):
 
 @last_modified(page_last_modified)
 def dispatch(request, page_id=None, node=None, url=None):
+    """Render a page or folder based on the given URL."""
     if page_id is not None:
         page = get_object_or_404(Page, pk=page_id)
     else:
