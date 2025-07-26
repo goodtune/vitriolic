@@ -241,7 +241,7 @@ class StageGroupPositionTests(TestCase):
         """
         # Create a superuser for admin access using django-test-plus pattern
         superuser = UserFactory.create(is_staff=True, is_superuser=True)
-        
+
         # Create a division with multiple stages
         division = DivisionFactory.create()
         stage1 = StageFactory.create(division=division, order=1)
