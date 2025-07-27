@@ -13,12 +13,7 @@ from test_plus import TestCase as BaseTestCase
 from touchtechnology.admin.mixins import AdminUrlLookup
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.models import (
-    Division,
-    Ground,
-    Match,
-    Stage,
-    StageGroup,
-    Team,
+    Division, Ground, Match, Stage, StageGroup, Team,
 )
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin, round_robin_format
@@ -1560,3 +1555,75 @@ class BackendTests(MessagesTestMixin, TestCase):
             match.refresh_from_db()
             self.assertFalse(match.live_stream)
             self.assertIsNone(match.external_identifier)
+
+    @mock.patch("tournamentcontrol.competition.models.Season.youtube")
+    def test_edit_match_youtube_refresh_error_handling(self, mock_youtube):
+        """
+        Test that RefreshError from expired OAuth2 tokens is properly handled.
+
+        When a YouTube OAuth2 token expires, the API call raises RefreshError.
+        This should be caught and result in a user-friendly error message
+        rather than crashing the view.
+
+        Refs: https://github.com/goodtune/vitriolic/issues/147
+        """
+        from google.auth.exceptions import RefreshError
+
+        # Create a stage with live streaming enabled and proper credentials
+        stage = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_client_id="test-client-id",
+            division__season__live_stream_client_secret="test-client-secret",
+        )
+
+        ground = factories.GroundFactory.create(venue__season=stage.division.season)
+
+        # Create a match with an existing external identifier (simulating a previously created stream)
+        match = factories.MatchFactory.create(
+            stage=stage,
+            play_at=ground,
+            live_stream=True,
+            external_identifier="existing-video-id",
+        )
+
+        # Mock the YouTube API to raise RefreshError when delete() is called
+        mock_delete = mock.Mock()
+        mock_delete.execute.side_effect = RefreshError(
+            "Token has been expired or revoked."
+        )
+        mock_youtube.return_value.liveBroadcasts.return_value.delete.return_value = (
+            mock_delete
+        )
+
+        edit_match_url = match.url_names["edit"]
+        with self.login(self.superuser):
+            # Turn off live streaming to trigger the delete operation that will fail with RefreshError
+            data = {
+                "home_team": match.home_team.pk,
+                "away_team": match.away_team.pk,
+                "label": match.label or "Test Match",
+                "round": match.round or 1,
+                "date": match.date.strftime("%Y-%m-%d"),
+                "time": match.time.strftime("%H:%M"),
+                "play_at": ground.pk,
+                "include_in_ladder": "1" if match.include_in_ladder else "0",
+                "live_stream": "0",  # Turn OFF live streaming to trigger delete
+                "thumbnail_url": "",
+            }
+
+            # This should handle the RefreshError gracefully and redirect
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            self.response_302()  # Should redirect successfully
+
+            # Verify that an error message was shown to the user
+            messages_list = list(messages.get_messages(self.last_request))
+            self.assertEqual(len(messages_list), 1)
+            self.assertIn("YouTube authorization has expired", str(messages_list[0]))
+            self.assertIn("re-authorize", str(messages_list[0]))
+
+            # Verify the match state wasn't changed due to the error
+            match.refresh_from_db()
+            # The match should still have live_stream=True and external_identifier set
+            # because the save was interrupted by the RefreshError
+            self.assertTrue(match.live_stream)
+            self.assertEqual(match.external_identifier, "existing-video-id")
