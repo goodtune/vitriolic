@@ -613,7 +613,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
         context = {
             "datetimes": [
-                timezone.localtime(each, ZoneInfo(season.timezone))
+                timezone.localtime(each, season.timezone)
                 for each in basic_results.datetimes("datetime", "minute")
             ],
             "details": details_results,
@@ -644,7 +644,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
         context = {
             "datetimes": [
-                timezone.localtime(each, ZoneInfo(season.timezone))
+                timezone.localtime(each, season.timezone)
                 for each in stream_start.datetimes("datetime", "minute")
             ],
         }
