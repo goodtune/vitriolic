@@ -1,3 +1,5 @@
+"""[User Facing] Utility views for authentication and preferences."""
+
 from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
 from django.http import Http404, HttpResponseRedirect
@@ -9,6 +11,7 @@ from touchtechnology.common.forms.tz import SelectTimezoneForm
 
 
 def login(request, to, *args, **kwargs):
+    """Redirects to a login URL preserving query parameters."""
     scheme, netloc, path, query, fragments = urlsplit(to)
     query = dict(parse_qsl(query))
     query.update(kwargs)
@@ -19,6 +22,7 @@ def login(request, to, *args, **kwargs):
 
 @require_POST
 def set_timezone(request):
+    """Persist the selected timezone on the user session or cookie."""
     url = request.META.get("HTTP_REFERER", "/")
     response = HttpResponseRedirect(url)
 

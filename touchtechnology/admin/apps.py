@@ -1,3 +1,5 @@
+"""[Developer API] Configuration objects for the admin application."""
+
 from django.apps import AppConfig, apps
 from django.conf import settings
 from django.core import checks
@@ -6,11 +8,13 @@ from first import first
 
 
 class AdminConfig(AppConfig):
+    """Registers admin sites and performs application checks."""
     default_site = "touchtechnology.admin.sites.admin.AdminSite"
     name = "touchtechnology.admin"
     label = "touchtechnology_name"
 
     def ready(self):
+        """Connects admin components to the global admin site."""
         from touchtechnology.admin.sites import site
         from touchtechnology.admin.sites.auth import UsersGroups
         from touchtechnology.admin.sites.settings import Settings

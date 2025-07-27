@@ -1,3 +1,5 @@
+"""[Developer API] Helper utilities for content management."""
+
 import logging
 import os.path
 from importlib import import_module
@@ -16,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def install_placeholder(app):
+    """Create placeholder records for a given application."""
     application = import_module(app)
     for cls_name in getattr(application, "INSTALL", ()):
         path = "%s.sites.%s" % (app, cls_name)
@@ -44,6 +47,7 @@ def install_placeholder(app):
 
 
 def template_path(base, filename, *args):
+    """Yield template paths from most specific to fallback."""
     args = [arg for arg in args if arg]
     for index in range(len(args), 0, -1):
         yield os.path.join(base, os.path.join(*args[:index]), filename)
@@ -51,6 +55,7 @@ def template_path(base, filename, *args):
 
 
 def get_media_storage(request):
+    """Return the media storage path for the current tenant."""
     if hasattr(request, "tenant"):
         get_public_schema_name = import_string(
             "tenant_schemas.utils.get_public_schema_name"

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+"""[Developer API] Models used for dynamic content management."""
 
 import logging
 from importlib import import_module
@@ -37,6 +38,7 @@ SITE_CACHE_KEY = "_site_cache"
 
 
 class AdminUrlModel(AdminUrlMixin, models.Model):
+    """Abstract base with helpers for admin URL building."""
     class Meta:
         abstract = True
 
@@ -51,6 +53,7 @@ class AdminUrlModel(AdminUrlMixin, models.Model):
 
 
 class Page(models.Model):
+    """Represents a CMS page configurable via the admin."""
 
     # allows us to customise the template on a per page basis
 
@@ -91,9 +94,11 @@ class Page(models.Model):
 
     def __repr__(self):
         return "<Page: #{}>".format(self.pk)
+    """Reusable fragment of HTML content."""
 
 
 class Content(models.Model):
+    """Reusable fragment of HTML content."""
 
     # FIXME and put the ``copy`` attribute on the ``PageContent`` model, we
     # aren't actually reusing the ``Content`` in any way, so simplify the
@@ -110,6 +115,7 @@ class Content(models.Model):
 
 class PageContent(models.Model):
 
+    """Placement of a Content instance on a Page."""
     page = models.ForeignKey(
         Page, related_name="content", verbose_name=_("Page"), on_delete=models.PROTECT
     )
@@ -132,6 +138,7 @@ class PageContent(models.Model):
 
 
 class Chunk(AdminUrlModel):
+    """Discrete content block that can be reused."""
 
     slug = models.SlugField(verbose_name=_("Slug"))
     copy = HTMLField(blank=True, verbose_name=_("Page Copy"))
@@ -141,6 +148,7 @@ class Chunk(AdminUrlModel):
 
 
 class NodeContent(models.Model):
+    """Links Content objects to navigation nodes."""
 
     node = models.ForeignKey(
         "common.SitemapNode",
@@ -152,6 +160,7 @@ class NodeContent(models.Model):
 
 
 class Placeholder(models.Model):
+    """Stores configuration for installed applications."""
 
     path = models.CharField(max_length=255, verbose_name=_("Module path"))
     namespace = models.CharField(
@@ -222,6 +231,7 @@ class Placeholder(models.Model):
 
 
 class Redirect(AdminUrlModel):
+    """URL redirection rule managed through the admin."""
 
     source_url = models.CharField(
         max_length=250,
