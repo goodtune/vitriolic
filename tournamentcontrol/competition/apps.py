@@ -11,6 +11,7 @@ from django.db.models.signals import (
 
 class CompetitionConfig(AppConfig):
     """Connects signals and admin components for competitions."""
+
     name = "tournamentcontrol.competition"
 
     def ready(self):
@@ -59,14 +60,16 @@ class CompetitionConfig(AppConfig):
 
         post_save.connect(set_ground_latlng, sender=Ground)
         post_save.connect(set_ground_timezone, sender=Ground)
-        
+
         # Capture timezone before save to detect changes
         pre_save.connect(capture_timezone_before_save, sender=Venue)
         pre_save.connect(capture_timezone_before_save, sender=Ground)
-        
+
         # Update match datetimes when timezone changes
         post_save.connect(update_match_datetimes_on_place_timezone_change, sender=Venue)
-        post_save.connect(update_match_datetimes_on_place_timezone_change, sender=Ground)
+        post_save.connect(
+            update_match_datetimes_on_place_timezone_change, sender=Ground
+        )
 
         post_save.connect(changed_points_formula, sender=Division)
 

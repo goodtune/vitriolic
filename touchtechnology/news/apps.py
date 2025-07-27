@@ -5,6 +5,7 @@ from django.apps import AppConfig
 
 class NewsConfig(AppConfig):
     """Registers the News app with the admin interface."""
+
     name = "touchtechnology.news"
 
     def ready(self):

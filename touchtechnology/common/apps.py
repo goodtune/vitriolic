@@ -2,6 +2,7 @@
 
 from django.apps import AppConfig
 
+
 class CommonConfig(AppConfig):
     """Loads system checks for shared functionality."""
 

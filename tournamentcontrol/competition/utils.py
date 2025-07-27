@@ -426,7 +426,7 @@ def stage_group_position(stage, formula):
     if g is None:
         logger.debug("No group specified in formula %r", formula)
     else:
-        pools = s.pools.all().order_by('order')
+        pools = s.pools.all().order_by("order")
         if pools.count() >= int(g):
             try:
                 g = pools[int(g) - 1]

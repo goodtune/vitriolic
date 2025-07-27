@@ -21,6 +21,7 @@ from touchtechnology.news.query import ArticleQuerySet, CategoryQuerySet
 
 class AdminUrlModel(AdminUrlMixin, models.Model):
     """Abstract base providing admin URL helpers."""
+
     class Meta:
         abstract = True
 

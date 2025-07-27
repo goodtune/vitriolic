@@ -3,6 +3,7 @@
 This module exposes app metadata and is tightly coupled to the
 tournamentcontrol project.
 """
+
 import logging
 
 logger = logging.getLogger(__name__)

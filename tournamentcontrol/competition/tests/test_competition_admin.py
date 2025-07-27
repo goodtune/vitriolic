@@ -14,7 +14,12 @@ from test_plus import TestCase as BaseTestCase
 from touchtechnology.admin.mixins import AdminUrlLookup
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.models import (
-    Division, Ground, Match, Stage, StageGroup, Team,
+    Division,
+    Ground,
+    Match,
+    Stage,
+    StageGroup,
+    Team,
 )
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin, round_robin_format
@@ -1557,8 +1562,8 @@ class BackendTests(MessagesTestMixin, TestCase):
             self.assertFalse(match.live_stream)
             self.assertIsNone(match.external_identifier)
 
-    @mock.patch("tournamentcontrol.competition.models.Season.youtube")
-    def test_edit_match_youtube_refresh_error_handling(self, mock_youtube):
+    @mock.patch("googleapiclient.discovery.build")
+    def test_edit_match_youtube_refresh_error_handling(self, mock_build):
         """
         Test that RefreshError from expired OAuth2 tokens is properly handled.
 
@@ -1574,6 +1579,12 @@ class BackendTests(MessagesTestMixin, TestCase):
             division__season__live_stream=True,
             division__season__live_stream_client_id="test-client-id",
             division__season__live_stream_client_secret="test-client-secret",
+            division__season__live_stream_token="test-token",
+            division__season__live_stream_refresh_token="test-refresh-token",
+            division__season__live_stream_token_uri="https://oauth2.googleapis.com/token",
+            division__season__live_stream_scopes=[
+                "https://www.googleapis.com/auth/youtube"
+            ],
         )
 
         ground = factories.GroundFactory.create(venue__season=stage.division.season)
@@ -1587,15 +1598,18 @@ class BackendTests(MessagesTestMixin, TestCase):
         )
 
         # Mock the YouTube API to raise RefreshError when delete() is called
+        mock_youtube_service = mock.Mock()
         mock_delete = mock.Mock()
         mock_delete.execute.side_effect = RefreshError(
             "Token has been expired or revoked."
         )
-        mock_youtube.return_value.liveBroadcasts.return_value.delete.return_value = (
+        mock_youtube_service.liveBroadcasts.return_value.delete.return_value = (
             mock_delete
         )
+        mock_build.return_value = mock_youtube_service
 
         edit_match_url = match.url_names["edit"]
+
         with self.login(self.superuser):
             # Turn off live streaming to trigger the delete operation that will fail with RefreshError
             data = {
