@@ -6,6 +6,7 @@ from django.test.utils import override_settings
 from freezegun import freeze_time
 from test_plus import TestCase
 
+from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.tests import factories
 
 
@@ -39,6 +40,24 @@ class GoodViewTests(TestCase):
         self.assertGoodView(
             "competition:season-videos", season.competition.slug, season.slug
         )
+
+    def test_stream(self):
+        # Create a superuser to access the login-required stream view
+        superuser = UserFactory.create(is_staff=True, is_superuser=True)
+
+        # Create a season with timezone to test the ZoneInfo fix
+        season = factories.SeasonFactory.create(timezone=ZoneInfo("Australia/Sydney"))
+        # Create matches with external_identifier so they appear in stream view
+        # Each match needs a unique external_identifier
+        for i in range(3):
+            factories.MatchFactory.create(
+                stage__division__season=season, external_identifier=f"test-{i}"
+            )
+
+        with self.login(superuser):
+            self.assertGoodView(
+                "competition:stream", season.competition.slug, season.slug
+            )
 
     def test_club(self):
         club = factories.ClubFactory.create()
@@ -322,72 +341,3 @@ class FrontEndTests(TestCase):
             team.division.season.competition.slug,
             team.division.season.slug,
         )
-
-
-@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
-class StreamViewTests(TestCase):
-    """Test the stream view functionality with timezone handling."""
-
-    def test_timezone_localtime_with_zoneinfo_object(self):
-        """Test that timezone.localtime works correctly with ZoneInfo objects."""
-        from datetime import datetime
-        from zoneinfo import ZoneInfo
-
-        from django.utils import timezone
-
-        # Create a ZoneInfo object like season.timezone would have
-        season_timezone = ZoneInfo("Australia/Sydney")
-
-        # Create a datetime object
-        test_datetime = datetime(2025, 1, 15, 14, 30, tzinfo=ZoneInfo("UTC"))
-
-        # This should work without TypeError after our fix
-        result = timezone.localtime(test_datetime, season_timezone)
-
-        # Verify the result is a datetime object in the correct timezone
-        self.assertIsInstance(result, datetime)
-        self.assertEqual(result.tzinfo, season_timezone)
-
-    def test_timezone_localtime_with_none(self):
-        """Test that timezone.localtime works correctly when timezone is None."""
-        from datetime import datetime
-        from zoneinfo import ZoneInfo
-
-        from django.utils import timezone
-
-        # Create a datetime object
-        test_datetime = datetime(2025, 1, 15, 14, 30, tzinfo=ZoneInfo("UTC"))
-
-        # This should work when timezone is None (uses current timezone)
-        result = timezone.localtime(test_datetime, None)
-
-        # Verify the result is a datetime object
-        self.assertIsInstance(result, datetime)
-
-    def test_stream_datetime_processing_logic(self):
-        """Test the logic that was causing the TypeError in stream view."""
-        from datetime import datetime
-        from zoneinfo import ZoneInfo
-
-        from django.utils import timezone
-
-        # Create a season with timezone (ZoneInfo object)
-        season = factories.SeasonFactory.create(timezone=ZoneInfo("Australia/Sydney"))
-
-        # Create some test datetime objects like what would come from .datetimes()
-        test_datetimes = [
-            datetime(2025, 1, 15, 14, 30, tzinfo=ZoneInfo("UTC")),
-            datetime(2025, 1, 15, 16, 30, tzinfo=ZoneInfo("UTC")),
-        ]
-
-        # This is the logic from the stream view that was causing the error
-        # After our fix, this should work correctly
-        datetimes_result = [
-            timezone.localtime(each, season.timezone) for each in test_datetimes
-        ]
-
-        # Verify we got results back
-        self.assertEqual(len(datetimes_result), 2)
-        for dt in datetimes_result:
-            self.assertIsInstance(dt, datetime)
-            self.assertEqual(dt.tzinfo, season.timezone)
