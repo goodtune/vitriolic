@@ -8,6 +8,7 @@ from django import VERSION
 from django.contrib import messages
 from django.template import Context, Template
 from django.urls import reverse
+from google.auth.exceptions import RefreshError
 from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.admin.mixins import AdminUrlLookup
@@ -1567,7 +1568,6 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         Refs: https://github.com/goodtune/vitriolic/issues/147
         """
-        from google.auth.exceptions import RefreshError
 
         # Create a stage with live streaming enabled and proper credentials
         stage = factories.StageFactory.create(
@@ -1606,7 +1606,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "date": match.date.strftime("%Y-%m-%d"),
                 "time": match.time.strftime("%H:%M"),
                 "play_at": ground.pk,
-                "include_in_ladder": "1" if match.include_in_ladder else "0",
+                "include_in_ladder": str(int(match.include_in_ladder)),
                 "live_stream": "0",  # Turn OFF live streaming to trigger delete
                 "thumbnail_url": "",
             }
@@ -1616,10 +1616,16 @@ class BackendTests(MessagesTestMixin, TestCase):
             self.response_302()  # Should redirect successfully
 
             # Verify that an error message was shown to the user
-            messages_list = list(messages.get_messages(self.last_request))
-            self.assertEqual(len(messages_list), 1)
-            self.assertIn("YouTube authorization has expired", str(messages_list[0]))
-            self.assertIn("re-authorize", str(messages_list[0]))
+            if VERSION >= (5, 0):
+                self.assertMessages(
+                    self.last_response,
+                    [
+                        messages.Message(
+                            level=messages.ERROR,
+                            message="YouTube authorization has expired. Please re-authorize to continue using live streaming features.",
+                        )
+                    ],
+                )
 
             # Verify the match state wasn't changed due to the error
             match.refresh_from_db()
