@@ -9,6 +9,7 @@ from tournamentcontrol.competition import utils
 from tournamentcontrol.competition.models import UndecidedTeam
 from tournamentcontrol.competition.tests.factories import (
     DivisionFactory,
+    MatchFactory,
     StageFactory,
     StageGroupFactory,
     SuperUserFactory,
@@ -269,12 +270,10 @@ class StageGroupPositionTests(TestCase):
 
         # Test that title returns the formula when invalid
         with self.subTest(formula="G1P1"):
-            title = undecided_team_1.title  # This should return the formula
-            self.assertEqual(title, "G1P1")
+            self.assertEqual(undecided_team_1.title, "G1P1")
 
         with self.subTest(formula="S1G2P1"):
-            title = undecided_team_2.title  # This should return the formula
-            self.assertEqual(title, "S1G2P1")
+            self.assertEqual(undecided_team_2.title, "S1G2P1")
 
         # Test that accessing choices returns division teams as fallback
         with self.subTest(property="choices", formula="G1P1"):
@@ -335,40 +334,47 @@ class TwoStageFormulaProblemTests(TestCase):
             label="Runner-up Pool 2",
         )
 
-        # Test that stage_group_position works correctly for valid formulas
-        stage, group, position = utils.stage_group_position(self.finals_stage, "G1P1")
-        self.assertEqual(stage, self.round_robin_stage)
-        self.assertEqual(group, self.pool1)
-        self.assertEqual(position, 1)
-
-        stage, group, position = utils.stage_group_position(self.finals_stage, "G2P2")
-        self.assertEqual(stage, self.round_robin_stage)
-        self.assertEqual(group, self.pool2)
-        self.assertEqual(position, 2)
-
-        # Test that UndecidedTeam.title works for valid formulas
-        # (Before the fix, this should work fine)
+        # Test that the UndecidedTeam.title properties work correctly
         title_g1p1 = undecided_team_g1p1.title
         title_g2p2 = undecided_team_g2p2.title
 
         # The titles should be generated from the template, not just be the formula
         self.assertIsInstance(title_g1p1, str)
         self.assertIsInstance(title_g2p2, str)
-        self.assertNotEqual(title_g1p1, "G1P1")  # Should be formatted template output
-        self.assertNotEqual(title_g2p2, "G2P2")  # Should be formatted template output
+        # Valid formulas should not return the raw formula string
+        self.assertNotEqual(title_g1p1, "G1P1")
+        self.assertNotEqual(title_g2p2, "G2P2")
 
-        # Test that UndecidedTeam.choices works for valid formulas
-        choices_g1p1 = undecided_team_g1p1.choices
-        choices_g2p2 = undecided_team_g2p2.choices
+        # Create a Match between the two undecided teams
+        match = MatchFactory.create(
+            stage=self.finals_stage,
+            home_team_undecided=undecided_team_g1p1,
+            away_team_undecided=undecided_team_g2p2,
+            home_team=None,  # Explicitly set to None since we're using undecided teams
+            away_team=None,  # Explicitly set to None since we're using undecided teams
+            label="Final",
+        )
 
-        # Choices should return teams from the respective pools
-        self.assertEqual(choices_g1p1, self.pool1.teams)
-        self.assertEqual(choices_g2p2, self.pool2.teams)
+        # Create a superuser to access admin views
+        user = SuperUserFactory.create()
+        self.client.force_login(user)
 
-    def test_invalid_formulas_before_fix_raise_index_error(self):
+        # Call the stage edit admin view which displays UndecidedTeam titles
+        stage_edit_url = self.finals_stage.urls["edit"]
+        response = self.client.get(stage_edit_url)
+
+        # Assert the page renders successfully
+        self.assertEqual(response.status_code, 200)
+
+        # The page should contain the match label
+        self.assertContains(response, "Final")
+
+    def test_invalid_formulas_gracefully_handled_in_admin_view(self):
         """
-        Negative test: Invalid formulae like G1P1 vs G5P2 should raise IndexError.
-        This demonstrates the problem before the fix by directly calling stage_group_position.
+        Test that invalid formulae are gracefully handled when accessing UndecidedTeam.title.
+        
+        This test demonstrates that UndecidedTeam objects with formulas referencing 
+        non-existent groups no longer crash when their title property is accessed.
         """
         # Create UndecidedTeam objects with invalid formulas
         undecided_team_g5p2 = UndecidedTeamFactory.create(
@@ -383,70 +389,25 @@ class TwoStageFormulaProblemTests(TestCase):
             label="Invalid Stage 1 Group 5",
         )
 
-        # Test that stage_group_position itself raises IndexError for invalid formulas
-        # This function behavior should remain unchanged
-        with self.assertRaisesRegex(
-            IndexError, r"Invalid group 5 for stage .* \(stage has 2 pools\)"
-        ):
-            utils.stage_group_position(self.finals_stage, "G5P2")
-
-        with self.assertRaisesRegex(
-            IndexError, r"Invalid group 5 for stage .* \(stage has 2 pools\)"
-        ):
-            utils.stage_group_position(self.finals_stage, "S1G5P1")
-
-        # After the fix, accessing title should NOT raise IndexError anymore
-        # Instead it should return the formula
+        # Test the core fix: accessing title should not raise IndexError
+        # Before the fix, this would raise IndexError
         title_g5p2 = undecided_team_g5p2.title
         title_s1g5p1 = undecided_team_s1g5p1.title
 
+        # After the fix, invalid formulas should return the formula as fallback
         self.assertEqual(title_g5p2, "G5P2")
         self.assertEqual(title_s1g5p1, "S1G5P1")
 
-        # After the fix, accessing choices should also NOT raise IndexError
-        # Instead it should return division teams as fallback
+        # Test that choices also work correctly (fallback to division teams)
         choices_g5p2 = undecided_team_g5p2.choices
         choices_s1g5p1 = undecided_team_s1g5p1.choices
 
         self.assertEqual(choices_g5p2, self.finals_stage.division.teams)
         self.assertEqual(choices_s1g5p1, self.finals_stage.division.teams)
 
-    def test_invalid_formulas_after_fix_return_formula(self):
+    def test_mixed_valid_and_invalid_formulas_in_admin_view(self):
         """
-        Test that after the fix, invalid formulae return the formula instead of raising exception.
-
-        This test will initially fail before implementing the fix, and should pass after.
-        """
-        # Create UndecidedTeam objects with invalid formulas
-        undecided_team_g5p2 = UndecidedTeamFactory.create(
-            stage=self.finals_stage,
-            formula="G5P2",  # References group 5, but we only have 2 pools
-            label="Invalid Group 5",
-        )
-
-        undecided_team_s1g5p1 = UndecidedTeamFactory.create(
-            stage=self.finals_stage,
-            formula="S1G5P1",  # Explicit stage reference, but group 5 doesn't exist
-            label="Invalid Stage 1 Group 5",
-        )
-
-        # After the fix, accessing title should return the formula instead of raising exception
-        title_g5p2 = undecided_team_g5p2.title
-        title_s1g5p1 = undecided_team_s1g5p1.title
-
-        self.assertEqual(title_g5p2, "G5P2")
-        self.assertEqual(title_s1g5p1, "S1G5P1")
-
-        # After the fix, accessing choices should return the division teams (fallback)
-        choices_g5p2 = undecided_team_g5p2.choices
-        choices_s1g5p1 = undecided_team_s1g5p1.choices
-
-        self.assertEqual(choices_g5p2, self.finals_stage.division.teams)
-        self.assertEqual(choices_s1g5p1, self.finals_stage.division.teams)
-
-    def test_mixed_valid_and_invalid_formulas(self):
-        """
-        Test a more complex scenario with both valid and invalid formulas in the same stage.
+        Test that both valid and invalid formulas can coexist without crashes.
         """
         # Create a mix of valid and invalid UndecidedTeam objects
         valid_team = UndecidedTeamFactory.create(
@@ -459,16 +420,19 @@ class TwoStageFormulaProblemTests(TestCase):
             label="Winner Pool 3",
         )
 
-        # Valid team should work normally
+        # Test that both teams can have their titles accessed without issues
         valid_title = valid_team.title
-        valid_choices = valid_team.choices
-
-        self.assertNotEqual(valid_title, "G1P1")  # Should be formatted template output
-        self.assertEqual(valid_choices, self.pool1.teams)
-
-        # After fix, invalid team should return formula as title and division teams as choices
         invalid_title = invalid_team.title
+
+        # Valid team should work normally (not return raw formula)
+        self.assertNotEqual(valid_title, "G1P1")  # Should be formatted template output
+        
+        # Invalid team should return the formula as fallback
+        self.assertEqual(invalid_title, "G3P1")
+
+        # Test choices also work
+        valid_choices = valid_team.choices
         invalid_choices = invalid_team.choices
 
-        self.assertEqual(invalid_title, "G3P1")
+        self.assertEqual(valid_choices, self.pool1.teams)
         self.assertEqual(invalid_choices, self.finals_stage.division.teams)
