@@ -12,6 +12,7 @@ requires-python = ">=3.11"
 dependencies = [
     "django-froala-editor>=2.9",
     "django-guardian>=2.4",
+    "django-mcp-server>=0.5.5",
     "django-modelforms",
     "django-mptt",
     "django-timezone-field",
