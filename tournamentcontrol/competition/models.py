@@ -1335,9 +1335,13 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
     @cached_property
     def choices(self):
         if self.formula:
-            __, group, __ = stage_group_position(self.stage, self.formula)
-            if group is not None:
-                return group.teams
+            try:
+                __, group, __ = stage_group_position(self.stage, self.formula)
+                if group is not None:
+                    return group.teams
+            except IndexError:
+                # If the formula references an invalid group, fall back to division teams
+                pass
         return self.stage.division.teams
 
     @property
@@ -1345,15 +1349,19 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
         if not self.formula and self.label:
             return self.label
 
-        stage, group, position = stage_group_position(self.stage, self.formula)
+        try:
+            stage, group, position = stage_group_position(self.stage, self.formula)
 
-        c = {
-            "stage": stage,
-            "group": group,
-            "position": position,
-        }
+            c = {
+                "stage": stage,
+                "group": group,
+                "position": position,
+            }
 
-        return stage_group_position_tpl.render(c).strip()
+            return stage_group_position_tpl.render(c).strip()
+        except IndexError:
+            # If the formula references an invalid group, return the formula itself
+            return self.formula
 
     @property
     def matches(self):
