@@ -297,6 +297,9 @@ class TwoStageFormulaProblemTests(TestCase):
 
     def setUp(self):
         """Set up the two-stage competition scenario."""
+        # Create superuser for admin access
+        self.user = SuperUserFactory.create()
+
         # Create a division with two stages
         self.division = DivisionFactory.create()
 
@@ -335,15 +338,9 @@ class TwoStageFormulaProblemTests(TestCase):
         )
 
         # Test that the UndecidedTeam.title properties work correctly
-        title_g1p1 = undecided_team_g1p1.title
-        title_g2p2 = undecided_team_g2p2.title
-
-        # The titles should be generated from the template, not just be the formula
-        self.assertIsInstance(title_g1p1, str)
-        self.assertIsInstance(title_g2p2, str)
         # Valid formulas should not return the raw formula string
-        self.assertNotEqual(title_g1p1, "G1P1")
-        self.assertNotEqual(title_g2p2, "G2P2")
+        self.assertNotEqual(undecided_team_g1p1.title, "G1P1")
+        self.assertNotEqual(undecided_team_g2p2.title, "G2P2")
 
         # Create a Match between the two undecided teams
         match = MatchFactory.create(
@@ -355,25 +352,18 @@ class TwoStageFormulaProblemTests(TestCase):
             label="Final",
         )
 
-        # Create a superuser to access admin views
-        user = SuperUserFactory.create()
-        self.client.force_login(user)
-
         # Call the stage edit admin view which displays UndecidedTeam titles
-        stage_edit_url = self.finals_stage.urls["edit"]
-        response = self.client.get(stage_edit_url)
-
-        # Assert the page renders successfully
-        self.assertEqual(response.status_code, 200)
-
-        # The page should contain the match label
-        self.assertContains(response, "Final")
+        with self.login(self.user):
+            self.get(self.finals_stage.urls["edit"])
+            self.response_200()
+            # The page should contain the match label
+            self.assertResponseContains("Final")
 
     def test_invalid_formulas_gracefully_handled_in_admin_view(self):
         """
         Test that invalid formulae are gracefully handled when accessing UndecidedTeam.title.
-        
-        This test demonstrates that UndecidedTeam objects with formulas referencing 
+
+        This test demonstrates that UndecidedTeam objects with formulas referencing
         non-existent groups no longer crash when their title property is accessed.
         """
         # Create UndecidedTeam objects with invalid formulas
@@ -405,6 +395,44 @@ class TwoStageFormulaProblemTests(TestCase):
         self.assertEqual(choices_g5p2, self.finals_stage.division.teams)
         self.assertEqual(choices_s1g5p1, self.finals_stage.division.teams)
 
+    def test_invalid_formulas_in_match_eval_fields(self):
+        """
+        Test that invalid formulas in home_team_eval and away_team_eval fields
+        are handled gracefully when displayed in admin views and when Match.eval() is called.
+        """
+        # Create a Match with invalid formulas in eval fields
+        match_with_invalid_formulas = MatchFactory.create(
+            stage=self.finals_stage,
+            home_team=None,
+            away_team=None,
+            home_team_eval="G5P2",  # Invalid - references group 5, but only 2 pools exist
+            away_team_eval="G3P1",  # Invalid - references group 3, but only 2 pools exist
+            label="Invalid Formula Match",
+        )
+
+        # Test that accessing the match in admin view doesn't crash
+        with self.login(self.user):
+            self.get(self.finals_stage.urls["edit"])
+            self.response_200()
+            # The match should be displayed on the stage edit page
+            self.assertResponseContains("Invalid Formula Match")
+
+        # Test the eval() method directly - it should handle the IndexError gracefully
+        # The Match.eval() method should not raise IndexError even with invalid formulas
+        home_team, away_team = match_with_invalid_formulas.eval()
+        # Teams will be None if formula can't be resolved, which is expected behavior
+        # The key is that no IndexError should be raised
+
+        # Also test that get_home_team() and get_away_team() don't crash
+        # These methods call _get_team() which should handle invalid formulas gracefully
+        home_result = match_with_invalid_formulas.get_home_team()
+        away_result = match_with_invalid_formulas.get_away_team()
+
+        # The results should be dictionaries with title indicating the error
+        # or None if the evaluation couldn't be completed
+        self.assertIsNotNone(home_result)  # Should return something, not crash
+        self.assertIsNotNone(away_result)  # Should return something, not crash
+
     def test_mixed_valid_and_invalid_formulas_in_admin_view(self):
         """
         Test that both valid and invalid formulas can coexist without crashes.
@@ -420,19 +448,34 @@ class TwoStageFormulaProblemTests(TestCase):
             label="Winner Pool 3",
         )
 
-        # Test that both teams can have their titles accessed without issues
-        valid_title = valid_team.title
-        invalid_title = invalid_team.title
+        # Create matches using both teams to force title evaluation in admin
+        MatchFactory.create(
+            stage=self.finals_stage,
+            home_team_undecided=valid_team,
+            away_team_undecided=invalid_team,
+            home_team=None,
+            away_team=None,
+            label="Mixed Formula Match",
+        )
 
+        # Test that both teams can have their titles accessed without issues
         # Valid team should work normally (not return raw formula)
-        self.assertNotEqual(valid_title, "G1P1")  # Should be formatted template output
-        
+        self.assertNotEqual(
+            valid_team.title, "G1P1"
+        )  # Should be formatted template output
+
         # Invalid team should return the formula as fallback
-        self.assertEqual(invalid_title, "G3P1")
+        self.assertEqual(invalid_team.title, "G3P1")
 
         # Test choices also work
-        valid_choices = valid_team.choices
-        invalid_choices = invalid_team.choices
+        self.assertEqual(valid_team.choices, self.pool1.teams)
+        self.assertEqual(invalid_team.choices, self.finals_stage.division.teams)
 
-        self.assertEqual(valid_choices, self.pool1.teams)
-        self.assertEqual(invalid_choices, self.finals_stage.division.teams)
+        # Test that the admin view renders successfully with mixed formulas
+        with self.login(self.user):
+            self.get(self.finals_stage.urls["edit"])
+            self.response_200()
+            # Both match label and team labels should appear
+            self.assertResponseContains("Mixed Formula Match")
+            self.assertResponseContains("Winner Pool 1")
+            self.assertResponseContains("Winner Pool 3")
