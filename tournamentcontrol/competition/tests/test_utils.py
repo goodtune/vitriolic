@@ -325,22 +325,21 @@ class TwoStageFormulaProblemTests(TestCase):
         Positive test: Valid formulae like G1P1 vs G2P2 should work correctly.
         """
         # Create UndecidedTeam objects with valid formulas
+        # Note: Don't set both label and formula as per UndecidedTeamForm validation
         undecided_team_g1p1 = UndecidedTeamFactory.create(
             stage=self.finals_stage,
             formula="G1P1",  # Winner of Pool 1, Position 1
-            label="Winner Pool 1",
         )
 
         undecided_team_g2p2 = UndecidedTeamFactory.create(
             stage=self.finals_stage,
             formula="G2P2",  # Runner-up of Pool 2, Position 2
-            label="Runner-up Pool 2",
         )
 
-        # Test that the UndecidedTeam.title properties work correctly
-        # Valid formulas should not return the raw formula string
-        self.assertNotEqual(undecided_team_g1p1.title, "G1P1")
-        self.assertNotEqual(undecided_team_g2p2.title, "G2P2")
+        # Test that the UndecidedTeam.title properties resolve to expected values
+        # G1P1 should resolve to "1st {pool1.title}" and G2P2 should resolve to "2nd {pool2.title}"
+        self.assertEqual(undecided_team_g1p1.title, f"1st {self.pool1.title}")
+        self.assertEqual(undecided_team_g2p2.title, f"2nd {self.pool2.title}")
 
         # Create a Match between the two undecided teams
         match = MatchFactory.create(
@@ -353,11 +352,11 @@ class TwoStageFormulaProblemTests(TestCase):
         )
 
         # Call the stage edit admin view which displays UndecidedTeam titles
-        with self.login(self.user):
-            self.get(self.finals_stage.urls["edit"])
-            self.response_200()
-            # The page should contain the match label
-            self.assertResponseContains("Final")
+        self.login(self.user)
+        self.get(self.finals_stage.urls["edit"])
+        self.response_200()
+        # The page should contain the match label
+        self.assertResponseContains("Final")
 
     def test_invalid_formulas_gracefully_handled_in_admin_view(self):
         """
@@ -367,33 +366,25 @@ class TwoStageFormulaProblemTests(TestCase):
         non-existent groups no longer crash when their title property is accessed.
         """
         # Create UndecidedTeam objects with invalid formulas
+        # Note: Don't set both label and formula as per UndecidedTeamForm validation
         undecided_team_g5p2 = UndecidedTeamFactory.create(
             stage=self.finals_stage,
             formula="G5P2",  # References group 5, but we only have 2 pools
-            label="Invalid Group 5",
         )
 
         undecided_team_s1g5p1 = UndecidedTeamFactory.create(
             stage=self.finals_stage,
             formula="S1G5P1",  # Explicit stage reference, but group 5 doesn't exist
-            label="Invalid Stage 1 Group 5",
         )
 
         # Test the core fix: accessing title should not raise IndexError
-        # Before the fix, this would raise IndexError
-        title_g5p2 = undecided_team_g5p2.title
-        title_s1g5p1 = undecided_team_s1g5p1.title
-
         # After the fix, invalid formulas should return the formula as fallback
-        self.assertEqual(title_g5p2, "G5P2")
-        self.assertEqual(title_s1g5p1, "S1G5P1")
+        self.assertEqual(undecided_team_g5p2.title, "G5P2")
+        self.assertEqual(undecided_team_s1g5p1.title, "S1G5P1")
 
         # Test that choices also work correctly (fallback to division teams)
-        choices_g5p2 = undecided_team_g5p2.choices
-        choices_s1g5p1 = undecided_team_s1g5p1.choices
-
-        self.assertEqual(choices_g5p2, self.finals_stage.division.teams)
-        self.assertEqual(choices_s1g5p1, self.finals_stage.division.teams)
+        self.assertEqual(undecided_team_g5p2.choices, self.finals_stage.division.teams)
+        self.assertEqual(undecided_team_s1g5p1.choices, self.finals_stage.division.teams)
 
     def test_invalid_formulas_in_match_eval_fields(self):
         """
@@ -411,41 +402,38 @@ class TwoStageFormulaProblemTests(TestCase):
         )
 
         # Test that accessing the match in admin view doesn't crash
-        with self.login(self.user):
-            self.get(self.finals_stage.urls["edit"])
-            self.response_200()
-            # The match should be displayed on the stage edit page
-            self.assertResponseContains("Invalid Formula Match")
+        self.login(self.user)
+        self.get(self.finals_stage.urls["edit"])
+        self.response_200()
+        # The match should be displayed on the stage edit page
+        self.assertResponseContains("Invalid Formula Match")
 
         # Test the eval() method directly - it should handle the IndexError gracefully
         # The Match.eval() method should not raise IndexError even with invalid formulas
-        home_team, away_team = match_with_invalid_formulas.eval()
         # Teams will be None if formula can't be resolved, which is expected behavior
         # The key is that no IndexError should be raised
+        self.assertIsNotNone(match_with_invalid_formulas.eval())
 
         # Also test that get_home_team() and get_away_team() don't crash
         # These methods call _get_team() which should handle invalid formulas gracefully
-        home_result = match_with_invalid_formulas.get_home_team()
-        away_result = match_with_invalid_formulas.get_away_team()
-
         # The results should be dictionaries with title indicating the error
         # or None if the evaluation couldn't be completed
-        self.assertIsNotNone(home_result)  # Should return something, not crash
-        self.assertIsNotNone(away_result)  # Should return something, not crash
+        self.assertIsNotNone(match_with_invalid_formulas.get_home_team())  # Should return something, not crash
+        self.assertIsNotNone(match_with_invalid_formulas.get_away_team())  # Should return something, not crash
 
     def test_mixed_valid_and_invalid_formulas_in_admin_view(self):
         """
         Test that both valid and invalid formulas can coexist without crashes.
         """
         # Create a mix of valid and invalid UndecidedTeam objects
+        # Note: Don't set both label and formula as per UndecidedTeamForm validation
         valid_team = UndecidedTeamFactory.create(
-            stage=self.finals_stage, formula="G1P1", label="Winner Pool 1"  # Valid
+            stage=self.finals_stage, formula="G1P1"  # Valid
         )
 
         invalid_team = UndecidedTeamFactory.create(
             stage=self.finals_stage,
             formula="G3P1",  # Invalid - only 2 pools exist
-            label="Winner Pool 3",
         )
 
         # Create matches using both teams to force title evaluation in admin
@@ -459,10 +447,8 @@ class TwoStageFormulaProblemTests(TestCase):
         )
 
         # Test that both teams can have their titles accessed without issues
-        # Valid team should work normally (not return raw formula)
-        self.assertNotEqual(
-            valid_team.title, "G1P1"
-        )  # Should be formatted template output
+        # Valid team should resolve to expected title based on template
+        self.assertEqual(valid_team.title, f"1st {self.pool1.title}")  # Should be formatted template output
 
         # Invalid team should return the formula as fallback
         self.assertEqual(invalid_team.title, "G3P1")
@@ -472,10 +458,8 @@ class TwoStageFormulaProblemTests(TestCase):
         self.assertEqual(invalid_team.choices, self.finals_stage.division.teams)
 
         # Test that the admin view renders successfully with mixed formulas
-        with self.login(self.user):
-            self.get(self.finals_stage.urls["edit"])
-            self.response_200()
-            # Both match label and team labels should appear
-            self.assertResponseContains("Mixed Formula Match")
-            self.assertResponseContains("Winner Pool 1")
-            self.assertResponseContains("Winner Pool 3")
+        self.login(self.user)
+        self.get(self.finals_stage.urls["edit"])
+        self.response_200()
+        # The match label should appear
+        self.assertResponseContains("Mixed Formula Match")

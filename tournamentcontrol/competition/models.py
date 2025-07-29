@@ -1862,10 +1862,17 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
             template = stage_group_position_tpl
             if group is not None:
                 if stage.pools.count():
-                    context["group"] = stage.pools.all()[int(group) - 1]
+                    try:
+                        context["group"] = stage.pools.all()[int(group) - 1]
+                    except IndexError:
+                        # Handle invalid group references gracefully
+                        context["group"] = {
+                            "title": "ERROR",
+                        }
+                        context.setdefault("errors", []).append("Invalid group.")
                 else:
                     context["group"] = {
-                        "title": mark_safe('<span class="error">ERROR</span>'),
+                        "title": "ERROR",
                     }
                     context.setdefault("errors", []).append("Invalid group.")
         if plain:
