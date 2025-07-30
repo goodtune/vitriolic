@@ -6,6 +6,7 @@ from django.db.models.signals import post_migrate
 
 def install_placeholder_handler(sender, **kwargs):
     from touchtechnology.content.utils import install_placeholder
+
     """Install placeholder pages after migrations run."""
 
     install_placeholder(sender.name)
@@ -13,6 +14,7 @@ def install_placeholder_handler(sender, **kwargs):
 
 class ContentConfig(AppConfig):
     """Integrates content admin components and post-migrate hooks."""
+
     name = "touchtechnology.content"
 
     def ready(self):

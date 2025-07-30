@@ -43,9 +43,7 @@ def update_match_datetimes_on_place_timezone_change(
 
         if old_timezone != new_timezone:
             # Update all matches played at this place (venue or ground)
-            matches = instance.match_set.filter(
-                date__isnull=False, time__isnull=False
-            )
+            matches = instance.match_set.filter(date__isnull=False, time__isnull=False)
             for match in matches:
                 match.clean()  # Recalculate datetime with new timezone
                 match.save(update_fields=["datetime"])

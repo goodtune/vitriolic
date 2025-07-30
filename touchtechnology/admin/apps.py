@@ -9,6 +9,7 @@ from first import first
 
 class AdminConfig(AppConfig):
     """Registers admin sites and performs application checks."""
+
     default_site = "touchtechnology.admin.sites.admin.AdminSite"
     name = "touchtechnology.admin"
     label = "touchtechnology_name"

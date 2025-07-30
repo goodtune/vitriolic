@@ -39,6 +39,7 @@ SITE_CACHE_KEY = "_site_cache"
 
 class AdminUrlModel(AdminUrlMixin, models.Model):
     """Abstract base with helpers for admin URL building."""
+
     class Meta:
         abstract = True
 
@@ -94,6 +95,7 @@ class Page(models.Model):
 
     def __repr__(self):
         return "<Page: #{}>".format(self.pk)
+
     """Reusable fragment of HTML content."""
 
 
@@ -114,8 +116,8 @@ class Content(models.Model):
 
 
 class PageContent(models.Model):
-
     """Placement of a Content instance on a Page."""
+
     page = models.ForeignKey(
         Page, related_name="content", verbose_name=_("Page"), on_delete=models.PROTECT
     )

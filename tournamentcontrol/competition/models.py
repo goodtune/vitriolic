@@ -1865,19 +1865,25 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                     try:
                         context["group"] = stage.pools.all()[int(group) - 1]
                     except IndexError:
-                        # Handle invalid group references gracefully
-                        context["group"] = {
-                            "title": "ERROR",
-                        }
-                        context.setdefault("errors", []).append("Invalid group.")
+                        # If there are ANY issues in evaluating a formula, return the formula itself
+                        if plain:
+                            return team_eval
+                        return {"title": team_eval}
                 else:
                     context["group"] = {
                         "title": "ERROR",
                     }
                     context.setdefault("errors", []).append("Invalid group.")
-        if plain:
-            return template.render(context).strip()
-        return {"title": template.render(context).strip()}
+
+        try:
+            if plain:
+                return template.render(context).strip()
+            return {"title": template.render(context).strip()}
+        except Exception:
+            # If there are ANY issues in evaluating a formula, return the formula itself
+            if plain:
+                return team_eval
+            return {"title": team_eval}
 
     def get_home_team(self):
         return self._get_team("home_team")

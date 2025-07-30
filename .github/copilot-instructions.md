@@ -28,6 +28,8 @@ This is a Python based repository, it provides a Django reusable application tha
 3. Write unit tests for new functionality.
     - Always use `django-test-plus` style tests.
     - Avoid `assertTrue` and `assertFalse` in favor of `assertEqual` and `assertNotEqual`.
+4. Use `tox` for running tests across supported Python versions
+5. **Continuous Improvement**: During any code review iteration, continuously evolve this instructions file to incorporate new guidance and reaffirm established patterns based on reviewer feedback.
     - Use `assertCountEqual` to check lists and querysets.
 4. Use `tox` for running tests across supported Python versions
 
@@ -41,20 +43,21 @@ This is a Python based repository, it provides a Django reusable application tha
 - **Test the actual behavior** - ensure tests validate what the code should do, not just that it doesn't crash
 
 ### Django Test Plus Patterns
-- **User creation**: Use `SuperUserFactory.create()` in `setUp()` method
+- **User creation**: Use the `make_user()` utility function in combination with the `user_factory` attribute
+  - **Admin users**: Set the `user_factory` to `SuperUserFactory`
 - **Authentication**: Use `self.login(self.user)` approach 
 - **HTTP requests**: Use `self.get(...)` instead of direct client calls
-- **Response validation**: Use `self.response_200()` to check status codes
+- **Response validation**: Use `self.response_XXX()` to check status codes
 - **Content validation**: Use `self.assertResponseContains(...)` to check for HTML fragments
 
 ### Model Field Guidelines
 - **UndecidedTeam models**: Don't set both `label` and `formula` - use one or the other as per form validation
-- **Match eval fields**: When testing `home_team_eval` and `away_team_eval`, verify both admin rendering and direct method calls
-- **Formula validation**: Test both valid formulas (that resolve correctly) and invalid formulas (that degrade gracefully)
+- **Eval fields**: When testing any `eval` fields, verify both admin rendering and direct method calls
+- **All outcomes testing**: Test all possible outcomes - both valid scenarios (that resolve correctly) and invalid scenarios (that degrade gracefully)
 
 ### Admin View Testing
-- **Test real usage**: Set up actual Match objects and call admin views to force evaluation
-- **Verify rendering**: Check that both valid and invalid formulas render appropriately
+- **Test real usage**: Set up actual model objects and call admin views to force evaluation
+- **Verify rendering**: Check that both valid and invalid data render appropriately
 - **Check specific content**: Don't just verify page loads - confirm expected titles/content appear
 
 ### Error Handling Testing

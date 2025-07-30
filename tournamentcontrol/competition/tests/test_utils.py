@@ -384,7 +384,9 @@ class TwoStageFormulaProblemTests(TestCase):
 
         # Test that choices also work correctly (fallback to division teams)
         self.assertEqual(undecided_team_g5p2.choices, self.finals_stage.division.teams)
-        self.assertEqual(undecided_team_s1g5p1.choices, self.finals_stage.division.teams)
+        self.assertEqual(
+            undecided_team_s1g5p1.choices, self.finals_stage.division.teams
+        )
 
     def test_invalid_formulas_in_match_eval_fields(self):
         """
@@ -407,22 +409,38 @@ class TwoStageFormulaProblemTests(TestCase):
         self.response_200()
         # The match should be displayed on the stage edit page
         self.assertResponseContains("Invalid Formula Match")
+        # Verify that the home_team and away_team formulas are rendered correctly
+        # Invalid formulas should show the formula itself as fallback
+        self.assertResponseContains(
+            "G5P2"
+        )  # home_team_eval formula should be displayed
+        self.assertResponseContains(
+            "G3P1"
+        )  # away_team_eval formula should be displayed
 
         # Test the eval() method directly - it should handle the IndexError gracefully
         # The Match.eval() method should return a tuple of (home_team, away_team)
-        # For invalid formulas, teams should be dictionaries with ERROR titles
+        # For invalid formulas, the output should be the formula itself
         # The key is that no IndexError should be raised
         home_team, away_team = match_with_invalid_formulas.eval()
-        self.assertEqual(home_team["title"], "2nd ERROR")  # Invalid formula should show ERROR with position
-        self.assertEqual(away_team["title"], "1st ERROR")  # Invalid formula should show ERROR with position
+        self.assertEqual(
+            home_team["title"], "G5P2"
+        )  # Invalid formula should show the formula itself
+        self.assertEqual(
+            away_team["title"], "G3P1"
+        )  # Invalid formula should show the formula itself
 
         # Also test that get_home_team() and get_away_team() don't crash
         # These methods call _get_team() which should handle invalid formulas gracefully
-        # For invalid formulas, they should return dictionaries with titles that include ERROR
+        # For invalid formulas, they should return the formula itself as the title
         home_team_result = match_with_invalid_formulas.get_home_team()
         away_team_result = match_with_invalid_formulas.get_away_team()
-        self.assertEqual(home_team_result["title"], "2nd ERROR")  # Invalid formula should show position + ERROR
-        self.assertEqual(away_team_result["title"], "1st ERROR")  # Invalid formula should show position + ERROR
+        self.assertEqual(
+            home_team_result["title"], "G5P2"
+        )  # Invalid formula should show the formula itself
+        self.assertEqual(
+            away_team_result["title"], "G3P1"
+        )  # Invalid formula should show the formula itself
 
     def test_mixed_valid_and_invalid_formulas_in_admin_view(self):
         """
@@ -451,7 +469,9 @@ class TwoStageFormulaProblemTests(TestCase):
 
         # Test that both teams can have their titles accessed without issues
         # Valid team should resolve to expected title based on template
-        self.assertEqual(valid_team.title, f"1st {self.pool1.title}")  # Should be formatted template output
+        self.assertEqual(
+            valid_team.title, f"1st {self.pool1.title}"
+        )  # Should be formatted template output
 
         # Invalid team should return the formula as fallback
         self.assertEqual(invalid_team.title, "G3P1")
