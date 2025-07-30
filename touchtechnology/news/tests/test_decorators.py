@@ -68,6 +68,8 @@ class ParseMonthNameTest(TestCase):
             ("marzo", 3),  # Spanish March
             ("mars", 3),  # French March
             ("märz", 3),  # German March
+            ("июль", 7),  # Russian July
+            ("июл", 7),  # Abbreviated Russian July
         ]
 
         for month_str, expected_num in test_cases:
