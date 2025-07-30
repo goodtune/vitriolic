@@ -353,3 +353,86 @@ class FrontEndTests(TestCase):
             team.division.season.competition.slug,
             team.division.season.slug,
         )
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class StreamInstructionsViewTests(TestCase):
+    """Test the stream-instructions view for both markdown and HTML formats."""
+
+    def test_stream_instructions_md_endpoint(self):
+        """Test that .md endpoint returns 200 and correct content-type."""
+        season = factories.SeasonFactory.create()
+        url = f"/{season.competition.slug}/{season.slug}/stream-instructions.md"
+
+        response = self.get(url)
+        self.response_200()
+        self.assertEqual(response["Content-Type"], "text/markdown")
+        self.assertResponseContains("# Live Streaming", html=False)
+        self.assertResponseContains(season.competition.title, html=False)
+        self.assertResponseContains(season.title, html=False)
+
+    def test_stream_instructions_html_endpoint(self):
+        """Test that .html endpoint returns 200 and correct content-type."""
+        season = factories.SeasonFactory.create()
+        url = f"/{season.competition.slug}/{season.slug}/stream-instructions.html"
+
+        response = self.get(url)
+        self.response_200()
+        self.assertEqual(response["Content-Type"], "text/html; charset=utf-8")
+        self.assertResponseContains("<h1>Live Streaming</h1>")
+        # Check for the section heading without the special dash characters
+        self.assertResponseContains("<h2>5. Operating the FIT Stream Controller</h2>")
+
+    def test_stream_instructions_internal_links_via_url_tags(self):
+        """Test that internal links are rendered via {% url %} and are fully qualified URI."""
+        season = factories.SeasonFactory.create()
+        url = f"/{season.competition.slug}/{season.slug}/stream-instructions.html"
+
+        response = self.get(url)
+        self.response_200()
+
+        # Check that internal links use {% url %} syntax and are fully qualified
+        # The links appear as separate list items in the HTML
+        self.assertResponseContains(
+            f'<a href="/{season.competition.slug}/{season.slug}/runsheet/">Runsheet</a>'
+        )
+        self.assertResponseContains(
+            f'<a href="/{season.competition.slug}/{season.slug}/results/">Results</a>'
+        )
+        self.assertResponseContains(
+            f'<a href="/{season.competition.slug}/{season.slug}/stream/">Stream</a>'
+        )
+
+    def test_stream_instructions_with_ground_stream_key(self):
+        """Test that when ground has stream_key, it's displayed instead of placeholder."""
+        season = factories.SeasonFactory.create()
+        ground = factories.GroundFactory.create(
+            venue__season=season, stream_key="test-stream-key-123"
+        )
+
+        url = f"/{season.competition.slug}/{season.slug}/stream-instructions.md"
+
+        response = self.get(url)
+        self.response_200()
+        self.assertResponseContains("test-stream-key-123", html=False)
+        # Should not contain placeholder for YouTube key since we have a real one
+        self.assertNotContains(
+            response, "| YouTube | rtmp://a.rtmp.youtube.com/live2 | ``PLACEHOLDER`` |"
+        )
+
+    def test_stream_instructions_missing_db_values_remain_placeholder(self):
+        """Test that missing DB values remain as ``PLACEHOLDER``."""
+        season = factories.SeasonFactory.create()
+        # Don't create any ground with stream_key
+
+        url = f"/{season.competition.slug}/{season.slug}/stream-instructions.md"
+
+        response = self.get(url)
+        self.response_200()
+        # Should contain placeholder for YouTube key since no ground with stream_key
+        self.assertResponseContains(
+            "| YouTube | rtmp://a.rtmp.youtube.com/live2 | ``PLACEHOLDER`` |",
+            html=False,
+        )
+        # Should contain other placeholders
+        self.assertResponseContains("``PLACEHOLDER``", html=False)

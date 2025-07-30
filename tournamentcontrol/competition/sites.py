@@ -452,6 +452,11 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             path("results/", include(self.result_urls())),
             path("runsheet/", include(self.runsheet_urls())),
             path("stream/", include(self.stream_urls())),
+            re_path(
+                r"^stream-instructions\.(?P<format>md|html)$",
+                self.stream_instructions,
+                name="stream-instructions",
+            ),
             path("<slug:division>.ics", self.calendar, name="calendar"),
             path("<slug:division>/", self.division, name="division"),
             path("<slug:division>:<slug:stage>/", self.stage, name="stage"),
@@ -1236,6 +1241,49 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
         templates = self.template_path("forfeit.html")
         return self.render(request, templates, context)
+
+    @competition_by_slug_m
+    def stream_instructions(
+        self, request, competition, season, format, extra_context, **kwargs
+    ):
+        """
+        Render live streaming instructions template with season-specific data.
+        Supports both markdown (.md) and HTML (.html) output formats.
+        """
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+
+        # Find a ground with stream_key if available
+        ground = None
+        venues = season.venues.all()
+        for venue in venues:
+            grounds = venue.grounds.filter(stream_key__isnull=False)
+            if grounds.exists():
+                ground = grounds.first()
+                break
+
+        context = {
+            "competition": competition,
+            "season": season,
+            "ground": ground,
+        }
+        context.update(extra_context)
+
+        # Render the markdown template
+        template_path = "tournamentcontrol/competition/live_streaming_instructions.md"
+        content = render_to_string(template_path, context, request=request)
+
+        if format == "html":
+            # Convert markdown to HTML
+            import markdown
+
+            html_content = markdown.markdown(content, extensions=["tables"])
+            content_type = "text/html; charset=utf-8"
+            return HttpResponse(html_content, content_type=content_type)
+        else:
+            # Return raw markdown
+            content_type = "text/markdown"
+            return HttpResponse(content, content_type=content_type)
 
 
 class MultiCompetitionSite(CompetitionSite):

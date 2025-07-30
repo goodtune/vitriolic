@@ -59,6 +59,7 @@ competition = [
     "google-auth-oauthlib",
     "icalendar",
     "internationaltouch-oauth2client",
+    "markdown",
     "pyparsing",
     "python-dateutil",
 ]
