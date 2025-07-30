@@ -30,3 +30,39 @@ This is a Python based repository, it provides a Django reusable application tha
     - Avoid `assertTrue` and `assertFalse` in favor of `assertEqual` and `assertNotEqual`.
     - Use `assertCountEqual` to check lists and querysets.
 4. Use `tox` for running tests across supported Python versions
+
+## Test Writing Best Practices
+
+### Assertion Guidelines
+- **Always assert positive expected outcomes** - don't settle for "not failing" tests
+- **Avoid intermediate variables** - use assertions directly instead of assigning to temporary variables first
+- **Never use `assertIsNotNone()` or `assertNotEqual()`** unless specifically checking for None/inequality
+- **Use `assertEqual()` with expected values** - verify exact expected results, not just "anything but X"
+- **Test the actual behavior** - ensure tests validate what the code should do, not just that it doesn't crash
+
+### Django Test Plus Patterns
+- **User creation**: Use `SuperUserFactory.create()` in `setUp()` method
+- **Authentication**: Use `self.login(self.user)` approach 
+- **HTTP requests**: Use `self.get(...)` instead of direct client calls
+- **Response validation**: Use `self.response_200()` to check status codes
+- **Content validation**: Use `self.assertResponseContains(...)` to check for HTML fragments
+
+### Model Field Guidelines
+- **UndecidedTeam models**: Don't set both `label` and `formula` - use one or the other as per form validation
+- **Match eval fields**: When testing `home_team_eval` and `away_team_eval`, verify both admin rendering and direct method calls
+- **Formula validation**: Test both valid formulas (that resolve correctly) and invalid formulas (that degrade gracefully)
+
+### Admin View Testing
+- **Test real usage**: Set up actual Match objects and call admin views to force evaluation
+- **Verify rendering**: Check that both valid and invalid formulas render appropriately
+- **Check specific content**: Don't just verify page loads - confirm expected titles/content appear
+
+### Error Handling Testing
+- **Test graceful degradation**: Verify that invalid data doesn't crash but provides meaningful fallbacks
+- **Verify exact error states**: When testing error conditions, assert the specific error content expected
+- **Test method return values**: Understand and test what methods actually return (tuples, dicts, etc.)
+
+### Test Organization
+- **No management commands for tests** - use regular unit tests instead
+- **Remove utility function calls from integration tests** - test through the actual usage paths
+- **Focus on user-facing behavior** - test how features work in practice, not internal implementation details

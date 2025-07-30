@@ -409,17 +409,20 @@ class TwoStageFormulaProblemTests(TestCase):
         self.assertResponseContains("Invalid Formula Match")
 
         # Test the eval() method directly - it should handle the IndexError gracefully
-        # The Match.eval() method should not raise IndexError even with invalid formulas
-        # Teams will be None if formula can't be resolved, which is expected behavior
+        # The Match.eval() method should return a tuple of (home_team, away_team)
+        # For invalid formulas, teams should be dictionaries with ERROR titles
         # The key is that no IndexError should be raised
-        self.assertIsNotNone(match_with_invalid_formulas.eval())
+        home_team, away_team = match_with_invalid_formulas.eval()
+        self.assertEqual(home_team["title"], "2nd ERROR")  # Invalid formula should show ERROR with position
+        self.assertEqual(away_team["title"], "1st ERROR")  # Invalid formula should show ERROR with position
 
         # Also test that get_home_team() and get_away_team() don't crash
         # These methods call _get_team() which should handle invalid formulas gracefully
-        # The results should be dictionaries with title indicating the error
-        # or None if the evaluation couldn't be completed
-        self.assertIsNotNone(match_with_invalid_formulas.get_home_team())  # Should return something, not crash
-        self.assertIsNotNone(match_with_invalid_formulas.get_away_team())  # Should return something, not crash
+        # For invalid formulas, they should return dictionaries with titles that include ERROR
+        home_team_result = match_with_invalid_formulas.get_home_team()
+        away_team_result = match_with_invalid_formulas.get_away_team()
+        self.assertEqual(home_team_result["title"], "2nd ERROR")  # Invalid formula should show position + ERROR
+        self.assertEqual(away_team_result["title"], "1st ERROR")  # Invalid formula should show position + ERROR
 
     def test_mixed_valid_and_invalid_formulas_in_admin_view(self):
         """
@@ -463,3 +466,8 @@ class TwoStageFormulaProblemTests(TestCase):
         self.response_200()
         # The match label should appear
         self.assertResponseContains("Mixed Formula Match")
+        # Verify that the home_team and away_team formulas are rendered correctly
+        # Valid team (G1P1) should show the resolved title
+        self.assertResponseContains(f"1st {self.pool1.title}")
+        # Invalid team (G3P1) should show the formula as fallback
+        self.assertResponseContains("G3P1")
