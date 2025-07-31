@@ -367,13 +367,13 @@ class StreamInstructionsViewTests(TestCase):
         """Test that .md endpoint returns 200 and correct content-type."""
         season = factories.SeasonFactory.create()
 
-        # Build the URL manually since the regex pattern doesn't reverse easily with format parameter
-        base_url = self.reverse(
-            "competition:season", season.competition.slug, season.slug
-        )
-        url = f"{base_url}stream-instructions.md"
         with self.login(self.superuser):
-            self.get(url)
+            self.get(
+                "competition:stream-instructions",
+                season.competition.slug,
+                season.slug,
+                "md",
+            )
             self.response_200()
             self.assertEqual(self.last_response["Content-Type"], "text/markdown")
             self.assertResponseContains("# Live Streaming", html=False)
@@ -384,13 +384,13 @@ class StreamInstructionsViewTests(TestCase):
         """Test that .html endpoint returns 200 and correct content-type."""
         season = factories.SeasonFactory.create()
 
-        # Build the URL manually since the regex pattern doesn't reverse easily with format parameter
-        base_url = self.reverse(
-            "competition:season", season.competition.slug, season.slug
-        )
-        url = f"{base_url}stream-instructions.html"
         with self.login(self.superuser):
-            self.get(url)
+            self.get(
+                "competition:stream-instructions",
+                season.competition.slug,
+                season.slug,
+                "html",
+            )
             self.response_200()
             self.assertEqual(
                 self.last_response["Content-Type"], "text/html; charset=utf-8"
@@ -405,13 +405,13 @@ class StreamInstructionsViewTests(TestCase):
         """Test that internal links are rendered via {% url %} and are fully qualified URI."""
         season = factories.SeasonFactory.create()
 
-        # Build the URL manually since the regex pattern doesn't reverse easily with format parameter
-        base_url = self.reverse(
-            "competition:season", season.competition.slug, season.slug
-        )
-        url = f"{base_url}stream-instructions.html"
         with self.login(self.superuser):
-            self.get(url)
+            self.get(
+                "competition:stream-instructions",
+                season.competition.slug,
+                season.slug,
+                "html",
+            )
             self.response_200()
 
             # Check that internal links use {% url %} syntax and are fully qualified
@@ -433,13 +433,13 @@ class StreamInstructionsViewTests(TestCase):
             venue__season=season, stream_key="test-stream-key-123"
         )
 
-        # Build the URL manually since the regex pattern doesn't reverse easily with format parameter
-        base_url = self.reverse(
-            "competition:season", season.competition.slug, season.slug
-        )
-        url = f"{base_url}stream-instructions.md"
         with self.login(self.superuser):
-            self.get(url)
+            self.get(
+                "competition:stream-instructions",
+                season.competition.slug,
+                season.slug,
+                "md",
+            )
             self.response_200()
             # Check for the real stream key from the ground
             self.assertResponseContains("test-stream-key-123", html=False)
@@ -455,13 +455,13 @@ class StreamInstructionsViewTests(TestCase):
         season = factories.SeasonFactory.create()
         # Don't create any ground with stream_key
 
-        # Build the URL manually since the regex pattern doesn't reverse easily with format parameter
-        base_url = self.reverse(
-            "competition:season", season.competition.slug, season.slug
-        )
-        url = f"{base_url}stream-instructions.md"
         with self.login(self.superuser):
-            self.get(url)
+            self.get(
+                "competition:stream-instructions",
+                season.competition.slug,
+                season.slug,
+                "md",
+            )
             self.response_200()
             # Should contain placeholder for YouTube key since no ground with stream_key
             self.assertResponseContains(
@@ -475,14 +475,13 @@ class StreamInstructionsViewTests(TestCase):
         """Test that unauthenticated users cannot access stream instructions."""
         season = factories.SeasonFactory.create()
 
-        # Build the URL manually since the regex pattern doesn't reverse easily with format parameter
-        base_url = self.reverse(
-            "competition:season", season.competition.slug, season.slug
-        )
-        url = f"{base_url}stream-instructions.md"
-
         # Try accessing without login
-        self.get(url)
+        self.get(
+            "competition:stream-instructions",
+            season.competition.slug,
+            season.slug,
+            "md",
+        )
         self.response_302()  # Should redirect to login
 
     def test_stream_instructions_requires_match_permissions(self):
@@ -490,15 +489,14 @@ class StreamInstructionsViewTests(TestCase):
         season = factories.SeasonFactory.create()
         regular_user = UserFactory.create()  # Regular user without Match permissions
 
-        # Build the URL manually since the regex pattern doesn't reverse easily with format parameter
-        base_url = self.reverse(
-            "competition:season", season.competition.slug, season.slug
-        )
-        url = f"{base_url}stream-instructions.md"
-
         # Try accessing with regular user
         with self.login(regular_user):
-            self.get(url)
+            self.get(
+                "competition:stream-instructions",
+                season.competition.slug,
+                season.slug,
+                "md",
+            )
             self.response_403()  # Should get 403 Forbidden
 
     def test_stream_instructions_html_requires_permissions(self):
@@ -506,13 +504,12 @@ class StreamInstructionsViewTests(TestCase):
         season = factories.SeasonFactory.create()
         regular_user = UserFactory.create()  # Regular user without Match permissions
 
-        # Build the URL manually since the regex pattern doesn't reverse easily with format parameter
-        base_url = self.reverse(
-            "competition:season", season.competition.slug, season.slug
-        )
-        url = f"{base_url}stream-instructions.html"
-
         # Try accessing with regular user
         with self.login(regular_user):
-            self.get(url)
+            self.get(
+                "competition:stream-instructions",
+                season.competition.slug,
+                season.slug,
+                "html",
+            )
             self.response_403()  # Should get 403 Forbidden

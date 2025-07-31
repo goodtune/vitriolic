@@ -1254,7 +1254,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         Render live streaming instructions template with season-specific data.
         Supports both markdown (.md) and HTML (.html) output formats.
         """
-        has_permission = permissions_required(request, Match, return_403=False)
+        has_permission = permissions_required(request, Match, return_403=True)
         if has_permission is not None:
             return has_permission
 
