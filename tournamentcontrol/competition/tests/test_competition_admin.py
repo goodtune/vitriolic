@@ -8,6 +8,7 @@ from django import VERSION
 from django.contrib import messages
 from django.template import Context, Template
 from django.urls import reverse
+from google.auth.exceptions import RefreshError
 from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.admin.mixins import AdminUrlLookup
@@ -1560,3 +1561,89 @@ class BackendTests(MessagesTestMixin, TestCase):
             match.refresh_from_db()
             self.assertFalse(match.live_stream)
             self.assertIsNone(match.external_identifier)
+
+    @mock.patch("googleapiclient.discovery.build")
+    def test_edit_match_youtube_refresh_error_handling(self, mock_build):
+        """
+        Test that RefreshError from expired OAuth2 tokens is properly handled.
+
+        When a YouTube OAuth2 token expires, the API call raises RefreshError.
+        This should be caught and result in a user-friendly error message
+        rather than crashing the view.
+
+        Refs: https://github.com/goodtune/vitriolic/issues/147
+        """
+
+        # Create a stage with live streaming enabled and proper credentials
+        stage = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_client_id="test-client-id",
+            division__season__live_stream_client_secret="test-client-secret",
+            division__season__live_stream_token="test-token",
+            division__season__live_stream_refresh_token="test-refresh-token",
+            division__season__live_stream_token_uri="https://oauth2.googleapis.com/token",
+            division__season__live_stream_scopes=[
+                "https://www.googleapis.com/auth/youtube"
+            ],
+        )
+
+        ground = factories.GroundFactory.create(venue__season=stage.division.season)
+
+        # Create a match with an existing external identifier (simulating a previously created stream)
+        match = factories.MatchFactory.create(
+            stage=stage,
+            play_at=ground,
+            live_stream=True,
+            external_identifier="existing-video-id",
+        )
+
+        # Mock the YouTube API to raise RefreshError when delete() is called
+        mock_youtube_service = mock.Mock()
+        mock_delete = mock.Mock()
+        mock_delete.execute.side_effect = RefreshError(
+            "Token has been expired or revoked."
+        )
+        mock_youtube_service.liveBroadcasts.return_value.delete.return_value = (
+            mock_delete
+        )
+        mock_build.return_value = mock_youtube_service
+
+        edit_match_url = match.url_names["edit"]
+
+        with self.login(self.superuser):
+            # Turn off live streaming to trigger the delete operation that will fail with RefreshError
+            data = {
+                "home_team": match.home_team.pk,
+                "away_team": match.away_team.pk,
+                "label": match.label or "Test Match",
+                "round": match.round or 1,
+                "date": match.date.strftime("%Y-%m-%d"),
+                "time": match.time.strftime("%H:%M"),
+                "play_at": ground.pk,
+                "include_in_ladder": str(int(match.include_in_ladder)),
+                "live_stream": "0",  # Turn OFF live streaming to trigger delete
+                "thumbnail_url": "",
+            }
+
+            # This should handle the RefreshError gracefully and redirect
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            self.response_302()  # Should redirect successfully
+
+            # Verify that an error message was shown to the user
+            if VERSION >= (5, 0):
+                self.assertMessages(
+                    self.last_response,
+                    [
+                        messages.Message(
+                            level=messages.ERROR,
+                            message="YouTube authorization has expired. Please re-authorize to continue using live streaming features.",
+                        )
+                    ],
+                )
+
+            # Verify the match state wasn't changed due to the error
+            match.refresh_from_db()
+            # The match should still have live_stream=True and external_identifier set
+            # because the save was interrupted by the RefreshError
+            self.assertTrue(match.live_stream)
+            self.assertEqual(match.external_identifier, "existing-video-id")
