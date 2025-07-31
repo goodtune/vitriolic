@@ -418,7 +418,7 @@ class StreamInstructionsViewTests(TestCase):
             self.response_200()
 
             # Check that internal links use {% url %} syntax and are fully qualified
-            # The links appear as separate list items in the HTML
+            # The links now have the URL as the link text in markdown format [url](url)
             runsheet_url = self.reverse(
                 "competition:runsheet", season.competition.slug, season.slug
             )
@@ -429,9 +429,9 @@ class StreamInstructionsViewTests(TestCase):
                 "competition:stream", season.competition.slug, season.slug
             )
             
-            self.assertResponseContains(f'<a href="{runsheet_url}">Runsheet</a>')
-            self.assertResponseContains(f'<a href="{results_url}">Results</a>')
-            self.assertResponseContains(f'<a href="{stream_url}">Stream</a>')
+            self.assertResponseContains(f'<a href="{runsheet_url}">{runsheet_url}</a>')
+            self.assertResponseContains(f'<a href="{results_url}">{results_url}</a>')
+            self.assertResponseContains(f'<a href="{stream_url}">{stream_url}</a>')
 
     def test_stream_instructions_with_ground_stream_key(self):
         """Test that when ground has stream_key, it's displayed instead of placeholder."""
@@ -450,15 +450,15 @@ class StreamInstructionsViewTests(TestCase):
             self.response_200()
             # Check for the real stream key from the ground
             self.assertResponseContains("test-stream-key-123", html=False)
-            # Check that the venue name is included in the YouTube row
-            self.assertResponseContains(f"YouTube ({ground.venue.title})", html=False)
+            # Check that the ground title is included in the YouTube row (format changed)
+            self.assertResponseContains(f"YouTube - {ground.title}", html=False)
             # Should not contain placeholder for YouTube key since we have a real one
             self.assertResponseNotContains(
                 "| YouTube | rtmp://a.rtmp.youtube.com/live2 | ``PLACEHOLDER`` |"
             )
 
     def test_stream_instructions_missing_db_values_remain_placeholder(self):
-        """Test that missing DB values remain as ``PLACEHOLDER``."""
+        """Test that missing DB values remain as placeholders."""
         season = factories.SeasonFactory.create()
         # Don't create any ground with stream_key
 
@@ -470,13 +470,12 @@ class StreamInstructionsViewTests(TestCase):
                 "md",
             )
             self.response_200()
-            # Should contain placeholder for YouTube key since no ground with stream_key
-            self.assertResponseContains(
-                "| YouTube | rtmp://a.rtmp.youtube.com/live2 | ``PLACEHOLDER`` |",
-                html=False,
-            )
-            # Should contain other placeholders
-            self.assertResponseContains("``PLACEHOLDER``", html=False)
+            # Should contain placeholders for static values in template
+            self.assertResponseContains("INSERT STREAM KEY", html=False)
+            # Should contain company name placeholder
+            self.assertResponseContains("COMPANY NAME", html=False)
+            # Should contain contact placeholders
+            self.assertResponseContains("INSERT NAME", html=False)
 
     def test_stream_instructions_requires_login(self):
         """Test that unauthenticated users cannot access stream instructions."""
