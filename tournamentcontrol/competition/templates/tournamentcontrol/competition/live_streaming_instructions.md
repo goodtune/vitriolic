@@ -37,14 +37,14 @@ If **restream.io** fails, switch to the emergency keys listed below.
 
 | Description            | RTMP Endpoint                  | Stream Key    |
 | ---------------------- | ------------------------------ | ------------- |
-| Primary feed (Field 1) | `rtmp://live.restream.io/live` | `PLACEHOLDER` |
+| Primary feed (Field 1) | `rtmp://live.restream.io/live` | `INSERT STREAM KEY` |
 
 ### 3.2 Emergency / Direct-to-Platform Keys
 
 | Platform | RTMP Endpoint | Stream Key | Notes |
-|----------|---------------|-----------|-------|{% for ground in streaming_grounds %}
-| YouTube ({{ ground.venue.title }}) | rtmp://a.rtmp.youtube.com/live2 | {{ ground.stream_key }} | Use if restream unavailable |{% endfor %}
-| Facebook | rtmps://live-api-s.facebook.com:443/rtmp/ | `PLACEHOLDER` | - |
+| -------- | ------------- | ---------- | ----- |{% for ground in streaming_grounds %}
+| YouTube - {{ ground.title }} | rtmp://a.rtmp.youtube.com/live2 | {{ ground.stream_key }} | {% if forloop.first %}Use if restream unavailable{% else %}-{% endif %} |{% endfor %}
+| Facebook | rtmps://live-api-s.facebook.com:443/rtmp/ | `INSERT STREAM KEY` | Use if restream unavailable |
 
 ## 4. Google Workspace Account
 
@@ -52,7 +52,7 @@ If **restream.io** fails, switch to the emergency keys listed below.
 | --------- | -------------------------------------------------------------------------------- |
 | Start URL | [https://workspace.google.com/dashboard](https://workspace.google.com/dashboard) |
 | Account   | scores@tournaments.fit                                                           |
-| Password  | `PLACEHOLDER`                                                                    |
+| Password  | This will be shared via WhatsApp by the Event Manager                            |
 
 Use this shared account to access the FIT dashboard and live‑stream controls.
 
@@ -60,19 +60,19 @@ Use this shared account to access the FIT dashboard and live‑stream controls.
 
 1. **Sign in** at [https://workspace.google.com/dashboard](https://workspace.google.com/dashboard) and launch the **FIT** app.
 2. Open:
-      - **Runsheets:** {% url 'competition:runsheet' competition.slug season.slug as runsheet %}[{{ runsheet }}]({{ runsheet }})
-      - **Results Entry:** {% url 'competition:results' competition.slug season.slug as results %}[{{ results }}]({{ results }})
-      - **Stream Control:** {% url 'competition:stream' competition.slug season.slug as stream %}[{{ stream }}]({{ stream }})
+   - **Runsheets:** {% url 'competition:runsheet' competition.slug season.slug as runsheet %}[{{ runsheet }}]({{ runsheet }})
+   - **Results Entry:** {% url 'competition:results' competition.slug season.slug as results %}[{{ results }}]({{ results }})
+   - **Stream Control:** {% url 'competition:stream' competition.slug season.slug as stream %}[{{ stream }}]({{ stream }})
 3. On the _Stream_ page, choose the upcoming match and press **Start streaming** ~1 min before tap‑off.
 4. After full‑time, press **Stop streaming**.
-      - Repeat for every match.
+   - Repeat for every match.
 
 ## 6. Roles & Responsibilities
 
-| Role                              | Morning Setup                                                       | During Play                                    | Evening Shutdown       |
-| --------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------- | ---------------------- |
-| `PLACEHOLDER`                     | Confirm production feed is received; start outputs in `restream.io` | On‑call for issues                             | Reset outputs to _Off_ |
-| Restream operator                 | Activate restream outputs; verify downstream platforms              | Monitor health                                 | Turn all outputs _Off_ |
+| Role              | Morning Setup                                                       | During Play        | Evening Shutdown       |
+| ----------------- | ------------------------------------------------------------------- | ------------------ | ---------------------- |
+| `PLACEHOLDER`     | Confirm production feed is received; start outputs in `restream.io` | On‑call for issues | Reset outputs to _Off_ |
+| Restream operator | Activate restream outputs; verify downstream platforms              | Monitor health     | Turn all outputs _Off_ |
 
 ## 7. Contact
 
