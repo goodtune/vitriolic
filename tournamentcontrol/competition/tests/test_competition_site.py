@@ -419,15 +419,19 @@ class StreamInstructionsViewTests(TestCase):
 
             # Check that internal links use {% url %} syntax and are fully qualified
             # The links appear as separate list items in the HTML
-            self.assertResponseContains(
-                f'<a href="/{season.competition.slug}/{season.slug}/runsheet/">Runsheet</a>'
+            runsheet_url = self.reverse(
+                "competition:runsheet", season.competition.slug, season.slug
             )
-            self.assertResponseContains(
-                f'<a href="/{season.competition.slug}/{season.slug}/results/">Results</a>'
+            results_url = self.reverse(
+                "competition:results", season.competition.slug, season.slug
             )
-            self.assertResponseContains(
-                f'<a href="/{season.competition.slug}/{season.slug}/stream/">Stream</a>'
+            stream_url = self.reverse(
+                "competition:stream", season.competition.slug, season.slug
             )
+            
+            self.assertResponseContains(f'<a href="{runsheet_url}">Runsheet</a>')
+            self.assertResponseContains(f'<a href="{results_url}">Results</a>')
+            self.assertResponseContains(f'<a href="{stream_url}">Stream</a>')
 
     def test_stream_instructions_with_ground_stream_key(self):
         """Test that when ground has stream_key, it's displayed instead of placeholder."""
