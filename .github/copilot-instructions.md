@@ -31,7 +31,19 @@ This is a Python based repository, it provides a Django reusable application tha
 4. Use `tox` for running tests across supported Python versions
 5. **Continuous Improvement**: During any code review iteration, continuously evolve this instructions file to incorporate new guidance and reaffirm established patterns based on reviewer feedback.
     - Use `assertCountEqual` to check lists and querysets.
-4. Use `tox` for running tests across supported Python versions
+6. **Imports and Dependencies**: 
+    - Never use try/except for imports of required dependencies - imports should be at the head of the file
+    - Only use inline imports to avoid circular import issues
+7. **Template Conventions**:
+    - Use `self.template_path()` method to find templates instead of hardcoding template paths
+    - Follow existing patterns for template path construction
+8. **URL and Test Conventions**:
+    - Always use named URLs in tests with `self.reverse()` instead of hardcoded URL strings
+    - Use ORM reverse relations to find related objects instead of manual queries
+9. **Permission and Security Guidelines**:
+    - Protected views must use the same permission level as related functionality (e.g., stream views)
+    - Always test both authorized and unauthorized access to protected endpoints
+    - Use `@login_required_m` and `permissions_required()` for consistent security patterns
 
 ## Test Writing Best Practices
 
@@ -46,9 +58,10 @@ This is a Python based repository, it provides a Django reusable application tha
 - **User creation**: Use the `make_user()` utility function in combination with the `user_factory` attribute
   - **Admin users**: Set the `user_factory` to `SuperUserFactory`
 - **Authentication**: Use `self.login(self.user)` approach 
-- **HTTP requests**: Use `self.get(...)` instead of direct client calls
+- **HTTP requests**: Use `self.get(named_url, *args)` instead of direct client calls or manual URL construction
 - **Response validation**: Use `self.response_XXX()` to check status codes
 - **Content validation**: Use `self.assertResponseContains(...)` to check for HTML fragments
+- **URL Testing**: Always use named URLs with `self.reverse("url_name", args...)` - never hardcode URL strings
 
 ### Model Field Guidelines
 - **UndecidedTeam models**: Don't set both `label` and `formula` - use one or the other as per form validation
@@ -69,3 +82,9 @@ This is a Python based repository, it provides a Django reusable application tha
 - **No management commands for tests** - use regular unit tests instead
 - **Remove utility function calls from integration tests** - test through the actual usage paths
 - **Focus on user-facing behavior** - test how features work in practice, not internal implementation details
+
+### Permission Testing
+- **Test unauthorized access**: Always verify that protected endpoints require proper authentication
+- **Test insufficient permissions**: Check that users without required permissions get 403 responses
+- **Test authorized access**: Verify superusers and users with correct permissions can access protected views
+- **Use proper test users**: Create `SuperUserFactory` users for admin-level access testing

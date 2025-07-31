@@ -8,6 +8,7 @@ from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.tests import factories
+from tournamentcontrol.competition.tests.factories import SuperUserFactory
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
@@ -353,3 +354,168 @@ class FrontEndTests(TestCase):
             team.division.season.competition.slug,
             team.division.season.slug,
         )
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class StreamInstructionsViewTests(TestCase):
+    """Test the stream-instructions view for both markdown and HTML formats."""
+
+    user_factory = SuperUserFactory
+
+    def setUp(self):
+        """Set up a superuser for permission-protected views."""
+        self.user = self.make_user()
+
+    def test_stream_instructions_md_endpoint(self):
+        """Test that .md endpoint returns 200 and correct content-type."""
+        season = factories.SeasonFactory.create()
+
+        with self.login(self.user):
+            self.get(
+                "competition:stream-instructions",
+                season.competition.slug,
+                season.slug,
+                "md",
+            )
+            self.response_200()
+            self.assertEqual(self.last_response["Content-Type"], "text/markdown")
+            self.assertResponseContains("# Live Streaming", html=False)
+            self.assertResponseContains(season.competition.title, html=False)
+            self.assertResponseContains(season.title, html=False)
+
+    def test_stream_instructions_html_endpoint(self):
+        """Test that .html endpoint returns 200 and correct content-type."""
+        season = factories.SeasonFactory.create()
+
+        with self.login(self.user):
+            self.get(
+                "competition:stream-instructions",
+                season.competition.slug,
+                season.slug,
+                "html",
+            )
+            self.response_200()
+            self.assertEqual(
+                self.last_response["Content-Type"], "text/html; charset=utf-8"
+            )
+            self.assertResponseContains("<h1>Live Streaming</h1>")
+            # Check for the section heading without the special dash characters
+            self.assertResponseContains(
+                "<h2>5. Operating the FIT Stream Controller</h2>"
+            )
+
+    def test_stream_instructions_internal_links_via_url_tags(self):
+        """Test that internal links are rendered via {% url %} and are fully qualified URI."""
+        season = factories.SeasonFactory.create()
+
+        with self.login(self.user):
+            self.get(
+                "competition:stream-instructions",
+                season.competition.slug,
+                season.slug,
+                "html",
+            )
+            self.response_200()
+
+            # Check that internal links use {% url %} syntax and are fully qualified
+            # The links now have the URL as the link text in markdown format [url](url)
+            runsheet_url = self.reverse(
+                "competition:runsheet", season.competition.slug, season.slug
+            )
+            results_url = self.reverse(
+                "competition:results", season.competition.slug, season.slug
+            )
+            stream_url = self.reverse(
+                "competition:stream", season.competition.slug, season.slug
+            )
+            
+            self.assertResponseContains(f'<a href="{runsheet_url}">{runsheet_url}</a>')
+            self.assertResponseContains(f'<a href="{results_url}">{results_url}</a>')
+            self.assertResponseContains(f'<a href="{stream_url}">{stream_url}</a>')
+
+    def test_stream_instructions_with_ground_stream_key(self):
+        """Test that when ground has stream_key, it's displayed instead of placeholder."""
+        season = factories.SeasonFactory.create()
+        ground = factories.GroundFactory.create(
+            venue__season=season, stream_key="test-stream-key-123"
+        )
+
+        with self.login(self.user):
+            self.get(
+                "competition:stream-instructions",
+                season.competition.slug,
+                season.slug,
+                "md",
+            )
+            self.response_200()
+            # Check for the real stream key from the ground
+            self.assertResponseContains("test-stream-key-123", html=False)
+            # Check that the ground title is included in the YouTube row (format changed)
+            self.assertResponseContains(f"YouTube - {ground.title}", html=False)
+            # Should not contain placeholder for YouTube key since we have a real one
+            self.assertResponseNotContains(
+                "| YouTube | rtmp://a.rtmp.youtube.com/live2 | ``PLACEHOLDER`` |"
+            )
+
+    def test_stream_instructions_missing_db_values_remain_placeholder(self):
+        """Test that missing DB values remain as placeholders."""
+        season = factories.SeasonFactory.create()
+        # Don't create any ground with stream_key
+
+        with self.login(self.user):
+            self.get(
+                "competition:stream-instructions",
+                season.competition.slug,
+                season.slug,
+                "md",
+            )
+            self.response_200()
+            # Should contain placeholders for static values in template
+            self.assertResponseContains("INSERT STREAM KEY", html=False)
+            # Should contain company name placeholder
+            self.assertResponseContains("COMPANY NAME", html=False)
+            # Should contain contact placeholders
+            self.assertResponseContains("INSERT NAME", html=False)
+
+    def test_stream_instructions_requires_login(self):
+        """Test that unauthenticated users cannot access stream instructions."""
+        season = factories.SeasonFactory.create()
+
+        # Try accessing without login
+        self.get(
+            "competition:stream-instructions",
+            season.competition.slug,
+            season.slug,
+            "md",
+        )
+        self.response_302()  # Should redirect to login
+
+    def test_stream_instructions_requires_match_permissions(self):
+        """Test that users without Match permissions cannot access stream instructions."""
+        season = factories.SeasonFactory.create()
+        regular_user = UserFactory.create()  # Regular user without Match permissions
+
+        # Try accessing with regular user
+        with self.login(regular_user):
+            self.get(
+                "competition:stream-instructions",
+                season.competition.slug,
+                season.slug,
+                "md",
+            )
+            self.response_403()  # Should get 403 Forbidden
+
+    def test_stream_instructions_html_requires_permissions(self):
+        """Test that HTML endpoint also requires same permissions."""
+        season = factories.SeasonFactory.create()
+        regular_user = UserFactory.create()  # Regular user without Match permissions
+
+        # Try accessing with regular user
+        with self.login(regular_user):
+            self.get(
+                "competition:stream-instructions",
+                season.competition.slug,
+                season.slug,
+                "html",
+            )
+            self.response_403()  # Should get 403 Forbidden
