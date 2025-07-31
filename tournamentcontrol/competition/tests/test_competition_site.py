@@ -362,8 +362,12 @@ class StreamInstructionsViewTests(TestCase):
     def test_stream_instructions_md_endpoint(self):
         """Test that .md endpoint returns 200 and correct content-type."""
         season = factories.SeasonFactory.create()
-        url = f"/{season.competition.slug}/{season.slug}/stream-instructions.md"
 
+        # Build the URL manually since the regex pattern doesn't reverse easily with format parameter
+        base_url = self.reverse(
+            "competition:season", season.competition.slug, season.slug
+        )
+        url = f"{base_url}stream-instructions.md"
         self.get(url)
         self.response_200()
         self.assertEqual(self.last_response["Content-Type"], "text/markdown")
@@ -374,8 +378,12 @@ class StreamInstructionsViewTests(TestCase):
     def test_stream_instructions_html_endpoint(self):
         """Test that .html endpoint returns 200 and correct content-type."""
         season = factories.SeasonFactory.create()
-        url = f"/{season.competition.slug}/{season.slug}/stream-instructions.html"
 
+        # Build the URL manually since the regex pattern doesn't reverse easily with format parameter
+        base_url = self.reverse(
+            "competition:season", season.competition.slug, season.slug
+        )
+        url = f"{base_url}stream-instructions.html"
         self.get(url)
         self.response_200()
         self.assertEqual(self.last_response["Content-Type"], "text/html; charset=utf-8")
@@ -386,8 +394,12 @@ class StreamInstructionsViewTests(TestCase):
     def test_stream_instructions_internal_links_via_url_tags(self):
         """Test that internal links are rendered via {% url %} and are fully qualified URI."""
         season = factories.SeasonFactory.create()
-        url = f"/{season.competition.slug}/{season.slug}/stream-instructions.html"
 
+        # Build the URL manually since the regex pattern doesn't reverse easily with format parameter
+        base_url = self.reverse(
+            "competition:season", season.competition.slug, season.slug
+        )
+        url = f"{base_url}stream-instructions.html"
         self.get(url)
         self.response_200()
 
@@ -410,8 +422,11 @@ class StreamInstructionsViewTests(TestCase):
             venue__season=season, stream_key="test-stream-key-123"
         )
 
-        url = f"/{season.competition.slug}/{season.slug}/stream-instructions.md"
-
+        # Build the URL manually since the regex pattern doesn't reverse easily with format parameter
+        base_url = self.reverse(
+            "competition:season", season.competition.slug, season.slug
+        )
+        url = f"{base_url}stream-instructions.md"
         self.get(url)
         self.response_200()
         # Check for the real stream key from the ground
@@ -428,8 +443,11 @@ class StreamInstructionsViewTests(TestCase):
         season = factories.SeasonFactory.create()
         # Don't create any ground with stream_key
 
-        url = f"/{season.competition.slug}/{season.slug}/stream-instructions.md"
-
+        # Build the URL manually since the regex pattern doesn't reverse easily with format parameter
+        base_url = self.reverse(
+            "competition:season", season.competition.slug, season.slug
+        )
+        url = f"{base_url}stream-instructions.md"
         self.get(url)
         self.response_200()
         # Should contain placeholder for YouTube key since no ground with stream_key

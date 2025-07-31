@@ -6,6 +6,7 @@ from datetime import timedelta
 from operator import or_
 from zoneinfo import ZoneInfo
 
+import markdown
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.contrib import messages
@@ -22,11 +23,6 @@ from django.utils.module_loading import import_string
 from django.utils.translation import gettext, gettext_lazy as _
 from guardian.utils import get_40x_or_None
 from icalendar import Calendar, Event
-
-try:
-    import markdown
-except ImportError:
-    markdown = None
 
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
@@ -1273,13 +1269,11 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         context.update(extra_context)
 
         # Render the markdown template
-        template_path = "tournamentcontrol/competition/live_streaming_instructions.md"
-        content = render_to_string(template_path, context, request=request)
+        templates = self.template_path("live_streaming_instructions.md")
+        content = render_to_string(templates, context, request=request)
 
         if format == "html":
             # Convert markdown to HTML
-            if markdown is None:
-                raise ImportError("markdown library is required for HTML format")
             html_content = markdown.markdown(content, extensions=["tables"])
             return HttpResponse(html_content, content_type="text/html; charset=utf-8")
 
