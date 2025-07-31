@@ -62,7 +62,7 @@ Use this shared account to access the FIT dashboard and live‑stream controls.
 2. Open:
       - **Runsheets:** {% url 'competition:runsheet' competition.slug season.slug as runsheet %}[{{ runsheet }}]({{ runsheet }})
       - **Results Entry:** {% url 'competition:results' competition.slug season.slug as results %}[{{ results }}]({{ results }})
-      - **Stream Control:** {% url 'competition:stream' competition.slug season.slug as stream %}[{{ stream }}]({{ runsheet }})
+      - **Stream Control:** {% url 'competition:stream' competition.slug season.slug as stream %}[{{ stream }}]({{ stream }})
 3. On the _Stream_ page, choose the upcoming match and press **Start streaming** ~1 min before tap‑off.
 4. After full‑time, press **Stop streaming**.
       - Repeat for every match.
