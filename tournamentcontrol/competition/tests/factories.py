@@ -73,7 +73,7 @@ class SeasonFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Season
 
-    title = factory.Sequence(lambda n: str(range(2015, 1900, -1)[n]))
+    title = factory.Sequence(lambda n: str(2015 - (n % 115)))
     timezone = factory.Faker("timezone")
 
     competition = factory.SubFactory(CompetitionFactory)
