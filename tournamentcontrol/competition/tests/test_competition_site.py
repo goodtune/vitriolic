@@ -8,6 +8,7 @@ from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.tests import factories
+from tournamentcontrol.competition.tests.factories import SuperUserFactory
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
@@ -359,15 +360,17 @@ class FrontEndTests(TestCase):
 class StreamInstructionsViewTests(TestCase):
     """Test the stream-instructions view for both markdown and HTML formats."""
 
+    user_factory = SuperUserFactory
+
     def setUp(self):
         """Set up a superuser for permission-protected views."""
-        self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
+        self.user = self.make_user()
 
     def test_stream_instructions_md_endpoint(self):
         """Test that .md endpoint returns 200 and correct content-type."""
         season = factories.SeasonFactory.create()
 
-        with self.login(self.superuser):
+        with self.login(self.user):
             self.get(
                 "competition:stream-instructions",
                 season.competition.slug,
@@ -384,7 +387,7 @@ class StreamInstructionsViewTests(TestCase):
         """Test that .html endpoint returns 200 and correct content-type."""
         season = factories.SeasonFactory.create()
 
-        with self.login(self.superuser):
+        with self.login(self.user):
             self.get(
                 "competition:stream-instructions",
                 season.competition.slug,
@@ -405,7 +408,7 @@ class StreamInstructionsViewTests(TestCase):
         """Test that internal links are rendered via {% url %} and are fully qualified URI."""
         season = factories.SeasonFactory.create()
 
-        with self.login(self.superuser):
+        with self.login(self.user):
             self.get(
                 "competition:stream-instructions",
                 season.competition.slug,
@@ -433,7 +436,7 @@ class StreamInstructionsViewTests(TestCase):
             venue__season=season, stream_key="test-stream-key-123"
         )
 
-        with self.login(self.superuser):
+        with self.login(self.user):
             self.get(
                 "competition:stream-instructions",
                 season.competition.slug,
@@ -455,7 +458,7 @@ class StreamInstructionsViewTests(TestCase):
         season = factories.SeasonFactory.create()
         # Don't create any ground with stream_key
 
-        with self.login(self.superuser):
+        with self.login(self.user):
             self.get(
                 "competition:stream-instructions",
                 season.competition.slug,
