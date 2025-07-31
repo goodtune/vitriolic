@@ -1246,6 +1246,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         return self.render(request, templates, context)
 
     @competition_by_slug_m
+    @login_required_m
     def stream_instructions(
         self, request, competition, season, format, extra_context, **kwargs
     ):
@@ -1253,6 +1254,10 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         Render live streaming instructions template with season-specific data.
         Supports both markdown (.md) and HTML (.html) output formats.
         """
+        has_permission = permissions_required(request, Match, return_403=False)
+        if has_permission is not None:
+            return has_permission
+
         if extra_context is None:
             extra_context = {}
 

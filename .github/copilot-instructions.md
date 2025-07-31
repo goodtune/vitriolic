@@ -40,6 +40,10 @@ This is a Python based repository, it provides a Django reusable application tha
 8. **URL and Test Conventions**:
     - Always use named URLs in tests with `self.reverse()` instead of hardcoded URL strings
     - Use ORM reverse relations to find related objects instead of manual queries
+9. **Permission and Security Guidelines**:
+    - Protected views must use the same permission level as related functionality (e.g., stream views)
+    - Always test both authorized and unauthorized access to protected endpoints
+    - Use `@login_required_m` and `permissions_required()` for consistent security patterns
 
 ## Test Writing Best Practices
 
@@ -78,3 +82,9 @@ This is a Python based repository, it provides a Django reusable application tha
 - **No management commands for tests** - use regular unit tests instead
 - **Remove utility function calls from integration tests** - test through the actual usage paths
 - **Focus on user-facing behavior** - test how features work in practice, not internal implementation details
+
+### Permission Testing
+- **Test unauthorized access**: Always verify that protected endpoints require proper authentication
+- **Test insufficient permissions**: Check that users without required permissions get 403 responses
+- **Test authorized access**: Verify superusers and users with correct permissions can access protected views
+- **Use proper test users**: Create `SuperUserFactory` users for admin-level access testing

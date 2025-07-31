@@ -359,6 +359,10 @@ class FrontEndTests(TestCase):
 class StreamInstructionsViewTests(TestCase):
     """Test the stream-instructions view for both markdown and HTML formats."""
 
+    def setUp(self):
+        """Set up a superuser for permission-protected views."""
+        self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
+
     def test_stream_instructions_md_endpoint(self):
         """Test that .md endpoint returns 200 and correct content-type."""
         season = factories.SeasonFactory.create()
@@ -368,12 +372,13 @@ class StreamInstructionsViewTests(TestCase):
             "competition:season", season.competition.slug, season.slug
         )
         url = f"{base_url}stream-instructions.md"
-        self.get(url)
-        self.response_200()
-        self.assertEqual(self.last_response["Content-Type"], "text/markdown")
-        self.assertResponseContains("# Live Streaming", html=False)
-        self.assertResponseContains(season.competition.title, html=False)
-        self.assertResponseContains(season.title, html=False)
+        with self.login(self.superuser):
+            self.get(url)
+            self.response_200()
+            self.assertEqual(self.last_response["Content-Type"], "text/markdown")
+            self.assertResponseContains("# Live Streaming", html=False)
+            self.assertResponseContains(season.competition.title, html=False)
+            self.assertResponseContains(season.title, html=False)
 
     def test_stream_instructions_html_endpoint(self):
         """Test that .html endpoint returns 200 and correct content-type."""
@@ -384,12 +389,17 @@ class StreamInstructionsViewTests(TestCase):
             "competition:season", season.competition.slug, season.slug
         )
         url = f"{base_url}stream-instructions.html"
-        self.get(url)
-        self.response_200()
-        self.assertEqual(self.last_response["Content-Type"], "text/html; charset=utf-8")
-        self.assertResponseContains("<h1>Live Streaming</h1>")
-        # Check for the section heading without the special dash characters
-        self.assertResponseContains("<h2>5. Operating the FIT Stream Controller</h2>")
+        with self.login(self.superuser):
+            self.get(url)
+            self.response_200()
+            self.assertEqual(
+                self.last_response["Content-Type"], "text/html; charset=utf-8"
+            )
+            self.assertResponseContains("<h1>Live Streaming</h1>")
+            # Check for the section heading without the special dash characters
+            self.assertResponseContains(
+                "<h2>5. Operating the FIT Stream Controller</h2>"
+            )
 
     def test_stream_instructions_internal_links_via_url_tags(self):
         """Test that internal links are rendered via {% url %} and are fully qualified URI."""
@@ -400,20 +410,21 @@ class StreamInstructionsViewTests(TestCase):
             "competition:season", season.competition.slug, season.slug
         )
         url = f"{base_url}stream-instructions.html"
-        self.get(url)
-        self.response_200()
+        with self.login(self.superuser):
+            self.get(url)
+            self.response_200()
 
-        # Check that internal links use {% url %} syntax and are fully qualified
-        # The links appear as separate list items in the HTML
-        self.assertResponseContains(
-            f'<a href="/{season.competition.slug}/{season.slug}/runsheet/">Runsheet</a>'
-        )
-        self.assertResponseContains(
-            f'<a href="/{season.competition.slug}/{season.slug}/results/">Results</a>'
-        )
-        self.assertResponseContains(
-            f'<a href="/{season.competition.slug}/{season.slug}/stream/">Stream</a>'
-        )
+            # Check that internal links use {% url %} syntax and are fully qualified
+            # The links appear as separate list items in the HTML
+            self.assertResponseContains(
+                f'<a href="/{season.competition.slug}/{season.slug}/runsheet/">Runsheet</a>'
+            )
+            self.assertResponseContains(
+                f'<a href="/{season.competition.slug}/{season.slug}/results/">Results</a>'
+            )
+            self.assertResponseContains(
+                f'<a href="/{season.competition.slug}/{season.slug}/stream/">Stream</a>'
+            )
 
     def test_stream_instructions_with_ground_stream_key(self):
         """Test that when ground has stream_key, it's displayed instead of placeholder."""
@@ -427,16 +438,17 @@ class StreamInstructionsViewTests(TestCase):
             "competition:season", season.competition.slug, season.slug
         )
         url = f"{base_url}stream-instructions.md"
-        self.get(url)
-        self.response_200()
-        # Check for the real stream key from the ground
-        self.assertResponseContains("test-stream-key-123", html=False)
-        # Check that the venue name is included in the YouTube row
-        self.assertResponseContains(f"YouTube ({ground.venue.title})", html=False)
-        # Should not contain placeholder for YouTube key since we have a real one
-        self.assertResponseNotContains(
-            "| YouTube | rtmp://a.rtmp.youtube.com/live2 | ``PLACEHOLDER`` |"
-        )
+        with self.login(self.superuser):
+            self.get(url)
+            self.response_200()
+            # Check for the real stream key from the ground
+            self.assertResponseContains("test-stream-key-123", html=False)
+            # Check that the venue name is included in the YouTube row
+            self.assertResponseContains(f"YouTube ({ground.venue.title})", html=False)
+            # Should not contain placeholder for YouTube key since we have a real one
+            self.assertResponseNotContains(
+                "| YouTube | rtmp://a.rtmp.youtube.com/live2 | ``PLACEHOLDER`` |"
+            )
 
     def test_stream_instructions_missing_db_values_remain_placeholder(self):
         """Test that missing DB values remain as ``PLACEHOLDER``."""
@@ -448,12 +460,59 @@ class StreamInstructionsViewTests(TestCase):
             "competition:season", season.competition.slug, season.slug
         )
         url = f"{base_url}stream-instructions.md"
-        self.get(url)
-        self.response_200()
-        # Should contain placeholder for YouTube key since no ground with stream_key
-        self.assertResponseContains(
-            "| YouTube | rtmp://a.rtmp.youtube.com/live2 | ``PLACEHOLDER`` |",
-            html=False,
+        with self.login(self.superuser):
+            self.get(url)
+            self.response_200()
+            # Should contain placeholder for YouTube key since no ground with stream_key
+            self.assertResponseContains(
+                "| YouTube | rtmp://a.rtmp.youtube.com/live2 | ``PLACEHOLDER`` |",
+                html=False,
+            )
+            # Should contain other placeholders
+            self.assertResponseContains("``PLACEHOLDER``", html=False)
+
+    def test_stream_instructions_requires_login(self):
+        """Test that unauthenticated users cannot access stream instructions."""
+        season = factories.SeasonFactory.create()
+
+        # Build the URL manually since the regex pattern doesn't reverse easily with format parameter
+        base_url = self.reverse(
+            "competition:season", season.competition.slug, season.slug
         )
-        # Should contain other placeholders
-        self.assertResponseContains("``PLACEHOLDER``", html=False)
+        url = f"{base_url}stream-instructions.md"
+
+        # Try accessing without login
+        self.get(url)
+        self.response_302()  # Should redirect to login
+
+    def test_stream_instructions_requires_match_permissions(self):
+        """Test that users without Match permissions cannot access stream instructions."""
+        season = factories.SeasonFactory.create()
+        regular_user = UserFactory.create()  # Regular user without Match permissions
+
+        # Build the URL manually since the regex pattern doesn't reverse easily with format parameter
+        base_url = self.reverse(
+            "competition:season", season.competition.slug, season.slug
+        )
+        url = f"{base_url}stream-instructions.md"
+
+        # Try accessing with regular user
+        with self.login(regular_user):
+            self.get(url)
+            self.response_403()  # Should get 403 Forbidden
+
+    def test_stream_instructions_html_requires_permissions(self):
+        """Test that HTML endpoint also requires same permissions."""
+        season = factories.SeasonFactory.create()
+        regular_user = UserFactory.create()  # Regular user without Match permissions
+
+        # Build the URL manually since the regex pattern doesn't reverse easily with format parameter
+        base_url = self.reverse(
+            "competition:season", season.competition.slug, season.slug
+        )
+        url = f"{base_url}stream-instructions.html"
+
+        # Try accessing with regular user
+        with self.login(regular_user):
+            self.get(url)
+            self.response_403()  # Should get 403 Forbidden
