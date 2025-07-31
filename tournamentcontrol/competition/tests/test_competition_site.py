@@ -364,9 +364,9 @@ class StreamInstructionsViewTests(TestCase):
         season = factories.SeasonFactory.create()
         url = f"/{season.competition.slug}/{season.slug}/stream-instructions.md"
 
-        response = self.get(url)
+        self.get(url)
         self.response_200()
-        self.assertEqual(response["Content-Type"], "text/markdown")
+        self.assertEqual(self.last_response["Content-Type"], "text/markdown")
         self.assertResponseContains("# Live Streaming", html=False)
         self.assertResponseContains(season.competition.title, html=False)
         self.assertResponseContains(season.title, html=False)
@@ -376,9 +376,9 @@ class StreamInstructionsViewTests(TestCase):
         season = factories.SeasonFactory.create()
         url = f"/{season.competition.slug}/{season.slug}/stream-instructions.html"
 
-        response = self.get(url)
+        self.get(url)
         self.response_200()
-        self.assertEqual(response["Content-Type"], "text/html; charset=utf-8")
+        self.assertEqual(self.last_response["Content-Type"], "text/html; charset=utf-8")
         self.assertResponseContains("<h1>Live Streaming</h1>")
         # Check for the section heading without the special dash characters
         self.assertResponseContains("<h2>5. Operating the FIT Stream Controller</h2>")
@@ -388,7 +388,7 @@ class StreamInstructionsViewTests(TestCase):
         season = factories.SeasonFactory.create()
         url = f"/{season.competition.slug}/{season.slug}/stream-instructions.html"
 
-        response = self.get(url)
+        self.get(url)
         self.response_200()
 
         # Check that internal links use {% url %} syntax and are fully qualified
@@ -412,12 +412,15 @@ class StreamInstructionsViewTests(TestCase):
 
         url = f"/{season.competition.slug}/{season.slug}/stream-instructions.md"
 
-        response = self.get(url)
+        self.get(url)
         self.response_200()
+        # Check for the real stream key from the ground
         self.assertResponseContains("test-stream-key-123", html=False)
+        # Check that the venue name is included in the YouTube row
+        self.assertResponseContains(f"YouTube ({ground.venue.title})", html=False)
         # Should not contain placeholder for YouTube key since we have a real one
-        self.assertNotContains(
-            response, "| YouTube | rtmp://a.rtmp.youtube.com/live2 | ``PLACEHOLDER`` |"
+        self.assertResponseNotContains(
+            "| YouTube | rtmp://a.rtmp.youtube.com/live2 | ``PLACEHOLDER`` |"
         )
 
     def test_stream_instructions_missing_db_values_remain_placeholder(self):
@@ -427,7 +430,7 @@ class StreamInstructionsViewTests(TestCase):
 
         url = f"/{season.competition.slug}/{season.slug}/stream-instructions.md"
 
-        response = self.get(url)
+        self.get(url)
         self.response_200()
         # Should contain placeholder for YouTube key since no ground with stream_key
         self.assertResponseContains(

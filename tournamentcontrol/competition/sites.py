@@ -14,6 +14,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Case, Count, F, Q, Sum, When
 from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
+from django.template.loader import render_to_string
 from django.urls import include, path, re_path, reverse
 from django.urls.exceptions import NoReverseMatch
 from django.utils import timezone
@@ -21,6 +22,11 @@ from django.utils.module_loading import import_string
 from django.utils.translation import gettext, gettext_lazy as _
 from guardian.utils import get_40x_or_None
 from icalendar import Calendar, Event
+
+try:
+    import markdown
+except ImportError:
+    markdown = None
 
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
@@ -43,6 +49,7 @@ from tournamentcontrol.competition.forms import (
 )
 from tournamentcontrol.competition.models import (
     Competition,
+    Ground,
     Match,
     Person,
     SimpleScoreMatchStatistic,
@@ -1250,22 +1257,18 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         Render live streaming instructions template with season-specific data.
         Supports both markdown (.md) and HTML (.html) output formats.
         """
-        from django.http import HttpResponse
-        from django.template.loader import render_to_string
+        if extra_context is None:
+            extra_context = {}
 
-        # Find a ground with stream_key if available
-        ground = None
-        venues = season.venues.all()
-        for venue in venues:
-            grounds = venue.grounds.filter(stream_key__isnull=False)
-            if grounds.exists():
-                ground = grounds.first()
-                break
+        # Find all grounds with stream keys using ORM reverse relations
+        streaming_grounds = Ground.objects.filter(
+            venue__season=season, stream_key__isnull=False
+        ).exclude(stream_key="")
 
         context = {
             "competition": competition,
             "season": season,
-            "ground": ground,
+            "streaming_grounds": streaming_grounds,
         }
         context.update(extra_context)
 
@@ -1275,15 +1278,12 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
         if format == "html":
             # Convert markdown to HTML
-            import markdown
-
+            if markdown is None:
+                raise ImportError("markdown library is required for HTML format")
             html_content = markdown.markdown(content, extensions=["tables"])
-            content_type = "text/html; charset=utf-8"
-            return HttpResponse(html_content, content_type=content_type)
-        else:
-            # Return raw markdown
-            content_type = "text/markdown"
-            return HttpResponse(content, content_type=content_type)
+            return HttpResponse(html_content, content_type="text/html; charset=utf-8")
+
+        return HttpResponse(content, content_type="text/markdown")
 
 
 class MultiCompetitionSite(CompetitionSite):

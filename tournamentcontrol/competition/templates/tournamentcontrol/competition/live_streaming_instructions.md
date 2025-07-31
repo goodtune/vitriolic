@@ -48,8 +48,9 @@ If restream fails and ``PLACEHOLDER`` is unreachable, switch to the emergency ke
 ### 3.2 Emergency / Direct-to-Platform Keys
 
 | Platform | RTMP Endpoint | Stream Key | Notes |
-|----------|---------------|-----------|-------|
-| YouTube | rtmp://a.rtmp.youtube.com/live2 | {% if ground.stream_key %}{{ ground.stream_key }}{% else %}``PLACEHOLDER``{% endif %} | Use if restream unavailable |
+|----------|---------------|-----------|-------|{% for ground in streaming_grounds %}
+| YouTube ({{ ground.venue.title }}) | rtmp://a.rtmp.youtube.com/live2 | {{ ground.stream_key }} | Use if restream unavailable |{% endfor %}{% if not streaming_grounds %}
+| YouTube | rtmp://a.rtmp.youtube.com/live2 | ``PLACEHOLDER`` | Use if restream unavailable |{% endif %}
 | Facebook | rtmps://live-api-s.facebook.com:443/rtmp/ | ``PLACEHOLDER`` | — |
 
 ## 4. Google Workspace Account
@@ -89,5 +90,3 @@ Use this shared account to access the FIT dashboard and live‑stream controls.
 
 - Technical lead: **``PLACEHOLDER``** 〈``PLACEHOLDER``〉  
 - Event manager: **``PLACEHOLDER``** 〈``PLACEHOLDER``〉
-
-*Template version: 2025‑07‑30.*
