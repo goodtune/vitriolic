@@ -16,7 +16,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.postgres import fields as PG
 from django.core import validators
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Count, DateField, DateTimeField, Q, Sum, TimeField
 from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
 from django.template import Template
@@ -598,8 +598,6 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 
         # Enable automatic refresh for expired tokens
         if credentials.expired and credentials.refresh_token:
-            from django.db import transaction
-
             try:
                 credentials.refresh(Request())
                 # Update stored tokens after successful refresh with transaction safety
@@ -607,18 +605,22 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
                     self.live_stream_token = credentials.token
                     self.save(update_fields=["live_stream_token"])
                 logger.info(
-                    f"Successfully refreshed YouTube OAuth token for season {self.pk}"
+                    "Successfully refreshed YouTube OAuth token for season %s", self.pk
                 )
             except RefreshError as e:
                 # Log error and re-raise for proper error handling
                 logger.error(
-                    f"Failed to refresh YouTube credentials for season {self.pk}: {e}"
+                    "Failed to refresh YouTube credentials for season %s: %s",
+                    self.pk,
+                    e,
                 )
                 raise
             except Exception as e:
                 # Log unexpected errors and re-raise
                 logger.error(
-                    f"Unexpected error refreshing YouTube credentials for season {self.pk}: {e}"
+                    "Unexpected error refreshing YouTube credentials for season %s: %s",
+                    self.pk,
+                    e,
                 )
                 raise
 
