@@ -7,6 +7,8 @@ import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
+logger = logging.getLogger(__name__)
+
 from cloudinary.models import CloudinaryField
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
@@ -25,6 +27,8 @@ from django.utils import timezone
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
+from google.auth.exceptions import RefreshError
+from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -585,18 +589,39 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 
     @cached_property
     def youtube(self):
-        return build(
-            "youtube",
-            "v3",
-            credentials=Credentials(
-                client_id=self.live_stream_client_id,
-                client_secret=self.live_stream_client_secret,
-                token=self.live_stream_token,
-                refresh_token=self.live_stream_refresh_token,
-                token_uri=self.live_stream_token_uri,
-                scopes=self.live_stream_scopes,
-            ),
+        credentials = Credentials(
+            client_id=self.live_stream_client_id,
+            client_secret=self.live_stream_client_secret,
+            token=self.live_stream_token,
+            refresh_token=self.live_stream_refresh_token,
+            token_uri=self.live_stream_token_uri,
+            scopes=self.live_stream_scopes,
         )
+
+        # Enable automatic refresh for expired tokens
+        if credentials.expired and credentials.refresh_token:
+            try:
+                credentials.refresh(Request())
+                # Update stored tokens after successful refresh
+                self.live_stream_token = credentials.token
+                self.save(update_fields=["live_stream_token"])
+                logger.info(
+                    f"Successfully refreshed YouTube OAuth token for season {self.pk}"
+                )
+            except RefreshError as e:
+                # Log error and re-raise for proper error handling
+                logger.error(
+                    f"Failed to refresh YouTube credentials for season {self.pk}: {e}"
+                )
+                raise
+            except Exception as e:
+                # Log unexpected errors and re-raise
+                logger.error(
+                    f"Unexpected error refreshing YouTube credentials for season {self.pk}: {e}"
+                )
+                raise
+
+        return build("youtube", "v3", credentials=credentials)
 
     @property
     def datetimes(self):
