@@ -7,8 +7,6 @@ import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
-logger = logging.getLogger(__name__)
-
 from cloudinary.models import CloudinaryField
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
@@ -587,7 +585,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             **kwargs,
         )
 
-    @cached_property
+    @property
     def youtube(self):
         credentials = Credentials(
             client_id=self.live_stream_client_id,
@@ -600,11 +598,14 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 
         # Enable automatic refresh for expired tokens
         if credentials.expired and credentials.refresh_token:
+            from django.db import transaction
+
             try:
                 credentials.refresh(Request())
-                # Update stored tokens after successful refresh
-                self.live_stream_token = credentials.token
-                self.save(update_fields=["live_stream_token"])
+                # Update stored tokens after successful refresh with transaction safety
+                with transaction.atomic():
+                    self.live_stream_token = credentials.token
+                    self.save(update_fields=["live_stream_token"])
                 logger.info(
                     f"Successfully refreshed YouTube OAuth token for season {self.pk}"
                 )
