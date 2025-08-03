@@ -29,6 +29,7 @@ class CompetitionConfig(AppConfig):
             LadderEntry,
             LadderSummary,
             Match,
+            MatchEvent,
             Season,
             Stage,
             StageGroup,
@@ -40,6 +41,7 @@ class CompetitionConfig(AppConfig):
             changed_points_formula,
             delete_related,
             delete_team,
+            match_event_saved_handler,
             match_forfeit,
             match_saved_handler,
             notify_match_forfeit_email,
@@ -53,6 +55,7 @@ class CompetitionConfig(AppConfig):
         site.register(CompetitionAdminComponent)
 
         post_save.connect(match_saved_handler, sender=Match)
+        post_save.connect(match_event_saved_handler, sender=MatchEvent)
 
         pre_save.connect(scale_ladder_entry, sender=LadderSummary)
         post_save.connect(team_ladder_entry_aggregation, sender=LadderEntry)

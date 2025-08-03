@@ -36,9 +36,23 @@
 			<tfoot>
 				<tr>
 					<td colspan="2"></td>
-					<td class="points">{{ match.home_team_score }}</td>
+					<td class="points">
+						{% if match.in_progress %}
+							{{ match.live_scores.0 }}
+							<small class="text-muted">LIVE</small>
+						{% else %}
+							{{ match.home_team_score }}
+						{% endif %}
+					</td>
 					<td colspan="2"></td>
-					<td class="points">{{ match.away_team_score }}</td>
+					<td class="points">
+						{% if match.in_progress %}
+							{{ match.live_scores.1 }}
+							<small class="text-muted">LIVE</small>
+						{% else %}
+							{{ match.away_team_score }}
+						{% endif %}
+					</td>
 				</tr>
 			</tfoot>
 			<tbody>
@@ -50,5 +64,92 @@
 			</tbody>
 		</table>
 	{% endblock %}
+	
+	{% if match.in_progress %}
+		{% block live_events %}
+		<div class="live-events">
+			<h3>{% trans "Live Events" %}</h3>
+			{% with events=match.events.all %}
+				{% if events %}
+					<div class="events-timeline">
+						{% for event in events %}
+							{% if not event.is_reversed %}
+								<div class="event-item">
+									<span class="event-time">{{ event.timestamp|date:"H:i" }}</span>
+									<span class="event-type">{{ event.get_event_type_display }}</span>
+									{% if event.home_score_delta %}
+										<span class="event-score">+{{ event.home_score_delta }} {{ match.get_home_team.title }}</span>
+									{% endif %}
+									{% if event.away_score_delta %}
+										<span class="event-score">+{{ event.away_score_delta }} {{ match.get_away_team.title }}</span>
+									{% endif %}
+									{% if event.description %}
+										<span class="event-description">{{ event.description }}</span>
+									{% endif %}
+								</div>
+							{% endif %}
+						{% endfor %}
+					</div>
+				{% else %}
+					<p class="text-muted">{% trans "No events recorded yet." %}</p>
+				{% endif %}
+			{% endwith %}
+		</div>
+		
+		<script>
+		// Auto-refresh every 30 seconds for live matches
+		setTimeout(function() {
+			location.reload();
+		}, 30000);
+		</script>
+		
+		<style>
+		.live-events {
+			margin-top: 20px;
+			padding: 20px;
+			background-color: #f9f9f9;
+			border-radius: 5px;
+		}
+		
+		.events-timeline {
+			margin-top: 15px;
+		}
+		
+		.event-item {
+			margin-bottom: 10px;
+			padding: 10px;
+			background-color: white;
+			border-left: 3px solid #337ab7;
+			border-radius: 3px;
+		}
+		
+		.event-time {
+			font-weight: bold;
+			color: #666;
+		}
+		
+		.event-type {
+			margin-left: 10px;
+			font-weight: bold;
+		}
+		
+		.event-score {
+			margin-left: 10px;
+			color: #337ab7;
+			font-weight: bold;
+		}
+		
+		.event-description {
+			margin-left: 10px;
+			font-style: italic;
+		}
+		
+		.text-muted {
+			color: #999;
+		}
+		</style>
+		{% endblock %}
+	{% endif %}
+	
 	{% endwith %}
 {% endblock %}

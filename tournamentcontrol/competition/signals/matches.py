@@ -150,3 +150,17 @@ def notify_match_forfeit_email(sender, match, team, *args, **kwargs):
     recipient_list = [formataddr((p.get_full_name(), p.email)) for p in administrators]
 
     send_mail(subject, message, from_email, recipient_list)
+
+
+@disable_for_loaddata  
+def match_event_saved_handler(sender, instance, created, *args, **kwargs):
+    """
+    Function to be called following a MatchEvent being saved.
+    
+    This updates live score calculations but does not trigger ladder 
+    processing until final scores are set on the match.
+    """
+    if created and not instance.is_reversed:
+        logger.debug("EVENT: MatchEvent #%s for Match #%s", instance.pk, instance.match.pk)
+        # The match.live_scores property will automatically calculate current totals
+        # No ladder processing occurs until final scores are set on the match itself

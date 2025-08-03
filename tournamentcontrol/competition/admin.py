@@ -78,6 +78,7 @@ from tournamentcontrol.competition.models import (
     LadderEntry,
     LadderSummary,
     Match,
+    MatchEvent,
     MatchScoreSheet,
     Person,
     Place,
@@ -737,6 +738,77 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def delete_matchscoresheet(self, request, pk, **extra_context):
         return self.generic_delete(
             request, MatchScoreSheet, pk=pk, permission_required=True
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def list_matchevent(self, request, **extra_context):
+        match = extra_context.get("match")
+        return self.generic_list(
+            request,
+            MatchEvent,
+            queryset=MatchEvent.objects.filter(match=match),
+            permission_required=True,
+            extra_context=extra_context,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m  
+    def edit_matchevent(self, request, pk=None, **extra_context):
+        match = extra_context.get("match")
+
+        if pk is None:
+            instance = MatchEvent(match=match)
+        else:
+            instance = get_object_or_404(MatchEvent, pk=pk, match=match)
+
+        return self.generic_edit(
+            request,
+            MatchEvent,
+            instance=instance,
+            form_fields=(
+                "event_type", "home_score_delta", "away_score_delta", 
+                "player", "team_association", "description"
+            ),
+            permission_required=True,
+            post_save_redirect=self.redirect(match.urls["edit"]),
+            extra_context=extra_context,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def delete_matchevent(self, request, pk, **extra_context):
+        return self.generic_delete(
+            request, MatchEvent, pk=pk, permission_required=True
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def live_score_match(self, request, **extra_context):
+        """Protected live scoring interface for matches."""
+        match = extra_context.get("match")
+        if not match:
+            raise Http404("Match not found")
+            
+        # Get live scores
+        home_score, away_score = match.live_scores
+        
+        # Get events in chronological order
+        events = match.events.filter(is_reversed=False).order_by('sequence')
+        
+        context = {
+            'match': match,
+            'home_score': home_score,
+            'away_score': away_score,
+            'events': events,
+            'in_progress': match.in_progress,
+        }
+        context.update(extra_context)
+        
+        return self.render(
+            request, 
+            "tournamentcontrol/competition/admin/match_live_score.html", 
+            context
         )
 
     @staff_login_required_m
