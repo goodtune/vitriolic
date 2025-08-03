@@ -566,6 +566,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 self.match_schedule,
                 name="match-schedule",
             ),
+            path("visual-schedule/", self.match_visual_schedule, name="match-visual-schedule"),
             path("scorecards.<mode>", self.scorecards, name="scorecards"),
             path("runsheet.html", self.day_runsheet, name="match-runsheet"),
             path("grid.<mode>", self.day_grid, name="match-grid"),
@@ -1906,6 +1907,118 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             templates=self.template_path("match/schedule.html"),
             extra_context=extra_context,
         )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def match_visual_schedule(
+        self,
+        request,
+        competition,
+        season,
+        date,
+        extra_context,
+        **kwargs,
+    ):
+        """
+        Visual drag-and-drop match scheduling interface.
+        """
+        where = Q(date=date, is_bye=False)
+        
+        # Get all matches for the date
+        queryset = (
+            season.matches
+            .select_related("stage__division__season", "play_at")
+            .filter(where)
+            .order_by("stage__division__order", "stage__order", "round")
+        )
+        
+        # Get venues and grounds for the schedule grid
+        venues = collections.OrderedDict()
+        for venue in season.venues.all():
+            venues.setdefault(venue, [])
+        
+        for ground in Ground.objects.select_related("venue").filter(venue__in=venues):
+            venues[ground.venue].append(ground)
+        
+        places = FauxQueryset(Place)
+        for venue, grounds in venues.items():
+            places.append(venue)
+            for ground in grounds:
+                places.append(ground)
+        
+        # Get timeslots for the day
+        timeslots = season.get_timeslots(date)
+        
+        # Group matches by division/stage hierarchy for the sidebar
+        matches_hierarchy = collections.OrderedDict()
+        unscheduled_matches = []
+        scheduled_matches = []
+        
+        for match in queryset:
+            division = match.stage.division
+            stage = match.stage
+            
+            if division not in matches_hierarchy:
+                matches_hierarchy[division] = collections.OrderedDict()
+            if stage not in matches_hierarchy[division]:
+                matches_hierarchy[division][stage] = []
+            
+            matches_hierarchy[division][stage].append(match)
+            
+            if match.time is None or match.play_at is None:
+                unscheduled_matches.append(match)
+            else:
+                scheduled_matches.append(match)
+        
+        if request.method == 'POST':
+            # Handle form submission using existing formset logic
+            formset = MatchScheduleFormSet(
+                data=request.POST,
+                queryset=queryset,
+                places=places,
+                timeslots=timeslots,
+            )
+            
+            if formset.is_valid():
+                changes = 0
+                for form in formset:
+                    if form.has_changed():
+                        form.save()
+                        changes += 1
+                
+                if changes:
+                    message = ngettext(
+                        "Your change to %(count)d match has been saved.",
+                        "Your changes to %(count)d matches have been saved.",
+                        changes,
+                    ) % {"count": changes}
+                    messages.success(request, message)
+                else:
+                    messages.info(request, _("No matches were updated."))
+                
+                return self.redirect(season.urls["edit"])
+        else:
+            formset = MatchScheduleFormSet(
+                queryset=queryset,
+                places=places,
+                timeslots=timeslots,
+            )
+        
+        context = {
+            'formset': formset,
+            'season': season,
+            'date': date,
+            'matches_hierarchy': matches_hierarchy,
+            'unscheduled_matches': unscheduled_matches,
+            'scheduled_matches': scheduled_matches,
+            'places': places,
+            'timeslots': timeslots,
+            'venues': venues,
+        }
+        context.update(extra_context)
+        
+        templates = self.template_path("match/visual_schedule.html")
+        return self.render(request, templates, context)
 
     @competition_by_pk_m
     @staff_login_required_m
