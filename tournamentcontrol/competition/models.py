@@ -28,6 +28,7 @@ from django.utils.translation import gettext_lazy as _
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 from timezone_field.fields import TimeZoneField
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
@@ -513,6 +514,17 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     live_stream_token_uri = models.URLField(null=True)
     live_stream_scopes = PG.ArrayField(models.CharField(max_length=200), null=True)
     live_stream_thumbnail = models.URLField(blank=True, null=True)
+    thumbnail_image = models.BinaryField(
+        blank=True,
+        null=True,
+        help_text="Binary data for thumbnail image to be used for YouTube videos",
+    )
+    thumbnail_image_mimetype = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="MIME type of the thumbnail image (e.g., image/jpeg, image/png)",
+    )
 
     complete = BooleanField(
         default=False,
@@ -655,6 +667,50 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         for timeslot in self.timeslots.exclude(exc):
             rset.rrule(timeslot.rrule())
         return [dt.time() for dt in rset]
+
+    def set_thumbnail_image(self, image_data, mimetype, propagate_to_matches=True):
+        """
+        Set the thumbnail image for this season.
+        
+        Args:
+            image_data (bytes): Binary image data
+            mimetype (str): MIME type of the image
+            propagate_to_matches (bool): Whether to propagate to all matches
+        """
+        self.thumbnail_image = image_data
+        self.thumbnail_image_mimetype = mimetype
+        self.save(update_fields=['thumbnail_image', 'thumbnail_image_mimetype'])
+        
+        if propagate_to_matches:
+            self.propagate_thumbnail_to_matches()
+    
+    def propagate_thumbnail_to_matches(self):
+        """
+        Propagate season thumbnail to all matches that don't have their own thumbnail.
+        """
+        if not self.thumbnail_image:
+            return
+            
+        # Only update matches that don't have their own thumbnail set
+        matches_to_update = self.matches.filter(
+            thumbnail_image__isnull=True,
+            videos__isnull=False  # Only matches that have YouTube videos
+        ).exclude(videos=[])
+        
+        matches_to_update.update(
+            thumbnail_image=self.thumbnail_image,
+            thumbnail_image_mimetype=self.thumbnail_image_mimetype
+        )
+    
+    def get_thumbnail_media_upload(self):
+        """
+        Get a MediaDatabaseUpload instance for this season's thumbnail.
+        
+        Returns:
+            MediaDatabaseUpload or None if no thumbnail is set
+        """
+        from .media import MediaDatabaseUpload
+        return MediaDatabaseUpload.from_model_field(self, resumable=True)
 
 
 class Place(AdminUrlMixin, OrderedSitemapNode):
@@ -1655,6 +1711,17 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         max_length=50, blank=True, null=True, db_index=True
     )
     live_stream_thumbnail = models.URLField(blank=True, null=True)
+    thumbnail_image = models.BinaryField(
+        blank=True,
+        null=True,
+        help_text="Binary data for thumbnail image to be used for YouTube video",
+    )
+    thumbnail_image_mimetype = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="MIME type of the thumbnail image (e.g., image/jpeg, image/png)",
+    )
 
     objects = MatchManager()
 
@@ -1988,6 +2055,48 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
 
     def __repr__(self):
         return f"<Match: {self.round!s}: {self!s}>"
+    
+    def set_thumbnail_image(self, image_data, mimetype):
+        """
+        Set the thumbnail image for this match.
+        
+        Args:
+            image_data (bytes): Binary image data
+            mimetype (str): MIME type of the image
+        """
+        self.thumbnail_image = image_data
+        self.thumbnail_image_mimetype = mimetype
+        self.save(update_fields=['thumbnail_image', 'thumbnail_image_mimetype'])
+    
+    def get_thumbnail_media_upload(self):
+        """
+        Get a MediaDatabaseUpload instance for this match's thumbnail.
+        Falls back to season thumbnail if match doesn't have its own.
+        
+        Returns:
+            MediaDatabaseUpload or None if no thumbnail is available
+        """
+        from .media import MediaDatabaseUpload
+        
+        # Try match-specific thumbnail first
+        if self.thumbnail_image:
+            return MediaDatabaseUpload.from_model_field(self, resumable=True)
+        
+        # Fall back to season thumbnail
+        season = self.stage.division.season
+        if season.thumbnail_image:
+            return MediaDatabaseUpload.from_model_field(season, resumable=True)
+        
+        return None
+    
+    def has_custom_thumbnail(self):
+        """
+        Check if this match has its own thumbnail (not inherited from season).
+        
+        Returns:
+            bool: True if match has its own thumbnail
+        """
+        return bool(self.thumbnail_image)
 
 
 class LadderBase(models.Model):
