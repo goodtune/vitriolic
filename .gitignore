@@ -1,5 +1,6 @@
 *.swp
 /*.egg-info
+/.claude
 /.eggs
 /.idea
 /.python-version

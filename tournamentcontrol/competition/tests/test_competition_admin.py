@@ -1,6 +1,5 @@
 import unittest
 from datetime import date, datetime, time
-from unittest import mock
 from zoneinfo import ZoneInfo
 
 from dateutil.rrule import DAILY
@@ -10,7 +9,6 @@ from django.template import Context, Template
 from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 
-from touchtechnology.admin.mixins import AdminUrlLookup
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.models import (
     Division,

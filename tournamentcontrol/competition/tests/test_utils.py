@@ -1,12 +1,8 @@
 import textwrap
 
-from django.contrib.auth.models import User
-from django.test import Client
 from test_plus import TestCase
 
-from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition import utils
-from tournamentcontrol.competition.models import UndecidedTeam
 from tournamentcontrol.competition.tests.factories import (
     DivisionFactory,
     MatchFactory,

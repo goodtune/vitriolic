@@ -38,7 +38,7 @@ class MatchQuerySet(QuerySet):
             datetime__lt=now,  # Should have started
             home_team_score__isnull=True,  # No final score
             away_team_score__isnull=True,
-            events__event_type='match_start'  # Has a start event
+            events__event_type="match_start",  # Has a start event
         ).distinct()
 
     def _rank_importance(self):

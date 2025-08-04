@@ -1992,9 +1992,12 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     def update_live_scores(self):
         """Calculate current live scores from active events."""
         from django.db.models import Sum
-        events = self.events.filter(is_reversed=False, event_type__in=['score_home', 'score_away'])
-        home_total = events.aggregate(total=Sum('home_score_delta'))['total'] or 0
-        away_total = events.aggregate(total=Sum('away_score_delta'))['total'] or 0
+
+        events = self.events.filter(
+            is_reversed=False, event_type__in=["score_home", "score_away"]
+        )
+        home_total = events.aggregate(total=Sum("home_score_delta"))["total"] or 0
+        away_total = events.aggregate(total=Sum("away_score_delta"))["total"] or 0
         return home_total, away_total
 
     @property
@@ -2012,9 +2015,10 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         if not self.datetime:
             return False  # Match not scheduled
         from django.utils import timezone
+
         if self.datetime > timezone.now():
             return False  # Match hasn't started yet
-        return self.events.filter(event_type='match_start').exists()
+        return self.events.filter(event_type="match_start").exists()
 
 
 class LadderBase(models.Model):
@@ -2239,87 +2243,72 @@ class MatchStatisticBase(models.Model):
 
 class MatchEvent(AdminUrlMixin, models.Model):
     EVENT_TYPE_CHOICES = [
-        ('match_start', _('Match Start')),
-        ('score_home', _('Home Score')),
-        ('score_away', _('Away Score')),
-        ('dismissal', _('Dismissal')),
-        ('substitution', _('Substitution')),
-        ('correction', _('Correction')),
+        ("match_start", _("Match Start")),
+        ("score_home", _("Home Score")),
+        ("score_away", _("Away Score")),
+        ("dismissal", _("Dismissal")),
+        ("substitution", _("Substitution")),
+        ("correction", _("Correction")),
     ]
 
     match = ForeignKey(
-        Match,
-        on_delete=CASCADE,
-        related_name='events',
-        verbose_name=_('Match')
+        Match, on_delete=CASCADE, related_name="events", verbose_name=_("Match")
     )
     event_type = models.CharField(
-        max_length=20,
-        choices=EVENT_TYPE_CHOICES,
-        verbose_name=_('Event Type')
+        max_length=20, choices=EVENT_TYPE_CHOICES, verbose_name=_("Event Type")
     )
-    timestamp = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name=_('Timestamp')
-    )
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name=_("Timestamp"))
     sequence = models.PositiveIntegerField(
-        verbose_name=_('Sequence'),
-        help_text=_('Order of events within the match')
+        verbose_name=_("Sequence"), help_text=_("Order of events within the match")
     )
-    
+
     # Scoring events
     home_score_delta = models.SmallIntegerField(
         default=0,
         validators=[validators.MinValueValidator(0)],
-        verbose_name=_('Home Score Delta')
+        verbose_name=_("Home Score Delta"),
     )
     away_score_delta = models.SmallIntegerField(
         default=0,
         validators=[validators.MinValueValidator(0)],
-        verbose_name=_('Away Score Delta')
+        verbose_name=_("Away Score Delta"),
     )
-    
+
     # Player involvement (optional)
     player = ForeignKey(
-        Person,
-        null=True,
-        blank=True,
-        on_delete=SET_NULL,
-        verbose_name=_('Player')
+        Person, null=True, blank=True, on_delete=SET_NULL, verbose_name=_("Player")
     )
     team_association = ForeignKey(
         TeamAssociation,
         null=True,
         blank=True,
         on_delete=SET_NULL,
-        verbose_name=_('Team Association')
+        verbose_name=_("Team Association"),
     )
-    
+
     # Event metadata
     description = models.CharField(
-        max_length=200,
-        blank=True,
-        verbose_name=_('Description')
+        max_length=200, blank=True, verbose_name=_("Description")
     )
     is_reversed = BooleanField(
         default=False,
-        verbose_name=_('Is Reversed'),
-        help_text=_('Indicates this event has been reversed/corrected')
+        verbose_name=_("Is Reversed"),
+        help_text=_("Indicates this event has been reversed/corrected"),
     )
     reversed_by = ForeignKey(
-        'self',
+        "self",
         null=True,
         blank=True,
         on_delete=SET_NULL,
-        verbose_name=_('Reversed By'),
-        help_text=_('The correction event that reversed this event')
+        verbose_name=_("Reversed By"),
+        help_text=_("The correction event that reversed this event"),
     )
 
     class Meta:
-        ordering = ['match', 'sequence']
-        unique_together = [('match', 'sequence')]
-        verbose_name = _('Match Event')
-        verbose_name_plural = _('Match Events')
+        ordering = ["match", "sequence"]
+        unique_together = [("match", "sequence")]
+        verbose_name = _("Match Event")
+        verbose_name_plural = _("Timeline")
 
     def __str__(self):
         return f"{self.match} - {self.get_event_type_display()} (#{self.sequence})"
@@ -2327,7 +2316,11 @@ class MatchEvent(AdminUrlMixin, models.Model):
     def save(self, *args, **kwargs):
         if not self.sequence:
             # Auto-assign sequence number
-            last_event = MatchEvent.objects.filter(match=self.match).order_by('-sequence').first()
+            last_event = (
+                MatchEvent.objects.filter(match=self.match)
+                .order_by("-sequence")
+                .first()
+            )
             self.sequence = (last_event.sequence + 1) if last_event else 1
         super().save(*args, **kwargs)
 

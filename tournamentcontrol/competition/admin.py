@@ -47,6 +47,7 @@ from tournamentcontrol.competition.forms import (
     DrawGenerationMatchFormSet,
     GroundForm,
     MatchEditForm,
+    MatchEventForm,
     MatchRefereeForm,
     MatchScheduleFormSet,
     MatchStreamForm,
@@ -186,6 +187,15 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             self.app_name,
         )
 
+        matchevent_urls = (
+            [
+                path("add/", self.edit_matchevent, name="add"),
+                path("<int:pk>/", self.edit_matchevent, name="edit"),
+                path("<int:pk>/delete/", self.delete_matchevent, name="delete"),
+            ],
+            self.app_name,
+        )
+
         match_urls = (
             [
                 path("add/", self.edit_match, name="add"),
@@ -200,6 +210,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path(
                     "<int:match_id>/scoresheet/",
                     include(matchscoresheet_urls, namespace="matchscoresheet"),
+                ),
+                path(
+                    "<int:match_id>/matchevent/",
+                    include(matchevent_urls, namespace="matchevent"),
                 ),
                 # FIXME - these just prevent template rendering failures
                 path(
@@ -753,7 +767,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         )
 
     @competition_by_pk_m
-    @staff_login_required_m  
+    @staff_login_required_m
     def edit_matchevent(self, request, pk=None, **extra_context):
         match = extra_context.get("match")
 
@@ -766,10 +780,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             request,
             MatchEvent,
             instance=instance,
-            form_fields=(
-                "event_type", "home_score_delta", "away_score_delta", 
-                "player", "team_association", "description"
-            ),
+            form_class=MatchEventForm,
             permission_required=True,
             post_save_redirect=self.redirect(match.urls["edit"]),
             extra_context=extra_context,
@@ -778,9 +789,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_matchevent(self, request, pk, **extra_context):
-        return self.generic_delete(
-            request, MatchEvent, pk=pk, permission_required=True
-        )
+        return self.generic_delete(request, MatchEvent, pk=pk, permission_required=True)
 
     @competition_by_pk_m
     @staff_login_required_m
@@ -789,26 +798,26 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         match = extra_context.get("match")
         if not match:
             raise Http404("Match not found")
-            
+
         # Get live scores
         home_score, away_score = match.live_scores
-        
+
         # Get events in chronological order
-        events = match.events.filter(is_reversed=False).order_by('sequence')
-        
+        events = match.events.filter(is_reversed=False).order_by("sequence")
+
         context = {
-            'match': match,
-            'home_score': home_score,
-            'away_score': away_score,
-            'events': events,
-            'in_progress': match.in_progress,
+            "match": match,
+            "home_score": home_score,
+            "away_score": away_score,
+            "events": events,
+            "in_progress": match.in_progress,
         }
         context.update(extra_context)
-        
+
         return self.render(
-            request, 
-            "tournamentcontrol/competition/admin/match_live_score.html", 
-            context
+            request,
+            "tournamentcontrol/competition/admin/match_live_score.html",
+            context,
         )
 
     @staff_login_required_m
