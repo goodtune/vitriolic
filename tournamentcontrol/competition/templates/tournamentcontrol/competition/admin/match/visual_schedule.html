@@ -1,20 +1,38 @@
-{% extends "touchtechnology/admin/base.html" %}
-{% load i18n %}
-{% load common %}
-
-{% block title %}{% trans "Visual Schedule" %} - {{ date|date }} - {{ season.title }}{% endblock %}
-
-{% block extra_head %}
-{{ block.super }}
-<script src="https://unpkg.com/htmx.org@1.9.10"></script>
-<script src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js" defer></script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% load i18n %}{% load common %}{% trans "Visual Schedule" %} - {{ date|date }} - {{ season.title }}</title>
+{% load static %}
+<script src="{% static 'django_htmx/htmx.min.js' %}"></script>
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js" defer></script>
 <style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        background: #f8f9fa;
+        overflow: hidden;
+    }
+
     .visual-schedule-container {
         display: flex;
+        flex-direction: column;
         height: 100vh;
         overflow: hidden;
     }
-    
+
+    .main-content {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+    }
+
     .match-sidebar {
         width: 300px;
         background: #f5f5f5;
@@ -22,53 +40,56 @@
         overflow-y: auto;
         padding: 20px;
     }
-    
+
     .schedule-grid-container {
         flex: 1;
         overflow: auto;
         padding: 20px;
     }
-    
-    .schedule-grid {
-        display: grid;
-        gap: 1px;
-        background: #ddd;
-        border: 1px solid #ddd;
+
+    .schedule-table {
+        width: 100%;
         min-width: 800px;
+        border-collapse: collapse;
+        border: 1px solid #ddd;
     }
-    
-    .grid-header {
+
+    .schedule-table th,
+    .schedule-table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        vertical-align: top;
+    }
+
+    .schedule-table thead th {
         background: #f8f9fa;
-        padding: 10px;
         font-weight: bold;
         text-align: center;
         border-bottom: 2px solid #ddd;
     }
-    
-    .time-header {
+
+    .schedule-table .time-header {
         background: #e9ecef;
-        padding: 10px;
         font-weight: bold;
         text-align: center;
         min-width: 80px;
     }
-    
-    .grid-cell {
+
+    .schedule-table .grid-cell {
         background: white;
         min-height: 60px;
-        padding: 5px;
         position: relative;
-        border: 1px solid #eee;
+        width: 120px;
     }
-    
-    .grid-cell:hover {
+
+    .schedule-table .grid-cell:hover {
         background: #f8f9fa;
     }
-    
-    .grid-cell.occupied {
+
+    .schedule-table .grid-cell.occupied {
         background: #e3f2fd;
     }
-    
+
     .match-item {
         background: #fff;
         border: 1px solid #ddd;
@@ -79,73 +100,75 @@
         font-size: 12px;
         position: relative;
     }
-    
+
     .match-item:hover {
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-    
+
     .match-item.dragging {
         opacity: 0.5;
         transform: rotate(5deg);
     }
-    
+
     .match-item.scheduled {
         background: #e8f5e8;
         border-color: #4caf50;
     }
-    
+
     .match-item.unscheduled {
         background: #fff3e0;
         border-color: #ff9800;
     }
-    
+
     .division-group {
         margin-bottom: 20px;
     }
-    
+
     .division-header {
         background: #007bff;
         color: white;
         padding: 8px 12px;
         border-radius: 4px;
         cursor: pointer;
+        -webkit-user-select: none;
         user-select: none;
         margin-bottom: 5px;
     }
-    
+
     .division-header:hover {
         background: #0056b3;
     }
-    
+
     .stage-group {
         margin-left: 15px;
         margin-bottom: 10px;
     }
-    
+
     .stage-header {
         background: #6c757d;
         color: white;
         padding: 6px 10px;
         border-radius: 3px;
         cursor: pointer;
+        -webkit-user-select: none;
         user-select: none;
         margin-bottom: 5px;
         font-size: 13px;
     }
-    
+
     .stage-header:hover {
         background: #545b62;
     }
-    
+
     .match-list {
         margin-left: 10px;
     }
-    
+
     .collapsed .stage-group,
     .collapsed .match-list {
         display: none;
     }
-    
+
     .toolbar {
         background: #f8f9fa;
         border-bottom: 1px solid #ddd;
@@ -153,18 +176,22 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        flex-shrink: 0;
+        width: 100%;
+        position: relative;
+        z-index: 10;
     }
-    
+
     .toolbar h1 {
         margin: 0;
         font-size: 20px;
     }
-    
+
     .toolbar-actions {
         display: flex;
         gap: 10px;
     }
-    
+
     .btn {
         padding: 8px 16px;
         border: 1px solid #ddd;
@@ -174,67 +201,148 @@
         text-decoration: none;
         display: inline-block;
     }
-    
+
     .btn-primary {
         background: #007bff;
         color: white;
         border-color: #007bff;
     }
-    
+
     .btn-primary:hover {
         background: #0056b3;
         border-color: #0056b3;
     }
-    
+
     .btn-secondary {
         background: #6c757d;
         color: white;
         border-color: #6c757d;
     }
-    
+
     .btn-secondary:hover {
         background: #545b62;
         border-color: #545b62;
     }
-    
+
     .drop-zone {
         border: 2px dashed #007bff;
         background: rgba(0, 123, 255, 0.1);
     }
-    
+
+    .messages-container {
+        position: fixed;
+        top: 70px;
+        right: 20px;
+        z-index: 1000;
+        max-width: 400px;
+    }
+
+    .message {
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+        padding: 12px 16px;
+        margin-bottom: 10px;
+        border-radius: 4px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        animation: slideIn 0.3s ease-out;
+    }
+
+    .message-success {
+        background: #d4edda;
+        border-color: #c3e6cb;
+        color: #155724;
+    }
+
+    .message-info {
+        background: #d1ecf1;
+        border-color: #bee5eb;
+        color: #0c5460;
+    }
+
+    .message-warning {
+        background: #fff3cd;
+        border-color: #ffeaa7;
+        color: #856404;
+    }
+
+    .message-error {
+        background: #f8d7da;
+        border-color: #f5c6cb;
+        color: #721c24;
+    }
+
+    .message-text {
+        flex: 1;
+        margin-right: 10px;
+    }
+
+    .message-close {
+        background: none;
+        border: none;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        opacity: 0.7;
+        padding: 0;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .message-close:hover {
+        opacity: 1;
+    }
+
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
     @media (max-width: 768px) {
         .visual-schedule-container {
             flex-direction: column;
             height: auto;
         }
-        
+
         .match-sidebar {
             width: 100%;
             height: 200px;
         }
-        
+
         .toolbar {
             text-align: center;
         }
-        
+
         .toolbar h1 {
             font-size: 16px;
             margin-bottom: 10px;
         }
-        
+
         .toolbar-actions {
             justify-content: center;
         }
     }
 </style>
-{% endblock %}
-
-{% block content %}
+</head>
+<body>
 <div x-data="visualSchedule()" class="visual-schedule-container">
     <!-- Form for submitting changes -->
     <form id="schedule-form" method="post" style="display: none;">
         {% csrf_token %}
         {{ formset.management_form }}
+        <input type="hidden" name="redirect_to_self" value="1">
         {% for form in formset %}
             {{ form.id }}
             <input type="hidden" :name="'{{ form.time.html_name }}'" :value="matches[{{ form.instance.id }}]?.time || ''">
@@ -246,22 +354,36 @@
     <div class="toolbar">
         <h1>{% trans "Visual Schedule" %} - {{ date|date }} - {{ season.title }}</h1>
         <div class="toolbar-actions">
-            <button @click="saveChanges()" class="btn btn-primary" :disabled="!hasChanges">
+            <button type="button" @click="saveChanges()" class="btn btn-primary" :disabled="!hasChanges">
                 {% trans "Save" %}
             </button>
-            <button @click="cancelChanges()" class="btn btn-secondary" :disabled="!hasChanges">
+            <button type="button" @click="cancelChanges()" class="btn btn-secondary" :disabled="!hasChanges">
                 {% trans "Cancel" %}
             </button>
-            <a href="{{ season.urls.edit }}" class="btn">
-                {% trans "Back to Season" %}
-            </a>
+            <button type="button" @click="closeWindow()" class="btn">
+                {% trans "Close" %}
+            </button>
         </div>
     </div>
 
-    <!-- Left sidebar with match hierarchy -->
-    <div class="match-sidebar">
+    <!-- Messages Display -->
+    {% if messages %}
+    <div class="messages-container">
+        {% for message in messages %}
+        <div class="message message-{{ message.tags }}" x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)">
+            <span class="message-text">{{ message }}</span>
+            <button type="button" @click="show = false" class="message-close">&times;</button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Main content area with sidebar and grid -->
+    <div class="main-content">
+        <!-- Left sidebar with match hierarchy -->
+        <div class="match-sidebar">
         <h3>{% trans "Matches" %}</h3>
-        
+
         <!-- Unscheduled matches section -->
         <div class="division-group">
             <div class="division-header" @click="toggleSection('unscheduled')">
@@ -271,7 +393,7 @@
             </div>
             <div x-show="!collapsedSections.unscheduled" class="match-list">
                 <template x-for="match in unscheduledMatches" :key="match.id">
-                    <div 
+                    <div
                         class="match-item unscheduled"
                         draggable="true"
                         @dragstart="startDrag(match, $event)"
@@ -303,9 +425,9 @@
                     </div>
                     <div x-show="!collapsedSections.stage_{{ stage.id }}" class="match-list">
                         {% for match in stage_matches %}
-                        <div 
-                            class="match-item"
-                            :class="matches[{{ match.id }}]?.scheduled ? 'scheduled' : 'unscheduled'"
+                        <div
+                            x-show="!matches[{{ match.id }}]?.scheduled"
+                            class="match-item unscheduled"
                             draggable="true"
                             @dragstart="startDrag(getMatch({{ match.id }}), $event)"
                             @dragend="endDrag($event)"
@@ -313,10 +435,6 @@
                         >
                             <div class="font-weight-bold">{{ match.get_home_team.title }} vs {{ match.get_away_team.title }}</div>
                             <div class="text-muted small">Round {{ match.round }}</div>
-                            <div x-show="matches[{{ match.id }}]?.time" class="text-info small">
-                                <span x-text="matches[{{ match.id }}]?.time"></span> - 
-                                <span x-text="matches[{{ match.id }}]?.place"></span>
-                            </div>
                         </div>
                         {% endfor %}
                     </div>
@@ -327,49 +445,53 @@
         {% endfor %}
     </div>
 
-    <!-- Main schedule grid -->
+    <!-- Main schedule table -->
     <div class="schedule-grid-container">
-        <div class="schedule-grid" :style="gridStyle">
-            <!-- Headers -->
-            <div class="grid-header"></div>
-            {% for place in places %}
-            <div class="grid-header">{{ place.abbreviation|default:place.title }}</div>
-            {% endfor %}
-
-            <!-- Time slots and grid cells -->
-            <template x-for="(timeslot, timeIndex) in timeslots" :key="timeslot">
-                <template>
-                    <!-- Time header -->
-                    <div class="time-header" x-text="timeslot"></div>
-                    
-                    <!-- Grid cells for each place -->
+        <table class="schedule-table">
+            <thead>
+                <tr>
+                    <th>&nbsp;</th>
                     {% for place in places %}
-                    <div 
-                        class="grid-cell"
-                        :class="{ 'occupied': isOccupied('{{ place.id }}', timeslot), 'drop-zone': dragTarget?.place == '{{ place.id }}' && dragTarget?.time == timeslot }"
-                        @dragover.prevent="handleDragOver($event, '{{ place.id }}', timeslot)"
-                        @dragleave="handleDragLeave($event)"
-                        @drop="handleDrop($event, '{{ place.id }}', timeslot)"
-                        :data-place="{{ place.id }}"
-                        :data-time="timeslot"
-                    >
-                        <template x-for="match in getMatchesAt('{{ place.id }}', timeslot)" :key="match.id">
-                            <div 
-                                class="match-item scheduled"
-                                draggable="true"
-                                @dragstart="startDrag(match, $event)"
-                                @dragend="endDrag($event)"
-                                :data-match-id="match.id"
-                            >
-                                <div x-text="match.teams" class="font-weight-bold"></div>
-                                <div x-text="match.stage" class="text-muted small"></div>
-                            </div>
-                        </template>
-                    </div>
+                    <th>{{ place.abbreviation|default:place.title }}</th>
                     {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                <template x-for="(timeslot, rowIndex) in timeslots" :key="'row_' + rowIndex">
+                    <tr>
+                        <th class="time-header" x-text="timeslot"></th>
+                        <template x-for="place in placesData" :key="'cell_' + rowIndex + '_' + place.id">
+                            <td 
+                                class="grid-cell"
+                                :class="{
+                                    'occupied': isOccupied(place.id, timeslot),
+                                    'drop-zone': dragTarget?.place == place.id && dragTarget?.time == timeslot
+                                }"
+                                @dragover.prevent="handleDragOver($event, place.id, timeslot)"
+                                @dragleave="handleDragLeave($event)"
+                                @drop="handleDrop($event, place.id, timeslot)"
+                                :data-place="place.id"
+                                :data-time="timeslot"
+                            >
+                                <template x-for="match in getMatchesAt(place.id, timeslot)" :key="match.id">
+                                    <div
+                                        class="match-item scheduled"
+                                        draggable="true"
+                                        @dragstart="startDrag(match, $event)"
+                                        @dragend="endDrag($event)"
+                                        :data-match-id="match.id"
+                                    >
+                                        <div x-text="match.teams" class="font-weight-bold"></div>
+                                        <div x-text="match.stage" class="text-muted small"></div>
+                                    </div>
+                                </template>
+                            </td>
+                        </template>
+                    </tr>
                 </template>
-            </template>
-        </div>
+            </tbody>
+        </table>
+    </div>
     </div>
 </div>
 
@@ -382,8 +504,21 @@ function visualSchedule() {
         draggedMatch: null,
         dragTarget: null,
         hasChanges: false,
-        
+
         init() {
+            // Initialize collapsed sections - default to collapsed
+            this.collapsedSections = {
+                'unscheduled': false  // Show unscheduled section expanded so user can see them
+            };
+
+            // Add division and stage sections
+            {% for division, stages in matches_hierarchy.items %}
+            this.collapsedSections['div_{{ division.id }}'] = true;  // Collapse divisions by default
+            {% for stage, stage_matches in stages.items %}
+            this.collapsedSections['stage_{{ stage.id }}'] = true;   // Collapse stages by default
+            {% endfor %}
+            {% endfor %}
+
             // Initialize matches data from Django context
             {% for form in formset %}
             this.matches[{{ form.instance.id }}] = {
@@ -396,84 +531,93 @@ function visualSchedule() {
                 scheduled: {{ form.instance.time|yesno:"true,false" }}
             };
             {% endfor %}
-            
+
             // Store original state for change detection
             this.originalMatches = JSON.parse(JSON.stringify(this.matches));
-            
+
             // Initialize timeslots
             this.timeslots = [
                 {% for timeslot in timeslots %}
                 '{{ timeslot|time:"H:i" }}',
                 {% endfor %}
             ];
-            
+
+            // Initialize places data for Alpine.js
+            this.placesData = [
+                {% for place in places %}
+                {
+                    id: '{{ place.id }}',
+                    title: '{{ place.title|escapejs }}',
+                    abbreviation: '{{ place.abbreviation|default:place.title|escapejs }}'
+                },
+                {% endfor %}
+            ];
+
+            // Basic initialization logging
+            console.log('Visual schedule initialized with', Object.keys(this.matches).length, 'matches');
+
             // Check for mobile and show warning
             if (window.innerWidth < 768) {
                 alert('{% trans "This interface is designed for desktop use. Please use a desktop computer for the best experience." %}');
             }
         },
-        
-        get gridStyle() {
-            const placeCount = {{ places|length }};
-            return `grid-template-columns: 80px repeat(${placeCount}, 1fr);`;
-        },
-        
+
         get unscheduledMatches() {
             return Object.values(this.matches).filter(match => !match.scheduled);
         },
-        
+
         get unscheduledCount() {
             return this.unscheduledMatches.length;
         },
-        
+
         getMatch(id) {
             return this.matches[id];
         },
-        
+
         toggleSection(section) {
             this.collapsedSections[section] = !this.collapsedSections[section];
         },
-        
+
         startDrag(match, event) {
             this.draggedMatch = match;
             event.dataTransfer.setData('text/plain', match.id);
             event.target.classList.add('dragging');
         },
-        
+
         endDrag(event) {
             event.target.classList.remove('dragging');
             this.draggedMatch = null;
             this.dragTarget = null;
         },
-        
+
         handleDragOver(event, placeId, time) {
             event.preventDefault();
             this.dragTarget = { place: placeId, time: time };
         },
-        
+
         handleDragLeave(event) {
             if (!event.currentTarget.contains(event.relatedTarget)) {
                 this.dragTarget = null;
             }
         },
-        
+
         handleDrop(event, placeId, time) {
             event.preventDefault();
             const matchId = event.dataTransfer.getData('text/plain');
-            
+
             if (matchId && this.matches[matchId]) {
                 // Update match scheduling
                 this.matches[matchId].time = time;
                 this.matches[matchId].play_at = placeId;
                 this.matches[matchId].place = this.getPlaceName(placeId);
                 this.matches[matchId].scheduled = true;
-                
+
                 this.checkForChanges();
             }
-            
+
             this.dragTarget = null;
         },
-        
+
         getPlaceName(placeId) {
             // This should be populated from Django context
             const places = {
@@ -483,34 +627,44 @@ function visualSchedule() {
             };
             return places[placeId] || '';
         },
-        
+
         isOccupied(placeId, time) {
-            return Object.values(this.matches).some(match => 
+            return Object.values(this.matches).some(match =>
                 match.play_at == placeId && match.time == time
             );
         },
-        
+
         getMatchesAt(placeId, time) {
-            return Object.values(this.matches).filter(match => 
+            return Object.values(this.matches).filter(match =>
                 match.play_at == placeId && match.time == time
             );
         },
-        
+
         checkForChanges() {
             this.hasChanges = JSON.stringify(this.matches) !== JSON.stringify(this.originalMatches);
         },
-        
+
         saveChanges() {
             if (!this.hasChanges) return;
-            
+
             if (confirm('{% trans "Save all scheduling changes?" %}')) {
                 document.getElementById('schedule-form').submit();
             }
         },
-        
+
+        closeWindow() {
+            if (this.hasChanges) {
+                if (confirm('{% trans "You have unsaved changes. Are you sure you want to close?" %}')) {
+                    window.close();
+                }
+            } else {
+                window.close();
+            }
+        },
+
         cancelChanges() {
             if (!this.hasChanges) return;
-            
+
             if (confirm('{% trans "Discard all unsaved changes?" %}')) {
                 this.matches = JSON.parse(JSON.stringify(this.originalMatches));
                 this.hasChanges = false;
@@ -519,4 +673,5 @@ function visualSchedule() {
     }
 }
 </script>
-{% endblock %}
+</body>
+</html>
