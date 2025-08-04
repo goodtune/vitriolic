@@ -215,6 +215,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     "<int:match_id>/matchevent/",
                     include(matchevent_urls, namespace="matchevent"),
                 ),
+                path(
+                    "<int:match_id>/live-score/",
+                    self.live_score_match,
+                    name="live_score",
+                ),
                 # FIXME - these just prevent template rendering failures
                 path(
                     "<int:match_id>/ladder/",

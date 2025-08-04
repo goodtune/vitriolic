@@ -73,6 +73,11 @@
 									<span class="glyphicon glyphicon-flag" aria-hidden="true"></span>
 								</a>
 							{% endblock %}
+							{% block live_score_link %}
+								<a href="{% url 'admin:fixja:competition:season:division:stage:match:live_score' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}">
+									<span class="glyphicon glyphicon-record" aria-hidden="true"></span>
+								</a>
+							{% endblock %}
 							{% if match.videos %}
 									<a href="{{ match.videos|first }}">
 											<span class="glyphicon glyphicon-facetime-video" aria-hidden="true"></span>
