@@ -213,7 +213,7 @@ function submitEvent() {
     
     // Create the event via AJAX to the edit endpoint
     $.ajax({
-        url: '{{ match.urls.edit_matchevent }}',
+        url: '{% url "admin:fixja:competition:season:division:stage:match:matchevent:add" match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}',
         method: 'POST',
         data: formData,
         processData: false,

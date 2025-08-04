@@ -2283,6 +2283,7 @@ class MatchEvent(AdminUrlMixin, models.Model):
         null=True,
         blank=True,
         on_delete=SET_NULL,
+        related_name="+",
         verbose_name=_("Team Association"),
     )
 
@@ -2312,6 +2313,19 @@ class MatchEvent(AdminUrlMixin, models.Model):
 
     def __str__(self):
         return f"{self.match} - {self.get_event_type_display()} (#{self.sequence})"
+
+    def _get_admin_namespace(self):
+        return "admin:fixja:competition:season:division:stage:match:matchevent"
+
+    def _get_url_args(self):
+        return (
+            self.match.stage.division.season.competition_id,
+            self.match.stage.division.season_id,
+            self.match.stage.division_id,
+            self.match.stage_id,
+            self.match_id,
+            self.pk,
+        )
 
     def save(self, *args, **kwargs):
         if not self.sequence:

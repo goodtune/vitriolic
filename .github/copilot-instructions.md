@@ -172,7 +172,50 @@ When adding new models to existing modules:
 - [ ] Update admin URL patterns
 - [ ] Test admin views work without AttributeError/NoReverseMatch
 
-### 6. Things to Watch Out For
+### 6. TouchTechnology Admin Hierarchy System
+
+**⚠️ Critical Understanding: Automatic Admin Hierarchy Construction**
+
+The `touchtechnology.admin` system automatically builds admin hierarchies based on foreign key relationships between models. This can cause unexpected behavior when models have foreign keys to entities in different admin contexts.
+
+**Key Behavior:**
+- `touchtechnology.admin` automatically creates navigation paths between related models
+- If Model A has a foreign key to Model B, the admin may try to show Model A objects in Model B's admin context
+- This can trigger `NoReverseMatch` errors when trying to generate URLs for models in the wrong admin hierarchy
+
+**Example Problem:**
+```python
+class MatchEvent(models.Model):
+    match = models.ForeignKey(Match, on_delete=models.CASCADE)
+    team_association = models.ForeignKey(TeamAssociation, on_delete=models.CASCADE)
+    # This creates automatic admin links from TeamAssociation to MatchEvent
+```
+
+**Solution: Disable Unwanted Reverse Relationships**
+Use `related_name="+"` to prevent the admin system from creating automatic reverse relationships:
+
+```python
+class MatchEvent(models.Model):
+    match = models.ForeignKey(Match, on_delete=models.CASCADE)
+    team_association = models.ForeignKey(
+        TeamAssociation,
+        on_delete=models.CASCADE,
+        related_name="+"  # Prevents automatic admin hierarchy
+    )
+```
+
+**When to Use `related_name="+"`:**
+- When the foreign key is for data integrity only, not navigation
+- When the related model should NOT automatically show the referencing model in its admin
+- When you want to control exactly which admin contexts show which related objects
+
+**Debugging Hierarchy Issues:**
+1. **Symptom**: `NoReverseMatch` errors mentioning model namespaces in unexpected contexts
+2. **Cause**: `touchtechnology.admin` trying to create admin links through foreign key relationships
+3. **Solution**: Add `related_name="+"` to foreign keys that shouldn't create admin hierarchy
+4. **Verification**: Check that the model only appears in its intended admin context
+
+### 7. Things to Watch Out For
 
 **⚠️ Common Pitfalls:**
 1. **Missing signal imports**: `ImportError: cannot import name 'handler_name'`
@@ -180,6 +223,7 @@ When adding new models to existing modules:
 3. **Form field display errors**: `AttributeError: 'Model' object has no attribute 'name'`
 4. **Security issues**: Using `Model.objects.all()` instead of contextual filtering
 5. **Property vs method confusion**: Using `obj.method()` when it's a `@property`
+6. **Automatic admin hierarchy conflicts**: Foreign keys creating unwanted admin navigation paths in `touchtechnology.admin`
 
 **🔍 Debug Steps:**
 1. Check `signals/__init__.py` has all required imports
@@ -187,3 +231,4 @@ When adding new models to existing modules:
 3. Test form fields render correctly with appropriate `label_from_instance`
 4. Ensure querysets are filtered to relevant objects only
 5. Confirm model properties/methods are called correctly (with/without parentheses)
+6. **For hierarchy issues**: Check if `NoReverseMatch` occurs in unexpected admin contexts, add `related_name="+"` to foreign keys that shouldn't create admin navigation in `touchtechnology.admin`
