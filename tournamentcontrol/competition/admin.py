@@ -47,6 +47,7 @@ from tournamentcontrol.competition.forms import (
     DrawGenerationMatchFormSet,
     GroundForm,
     MatchEditForm,
+    MatchEventForm,
     MatchRefereeForm,
     MatchScheduleFormSet,
     MatchStreamForm,
@@ -78,6 +79,7 @@ from tournamentcontrol.competition.models import (
     LadderEntry,
     LadderSummary,
     Match,
+    MatchEvent,
     MatchScoreSheet,
     Person,
     Place,
@@ -185,6 +187,15 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             self.app_name,
         )
 
+        matchevent_urls = (
+            [
+                path("add/", self.edit_matchevent, name="add"),
+                path("<int:pk>/", self.edit_matchevent, name="edit"),
+                path("<int:pk>/delete/", self.delete_matchevent, name="delete"),
+            ],
+            self.app_name,
+        )
+
         match_urls = (
             [
                 path("add/", self.edit_match, name="add"),
@@ -199,6 +210,15 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path(
                     "<int:match_id>/scoresheet/",
                     include(matchscoresheet_urls, namespace="matchscoresheet"),
+                ),
+                path(
+                    "<int:match_id>/matchevent/",
+                    include(matchevent_urls, namespace="matchevent"),
+                ),
+                path(
+                    "<int:match_id>/live-score/",
+                    self.live_score_match,
+                    name="live_score",
                 ),
                 # FIXME - these just prevent template rendering failures
                 path(
@@ -738,6 +758,101 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         return self.generic_delete(
             request, MatchScoreSheet, pk=pk, permission_required=True
         )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def list_matchevent(
+        self,
+        request,
+        competition,
+        season,
+        division,
+        stage,
+        match,
+        **extra_context,
+    ):
+        return self.generic_list(
+            request,
+            match.events,
+            permission_required=True,
+            extra_context=extra_context,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def edit_matchevent(
+        self,
+        request,
+        competition,
+        season,
+        division,
+        stage,
+        match,
+        pk=None,
+        **extra_context,
+    ):
+        instance = get_object_or_404(match.events, pk=pk)
+
+        return self.generic_edit(
+            request,
+            MatchEvent,
+            instance=instance,
+            form_class=MatchEventForm,
+            permission_required=True,
+            post_save_redirect=self.redirect(match.urls["edit"]),
+            extra_context=extra_context,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def delete_matchevent(
+        self,
+        request,
+        competition,
+        season,
+        division,
+        stage,
+        match,
+        pk,
+        **extra_context,
+    ):
+        return self.generic_delete(
+            request,
+            match.events,
+            pk=pk,
+            permission_required=True,
+            extra_context=extra_context,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def live_score_match(
+        self,
+        request,
+        competition,
+        season,
+        division,
+        stage,
+        match,
+        **extra_context,
+    ):
+        """Protected live scoring interface for matches."""
+        home_score, away_score = match.live_scores
+
+        # Get events in chronological order
+        events = match.events.filter(is_reversed=False).order_by("sequence")
+
+        context = {
+            "match": match,
+            "home_score": home_score,
+            "away_score": away_score,
+            "events": events,
+            "in_progress": match.in_progress,
+        }
+        context.update(extra_context)
+
+        templates = self.template_path("match_live_score.html")
+        return self.render(request, templates, context)
 
     @staff_login_required_m
     def list_drawformat(self, request, **extra_context):

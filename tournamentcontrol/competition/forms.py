@@ -63,6 +63,7 @@ from tournamentcontrol.competition.models import (
     Ground,
     LadderEntry,
     Match,
+    MatchEvent,
     Person,
     Place,
     Season,
@@ -1061,6 +1062,63 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
             "away_team_undecided": _("Away team"),
         }
         formfield_callback = _match_edit_form_formfield_callback
+
+
+class MatchEventForm(BootstrapFormControlMixin, ModelForm):
+    player = ModelChoiceField(
+        queryset=Person.objects.none(),
+        required=False,
+        label_from_instance=lambda person: person.get_full_name,
+        empty_label="Select player...",
+    )
+    team_association = ModelChoiceField(
+        queryset=TeamAssociation.objects.none(),
+        required=False,
+        label_from_instance=lambda ta: str(ta),
+        empty_label="Select team association...",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Limit choices to players and associations from the teams in this match
+        if self.instance and self.instance.match_id:
+            match = self.instance.match
+            player_queryset = Person.objects.none()
+            team_association_queryset = TeamAssociation.objects.none()
+
+            if match.home_team:
+                player_queryset |= Person.objects.filter(
+                    teamassociation__team=match.home_team,
+                    teamassociation__is_player=True,
+                )
+                team_association_queryset |= TeamAssociation.objects.filter(
+                    team=match.home_team
+                )
+            if match.away_team:
+                player_queryset |= Person.objects.filter(
+                    teamassociation__team=match.away_team,
+                    teamassociation__is_player=True,
+                )
+                team_association_queryset |= TeamAssociation.objects.filter(
+                    team=match.away_team
+                )
+
+            self.fields["player"].queryset = player_queryset.distinct()
+            self.fields["team_association"].queryset = (
+                team_association_queryset.distinct()
+            )
+
+    class Meta:
+        model = MatchEvent
+        fields = (
+            "event_type",
+            "home_score_delta",
+            "away_score_delta",
+            "player",
+            "team_association",
+            "description",
+        )
 
 
 class MatchStreamForm(MatchEditForm):

@@ -31,6 +31,16 @@ class MatchQuerySet(QuerySet):
     def videos(self):
         return self.filter(videos__isnull=False).order_by("datetime").distinct()
 
+    def in_progress(self):
+        """Find matches that should have started but don't have final scores."""
+        now = timezone.now()
+        return self.filter(
+            datetime__lt=now,  # Should have started
+            home_team_score__isnull=True,  # No final score
+            away_team_score__isnull=True,
+            events__event_type="match_start",  # Has a start event
+        ).distinct()
+
     def _rank_importance(self):
         """
         Find the rank_importance of a match based on the competition hierarchy.

@@ -1,0 +1,237 @@
+{% extends "tournamentcontrol/competition/admin/base.html" %}
+{% load i18n %}
+
+{% block head_title %}
+    {% trans "Live Score" %} - {{ match }}
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h3 class="panel-title">
+                    {% trans "Live Score" %} - {{ match }}
+                    {% if in_progress %}
+                        <span class="label label-success">{% trans "In Progress" %}</span>
+                    {% else %}
+                        <span class="label label-default">{% trans "Not Started" %}</span>
+                    {% endif %}
+                </h3>
+            </div>
+            <div class="panel-body">
+                <!-- Current Score Display -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="well text-center">
+                            <h4>{{ match.home_team|default:"Home Team" }}</h4>
+                            <h2 class="text-primary">{{ home_score }}</h2>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="well text-center">
+                            <h4>{{ match.away_team|default:"Away Team" }}</h4>
+                            <h2 class="text-primary">{{ away_score }}</h2>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Action Buttons -->
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="btn-group" role="group">
+                            {% if not in_progress %}
+                                <button type="button" class="btn btn-success" onclick="addEvent('match_start')">
+                                    {% trans "Start Match" %}
+                                </button>
+                            {% endif %}
+                            {% if in_progress %}
+                                <button type="button" class="btn btn-primary" onclick="addScore('home')">
+                                    {% trans "Home Score" %}
+                                </button>
+                                <button type="button" class="btn btn-primary" onclick="addScore('away')">
+                                    {% trans "Away Score" %}
+                                </button>
+                                <button type="button" class="btn btn-warning" onclick="addEvent('substitution')">
+                                    {% trans "Substitution" %}
+                                </button>
+                                <button type="button" class="btn btn-danger" onclick="addEvent('dismissal')">
+                                    {% trans "Dismissal" %}
+                                </button>
+                            {% endif %}
+                        </div>
+                        <div class="pull-right">
+                            <a href="{{ match.urls.edit }}" class="btn btn-default">
+                                {% trans "Back to Match" %}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Event Timeline -->
+                <div class="row" style="margin-top: 20px;">
+                    <div class="col-md-12">
+                        <h4>{% trans "Event Timeline" %}</h4>
+                        {% if events %}
+                            <div class="timeline">
+                                {% for event in events %}
+                                    <div class="timeline-item">
+                                        <div class="timeline-marker"></div>
+                                        <div class="timeline-content">
+                                            <h6 class="timeline-title">
+                                                {{ event.get_event_type_display }}
+                                                <small class="text-muted">{{ event.timestamp|date:"H:i:s" }}</small>
+                                            </h6>
+                                            <p>
+                                                {% if event.home_score_delta %}
+                                                    Home +{{ event.home_score_delta }}
+                                                {% endif %}
+                                                {% if event.away_score_delta %}
+                                                    Away +{{ event.away_score_delta }}
+                                                {% endif %}
+                                                {% if event.description %}
+                                                    - {{ event.description }}
+                                                {% endif %}
+                                                {% if event.player %}
+                                                    - {{ event.player }}
+                                                {% endif %}
+                                            </p>
+                                            <div class="timeline-actions">
+                                                <a href="{{ event.urls.edit }}" class="btn btn-xs btn-primary">
+                                                    {% trans "Edit" %}
+                                                </a>
+                                                <a href="{{ event.urls.delete }}" class="btn btn-xs btn-danger">
+                                                    {% trans "Delete" %}
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="text-muted">{% trans "No events recorded yet." %}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Event Modal -->
+<div class="modal fade" id="eventModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+                <h4 class="modal-title">{% trans "Add Event" %}</h4>
+            </div>
+            <div class="modal-body">
+                <form id="eventForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="eventType" name="event_type" />
+                    <div class="form-group" id="scoreGroup" style="display: none;">
+                        <label for="scoreDelta">{% trans "Score Delta" %}</label>
+                        <input type="number" class="form-control" id="scoreDelta" name="score_delta" min="1" value="1" />
+                    </div>
+                    <div class="form-group">
+                        <label for="description">{% trans "Description" %}</label>
+                        <input type="text" class="form-control" id="description" name="description" />
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">{% trans "Cancel" %}</button>
+                <button type="button" class="btn btn-primary" onclick="submitEvent()">{% trans "Add Event" %}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.timeline {
+    position: relative;
+    padding-left: 30px;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -35px;
+    top: 5px;
+    width: 10px;
+    height: 10px;
+    background: #337ab7;
+    border-radius: 50%;
+}
+
+.timeline-content {
+    margin-left: 10px;
+}
+
+.timeline-title {
+    margin: 0 0 5px 0;
+    font-weight: bold;
+}
+
+.timeline-actions {
+    margin-top: 10px;
+}
+</style>
+
+<script>
+function addEvent(eventType) {
+    $('#eventType').val(eventType);
+    $('#eventModal .modal-title').text('Add ' + eventType.replace('_', ' ').toUpperCase());
+    
+    if (eventType === 'match_start') {
+        $('#scoreGroup').hide();
+    } else {
+        $('#scoreGroup').hide();
+    }
+    
+    $('#eventModal').modal('show');
+}
+
+function addScore(team) {
+    const eventType = team === 'home' ? 'score_home' : 'score_away';
+    $('#eventType').val(eventType);
+    $('#eventModal .modal-title').text('Add ' + team.toUpperCase() + ' Score');
+    $('#scoreGroup').show();
+    $('#eventModal').modal('show');
+}
+
+function submitEvent() {
+    const formData = new FormData($('#eventForm')[0]);
+    const eventType = $('#eventType').val();
+    
+    // Create the event via AJAX to the edit endpoint
+    $.ajax({
+        url: '{% url "admin:fixja:competition:season:division:stage:match:matchevent:add" match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(response) {
+            location.reload(); // Refresh to show new event
+        },
+        error: function(xhr, status, error) {
+            alert('Error adding event: ' + error);
+        }
+    });
+}
+
+// Auto-refresh every 30 seconds for live updates
+setInterval(function() {
+    if ({{ in_progress|yesno:"true,false" }}) {
+        location.reload();
+    }
+}, 30000);
+</script>
+{% endblock %}

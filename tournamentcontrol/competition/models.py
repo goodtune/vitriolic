@@ -1989,6 +1989,37 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     def __repr__(self):
         return f"<Match: {self.round!s}: {self!s}>"
 
+    def update_live_scores(self):
+        """Calculate current live scores from active events."""
+        from django.db.models import Sum
+
+        events = self.events.filter(
+            is_reversed=False, event_type__in=["score_home", "score_away"]
+        )
+        home_total = events.aggregate(total=Sum("home_score_delta"))["total"] or 0
+        away_total = events.aggregate(total=Sum("away_score_delta"))["total"] or 0
+        return home_total, away_total
+
+    @property
+    def live_scores(self):
+        """Get current live scores without affecting final scores."""
+        if self.home_team_score is not None:
+            return self.home_team_score, self.away_team_score
+        return self.update_live_scores()
+
+    @property
+    def in_progress(self):
+        """Check if this match is currently in progress."""
+        if self.home_team_score is not None or self.away_team_score is not None:
+            return False  # Match has final scores
+        if not self.datetime:
+            return False  # Match not scheduled
+        from django.utils import timezone
+
+        if self.datetime > timezone.now():
+            return False  # Match hasn't started yet
+        return self.events.filter(event_type="match_start").exists()
+
 
 class LadderBase(models.Model):
     played = models.SmallIntegerField(default=0)
@@ -2205,6 +2236,107 @@ class MatchStatisticBase(models.Model):
         abstract = True
         ordering = ("match", "number")
         get_latest_by = "match"
+
+
+# Live Scoring Models
+
+
+class MatchEvent(AdminUrlMixin, models.Model):
+    EVENT_TYPE_CHOICES = [
+        ("match_start", _("Match Start")),
+        ("score_home", _("Home Score")),
+        ("score_away", _("Away Score")),
+        ("dismissal", _("Dismissal")),
+        ("substitution", _("Substitution")),
+        ("correction", _("Correction")),
+    ]
+
+    match = ForeignKey(
+        Match, on_delete=CASCADE, related_name="events", verbose_name=_("Match")
+    )
+    event_type = models.CharField(
+        max_length=20, choices=EVENT_TYPE_CHOICES, verbose_name=_("Event Type")
+    )
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name=_("Timestamp"))
+    sequence = models.PositiveIntegerField(
+        verbose_name=_("Sequence"), help_text=_("Order of events within the match")
+    )
+
+    # Scoring events
+    home_score_delta = models.SmallIntegerField(
+        default=0,
+        validators=[validators.MinValueValidator(0)],
+        verbose_name=_("Home Score Delta"),
+    )
+    away_score_delta = models.SmallIntegerField(
+        default=0,
+        validators=[validators.MinValueValidator(0)],
+        verbose_name=_("Away Score Delta"),
+    )
+
+    # Player involvement (optional)
+    player = ForeignKey(
+        Person, null=True, blank=True, on_delete=SET_NULL, verbose_name=_("Player")
+    )
+    team_association = ForeignKey(
+        TeamAssociation,
+        null=True,
+        blank=True,
+        on_delete=SET_NULL,
+        related_name="+",
+        verbose_name=_("Team Association"),
+    )
+
+    # Event metadata
+    description = models.CharField(
+        max_length=200, blank=True, verbose_name=_("Description")
+    )
+    is_reversed = BooleanField(
+        default=False,
+        verbose_name=_("Is Reversed"),
+        help_text=_("Indicates this event has been reversed/corrected"),
+    )
+    reversed_by = ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=SET_NULL,
+        verbose_name=_("Reversed By"),
+        help_text=_("The correction event that reversed this event"),
+    )
+
+    class Meta:
+        ordering = ["match", "sequence"]
+        unique_together = [("match", "sequence")]
+        verbose_name = _("Match Event")
+        verbose_name_plural = _("Timeline")
+
+    def __str__(self):
+        return f"{self.match} - {self.get_event_type_display()} (#{self.sequence})"
+
+    def _get_admin_namespace(self):
+        return "admin:fixja:competition:season:division:stage:match:matchevent"
+
+    def _get_url_args(self):
+        return (
+            self.match.stage.division.season.competition_id,
+            self.match.stage.division.season_id,
+            self.match.stage.division_id,
+            self.match.stage_id,
+            self.match_id,
+            self.pk,
+        )
+
+    def save(self, *args, **kwargs):
+        if not self.sequence:
+            # Auto-assign sequence number
+            last_event = (
+                MatchEvent.objects.filter(match=self.match)
+                .order_by("-sequence")
+                .first()
+            )
+            self.sequence = (last_event.sequence + 1) if last_event else 1
+        super().save(*args, **kwargs)
 
 
 class SimpleScoreMatchStatistic(MatchStatisticBase):
