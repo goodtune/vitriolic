@@ -761,25 +761,37 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
-    def list_matchevent(self, request, **extra_context):
-        match = extra_context.get("match")
+    def list_matchevent(
+        self,
+        request,
+        competition,
+        season,
+        division,
+        stage,
+        match,
+        **extra_context,
+    ):
         return self.generic_list(
             request,
-            MatchEvent,
-            queryset=MatchEvent.objects.filter(match=match),
+            match.events,
             permission_required=True,
             extra_context=extra_context,
         )
 
     @competition_by_pk_m
     @staff_login_required_m
-    def edit_matchevent(self, request, pk=None, **extra_context):
-        match = extra_context.get("match")
-
-        if pk is None:
-            instance = MatchEvent(match=match)
-        else:
-            instance = get_object_or_404(MatchEvent, pk=pk, match=match)
+    def edit_matchevent(
+        self,
+        request,
+        competition,
+        season,
+        division,
+        stage,
+        match,
+        pk=None,
+        **extra_context,
+    ):
+        instance = get_object_or_404(match.events, pk=pk)
 
         return self.generic_edit(
             request,
@@ -793,18 +805,38 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
-    def delete_matchevent(self, request, pk, **extra_context):
-        return self.generic_delete(request, MatchEvent, pk=pk, permission_required=True)
+    def delete_matchevent(
+        self,
+        request,
+        competition,
+        season,
+        division,
+        stage,
+        match,
+        pk,
+        **extra_context,
+    ):
+        return self.generic_delete(
+            request,
+            match.events,
+            pk=pk,
+            permission_required=True,
+            extra_context=extra_context,
+        )
 
     @competition_by_pk_m
     @staff_login_required_m
-    def live_score_match(self, request, **extra_context):
+    def live_score_match(
+        self,
+        request,
+        competition,
+        season,
+        division,
+        stage,
+        match,
+        **extra_context,
+    ):
         """Protected live scoring interface for matches."""
-        match = extra_context.get("match")
-        if not match:
-            raise Http404("Match not found")
-
-        # Get live scores
         home_score, away_score = match.live_scores
 
         # Get events in chronological order
@@ -819,11 +851,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         }
         context.update(extra_context)
 
-        return self.render(
-            request,
-            "tournamentcontrol/competition/admin/match_live_score.html",
-            context,
-        )
+        templates = self.template_path("match_live_score.html")
+        return self.render(request, templates, context)
 
     @staff_login_required_m
     def list_drawformat(self, request, **extra_context):
