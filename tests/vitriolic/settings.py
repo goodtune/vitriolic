@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     "bootstrap3",
     "django_gravatar",
     "embed_video",
+    "django_htmx",
     "touchtechnology.common",
     "touchtechnology.admin",
     "touchtechnology.content",

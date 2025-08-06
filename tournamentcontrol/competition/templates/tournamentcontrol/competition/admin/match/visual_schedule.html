@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% load i18n %}{% load common %}{% trans "Visual Schedule" %} - {{ date|date }} - {{ season.title }}</title>
+{% load static %}
+<link rel="stylesheet" href="{% static 'tournamentcontrol/competition/css/visual_schedule.css' %}">
+<script src="{% static 'django_htmx/htmx.min.js' %}"></script>
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js" defer></script>
+</head>
+<body>
+<div x-data="visualSchedule()" class="visual-schedule-container">
+    <!-- Form for submitting changes -->
+    <form id="schedule-form" method="post" style="display: none;">
+        {% csrf_token %}
+        {{ formset.management_form }}
+        <input type="hidden" name="redirect_to_self" value="1">
+        {% for form in formset %}
+            {{ form.id }}
+            <input type="hidden" :name="'{{ form.time.html_name }}'" :value="matches[{{ form.instance.id }}]?.time || ''">
+            <input type="hidden" :name="'{{ form.play_at.html_name }}'" :value="matches[{{ form.instance.id }}]?.play_at || ''">
+        {% endfor %}
+    </form>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <h1>{% trans "Visual Schedule" %} - {{ date|date }} - {{ season.title }}</h1>
+            <span class="preview-indicator">{% trans "Preview" %}</span>
+        </div>
+        <div class="toolbar-center">
+            <select class="date-selector" @change="navigateToDate($event.target.value)">
+                {% for schedule_date in dates %}
+                <option value="{% url 'admin:competition:match-visual-schedule' season.competition_id season.pk schedule_date|date:"Ymd" %}"
+                        {% if schedule_date == date %}selected{% endif %}>
+                    {{ schedule_date|date:"l, F j, Y" }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="toolbar-actions">
+            <button type="button" @click="saveChanges()" class="btn btn-primary" :disabled="!hasChanges">
+                {% trans "Save" %}
+            </button>
+            <button type="button" @click="cancelChanges()" class="btn btn-secondary" :disabled="!hasChanges">
+                {% trans "Cancel" %}
+            </button>
+            <button type="button" @click="closeWindow()" class="btn">
+                {% trans "Close" %}
+            </button>
+        </div>
+    </div>
+
+    <!-- Messages Display -->
+    {% if messages %}
+    <div class="messages-container">
+        {% for message in messages %}
+        <div class="message message-{{ message.tags }}" x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)">
+            <span class="message-text">{{ message }}</span>
+            <button type="button" @click="show = false" class="message-close">&times;</button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Main content area with sidebar and grid -->
+    <div class="main-content">
+        <!-- Left sidebar with match hierarchy -->
+        <div class="match-sidebar"
+             :class="{ 'drop-zone': dragTarget?.type === 'unschedule' }"
+             @dragover.prevent="handleUnscheduleDragOver($event)"
+             @dragleave="handleDragLeave($event)"
+             @drop="handleUnscheduleDrop($event)">
+
+        <!-- Division/Stage hierarchy -->
+        {% for division, stages in matches_hierarchy.items %}
+        <div class="division-group">
+            <div class="division-header" @click="toggleSection('div_{{ division.id }}')">
+                <span x-show="!collapsedSections.div_{{ division.id }}">▼</span>
+                <span x-show="collapsedSections.div_{{ division.id }}">▶</span>
+                {{ division.title }}
+            </div>
+            <div x-show="!collapsedSections.div_{{ division.id }}">
+                {% for stage, stage_matches in stages.items %}
+                <div class="stage-group">
+                    <div class="stage-header" @click="toggleSection('stage_{{ stage.id }}')">
+                        <span x-show="!collapsedSections.stage_{{ stage.id }}">▼</span>
+                        <span x-show="collapsedSections.stage_{{ stage.id }}">▶</span>
+                        {{ stage.title }} ({{ stage_matches|length }})
+                    </div>
+                    <div x-show="!collapsedSections.stage_{{ stage.id }}" class="match-list">
+                        {% for match in stage_matches %}
+                        <div
+                            x-show="!matches[{{ match.id }}]?.scheduled"
+                            class="match-item unscheduled division-{{ match.stage.division.order }}"
+                            draggable="true"
+                            @dragstart="startDrag(getMatch({{ match.id }}), $event)"
+                            @dragend="endDrag($event)"
+                            :data-match-id="{{ match.id }}"
+                        >
+                            <div class="font-weight-bold">{{ match.get_home_team.title }} vs {{ match.get_away_team.title }}</div>
+                            <div class="text-muted small">
+                                {% if match.label %}
+                                    {% trans match.label %}
+                                {% else %}
+                                    {% if not match.is_final %}
+                                        {% with num=match.round %}Round {{ num }}{% endwith %}
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+        </div>
+
+    <!-- Main schedule grid with fixed headers -->
+    <div class="schedule-grid-container">
+        <!-- Fixed column headers -->
+        <div class="schedule-grid-header">
+            <div class="time-corner">&nbsp;</div>
+            <div class="column-headers" x-ref="columnHeaders">
+                {% for place in places %}
+                <div class="column-header">{{ place.abbreviation|default:place.title }}</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Grid body with fixed row headers and scrollable content -->
+        <div class="schedule-grid-body">
+            <!-- Fixed time column -->
+            <div class="schedule-grid-times" x-ref="timeHeaders">
+                <template x-for="(timeslot, rowIndex) in timeslots" :key="'time_' + rowIndex">
+                    <div class="time-row-container" x-text="timeslot"></div>
+                </template>
+            </div>
+
+            <!-- Scrollable grid content -->
+            <div class="schedule-grid-content" x-ref="gridContent" @scroll="syncScroll($event)">
+                <div class="schedule-table">
+                    <template x-for="(timeslot, rowIndex) in timeslots" :key="'row_' + rowIndex">
+                        <div class="content-row">
+                            <template x-for="place in placesData" :key="'cell_' + rowIndex + '_' + place.id">
+                                <div
+                                    class="grid-cell"
+                                    :class="{
+                                        'occupied': isOccupied(place.id, timeslot),
+                                        'drop-zone': dragTarget?.place == place.id && dragTarget?.time == timeslot && dragTarget?.type === 'schedule'
+                                    }"
+                                    @dragover.prevent="handleDragOver($event, place.id, timeslot)"
+                                    @dragleave="handleDragLeave($event)"
+                                    @drop="handleDrop($event, place.id, timeslot)"
+                                    :data-place="place.id"
+                                    :data-time="timeslot"
+                                >
+                                    <template x-for="match in getMatchesAt(place.id, timeslot)" :key="match.id">
+                                        <div
+                                            :class="'match-item scheduled division-' + match.division_order"
+                                            draggable="true"
+                                            @dragstart="startDrag(match, $event)"
+                                            @dragend="endDrag($event)"
+                                            :data-match-id="match.id"
+                                        >
+                                            <div x-text="match.division_title" class="font-weight-bold match-division-header"></div>
+                                            <div x-text="match.teams" class="font-weight-bold"></div>
+                                            <div x-text="getMatchLabel(match)" class="text-muted small"></div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+</div>
+
+<script>
+function visualSchedule() {
+    return {
+        matches: {},
+        originalMatches: {},
+        collapsedSections: {},
+        draggedMatch: null,
+        dragTarget: null,
+        hasChanges: false,
+
+        init() {
+            // Initialize collapsed sections - default to collapsed
+            this.collapsedSections = {};
+
+            // Add division and stage sections
+            {% for division, stages in matches_hierarchy.items %}
+            this.collapsedSections['div_{{ division.id }}'] = false;  // Expand divisions by default so matches are visible
+            {% for stage, stage_matches in stages.items %}
+            this.collapsedSections['stage_{{ stage.id }}'] = false;   // Expand stages by default so matches are visible
+            {% endfor %}
+            {% endfor %}
+
+            // Initialize matches data from Django context
+            {% for form in formset %}
+            this.matches[{{ form.instance.id }}] = {
+                id: {{ form.instance.id }},
+                teams: '{{ form.instance.get_home_team.title|escapejs }} vs {{ form.instance.get_away_team.title|escapejs }}',
+                stage: '{{ form.instance.stage.title|escapejs }}',
+                time: '{{ form.instance.time|default:""|time:"H:i" }}',
+                play_at: '{{ form.instance.play_at.id|default:"" }}',
+                place: '{{ form.instance.play_at.title|default:""|escapejs }}',
+                scheduled: {{ form.instance.time|yesno:"true,false" }},
+                label: '{{ form.instance.label|default:""|escapejs }}',
+                round: {{ form.instance.round|default_if_none:"null" }},
+                is_final: {{ form.instance.is_final|yesno:"true,false" }},
+                division_order: {{ form.instance.stage.division.order }},
+                division_title: '{{ form.instance.stage.division.abbreviation|default:form.instance.stage.division.title|escapejs }}'
+            };
+            {% endfor %}
+
+            // Store original state for change detection
+            this.originalMatches = JSON.parse(JSON.stringify(this.matches));
+
+            // Initialize timeslots
+            this.timeslots = [
+                {% for timeslot in timeslots %}
+                '{{ timeslot|time:"H:i" }}',
+                {% endfor %}
+            ];
+
+            // Initialize places data for Alpine.js
+            this.placesData = [
+                {% for place in places %}
+                {
+                    id: '{{ place.id }}',
+                    title: '{{ place.title|escapejs }}',
+                    abbreviation: '{{ place.abbreviation|default:place.title|escapejs }}'
+                },
+                {% endfor %}
+            ];
+
+            // Basic initialization logging
+            console.log('Visual schedule initialized with', Object.keys(this.matches).length, 'matches');
+
+            // Check for mobile and show warning
+            if (window.innerWidth < 768) {
+                alert('{% trans "This interface is designed for desktop use. Please use a desktop computer for the best experience." %}');
+            }
+        },
+
+
+        getMatch(id) {
+            return this.matches[id];
+        },
+
+        getMatchLabel(match) {
+            if (match.label) {
+                return match.label;
+            } else if (!match.is_final) {
+                return `Round ${match.round}`;
+            }
+            return '';
+        },
+
+        toggleSection(section) {
+            this.collapsedSections[section] = !this.collapsedSections[section];
+        },
+
+        startDrag(match, event) {
+            this.draggedMatch = match;
+            event.dataTransfer.setData('text/plain', match.id);
+            event.target.classList.add('dragging');
+        },
+
+        endDrag(event) {
+            event.target.classList.remove('dragging');
+            this.draggedMatch = null;
+            this.dragTarget = null;
+        },
+
+        handleDragOver(event, placeId, time) {
+            event.preventDefault();
+            this.dragTarget = { place: placeId, time: time, type: 'schedule' };
+        },
+
+        handleUnscheduleDragOver(event) {
+            event.preventDefault();
+            this.dragTarget = { type: 'unschedule' };
+        },
+
+        handleDragLeave(event) {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+                this.dragTarget = null;
+            }
+        },
+
+        handleDrop(event, placeId, time) {
+            event.preventDefault();
+            const matchId = event.dataTransfer.getData('text/plain');
+
+            if (matchId && this.matches[matchId]) {
+                // Update match scheduling
+                this.matches[matchId].time = time;
+                this.matches[matchId].play_at = placeId;
+                this.matches[matchId].place = this.getPlaceName(placeId);
+                this.matches[matchId].scheduled = true;
+
+                this.checkForChanges();
+            }
+
+            this.dragTarget = null;
+        },
+
+        handleUnscheduleDrop(event) {
+            event.preventDefault();
+            const matchId = event.dataTransfer.getData('text/plain');
+
+            if (matchId && this.matches[matchId]) {
+                // Clear match scheduling - nullify time and play_at values
+                // The match will automatically appear back under its division/stage
+                // since the template uses x-show="!matches[matchId]?.scheduled"
+                this.matches[matchId].time = '';
+                this.matches[matchId].play_at = '';
+                this.matches[matchId].place = '';
+                this.matches[matchId].scheduled = false;
+
+                this.checkForChanges();
+            }
+
+            this.dragTarget = null;
+        },
+
+        getPlaceName(placeId) {
+            // This should be populated from Django context
+            const places = {
+                {% for place in places %}
+                '{{ place.id }}': '{{ place.title|escapejs }}',
+                {% endfor %}
+            };
+            return places[placeId] || '';
+        },
+
+        isOccupied(placeId, time) {
+            return Object.values(this.matches).some(match =>
+                match.play_at == placeId && match.time == time
+            );
+        },
+
+        getMatchesAt(placeId, time) {
+            return Object.values(this.matches).filter(match =>
+                match.play_at == placeId && match.time == time
+            );
+        },
+
+        checkForChanges() {
+            this.hasChanges = JSON.stringify(this.matches) !== JSON.stringify(this.originalMatches);
+        },
+
+        saveChanges() {
+            if (!this.hasChanges) return;
+
+            document.getElementById('schedule-form').submit();
+        },
+
+        closeWindow() {
+            if (this.hasChanges) {
+                if (confirm('{% trans "You have unsaved changes. Are you sure you want to close?" %}')) {
+                    window.close();
+                }
+            } else {
+                window.close();
+            }
+        },
+
+        cancelChanges() {
+            if (!this.hasChanges) return;
+
+            if (confirm('{% trans "Discard all unsaved changes?" %}')) {
+                this.matches = JSON.parse(JSON.stringify(this.originalMatches));
+                this.hasChanges = false;
+            }
+        },
+
+        syncScroll(event) {
+            // Sync horizontal scroll between column headers and grid content
+            const scrollLeft = event.target.scrollLeft;
+            if (this.$refs.columnHeaders) {
+                this.$refs.columnHeaders.scrollLeft = scrollLeft;
+            }
+
+            // Sync vertical scroll between time headers and grid content
+            const scrollTop = event.target.scrollTop;
+            if (this.$refs.timeHeaders) {
+                this.$refs.timeHeaders.scrollTop = scrollTop;
+            }
+        },
+
+        navigateToDate(dateValue) {
+            if (!dateValue) return;
+
+            const navigateToUrl = () => {
+                window.location.href = `${dateValue}`;
+            };
+
+            if (this.hasChanges) {
+                if (confirm('{% trans "You have unsaved changes. Are you sure you want to navigate to another date?" %}')) {
+                    navigateToUrl();
+                }
+            } else {
+                navigateToUrl();
+            }
+        }
+    }
+}
+</script>
+</body>
+</html>
