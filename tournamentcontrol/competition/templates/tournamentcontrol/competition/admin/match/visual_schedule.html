@@ -54,31 +54,11 @@
     <!-- Main content area with sidebar and grid -->
     <div class="main-content">
         <!-- Left sidebar with match hierarchy -->
-        <div class="match-sidebar">
-        <h3>{% trans "Matches" %}</h3>
-
-        <!-- Unscheduled matches section -->
-        <div class="division-group">
-            <div class="division-header" @click="toggleSection('unscheduled')">
-                <span x-show="!collapsedSections.unscheduled">▼</span>
-                <span x-show="collapsedSections.unscheduled">▶</span>
-                {% trans "Unscheduled" %} (<span x-text="unscheduledCount"></span>)
-            </div>
-            <div x-show="!collapsedSections.unscheduled" class="match-list">
-                <template x-for="match in unscheduledMatches" :key="match.id">
-                    <div
-                        class="match-item unscheduled"
-                        draggable="true"
-                        @dragstart="startDrag(match, $event)"
-                        @dragend="endDrag($event)"
-                        :data-match-id="match.id"
-                    >
-                        <div x-text="match.teams" class="font-weight-bold"></div>
-                        <div x-text="match.stage" class="text-muted small"></div>
-                    </div>
-                </template>
-            </div>
-        </div>
+        <div class="match-sidebar"
+             :class="{ 'drop-zone': dragTarget?.type === 'unschedule' }"
+             @dragover.prevent="handleUnscheduleDragOver($event)"
+             @dragleave="handleDragLeave($event)"
+             @drop="handleUnscheduleDrop($event)">
 
         <!-- Division/Stage hierarchy -->
         {% for division, stages in matches_hierarchy.items %}
@@ -116,54 +96,66 @@
             </div>
         </div>
         {% endfor %}
-    </div>
+        </div>
 
-    <!-- Main schedule table -->
+    <!-- Main schedule grid with fixed headers -->
     <div class="schedule-grid-container">
-        <table class="schedule-table">
-            <thead>
-                <tr>
-                    <th>&nbsp;</th>
-                    {% for place in places %}
-                    <th>{{ place.abbreviation|default:place.title }}</th>
-                    {% endfor %}
-                </tr>
-            </thead>
-            <tbody>
-                <template x-for="(timeslot, rowIndex) in timeslots" :key="'row_' + rowIndex">
-                    <tr>
-                        <th class="time-header" x-text="timeslot"></th>
-                        <template x-for="place in placesData" :key="'cell_' + rowIndex + '_' + place.id">
-                            <td 
-                                class="grid-cell"
-                                :class="{
-                                    'occupied': isOccupied(place.id, timeslot),
-                                    'drop-zone': dragTarget?.place == place.id && dragTarget?.time == timeslot
-                                }"
-                                @dragover.prevent="handleDragOver($event, place.id, timeslot)"
-                                @dragleave="handleDragLeave($event)"
-                                @drop="handleDrop($event, place.id, timeslot)"
-                                :data-place="place.id"
-                                :data-time="timeslot"
-                            >
-                                <template x-for="match in getMatchesAt(place.id, timeslot)" :key="match.id">
-                                    <div
-                                        class="match-item scheduled"
-                                        draggable="true"
-                                        @dragstart="startDrag(match, $event)"
-                                        @dragend="endDrag($event)"
-                                        :data-match-id="match.id"
-                                    >
-                                        <div x-text="match.teams" class="font-weight-bold"></div>
-                                        <div x-text="match.stage" class="text-muted small"></div>
-                                    </div>
-                                </template>
-                            </td>
-                        </template>
-                    </tr>
+        <!-- Fixed column headers -->
+        <div class="schedule-grid-header">
+            <div class="time-corner">&nbsp;</div>
+            <div class="column-headers" x-ref="columnHeaders">
+                {% for place in places %}
+                <div class="column-header">{{ place.abbreviation|default:place.title }}</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Grid body with fixed row headers and scrollable content -->
+        <div class="schedule-grid-body">
+            <!-- Fixed time column -->
+            <div class="schedule-grid-times" x-ref="timeHeaders">
+                <template x-for="(timeslot, rowIndex) in timeslots" :key="'time_' + rowIndex">
+                    <div class="time-row-container" x-text="timeslot"></div>
                 </template>
-            </tbody>
-        </table>
+            </div>
+
+            <!-- Scrollable grid content -->
+            <div class="schedule-grid-content" x-ref="gridContent" @scroll="syncScroll($event)">
+                <div class="schedule-table">
+                    <template x-for="(timeslot, rowIndex) in timeslots" :key="'row_' + rowIndex">
+                        <div class="content-row">
+                            <template x-for="place in placesData" :key="'cell_' + rowIndex + '_' + place.id">
+                                <div
+                                    class="grid-cell"
+                                    :class="{
+                                        'occupied': isOccupied(place.id, timeslot),
+                                        'drop-zone': dragTarget?.place == place.id && dragTarget?.time == timeslot && dragTarget?.type === 'schedule'
+                                    }"
+                                    @dragover.prevent="handleDragOver($event, place.id, timeslot)"
+                                    @dragleave="handleDragLeave($event)"
+                                    @drop="handleDrop($event, place.id, timeslot)"
+                                    :data-place="place.id"
+                                    :data-time="timeslot"
+                                >
+                                    <template x-for="match in getMatchesAt(place.id, timeslot)" :key="match.id">
+                                        <div
+                                            class="match-item scheduled"
+                                            draggable="true"
+                                            @dragstart="startDrag(match, $event)"
+                                            @dragend="endDrag($event)"
+                                            :data-match-id="match.id"
+                                        >
+                                            <div x-text="match.teams" class="font-weight-bold"></div>
+                                            <div x-text="match.stage" class="text-muted small"></div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
     </div>
     </div>
 </div>
@@ -180,15 +172,13 @@ function visualSchedule() {
 
         init() {
             // Initialize collapsed sections - default to collapsed
-            this.collapsedSections = {
-                'unscheduled': false  // Show unscheduled section expanded so user can see them
-            };
+            this.collapsedSections = {};
 
             // Add division and stage sections
             {% for division, stages in matches_hierarchy.items %}
-            this.collapsedSections['div_{{ division.id }}'] = true;  // Collapse divisions by default
+            this.collapsedSections['div_{{ division.id }}'] = false;  // Expand divisions by default so matches are visible
             {% for stage, stage_matches in stages.items %}
-            this.collapsedSections['stage_{{ stage.id }}'] = true;   // Collapse stages by default
+            this.collapsedSections['stage_{{ stage.id }}'] = false;   // Expand stages by default so matches are visible
             {% endfor %}
             {% endfor %}
 
@@ -235,13 +225,6 @@ function visualSchedule() {
             }
         },
 
-        get unscheduledMatches() {
-            return Object.values(this.matches).filter(match => !match.scheduled);
-        },
-
-        get unscheduledCount() {
-            return this.unscheduledMatches.length;
-        },
 
         getMatch(id) {
             return this.matches[id];
@@ -265,7 +248,12 @@ function visualSchedule() {
 
         handleDragOver(event, placeId, time) {
             event.preventDefault();
-            this.dragTarget = { place: placeId, time: time };
+            this.dragTarget = { place: placeId, time: time, type: 'schedule' };
+        },
+
+        handleUnscheduleDragOver(event) {
+            event.preventDefault();
+            this.dragTarget = { type: 'unschedule' };
         },
 
         handleDragLeave(event) {
@@ -284,6 +272,25 @@ function visualSchedule() {
                 this.matches[matchId].play_at = placeId;
                 this.matches[matchId].place = this.getPlaceName(placeId);
                 this.matches[matchId].scheduled = true;
+
+                this.checkForChanges();
+            }
+
+            this.dragTarget = null;
+        },
+
+        handleUnscheduleDrop(event) {
+            event.preventDefault();
+            const matchId = event.dataTransfer.getData('text/plain');
+
+            if (matchId && this.matches[matchId]) {
+                // Clear match scheduling - nullify time and play_at values
+                // The match will automatically appear back under its division/stage
+                // since the template uses x-show="!matches[matchId]?.scheduled"
+                this.matches[matchId].time = '';
+                this.matches[matchId].play_at = '';
+                this.matches[matchId].place = '';
+                this.matches[matchId].scheduled = false;
 
                 this.checkForChanges();
             }
@@ -341,6 +348,20 @@ function visualSchedule() {
             if (confirm('{% trans "Discard all unsaved changes?" %}')) {
                 this.matches = JSON.parse(JSON.stringify(this.originalMatches));
                 this.hasChanges = false;
+            }
+        },
+
+        syncScroll(event) {
+            // Sync horizontal scroll between column headers and grid content
+            const scrollLeft = event.target.scrollLeft;
+            if (this.$refs.columnHeaders) {
+                this.$refs.columnHeaders.scrollLeft = scrollLeft;
+            }
+
+            // Sync vertical scroll between time headers and grid content
+            const scrollTop = event.target.scrollTop;
+            if (this.$refs.timeHeaders) {
+                this.$refs.timeHeaders.scrollTop = scrollTop;
             }
         }
     }
