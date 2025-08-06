@@ -386,6 +386,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path("<int:season_id>/callback", self.oauth_callback, name="callback"),
                 path("<int:season_id>/delete/", self.delete_season, name="delete"),
                 path(
+                    "<int:season_id>/ai-competition/",
+                    self.ai_competition_wizard,
+                    name="ai-competition",
+                ),
+                path(
                     "<int:season_id>/reschedule/",
                     self.match_reschedule,
                     name="reschedule",
@@ -1972,6 +1977,22 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
         ScorecardWizard = scorecardwizard_factory(app=self, extra_context=extra_context)
         wizard = ScorecardWizard.as_view(form_list=[SeasonForm, FilterForm])
+        return wizard(request)
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def ai_competition_wizard(self, request, competition, season, **extra_context):
+        """AI-powered competition structure generation wizard."""
+        from .wizards import AIPromptForm, AIPlanReviewForm, ai_competition_wizard_factory
+
+        AICompetitionWizard = ai_competition_wizard_factory(
+            season=season,
+            app=self,
+            extra_context=extra_context
+        )
+        wizard = AICompetitionWizard.as_view(
+            form_list=[AIPromptForm, AIPlanReviewForm]
+        )
         return wizard(request)
 
     @competition_by_pk_m

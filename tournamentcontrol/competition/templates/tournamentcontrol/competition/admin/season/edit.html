@@ -94,6 +94,10 @@
 
 			<div class="form-group">
 				<div class="text-center">
+					<a class="btn btn-primary" href="{% url 'competition:season:ai-competition' object.competition.pk object.pk %}">
+						<i class="fa fa-magic fa-fw"></i>
+						{% trans "AI Competition Builder" %}
+					</a>
 					<a class="btn btn-default" href="{% url 'admin:fixja:competition:season:reschedule' competition.pk season.pk %}">{% trans "Reschedule" %}</a>
 				</div> <!-- /.col -->
 			</div>
