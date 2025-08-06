@@ -80,14 +80,22 @@
                         {% for match in stage_matches %}
                         <div
                             x-show="!matches[{{ match.id }}]?.scheduled"
-                            class="match-item unscheduled"
+                            class="match-item unscheduled division-{{ match.stage.division.order }}"
                             draggable="true"
                             @dragstart="startDrag(getMatch({{ match.id }}), $event)"
                             @dragend="endDrag($event)"
                             :data-match-id="{{ match.id }}"
                         >
                             <div class="font-weight-bold">{{ match.get_home_team.title }} vs {{ match.get_away_team.title }}</div>
-                            <div class="text-muted small">Round {{ match.round }}</div>
+                            <div class="text-muted small">
+                                {% if match.label %}
+                                    {% trans match.label %}
+                                {% else %}
+                                    {% if not match.is_final %}
+                                        {% with num=match.round %}Round {{ num }}{% endwith %}
+                                    {% endif %}
+                                {% endif %}
+                            </div>
                         </div>
                         {% endfor %}
                     </div>
@@ -139,14 +147,15 @@
                                 >
                                     <template x-for="match in getMatchesAt(place.id, timeslot)" :key="match.id">
                                         <div
-                                            class="match-item scheduled"
+                                            :class="'match-item scheduled division-' + match.division_order"
                                             draggable="true"
                                             @dragstart="startDrag(match, $event)"
                                             @dragend="endDrag($event)"
                                             :data-match-id="match.id"
                                         >
+                                            <div x-text="match.division_title" class="font-weight-bold match-division-header"></div>
                                             <div x-text="match.teams" class="font-weight-bold"></div>
-                                            <div x-text="match.stage" class="text-muted small"></div>
+                                            <div x-text="getMatchLabel(match)" class="text-muted small"></div>
                                         </div>
                                     </template>
                                 </div>
@@ -191,7 +200,12 @@ function visualSchedule() {
                 time: '{{ form.instance.time|default:""|time:"H:i" }}',
                 play_at: '{{ form.instance.play_at.id|default:"" }}',
                 place: '{{ form.instance.play_at.title|default:""|escapejs }}',
-                scheduled: {{ form.instance.time|yesno:"true,false" }}
+                scheduled: {{ form.instance.time|yesno:"true,false" }},
+                label: '{{ form.instance.label|default:""|escapejs }}',
+                round: {{ form.instance.round }},
+                is_final: {{ form.instance.is_final|yesno:"true,false" }},
+                division_order: {{ form.instance.stage.division.order }},
+                division_title: '{{ form.instance.stage.division.abbreviation|default:form.instance.stage.division.title|escapejs }}'
             };
             {% endfor %}
 
@@ -228,6 +242,15 @@ function visualSchedule() {
 
         getMatch(id) {
             return this.matches[id];
+        },
+
+        getMatchLabel(match) {
+            if (match.label) {
+                return match.label;
+            } else if (!match.is_final) {
+                return `Round ${match.round}`;
+            }
+            return '';
         },
 
         toggleSection(section) {
@@ -327,9 +350,7 @@ function visualSchedule() {
         saveChanges() {
             if (!this.hasChanges) return;
 
-            if (confirm('{% trans "Save all scheduling changes?" %}')) {
-                document.getElementById('schedule-form').submit();
-            }
+            document.getElementById('schedule-form').submit();
         },
 
         closeWindow() {

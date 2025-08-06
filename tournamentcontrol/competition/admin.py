@@ -1976,7 +1976,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         competition,
         season,
         date,
-        extra_context,
         time=None,
         division=None,
         stage=None,
@@ -1985,6 +1984,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         **kwargs,
     ):
         """Match scheduling interface - supports both standard and visual modes."""
+        # Extract extra_context from kwargs (injected by decorator)
+        extra_context = kwargs.pop('extra_context', {})
+        
         queryset = self._build_match_queryset(
             season, date, time=time, division=division, stage=stage, round=round, visual=visual
         )
@@ -2064,7 +2066,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             competition,
             season,
             date,
-            extra_context,
             visual=True,
             **kwargs,
         )
