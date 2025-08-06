@@ -25,7 +25,20 @@
 
     <!-- Toolbar -->
     <div class="toolbar">
-        <h1>{% trans "Visual Schedule" %} - {{ date|date }} - {{ season.title }}</h1>
+        <div class="toolbar-left">
+            <h1>{% trans "Visual Schedule" %} - {{ date|date }} - {{ season.title }}</h1>
+            <span class="preview-indicator">{% trans "Preview" %}</span>
+        </div>
+        <div class="toolbar-center">
+            <select class="date-selector" @change="navigateToDate($event.target.value)">
+                {% for schedule_date in dates %}
+                <option value="{% url 'admin:competition:match-visual-schedule' season.competition_id season.pk schedule_date|date:"Ymd" %}"
+                        {% if schedule_date == date %}selected{% endif %}>
+                    {{ schedule_date|date:"l, F j, Y" }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
         <div class="toolbar-actions">
             <button type="button" @click="saveChanges()" class="btn btn-primary" :disabled="!hasChanges">
                 {% trans "Save" %}
@@ -202,7 +215,7 @@ function visualSchedule() {
                 place: '{{ form.instance.play_at.title|default:""|escapejs }}',
                 scheduled: {{ form.instance.time|yesno:"true,false" }},
                 label: '{{ form.instance.label|default:""|escapejs }}',
-                round: {{ form.instance.round }},
+                round: {{ form.instance.round|default_if_none:"null" }},
                 is_final: {{ form.instance.is_final|yesno:"true,false" }},
                 division_order: {{ form.instance.stage.division.order }},
                 division_title: '{{ form.instance.stage.division.abbreviation|default:form.instance.stage.division.title|escapejs }}'
@@ -383,6 +396,22 @@ function visualSchedule() {
             const scrollTop = event.target.scrollTop;
             if (this.$refs.timeHeaders) {
                 this.$refs.timeHeaders.scrollTop = scrollTop;
+            }
+        },
+
+        navigateToDate(dateValue) {
+            if (!dateValue) return;
+
+            const navigateToUrl = () => {
+                window.location.href = `${dateValue}`;
+            };
+
+            if (this.hasChanges) {
+                if (confirm('{% trans "You have unsaved changes. Are you sure you want to navigate to another date?" %}')) {
+                    navigateToUrl();
+                }
+            } else {
+                navigateToUrl();
             }
         }
     }

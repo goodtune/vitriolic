@@ -299,6 +299,18 @@ body {
     z-index: 10;
 }
 
+.toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.toolbar-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+}
+
 .toolbar h1 {
     margin: 0;
     font-size: 20px;
@@ -307,6 +319,32 @@ body {
 .toolbar-actions {
     display: flex;
     gap: 10px;
+}
+
+.preview-indicator {
+    background: #17a2b8;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.date-selector {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    font-size: 14px;
+    min-width: 200px;
+    cursor: pointer;
+}
+
+.date-selector:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
 }
 
 .btn {

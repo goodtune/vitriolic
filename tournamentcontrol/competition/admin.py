@@ -2022,6 +2022,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 "formset": formset,
                 "season": season,
                 "date": date,
+                "dates": season.matches.dates("date", "day"),
                 "places": places,
                 "timeslots": timeslots,
                 "venues": venues,
