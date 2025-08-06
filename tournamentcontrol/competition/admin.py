@@ -12,7 +12,7 @@ from django.contrib import messages
 from django.db import models
 from django.db.models import Case, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
-from django.http import Http404, HttpResponse, HttpResponseGone
+from django.http import Http404, HttpResponse, HttpResponseGone, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
@@ -1850,22 +1850,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         templates = self.template_path("reschedule.html")
         return self.render(request, templates, context)
 
-    # FIXME
-    @competition_by_pk_m
-    @staff_login_required_m
-    def match_schedule(
-        self,
-        request,
-        competition,
-        season,
-        date,
-        extra_context,
-        time=None,
-        division=None,
-        stage=None,
-        round=None,
-        **kwargs,
-    ):
+    def _build_match_queryset(self, season, date, time=None, division=None, stage=None, round=None, visual=False):
+        """Build queryset for match scheduling."""
         where = Q(date=date, is_bye=False)
 
         if stage:
@@ -1880,87 +1866,41 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         if time is not None:
             where &= Q(time=time)
 
-        queryset = (
-            manager.select_related("stage__division__season")
-            .filter(where)
-            .order_by("stage__division__order", "round", "datetime", "play_at")
-        )
-
-        venues = collections.OrderedDict()
-        for venue in season.venues.all():
-            venues.setdefault(venue, [])
-
-        for ground in Ground.objects.select_related("venue").filter(venue__in=venues):
-            venues[ground.venue].append(ground)
-
-        places = FauxQueryset(Place)
-        for venue, grounds in venues.items():
-            places.append(venue)
-            for ground in grounds:
-                places.append(ground)
-
-        return self.generic_edit_multiple(
-            request,
-            queryset,
-            formset_class=MatchScheduleFormSet,
-            formset_kwargs={
-                "places": places,
-                "timeslots": season.get_timeslots(date),
-            },
-            post_save_redirect=self.redirect(season.urls["edit"]),
-            templates=self.template_path("match/schedule.html"),
-            extra_context=extra_context,
-        )
-
-    @competition_by_pk_m
-    @staff_login_required_m
-    def match_visual_schedule(
-        self,
-        request,
-        competition,
-        season,
-        date,
-        extra_context,
-        **kwargs,
-    ):
-        """
-        Visual drag-and-drop match scheduling interface.
-        """
-        where = Q(date=date, is_bye=False)
-
-        # Get all matches for the date
-        queryset = (
-            season.matches.select_related("stage__division__season", "play_at")
-            .filter(where)
-            .order_by("stage__division__order", "stage__order", "round")
-        )
-
-        # Get venues and grounds for the schedule grid
-        venues = collections.OrderedDict()
-        for venue in season.venues.all():
-            venues.setdefault(venue, [])
-
-        for ground in Ground.objects.select_related("venue").filter(venue__in=venues):
-            venues[ground.venue].append(ground)
-
-        places = FauxQueryset(Place)
-        for venue, grounds in venues.items():
-            places.append(venue)
-            for ground in grounds:
-                places.append(ground)
-
-        # Get timeslots for the day
-        timeslots = season.get_timeslots(date)
-
-        # If no timeslots configured, show error and redirect back to season
-        if not timeslots:
-            messages.error(
-                request,
-                _("The visual scheduler can only be used when timeslots are specified for this season.")
+        # Visual schedule uses different ordering and includes play_at
+        if visual:
+            queryset = (
+                season.matches.select_related("stage__division__season", "play_at")
+                .filter(where)
+                .order_by("stage__division__order", "stage__order", "round")
             )
-            return self.redirect(season.urls["edit"])
+        else:
+            queryset = (
+                manager.select_related("stage__division__season")
+                .filter(where)
+                .order_by("stage__division__order", "round", "datetime", "play_at")
+            )
 
-        # Group matches by division/stage hierarchy for the sidebar
+        return queryset
+
+    def _build_venues_and_places(self, season):
+        """Build venues and places data structures."""
+        venues = collections.OrderedDict()
+        for venue in season.venues.all():
+            venues.setdefault(venue, [])
+
+        for ground in Ground.objects.select_related("venue").filter(venue__in=venues):
+            venues[ground.venue].append(ground)
+
+        places = FauxQueryset(Place)
+        for venue, grounds in venues.items():
+            places.append(venue)
+            for ground in grounds:
+                places.append(ground)
+
+        return venues, places
+
+    def _build_visual_context(self, queryset):
+        """Build visual-specific context data."""
         matches_hierarchy = collections.OrderedDict()
         unscheduled_matches = []
         scheduled_matches = []
@@ -1981,8 +1921,15 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             else:
                 scheduled_matches.append(match)
 
+        return {
+            "matches_hierarchy": matches_hierarchy,
+            "unscheduled_matches": unscheduled_matches,
+            "scheduled_matches": scheduled_matches,
+        }
+
+    def _handle_visual_schedule_form(self, request, queryset, places, timeslots, extra_context, templates, season):
+        """Handle form processing for visual schedule."""
         if request.method == "POST":
-            # Handle form submission using existing formset logic
             formset = MatchScheduleFormSet(
                 data=request.POST,
                 queryset=queryset,
@@ -2019,21 +1966,108 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 timeslots=timeslots,
             )
 
-        context = {
-            "formset": formset,
-            "season": season,
-            "date": date,
-            "matches_hierarchy": matches_hierarchy,
-            "unscheduled_matches": unscheduled_matches,
-            "scheduled_matches": scheduled_matches,
-            "places": places,
-            "timeslots": timeslots,
-            "venues": venues,
-        }
-        context.update(extra_context)
+        return formset
 
-        templates = self.template_path("match/visual_schedule.html")
-        return self.render(request, templates, context)
+    @competition_by_pk_m
+    @staff_login_required_m
+    def match_schedule(
+        self,
+        request,
+        competition,
+        season,
+        date,
+        extra_context,
+        time=None,
+        division=None,
+        stage=None,
+        round=None,
+        visual=False,
+        **kwargs,
+    ):
+        """Match scheduling interface - supports both standard and visual modes."""
+        queryset = self._build_match_queryset(
+            season, date, time=time, division=division, stage=stage, round=round, visual=visual
+        )
+        
+        venues, places = self._build_venues_and_places(season)
+        
+        # Get timeslots for the day
+        timeslots = season.get_timeslots(date)
+
+        if visual:
+            # Visual schedule specific validation
+            if not timeslots:
+                messages.error(
+                    request,
+                    _("The visual scheduler can only be used when timeslots are specified for this season.")
+                )
+                return self.redirect(season.urls["edit"])
+
+            # Handle visual schedule form processing and build context
+            formset = self._handle_visual_schedule_form(
+                request, queryset, places, timeslots, extra_context, 
+                self.template_path("match/visual_schedule.html"), season
+            )
+            
+            # If POST resulted in redirect, return it
+            if isinstance(formset, HttpResponseRedirect):
+                return formset
+
+            # Build visual-specific context
+            visual_context = self._build_visual_context(queryset)
+            
+            context = {
+                "formset": formset,
+                "season": season,
+                "date": date,
+                "places": places,
+                "timeslots": timeslots,
+                "venues": venues,
+                **visual_context,
+            }
+            context.update(extra_context)
+
+            templates = self.template_path("match/visual_schedule.html")
+            return self.render(request, templates, context)
+        else:
+            # Standard schedule using generic_edit_multiple
+            return self.generic_edit_multiple(
+                request,
+                queryset,
+                formset_class=MatchScheduleFormSet,
+                formset_kwargs={
+                    "places": places,
+                    "timeslots": timeslots,
+                },
+                post_save_redirect=self.redirect(season.urls["edit"]),
+                templates=self.template_path("match/schedule.html"),
+                extra_context=extra_context,
+            )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def match_visual_schedule(
+        self,
+        request,
+        competition,
+        season,
+        date,
+        extra_context,
+        **kwargs,
+    ):
+        """
+        Visual drag-and-drop match scheduling interface.
+        Delegates to match_schedule with visual=True.
+        """
+        return self.match_schedule(
+            request,
+            competition,
+            season,
+            date,
+            extra_context,
+            visual=True,
+            **kwargs,
+        )
 
     @competition_by_pk_m
     @staff_login_required_m
