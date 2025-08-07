@@ -56,7 +56,7 @@ def check_dependencies():
     except subprocess.CalledProcessError as e:
         print(f"✗ Playwright not installed: {e}")
         if e.stderr:
-            error_msg = e.stderr.decode().strip()
+            error_msg = e.stderr.strip()
             print(f"  Error details: {error_msg}")
             if "ModuleNotFoundError" in error_msg:
                 print("  Solution: Run 'uv sync --group e2e' to install dependencies")
