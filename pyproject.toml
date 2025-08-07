@@ -36,6 +36,13 @@ test = [
     "packaging>=25.0",
     "tblib",
 ]
+e2e = [
+    "playwright",
+    "pytest-playwright",
+    "pytest-django",
+    "redis",
+    "celery",
+]
 
 [project.optional-dependencies]
 admin = ["django-bootstrap3", "django-gravatar2"]
