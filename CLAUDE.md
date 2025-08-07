@@ -11,6 +11,7 @@
 - Comprehensive test writing guidelines using `django-test-plus`
 - Security and permission testing requirements
 - Model field and admin view testing patterns
+- Import organization and positive assertion requirements
 
 ## Key Project Context
 
@@ -34,6 +35,7 @@ This is a Django-based repository providing reusable applications for sporting c
 - Always use named URLs and proper template path methods
 - Test both positive outcomes and security/permission scenarios
 - Use ORM relations instead of manual queries
+- Never perform `git add .` - always be explicit about the files you add
 
 ## Continuous Improvement
 

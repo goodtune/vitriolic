@@ -34,6 +34,7 @@ This is a Python based repository, it provides a Django reusable application tha
 5. **Continuous Improvement**: During any code review iteration, continuously evolve this instructions file to incorporate new guidance and reaffirm established patterns based on reviewer feedback. **When updating this file, also update `CLAUDE.md` to maintain synchronization with the summary overview.**
     - Use `assertCountEqual` to check lists and querysets.
 6. **Imports and Dependencies**: 
+    - **All imports must be at the head of the file** - never place import statements inside functions or methods
     - Never use try/except for imports of required dependencies - imports should be at the head of the file
     - Only use inline imports to avoid circular import issues
 7. **Template Conventions**:
@@ -50,9 +51,10 @@ This is a Python based repository, it provides a Django reusable application tha
 ## Test Writing Best Practices
 
 ### Assertion Guidelines
-- **Always assert positive expected outcomes** - don't settle for "not failing" tests
+- **Always assert positive expected outcomes** - don't settle for "not failing" tests or negative assertions
+- **No ambiguous testing** - all responses must be predictable, assert for exact expected values, not what should not happen
 - **Avoid intermediate variables** - use assertions directly instead of assigning to temporary variables first
-- **Never use `assertIsNotNone()` or `assertNotEqual()`** unless specifically checking for None/inequality
+- **Never use `assertIsNotNone()`, `assertNotEqual()`, or `!= 404`** - assert for the specific expected value instead
 - **Use `assertEqual()` with expected values** - verify exact expected results, not just "anything but X"
 - **Test the actual behavior** - ensure tests validate what the code should do, not just that it doesn't crash
 

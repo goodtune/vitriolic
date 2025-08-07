@@ -66,6 +66,8 @@ INSTALLED_APPS = [
     "django_gravatar",
     "embed_video",
     "django_htmx",
+    "rest_framework",
+    "mcp_server",
     "touchtechnology.common",
     "touchtechnology.admin",
     "touchtechnology.content",
@@ -205,3 +207,14 @@ LOGGING = {
 # Touch Technology settings
 
 TOUCHTECHNOLOGY_SITEMAP_ROOT = "home"
+
+
+# Django MCP Server settings
+
+DJANGO_MCP_GLOBAL_SERVER_CONFIG = {
+    "name": "vitriolic-mcp-server",
+    "instructions": "MCP Server for Tournament Control Competition Management System. Provides access to clubs, competitions, seasons, divisions, stages, teams, matches, and players data.",
+}
+
+# Optional: Configure authentication for MCP endpoints
+# DJANGO_MCP_AUTHENTICATION_CLASSES = ["rest_framework.authentication.SessionAuthentication"]
