@@ -53,7 +53,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        uv sync --group e2e
+        uv sync --locked --all-groups --all-extras
 
     - name: Install Playwright browsers
       run: |
