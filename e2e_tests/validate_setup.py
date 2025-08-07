@@ -24,7 +24,7 @@ def check_docker():
     except subprocess.CalledProcessError as e:
         print(f"✗ Docker command failed: {e}")
         if e.stderr:
-            print(f"  Error output: {e.stderr.decode().strip()}")
+            print(f"  Error output: {e.stderr.strip()}")
         return False
 
 def check_uv():
@@ -41,7 +41,7 @@ def check_uv():
     except subprocess.CalledProcessError as e:
         print(f"✗ uv command failed: {e}")
         if e.stderr:
-            print(f"  Error output: {e.stderr.decode().strip()}")
+            print(f"  Error output: {e.stderr.strip()}")
         return False
 
 def check_dependencies():
@@ -118,7 +118,7 @@ def check_services():
     except subprocess.CalledProcessError as e:
         print(f"✗ Failed to start services: {e}")
         if e.stderr:
-            error_msg = e.stderr.decode().strip()
+            error_msg = e.stderr.strip()
             print(f"  Error details: {error_msg}")
             if "port is already allocated" in error_msg.lower():
                 print("  Cause: Ports may be in use by other services")
@@ -150,7 +150,7 @@ def test_database_connection():
     except subprocess.CalledProcessError as e:
         print(f"✗ Database connection failed (exit code {e.returncode})")
         if e.stderr:
-            error_msg = e.stderr.decode().strip()
+            error_msg = e.stderr.strip()
             print(f"  Error details: {error_msg}")
             
             # Provide specific troubleshooting based on common errors
@@ -264,7 +264,7 @@ def cleanup():
         except subprocess.CalledProcessError as e:
             print(f"✗ Cleanup failed: {e}")
             if e.stderr:
-                print(f"  Error details: {e.stderr.decode().strip()}")
+                print(f"  Error details: {e.stderr.strip()}")
             print("  Note: Manual cleanup may be required")
         except Exception as e:
             print(f"✗ Unexpected cleanup error: {e}")
