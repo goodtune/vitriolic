@@ -39,8 +39,14 @@ def check_dependencies():
         print("✗ Playwright not installed - run 'uv sync --group e2e'")
         return False
 
-def start_services():
-    """Start Docker services."""
+def check_services():
+    """Check if services are available (either via Docker Compose or CI services)."""
+    # In CI, services are already running via GitHub Actions services
+    if os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'):
+        print("✓ Services are provided by CI environment")
+        return True
+    
+    # For local development, start Docker Compose services
     try:
         # Start services
         subprocess.run([
@@ -89,25 +95,38 @@ def test_database_connection():
 def test_redis_connection():
     """Test Redis connection."""
     try:
-        subprocess.run([
-            "docker", "exec", "-i", "e2e_tests-redis-1", 
-            "redis-cli", "ping"
-        ], check=True, capture_output=True)
-        print("✓ Redis connection works")
-        return True
+        # In CI, use redis-cli directly on the service
+        if os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'):
+            subprocess.run([
+                "redis-cli", "-h", "localhost", "-p", "6379", "ping"
+            ], check=True, capture_output=True)
+            print("✓ Redis connection works")
+            return True
+        else:
+            # For local Docker containers
+            subprocess.run([
+                "docker", "exec", "-i", "e2e_tests-redis-1", 
+                "redis-cli", "ping"
+            ], check=True, capture_output=True)
+            print("✓ Redis connection works")
+            return True
     except subprocess.CalledProcessError:
         print("✗ Redis connection failed")
         return False
 
 def cleanup():
     """Cleanup services."""
-    try:
-        subprocess.run([
-            "docker", "compose", "-f", "e2e_tests/docker-compose.yml", "down"
-        ], check=True, capture_output=True)
-        print("✓ Services cleaned up")
-    except subprocess.CalledProcessError:
-        print("✗ Cleanup failed")
+    # Only cleanup if we started services locally (not in CI)
+    if not (os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS')):
+        try:
+            subprocess.run([
+                "docker", "compose", "-f", "e2e_tests/docker-compose.yml", "down"
+            ], check=True, capture_output=True)
+            print("✓ Services cleaned up")
+        except subprocess.CalledProcessError:
+            print("✗ Cleanup failed")
+    else:
+        print("✓ Services managed by CI environment")
 
 def main():
     """Run validation checks."""
@@ -118,7 +137,7 @@ def main():
         check_docker,
         check_uv, 
         check_dependencies,
-        start_services,
+        check_services,
         test_database_connection,
         test_redis_connection,
     ]
