@@ -65,7 +65,7 @@ jobs:
 
     - name: Validate E2E environment
       run: |
-        python e2e_tests/validate_setup.py
+        uv run --script e2e_tests/validate_setup.py
 
     - name: Run E2E tests
       run: |

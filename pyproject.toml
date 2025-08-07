@@ -42,6 +42,7 @@ e2e = [
     "pytest-django",
     "redis",
     "celery",
+    "requests",
 ]
 
 [project.optional-dependencies]
