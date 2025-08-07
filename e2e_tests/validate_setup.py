@@ -6,6 +6,7 @@ import subprocess
 import time
 import requests
 import redis
+import importlib.util
 from pathlib import Path
 
 def check_docker():
@@ -47,23 +48,32 @@ def check_uv():
 def check_dependencies():
     """Check if E2E dependencies are installed."""
     try:
-        # Check Playwright specifically
-        result = subprocess.run(["uv", "run", "python", "-c", "import playwright; print(playwright.__version__)"], 
-                              check=True, capture_output=True, text=True)
-        print("✓ Playwright is installed")
-        print(f"  Version: {result.stdout.strip()}")
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"✗ Playwright not installed: {e}")
-        if e.stderr:
-            error_msg = e.stderr.strip()
-            print(f"  Error details: {error_msg}")
-            if "ModuleNotFoundError" in error_msg:
-                print("  Solution: Run 'uv sync --group e2e' to install dependencies")
-            elif "No such file or directory" in error_msg:
-                print("  Solution: Make sure you're in the project root and uv is installed")
-        else:
+        # Check Playwright specifically using importlib
+        spec = importlib.util.find_spec("playwright")
+        if spec is None:
+            print("✗ Playwright not installed")
             print("  Solution: Run 'uv sync --group e2e' to install dependencies")
+            return False
+        
+        # Import the module to get version
+        import playwright
+        print("✓ Playwright is installed")
+        print(f"  Version: {playwright.__version__}")
+        return True
+        
+    except ImportError as e:
+        print(f"✗ Playwright import failed: {e}")
+        print("  Solution: Run 'uv sync --group e2e' to install dependencies")
+        return False
+    except AttributeError as e:
+        print(f"✗ Playwright version not accessible: {e}")
+        print("  Note: Playwright is installed but version info unavailable")
+        print("✓ Playwright is installed (version unknown)")
+        return True
+    except Exception as e:
+        print(f"✗ Unexpected error checking Playwright: {e}")
+        print(f"  Error type: {type(e).__name__}")
+        print("  Solution: Run 'uv sync --group e2e' to install dependencies")
         return False
 
 def check_services():
