@@ -35,7 +35,13 @@ test = [
     "factory_boy",
     "freezegun",
     "packaging>=25.0",
+    "playwright",
+    "pytest-django",
+    "pytest-playwright",
+    "pytest",
+    "requests",
     "tblib",
+    "whitenoise>=6.9.0",
 ]
 
 [project.optional-dependencies]

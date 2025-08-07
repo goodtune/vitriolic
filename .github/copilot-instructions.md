@@ -4,12 +4,13 @@ This is a Python based repository, it provides a Django reusable application tha
 
 ### Required Before Each Commit
 
-- Run `isort` and `black` before committing any changes to ensure proper code formatting
+- Run `isort`, `black`, and `ruff check` before committing any changes to ensure proper code formatting and linting
 
 ### Development Flow
 
-- Test: `tox` to run the full test suite
-- Test: `tox -l` to list the available `tox` environments - you can pick one for faster feedback or run them all for thoroughness
+- **Unit Tests**: `tox` to run the full unit test suite across Django/Python versions
+- **E2E Tests**: `tox -e e2e` to run end-to-end browser tests with Playwright
+- **Environment Options**: `tox -l` to list available `tox` environments - pick specific ones for faster feedback or run all for thoroughness
 
 ## Repository Structure
 
@@ -18,8 +19,9 @@ This is a Python based repository, it provides a Django reusable application tha
 - `touchtechnology/content`: content management features
 - `touchtechnology/news`: news articles
 - `tournamentcontrol/competition`: sporting competition management
-- `tests`: test project to validate the reusable applications
-    - each module above has their own set of tests within
+- `tests`: test project and infrastructure to validate the reusable applications
+    - **Unit tests**: Each module above has their own set of tests using Django test framework with `django-test-plus`
+    - **E2E tests**: Located in `tests/e2e/` using Playwright with `pytest-django` for browser automation and admin workflow testing
 
 ## Key Guidelines
 
@@ -29,7 +31,7 @@ This is a Python based repository, it provides a Django reusable application tha
     - Always use `django-test-plus` style tests.
     - Avoid `assertTrue` and `assertFalse` in favor of `assertEqual` and `assertNotEqual`.
 4. Use `tox` for running tests across supported Python versions
-5. **Continuous Improvement**: During any code review iteration, continuously evolve this instructions file to incorporate new guidance and reaffirm established patterns based on reviewer feedback.
+5. **Continuous Improvement**: During any code review iteration, continuously evolve this instructions file to incorporate new guidance and reaffirm established patterns based on reviewer feedback. **When updating this file, also update `CLAUDE.md` to maintain synchronization with the summary overview.**
     - Use `assertCountEqual` to check lists and querysets.
 6. **Imports and Dependencies**: 
     - Never use try/except for imports of required dependencies - imports should be at the head of the file
@@ -88,3 +90,22 @@ This is a Python based repository, it provides a Django reusable application tha
 - **Test insufficient permissions**: Check that users without required permissions get 403 responses
 - **Test authorized access**: Verify superusers and users with correct permissions can access protected views
 - **Use proper test users**: Create `SuperUserFactory` users for admin-level access testing
+
+## E2E Testing Best Practices
+
+### Playwright Test Structure
+- **Location**: All E2E tests in `tests/e2e/` directory
+- **Shared fixtures**: Use `tests/e2e/conftest.py` for common fixtures like `admin_user` and `authenticated_page`
+- **Execution**: Run via `tox -e e2e` which handles browser installation and database setup
+
+### E2E Test Guidelines  
+- **Comprehensive docstrings**: All E2E test methods must have detailed docstrings explaining purpose, prerequisites, expected behavior, and current limitations
+- **Test real workflows**: Focus on complete user journeys through the admin interface and frontend
+- **Performance validation**: Include tests for Visual Scheduler performance with large datasets
+- **Browser automation**: Use Playwright's `Page` fixture for browser interactions and `expect()` for assertions
+
+### E2E Test Patterns
+- **Authentication**: Use `authenticated_page` fixture for tests requiring admin access
+- **Navigation**: Test complete workflows from login through task completion
+- **Error handling**: Verify graceful degradation and user-friendly error messages
+- **Cross-browser**: Tests run in Chromium by default, can be configured for other browsers

@@ -79,6 +79,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.contrib.sites.middleware.CurrentSiteMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -110,6 +111,8 @@ TEMPLATES = [
                 "touchtechnology.common.context_processors.query_string",
                 "touchtechnology.common.context_processors.site",
                 "touchtechnology.common.context_processors.tz",
+                # Static files context processor
+                "django.template.context_processors.static",
             ],
             "loaders": [
                 "django.template.loaders.filesystem.Loader",
