@@ -6,38 +6,9 @@ on:
   pull_request:
     branches: [ main ]
 
-env:
-  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vitriolic_e2e_test
-  REDIS_URL: redis://localhost:6379/0
-  DJANGO_SETTINGS_MODULE: e2e_tests.settings
-
 jobs:
   e2e-tests:
     runs-on: ubuntu-latest
-    
-    services:
-      postgres:
-        image: postgres:14
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: vitriolic_e2e_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-      
-      redis:
-        image: redis:7
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
 
     steps:
     - name: Checkout code
@@ -55,21 +26,13 @@ jobs:
       run: |
         uv sync --all-groups --all-extras
 
-    - name: Install Playwright browsers
+    - name: Install tox
       run: |
-        uv run playwright install chromium
+        uv tool install tox
 
-    - name: Wait for services
+    - name: Run E2E tests via tox
       run: |
-        sleep 10
-
-    - name: Validate E2E environment
-      run: |
-        uv run --script e2e_tests/validate_setup.py
-
-    - name: Run E2E tests
-      run: |
-        uv run pytest e2e_tests/ -v --headed=false
+        uv tool run tox -e e2e
 
     - name: Upload test results
       uses: actions/upload-artifact@v4
@@ -77,12 +40,12 @@ jobs:
       with:
         name: e2e-test-results
         path: |
-          e2e_tests/test-results/
-          e2e_tests/playwright-report/
+          .coverage
+          htmlcov/
 
-    - name: Upload screenshots
+    - name: Upload screenshots on failure
       uses: actions/upload-artifact@v4
       if: failure()
       with:
         name: e2e-screenshots
-        path: e2e_tests/screenshots/
+        path: test-results/
