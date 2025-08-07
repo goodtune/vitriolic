@@ -53,6 +53,26 @@ Run MCP integration tests:
 Verify existing API compatibility:
     uvx tox -e dj52-py312 -- tournamentcontrol.competition.tests.test_rest_api_v1
 
+Future Enhancements (TODO)
+--------------------------
+TODO (Medium Priority): Add custom error handling in MCP query tools
+  - Implement try/catch blocks in ModelQueryToolset subclasses
+  - Provide meaningful error responses for invalid queries
+  - Handle Django ORM exceptions gracefully
+  - Add validation for query parameters and field lookups
+
+TODO (Low Priority): Consider rate limiting for MCP endpoints
+  - Evaluate need for rate limiting on /mcp/ endpoints
+  - Consider Django-ratelimit or similar middleware
+  - Monitor usage patterns before implementation
+  - Balance security with legitimate AI agent usage
+
+TODO (Low Priority): Add query optimization for better performance
+  - Implement select_related() for foreign key relationships
+  - Add prefetch_related() for reverse foreign keys and many-to-many
+  - Profile common query patterns and optimize accordingly
+  - Consider database connection pooling for high-volume usage
+
 Links
 -----
 - Django MCP Server: https://github.com/omarbenhamid/django-mcp-server
