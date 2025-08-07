@@ -34,16 +34,13 @@ test = [
     "factory_boy",
     "freezegun",
     "packaging>=25.0",
-    "tblib",
-]
-e2e = [
     "playwright",
-    "pytest-playwright",
     "pytest-django",
-    "redis",
-    "celery",
+    "pytest-playwright",
+    "pytest",
     "requests",
-    "django-environ",
+    "tblib",
+    "whitenoise>=6.9.0",
 ]
 
 [project.optional-dependencies]
