@@ -5,6 +5,7 @@ import sys
 import subprocess
 import time
 import requests
+import redis
 from pathlib import Path
 
 def check_docker():
@@ -93,25 +94,16 @@ def test_database_connection():
         return False
 
 def test_redis_connection():
-    """Test Redis connection."""
+    """Test Redis connection using Python redis client."""
     try:
-        # In CI, use redis-cli directly on the service
-        if os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'):
-            subprocess.run([
-                "redis-cli", "-h", "localhost", "-p", "6379", "ping"
-            ], check=True, capture_output=True)
-            print("✓ Redis connection works")
-            return True
-        else:
-            # For local Docker containers
-            subprocess.run([
-                "docker", "exec", "-i", "e2e_tests-redis-1", 
-                "redis-cli", "ping"
-            ], check=True, capture_output=True)
-            print("✓ Redis connection works")
-            return True
-    except subprocess.CalledProcessError:
-        print("✗ Redis connection failed")
+        # Connect to Redis (works both in CI and locally)
+        redis_client = redis.Redis(host='localhost', port=6379, db=0, socket_timeout=5)
+        # Test connection with a ping
+        redis_client.ping()
+        print("✓ Redis connection works")
+        return True
+    except (redis.RedisError, ConnectionError, OSError) as e:
+        print(f"✗ Redis connection failed: {e}")
         return False
 
 def cleanup():
