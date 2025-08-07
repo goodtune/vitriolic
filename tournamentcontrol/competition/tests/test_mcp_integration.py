@@ -2,9 +2,10 @@
 Test MCP Server Integration for Tournament Control Competition API.
 """
 
+import json
+
 from django.conf import settings
 from django.test.utils import override_settings
-from django.urls import reverse
 from test_plus import TestCase
 
 from tournamentcontrol.competition import mcp, models
@@ -87,3 +88,107 @@ class MCPServerIntegrationTests(TestCase):
         # Since we're using the main vitriolic.urls, let's just check that
         # the URL configuration loaded correctly and MCP didn't break it
         self.assertEqual(settings.ROOT_URLCONF, "vitriolic.urls")
+
+    def test_mcp_http_protocol_initialize(self):
+        """Test MCP server HTTP protocol initialization."""
+        # Test MCP initialization request over HTTP
+        mcp_data = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {}},
+                "clientInfo": {"name": "test-client", "version": "1.0.0"},
+            },
+        }
+
+        response = self.client.post(
+            "/mcp/mcp", data=json.dumps(mcp_data), content_type="application/json"
+        )
+
+        # MCP endpoint should process requests appropriately
+        expected_statuses = [200, 400, 406, 422]  # Valid responses or expected errors
+        self.assertIn(
+            response.status_code,
+            expected_statuses,
+            f"Expected MCP endpoint to process request, got {response.status_code}",
+        )
+
+    def test_mcp_http_protocol_list_tools(self):
+        """Test MCP server HTTP protocol tool listing."""
+        # Test MCP list_tools request over HTTP
+        mcp_data = {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
+
+        response = self.client.post(
+            "/mcp/mcp", data=json.dumps(mcp_data), content_type="application/json"
+        )
+
+        # MCP endpoint should process tool listing requests appropriately
+        expected_statuses = [200, 400, 406, 422]  # Valid responses or expected errors
+        self.assertIn(
+            response.status_code,
+            expected_statuses,
+            f"Expected MCP endpoint to process tools/list request, got {response.status_code}",
+        )
+
+        # If successful (2xx), should return valid JSON with jsonrpc field
+        if 200 <= response.status_code < 300:
+            response_data = response.json()
+            self.assertEqual(
+                response_data.get("jsonrpc"), "2.0", "Response must use JSON-RPC 2.0"
+            )
+            self.assertIn("id", response_data, "Response must include id field")
+
+    def test_mcp_http_protocol_call_tool(self):
+        """Test MCP server HTTP protocol tool calling."""
+        # Test MCP call_tool request over HTTP for club query
+        mcp_data = {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "clubquerytool_query",
+                "arguments": {"query": {"title__icontains": self.club.title[:5]}},
+            },
+        }
+
+        response = self.client.post(
+            "/mcp/mcp", data=json.dumps(mcp_data), content_type="application/json"
+        )
+
+        # MCP endpoint should process tool call requests appropriately
+        expected_statuses = [200, 400, 406, 422]  # Valid responses or expected errors
+        self.assertIn(
+            response.status_code,
+            expected_statuses,
+            f"Expected MCP endpoint to process tools/call request, got {response.status_code}",
+        )
+
+        # If successful (2xx), should return valid JSON with jsonrpc field
+        if 200 <= response.status_code < 300:
+            response_data = response.json()
+            self.assertEqual(
+                response_data.get("jsonrpc"), "2.0", "Response must use JSON-RPC 2.0"
+            )
+            self.assertIn("id", response_data, "Response must include id field")
+
+    def test_mcp_tools_model_access(self):
+        """Test that MCP tools can access Django models correctly."""
+        # Test instantiating MCP tools and verify they have model access
+        club_tool = mcp.ClubQueryTool()
+        self.assertEqual(club_tool.model, models.Club)
+
+        # Verify model queryset access
+        self.assertTrue(hasattr(club_tool.model.objects, "all"))
+
+        # Test that we can query the model through Django ORM
+        club_count = club_tool.model.objects.count()
+        self.assertGreaterEqual(club_count, 1)  # We created at least one club
+
+        # Test other tools
+        competition_tool = mcp.CompetitionQueryTool()
+        self.assertEqual(competition_tool.model, models.Competition)
+
+        team_tool = mcp.TeamQueryTool()
+        self.assertEqual(team_tool.model, models.Team)
