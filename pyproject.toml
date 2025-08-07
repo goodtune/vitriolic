@@ -43,6 +43,7 @@ e2e = [
     "redis",
     "celery",
     "requests",
+    "django-environ",
 ]
 
 [project.optional-dependencies]
