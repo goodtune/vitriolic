@@ -1,93 +1,30 @@
 """Pytest configuration and fixtures for E2E tests."""
 import os
-import subprocess
-import time
-from pathlib import Path
-
 import pytest
-from playwright.sync_api import Playwright
 
 
-@pytest.fixture(scope="session")
-def django_db_setup(django_db_setup):
-    """Override Django DB setup to use test database with PostgreSQL."""
-    pass
-
-
-@pytest.fixture(scope="session")
-def test_environment():
-    """Start the test environment with Redis, PostgreSQL, and Celery."""
-    # Start docker compose services
-    docker_compose_path = Path(__file__).parent / "docker-compose.yml"
+# Configure Django settings for pytest
+def pytest_configure():
+    """Configure Django settings for pytest-django."""
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'e2e_tests.settings')
     
-    # Start services
-    subprocess.run(
-        ["docker", "compose", "-f", str(docker_compose_path), "up", "-d"],
-        check=True,
-        capture_output=True
-    )
-    
-    # Wait for services to be ready
-    time.sleep(10)
-    
-    # Start Celery worker in the background
-    celery_process = subprocess.Popen(
-        ["uv", "run", "celery", "-A", "tests.vitriolic.celery", "worker", "--loglevel=info"],
-        cwd=Path(__file__).parent.parent / "tests",
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
-    )
-    
-    yield
-    
-    # Cleanup
-    celery_process.terminate()
-    celery_process.wait(timeout=10)
-    
-    subprocess.run(
-        ["docker", "compose", "-f", str(docker_compose_path), "down"],
-        capture_output=True
-    )
-
-
-@pytest.fixture(scope="session")
-def live_server_url(test_environment):
-    """Start Django development server for E2E tests."""
-    import threading
-    import socket
     import django
-    from django.core.management import execute_from_command_line
-    from django.test.utils import setup_test_environment, teardown_test_environment
+    from django.conf import settings
     
-    # Setup Django
-    os.environ['DJANGO_SETTINGS_MODULE'] = 'e2e_tests.settings'
+    # Override test database settings to use PostgreSQL provided by tox-docker
+    settings.DATABASES['default'].update({
+        'HOST': 'localhost',
+        'PORT': '5432',
+        'USER': 'vitriolic',
+        'PASSWORD': 'vitriolic',
+    })
+    
+    # Override Redis settings to use Redis provided by tox-docker  
+    settings.CACHES['default'].update({
+        'LOCATION': 'redis://localhost:6379/0',
+    })
+    
     django.setup()
-    
-    # Setup test environment
-    setup_test_environment()
-    
-    # Find free port
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('', 0))
-        port = s.getsockname()[1]
-    
-    # Start Django server in thread
-    server_url = f"http://localhost:{port}"
-    
-    def run_server():
-        execute_from_command_line([
-            'manage.py', 'runserver', f'localhost:{port}', '--noreload'
-        ])
-    
-    server_thread = threading.Thread(target=run_server, daemon=True)
-    server_thread.start()
-    
-    # Wait for server to start
-    time.sleep(5)
-    
-    yield server_url
-    
-    teardown_test_environment()
 
 
 @pytest.fixture(scope="session")
@@ -110,10 +47,10 @@ def admin_user(django_user_model, db):
 
 
 @pytest.fixture
-def authenticated_page(page, live_server_url, admin_user):
+def authenticated_page(page, live_server, admin_user):
     """Provide a page that's already authenticated as admin."""
     # Login
-    page.goto(f"{live_server_url}/admin/login/")
+    page.goto(f"{live_server.url}/admin/login/")
     page.fill('input[name="username"]', admin_user.username)
     page.fill('input[name="password"]', "testpass123")
     page.click('input[type="submit"]')

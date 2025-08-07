@@ -1,63 +1,69 @@
 # End-to-End Testing with Playwright
 
-This directory contains the end-to-end testing infrastructure using Playwright for the Visual Scheduler and other dynamic web interface components.
+This directory contains the end-to-end testing infrastructure using Playwright for the Visual Scheduler and other dynamic web interface components, integrated with the project's tox infrastructure.
 
 ## Setup
 
 ### Prerequisites
 
 - Python 3.11+
-- Docker and Docker Compose
+- tox package manager
 - uv package manager
 
 ### Installation
 
-1. Install E2E dependencies:
-   ```bash
-   uv sync --group e2e
-   ```
-
-2. Install Playwright browsers:
-   ```bash
-   uv run playwright install chromium
-   ```
+Install tox if not already available:
+```bash
+uv tool install tox
+```
 
 ## Running Tests
 
-### Local Development
+### Local Development (Recommended)
 
-1. **Quick run (recommended):**
+**Single command** - run all E2E tests:
+```bash
+tox -e e2e
+```
+
+**Run specific tests:**
+```bash
+tox -e e2e -- test_admin_flow.py -v
+```
+
+**Run without slow tests:**
+```bash
+tox -e e2e -- -m "not slow"
+```
+
+### Manual Development Setup
+
+For iterative development, you can also run tests without tox:
+
+1. **Setup environment:**
    ```bash
-   chmod +x e2e_tests/run_tests.sh
-   ./e2e_tests/run_tests.sh
+   uv sync --group e2e --all-extras
    ```
 
-2. **Manual setup:**
+2. **Start services (in background):**
    ```bash
-   # Start services
-   docker compose -f e2e_tests/docker-compose.yml up -d
-   
-   # Setup database
+   docker compose up postgres:14-alpine redis:7-alpine -d
+   ```
+
+3. **Run tests:**
+   ```bash
    cd e2e_tests
-   uv run python manage.py migrate --run-syncdb
-   cd ..
-   
-   # Start Celery worker
-   cd tests
-   uv run celery -A vitriolic.celery worker --loglevel=info --detach
-   cd ..
-   
-   # Run tests
-   uv run pytest e2e_tests/ -v
-   
-   # Cleanup
-   docker compose -f e2e_tests/docker-compose.yml down
-   pkill -f "celery.*worker"
+   uv run pytest . -v
+   ```
+
+4. **Cleanup:**
+   ```bash
+   docker compose down
    ```
 
 ### CI/CD
 
-Tests automatically run in GitHub Actions on push/PR to main/develop branches via the `.github/workflows/e2e-tests.yml` workflow.
+Tests automatically run in GitHub Actions via tox integration in the project's CI workflow.
 
 ## Test Structure
 
@@ -77,21 +83,39 @@ Tests automatically run in GitHub Actions on push/PR to main/develop branches vi
 
 ## Configuration
 
-### Test Environment
+### Test Environment (Managed by tox-docker)
 - **PostgreSQL**: Database for test data (port 5432)
 - **Redis**: Cache and Celery broker (port 6379) 
-- **Celery**: Background task processing
-- **Django**: Test server with E2E-specific settings
+- **Django**: Test server using existing project settings via `tests.vitriolic.settings`
 
 ### Browser Configuration
-- **Default browser**: Chromium (headless in CI, headed locally)
+- **Default browser**: Chromium (headless in CI, can be headed locally)
 - **Viewport**: 1920x1080
 - **HTTPS**: Ignores SSL errors for local testing
 
 ### Database
-- **Name**: `vitriolic_e2e`
-- **User/Password**: `vitriolic/vitriolic`
+- **Name**: Auto-generated test database
+- **User/Password**: `vitriolic/vitriolic` (via tox-docker)
 - **Host**: `localhost:5432`
+
+## Benefits of Tox Integration
+
+### For Local Development:
+- **Single command**: `tox -e e2e` handles everything
+- **No manual setup**: No Docker Compose or service management  
+- **Isolated environment**: No dependency conflicts
+- **Automatic cleanup**: No leftover containers or processes
+
+### For CI/CD:
+- **Simplified workflow**: No custom service configuration
+- **Better reliability**: Standard tox patterns, proven infrastructure
+- **Easier maintenance**: Follows project conventions
+- **Consistent results**: Same environment as local development
+
+### For the Codebase:
+- **Django best practices**: Uses pytest-django fixtures properly
+- **Better maintainability**: Standard pytest-django patterns
+- **Scalable**: Easy to add more test environments
 
 ## Extending Tests
 
@@ -104,9 +128,9 @@ Tests automatically run in GitHub Actions on push/PR to main/develop branches vi
 
 ### Example Test Structure
 ```python
-def test_my_feature(authenticated_page: Page, live_server_url: str):
+def test_my_feature(authenticated_page: Page, live_server):
     page = authenticated_page
-    page.goto(f"{live_server_url}/my-feature/")
+    page.goto(f"{live_server.url}/my-feature/")
     
     # Test interactions
     page.click("button")
@@ -132,24 +156,23 @@ For performance-critical tests like the Visual Scheduler:
 
 ### Common Issues
 
-1. **Port conflicts**: Ensure ports 5432 and 6379 are available
-2. **Docker issues**: Check Docker daemon is running and has permissions
-3. **Browser issues**: Reinstall browsers with `uv run playwright install`
-4. **Database issues**: Check PostgreSQL service health and connection
+1. **Tox environment issues**: Run `tox -r -e e2e` to recreate environment
+2. **Browser issues**: Tox automatically installs Playwright browsers
+3. **Database issues**: tox-docker handles PostgreSQL service management
+4. **Port conflicts**: tox-docker uses available ports automatically
 
 ### Debug Mode
 
 Run tests with additional debugging:
 ```bash
-uv run pytest e2e_tests/ -v --tb=long --headed --slowmo=1000
+tox -e e2e -- --headed --slowmo=1000 -v --tb=long
 ```
 
 ### Logs
 
-- **Django logs**: Configure in `e2e_tests/settings.py`
-- **Celery logs**: Check worker output
-- **Database logs**: Docker compose logs
-- **Playwright traces**: Enable in CI artifacts
+- **Django logs**: Configured via existing project settings
+- **Database logs**: Check tox output for docker logs
+- **Playwright traces**: Available in CI artifacts when tests fail
 
 ## Performance Considerations
 
