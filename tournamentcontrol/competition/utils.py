@@ -98,7 +98,7 @@ def team_title_case_clause(team):
                 ),
                 When(
                     ~Q(**{f"{team}_undecided__formula": ""}),
-                    then=StageGroupPosition(F(f"{team}_undecided__formula")),
+                    then=StageGroupPosition(Cast(f"{team}_undecided__formula", output_field=CharField())),
                 ),
                 default=Value(None, output_field=CharField()),
             ),
