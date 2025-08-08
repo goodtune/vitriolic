@@ -11,8 +11,10 @@ from tournamentcontrol.competition.signals.matches import (  # noqa
     notify_match_forfeit_email,
 )
 from tournamentcontrol.competition.signals.places import (  # noqa
+    capture_timezone_before_save,
     set_ground_latlng,
     set_ground_timezone,
+    update_match_datetimes_on_place_timezone_change,
 )
 from tournamentcontrol.competition.signals.teams import delete_team  # noqa
 

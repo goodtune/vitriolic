@@ -1,6 +1,10 @@
 from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
+from tournamentcontrol.competition.forms import (
+    DrawGenerationForm,
+    DrawGenerationFormSet,
+)
 from tournamentcontrol.competition.models import Match
 from tournamentcontrol.competition.tests import factories
 
@@ -205,3 +209,50 @@ class DrawGenerationMatchFormSetTest(TestCase):
                 ("Winner Semi Final 1", "Winner Semi Final 2"),
             ],
         )
+
+
+class DrawGenerationFormTest(TestCase):
+    """Test cases for DrawGenerationForm to ensure it works with and without initial parameter"""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.stage = factories.StageFactory.create()
+
+    def test_form_creation_without_initial(self):
+        """Test that DrawGenerationForm can be created without initial parameter (empty form scenario)"""
+        # This should not raise TypeError anymore
+        form = DrawGenerationForm()
+        self.assertIsNone(form.instance)
+        # Should have default help text and empty queryset
+        self.assertEqual(
+            form.fields["format"].help_text, "Choose the competition format"
+        )
+        self.assertEqual(
+            form.fields["format"].queryset.count(), 0
+        )  # No teams, so no suitable formats
+
+    def test_form_creation_with_stage_initial(self):
+        """Test that DrawGenerationForm works correctly with a Stage instance"""
+        form = DrawGenerationForm(initial=self.stage)
+        self.assertEqual(form.instance, self.stage)
+        # Should have stage-specific help text
+        self.assertIn("stage", form.fields["format"].help_text.lower())
+
+    def test_formset_empty_form_creation(self):
+        """Test that DrawGenerationFormSet.empty_form can be created (reproduces original bug)"""
+        # This was the failing scenario from the stack trace
+        formset = DrawGenerationFormSet()
+
+        # This should not raise TypeError: DrawGenerationForm.__init__() missing 1 required positional argument: 'initial'
+        empty_form = formset.empty_form
+        self.assertIsNotNone(empty_form)
+        self.assertIsNone(empty_form.instance)
+
+    def test_formset_empty_form_media_access(self):
+        """Test that empty_form.media can be accessed (reproduces the template error)"""
+        formset = DrawGenerationFormSet()
+        empty_form = formset.empty_form
+
+        # This was failing in the template when trying to access {{ formset.empty_form.media }}
+        media = empty_form.media
+        self.assertIsNotNone(media)

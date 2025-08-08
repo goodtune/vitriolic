@@ -1335,9 +1335,13 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
     @cached_property
     def choices(self):
         if self.formula:
-            __, group, __ = stage_group_position(self.stage, self.formula)
-            if group is not None:
-                return group.teams
+            try:
+                __, group, __ = stage_group_position(self.stage, self.formula)
+                if group is not None:
+                    return group.teams
+            except IndexError:
+                # If the formula references an invalid group, fall back to division teams
+                pass
         return self.stage.division.teams
 
     @property
@@ -1345,15 +1349,19 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
         if not self.formula and self.label:
             return self.label
 
-        stage, group, position = stage_group_position(self.stage, self.formula)
+        try:
+            stage, group, position = stage_group_position(self.stage, self.formula)
 
-        c = {
-            "stage": stage,
-            "group": group,
-            "position": position,
-        }
+            c = {
+                "stage": stage,
+                "group": group,
+                "position": position,
+            }
 
-        return stage_group_position_tpl.render(c).strip()
+            return stage_group_position_tpl.render(c).strip()
+        except IndexError:
+            # If the formula references an invalid group, return the formula itself
+            return self.formula
 
     @property
     def matches(self):
@@ -1854,15 +1862,28 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
             template = stage_group_position_tpl
             if group is not None:
                 if stage.pools.count():
-                    context["group"] = stage.pools.all()[int(group) - 1]
+                    try:
+                        context["group"] = stage.pools.all()[int(group) - 1]
+                    except IndexError:
+                        # If there are ANY issues in evaluating a formula, return the formula itself
+                        if plain:
+                            return team_eval
+                        return {"title": team_eval}
                 else:
                     context["group"] = {
-                        "title": mark_safe('<span class="error">ERROR</span>'),
+                        "title": "ERROR",
                     }
                     context.setdefault("errors", []).append("Invalid group.")
-        if plain:
-            return template.render(context).strip()
-        return {"title": template.render(context).strip()}
+
+        try:
+            if plain:
+                return template.render(context).strip()
+            return {"title": template.render(context).strip()}
+        except Exception:
+            # If there are ANY issues in evaluating a formula, return the formula itself
+            if plain:
+                return team_eval
+            return {"title": team_eval}
 
     def get_home_team(self):
         return self._get_team("home_team")

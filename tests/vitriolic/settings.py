@@ -48,6 +48,9 @@ INSTALLED_APPS = [
     "bootstrap3",
     "django_gravatar",
     "embed_video",
+    "django_htmx",
+    "rest_framework",
+    "mcp_server",
     "touchtechnology.common",
     "touchtechnology.admin",
     "touchtechnology.content",
@@ -59,6 +62,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.contrib.sites.middleware.CurrentSiteMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -90,6 +94,8 @@ TEMPLATES = [
                 "touchtechnology.common.context_processors.query_string",
                 "touchtechnology.common.context_processors.site",
                 "touchtechnology.common.context_processors.tz",
+                # Static files context processor
+                "django.template.context_processors.static",
             ],
             "loaders": [
                 "django.template.loaders.filesystem.Loader",
@@ -184,3 +190,14 @@ LOGGING = {
 # Touch Technology settings
 
 TOUCHTECHNOLOGY_SITEMAP_ROOT = "home"
+
+
+# Django MCP Server settings
+
+DJANGO_MCP_GLOBAL_SERVER_CONFIG = {
+    "name": "vitriolic-mcp-server",
+    "instructions": "MCP Server for Tournament Control Competition Management System. Provides access to clubs, competitions, seasons, divisions, stages, teams, matches, and players data.",
+}
+
+# Optional: Configure authentication for MCP endpoints
+# DJANGO_MCP_AUTHENTICATION_CLASSES = ["rest_framework.authentication.SessionAuthentication"]

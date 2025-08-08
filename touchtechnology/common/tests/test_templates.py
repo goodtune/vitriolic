@@ -213,3 +213,38 @@ class ContextTest(TestCase):
     def test_tz(self):
         self.get("context:tz")
         self.assertResponseContains("UTC", html=False)
+
+
+class VersionTest(TestCase):
+    def test_version_python(self):
+        """Test version tag for Python returns expected structure."""
+        template = Template("{% load common %}{% version 'python' %}")
+        output = template.render(Context()).strip()
+        # Should contain a version div with Python info
+        self.assertIn('class="version"', output)
+        self.assertIn('id="pkg_Python"', output)  # name is "Python" for python package
+        self.assertIn("Python", output)
+        # Should contain a version number (e.g., 3.12.x)
+        self.assertRegex(output, r"\d+\.\d+")
+
+    def test_version_django(self):
+        """Test version tag for Django package."""
+        template = Template("{% load common %}{% version 'django' %}")
+        output = template.render(Context()).strip()
+        # Should contain a version div with Django info
+        self.assertIn('class="version"', output)
+        self.assertIn(
+            'id="pkg_django"', output
+        )  # name is lowercase for regular packages
+        self.assertIn("Django", output)
+        # Should contain a version number
+        self.assertRegex(output, r"\d+\.\d+")
+
+    def test_version_nonexistent_package(self):
+        """Test version tag for non-existent package."""
+        template = Template("{% load common %}{% version 'nonexistentpackage123' %}")
+        output = template.render(Context()).strip()
+        # Should contain unversioned div when package not found
+        self.assertIn('class="version"', output)
+        self.assertIn('id="unknown"', output)
+        self.assertIn("Unversioned", output)

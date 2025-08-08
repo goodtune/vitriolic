@@ -74,7 +74,7 @@ class SeasonFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Season
 
-    title = factory.Sequence(lambda n: str(range(2015, 1900, -1)[n]))
+    title = factory.Sequence(lambda n: str(2015 - (n % 115)))
     timezone = factory.Faker("timezone")
 
     competition = factory.SubFactory(CompetitionFactory)
@@ -210,6 +210,13 @@ class UserFactory(DjangoModelFactory):
 
     password = factory.LazyFunction(lambda: make_password("password"))
     is_active = True
+
+
+class SuperUserFactory(UserFactory):
+    """Factory for creating superuser accounts with staff and superuser privileges."""
+
+    is_staff = True
+    is_superuser = True
 
 
 class PersonFactory(DjangoModelFactory):

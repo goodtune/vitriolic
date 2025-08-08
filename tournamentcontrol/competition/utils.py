@@ -6,7 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 from itertools import zip_longest
 from operator import and_, or_
-from typing import Union
+from typing import Iterable, Optional, Union
 from zoneinfo import ZoneInfo
 
 from django.apps import apps
@@ -318,7 +318,20 @@ def round_robin(teams, rounds=None):
     return schedule
 
 
-def round_robin_format(teams, rounds=None):
+def round_robin_format(
+    teams: Union[int, Iterable], rounds: Optional[int] = None
+) -> str:
+    """
+    Generate a formatted string for a round-robin tournament.
+
+    :param teams: either an integer (number of teams) or an iterable of teams
+    :param rounds: number of rounds to generate (optional)
+    :return: formatted string showing the tournament schedule
+    """
+    # If teams is an integer, convert it to a range starting from 1
+    if isinstance(teams, int):
+        teams = range(1, teams + 1)
+
     i, s = 1, ""
     for round in round_robin(teams, rounds):
         s += "ROUND\n"
@@ -468,11 +481,21 @@ def stage_group_position(stage, formula):
     if g is None:
         logger.debug("No group specified in formula %r", formula)
     else:
-        try:
-            g = s.pools.all()[int(g) - 1]
-        except IndexError:
-            logger.exception("Invalid group %r for stage %r", g, stage)
-            raise
+        pools = s.pools.all().order_by("order")
+        if pools.count() >= int(g):
+            try:
+                g = pools[int(g) - 1]
+            except IndexError:
+                logger.exception("Invalid group %r for stage %r", g, stage)
+                raise
+        else:
+            pool_count = pools.count()
+            logger.exception(
+                "Invalid group %r for stage %r (stage has %d pools)", g, s, pool_count
+            )
+            raise IndexError(
+                f"Invalid group {g} for stage {s} (stage has {pool_count} pools)"
+            )
     logger.debug("group=%r", g)
 
     p = int(p)

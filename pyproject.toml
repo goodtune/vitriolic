@@ -12,6 +12,7 @@ requires-python = ">=3.11"
 dependencies = [
     "django-froala-editor>=2.9",
     "django-guardian>=2.4",
+    "django-mcp-server>=0.5.5",
     "django-modelforms",
     "django-mptt",
     "django-timezone-field",
@@ -19,20 +20,38 @@ dependencies = [
     "first",
     "namedentities",
     "psycopg",
-    "setuptools", # pkg_resources in touchtechnology.common.templatetags.common
 ]
 dynamic = ["version"]
 
 [dependency-groups]
-dj42 = ["Django~=4.2.0"]
-dj52 = ["Django~=5.2.0"]
-test = ["coverage", "django-environ", "django-test-plus", "factory_boy", "freezegun", "tblib"]
+dev = [
+    "black>=25.1.0",
+    "isort>=6.0.1",
+]
+test = [
+    "coverage",
+    "django-environ",
+    "django-test-plus",
+    "factory_boy",
+    "freezegun",
+    "mcp",
+    "packaging>=25.0",
+    "playwright",
+    "pytest-asyncio",
+    "pytest-django",
+    "pytest-playwright",
+    "pytest",
+    "requests",
+    "tblib",
+    "whitenoise>=6.9.0",
+]
 
 [project.optional-dependencies]
 admin = ["django-bootstrap3", "django-gravatar2"]
 common = []
 content = []
 news = [
+    "babel",
     "django-imagekit",
     "python-dateutil",
     "python-magic",
@@ -42,6 +61,7 @@ competition = [
     "cloudinary",
     "django-embed-video",
     "django-formtools",
+    "django-htmx>=1.23.2",
     "django-mathfilters",
     "djangorestframework>3.11",
     "drf-nested-routers",
@@ -49,6 +69,7 @@ competition = [
     "google-auth-oauthlib",
     "icalendar",
     "internationaltouch-oauth2client",
+    "markdown",
     "pyparsing",
     "python-dateutil",
 ]

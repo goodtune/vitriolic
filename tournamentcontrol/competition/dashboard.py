@@ -42,6 +42,7 @@ def matches_require_basic_results(now=None, matches=None):
         home_team_score=None,
         away_team_score=None,
         is_washout=False,
+        include_in_ladder=True,
     ).select_related(
         "stage__division__season__competition",
         "play_at",

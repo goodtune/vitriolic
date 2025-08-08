@@ -792,6 +792,11 @@ class BaseMatchFormMixin(BootstrapFormControlMixin):
     def __init__(self, timeslots=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # Skip field customization if instance doesn't have a stage
+        # (e.g., for empty forms)
+        if not self.instance or self.instance.stage is None:
+            return
+
         # set the queryset of the `home_team` and `away_team` fields
         team_ids = self.instance.stage.division.teams.values_list("id", flat=True)
         undecided_team_ids = self.instance.stage.undecided_teams.values_list(
@@ -895,6 +900,11 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # Skip field customization if instance doesn't have a stage
+        # (e.g., for empty forms)
+        if not self.instance or not self.instance.stage:
+            return
 
         # restrict the list of referees to those registered this season
         if "referees" in self.fields:
@@ -1626,7 +1636,7 @@ class DrawGenerationForm(BootstrapFormControlMixin, forms.Form):
     rounds = forms.IntegerField(required=False, min_value=1)
     offset = forms.IntegerField(required=False)
 
-    def __init__(self, initial, *args, **kwargs):
+    def __init__(self, initial=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.instance = initial
 
@@ -1655,13 +1665,21 @@ class DrawGenerationForm(BootstrapFormControlMixin, forms.Form):
             Q(teams__in=(teams, teams - 1)) if teams else Q()
         )
         self.fields["format"].queryset = suitable_draw_formats
-        self.fields["format"].help_text = _(
-            "Choose the competition format for this %s"
-        ) % (self.instance._meta.verbose_name.lower(),)
 
-        # determine the best logical start date
-        start_date = self.instance.division.season.start_date or datetime.date.today()
-        self.fields["start_date"].initial = start_date
+        if self.instance:
+            self.fields["format"].help_text = _(
+                "Choose the competition format for this %s"
+            ) % (self.instance._meta.verbose_name.lower(),)
+            # determine the best logical start date
+            start_date = (
+                self.instance.division.season.start_date or datetime.date.today()
+            )
+            self.fields["start_date"].initial = start_date
+        else:
+            # Default help text when no instance is provided (e.g., for empty forms)
+            self.fields["format"].help_text = _("Choose the competition format")
+            # Use today's date as default when no instance is available
+            self.fields["start_date"].initial = datetime.date.today()
 
     @property
     def generator(self):

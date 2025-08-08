@@ -1,22 +1,34 @@
 import unittest
 from datetime import date, datetime, time
+from unittest import mock
 from zoneinfo import ZoneInfo
 
+from dateutil.rrule import DAILY
 from django import VERSION
+from django.contrib import messages
 from django.template import Context, Template
 from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 
+from touchtechnology.admin.mixins import AdminUrlLookup
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.models import (
     Division,
     Ground,
     Match,
+    Stage,
     StageGroup,
     Team,
 )
 from tournamentcontrol.competition.tests import factories
-from tournamentcontrol.competition.utils import round_robin
+from tournamentcontrol.competition.utils import round_robin, round_robin_format
+
+try:
+    from django.contrib.messages.test import MessagesTestMixin
+except ImportError:  # Django < 5.0
+    from tournamentcontrol.competition.tests.test_utils import (
+        MessagesTestMixin,
+    )
 
 
 class TestCase(BaseTestCase):
@@ -621,9 +633,9 @@ class GoodViewTests(TestCase):
             )
 
 
-class BackendTests(TestCase):
+class BackendTests(MessagesTestMixin, TestCase):
     def setUp(self):
-        super(BackendTests, self).setUp()
+        super().setUp()
         self.login(self.superuser)
 
     def test_add_division(self):
@@ -1160,3 +1172,391 @@ class BackendTests(TestCase):
         }
         self.post(add_ground.url_name, *add_ground.args, data=data)
         self.assertRedirects(self.last_response, venue.urls["edit"])
+
+    def test_delete_division_with_protected_objects(self):
+        """
+        Test that deleting a division with related protected objects shows a user-friendly error.
+        """
+        # Create division with protected related objects
+        division = factories.DivisionFactory.create()
+        stage = factories.StageFactory.create(division=division, title="Test Stage")
+        team = factories.TeamFactory.create(division=division, title="Test Team")
+
+        # Try to delete the division
+        delete_division = division.url_names["delete"]
+        self.post(delete_division.url_name, *delete_division.args)
+
+        # Should redirect back to the division edit page with error message
+        self.assertRedirects(self.last_response, division.urls["edit"])
+
+        # Check that objects still exists
+        self.assertQuerySetEqual(Division.objects.all(), [division])
+        self.assertQuerySetEqual(Stage.objects.all(), [stage])
+        self.assertQuerySetEqual(Team.objects.all(), [team])
+
+        # Check that error message was set
+        if VERSION >= (5, 0):
+            self.assertMessages(
+                self.last_response,
+                [
+                    messages.Message(
+                        level=messages.ERROR,
+                        message=(
+                            f'Cannot delete {division._meta.verbose_name} "{division.title}" '
+                            f"because it is still referenced by: "
+                            f"1 stage: {stage.title}; 1 team: {team.title}. "
+                            "Please delete or move these related objects first."
+                        ),
+                    )
+                ],
+            )
+
+    def test_delete_division_without_protected_objects(self):
+        """
+        Test that deleting a division without related objects works normally.
+        """
+        # Create division without any related objects
+        division = factories.DivisionFactory.create()
+        season = division.season
+
+        # Try to delete the division
+        delete_division = division.url_names["delete"]
+        self.post(delete_division.url_name, *delete_division.args)
+
+        # Should redirect back to season page
+        self.assertRedirects(self.last_response, season.urls["edit"] + "#divisions-tab")
+
+        # Check that division was deleted
+        self.assertQuerySetEqual(Division.objects.all(), [])
+
+        # Check that success message was displayed
+        if VERSION >= (5, 0):
+            self.assertMessages(
+                self.last_response,
+                [
+                    messages.Message(
+                        level=messages.SUCCESS,
+                        message=f"The {division._meta.verbose_name} has been deleted.",
+                    )
+                ],
+            )
+
+    def test_delete_stage_with_protected_objects(self):
+        """
+        Test that deleting a stage with related protected objects (Pools) shows a user-friendly error.
+        This demonstrates the generic ProtectedError handling works for different model types.
+        """
+        # Create stage with protected related objects (Pool)
+        stage = factories.StageFactory.create(title="Test Stage")
+        pool = factories.StageGroupFactory.create(stage=stage, title="Test Pool")
+
+        # Try to delete the stage
+        delete_stage = stage.url_names["delete"]
+        self.post(delete_stage.url_name, *delete_stage.args)
+
+        # Should redirect back to the stage edit page with error message
+        self.assertRedirects(self.last_response, stage.urls["edit"])
+
+        # Check that objects still exists
+        self.assertQuerySetEqual(Stage.objects.all(), [stage])
+        self.assertQuerySetEqual(StageGroup.objects.all(), [pool])
+
+        # Check that error message was set
+        if VERSION >= (5, 0):
+            self.assertMessages(
+                self.last_response,
+                [
+                    messages.Message(
+                        level=messages.ERROR,
+                        message=(
+                            f'Cannot delete {stage._meta.verbose_name} "{stage.title}" because '
+                            f"it is still referenced by: 1 pool: {pool.title}. "
+                            "Please delete or move these related objects first."
+                        ),
+                    )
+                ],
+            )
+
+    def test_draw_generation_wizard_empty_form_bug(self):
+        """
+        Test that the draw generation wizard doesn't crash with TypeError when
+        accessing formset.empty_form.media in the template.
+
+        This reproduces the bug from issue #133 where DrawGenerationForm.__init__()
+        was missing 1 required positional argument: 'initial'
+        """
+        # Create a Stage
+        stage = factories.StageFactory.create(
+            division__season__mode=DAILY,
+            division__games_per_day=1,
+        )
+
+        # Create a batch of four Teams in the Division
+        teams = factories.TeamFactory.create_batch(4, division=stage.division)
+
+        # Establish the expected matches for the teams using a round-robin format
+        matches = round_robin(teams)
+
+        # Create a DrawFormat that will put each team against each other once
+        draw_format = factories.DrawFormatFactory.create(
+            name="Round Robin (4 teams)",
+            text=round_robin_format([1, 2, 3, 4]),
+            teams=4,
+        )
+
+        # Attempt to build the draw using the Wizard
+        build_url = stage.url_names["build"]
+
+        # This should not raise TypeError anymore
+        with self.login(self.superuser):
+            # Step 0: Test that the first step renders without error
+            self.get(build_url.url_name, *build_url.args)
+            self.response_200()
+
+            # Extract the formset from the context and test empty_form works
+            formset = self.get_context("form")
+            self.assertIsNotNone(formset)
+
+            # This should not raise TypeError - the main bug we're testing
+            empty_form = formset.empty_form
+            self.assertIsNotNone(empty_form)
+
+            # Test media property access (this was the original failing case)
+            media = empty_form.media
+            self.assertIsNotNone(media)
+
+            # Prepare step 0 data with a valid DrawFormat selection and date
+            step0_data = {
+                # Wizard management form data
+                "draw_generation_wizard-current_step": "0",
+            }
+
+            # Formset management form data
+            step0_data.update(
+                {
+                    "0-TOTAL_FORMS": "1",
+                    "0-INITIAL_FORMS": "1",
+                    "0-MIN_NUM_FORMS": "0",
+                    "0-MAX_NUM_FORMS": "1000",
+                    # Form 0 data
+                    "0-0-start_date": "2025-07-15",
+                    "0-0-format": draw_format.pk,
+                    "0-0-rounds": "",
+                    "0-0-offset": "",
+                }
+            )
+
+            # Submit step 0 to proceed to step 1
+            self.post(build_url.url_name, *build_url.args, data=step0_data)
+            self.response_200()
+
+            # Step 1: Test the second step
+            formset = self.get_context("form")
+            self.assertIsNotNone(formset)
+
+            # Test that empty_form works on step 1 - this is the main fix
+            empty_form = formset.empty_form
+            self.assertIsNotNone(empty_form)
+
+            # Test that we can access the media property without TypeError
+            media = empty_form.media
+            self.assertIsNotNone(media)
+
+            # Prepare step 1 data
+            step1_data = {
+                "draw_generation_wizard-current_step": "1",
+                "1-TOTAL_FORMS": "6",
+                "1-INITIAL_FORMS": "6",
+                "1-MIN_NUM_FORMS": "0",
+                "1-MAX_NUM_FORMS": "1000",
+                # Form 1 data
+                "1-0-round": "1",
+                "1-0-home_team": matches[0][0][0].pk,
+                "1-0-away_team": matches[0][0][1].pk,
+                "1-0-date": "2025-07-15",
+                # Form 2 data
+                "1-1-round": "1",
+                "1-1-home_team": matches[0][1][0].pk,
+                "1-1-away_team": matches[0][1][1].pk,
+                "1-1-date": "2025-07-15",
+                # Form 3 data
+                "1-2-round": "2",
+                "1-2-home_team": matches[1][0][0].pk,
+                "1-2-away_team": matches[1][0][1].pk,
+                "1-2-date": "2025-07-16",
+                # Form 4 data
+                "1-3-round": "2",
+                "1-3-home_team": matches[1][1][0].pk,
+                "1-3-away_team": matches[1][1][1].pk,
+                "1-3-date": "2025-07-16",
+                # Form 5 data
+                "1-4-round": "3",
+                "1-4-home_team": matches[2][0][0].pk,
+                "1-4-away_team": matches[2][0][1].pk,
+                "1-4-date": "2025-07-17",
+                # Form 6 data
+                "1-5-round": "3",
+                "1-5-home_team": matches[2][1][0].pk,
+                "1-5-away_team": matches[2][1][1].pk,
+                "1-5-date": "2025-07-17",
+            }
+
+            # Submit step 1 to complete the wizard
+            self.post(build_url.url_name, *build_url.args, data=step1_data)
+            self.response_302()
+
+            # If we have successfully moved through the wizard and been
+            # redirected, the following matches would have been created.
+            self.assertCountEqual(
+                Match.objects.values_list(
+                    "home_team__title", "away_team__title", "date", "round"
+                ).order_by("round", "date"),
+                [
+                    (
+                        matches[0][0][0].title,
+                        matches[0][0][1].title,
+                        date(2025, 7, 15),
+                        1,
+                    ),
+                    (
+                        matches[0][1][0].title,
+                        matches[0][1][1].title,
+                        date(2025, 7, 15),
+                        1,
+                    ),
+                    (
+                        matches[1][0][0].title,
+                        matches[1][0][1].title,
+                        date(2025, 7, 16),
+                        2,
+                    ),
+                    (
+                        matches[1][1][0].title,
+                        matches[1][1][1].title,
+                        date(2025, 7, 16),
+                        2,
+                    ),
+                    (
+                        matches[2][0][0].title,
+                        matches[2][0][1].title,
+                        date(2025, 7, 17),
+                        3,
+                    ),
+                    (
+                        matches[2][1][0].title,
+                        matches[2][1][1].title,
+                        date(2025, 7, 17),
+                        3,
+                    ),
+                ],
+            )
+
+    def test_edit_match_without_external_identifier_youtube_api(self):
+        """
+        Test that editing a match with live streaming enabled but without
+        external_identifier doesn't cause TypeError when YouTube API bind() is called.
+
+        This test covers the original bug scenario where:
+        - A match has live_stream=True
+        - But obj.external_identifier is None
+        - The pre_save_callback tried to bind the stream without checking identifiers
+        - This caused TypeError: Missing required parameter "id"
+        """
+        # Create a stage with live streaming enabled but no YouTube credentials
+        # This simulates the guard clause scenario
+        stage = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_client_id=None,
+            division__season__live_stream_client_secret=None,
+        )
+
+        # Create a ground - doesn't need external_identifier for this test
+        ground = factories.GroundFactory.create(venue__season=stage.division.season)
+
+        # Create a match that has live streaming enabled but no external identifier
+        # This is the problematic state that caused the original bug
+        match = factories.MatchFactory.create(
+            stage=stage,
+            play_at=ground,
+            live_stream=True,
+            external_identifier=None,  # This is the key - no external ID
+        )
+
+        # Test editing the match - this should not raise TypeError
+        edit_match_url = match.url_names["edit"]
+        with self.login(self.superuser):
+            # Turn off live streaming to resolve the problematic state
+            data = {
+                "home_team": match.home_team.pk,
+                "away_team": match.away_team.pk,
+                "label": match.label or "Test Match",
+                "round": match.round or 1,
+                "date": match.date.strftime("%Y-%m-%d"),
+                "time": match.time.strftime("%H:%M"),
+                "play_at": ground.pk,
+                "include_in_ladder": "1" if match.include_in_ladder else "0",
+                "live_stream": "0",  # Turn OFF live streaming
+                "thumbnail_url": "",
+            }
+
+            # This should complete successfully without TypeError
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            self.response_302()  # Should redirect successfully
+
+            # Verify the match was updated
+            match.refresh_from_db()
+            self.assertFalse(match.live_stream)
+            self.assertIsNone(match.external_identifier)
+
+    def test_edit_match_youtube_api_basic_guard_clause(self):
+        """
+        Test that the YouTube API guard clauses work correctly.
+
+        This test covers scenarios where YouTube credentials may or may not
+        be configured, focusing on the original bug case where matches with
+        live_stream=True but no external_identifier could cause TypeErrors.
+        """
+        # Test Case 1: No credentials configured (guard clause should prevent API calls)
+        stage_no_creds = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_client_id=None,
+            division__season__live_stream_client_secret=None,
+        )
+
+        ground = factories.GroundFactory.create(
+            venue__season=stage_no_creds.division.season
+        )
+
+        # Create match with problematic state: live_stream=True, external_identifier=None
+        match = factories.MatchFactory.create(
+            stage=stage_no_creds,
+            play_at=ground,
+            live_stream=True,
+            external_identifier=None,
+        )
+
+        # Edit the match - should not cause TypeError due to guard clause
+        edit_match_url = match.url_names["edit"]
+        with self.login(self.superuser):
+            # Turn off live streaming
+            data = {
+                "home_team": match.home_team.pk,
+                "away_team": match.away_team.pk,
+                "label": match.label or "Test Match",
+                "round": match.round or 1,
+                "date": match.date.strftime("%Y-%m-%d"),
+                "time": match.time.strftime("%H:%M"),
+                "play_at": ground.pk,
+                "include_in_ladder": "1" if match.include_in_ladder else "0",
+                "live_stream": "0",
+                "thumbnail_url": "",
+            }
+
+            # This should complete successfully without TypeError
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            self.response_302()  # Should redirect successfully
+
+            # Verify the match was updated
+            match.refresh_from_db()
+            self.assertFalse(match.live_stream)
+            self.assertIsNone(match.external_identifier)

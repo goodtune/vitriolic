@@ -1,3 +1,8 @@
+"""[Developer API] Shared utilities for touchtechnology apps.
+
+This package contains common models and helpers intended for reuse.
+"""
+
 import logging
 
 logger = logging.getLogger(__name__)

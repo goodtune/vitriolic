@@ -106,6 +106,7 @@ class TestGenericViewsSite(Application):
                 path("<int:pk>/delete/", self.delete, name="delete"),
                 path("<int:pk>/perms/", self.perms, name="perms"),
                 path("edit/", self.edit_multiple, name="edit"),
+                path("bulk-create/", self.bulk_create, name="bulk_create"),
             ],
             self.app_name,
         )
@@ -118,6 +119,7 @@ class TestGenericViewsSite(Application):
                 path("<int:pk>/edit/", self.edit_with_perms, name="edit"),
                 path("<int:pk>/delete/", self.delete_with_perms, name="delete"),
                 path("edit/", self.edit_multiple_with_perms, name="edit"),
+                path("bulk-create/", self.bulk_create_with_perms, name="bulk_create"),
             ],
             self.app_name,
         )
@@ -156,6 +158,11 @@ class TestGenericViewsSite(Application):
             request, TestDateTimeField, extra_context=extra_context
         )
 
+    def bulk_create(self, request, **extra_context):
+        return self.generic_bulk_create(
+            request, TestDateTimeField, extra_context=extra_context
+        )
+
     def list_with_perms(self, request, **extra_context):
         return self.generic_list(
             request,
@@ -180,6 +187,14 @@ class TestGenericViewsSite(Application):
 
     def edit_multiple_with_perms(self, request, **extra_context):
         return self.generic_edit_multiple(
+            request,
+            TestDateTimeField,
+            permission_required=True,
+            extra_context=extra_context,
+        )
+
+    def bulk_create_with_perms(self, request, **extra_context):
+        return self.generic_bulk_create(
             request,
             TestDateTimeField,
             permission_required=True,

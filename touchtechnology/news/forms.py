@@ -1,3 +1,5 @@
+"""[Developer API] Forms used by the News admin interface."""
+
 from django import forms
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _
@@ -11,6 +13,8 @@ from touchtechnology.news.models import Article, Category, Translation
 
 
 class ArticleForm(SuperUserSlugMixin, ModelForm):
+    """Form for creating and editing Article instances."""
+
     def __init__(self, *args, **kwargs):
         super(ArticleForm, self).__init__(*args, **kwargs)
         if not self.fields["categories"].queryset.count():
@@ -37,6 +41,8 @@ class ArticleForm(SuperUserSlugMixin, ModelForm):
 
 
 class CategoryForm(SuperUserSlugMixin, ModelForm):
+    """Form for managing article categories."""
+
     class Meta:
         model = Category
         fields = (
@@ -50,6 +56,8 @@ class CategoryForm(SuperUserSlugMixin, ModelForm):
 
 
 class TranslationForm(BootstrapFormControlMixin, ModelForm):
+    """Form for editing translations of an Article."""
+
     class Meta:
         model = Translation
         fields = (
