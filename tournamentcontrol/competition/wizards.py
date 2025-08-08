@@ -14,6 +14,10 @@ from touchtechnology.common.forms.fields import (
     ModelChoiceField,
     ModelMultipleChoiceField,
 )
+from tournamentcontrol.competition.ai import (
+    AICompetitionService,
+    CompetitionPlan,
+)
 from tournamentcontrol.competition.models import Season
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.utils import generate_scorecards
@@ -251,3 +255,235 @@ class DrawGenerationWizard(SessionWizardView):
     def done(self, form_list, **kwargs):
         first(reversed(form_list)).save()
         return HttpResponseRedirect(self.redirect_to)
+
+
+##############################################################################
+# AI Competition Structure Generation
+##############################################################################
+
+
+class AIPromptForm(forms.Form):
+    """
+    Step 1. Input natural language prompt for AI competition generation.
+    """
+
+    prompt = forms.CharField(
+        widget=forms.Textarea(
+            attrs={
+                "rows": 8,
+                "cols": 80,
+                "placeholder": "Example: Build a competition for 19 Mixed Open teams. The competition must be completed in 5 days of play, inclusive of a finals series. Teams may not play any more than 3 matches each day, but should expect no less than 2 matches until the elimination stages. The top teams must play off to determine Gold, Silver and Bronze medalists. All other teams must play off to fill out the finishing order from 1-19.",
+            }
+        ),
+        label=_("Competition Description"),
+        help_text=_(
+            "Describe your competition requirements in natural language. "
+            "Include details like number of teams, days available, matches per day, "
+            "finals structure, etc."
+        ),
+        max_length=2000,
+    )
+
+    include_existing_teams = forms.BooleanField(
+        required=False,
+        initial=False,
+        label=_("Use existing teams from season"),
+        help_text=_(
+            "Check this box to use teams already added to this season. "
+            "Otherwise, placeholder team names will be generated."
+        ),
+    )
+
+
+class AIPlanReviewForm(forms.Form):
+    """
+    Step 2. Review the AI-generated plan before execution.
+    """
+
+    # This will be populated dynamically based on the plan
+    plan_data = forms.CharField(widget=forms.HiddenInput())
+
+    approve_plan = forms.BooleanField(
+        required=True,
+        label=_("I approve this plan"),
+        help_text=_(
+            "Check this box to confirm you want to execute this plan. "
+            "This will create divisions, stages, pools, teams, and matches."
+        ),
+    )
+
+    def __init__(self, plan: CompetitionPlan = None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if plan:
+            import json
+            from dataclasses import asdict
+
+            self.initial["plan_data"] = json.dumps(asdict(plan))
+            self.plan = plan
+        else:
+            self.plan = None
+
+    def get_plan(self) -> CompetitionPlan:
+        """Get the CompetitionPlan from form data."""
+        if hasattr(self, "plan") and self.plan:
+            return self.plan
+
+        if "plan_data" in self.cleaned_data:
+            import json
+
+            from tournamentcontrol.competition.ai import (
+                CompetitionPlan,
+                DivisionStructure,
+                PoolStructure,
+                StageStructure,
+            )
+
+            data = json.loads(self.cleaned_data["plan_data"])
+
+            # Reconstruct the plan from JSON
+            divisions = []
+            for div_data in data.get("divisions", []):
+                stages = []
+                for stage_data in div_data.get("stages", []):
+                    pools = []
+                    for pool_data in stage_data.get("pools", []):
+                        pools.append(PoolStructure(**pool_data))
+
+                    stage_data_copy = stage_data.copy()
+                    stage_data_copy["pools"] = pools
+                    stages.append(StageStructure(**stage_data_copy))
+
+                div_data_copy = div_data.copy()
+                div_data_copy["stages"] = stages
+                divisions.append(DivisionStructure(**div_data_copy))
+
+            plan_data = data.copy()
+            plan_data["divisions"] = divisions
+
+            return CompetitionPlan(**plan_data)
+
+        return None
+
+
+class AICompetitionWizardBase(SessionWizardView):
+    """Base wizard for AI competition structure generation."""
+
+    extra_context = {}
+    template_name = "tournamentcontrol/competition/admin/ai_competition/wizard.html"
+
+    def __init__(self, season, app, **kwargs):
+        super().__init__(**kwargs)
+        self.season = season
+        self.app = app
+        self.ai_service = AICompetitionService()
+
+    def get_form_kwargs(self, step):
+        """Provide additional kwargs for form initialization."""
+        kwargs = super().get_form_kwargs(step)
+
+        if step == "1":  # Plan review step
+            # Get plan from previous step
+            prompt_data = self.get_cleaned_data_for_step("0")
+            if prompt_data:
+                plan = self._generate_plan(prompt_data)
+                kwargs["plan"] = plan
+
+        return kwargs
+
+    def get_context_data(self, form, **kwargs):
+        """Add extra context for template rendering."""
+        context = super().get_context_data(form=form, **kwargs)
+        context.update(self.extra_context)
+        context.update(
+            {
+                "season": self.season,
+                "step_title": self._get_step_title(),
+                "ai_available": self.ai_service.is_available(),
+            }
+        )
+
+        # Add plan data for review step
+        if self.steps.current == "1":
+            prompt_data = self.get_cleaned_data_for_step("0")
+            if prompt_data:
+                context["plan"] = self._generate_plan(prompt_data)
+
+        return context
+
+    def _get_step_title(self):
+        """Get title for current step."""
+        step_titles = {
+            "0": _("Step 1: Describe Your Competition"),
+            "1": _("Step 2: Review Generated Plan"),
+        }
+        return step_titles.get(self.steps.current, _("AI Competition Builder"))
+
+    def _generate_plan(self, prompt_data):
+        """Generate plan from prompt data."""
+        if not hasattr(self, "_cached_plan"):
+            prompt = prompt_data["prompt"]
+
+            # Prepare context about the season
+            context = {
+                "season_title": self.season.title,
+                "competition_title": self.season.competition.title,
+                "existing_teams": [],
+            }
+
+            # Add existing teams if requested
+            if prompt_data.get("include_existing_teams"):
+                context["existing_teams"] = [
+                    team.title for team in self.season.teams.all()
+                ]
+
+            self._cached_plan = self.ai_service.generate_plan(prompt, context)
+
+        return self._cached_plan
+
+    def done(self, form_list, **kwargs):
+        """Execute the plan when wizard is completed."""
+        forms = list(form_list)
+        review_form = forms[1]  # AIPlanReviewForm
+
+        plan = review_form.get_plan()
+        if plan and review_form.cleaned_data["approve_plan"]:
+            try:
+                from tournamentcontrol.competition.ai_executor import (
+                    execute_competition_plan,
+                )
+
+                execute_competition_plan(self.season, plan)
+
+                # Add success message
+                from django.contrib import messages
+
+                messages.success(
+                    self.request,
+                    _("Competition structure has been created successfully!"),
+                )
+
+            except Exception as e:
+                # Add error message
+                from django.contrib import messages
+
+                messages.error(
+                    self.request,
+                    _("Error creating competition structure: {}").format(str(e)),
+                )
+
+        # Redirect to season edit page
+        return HttpResponseRedirect(
+            self.app.reverse(
+                "competition:season:edit",
+                kwargs={
+                    "competition_id": self.season.competition_id,
+                    "season_id": self.season.pk,
+                },
+            )
+        )
+
+
+def ai_competition_wizard_factory(**kwargs):
+    """Factory function to create AI competition wizard class."""
+    return type("AICompetitionWizard", (AICompetitionWizardBase,), kwargs)

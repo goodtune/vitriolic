@@ -70,6 +70,7 @@ competition = [
     "icalendar",
     "internationaltouch-oauth2client",
     "markdown",
+    "openai>=1.0.0",
     "pyparsing",
     "python-dateutil",
 ]
