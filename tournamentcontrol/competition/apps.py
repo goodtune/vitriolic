@@ -40,6 +40,7 @@ class CompetitionConfig(AppConfig):
             changed_points_formula,
             delete_related,
             delete_team,
+            handle_match_youtube_updates,
             match_forfeit,
             match_saved_handler,
             notify_match_forfeit_email,
@@ -53,6 +54,7 @@ class CompetitionConfig(AppConfig):
         site.register(CompetitionAdminComponent)
 
         post_save.connect(match_saved_handler, sender=Match)
+        pre_save.connect(handle_match_youtube_updates, sender=Match)
 
         pre_save.connect(scale_ladder_entry, sender=LadderSummary)
         post_save.connect(team_ladder_entry_aggregation, sender=LadderEntry)

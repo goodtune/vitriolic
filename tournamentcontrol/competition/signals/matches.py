@@ -1,9 +1,14 @@
 import logging
 from email.utils import formataddr
+from zoneinfo import ZoneInfo
 
+from dateutil.relativedelta import relativedelta
 from django.conf import settings
+from django.contrib.sites.models import Site
 from django.core.mail import send_mail
 from django.template import Context, Template
+from django.urls import reverse
+from googleapiclient.errors import HttpError
 
 from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
 from tournamentcontrol.competition.signals.decorators import (
@@ -150,3 +155,164 @@ def notify_match_forfeit_email(sender, match, team, *args, **kwargs):
     recipient_list = [formataddr((p.get_full_name(), p.email)) for p in administrators]
 
     send_mail(subject, message, from_email, recipient_list)
+
+
+@disable_for_loaddata
+def handle_match_youtube_updates(sender, instance, **kwargs):
+    """
+    Handle YouTube live stream updates when a Match is saved.
+    
+    This signal handler replaces the pre_save_callback in the edit_match admin view
+    to decouple YouTube operations from the request/response cycle.
+    """
+    obj = instance
+    
+    # Check if YouTube credentials are configured before attempting anything else,
+    # we can't interact with the YouTube API without them.
+    season = obj.stage.division.season
+    if not (season.live_stream_client_id and season.live_stream_client_secret):
+        return
+
+    competition = season.competition
+    division = obj.stage.division
+
+    if obj.label:
+        title = (
+            f"{division} | {obj.label}: "
+            f"{obj.get_home_team_plain()} vs {obj.get_away_team_plain()} | "
+            f"{competition} {season}"
+        )
+    else:
+        title = (
+            f"{division} | {obj.get_home_team_plain()} vs "
+            f"{obj.get_away_team_plain()} | {competition} {season}"
+        )
+
+    # Build match video URL for description using Site model
+    current_site = Site.objects.get_current()
+    match_path = reverse(
+        'competition:match-video',
+        kwargs={
+            'competition': competition.slug,
+            'season': season.slug,
+            'division': division.slug,
+            'match': obj.pk,
+        }
+    )
+    match_url = f"https://{current_site.domain}{match_path}"
+    
+    if obj.play_at and hasattr(obj.play_at, 'ground') and obj.play_at.ground.venue:
+        venue_text = f"from {obj.play_at.ground.venue}"
+        play_at_text = f"on {obj.play_at}"
+    else:
+        venue_text = ""
+        play_at_text = ""
+    
+    description = (
+        f"Live stream of the {division} division of {competition} {season} "
+        f"{venue_text}.\n"
+        f"\n"
+        f"Watch {obj.get_home_team_plain()} take on "
+        f"{obj.get_away_team_plain()} {play_at_text}.\n"
+        f"\n"
+        f"Full match details are available at {match_url}\n"
+        f"\n"
+        f"Subscribe to receive notifications of upcoming matches."
+    )
+
+    start_time = obj.get_datetime(ZoneInfo("UTC"))
+    stop_time = obj.get_datetime(ZoneInfo("UTC")) + relativedelta(
+        minutes=50
+    )  # FIXME: hard coded
+
+    body = {
+        "snippet": {
+            "title": title,
+            "description": description,
+            "scheduledStartTime": start_time.isoformat(),
+            "scheduledEndTime": stop_time.isoformat(),
+        },
+        "status": {
+            "privacyStatus": season.live_stream_privacy,
+            "selfDeclaredMadeForKids": False,
+        },
+        "contentDetails": {
+            "enableAutoStart": False,
+            "enableAutoStop": False,
+            "monitorStream": {
+                "broadcastStreamDelayMs": 0,
+                "enableMonitorStream": True,
+            },
+        },
+    }
+
+    try:
+        if obj.external_identifier:
+            # If we have disabled live-streaming where it was previously
+            # enabled, we need to remove it using the YouTube API.
+            if not obj.live_stream:
+                video_id = obj.external_identifier
+                season.youtube.liveBroadcasts().delete(id=video_id).execute()
+                if obj.videos is not None:
+                    obj.videos.remove(f"https://youtu.be/{video_id}")
+                if not obj.videos:
+                    obj.videos = None
+                obj.external_identifier = None
+                logger.info("YouTube video %r deleted", video_id)
+                return
+
+            # Alternatively we're making sure the representation on the backend
+            # is consistent with the current status.
+            else:
+                body["id"] = obj.external_identifier
+                broadcast = (
+                    season.youtube.liveBroadcasts()
+                    .update(part="snippet,status,contentDetails", body=body)
+                    .execute()
+                )
+                from tournamentcontrol.competition.tasks import set_youtube_thumbnail
+                set_youtube_thumbnail.s(obj.pk).apply_async(countdown=10)
+                logger.info("YouTube video %r updated", broadcast)
+
+        # If we have enabled live-streaming, but don't have an external id, we
+        # need to create an event with the YouTube API and store the external
+        # id.
+        elif obj.live_stream:
+            broadcast = (
+                season.youtube.liveBroadcasts()
+                .insert(
+                    part="id,snippet,status,contentDetails",
+                    body=body,
+                )
+                .execute()
+            )
+            obj.external_identifier = broadcast["id"]
+            from tournamentcontrol.competition.tasks import set_youtube_thumbnail
+            set_youtube_thumbnail.s(obj.pk).apply_async(countdown=10)
+            video_link = f"https://youtu.be/{obj.external_identifier}"
+            if obj.videos is None:
+                obj.videos = [video_link]
+            else:
+                obj.videos.append(video_link)
+            logger.info("YouTube video %r inserted", broadcast)
+
+        # We need to bind to a liveStream resource. This is only supported on
+        # a Ground, not a Venue. Only attempt binding if external_identifier exists.
+        if (obj.external_identifier and obj.play_at and 
+            hasattr(obj.play_at, 'ground') and obj.play_at.ground.external_identifier):
+            bind = (
+                season.youtube.liveBroadcasts()
+                .bind(
+                    part="id,snippet,contentDetails,status",
+                    id=obj.external_identifier,
+                    streamId=obj.play_at.ground.external_identifier,
+                )
+                .execute()
+            )
+            obj.live_stream_bind = bind["contentDetails"].get("boundStreamId")
+
+    except HttpError as exc:
+        logger.error("YouTube API error: %s", exc.reason)
+        # Without access to the request/response cycle, we can't add messages
+        # to the user interface, so we just log the error
+        raise
