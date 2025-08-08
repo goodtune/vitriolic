@@ -8,6 +8,10 @@ changelog:
           - bug
           - dependencies
           - maintenance
+          - performance
+    - title: ":rocket: Performance"
+      labels:
+        - performance
     - title: ":lady_beetle: Bug fixes"
       labels:
         - bug

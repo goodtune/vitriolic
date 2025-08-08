@@ -18,10 +18,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="article",
             name="last_modified",
-            field=touchtechnology.common.db.models.DateTimeField(
-                default=datetime.datetime.now(timezone.utc),
-                auto_now=True,
-            ),
+            field=touchtechnology.common.db.models.DateTimeField(auto_now=True),
             preserve_default=False,
         ),
     ]

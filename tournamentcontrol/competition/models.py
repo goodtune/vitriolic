@@ -264,7 +264,7 @@ class Club(AdminUrlMixin, SitemapNodeBase):
             ORDER BY
                 "competition_person"."last_name" ASC,
                 "competition_person"."first_name" ASC
-        """ % {
+        """ % {  # noqa: E501
             "user": get_user_model()._meta.db_table
         }
         params = {
@@ -568,7 +568,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
                     "project_id": self.live_stream_project_id,
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
-                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",  # noqa: E501
                     "client_secret": self.live_stream_client_secret,
                     "redirect_uris": [],
                 }
@@ -1928,10 +1928,14 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         try:
             stage = self.stage.comes_after
         except Stage.DoesNotExist:
-            logger.warning(
-                "Stage is first, %r should not be attempting to be evaluated.", self
-            )
-            return (self.home_team, self.away_team)
+            if self.home_team_eval_related or self.away_team_eval_related:
+                # This match depends on the result of matches in the same stage.
+                stage = self.stage
+            else:
+                logger.warning(
+                    "Stage is first, %r should not be attempting to be evaluated.", self
+                )
+                return (self.home_team, self.away_team)
 
         positions = {
             index + 1: team
@@ -1946,41 +1950,47 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         res = [None, None]
         for index, field in enumerate(("home_team", "away_team")):
             team = self._get_team(field)
-            is_team_model = not isinstance(team, Team)
+            is_team_model = isinstance(team, Team)
             if not is_team_model:
                 logger.warning("%r is not a Team instance.", team)
-            if not lazy or not is_team_model:
-                team_undecided = getattr(self, f"{field}_undecided")
-                if team_undecided:
-                    team_eval = team_undecided.formula
-                    team_eval_related = None
-                else:
-                    team_eval = getattr(self, f"{field}_eval")
-                    team_eval_related = getattr(self, f"{field}_eval_related")
-                if team_eval in WIN_LOSE:
-                    team = team_eval_related._winner_loser(team_eval)
-                else:
-                    try:
-                        stage, group, position = stage_group_position_re.match(
-                            team_eval
-                        ).groups()
-                    except (AttributeError, TypeError):
-                        logger.exception(
-                            "Failed evaluating `stage_group_position` %s for %s",
-                            team_eval,
-                            self,
-                        )
+            if not lazy:
+                # For lazy=False, use the result from _get_team() as-is
+                # (either Team instances or dictionaries with titles for invalid formulas)
+                pass
+            else:
+                # Only do additional processing when lazy=True
+                if not is_team_model:
+                    team_undecided = getattr(self, f"{field}_undecided")
+                    if team_undecided:
+                        team_eval = team_undecided.formula
+                        team_eval_related = None
+                    else:
+                        team_eval = getattr(self, f"{field}_eval")
+                        team_eval_related = getattr(self, f"{field}_eval_related")
+                    if team_eval in WIN_LOSE:
+                        team = team_eval_related._winner_loser(team_eval)
                     else:
                         try:
+                            stage, group, position = stage_group_position_re.match(
+                                team_eval
+                            ).groups()
+                        except (AttributeError, TypeError):
+                            logger.exception(
+                                "Failed evaluating `stage_group_position` %s for %s",
+                                team_eval,
+                                self,
+                            )
+                        else:
                             try:
-                                g = int(group)
-                                p = int(position)
-                                team = group_positions[g][p - 1]
-                            except TypeError:
-                                team = positions[int(position)]
-                        except (IndexError, KeyError):
-                            pass
-                res[index] = team
+                                try:
+                                    g = int(group)
+                                    p = int(position)
+                                    team = group_positions[g][p - 1]
+                                except TypeError:
+                                    team = positions[int(position)]
+                            except (IndexError, KeyError):
+                                pass
+            res[index] = team
         return tuple(res)
 
     def __str__(self):
