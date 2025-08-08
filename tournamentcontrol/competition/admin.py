@@ -1540,16 +1540,38 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 return obj
 
             if obj.label:
-                title = f"{division} | {obj.label}: {obj.get_home_team_plain()} vs {obj.get_away_team_plain()} | {competition} {season}"  # noqa: E501
+                title = (
+                    f"{division} | {obj.label}: "
+                    f"{obj.get_home_team_plain()} vs {obj.get_away_team_plain()} | "
+                    f"{competition} {season}"
+                )
             else:
-                title = f"{division} | {obj.get_home_team_plain()} vs {obj.get_away_team_plain()} | {competition} {season}"  # noqa: E501
+                title = (
+                    f"{division} | {obj.get_home_team_plain()} vs "
+                    f"{obj.get_away_team_plain()} | {competition} {season}"
+                )
 
+            # Build match video URL for description
+            match_url = request.build_absolute_uri(
+                reverse(
+                    'competition:match-video',
+                    kwargs={
+                        'competition': competition.slug,
+                        'season': season.slug,
+                        'division': division.slug,
+                        'match': obj.pk,
+                    }
+                )
+            )
+            
             description = (
-                f"Live stream of the {division} division of {competition} {season} from {obj.play_at.ground.venue}.\n"  # noqa: E501
+                f"Live stream of the {division} division of {competition} {season} "
+                f"from {obj.play_at.ground.venue}.\n"
                 f"\n"
-                f"Watch {obj.get_home_team_plain()} take on {obj.get_away_team_plain()} on {obj.play_at}.\n"  # noqa: E501
+                f"Watch {obj.get_home_team_plain()} take on "
+                f"{obj.get_away_team_plain()} on {obj.play_at}.\n"
                 f"\n"
-                f"Full match details are available at {request.build_absolute_uri(reverse('competition:match-video', kwargs={'competition': competition.slug, 'season': season.slug, 'division': division.slug, 'match': obj.pk}))}\n"  # noqa: E501
+                f"Full match details are available at {match_url}\n"
                 f"\n"
                 f"Subscribe to receive notifications of upcoming matches."
             )
