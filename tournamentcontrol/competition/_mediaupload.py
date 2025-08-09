@@ -1,21 +1,21 @@
 """
 Custom media upload classes for YouTube thumbnail management.
 
-This module provides database-sourced media upload classes that are compatible
-with the Google API client library, similar to MediaFileUpload but reading
-data from Django model fields instead of files.
+This module provides memory-based media upload classes that are compatible
+with the Google API client library, similar to MediaFileUpload but working
+with in-memory data instead of files.
 """
 
 import io
 from googleapiclient.http import HttpRequest, MediaUpload
 
 
-class MediaDatabaseUpload(MediaUpload):
+class MediaMemoryUpload(MediaUpload):
     """
-    A MediaUpload subclass that uploads from database-stored binary data.
+    A MediaUpload subclass that uploads from in-memory binary data.
     
     This class mimics the behavior of MediaFileUpload but sources its data
-    from a Django model's BinaryField instead of a file on disk.
+    from memory (e.g., database fields) instead of a file on disk.
     
     Args:
         data (bytes): The binary data to upload
@@ -70,25 +70,25 @@ class MediaDatabaseUpload(MediaUpload):
         }
         
     @classmethod
-    def from_bytes(cls, data, mimetype, **kwargs):
+    def from_bytes(cls, data, mimetype=None, **kwargs):
         """
-        Create a MediaDatabaseUpload from bytes data.
+        Create a MediaMemoryUpload from bytes data.
         
         Args:
             data (bytes): The binary data to upload
-            mimetype (str): The MIME type of the data
-            **kwargs: Additional arguments passed to MediaDatabaseUpload
+            mimetype (str, optional): The MIME type of the data. If not provided,
+                                    will be detected using magic library.
+            **kwargs: Additional arguments passed to MediaMemoryUpload
             
         Returns:
-            MediaDatabaseUpload instance or None if no image data available
-            
-        Raises:
-            ValueError: If image data exists but no MIME type is specified
+            MediaMemoryUpload instance or None if no image data available
         """
         if not data:
             return None
             
         if not mimetype:
-            raise ValueError("Image data exists but no MIME type specified")
+            # Auto-detect MIME type using magic library
+            import magic
+            mimetype = magic.from_buffer(data, mime=True)
             
         return cls(data, mimetype, **kwargs)

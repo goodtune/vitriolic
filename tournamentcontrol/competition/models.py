@@ -32,7 +32,7 @@ from googleapiclient.http import MediaFileUpload, MediaInMemoryUpload
 import magic
 import requests
 
-from ._mediaupload import MediaDatabaseUpload
+from ._mediaupload import MediaMemoryUpload
 from timezone_field.fields import TimeZoneField
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
@@ -691,14 +691,13 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     
     def get_thumbnail_media_upload(self):
         """
-        Get a MediaDatabaseUpload instance for this season's thumbnail.
+        Get a MediaMemoryUpload instance for this season's thumbnail.
         
         Returns:
-            MediaDatabaseUpload or None if no thumbnail is set
+            MediaMemoryUpload or None if no thumbnail is set
         """
         if self.thumbnail_image:
-            mimetype = self.thumbnail_image_mimetype_detected
-            return MediaDatabaseUpload.from_bytes(self.thumbnail_image, mimetype, resumable=True)
+            return MediaMemoryUpload.from_bytes(self.thumbnail_image, resumable=True)
         return None
 
 
@@ -2063,22 +2062,20 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     
     def get_thumbnail_media_upload(self):
         """
-        Get a MediaDatabaseUpload instance for this match's thumbnail.
+        Get a MediaMemoryUpload instance for this match's thumbnail.
         Falls back to season thumbnail and then URL-based thumbnails if no database image is available.
         
         Returns:
-            MediaDatabaseUpload or None if no thumbnail is available
+            MediaMemoryUpload or None if no thumbnail is available
         """
         # Try match-specific thumbnail first
         if self.thumbnail_image:
-            mimetype = self.thumbnail_image_mimetype_detected
-            return MediaDatabaseUpload.from_bytes(self.thumbnail_image, mimetype, resumable=True)
+            return MediaMemoryUpload.from_bytes(self.thumbnail_image, resumable=True)
         
         # Fall back to season thumbnail
         season = self.stage.division.season
         if season.thumbnail_image:
-            mimetype = season.thumbnail_image_mimetype_detected
-            return MediaDatabaseUpload.from_bytes(season.thumbnail_image, mimetype, resumable=True)
+            return MediaMemoryUpload.from_bytes(season.thumbnail_image, resumable=True)
         
         # Fall back to URL-based thumbnails if no database image available
         thumbnail_url = self.live_stream_thumbnail or season.live_stream_thumbnail

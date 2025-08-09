@@ -351,6 +351,8 @@ class CompetitionForm(SuperUserSlugMixin, ModelForm):
 
 
 class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
+    thumbnail_upload = ThumbnailImageField(label=_("Thumbnail Image"))
+    
     class Meta:
         model = Season
         fields = (
@@ -387,6 +389,19 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
                 "URL to the default thumbnail image for all live streams."
             ),
         }
+    
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        
+        # Handle thumbnail upload
+        thumbnail_data = self.cleaned_data.get('thumbnail_upload')
+        if thumbnail_data:
+            instance.thumbnail_image = thumbnail_data
+        
+        if commit:
+            instance.save()
+        
+        return instance
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -897,6 +912,8 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
      * that if the `stage_group` is set, it is a group of the `division`
      * that both the `home_team` and `away_team` are in the `division`
     """
+    
+    thumbnail_upload = ThumbnailImageField(label=_("Thumbnail Image"))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1041,6 +1058,19 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
         videos = self.cleaned_data.get("videos")
         if any(videos):
             return videos
+    
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        
+        # Handle thumbnail upload
+        thumbnail_data = self.cleaned_data.get('thumbnail_upload')
+        if thumbnail_data:
+            instance.thumbnail_image = thumbnail_data
+        
+        if commit:
+            instance.save()
+        
+        return instance
 
     class Meta:
         model = Match
@@ -2085,3 +2115,35 @@ class StreamControlForm(forms.Form):
                 messages.error(request, f"{match}: {exc.reason}")
             else:
                 messages.success(request, f"{match}: broadcast is {broadcast_status!r}")
+
+
+class ThumbnailImageField(forms.FileField):
+    """
+    Custom field for handling thumbnail image uploads that converts to BinaryField.
+    
+    This field accepts image file uploads and stores them as binary data in the database.
+    """
+    
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('help_text', 'Upload an image file for use as a YouTube thumbnail')
+        kwargs.setdefault('required', False)
+        super().__init__(*args, **kwargs)
+        
+    def clean(self, data, initial=None):
+        # Let parent handle basic file validation
+        file = super().clean(data, initial)
+        
+        if file is None:
+            return None
+            
+        # Check if it's an image
+        if hasattr(file, 'content_type') and file.content_type:
+            if not file.content_type.startswith('image/'):
+                raise forms.ValidationError('Please upload an image file.')
+        
+        # Read file content and return as bytes
+        if hasattr(file, 'read'):
+            file.seek(0)  # Ensure we're at the start of the file
+            return file.read()
+        
+        return file
