@@ -11,7 +11,6 @@ from django.urls import reverse
 from googleapiclient.errors import HttpError
 
 from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
-from tournamentcontrol.competition.tasks import set_youtube_thumbnail
 from tournamentcontrol.competition.signals.decorators import (
     disable_for_loaddata,
 )
@@ -166,6 +165,8 @@ def match_youtube_sync(sender, instance, **kwargs):
     This signal handler replaces the pre_save_callback in the edit_match admin view
     to decouple YouTube operations from the request/response cycle.
     """
+    from tournamentcontrol.competition.tasks import set_youtube_thumbnail
+    
     obj = instance
     
     # Check if YouTube credentials are configured before attempting anything else,
