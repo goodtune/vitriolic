@@ -1,8 +1,17 @@
 from django.conf import settings
-from django.db.models import Case, ExpressionWrapper, F, FloatField, Func, When
+from django.db.models import (
+    Case,
+    ExpressionWrapper,
+    F,
+    FloatField,
+    Func,
+    When,
+)
 from django.db.models.query import QuerySet
 from django.utils import timezone
 from django.utils.module_loading import import_string
+
+from tournamentcontrol.competition.utils import team_title_case_clause
 
 
 class DivisionQuerySet(QuerySet):
@@ -19,6 +28,7 @@ class StageQuerySet(QuerySet):
         return self.filter(keep_ladder=True, ladder_summary__isnull=False).distinct()
 
 
+
 class MatchQuerySet(QuerySet):
     def future(self, date=None):
         if date is None:
@@ -30,6 +40,15 @@ class MatchQuerySet(QuerySet):
 
     def videos(self):
         return self.filter(videos__isnull=False).order_by("datetime").distinct()
+
+    def _team_titles(self):
+        """
+        Calculate a placeholder title for teams that will require progression.
+        """
+        return self.annotate(
+            home_team_title=team_title_case_clause("home_team"),
+            away_team_title=team_title_case_clause("away_team"),
+        )
 
     def _rank_importance(self):
         """
@@ -118,7 +137,7 @@ class LadderEntryQuerySet(QuerySet):
                     then=F("match__stage__division__season__rank_importance"),
                 ),
                 When(
-                    match__stage__division__season__competition__rank_importance__isnull=False,
+                    match__stage__division__season__competition__rank_importance__isnull=False,  # noqa: E501
                     then=F(
                         "match__stage__division__season__competition__rank_importance"
                     ),

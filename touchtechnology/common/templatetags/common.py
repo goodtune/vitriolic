@@ -24,7 +24,7 @@ from django.forms.widgets import (
 )
 from django.template.base import Node
 from django.template.library import Library
-from django.template.loader import get_template, render_to_string
+from django.template.loader import render_to_string
 from django.urls import Resolver404, resolve, reverse
 from django.utils import timezone
 from django.utils.encoding import smart_str
@@ -374,9 +374,7 @@ def field(bf, label=None):
         "no_label": not bool(label),
     }
 
-    template = get_template("touchtechnology/common/templatetags/field.html")
-
-    return template.render(context)
+    return render_to_string("touchtechnology/common/templatetags/field.html", context)
 
 
 @register.inclusion_tag("touchtechnology/common/templatetags/analytics.html")

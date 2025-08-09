@@ -1,9 +1,9 @@
 import base64
 import collections
-import datetime
 import functools
 import logging
 import operator
+from zoneinfo import ZoneInfo
 
 from dateutil.relativedelta import relativedelta
 from django.apps import apps
@@ -12,7 +12,7 @@ from django.contrib import messages
 from django.db import models
 from django.db.models import Case, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
-from django.http import Http404, HttpResponse, HttpResponseGone
+from django.http import Http404, HttpResponse, HttpResponseGone, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
@@ -566,6 +566,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 self.match_schedule,
                 name="match-schedule",
             ),
+            path(
+                "visual-schedule/",
+                self.match_visual_schedule,
+                name="match-visual-schedule",
+            ),
             path("scorecards.<mode>", self.scorecards, name="scorecards"),
             path("runsheet.html", self.day_runsheet, name="match-runsheet"),
             path("grid.<mode>", self.day_grid, name="match-grid"),
@@ -586,7 +591,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             path("scorecards/", self.scorecard_report, name="scorecard-report"),
             path("draw-format/", include(drawformat_urls, namespace="format")),
             re_path(
-                r"^reorder/(?P<model>[^/:]+)(?::(?P<parent>[^/]+))?/(?P<pk>\d+)/(?P<direction>\w+)/$",
+                r"^reorder/(?P<model>[^/:]+)(?::(?P<parent>[^/]+))?/(?P<pk>\d+)/(?P<direction>\w+)/$",  # noqa: E501
                 self.reorder,
                 name="reorder",
             ),
@@ -1535,32 +1540,53 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 return obj
 
             if obj.label:
-                title = f"{division} | {obj.label}: {obj.get_home_team_plain()} vs {obj.get_away_team_plain()} | {competition} {season}"
+                title = (
+                    f"{division} | {obj.label}: "
+                    f"{obj.get_home_team_plain()} vs {obj.get_away_team_plain()} | "
+                    f"{competition} {season}"
+                )
             else:
-                title = f"{division} | {obj.get_home_team_plain()} vs {obj.get_away_team_plain()} | {competition} {season}"
+                title = (
+                    f"{division} | {obj.get_home_team_plain()} vs "
+                    f"{obj.get_away_team_plain()} | {competition} {season}"
+                )
 
+            # Build match video URL for description
+            match_url = request.build_absolute_uri(
+                reverse(
+                    'competition:match-video',
+                    kwargs={
+                        'competition': competition.slug,
+                        'season': season.slug,
+                        'division': division.slug,
+                        'match': obj.pk,
+                    }
+                )
+            )
+            
             description = (
-                f"Live stream of the {division} division of {competition} {season} from {obj.play_at.ground.venue}.\n"
+                f"Live stream of the {division} division of {competition} {season} "
+                f"from {obj.play_at.ground.venue}.\n"
                 f"\n"
-                f"Watch {obj.get_home_team_plain()} take on {obj.get_away_team_plain()} on {obj.play_at}.\n"
+                f"Watch {obj.get_home_team_plain()} take on "
+                f"{obj.get_away_team_plain()} on {obj.play_at}.\n"
                 f"\n"
-                f"Full match details are available at {request.build_absolute_uri(reverse('competition:match-video', kwargs={'competition': competition.slug, 'season': season.slug, 'division': division.slug, 'match': obj.pk}))}\n"
+                f"Full match details are available at {match_url}\n"
                 f"\n"
                 f"Subscribe to receive notifications of upcoming matches."
             )
 
-            start_time = obj.get_datetime(datetime.timezone.utc).isoformat()
-            stop_time = (
-                obj.get_datetime(datetime.timezone.utc)
-                + relativedelta(minutes=50)  # FIXME hard coded
-            ).isoformat()
+            start_time = obj.get_datetime(ZoneInfo("UTC"))
+            stop_time = obj.get_datetime(ZoneInfo("UTC")) + relativedelta(
+                minutes=50
+            )  # FIXME: hard coded
 
             body = {
                 "snippet": {
                     "title": title,
                     "description": description,
-                    "scheduledStartTime": start_time,
-                    "scheduledEndTime": stop_time,
+                    "scheduledStartTime": start_time.isoformat(),
+                    "scheduledEndTime": stop_time.isoformat(),
                 },
                 "status": {
                     "privacyStatus": season.live_stream_privacy,
@@ -1845,22 +1871,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         templates = self.template_path("reschedule.html")
         return self.render(request, templates, context)
 
-    # FIXME
-    @competition_by_pk_m
-    @staff_login_required_m
-    def match_schedule(
-        self,
-        request,
-        competition,
-        season,
-        date,
-        extra_context,
-        time=None,
-        division=None,
-        stage=None,
-        round=None,
-        **kwargs,
-    ):
+    def _build_match_queryset(self, season, date, time=None, division=None, stage=None, round=None, visual=False):
+        """Build queryset for match scheduling."""
         where = Q(date=date, is_bye=False)
 
         if stage:
@@ -1875,12 +1887,24 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         if time is not None:
             where &= Q(time=time)
 
-        queryset = (
-            manager.select_related("stage__division__season")
-            .filter(where)
-            .order_by("stage__division__order", "round", "datetime", "play_at")
-        )
+        # Visual schedule uses different ordering and includes play_at
+        if visual:
+            queryset = (
+                season.matches.select_related("stage__division__season", "play_at")
+                .filter(where)
+                .order_by("stage__division__order", "stage__order", "round")
+            )
+        else:
+            queryset = (
+                manager.select_related("stage__division__season")
+                .filter(where)
+                .order_by("stage__division__order", "round", "datetime", "play_at")
+            )
 
+        return queryset
+
+    def _build_venues_and_places(self, season):
+        """Build venues and places data structures."""
         venues = collections.OrderedDict()
         for venue in season.venues.all():
             venues.setdefault(venue, [])
@@ -1894,17 +1918,178 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             for ground in grounds:
                 places.append(ground)
 
-        return self.generic_edit_multiple(
-            request,
-            queryset,
-            formset_class=MatchScheduleFormSet,
-            formset_kwargs={
+        return venues, places
+
+    def _build_visual_context(self, queryset):
+        """Build visual-specific context data."""
+        matches_hierarchy = collections.OrderedDict()
+        unscheduled_matches = []
+        scheduled_matches = []
+
+        for match in queryset:
+            division = match.stage.division
+            stage = match.stage
+
+            if division not in matches_hierarchy:
+                matches_hierarchy[division] = collections.OrderedDict()
+            if stage not in matches_hierarchy[division]:
+                matches_hierarchy[division][stage] = []
+
+            matches_hierarchy[division][stage].append(match)
+
+            if match.time is None or match.play_at is None:
+                unscheduled_matches.append(match)
+            else:
+                scheduled_matches.append(match)
+
+        return {
+            "matches_hierarchy": matches_hierarchy,
+            "unscheduled_matches": unscheduled_matches,
+            "scheduled_matches": scheduled_matches,
+        }
+
+    def _handle_visual_schedule_form(self, request, queryset, places, timeslots, extra_context, templates, season):
+        """Handle form processing for visual schedule."""
+        if request.method == "POST":
+            formset = MatchScheduleFormSet(
+                data=request.POST,
+                queryset=queryset,
+                places=places,
+                timeslots=timeslots,
+            )
+
+            if formset.is_valid():
+                changes = 0
+                for form in formset:
+                    if form.has_changed():
+                        form.save()
+                        changes += 1
+
+                if changes:
+                    message = ngettext(
+                        "Your change to %(count)d match has been saved.",
+                        "Your changes to %(count)d matches have been saved.",
+                        changes,
+                    ) % {"count": changes}
+                    messages.success(request, message)
+                else:
+                    messages.info(request, _("No matches were updated."))
+
+                # Check if we should redirect back to self (visual schedule)
+                if request.POST.get("redirect_to_self"):
+                    return self.redirect(request.path)
+                else:
+                    return self.redirect(season.urls["edit"])
+        else:
+            formset = MatchScheduleFormSet(
+                queryset=queryset,
+                places=places,
+                timeslots=timeslots,
+            )
+
+        return formset
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def match_schedule(
+        self,
+        request,
+        competition,
+        season,
+        date,
+        time=None,
+        division=None,
+        stage=None,
+        round=None,
+        visual=False,
+        **kwargs,
+    ):
+        """Match scheduling interface - supports both standard and visual modes."""
+        # Extract extra_context from kwargs (injected by decorator)
+        extra_context = kwargs.pop('extra_context', {})
+        
+        queryset = self._build_match_queryset(
+            season, date, time=time, division=division, stage=stage, round=round, visual=visual
+        )
+        
+        venues, places = self._build_venues_and_places(season)
+        
+        # Get timeslots for the day
+        timeslots = season.get_timeslots(date)
+
+        if visual:
+            # Visual schedule specific validation
+            if not timeslots:
+                messages.error(
+                    request,
+                    _("The visual scheduler can only be used when timeslots are specified for this season.")
+                )
+                return self.redirect(season.urls["edit"])
+
+            # Handle visual schedule form processing and build context
+            formset = self._handle_visual_schedule_form(
+                request, queryset, places, timeslots, extra_context, 
+                self.template_path("match/visual_schedule.html"), season
+            )
+            
+            # If POST resulted in redirect, return it
+            if isinstance(formset, HttpResponseRedirect):
+                return formset
+
+            # Build visual-specific context
+            visual_context = self._build_visual_context(queryset)
+            
+            context = {
+                "formset": formset,
+                "season": season,
+                "date": date,
+                "dates": season.matches.dates("date", "day"),
                 "places": places,
-                "timeslots": season.get_timeslots(date),
-            },
-            post_save_redirect=self.redirect(season.urls["edit"]),
-            templates=self.template_path("match/schedule.html"),
-            extra_context=extra_context,
+                "timeslots": timeslots,
+                "venues": venues,
+                **visual_context,
+            }
+            context.update(extra_context)
+
+            templates = self.template_path("match/visual_schedule.html")
+            return self.render(request, templates, context)
+        else:
+            # Standard schedule using generic_edit_multiple
+            return self.generic_edit_multiple(
+                request,
+                queryset,
+                formset_class=MatchScheduleFormSet,
+                formset_kwargs={
+                    "places": places,
+                    "timeslots": timeslots,
+                },
+                post_save_redirect=self.redirect(season.urls["edit"]),
+                templates=self.template_path("match/schedule.html"),
+                extra_context=extra_context,
+            )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def match_visual_schedule(
+        self,
+        request,
+        competition,
+        season,
+        date,
+        extra_context,
+        **kwargs,
+    ):
+        """
+        Visual drag-and-drop match scheduling interface.
+        Delegates to match_schedule with visual=True.
+        """
+        return self.match_schedule(
+            request,
+            competition,
+            season,
+            date,
+            visual=True,
+            **kwargs,
         )
 
     @competition_by_pk_m

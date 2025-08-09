@@ -71,6 +71,12 @@
 													<span class="hidden-sm hidden-xs">&nbsp;{% trans "PDF" %}</span>
 												</a>
 											</li>
+											<li role="presentation">
+												<a href="{% url 'admin:fixja:match-visual-schedule' object.competition.pk object.pk date|date:"Ymd" %}" role="button" target="_blank">
+													<i class="fa fa-th fa-fw"></i>
+													<span class="hidden-sm hidden-xs">&nbsp;{% trans "Visual Schedule" %}</span>
+												</a>
+											</li>
 										</ul>
 									</div>
 									<a href="{% url 'admin:competition:match-washout' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
