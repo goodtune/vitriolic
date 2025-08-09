@@ -198,5 +198,5 @@ AI Competition Builder - {{ step_title }}
 {% elif wizard.steps.current == "1" %}
     <button type="submit" class="btn btn-success">Execute Plan</button>
 {% endif %}
-<a href="{% url 'competition:season:edit' competition_id=season.competition.pk season_id=season.pk %}" class="btn btn-secondary">Cancel</a>
+<a href="{% url 'admin:fixja:competition:season:edit' season.competition.pk season.pk %}" class="btn btn-secondary">Cancel</a>
 {% endblock %}

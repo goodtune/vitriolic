@@ -2,8 +2,8 @@
 
 import json
 import logging
-from dataclasses import asdict, dataclass
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 
 from django.conf import settings
 
