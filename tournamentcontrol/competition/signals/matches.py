@@ -11,6 +11,7 @@ from django.urls import reverse
 from googleapiclient.errors import HttpError
 
 from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
+from tournamentcontrol.competition.tasks import set_youtube_thumbnail
 from tournamentcontrol.competition.signals.decorators import (
     disable_for_loaddata,
 )
@@ -158,7 +159,7 @@ def notify_match_forfeit_email(sender, match, team, *args, **kwargs):
 
 
 @disable_for_loaddata
-def handle_match_youtube_updates(sender, instance, **kwargs):
+def match_youtube_sync(sender, instance, **kwargs):
     """
     Handle YouTube live stream updates when a Match is saved.
     
@@ -270,7 +271,6 @@ def handle_match_youtube_updates(sender, instance, **kwargs):
                     .update(part="snippet,status,contentDetails", body=body)
                     .execute()
                 )
-                from tournamentcontrol.competition.tasks import set_youtube_thumbnail
                 set_youtube_thumbnail.s(obj.pk).apply_async(countdown=10)
                 logger.info("YouTube video %r updated", broadcast)
 
@@ -287,7 +287,6 @@ def handle_match_youtube_updates(sender, instance, **kwargs):
                 .execute()
             )
             obj.external_identifier = broadcast["id"]
-            from tournamentcontrol.competition.tasks import set_youtube_thumbnail
             set_youtube_thumbnail.s(obj.pk).apply_async(countdown=10)
             video_link = f"https://youtu.be/{obj.external_identifier}"
             if obj.videos is None:
