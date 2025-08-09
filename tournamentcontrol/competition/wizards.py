@@ -1,11 +1,15 @@
 import datetime
 import functools
+import json
+from dataclasses import asdict
 from operator import add, or_
 
 from dateutil.parser import parse
 from django import forms
+from django.contrib import messages
 from django.db.models import Q
 from django.http import HttpResponse, HttpResponseRedirect
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from first import first
 from formtools.wizard.views import SessionWizardView
@@ -17,7 +21,11 @@ from touchtechnology.common.forms.fields import (
 from tournamentcontrol.competition.ai import (
     AICompetitionService,
     CompetitionPlan,
+    DivisionStructure,
+    PoolStructure,
+    StageStructure,
 )
+from tournamentcontrol.competition.ai_executor import execute_competition_plan
 from tournamentcontrol.competition.models import Season
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.utils import generate_scorecards
@@ -316,9 +324,6 @@ class AIPlanReviewForm(forms.Form):
         super().__init__(*args, **kwargs)
 
         if plan:
-            import json
-            from dataclasses import asdict
-
             self.initial["plan_data"] = json.dumps(asdict(plan))
             self.plan = plan
         else:
@@ -330,15 +335,6 @@ class AIPlanReviewForm(forms.Form):
             return self.plan
 
         if "plan_data" in self.cleaned_data:
-            import json
-
-            from tournamentcontrol.competition.ai import (
-                CompetitionPlan,
-                DivisionStructure,
-                PoolStructure,
-                StageStructure,
-            )
-
             data = json.loads(self.cleaned_data["plan_data"])
 
             # Reconstruct the plan from JSON
@@ -372,10 +368,10 @@ class AICompetitionWizardBase(SessionWizardView):
     extra_context = {}
     template_name = "tournamentcontrol/competition/admin/ai_competition/wizard.html"
 
-    def __init__(self, season, app, **kwargs):
+    def __init__(self, season=None, app=None, **kwargs):
         super().__init__(**kwargs)
-        self.season = season
-        self.app = app
+        self.season = season or getattr(self, "season", None)
+        self.app = app or getattr(self, "app", None)
         self.ai_service = AICompetitionService()
 
     def get_form_kwargs(self, step):
@@ -449,15 +445,9 @@ class AICompetitionWizardBase(SessionWizardView):
         plan = review_form.get_plan()
         if plan and review_form.cleaned_data["approve_plan"]:
             try:
-                from tournamentcontrol.competition.ai_executor import (
-                    execute_competition_plan,
-                )
-
                 execute_competition_plan(self.season, plan)
 
                 # Add success message
-                from django.contrib import messages
-
                 messages.success(
                     self.request,
                     _("Competition structure has been created successfully!"),
@@ -465,8 +455,6 @@ class AICompetitionWizardBase(SessionWizardView):
 
             except Exception as e:
                 # Add error message
-                from django.contrib import messages
-
                 messages.error(
                     self.request,
                     _("Error creating competition structure: {}").format(str(e)),
@@ -474,8 +462,8 @@ class AICompetitionWizardBase(SessionWizardView):
 
         # Redirect to season edit page
         return HttpResponseRedirect(
-            self.app.reverse(
-                "competition:season:edit",
+            reverse(
+                "admin:fixja:competition:season:edit",
                 kwargs={
                     "competition_id": self.season.competition_id,
                     "season_id": self.season.pk,

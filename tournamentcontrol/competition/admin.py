@@ -1973,7 +1973,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @staff_login_required_m
     def scorecard_report(self, request, **extra_context):
-        from .wizards import FilterForm, SeasonForm, scorecardwizard_factory
+        from tournamentcontrol.competition.wizards import (
+            FilterForm,
+            SeasonForm,
+            scorecardwizard_factory,
+        )
 
         ScorecardWizard = scorecardwizard_factory(app=self, extra_context=extra_context)
         wizard = ScorecardWizard.as_view(form_list=[SeasonForm, FilterForm])
@@ -1983,16 +1987,16 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @staff_login_required_m
     def ai_competition_wizard(self, request, competition, season, **extra_context):
         """AI-powered competition structure generation wizard."""
-        from .wizards import AIPromptForm, AIPlanReviewForm, ai_competition_wizard_factory
+        from tournamentcontrol.competition.wizards import (
+            AIPlanReviewForm,
+            AIPromptForm,
+            ai_competition_wizard_factory,
+        )
 
         AICompetitionWizard = ai_competition_wizard_factory(
-            season=season,
-            app=self,
-            extra_context=extra_context
+            season=season, app=self, extra_context=extra_context
         )
-        wizard = AICompetitionWizard.as_view(
-            form_list=[AIPromptForm, AIPlanReviewForm]
-        )
+        wizard = AICompetitionWizard.as_view(form_list=[AIPromptForm, AIPlanReviewForm])
         return wizard(request)
 
     @competition_by_pk_m
