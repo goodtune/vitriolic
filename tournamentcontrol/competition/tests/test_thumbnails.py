@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 from django.test import TestCase
 
-from tournamentcontrol.competition.media import MediaDatabaseUpload
+from tournamentcontrol.competition._mediaupload import MediaDatabaseUpload
 from tournamentcontrol.competition.models import Season, Match
 from tournamentcontrol.competition.tests.factories import SeasonFactory, MatchFactory
 
@@ -45,36 +45,24 @@ class MediaDatabaseUploadTestCase(TestCase):
         chunk = upload.getbytes(5, 15)
         self.assertEqual(chunk, self.image_data[5:15])
     
-    def test_from_model_field_with_data(self):
-        """Test creating MediaDatabaseUpload from model fields."""
-        season = SeasonFactory()
-        season.thumbnail_image = self.image_data
-        season.thumbnail_image_mimetype = self.mimetype
-        season.save()
-        
-        upload = MediaDatabaseUpload.from_model_field(season)
+    def test_from_bytes_with_data(self):
+        """Test creating MediaDatabaseUpload from bytes."""
+        upload = MediaDatabaseUpload.from_bytes(self.image_data, self.mimetype)
         
         self.assertIsNotNone(upload)
         self.assertEqual(upload.mimetype(), self.mimetype)
         self.assertEqual(upload.size(), len(self.image_data))
     
-    def test_from_model_field_no_data(self):
-        """Test creating MediaDatabaseUpload from model with no image data."""
-        season = SeasonFactory()
-        
-        upload = MediaDatabaseUpload.from_model_field(season)
+    def test_from_bytes_no_data(self):
+        """Test creating MediaDatabaseUpload with no image data."""
+        upload = MediaDatabaseUpload.from_bytes(None, self.mimetype)
         
         self.assertIsNone(upload)
     
-    def test_from_model_field_no_mimetype(self):
+    def test_from_bytes_no_mimetype(self):
         """Test error when image data exists but no MIME type."""
-        season = SeasonFactory()
-        season.thumbnail_image = self.image_data
-        # Don't set mimetype
-        season.save()
-        
         with self.assertRaises(ValueError):
-            MediaDatabaseUpload.from_model_field(season)
+            MediaDatabaseUpload.from_bytes(self.image_data, None)
 
 
 class SeasonThumbnailTestCase(TestCase):
@@ -87,17 +75,17 @@ class SeasonThumbnailTestCase(TestCase):
     
     def test_set_thumbnail_image(self):
         """Test setting thumbnail image on season."""
-        self.season.set_thumbnail_image(self.image_data, self.mimetype)
+        self.season.set_thumbnail_image(self.image_data)
         
         self.season.refresh_from_db()
         self.assertEqual(self.season.thumbnail_image, self.image_data)
-        self.assertEqual(self.season.thumbnail_image_mimetype, self.mimetype)
     
-    
-    def test_get_thumbnail_media_upload(self):
+    @patch('magic.from_buffer')
+    def test_get_thumbnail_media_upload(self, mock_magic):
         """Test getting MediaDatabaseUpload from season."""
+        mock_magic.return_value = self.mimetype
+        
         self.season.thumbnail_image = self.image_data
-        self.season.thumbnail_image_mimetype = self.mimetype
         self.season.save()
         
         upload = self.season.get_thumbnail_media_upload()
@@ -126,10 +114,12 @@ class MatchThumbnailTestCase(TestCase):
     
     
     
-    def test_get_thumbnail_media_upload_match_specific(self):
+    @patch('magic.from_buffer')
+    def test_get_thumbnail_media_upload_match_specific(self, mock_magic):
         """Test getting MediaDatabaseUpload from match with its own thumbnail."""
+        mock_magic.return_value = self.mimetype
+        
         self.match.thumbnail_image = self.image_data
-        self.match.thumbnail_image_mimetype = self.mimetype
         self.match.save()
         
         upload = self.match.get_thumbnail_media_upload()
@@ -138,11 +128,13 @@ class MatchThumbnailTestCase(TestCase):
         self.assertEqual(upload.mimetype(), self.mimetype)
         self.assertEqual(upload.size(), len(self.image_data))
     
-    def test_get_thumbnail_media_upload_fallback_to_season(self):
+    @patch('magic.from_buffer')
+    def test_get_thumbnail_media_upload_fallback_to_season(self, mock_magic):
         """Test getting MediaDatabaseUpload falling back to season thumbnail."""
+        mock_magic.return_value = self.season_mimetype
+        
         # Set season thumbnail
         self.season.thumbnail_image = self.season_image_data
-        self.season.thumbnail_image_mimetype = self.season_mimetype
         self.season.save()
         
         # Match has no thumbnail
@@ -158,15 +150,24 @@ class MatchThumbnailTestCase(TestCase):
         
         self.assertIsNone(upload)
     
-    def test_match_thumbnail_priority_over_season(self):
+    @patch('magic.from_buffer')
+    def test_match_thumbnail_priority_over_season(self, mock_magic):
         """Test that match thumbnail takes priority over season thumbnail."""
+        # Mock magic to return different values based on input
+        def mock_magic_side_effect(data, mime=True):
+            if data == self.image_data:
+                return self.mimetype
+            elif data == self.season_image_data:
+                return self.season_mimetype
+            return 'application/octet-stream'
+        
+        mock_magic.side_effect = mock_magic_side_effect
+        
         # Set both season and match thumbnails
         self.season.thumbnail_image = self.season_image_data
-        self.season.thumbnail_image_mimetype = self.season_mimetype
         self.season.save()
         
         self.match.thumbnail_image = self.image_data
-        self.match.thumbnail_image_mimetype = self.mimetype
         self.match.save()
         
         upload = self.match.get_thumbnail_media_upload()

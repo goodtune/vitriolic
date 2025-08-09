@@ -28,10 +28,11 @@ from django.utils.translation import gettext_lazy as _
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
+from googleapiclient.http import MediaFileUpload, MediaInMemoryUpload
 import magic
+import requests
 
-from .media import MediaDatabaseUpload
+from ._mediaupload import MediaDatabaseUpload
 from timezone_field.fields import TimeZoneField
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
@@ -522,12 +523,6 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         null=True,
         help_text="Binary data for thumbnail image to be used for YouTube videos",
     )
-    thumbnail_image_mimetype = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        help_text="MIME type of the thumbnail image (e.g., image/jpeg, image/png)",
-    )
 
     complete = BooleanField(
         default=False,
@@ -683,19 +678,15 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             return None
         return magic.from_buffer(self.thumbnail_image, mime=True)
 
-    def set_thumbnail_image(self, image_data, mimetype=None):
+    def set_thumbnail_image(self, image_data):
         """
         Set the thumbnail image for this season.
         
         Args:
             image_data (bytes): Binary image data
-            mimetype (str, optional): MIME type of the image. If not provided, will be detected.
         """
         self.thumbnail_image = image_data
-        if mimetype is None:
-            mimetype = magic.from_buffer(image_data, mime=True)
-        self.thumbnail_image_mimetype = mimetype
-        self.save(update_fields=['thumbnail_image', 'thumbnail_image_mimetype'])
+        self.save(update_fields=['thumbnail_image'])
     
     
     def get_thumbnail_media_upload(self):
@@ -706,7 +697,8 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             MediaDatabaseUpload or None if no thumbnail is set
         """
         if self.thumbnail_image:
-            return MediaDatabaseUpload.from_model_field(self, resumable=True)
+            mimetype = self.thumbnail_image_mimetype_detected
+            return MediaDatabaseUpload.from_bytes(self.thumbnail_image, mimetype, resumable=True)
         return None
 
 
@@ -1713,12 +1705,6 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         null=True,
         help_text="Binary data for thumbnail image to be used for YouTube video",
     )
-    thumbnail_image_mimetype = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        help_text="MIME type of the thumbnail image (e.g., image/jpeg, image/png)",
-    )
 
     objects = MatchManager()
 
@@ -2068,19 +2054,33 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     def get_thumbnail_media_upload(self):
         """
         Get a MediaDatabaseUpload instance for this match's thumbnail.
-        Falls back to season thumbnail if match doesn't have its own.
+        Falls back to season thumbnail and then URL-based thumbnails if no database image is available.
         
         Returns:
             MediaDatabaseUpload or None if no thumbnail is available
         """
         # Try match-specific thumbnail first
         if self.thumbnail_image:
-            return MediaDatabaseUpload.from_model_field(self, resumable=True)
+            mimetype = self.thumbnail_image_mimetype_detected
+            return MediaDatabaseUpload.from_bytes(self.thumbnail_image, mimetype, resumable=True)
         
         # Fall back to season thumbnail
         season = self.stage.division.season
         if season.thumbnail_image:
-            return MediaDatabaseUpload.from_model_field(season, resumable=True)
+            mimetype = season.thumbnail_image_mimetype_detected
+            return MediaDatabaseUpload.from_bytes(season.thumbnail_image, mimetype, resumable=True)
+        
+        # Fall back to URL-based thumbnails if no database image available
+        thumbnail_url = self.live_stream_thumbnail or season.live_stream_thumbnail
+        if thumbnail_url:
+            img = requests.get(thumbnail_url)
+            img.raise_for_status()
+            
+            return MediaInMemoryUpload(
+                img.content,
+                mimetype=img.headers["Content-Type"],
+                resumable=True,
+            )
         
         return None
     

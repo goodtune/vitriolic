@@ -70,15 +70,13 @@ class MediaDatabaseUpload(MediaUpload):
         }
         
     @classmethod
-    def from_model_field(cls, obj, image_field_name='thumbnail_image', 
-                        mimetype_field_name='thumbnail_image_mimetype', **kwargs):
+    def from_bytes(cls, data, mimetype, **kwargs):
         """
-        Create a MediaDatabaseUpload from Django model fields.
+        Create a MediaDatabaseUpload from bytes data.
         
         Args:
-            obj: Django model instance containing the image data
-            image_field_name: Name of the BinaryField containing image data
-            mimetype_field_name: Name of the CharField containing MIME type
+            data (bytes): The binary data to upload
+            mimetype (str): The MIME type of the data
             **kwargs: Additional arguments passed to MediaDatabaseUpload
             
         Returns:
@@ -87,13 +85,10 @@ class MediaDatabaseUpload(MediaUpload):
         Raises:
             ValueError: If image data exists but no MIME type is specified
         """
-        image_data = getattr(obj, image_field_name)
-        mimetype = getattr(obj, mimetype_field_name)
-        
-        if not image_data:
+        if not data:
             return None
             
         if not mimetype:
-            raise ValueError(f"Image data exists but no MIME type specified in {mimetype_field_name}")
+            raise ValueError("Image data exists but no MIME type specified")
             
-        return cls(image_data, mimetype, **kwargs)
+        return cls(data, mimetype, **kwargs)
