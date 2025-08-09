@@ -3,7 +3,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("competition", "0050_alter_place_timezone_and_more"),
+        ("competition", "0051_plpgsql_vitriolic_stage_group_position"),
     ]
 
     operations = [
