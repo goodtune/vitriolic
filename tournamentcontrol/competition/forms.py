@@ -390,7 +390,7 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
             ),
         }
         field_classes = {
-            "live_stream_thumbnail_image": ThumbnailImageField,
+            "live_stream_thumbnail_image": "tournamentcontrol.competition.forms.ThumbnailImageField",
         }
 
     def __init__(self, *args, **kwargs):
@@ -1063,7 +1063,7 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
             "live_stream_thumbnail_image",
         )
         field_classes = {
-            "live_stream_thumbnail_image": ThumbnailImageField,
+            "live_stream_thumbnail_image": "tournamentcontrol.competition.forms.ThumbnailImageField",
         }
         labels = {
             "home_team_undecided": _("Home team"),
