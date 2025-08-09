@@ -428,7 +428,7 @@ class StreamInstructionsViewTests(TestCase):
             stream_url = self.reverse(
                 "competition:stream", season.competition.slug, season.slug
             )
-            
+
             self.assertResponseContains(f'<a href="{runsheet_url}">{runsheet_url}</a>')
             self.assertResponseContains(f'<a href="{results_url}">{results_url}</a>')
             self.assertResponseContains(f'<a href="{stream_url}">{stream_url}</a>')
