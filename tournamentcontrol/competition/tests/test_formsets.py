@@ -200,6 +200,16 @@ class DrawGenerationMatchFormSetTest(TestCase):
             ],
         )
 
+        self.assertCountEqual(
+            [(m.home_team_title, m.away_team_title) for m in Match.objects.all()],
+            [
+                ("1st", "4th"),
+                ("2nd", "3rd"),
+                ("Loser Semi Final 1", "Loser Semi Final 2"),
+                ("Winner Semi Final 1", "Winner Semi Final 2"),
+            ],
+        )
+
 
 class DrawGenerationFormTest(TestCase):
     """Test cases for DrawGenerationForm to ensure it works with and without initial parameter"""

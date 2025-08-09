@@ -12,6 +12,7 @@ requires-python = ">=3.11"
 dependencies = [
     "django-froala-editor>=2.9",
     "django-guardian>=2.4",
+    "django-mcp-server>=0.5.5",
     "django-modelforms",
     "django-mptt",
     "django-timezone-field",
@@ -29,12 +30,20 @@ dev = [
 ]
 test = [
     "coverage",
- "django-environ",
- "django-test-plus",
- "factory_boy",
- "freezegun",
- "packaging>=25.0",
- "tblib",
+    "django-environ",
+    "django-test-plus",
+    "factory_boy",
+    "freezegun",
+    "mcp",
+    "packaging>=25.0",
+    "playwright",
+    "pytest-asyncio",
+    "pytest-django",
+    "pytest-playwright",
+    "pytest",
+    "requests",
+    "tblib",
+    "whitenoise>=6.9.0",
 ]
 
 [project.optional-dependencies]
@@ -52,6 +61,7 @@ competition = [
     "cloudinary",
     "django-embed-video",
     "django-formtools",
+    "django-htmx>=1.23.2",
     "django-mathfilters",
     "djangorestframework>3.11",
     "drf-nested-routers",
