@@ -29,6 +29,9 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+import magic
+
+from .media import MediaDatabaseUpload
 from timezone_field.fields import TimeZoneField
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
@@ -668,39 +671,32 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             rset.rrule(timeslot.rrule())
         return [dt.time() for dt in rset]
 
-    def set_thumbnail_image(self, image_data, mimetype, propagate_to_matches=True):
+    @property
+    def thumbnail_image_mimetype_detected(self):
+        """
+        Dynamically detect MIME type of thumbnail image using magic library.
+        
+        Returns:
+            str or None: Detected MIME type, or None if no image data
+        """
+        if not self.thumbnail_image:
+            return None
+        return magic.from_buffer(self.thumbnail_image, mime=True)
+
+    def set_thumbnail_image(self, image_data, mimetype=None):
         """
         Set the thumbnail image for this season.
         
         Args:
             image_data (bytes): Binary image data
-            mimetype (str): MIME type of the image
-            propagate_to_matches (bool): Whether to propagate to all matches
+            mimetype (str, optional): MIME type of the image. If not provided, will be detected.
         """
         self.thumbnail_image = image_data
+        if mimetype is None:
+            mimetype = magic.from_buffer(image_data, mime=True)
         self.thumbnail_image_mimetype = mimetype
         self.save(update_fields=['thumbnail_image', 'thumbnail_image_mimetype'])
-        
-        if propagate_to_matches:
-            self.propagate_thumbnail_to_matches()
     
-    def propagate_thumbnail_to_matches(self):
-        """
-        Propagate season thumbnail to all matches that don't have their own thumbnail.
-        """
-        if not self.thumbnail_image:
-            return
-            
-        # Only update matches that don't have their own thumbnail set
-        matches_to_update = self.matches.filter(
-            thumbnail_image__isnull=True,
-            videos__isnull=False  # Only matches that have YouTube videos
-        ).exclude(videos=[])
-        
-        matches_to_update.update(
-            thumbnail_image=self.thumbnail_image,
-            thumbnail_image_mimetype=self.thumbnail_image_mimetype
-        )
     
     def get_thumbnail_media_upload(self):
         """
@@ -709,8 +705,9 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         Returns:
             MediaDatabaseUpload or None if no thumbnail is set
         """
-        from .media import MediaDatabaseUpload
-        return MediaDatabaseUpload.from_model_field(self, resumable=True)
+        if self.thumbnail_image:
+            return MediaDatabaseUpload.from_model_field(self, resumable=True)
+        return None
 
 
 class Place(AdminUrlMixin, OrderedSitemapNode):
@@ -2056,17 +2053,17 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     def __repr__(self):
         return f"<Match: {self.round!s}: {self!s}>"
     
-    def set_thumbnail_image(self, image_data, mimetype):
+    @property
+    def thumbnail_image_mimetype_detected(self):
         """
-        Set the thumbnail image for this match.
+        Dynamically detect MIME type of thumbnail image using magic library.
         
-        Args:
-            image_data (bytes): Binary image data
-            mimetype (str): MIME type of the image
+        Returns:
+            str or None: Detected MIME type, or None if no image data
         """
-        self.thumbnail_image = image_data
-        self.thumbnail_image_mimetype = mimetype
-        self.save(update_fields=['thumbnail_image', 'thumbnail_image_mimetype'])
+        if not self.thumbnail_image:
+            return None
+        return magic.from_buffer(self.thumbnail_image, mime=True)
     
     def get_thumbnail_media_upload(self):
         """
@@ -2076,8 +2073,6 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         Returns:
             MediaDatabaseUpload or None if no thumbnail is available
         """
-        from .media import MediaDatabaseUpload
-        
         # Try match-specific thumbnail first
         if self.thumbnail_image:
             return MediaDatabaseUpload.from_model_field(self, resumable=True)
@@ -2089,14 +2084,6 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         
         return None
     
-    def has_custom_thumbnail(self):
-        """
-        Check if this match has its own thumbnail (not inherited from season).
-        
-        Returns:
-            bool: True if match has its own thumbnail
-        """
-        return bool(self.thumbnail_image)
 
 
 class LadderBase(models.Model):

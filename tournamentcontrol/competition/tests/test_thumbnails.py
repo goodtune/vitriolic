@@ -9,7 +9,6 @@ from django.test import TestCase
 
 from tournamentcontrol.competition.media import MediaDatabaseUpload
 from tournamentcontrol.competition.models import Season, Match
-from tournamentcontrol.competition.thumbnail_utils import load_image_from_file
 from tournamentcontrol.competition.tests.factories import SeasonFactory, MatchFactory
 
 
@@ -94,19 +93,6 @@ class SeasonThumbnailTestCase(TestCase):
         self.assertEqual(self.season.thumbnail_image, self.image_data)
         self.assertEqual(self.season.thumbnail_image_mimetype, self.mimetype)
     
-    @patch('tournamentcontrol.competition.models.Season.propagate_thumbnail_to_matches')
-    def test_set_thumbnail_image_with_propagation(self, mock_propagate):
-        """Test setting thumbnail image with propagation."""
-        self.season.set_thumbnail_image(self.image_data, self.mimetype, propagate_to_matches=True)
-        
-        mock_propagate.assert_called_once()
-    
-    @patch('tournamentcontrol.competition.models.Season.propagate_thumbnail_to_matches')
-    def test_set_thumbnail_image_without_propagation(self, mock_propagate):
-        """Test setting thumbnail image without propagation."""
-        self.season.set_thumbnail_image(self.image_data, self.mimetype, propagate_to_matches=False)
-        
-        mock_propagate.assert_not_called()
     
     def test_get_thumbnail_media_upload(self):
         """Test getting MediaDatabaseUpload from season."""
@@ -138,22 +124,7 @@ class MatchThumbnailTestCase(TestCase):
         self.season_image_data = b'season image data'
         self.season_mimetype = 'image/png'
     
-    def test_set_thumbnail_image(self):
-        """Test setting thumbnail image on match."""
-        self.match.set_thumbnail_image(self.image_data, self.mimetype)
-        
-        self.match.refresh_from_db()
-        self.assertEqual(self.match.thumbnail_image, self.image_data)
-        self.assertEqual(self.match.thumbnail_image_mimetype, self.mimetype)
     
-    def test_has_custom_thumbnail(self):
-        """Test checking if match has custom thumbnail."""
-        # No thumbnail initially
-        self.assertFalse(self.match.has_custom_thumbnail())
-        
-        # Set thumbnail
-        self.match.set_thumbnail_image(self.image_data, self.mimetype)
-        self.assertTrue(self.match.has_custom_thumbnail())
     
     def test_get_thumbnail_media_upload_match_specific(self):
         """Test getting MediaDatabaseUpload from match with its own thumbnail."""
@@ -205,54 +176,3 @@ class MatchThumbnailTestCase(TestCase):
         self.assertEqual(upload.size(), len(self.image_data))
 
 
-class ThumbnailPropagationTestCase(TestCase):
-    """Test thumbnail propagation from season to matches."""
-    
-    def setUp(self):
-        self.season = SeasonFactory()
-        self.match1 = MatchFactory(stage__division__season=self.season, videos=['https://youtube.com/watch?v=123'])
-        self.match2 = MatchFactory(stage__division__season=self.season, videos=['https://youtube.com/watch?v=456'])
-        self.match3 = MatchFactory(stage__division__season=self.season)  # No videos
-        
-        self.image_data = b'season image data'
-        self.mimetype = 'image/jpeg'
-    
-    def test_propagate_thumbnail_to_matches(self):
-        """Test propagating season thumbnail to matches."""
-        self.season.thumbnail_image = self.image_data
-        self.season.thumbnail_image_mimetype = self.mimetype
-        self.season.save()
-        
-        self.season.propagate_thumbnail_to_matches()
-        
-        # Matches with videos should get the thumbnail
-        self.match1.refresh_from_db()
-        self.match2.refresh_from_db()
-        self.match3.refresh_from_db()
-        
-        self.assertEqual(self.match1.thumbnail_image, self.image_data)
-        self.assertEqual(self.match2.thumbnail_image, self.image_data)
-        # Match without videos should not get thumbnail
-        self.assertIsNone(self.match3.thumbnail_image)
-    
-    def test_propagate_does_not_override_custom_thumbnails(self):
-        """Test that propagation doesn't override existing match thumbnails."""
-        # Set season thumbnail
-        self.season.thumbnail_image = self.image_data
-        self.season.thumbnail_image_mimetype = self.mimetype
-        self.season.save()
-        
-        # Set custom thumbnail on match1
-        custom_data = b'custom image data'
-        self.match1.thumbnail_image = custom_data
-        self.match1.thumbnail_image_mimetype = 'image/png'
-        self.match1.save()
-        
-        self.season.propagate_thumbnail_to_matches()
-        
-        # match1 should keep its custom thumbnail
-        self.match1.refresh_from_db()
-        self.match2.refresh_from_db()
-        
-        self.assertEqual(self.match1.thumbnail_image, custom_data)  # Unchanged
-        self.assertEqual(self.match2.thumbnail_image, self.image_data)  # Updated
