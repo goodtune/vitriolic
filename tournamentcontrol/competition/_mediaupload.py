@@ -16,18 +16,19 @@ class MediaMemoryUpload(MediaUpload):
     
     This class mimics the behavior of MediaFileUpload but sources its data
     from memory (e.g., database fields) instead of a file on disk.
+    MIME type is automatically detected using the magic library.
     
     Args:
         data (bytes): The binary data to upload
-        mimetype (str): The MIME type of the data
         chunksize (int): Size of chunks to use for resumable uploads
         resumable (bool): Whether to make the upload resumable
     """
     
-    def __init__(self, data, mimetype, chunksize=1024*1024, resumable=False):
+    def __init__(self, data, chunksize=1024*1024, resumable=False):
+        import magic
         super().__init__()
         self._data = data
-        self._mimetype = mimetype
+        self._mimetype = magic.from_buffer(data, mime=True)
         self._chunksize = chunksize
         self._resumable = resumable
         self._stream = io.BytesIO(data)
@@ -69,26 +70,3 @@ class MediaMemoryUpload(MediaUpload):
             'resumable': self._resumable,
         }
         
-    @classmethod
-    def from_bytes(cls, data, mimetype=None, **kwargs):
-        """
-        Create a MediaMemoryUpload from bytes data.
-        
-        Args:
-            data (bytes): The binary data to upload
-            mimetype (str, optional): The MIME type of the data. If not provided,
-                                    will be detected using magic library.
-            **kwargs: Additional arguments passed to MediaMemoryUpload
-            
-        Returns:
-            MediaMemoryUpload instance or None if no image data available
-        """
-        if not data:
-            return None
-            
-        if not mimetype:
-            # Auto-detect MIME type using magic library
-            import magic
-            mimetype = magic.from_buffer(data, mime=True)
-            
-        return cls(data, mimetype, **kwargs)

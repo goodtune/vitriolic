@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddField(
             model_name="season",
-            name="thumbnail_image",
+            name="live_stream_thumbnail_image",
             field=models.BinaryField(
                 blank=True,
                 null=True,
@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name="match",
-            name="thumbnail_image",
+            name="live_stream_thumbnail_image",
             field=models.BinaryField(
                 blank=True,
                 null=True,

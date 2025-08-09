@@ -19,23 +19,29 @@ class MediaMemoryUploadTestCase(TestCase):
         self.image_data = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB`\x82'
         self.mimetype = 'image/png'
     
-    def test_media_memory_upload_creation(self):
+    @patch('magic.from_buffer')
+    def test_media_memory_upload_creation(self, mock_magic):
         """Test creating MediaMemoryUpload with binary data."""
-        upload = MediaMemoryUpload(self.image_data, self.mimetype)
+        mock_magic.return_value = self.mimetype
+        upload = MediaMemoryUpload(self.image_data)
         
         self.assertEqual(upload.mimetype(), self.mimetype)
         self.assertEqual(upload.size(), len(self.image_data))
         self.assertFalse(upload.resumable())
         self.assertTrue(upload.has_stream())
     
-    def test_media_memory_upload_resumable(self):
+    @patch('magic.from_buffer')
+    def test_media_memory_upload_resumable(self, mock_magic):
         """Test creating resumable MediaMemoryUpload."""
-        upload = MediaMemoryUpload(self.image_data, self.mimetype, resumable=True)
+        mock_magic.return_value = self.mimetype
+        upload = MediaMemoryUpload(self.image_data, resumable=True)
         self.assertTrue(upload.resumable())
     
-    def test_getbytes(self):
+    @patch('magic.from_buffer')
+    def test_getbytes(self, mock_magic):
         """Test getting bytes from upload."""
-        upload = MediaMemoryUpload(self.image_data, self.mimetype)
+        mock_magic.return_value = self.mimetype
+        upload = MediaMemoryUpload(self.image_data)
         
         # Get first 10 bytes
         chunk = upload.getbytes(0, 10)
@@ -45,29 +51,15 @@ class MediaMemoryUploadTestCase(TestCase):
         chunk = upload.getbytes(5, 15)
         self.assertEqual(chunk, self.image_data[5:15])
     
-    def test_from_bytes_with_data(self):
-        """Test creating MediaMemoryUpload from bytes."""
-        upload = MediaMemoryUpload.from_bytes(self.image_data, self.mimetype)
+    @patch('magic.from_buffer')
+    def test_auto_detect_mimetype(self, mock_magic):
+        """Test auto-detecting MIME type when creating MediaMemoryUpload."""
+        mock_magic.return_value = 'image/png'
+        upload = MediaMemoryUpload(self.image_data)
         
         self.assertIsNotNone(upload)
-        self.assertEqual(upload.mimetype(), self.mimetype)
-        self.assertEqual(upload.size(), len(self.image_data))
-    
-    def test_from_bytes_no_data(self):
-        """Test creating MediaMemoryUpload with no image data."""
-        upload = MediaMemoryUpload.from_bytes(None, self.mimetype)
-        
-        self.assertIsNone(upload)
-    
-    def test_from_bytes_auto_detect_mimetype(self):
-        """Test auto-detecting MIME type when not provided."""
-        with patch('magic.from_buffer') as mock_magic:
-            mock_magic.return_value = 'image/png'
-            upload = MediaMemoryUpload.from_bytes(self.image_data)
-            
-            self.assertIsNotNone(upload)
-            self.assertEqual(upload.mimetype(), 'image/png')
-            mock_magic.assert_called_once_with(self.image_data, mime=True)
+        self.assertEqual(upload.mimetype(), 'image/png')
+        mock_magic.assert_called_once_with(self.image_data, mime=True)
 
 
 class SeasonThumbnailTestCase(TestCase):
@@ -83,14 +75,14 @@ class SeasonThumbnailTestCase(TestCase):
         self.season.set_thumbnail_image(self.image_data)
         
         self.season.refresh_from_db()
-        self.assertEqual(self.season.thumbnail_image, self.image_data)
+        self.assertEqual(self.season.live_stream_thumbnail_image, self.image_data)
     
     @patch('magic.from_buffer')
     def test_get_thumbnail_media_upload(self, mock_magic):
         """Test getting MediaMemoryUpload from season."""
         mock_magic.return_value = self.mimetype
         
-        self.season.thumbnail_image = self.image_data
+        self.season.live_stream_thumbnail_image = self.image_data
         self.season.save()
         
         upload = self.season.get_thumbnail_media_upload()
@@ -124,7 +116,7 @@ class MatchThumbnailTestCase(TestCase):
         """Test getting MediaMemoryUpload from match with its own thumbnail."""
         mock_magic.return_value = self.mimetype
         
-        self.match.thumbnail_image = self.image_data
+        self.match.live_stream_thumbnail_image = self.image_data
         self.match.save()
         
         upload = self.match.get_thumbnail_media_upload()
@@ -172,7 +164,7 @@ class MatchThumbnailTestCase(TestCase):
         self.season.thumbnail_image = self.season_image_data
         self.season.save()
         
-        self.match.thumbnail_image = self.image_data
+        self.match.live_stream_thumbnail_image = self.image_data
         self.match.save()
         
         upload = self.match.get_thumbnail_media_upload()

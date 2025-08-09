@@ -518,7 +518,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     live_stream_token_uri = models.URLField(null=True)
     live_stream_scopes = PG.ArrayField(models.CharField(max_length=200), null=True)
     live_stream_thumbnail = models.URLField(blank=True, null=True)
-    thumbnail_image = models.BinaryField(
+    live_stream_thumbnail_image = models.BinaryField(
         blank=True,
         null=True,
         help_text="Binary data for thumbnail image to be used for YouTube videos",
@@ -666,18 +666,6 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             rset.rrule(timeslot.rrule())
         return [dt.time() for dt in rset]
 
-    @property
-    def thumbnail_image_mimetype_detected(self):
-        """
-        Dynamically detect MIME type of thumbnail image using magic library.
-        
-        Returns:
-            str or None: Detected MIME type, or None if no image data
-        """
-        if not self.thumbnail_image:
-            return None
-        return magic.from_buffer(self.thumbnail_image, mime=True)
-
     def set_thumbnail_image(self, image_data):
         """
         Set the thumbnail image for this season.
@@ -685,19 +673,19 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         Args:
             image_data (bytes): Binary image data
         """
-        self.thumbnail_image = image_data
-        self.save(update_fields=['thumbnail_image'])
+        self.live_stream_thumbnail_image = image_data
+        self.save(update_fields=['live_stream_thumbnail_image'])
     
     
-    def get_thumbnail_media_upload(self):
+    def get_thumbnail_media_upload(self) -> MediaUpload | None:
         """
         Get a MediaMemoryUpload instance for this season's thumbnail.
         
         Returns:
             MediaMemoryUpload or None if no thumbnail is set
         """
-        if self.thumbnail_image:
-            return MediaMemoryUpload.from_bytes(self.thumbnail_image, resumable=True)
+        if self.live_stream_thumbnail_image:
+            return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
         return None
 
 
@@ -1699,7 +1687,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         max_length=50, blank=True, null=True, db_index=True
     )
     live_stream_thumbnail = models.URLField(blank=True, null=True)
-    thumbnail_image = models.BinaryField(
+    live_stream_thumbnail_image = models.BinaryField(
         blank=True,
         null=True,
         help_text="Binary data for thumbnail image to be used for YouTube video",
@@ -2048,19 +2036,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     def __repr__(self):
         return f"<Match: {self.round!s}: {self!s}>"
     
-    @property
-    def thumbnail_image_mimetype_detected(self):
-        """
-        Dynamically detect MIME type of thumbnail image using magic library.
-        
-        Returns:
-            str or None: Detected MIME type, or None if no image data
-        """
-        if not self.thumbnail_image:
-            return None
-        return magic.from_buffer(self.thumbnail_image, mime=True)
-    
-    def get_thumbnail_media_upload(self):
+    def get_thumbnail_media_upload(self) -> MediaUpload | None:
         """
         Get a MediaMemoryUpload instance for this match's thumbnail.
         Falls back to season thumbnail and then URL-based thumbnails if no database image is available.
@@ -2069,13 +2045,13 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
             MediaMemoryUpload or None if no thumbnail is available
         """
         # Try match-specific thumbnail first
-        if self.thumbnail_image:
-            return MediaMemoryUpload.from_bytes(self.thumbnail_image, resumable=True)
+        if self.live_stream_thumbnail_image:
+            return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
         
         # Fall back to season thumbnail
         season = self.stage.division.season
-        if season.thumbnail_image:
-            return MediaMemoryUpload.from_bytes(season.thumbnail_image, resumable=True)
+        if season.live_stream_thumbnail_image:
+            return MediaMemoryUpload(season.live_stream_thumbnail_image, resumable=True)
         
         # Fall back to URL-based thumbnails if no database image available
         thumbnail_url = self.live_stream_thumbnail or season.live_stream_thumbnail
