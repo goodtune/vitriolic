@@ -365,6 +365,7 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
             "live_stream_client_id",
             "live_stream_client_secret",
             "live_stream_thumbnail",
+            "live_stream_thumbnail_image",
             "timezone",
             "start_date",
             "mode",
@@ -380,12 +381,16 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
             "live_stream_project_id": _("Project ID"),
             "live_stream_client_id": _("Client ID"),
             "live_stream_thumbnail": _("Thumbnail URL"),
+            "live_stream_thumbnail_image": _("Thumbnail Image"),
         }
         help_texts = {
             "copy": _("Optional. Will be displayed in the front end if provided."),
             "live_stream_thumbnail": _(
                 "URL to the default thumbnail image for all live streams."
             ),
+        }
+        field_classes = {
+            "live_stream_thumbnail_image": "tournamentcontrol.competition.forms.ThumbnailImageField",
         }
 
     def __init__(self, *args, **kwargs):
@@ -1041,7 +1046,7 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
         videos = self.cleaned_data.get("videos")
         if any(videos):
             return videos
-
+    
     class Meta:
         model = Match
         fields = (
@@ -1055,10 +1060,15 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
             "date",
             "include_in_ladder",
             "videos",
+            "live_stream_thumbnail_image",
         )
+        field_classes = {
+            "live_stream_thumbnail_image": "tournamentcontrol.competition.forms.ThumbnailImageField",
+        }
         labels = {
             "home_team_undecided": _("Home team"),
             "away_team_undecided": _("Away team"),
+            "live_stream_thumbnail_image": _("Thumbnail Image"),
         }
         formfield_callback = _match_edit_form_formfield_callback
 
@@ -2085,3 +2095,40 @@ class StreamControlForm(forms.Form):
                 messages.error(request, f"{match}: {exc.reason}")
             else:
                 messages.success(request, f"{match}: broadcast is {broadcast_status!r}")
+
+
+class ThumbnailImageWidget(forms.ClearableFileInput):
+    """
+    Widget for handling binary image data uploads.
+    """
+    def format_value(self, value):
+        # Don't try to format binary data for display
+        return None
+
+
+class ThumbnailImageField(forms.BinaryField):
+    """
+    Custom field for handling thumbnail image uploads that works directly with BinaryField.
+    
+    This field accepts image file uploads and converts them to binary data.
+    """
+    
+    widget = ThumbnailImageWidget
+    
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('help_text', 'Upload an image file for use as a YouTube thumbnail')
+        kwargs.setdefault('required', False)
+        super().__init__(*args, **kwargs)
+        
+    def to_python(self, data):
+        # Handle file upload data
+        if hasattr(data, 'read'):
+            # Check if it's an image
+            if hasattr(data, 'content_type') and data.content_type:
+                if not data.content_type.startswith('image/'):
+                    raise forms.ValidationError('Please upload an image file.')
+            
+            data.seek(0)  # Ensure we're at the start of the file
+            return data.read()
+            
+        return super().to_python(data)
