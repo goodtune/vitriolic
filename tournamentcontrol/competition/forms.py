@@ -2097,7 +2097,7 @@ class StreamControlForm(forms.Form):
                 messages.success(request, f"{match}: broadcast is {broadcast_status!r}")
 
 
-class ThumbnailImageWidget(forms.FileInput):
+class ThumbnailImageWidget(forms.ClearableFileInput):
     """
     Widget for handling binary image data uploads.
     """

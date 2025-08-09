@@ -49,7 +49,7 @@ def set_youtube_thumbnail(match_pk):
     the match specified.
     
     This function uses the database-stored thumbnail images via the
-    MediaDatabaseUpload class, with fallback logic handled by the model.
+    MediaMemoryUpload class, with fallback logic handled by the model.
     """
     obj = Match.objects.get(pk=match_pk)
     season = obj.stage.division.season

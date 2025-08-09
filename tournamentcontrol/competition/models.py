@@ -28,11 +28,11 @@ from django.utils.translation import gettext_lazy as _
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload, MediaInMemoryUpload
+from googleapiclient.http import MediaFileUpload, MediaInMemoryUpload, MediaUpload
 import magic
 import requests
 
-from ._mediaupload import MediaMemoryUpload
+from tournamentcontrol.competition._mediaupload import MediaMemoryUpload
 from timezone_field.fields import TimeZoneField
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
@@ -666,17 +666,6 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             rset.rrule(timeslot.rrule())
         return [dt.time() for dt in rset]
 
-    def set_thumbnail_image(self, image_data):
-        """
-        Set the thumbnail image for this season.
-        
-        Args:
-            image_data (bytes): Binary image data
-        """
-        self.live_stream_thumbnail_image = image_data
-        self.save(update_fields=['live_stream_thumbnail_image'])
-    
-    
     def get_thumbnail_media_upload(self) -> MediaUpload | None:
         """
         Get a MediaMemoryUpload instance for this season's thumbnail.
