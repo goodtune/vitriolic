@@ -98,7 +98,9 @@ def team_title_case_clause(team):
                 ),
                 When(
                     ~Q(**{f"{team}_undecided__formula": ""}),
-                    then=StageGroupPosition(Cast(f"{team}_undecided__formula", output_field=CharField())),
+                    then=StageGroupPosition(
+                        Cast(f"{team}_undecided__formula", output_field=CharField())
+                    ),
                 ),
                 default=Value(None, output_field=CharField()),
             ),
@@ -398,8 +400,8 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
 
     if number_of_pools == 1:
         initial = RoundDescriptor(2, final_series_round_label(2))
-        initial.add(MatchDescriptor(1, "P1", "P4"))
-        initial.add(MatchDescriptor(2, "P2", "P3"))
+        initial.add(MatchDescriptor(1, "P1", "P4", f"{initial.round_label} 1"))
+        initial.add(MatchDescriptor(2, "P2", "P3", f"{initial.round_label} 2"))
 
     else:
         initial = RoundDescriptor(
@@ -411,6 +413,7 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
                 pool + 1,
                 "G%dP1" % (pool + 1),
                 "G%dP2" % (number_of_pools - pool),
+                f"{initial.round_label} {pool + 1}",
             )
             initial.add(match)
 
@@ -436,6 +439,7 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
                 series[-1].matches[-1].match_id + i + 1,
                 "W%s" % (series[-1].matches[i].match_id),
                 "W%s" % (series[-1].matches[-1 - i].match_id),
+                f"{this_round.round_label} {i + 1}",
             )
             this_round.add(match)
 

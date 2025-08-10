@@ -25,7 +25,7 @@ from tournamentcontrol.competition.ai import (
     PoolStructure,
     StageStructure,
 )
-from tournamentcontrol.competition.ai_executor import execute_competition_plan
+from tournamentcontrol.competition.ai.executor import execute_competition_plan
 from tournamentcontrol.competition.models import Season
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.utils import generate_scorecards

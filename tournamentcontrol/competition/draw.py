@@ -280,7 +280,7 @@ class MatchDescriptor(object):
 
     def __str__(self):
         if self.match_label:
-            return '%s: %s vs %s "%s"' % (
+            return "%s: %s vs %s %s" % (
                 self.match_id,
                 self.home_team,
                 self.away_team,
@@ -451,14 +451,19 @@ class DrawGenerator(object):
             match = MatchDescriptor(**data)
             round.add(match)
 
-    def generate(self, n=None, offset=0):
+    def generate(self, n=None, offset=0, custom_date_generator=None):
         # if n is not specified generate one complete round
         if n is None:
             n = len(self.rounds)
 
         rounds = itertools.cycle(self.rounds)
 
-        if self.stage.division.season.mode == WEEKLY:
+        if custom_date_generator is not None:
+            logger.debug(
+                "CUSTOM generator mode: '%s' (%s)", self.stage.title, self.start_date
+            )
+            dates = custom_date_generator(self.stage, self.start_date)
+        elif self.stage.division.season.mode == WEEKLY:
             logger.debug(
                 "WEEKLY generator mode: '%s' (%s)", self.stage.title, self.start_date
             )
