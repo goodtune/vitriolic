@@ -324,11 +324,39 @@ def round_robin_format(
     teams: Union[int, Iterable], rounds: Optional[int] = None
 ) -> str:
     """
-    Generate a formatted string for a round-robin tournament.
+    Generate a formatted DrawGenerator string for a round-robin tournament.
 
-    :param teams: either an integer (number of teams) or an iterable of teams
-    :param rounds: number of rounds to generate (optional)
-    :return: formatted string showing the tournament schedule
+    This creates a complete round-robin schedule where every team plays every
+    other team. The output uses DrawGenerator syntax compatible with the
+    tournament system.
+
+    Args:
+        teams: either an integer (number of teams) or an iterable of teams
+        rounds: number of rounds to generate (optional, defaults to complete
+                round-robin)
+
+    Returns:
+        formatted string showing the tournament schedule in DrawGenerator format
+
+    Examples:
+        4-team round robin:
+        >>> round_robin_format(4)
+        ('ROUND\n1: 1 vs 4\n2: 2 vs 3\nROUND\n3: 1 vs 3\n4: 4 vs 2\n'
+         'ROUND\n5: 1 vs 2\n6: 3 vs 4')
+
+        Custom team names:
+        >>> round_robin_format(['Red', 'Blue', 'Green'])
+        ('ROUND\n1: Red vs 0\n2: Blue vs Green\nROUND\n3: Red vs Green\n'
+         '4: 0 vs Blue\nROUND\n5: Red vs Blue\n6: Green vs 0')
+
+    Note:
+        - Teams are referenced by their 1-based position (1, 2, 3...)
+        - Uneven number of teams will have a "bye" (represented as 0)
+        - Each ROUND section contains matches played together
+          (ie. before the next round)
+        - Total matches for n teams: n*(n-1)/2
+        - For 4 teams: 6 matches across 3 rounds
+        - For 6 teams: 15 matches across 5 rounds
     """
     # If teams is an integer, convert it to a range starting from 1
     if isinstance(teams, int):

@@ -419,19 +419,17 @@ class DrawFormatFixturesTestCase(TestCase):
 
     def test_deserialization(self):
         """Test case for deserializing a complex tournament structure."""
-        fixture = DivisionStructure.from_json(
-            json.dumps(
-                {
-                    "title": "Test Series",
-                    "teams": ["Australia", "New Zealand"],
-                    "stages": [
-                        {
-                            "title": "Best of Three",
-                            "draw_format": "ROUND\n1: 1 vs 2 1st Test\nROUND\n2: 1 vs 2 2nd Test\nROUND\n3: 1 vs 2 3rd Test",
-                        },
-                    ],
-                }
-            )
+        fixture = DivisionStructure.model_validate(
+            {
+                "title": "Test Series",
+                "teams": ["Australia", "New Zealand"],
+                "stages": [
+                    {
+                        "title": "Best of Three",
+                        "draw_format": "ROUND\n1: 1 vs 2 1st Test\nROUND\n2: 1 vs 2 2nd Test\nROUND\n3: 1 vs 2 3rd Test",
+                    },
+                ],
+            }
         )
 
         # Validate that no matches exist before building the tournament

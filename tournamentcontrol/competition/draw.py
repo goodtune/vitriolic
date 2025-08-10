@@ -392,6 +392,59 @@ class MatchCollection(object):
 
 
 class DrawGenerator(object):
+    """
+    DrawGenerator parses tournament draw format strings and generates Match objects.
+    
+    DRAW FORMAT SYNTAX:
+    
+    The draw format uses a simple text-based syntax to describe tournament brackets:
+    
+    ROUND [optional_label]
+    match_id: team1 vs team2 [optional_match_label]
+    
+    TEAM REFERENCES:
+    - Direct indices: 1, 2, 3, 4 (refers to teams by their position in the division)
+    - Winner references: W1, W2 (winner of match ID 1, 2)  
+    - Loser references: L1, L2 (loser of match ID 1, 2)
+    - Pool position references: G1P1, G2P3 (Group 1 Position 1, Group 2 Position 3)
+    - Stage references: S1G1P2 (Stage 1 Group 1 Position 2)
+    
+    EXAMPLES:
+    
+    Simple Knockout (4 teams):
+    ```
+    ROUND
+    1: 1 vs 2 Semi 1
+    2: 3 vs 4 Semi 2
+    ROUND
+    3: L1 vs L2 Bronze
+    ROUND  
+    4: W1 vs W2 Final
+    ```
+    
+    Round Robin (4 teams):
+    ```
+    ROUND
+    1: 1 vs 2
+    2: 3 vs 4
+    ROUND
+    3: 1 vs 3
+    4: 2 vs 4
+    ROUND
+    5: 1 vs 4
+    6: 2 vs 3
+    ```
+    
+    Complex Multi-Stage with Pool References:
+    ```
+    ROUND
+    1: G1P1 vs G1P2 Pool Winner Playoff
+    2: G2P3 vs G2P4 Consolation
+    ```
+    
+    The generator processes these formats and creates Match objects with proper
+    team assignments and progression logic.
+    """
     regex = re.compile(
         r"""  # noqa
         (?:

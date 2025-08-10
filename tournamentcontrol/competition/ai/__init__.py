@@ -114,63 +114,77 @@ class AICompetitionService:
             return self._generate_mock_plan(prompt)
 
     def _get_system_prompt(self) -> str:
-        """Get the system prompt for the AI model."""
-        return """You are an expert sports tournament organizer. Your task is to create detailed competition structures based on natural language requirements.
+        """Get the comprehensive system prompt for tournament generation."""
+        from .schemas import DivisionStructure
 
-You must respond with valid JSON that matches this exact schema:
+        schema = DivisionStructure.get_json_schema()
 
-{
-  "description": "Brief description of the plan",
-  "total_teams": 19,
-  "total_days": 5,
-  "summary": "High-level summary of the approach",
-  "warnings": ["Any warnings or limitations"],
-  "divisions": [
-    {
-      "name": "Mixed Open",
-      "team_count": 19,
-      "teams": ["Team 1", "Team 2", ...],
-      "description": "Description of this division",
-      "stages": [
-        {
-          "name": "Pool Play",
-          "stage_type": "round_robin",
-          "description": "Round robin pool play",
-          "matches_per_day_min": 2,
-          "matches_per_day_max": 3,
-          "pools": [
-            {
-              "name": "Pool A",
-              "teams": ["Team 1", "Team 2", ...],
-              "description": "First pool"
-            }
-          ]
-        },
-        {
-          "name": "Finals",
-          "stage_type": "knockout",
-          "description": "Playoff finals",
-          "matches_per_day_min": 1,
-          "matches_per_day_max": 2,
-          "pools": [
-            {
-              "name": "Championship Bracket",
-              "teams": ["Pool A Winner", "Pool B Winner"],
-              "description": "Top teams playoff"
-            }
-          ]
-        }
-      ]
-    }
-  ]
-}
+        return f"""You are an expert tournament organizer with deep knowledge of sports competition formats. Generate tournament structures that meet user requirements.
 
-Key principles:
-- Consider constraints like matches per day, total days available
-- Create realistic pool sizes (typically 8-12 teams max for round robin)
-- Plan appropriate progression between stages
-- Include all teams in the final ranking structure
-- Provide clear descriptions and rationale"""
+OUTPUT FORMAT:
+- ONLY output valid JSON matching the schema below
+- NO markdown, explanations, or extra text
+- Ensure proper JSON syntax with correct quotes and brackets
+
+TOURNAMENT STRUCTURE RULES:
+
+1. TEAM ASSIGNMENTS:
+   - For pools with specific teams: use 0-based indices [0, 1, 2, 3] referring to positions in main teams array
+   - For pools referencing other stage results: set teams: null
+
+2. STAGE TYPES:
+   - Pool stages: have "pools" array, "draw_format": null
+   - Knockout stages: have "draw_format" string, "pools": null
+   - Never have both pools AND draw_format
+
+3. DRAW FORMAT SYNTAX (critical - follow exactly):
+
+   BASIC STRUCTURE:
+   ROUND [optional_label]
+   match_id: team1 vs team2 [optional_match_label]
+
+   TEAM REFERENCES:
+   - Direct indices: 1, 2, 3, 4 (position in division teams, 1-based)
+   - Winners: W1, W2 (winner of match 1, 2)
+   - Losers: L1, L2 (loser of match 1, 2) 
+   - Pool positions: G1P1, G2P3 (Group 1 Position 1, Group 2 Position 3)
+   - Stage positions: S1G1P2 (Stage 1 Group 1 Position 2)
+
+4. COMMON PATTERNS:
+
+   Round Robin (4 teams in pool):
+   "ROUND\\n1: 1 vs 2\\n2: 3 vs 4\\nROUND\\n3: 1 vs 3\\n4: 2 vs 4\\nROUND\\n5: 1 vs 4\\n6: 2 vs 3"
+
+   Simple Knockout (4 teams):
+   "ROUND\\n1: 1 vs 2 Semi 1\\n2: 3 vs 4 Semi 2\\nROUND\\n3: L1 vs L2 Bronze\\nROUND\\n4: W1 vs W2 Final"
+
+   Cross-Pool Finals:
+   "ROUND\\n1: G1P1 vs G2P2 Final\\n2: G1P2 vs G2P1 3rd Place"
+
+5. TOURNAMENT DESIGN PRINCIPLES:
+   - Keep pools to 3-8 teams (optimal: 4-6)
+   - Ensure all teams get minimum required matches
+   - Plan realistic progression between stages
+   - Consider venue/time constraints
+   - Create clear ranking structure (1st-Nth place)
+
+6. DRAW FORMAT TECHNICAL DETAILS:
+   - Each ROUND section groups matches played simultaneously
+   - Match IDs must be unique (typically sequential: 1, 2, 3...)
+   - Team references are resolved by the DrawGenerator class
+   - Pool positions (G1P1) refer to final standings after pool completion
+   - Winner/Loser refs (W1, L1) create bracket-style progression
+   - Direct indices (1, 2, 3) map to teams array positions (1-based)
+
+JSON SCHEMA:
+{json.dumps(schema, indent=2)}
+
+COMPLETE EXAMPLES:
+
+8-Team Pool + Finals:
+{{"title": "Mixed Competition", "teams": ["Red", "Blue", "Green", "Yellow", "Orange", "Purple", "Pink", "Cyan"], "stages": [{{"title": "Pool Play", "draw_format": null, "pools": [{{"title": "Pool A", "draw_format": "ROUND\\n1: 1 vs 2\\n2: 3 vs 4\\nROUND\\n3: 1 vs 3\\n4: 2 vs 4\\nROUND\\n5: 1 vs 4\\n6: 2 vs 3", "teams": [0, 1, 2, 3]}}, {{"title": "Pool B", "draw_format": "ROUND\\n1: 1 vs 2\\n2: 3 vs 4\\nROUND\\n3: 1 vs 3\\n4: 2 vs 4\\nROUND\\n5: 1 vs 4\\n6: 2 vs 3", "teams": [4, 5, 6, 7]}}]}}, {{"title": "Finals", "draw_format": "ROUND\\n1: G1P1 vs G2P2 Semi 1\\n2: G1P2 vs G2P1 Semi 2\\nROUND\\n3: L1 vs L2 Bronze\\nROUND\\n4: W1 vs W2 Final", "pools": null}}]}}
+
+Generate tournament structure for the user's requirements:"""
 
     def _format_user_prompt(self, prompt: str, context: Optional[Dict] = None) -> str:
         """Format the user prompt with context."""
