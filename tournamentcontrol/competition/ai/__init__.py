@@ -133,9 +133,9 @@ TOURNAMENT STRUCTURE RULES:
    - For pools referencing other stage results: set teams: null
 
 2. STAGE TYPES:
-   - Pool stages: have "pools" array, "draw_format": null
+   - Pool stages: have "pools" array with each pool having "draw_format", stage "draw_format": null
    - Knockout stages: have "draw_format" string, "pools": null
-   - Never have both pools AND draw_format
+   - Never have both stage-level draw_format AND pools array
 
 3. DRAW FORMAT SYNTAX (critical - follow exactly):
 
