@@ -22,7 +22,10 @@ class OllamaProvider:
     """Simple Ollama provider for tournament generation."""
 
     def __init__(
-        self, base_url: str = "http://localhost:11434", model: str = "llama3.2"
+        self,
+        base_url: str = "http://localhost:11434",
+        model: str = "llama3.2",
+        timeout: int = 60,
     ):
         """
         Initialize Ollama provider.
@@ -30,9 +33,11 @@ class OllamaProvider:
         Args:
             base_url: Ollama API base URL
             model: Model name to use (e.g., 'llama3.2', 'codellama')
+            timeout: Request timeout in seconds
         """
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.timeout = timeout
 
     def generate_tournament(self, prompt: str) -> Optional[DivisionStructure]:
         """
@@ -95,6 +100,10 @@ class OllamaProvider:
 
         return system_prompt
 
+    def get_system_prompt(self) -> str:
+        """Get the system prompt for debugging/display purposes."""
+        return self._build_system_prompt()
+
     def _call_ollama_api(self, system_prompt: str, user_prompt: str) -> Optional[str]:
         """Make API call to Ollama."""
         try:
@@ -110,7 +119,7 @@ class OllamaProvider:
             }
 
             logger.debug(f"Calling Ollama API at {url}")
-            response = requests.post(url, json=payload, timeout=60)
+            response = requests.post(url, json=payload, timeout=self.timeout)
             response.raise_for_status()
 
             data = response.json()
@@ -141,7 +150,9 @@ class OllamaProvider:
     def is_available(self) -> bool:
         """Check if Ollama API is available."""
         try:
-            response = requests.get(f"{self.base_url}/api/tags", timeout=5)
+            response = requests.get(
+                f"{self.base_url}/api/tags", timeout=min(5, self.timeout)
+            )
             return response.status_code == 200
         except requests.exceptions.RequestException:
             return False

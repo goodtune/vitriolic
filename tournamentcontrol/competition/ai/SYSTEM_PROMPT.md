@@ -43,15 +43,24 @@ match_id: team1 vs team2 [optional_match_label]
 "ROUND\n1: 1 vs 2\n2: 3 vs 4\nROUND\n3: 1 vs 3\n4: 2 vs 4\nROUND\n5: 1 vs 4\n6: 2 vs 3"
 ```
 
+**League Format (all teams play each other):**
+- Use ONE pool with ALL teams for "teams play each other" requests
+- Example: "8 teams play each other" = single pool with teams [0,1,2,3,4,5,6,7]
+- For home/away: use double round-robin (each team plays twice)
+
 **Simple Knockout (4 teams):**
 ```
 "ROUND\n1: 1 vs 2 Semi 1\n2: 3 vs 4 Semi 2\nROUND\n3: L1 vs L2 Bronze\nROUND\n4: W1 vs W2 Final"
 ```
 
-**Cross-Pool Finals:**
+**Finals from League Positions:**
 ```
-"ROUND\n1: G1P1 vs G2P2 Final\n2: G1P2 vs G2P1 3rd Place"
+"ROUND\n1: G1P1 vs G1P2 Final\n2: G1P3 vs G1P4 3rd Place"
 ```
+
+**Top N Teams from League:**
+- Use G1P1, G1P2, G1P3, G1P4, G1P5 for top 5 teams from league
+- NEVER use W1, L1 unless referencing specific match results
 
 ### 5. TOURNAMENT DESIGN PRINCIPLES
 
@@ -89,6 +98,11 @@ match_id: team1 vs team2 [optional_match_label]
 ### Multi-Tier Regrouping (12 teams):
 ```json
 {"title": "Cup/Bowl Tournament", "teams": ["Team 1", "Team 2", "Team 3", "Team 4", "Team 5", "Team 6", "Team 7", "Team 8", "Team 9", "Team 10", "Team 11", "Team 12"], "stages": [{"title": "Initial Pools", "draw_format": null, "pools": [{"title": "Pool A", "draw_format": "ROUND\n1: 1 vs 2\n2: 3 vs 4\nROUND\n3: 1 vs 3\n4: 2 vs 4\nROUND\n5: 1 vs 4\n6: 2 vs 3", "teams": [0, 1, 2, 3]}, {"title": "Pool B", "draw_format": "ROUND\n1: 1 vs 2\n2: 3 vs 4\nROUND\n3: 1 vs 3\n4: 2 vs 4\nROUND\n5: 1 vs 4\n6: 2 vs 3", "teams": [4, 5, 6, 7]}, {"title": "Pool C", "draw_format": "ROUND\n1: 1 vs 2\n2: 3 vs 4\nROUND\n3: 1 vs 3\n4: 2 vs 4\nROUND\n5: 1 vs 4\n6: 2 vs 3", "teams": [8, 9, 10, 11]}]}, {"title": "Cup Finals", "draw_format": "ROUND\n1: G1P1 vs G2P1 Semi\n2: G3P1 vs G1P2 Semi\nROUND\n3: W1 vs W2 Cup Final", "pools": null}]}
+```
+
+### League + Finals (8 teams):
+```json
+{"title": "League Championship", "teams": ["Team A", "Team B", "Team C", "Team D", "Team E", "Team F", "Team G", "Team H"], "stages": [{"title": "Regular Season", "draw_format": null, "pools": [{"title": "League", "draw_format": "ROUND\n1: 1 vs 2\n2: 3 vs 4\n3: 5 vs 6\n4: 7 vs 8\nROUND\n5: 1 vs 3\n6: 2 vs 5\n7: 4 vs 7\n8: 6 vs 8\nROUND\n9: 1 vs 4\n10: 3 vs 6\n11: 2 vs 7\n12: 5 vs 8\nROUND\n13: 1 vs 5\n14: 4 vs 6\n15: 3 vs 7\n16: 2 vs 8\nROUND\n17: 1 vs 6\n18: 5 vs 7\n19: 4 vs 8\n20: 2 vs 3\nROUND\n21: 1 vs 7\n22: 6 vs 4\n23: 5 vs 3\n24: 8 vs 2\nROUND\n25: 1 vs 8\n26: 7 vs 5\n27: 6 vs 3\n28: 4 vs 2", "teams": [0, 1, 2, 3, 4, 5, 6, 7]}]}, {"title": "Finals", "draw_format": "ROUND\n1: G1P1 vs G1P5 QF1\n2: G1P2 vs G1P4 QF2\nROUND\n3: G1P3 vs W2 SF1\n4: W1 vs L2 SF2\nROUND\n5: W3 vs W4 Final", "pools": null}]}
 ```
 
 ### 8-Team Pool + Finals:
