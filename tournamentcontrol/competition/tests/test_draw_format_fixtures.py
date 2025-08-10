@@ -11,6 +11,7 @@ that AI models should be able to generate. Each fixture includes:
 - Validation criteria
 """
 
+import json
 import textwrap
 
 from test_plus import TestCase
@@ -412,6 +413,41 @@ class DrawFormatFixturesTestCase(TestCase):
         ]
         actual_matches = [
             (m.stage.title, {m.home_team_title, m.away_team_title})
+            for m in Match.objects.all()
+        ]
+        self.assertCountEqual(actual_matches, expected_matches)
+
+    def test_deserialization(self):
+        """Test case for deserializing a complex tournament structure."""
+        fixture = DivisionStructure.from_json(
+            json.dumps(
+                {
+                    "title": "Test Series",
+                    "teams": ["Australia", "New Zealand"],
+                    "stages": [
+                        {
+                            "title": "Best of Three",
+                            "draw_format": "ROUND\n1: 1 vs 2 1st Test\nROUND\n2: 1 vs 2 2nd Test\nROUND\n3: 1 vs 2 3rd Test",
+                        },
+                    ],
+                }
+            )
+        )
+
+        # Validate that no matches exist before building the tournament
+        self.assertCountEqual(Match.objects.all(), [])
+
+        # Build the tournament structure
+        build(self.season, fixture)
+
+        # Validate the structure
+        expected_matches = [
+            ("Best of Three", "1st Test", {"Australia", "New Zealand"}),
+            ("Best of Three", "2nd Test", {"Australia", "New Zealand"}),
+            ("Best of Three", "3rd Test", {"Australia", "New Zealand"}),
+        ]
+        actual_matches = [
+            (m.stage.title, m.label, {m.home_team_title, m.away_team_title})
             for m in Match.objects.all()
         ]
         self.assertCountEqual(actual_matches, expected_matches)
