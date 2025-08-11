@@ -3,17 +3,12 @@
 import logging
 from datetime import datetime
 from decimal import Decimal
-from statistics import StatisticsError, mean
+from statistics import mean
 
-from dateutil.parser import parse as date_parse
 from dateutil.relativedelta import relativedelta
 from django.core.serializers import get_serializer
 from django.db.models import Case, ExpressionWrapper, F, FloatField, Q, When
-from django.http import Http404
-from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.utils.module_loading import import_string
-from django.views.generic import dates
 
 from tournamentcontrol.competition.models import (
     LadderEntry,
@@ -29,161 +24,6 @@ RANK_POINTS_Q = Q(match__is_bye=False, match__is_forfeit=False) | (
     (Q(match__is_forfeit=True) & ~Q(match__forfeit_winner=F("team")))
     & Q(division=F("opponent_division"))
 )
-
-
-class NodeToContextMixin(object):
-    def get_context_data(self, **kwargs):
-        data = super(NodeToContextMixin, self).get_context_data(**kwargs)
-        data["node"] = self.kwargs.get("node")
-        return data
-
-
-class IndexView(NodeToContextMixin, dates.ArchiveIndexView):
-    model = RankPoints
-    date_field = "date"
-    date_list_period = "day"
-
-    def get_date_list(self, *args, **kwargs):
-        date_list = super(IndexView, self).get_date_list(*args, **kwargs)
-        return date_list[:12]
-
-
-class YearView(NodeToContextMixin, dates.YearArchiveView):
-    model = RankPoints
-    date_field = "date"
-    date_list_period = "day"
-
-
-class MonthView(NodeToContextMixin, dates.MonthArchiveView):
-    model = RankPoints
-    date_field = "date"
-
-
-class DayView(NodeToContextMixin, dates.DayArchiveView):
-    model = RankPoints
-    date_field = "date"
-    allow_future = True
-
-    def get_context_data(self, **kwargs):
-        data = super(DayView, self).get_context_data(**kwargs)
-        division_list = (
-            data["object_list"]
-            .order_by("team__division")
-            .values_list("team__division__title", "team__division__slug")
-            .distinct()
-        )
-        data["division_list"] = division_list
-        return data
-
-
-class DivisionView(NodeToContextMixin, dates.DayArchiveView):
-    model = RankPoints
-    date_field = "date"
-    template_name_suffix = "_detail"
-    allow_future = True
-
-    def get_queryset(self):
-        queryset = super(DivisionView, self).get_queryset()
-        slug = self.kwargs["slug"]
-        division_queryset = queryset.filter(team__division__slug=slug).select_related(
-            "team__club"
-        )
-        return division_queryset.order_by("-points")
-
-    def get_context_data(self, **kwargs):
-        data = super(DivisionView, self).get_context_data(**kwargs)
-        slug = self.kwargs["slug"]
-        data["object"] = get_object_or_404(RankDivision, slug=slug)
-        return data
-
-
-class TeamView(DivisionView):
-    template_name_suffix = "_team"
-
-    def get_context_data(self, **kwargs):
-        slug = self.kwargs["team"]
-        data = super(TeamView, self).get_context_data(**kwargs)
-
-        decay = import_string(
-            self.kwargs.get("decay", "tournamentcontrol.competition.rank.no_decay")
-        )
-        version = "%(year)s-%(month)s-%(day)s" % self.kwargs
-        at = date_parse(version).date()
-
-        division = data["object"]
-        team = get_object_or_404(division.rankteam_set, club__slug=slug)
-
-        # Transform the data for template consumption.
-        queryset = (
-            LadderEntry.objects.filter(
-                bye=0,
-                division=division.pk,
-                opponent_division=division.pk,
-                team__club__slug=slug,
-                match__date__lt=at,
-            )
-            .select_related(
-                "match",
-                "match__stage",
-                "match__stage__division",
-                "match__stage__division__season",
-                "match__stage__division__season__competition",
-                "match__home_team__club",
-                "match__home_team__rank_division",
-                "match__home_team__division__rank_division",
-                "match__away_team__club",
-                "match__away_team__rank_division",
-                "match__away_team__division__rank_division",
-            )
-            # It would be nicer to use only but it's very easy to introduce breaking
-            # changes. Let's defer useless and expensive columns we can easily identify.
-            .defer(
-                "match__away_team__club__short_title",
-                "match__away_team_eval",
-                "match__away_team_eval_related",
-                "match__away_team_undecided",
-                "match__bye_processed",
-                "match__evaluated",
-                "match__external_identifier",
-                "match__home_team__club__short_title",
-                "match__home_team_eval",
-                "match__home_team_eval_related",
-                "match__home_team_undecided",
-                "match__include_in_ladder",
-                "match__is_bye",
-                "match__is_washout",
-                "match__play_at",
-                "match__round",
-                "match__time",
-                "match__videos",
-                # This is a text field and could be quite large, we don't want to
-                # return it for every match. We'll have a limited number of matches
-                # to constrain the issue, but we have seen it bite before in real
-                # world so let's defer it.
-                "match__stage__division__season__competition__copy",
-            )
-            .order_by("match__datetime")
-        )
-
-        table = [
-            (each.match, each.rank_points, each.rank_points * decay(each, at=at))
-            for each in queryset
-            if each.rank_points is not None
-        ]
-
-        series = [points_decay for match, points, points_decay in table]
-
-        try:
-            points = mean(series)
-        except StatisticsError as exc:
-            raise Http404(exc)
-
-        # Punch this into the context to display in the front end.
-        data["team"] = team
-        data["table"] = table
-        data["points"] = points
-
-        return data
 
 
 class Constants:
