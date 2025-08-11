@@ -332,6 +332,20 @@ class PersonMergeForm(PersonEditForm):
         )
 
 
+class PersonTransferForm(BootstrapFormControlMixin, ModelForm):
+    class Meta:
+        model = Person
+        fields = ("club",)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Only show clubs that are different from the current club
+        if self.instance and self.instance.club_id:
+            self.fields["club"].queryset = Club.objects.exclude(
+                pk=self.instance.club_id
+            )
+
+
 class CompetitionForm(SuperUserSlugMixin, ModelForm):
     class Meta:
         model = Competition

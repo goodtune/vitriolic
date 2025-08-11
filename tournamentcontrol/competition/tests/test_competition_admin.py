@@ -551,6 +551,66 @@ class GoodViewTests(TestCase):
             ),
         )
 
+    def test_transfer_person(self):
+        """Test transferring a person from one club to another."""
+        original_club = factories.ClubFactory.create(title="Original Club")
+        target_club = factories.ClubFactory.create(title="Target Club")
+        
+        # Create a person with team associations
+        person = factories.PersonFactory.create(
+            club=original_club,
+            first_name="Transfer", 
+            last_name="Test"
+        )
+        
+        # Create a team association to ensure it's preserved after transfer
+        division = factories.DivisionFactory.create()
+        division.season.competition.clubs.add(original_club, target_club)
+        team = factories.TeamFactory.create(club=original_club, division=division)
+        team_association = factories.TeamAssociationFactory.create(
+            team=team, 
+            person=person
+        )
+        
+        # Verify initial state
+        self.assertEqual(person.club, original_club)
+        self.assertEqual(team_association.person, person)
+        
+        # Test the transfer view requires login
+        self.assertLoginRequired(
+            "admin:fixja:club:person:transfer", 
+            original_club.pk, 
+            person.pk
+        )
+        
+        with self.login(self.superuser):
+            # Test GET request shows the form
+            self.get(
+                "admin:fixja:club:person:transfer", 
+                original_club.pk, 
+                person.pk
+            )
+            self.response_200()
+            
+            # Test POST request transfers the person
+            data = {"club": target_club.pk}
+            self.post(
+                "admin:fixja:club:person:transfer",
+                original_club.pk,
+                person.pk,
+                data=data
+            )
+            self.response_302()
+            
+            # Verify the person was transferred
+            person.refresh_from_db()
+            self.assertEqual(person.club, target_club)
+            
+            # Verify team association is preserved
+            team_association.refresh_from_db()
+            self.assertEqual(team_association.person, person)
+            self.assertEqual(team_association.team, team)
+
     def test_edit_clubassociation(self):
         association = factories.ClubAssociationFactory.create()
         self.assertLoginRequired(

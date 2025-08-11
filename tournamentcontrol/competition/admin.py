@@ -53,6 +53,7 @@ from tournamentcontrol.competition.forms import (
     MatchWashoutFormSet,
     PersonEditForm,
     PersonMergeForm,
+    PersonTransferForm,
     RescheduleDateFormSet,
     SeasonAssociationFormSet,
     SeasonForm,
@@ -476,6 +477,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path("<uuid:person_id>/", self.edit_person, name="edit"),
                 path("<uuid:person_id>/delete/", self.delete_person, name="delete"),
                 path("<uuid:person_id>/merge/", self.merge_person, name="merge"),
+                path("<uuid:person_id>/transfer/", self.transfer_person, name="transfer"),
             ],
             self.app_name,
         )
@@ -2359,6 +2361,34 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             permission_required=True,
             extra_context=extra_context,
         )
+
+    @registration
+    @staff_login_required_m
+    def transfer_person(self, request, club, extra_context, person, **kwargs):
+        # Get the current club before the form is processed
+        original_club = person.club
+        
+        response = self.generic_edit(
+            request,
+            Person.objects.filter(pk=person.pk),
+            instance=person,
+            form_class=PersonTransferForm,
+            related=(),
+            post_save_redirect=self.redirect(person.club.urls["edit"]),
+            permission_required=True,
+            extra_context=extra_context,
+        )
+        
+        # If the transfer was successful and the club changed, add a success message
+        if request.method == 'POST' and hasattr(response, 'status_code') and response.status_code == 302:
+            person.refresh_from_db()
+            if person.club != original_club:
+                messages.success(
+                    request,
+                    f"{person.get_full_name} has been transferred from {original_club.title} to {person.club.title}."
+                )
+        
+        return response
 
     @registration
     @staff_login_required_m
