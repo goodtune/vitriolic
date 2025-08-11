@@ -7,7 +7,7 @@ These Pydantic models define the structure that AI models should output
 when generating tournament formats, with built-in JSON Schema generation.
 """
 
-from typing import Optional
+from typing import Dict, Optional
 
 from pydantic import BaseModel, Field
 
@@ -16,9 +16,9 @@ class PoolFixture(BaseModel):
     """Pool within a stage."""
 
     title: str = Field(..., description="Name of the pool (e.g., 'Pool A', 'Group 1')")
-    draw_format: Optional[str] = Field(
+    draw_format_ref: Optional[str] = Field(
         None,
-        description="Draw format string for this pool. Use DrawGenerator syntax for round-robin: 'ROUND\\n1: 1 vs 2\\n2: 3 vs 4\\nROUND\\n3: 1 vs 3\\n4: 2 vs 4'. Required for pool stages, should be null for knockout stages.",
+        description="Reference to a draw format in the division's draw_formats dictionary. Required for pool stages, should be null for knockout stages.",
     )
     teams: Optional[list[int]] = Field(
         None,
@@ -30,9 +30,9 @@ class StageFixture(BaseModel):
     """Stage within a division."""
 
     title: str = Field(..., description="Name of the tournament stage")
-    draw_format: Optional[str] = Field(
+    draw_format_ref: Optional[str] = Field(
         None,
-        description="Draw format string for direct knockout stages. Use DrawGenerator syntax: 'ROUND\\n1: 1 vs 2 Semi\\nROUND\\n3: W1 vs W2 Final'. Set to null for pool-based stages.",
+        description="Reference to a draw format in the division's draw_formats dictionary for direct knockout stages. Set to null for pool-based stages.",
     )
     pools: Optional[list[PoolFixture]] = Field(
         None,
@@ -49,6 +49,10 @@ class DivisionStructure(BaseModel):
         min_length=2,
         description="List of team names participating in the tournament",
     )
+    draw_formats: Dict[str, str] = Field(
+        ...,
+        description="Dictionary of reusable draw formats referenced by stages and pools. Keys are descriptive names, values are draw format strings using DrawGenerator syntax.",
+    )
     stages: list[StageFixture] = Field(
         ..., min_length=1, description="Tournament stages in chronological order"
     )
@@ -57,3 +61,9 @@ class DivisionStructure(BaseModel):
     def get_json_schema(cls) -> dict:
         """Generate JSON Schema from Pydantic model."""
         return cls.model_json_schema()
+
+    def get_draw_format(self, ref: Optional[str]) -> Optional[str]:
+        """Get the draw format string by reference."""
+        if ref is None:
+            return None
+        return self.draw_formats.get(ref)

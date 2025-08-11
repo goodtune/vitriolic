@@ -313,10 +313,10 @@ def build(season: Season, spec: DivisionStructure) -> Division:
             logger.debug(f"Created stage: {stage.title}")
 
             # Handle stage-level draw format (knockouts without pools)
-            if stage_spec.draw_format and not stage_spec.pools:
-                _generate_matches_from_draw_format(
-                    stage, stage_spec.draw_format, team_mapping
-                )
+            if stage_spec.draw_format_ref and not stage_spec.pools:
+                draw_format = spec.get_draw_format(stage_spec.draw_format_ref)
+                if draw_format:
+                    _generate_matches_from_draw_format(stage, draw_format, team_mapping)
 
             # Handle pool-level draw formats
             if stage_spec.pools:
@@ -345,10 +345,12 @@ def build(season: Season, spec: DivisionStructure) -> Division:
                                 )
 
                     # Generate matches for this pool if draw format exists
-                    if pool_spec.draw_format:
-                        _generate_matches_from_draw_format(
-                            stage, pool_spec.draw_format, pool_team_mapping, pool
-                        )
+                    if pool_spec.draw_format_ref:
+                        draw_format = spec.get_draw_format(pool_spec.draw_format_ref)
+                        if draw_format:
+                            _generate_matches_from_draw_format(
+                                stage, draw_format, pool_team_mapping, pool
+                            )
 
         logger.info(f"Successfully built division '{spec.title}'")
         return division

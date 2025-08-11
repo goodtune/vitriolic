@@ -67,8 +67,33 @@ class Command(BaseCommand):
         """Dump all draw_formats with their scope paths."""
         self.stdout.write("\n")
 
+        # First, dump the draw_formats dictionary
+        if division.draw_formats:
+            self.stdout.write(
+                self.style.HTTP_BAD_REQUEST("# Division Draw Formats Dictionary")
+            )
+            for format_name, draw_format_string in division.draw_formats.items():
+                header = f"## {format_name}"
+                self.stdout.write(self.style.HTTP_BAD_REQUEST(header))  # Magenta
+                self.stdout.write(self.style.MIGRATE_LABEL(draw_format_string))  # Cyan
+                self.stdout.write("")  # Empty line for readability
+
+        # Then show how stages and pools reference them
         for stage_idx, stage in enumerate(division.stages):
             stage_path = f"stages[{stage_idx}]"
+
+            # Stage-level draw format reference
+            if stage.draw_format_ref:
+                header = f"# {stage_path}.draw_format_ref = '{stage.draw_format_ref}'"
+                if hasattr(stage, "title") and stage.title:
+                    header += f" [Stage: {stage.title}]"
+                self.stdout.write(self.style.HTTP_BAD_REQUEST(header))  # Magenta
+
+                # Show resolved format
+                draw_format = division.get_draw_format(stage.draw_format_ref)
+                if draw_format:
+                    self.stdout.write(self.style.MIGRATE_LABEL(draw_format))  # Cyan
+                self.stdout.write("")  # Empty line for readability
 
             # Guard against None pools
             if stage.pools is None:
@@ -77,9 +102,11 @@ class Command(BaseCommand):
             for pool_idx, pool in enumerate(stage.pools):
                 pool_path = f"{stage_path}.pools[{pool_idx}]"
 
-                if pool.draw_format:
+                if pool.draw_format_ref:
                     # Build header with titles in brackets
-                    header_parts = [f"# {pool_path}.draw_format"]
+                    header_parts = [
+                        f"# {pool_path}.draw_format_ref = '{pool.draw_format_ref}'"
+                    ]
 
                     # Add stage title if available
                     if hasattr(stage, "title") and stage.title:
@@ -93,7 +120,9 @@ class Command(BaseCommand):
 
                     # Header in magenta, draw_format in cyan
                     self.stdout.write(self.style.HTTP_BAD_REQUEST(header))  # Magenta
-                    self.stdout.write(
-                        self.style.MIGRATE_LABEL(pool.draw_format)
-                    )  # Cyan
+
+                    # Show resolved format
+                    draw_format = division.get_draw_format(pool.draw_format_ref)
+                    if draw_format:
+                        self.stdout.write(self.style.MIGRATE_LABEL(draw_format))  # Cyan
                     self.stdout.write("")  # Empty line for readability
