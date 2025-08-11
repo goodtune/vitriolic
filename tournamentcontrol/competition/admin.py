@@ -18,6 +18,7 @@ from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _, ngettext
+from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 
 from touchtechnology.admin.base import AdminComponent
@@ -1667,7 +1668,14 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
             except HttpError as exc:
                 messages.error(request, exc.reason)
-                return self.redirect(".")
+                return self.redirect(request.GET.get("next") or stage.urls["edit"])
+            except RefreshError as exc:
+                messages.error(
+                    request,
+                    "YouTube authorization has expired. Please re-authorize to continue using live streaming features.",
+                )
+                log.error("YouTube OAuth2 token refresh failed: %s", exc)
+                return self.redirect(request.GET.get("next") or stage.urls["edit"])
 
         return self.generic_edit(
             request,
