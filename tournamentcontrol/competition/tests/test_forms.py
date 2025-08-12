@@ -1,7 +1,7 @@
 from test_plus import TestCase
 
 from tournamentcontrol.competition.admin import next_related_factory
-from tournamentcontrol.competition.forms import DrawFormatForm, PersonTransferForm, TeamForm
+from tournamentcontrol.competition.forms import DrawFormatForm, TeamForm
 from tournamentcontrol.competition.models import Team
 from tournamentcontrol.competition.tests import factories
 
@@ -45,48 +45,3 @@ class TeamFormTests(TestCase):
             "text",
             ["Draw formula is invalid: line(s) '1' are not in the correct format."],
         )
-
-
-class PersonTransferFormTests(TestCase):
-    @classmethod
-    def setUpTestData(cls):
-        cls.original_club = factories.ClubFactory.create(title="Original Club")
-        cls.target_club = factories.ClubFactory.create(title="Target Club")
-        cls.other_club = factories.ClubFactory.create(title="Other Club")
-        cls.person = factories.PersonFactory.create(
-            club=cls.original_club,
-            first_name="John",
-            last_name="Doe"
-        )
-
-    def test_form_excludes_current_club(self):
-        """The form should exclude the person's current club from the choices."""
-        form = PersonTransferForm(instance=self.person)
-        club_choices = [choice[0] for choice in form.fields['club'].choices if choice[0]]
-        
-        self.assertNotIn(self.original_club.pk, club_choices)
-        self.assertIn(self.target_club.pk, club_choices)
-        self.assertIn(self.other_club.pk, club_choices)
-
-    def test_transfer_to_different_club(self):
-        """Test transferring a person to a different club."""
-        form = PersonTransferForm(
-            instance=self.person,
-            data={"club": self.target_club.pk}
-        )
-        
-        self.assertTrue(form.is_valid())
-        saved_person = form.save()
-        
-        self.assertEqual(saved_person.club, self.target_club)
-        self.assertEqual(saved_person.pk, self.person.pk)  # Same person
-        
-    def test_form_with_no_instance(self):
-        """Test form behavior when no instance is provided."""
-        form = PersonTransferForm()
-        # Should show all clubs when no instance is provided
-        club_choices = [choice[0] for choice in form.fields['club'].choices if choice[0]]
-        
-        self.assertIn(self.original_club.pk, club_choices)
-        self.assertIn(self.target_club.pk, club_choices)
-        self.assertIn(self.other_club.pk, club_choices)

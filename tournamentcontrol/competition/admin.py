@@ -12,7 +12,9 @@ from django.contrib import messages
 from django.db import models
 from django.db.models import Case, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
-from django.http import Http404, HttpResponse, HttpResponseGone, HttpResponseRedirect
+from django.http import (
+    Http404, HttpResponse, HttpResponseGone, HttpResponseRedirect,
+)
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
@@ -22,91 +24,40 @@ from googleapiclient.errors import HttpError
 
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.common.decorators import (
-    csrf_exempt_m,
-    staff_login_required_m,
+    csrf_exempt_m, staff_login_required_m,
 )
 from touchtechnology.common.prince import prince
 from tournamentcontrol.competition.dashboard import (
-    BasicResultWidget,
-    DetailResultWidget,
-    MostValuableWidget,
-    ProgressStageWidget,
-    ScoresheetWidget,
+    BasicResultWidget, DetailResultWidget, MostValuableWidget,
+    ProgressStageWidget, ScoresheetWidget,
 )
 from tournamentcontrol.competition.decorators import (
-    competition_by_pk_m,
-    registration,
+    competition_by_pk_m, registration,
 )
 from tournamentcontrol.competition.forms import (
-    ClubAssociationForm,
-    ClubRoleForm,
-    CompetitionForm,
-    DivisionForm,
-    DrawFormatForm,
-    DrawGenerationFormSet,
-    DrawGenerationMatchFormSet,
-    GroundForm,
-    MatchEditForm,
-    MatchRefereeForm,
-    MatchScheduleFormSet,
-    MatchStreamForm,
-    MatchWashoutFormSet,
-    PersonEditForm,
-    PersonMergeForm,
-    PersonTransferForm,
-    RescheduleDateFormSet,
-    SeasonAssociationFormSet,
-    SeasonForm,
-    SeasonMatchTimeFormSet,
-    StageForm,
-    StageGroupForm,
-    TeamAssociationForm,
-    TeamAssociationFormSet,
-    TeamForm,
-    TeamRoleForm,
-    UndecidedTeamForm,
+    ClubAssociationForm, ClubRoleForm, CompetitionForm, DivisionForm,
+    DrawFormatForm, DrawGenerationFormSet, DrawGenerationMatchFormSet,
+    GroundForm, MatchEditForm, MatchRefereeForm, MatchScheduleFormSet,
+    MatchStreamForm, MatchWashoutFormSet, PersonEditForm, PersonMergeForm,
+    RescheduleDateFormSet, SeasonAssociationFormSet, SeasonForm,
+    SeasonMatchTimeFormSet, StageForm, StageGroupForm, TeamAssociationForm,
+    TeamAssociationFormSet, TeamForm, TeamRoleForm, UndecidedTeamForm,
     VenueForm,
 )
 from tournamentcontrol.competition.models import (
-    Club,
-    ClubAssociation,
-    ClubRole,
-    Competition,
-    Division,
-    DivisionExclusionDate,
-    DrawFormat,
-    Ground,
-    LadderEntry,
-    LadderSummary,
-    Match,
-    MatchScoreSheet,
-    Person,
-    Place,
-    Season,
-    SeasonAssociation,
-    SeasonExclusionDate,
-    SeasonMatchTime,
-    SeasonReferee,
-    Stage,
-    StageGroup,
-    Team,
-    TeamAssociation,
-    TeamRole,
-    UndecidedTeam,
-    Venue,
+    Club, ClubAssociation, ClubRole, Competition, Division,
+    DivisionExclusionDate, DrawFormat, Ground, LadderEntry, LadderSummary,
+    Match, MatchScoreSheet, Person, Place, Season, SeasonAssociation,
+    SeasonExclusionDate, SeasonMatchTime, SeasonReferee, Stage, StageGroup,
+    Team, TeamAssociation, TeamRole, UndecidedTeam, Venue,
 )
 from tournamentcontrol.competition.sites import CompetitionAdminMixin
 from tournamentcontrol.competition.tasks import (
-    generate_pdf_grid,
-    generate_pdf_scorecards,
-    set_youtube_thumbnail,
+    generate_pdf_grid, generate_pdf_scorecards, set_youtube_thumbnail,
 )
 from tournamentcontrol.competition.utils import (
-    FauxQueryset,
-    generate_fixture_grid,
-    generate_scorecards,
-    legitimate_bye_match,
-    match_unplayed,
+    FauxQueryset, generate_fixture_grid, generate_scorecards,
+    legitimate_bye_match, match_unplayed,
 )
 from tournamentcontrol.competition.wizards import DrawGenerationWizard
 
@@ -2391,16 +2342,13 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @registration
     @staff_login_required_m
     def transfer_person(self, request, club, extra_context, person, **kwargs):
-        # Get the current club before the form is processed
-        original_club = club
-
         return self.generic_edit(
             request,
-            Person.objects.filter(pk=person.pk),
+            Person,
             instance=person,
-            form_class=PersonTransferForm,
+            form_fields=("club",),
             related=(),
-            post_save_redirect=self.redirect(person.club.urls["edit"]),
+            post_save_redirect=self.redirect(club.urls["edit"]),
             permission_required=True,
             extra_context=extra_context,
             changed_messages=(
