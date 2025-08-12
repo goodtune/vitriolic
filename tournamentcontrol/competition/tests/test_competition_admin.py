@@ -1564,8 +1564,10 @@ class BackendTests(MessagesTestMixin, TestCase):
         # Create a stage with two rounds as described in the issue
         stage = factories.StageFactory.create()
 
-        # Round 1: Create two matches (1 vs 2)
-        match1 = factories.MatchFactory.create(stage=stage, round=1, label="Match 1")
+        # Round 1: Create match without teams assigned
+        match1 = factories.MatchFactory.create(
+            stage=stage, round=1, label="Match 1", home_team=None, away_team=None
+        )
 
         # Round 2: Create matches that depend on Round 1 results
         # These matches will have eval_related fields pointing to match1
@@ -1582,12 +1584,15 @@ class BackendTests(MessagesTestMixin, TestCase):
         )
 
         # Verify that the dependent match shows the correct team titles
-        all_matches = list(stage.matches.all()._team_titles().order_by("round", "pk"))
-        self.assertEqual(len(all_matches), 2)
-
-        # First match has factory-created teams, second has eval-based teams
-        match2_teams = (all_matches[1].home_team_title, all_matches[1].away_team_title)
-        self.assertEqual(match2_teams, ("Winner Match 1", "Loser Match 1"))
+        expected_matches = [
+            (None, None),  # match1 has no teams assigned
+            ("Winner Match 1", "Loser Match 1"),  # match2 references match1
+        ]
+        actual_matches = [
+            (m.home_team_title, m.away_team_title)
+            for m in stage.matches.order_by("round", "pk")._team_titles()
+        ]
+        self.assertCountEqual(actual_matches, expected_matches)
 
         # Now test the undo_draw view - this should work without ProtectedError
         undo_draw_url = stage.url_names["undo"]
