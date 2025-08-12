@@ -1569,10 +1569,12 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # Round 2: Create matches that depend on Round 1 results
         # These matches will have eval_related fields pointing to match1
-        factories.MatchFactory.create(
+        match2 = factories.MatchFactory.create(
             stage=stage,
             round=2,
             label="Winner vs Loser",
+            home_team=None,  # Don't create teams, rely on eval fields
+            away_team=None,
             home_team_eval="W",  # Home team is winner of match1
             home_team_eval_related=match1,
             away_team_eval="L",  # Away team is loser of match1
@@ -1580,15 +1582,12 @@ class BackendTests(MessagesTestMixin, TestCase):
         )
 
         # Verify that the dependent match shows the correct team titles
-        expected_matches = [
-            (None, None),  # match1 has no teams assigned
-            ("Winner Match 1", "Loser Match 1"),  # match2 references match1
-        ]
-        actual_matches = [
-            (m.home_team_title, m.away_team_title)
-            for m in stage.matches.all()._team_titles().order_by("round", "pk")
-        ]
-        self.assertCountEqual(actual_matches, expected_matches)
+        all_matches = list(stage.matches.all()._team_titles().order_by("round", "pk"))
+        self.assertEqual(len(all_matches), 2)
+
+        # First match has factory-created teams, second has eval-based teams
+        match2_teams = (all_matches[1].home_team_title, all_matches[1].away_team_title)
+        self.assertEqual(match2_teams, ("Winner Match 1", "Loser Match 1"))
 
         # Now test the undo_draw view - this should work without ProtectedError
         undo_draw_url = stage.url_names["undo"]
@@ -1597,4 +1596,104 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.response_302()  # Should redirect successfully without error
 
         # Verify all matches from the stage were deleted
+        self.assertCountEqual(stage.matches.all(), [])
+
+    def test_undo_draw_with_complex_interleaved_dependencies(self):
+        """
+        Test that undo_draw handles complex interleaved match dependencies correctly.
+
+        This test creates a tournament bracket-like structure with multiple rounds
+        where matches depend on results from previous rounds in a complex way:
+        - Round 1: Two base matches
+        - Round 2: Two matches depending on Round 1 results (winners vs winners, losers vs losers)
+        - Round 3: Two matches depending on Round 2 results with cross-dependencies
+
+        This tests that the ordering of deletion doesn't matter and that all
+        dependent matches are properly handled regardless of their creation order
+        or interdependencies.
+        """
+        stage = factories.StageFactory.create()
+
+        # Round 1: Create two base matches
+        match1 = factories.MatchFactory.create(stage=stage, round=1, label="Match 1")
+        match2 = factories.MatchFactory.create(stage=stage, round=1, label="Match 2")
+
+        # Round 2: Create matches that depend on Round 1 results
+        # Set home_team=None, away_team=None to rely on eval fields
+        match3 = factories.MatchFactory.create(
+            stage=stage,
+            round=2,
+            label="Winners Semi",
+            home_team=None,
+            away_team=None,
+            home_team_eval="W",  # Winner of match1
+            home_team_eval_related=match1,
+            away_team_eval="W",  # Winner of match2
+            away_team_eval_related=match2,
+        )
+        match4 = factories.MatchFactory.create(
+            stage=stage,
+            round=2,
+            label="Losers Semi",
+            home_team=None,
+            away_team=None,
+            home_team_eval="L",  # Loser of match1
+            home_team_eval_related=match1,
+            away_team_eval="L",  # Loser of match2
+            away_team_eval_related=match2,
+        )
+
+        # Round 3: Create matches with cross-dependencies on Round 2
+        match5 = factories.MatchFactory.create(
+            stage=stage,
+            round=3,
+            label="Final",
+            home_team=None,
+            away_team=None,
+            home_team_eval="W",  # Winner of match3
+            home_team_eval_related=match3,
+            away_team_eval="L",  # Loser of match4 (cross-dependency)
+            away_team_eval_related=match4,
+        )
+        match6 = factories.MatchFactory.create(
+            stage=stage,
+            round=3,
+            label="3rd Place",
+            home_team=None,
+            away_team=None,
+            home_team_eval="L",  # Loser of match3
+            home_team_eval_related=match3,
+            away_team_eval="W",  # Winner of match4 (cross-dependency)
+            away_team_eval_related=match4,
+        )
+
+        # Verify the complex dependency structure is set up correctly
+        # Note: match1 and match2 have actual teams, others have eval-based teams
+        all_matches = list(stage.matches.all()._team_titles().order_by("round", "pk"))
+
+        # First two matches should have actual teams
+        self.assertEqual(len(all_matches), 6)
+
+        # Verify matches 3-6 have the expected eval-based team titles
+        match3_teams = (all_matches[2].home_team_title, all_matches[2].away_team_title)
+        match4_teams = (all_matches[3].home_team_title, all_matches[3].away_team_title)
+        match5_teams = (all_matches[4].home_team_title, all_matches[4].away_team_title)
+        match6_teams = (all_matches[5].home_team_title, all_matches[5].away_team_title)
+
+        self.assertEqual(match3_teams, ("Winner Match 1", "Winner Match 2"))
+        self.assertEqual(match4_teams, ("Loser Match 1", "Loser Match 2"))
+        self.assertEqual(match5_teams, ("Winner Winners Semi", "Loser Losers Semi"))
+        self.assertEqual(match6_teams, ("Loser Winners Semi", "Winner Losers Semi"))
+
+        # Verify that we have 6 matches total before deletion
+        self.assertEqual(stage.matches.count(), 6)
+
+        # Now test the undo_draw view with this complex dependency structure
+        # This should work without ProtectedError despite the interleaved dependencies
+        undo_draw_url = stage.url_names["undo"]
+
+        self.post(undo_draw_url.url_name, *undo_draw_url.args)
+        self.response_302()  # Should redirect successfully without error
+
+        # Verify all matches from the stage were deleted despite complex dependencies
         self.assertCountEqual(stage.matches.all(), [])

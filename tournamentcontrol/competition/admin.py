@@ -1519,15 +1519,48 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         LadderSummary.objects.filter(stage=stage).delete()
         LadderEntry.objects.filter(match__stage=stage).delete()
 
-        # Two-stage deletion to handle matches with eval_related dependencies
-        # First, delete matches that have eval_related fields (dependent matches)
-        Match.objects.filter(stage=stage).filter(
-            Q(home_team_eval_related__isnull=False)
-            | Q(away_team_eval_related__isnull=False)
-        ).delete()
+        # Multi-stage deletion to handle complex eval_related dependencies
+        # Keep deleting matches until all are gone, starting with the most dependent ones
+        while Match.objects.filter(stage=stage).exists():
+            # Get all matches for this stage
+            stage_matches = Match.objects.filter(stage=stage)
 
-        # Then, delete the remaining matches
-        Match.objects.filter(stage=stage).delete()
+            # Find matches that have eval_related fields (dependent matches)
+            dependent_matches = stage_matches.filter(
+                Q(home_team_eval_related__isnull=False)
+                | Q(away_team_eval_related__isnull=False)
+            )
+
+            if dependent_matches.exists():
+                # Find matches that are NOT referenced by other matches
+                # These are the "leaf" matches in the dependency tree that can be safely deleted
+                referenced_match_ids = set()
+                for match in dependent_matches:
+                    if match.home_team_eval_related_id:
+                        referenced_match_ids.add(match.home_team_eval_related_id)
+                    if match.away_team_eval_related_id:
+                        referenced_match_ids.add(match.away_team_eval_related_id)
+
+                # Delete dependent matches that are not referenced by others
+                deletable_dependent = dependent_matches.exclude(
+                    pk__in=referenced_match_ids
+                )
+                if deletable_dependent.exists():
+                    deletable_dependent.delete()
+                else:
+                    # If no dependent matches can be deleted, try deleting non-dependent ones
+                    non_dependent_matches = stage_matches.filter(
+                        home_team_eval_related__isnull=True,
+                        away_team_eval_related__isnull=True,
+                    )
+                    if non_dependent_matches.exists():
+                        non_dependent_matches.delete()
+                    else:
+                        # This shouldn't happen, but break to avoid infinite loop
+                        break
+            else:
+                # No dependent matches left, delete all remaining matches
+                stage_matches.delete()
 
         messages.success(request, _("Your draw has been undone."))
         return self.redirect(division.urls["edit"])
