@@ -208,7 +208,7 @@ class ThumbnailImageWidget(forms.ClearableFileInput):
         return None
 
 
-class ThumbnailImageField(forms.BinaryField):
+class ThumbnailImageField(forms.FileField):
     """
     Custom field for handling thumbnail image uploads that works directly with BinaryField.
     
