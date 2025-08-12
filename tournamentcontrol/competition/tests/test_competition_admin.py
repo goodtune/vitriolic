@@ -1,6 +1,5 @@
 import unittest
 from datetime import date, datetime, time
-from unittest import mock
 from zoneinfo import ZoneInfo
 
 from dateutil.rrule import DAILY
@@ -10,10 +9,14 @@ from django.template import Context, Template
 from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 
-from touchtechnology.admin.mixins import AdminUrlLookup
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.models import (
-    Division, Ground, Match, Stage, StageGroup, Team,
+    Division,
+    Ground,
+    Match,
+    Stage,
+    StageGroup,
+    Team,
 )
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin, round_robin_format
@@ -1566,7 +1569,7 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # Round 2: Create matches that depend on Round 1 results
         # These matches will have eval_related fields pointing to match1
-        match2 = factories.MatchFactory.create(
+        factories.MatchFactory.create(
             stage=stage,
             round=2,
             label="Winner vs Loser",
@@ -1575,6 +1578,17 @@ class BackendTests(MessagesTestMixin, TestCase):
             away_team_eval="L",  # Away team is loser of match1
             away_team_eval_related=match1,
         )
+
+        # Verify that the dependent match shows the correct team titles
+        expected_matches = [
+            (None, None),  # match1 has no teams assigned
+            ("Winner Match 1", "Loser Match 1"),  # match2 references match1
+        ]
+        actual_matches = [
+            (m.home_team_title, m.away_team_title)
+            for m in stage.matches.all()._team_titles().order_by("round", "pk")
+        ]
+        self.assertCountEqual(actual_matches, expected_matches)
 
         # Now test the undo_draw view - this should work without ProtectedError
         undo_draw_url = stage.url_names["undo"]
