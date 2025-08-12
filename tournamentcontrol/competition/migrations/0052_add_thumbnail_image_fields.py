@@ -13,6 +13,7 @@ class Migration(migrations.Migration):
             field=models.BinaryField(
                 blank=True,
                 null=True,
+                editable=True,
                 help_text="Binary data for thumbnail image to be used for YouTube videos",
             ),
         ),
@@ -22,6 +23,7 @@ class Migration(migrations.Migration):
             field=models.BinaryField(
                 blank=True,
                 null=True,
+                editable=True,
                 help_text="Binary data for thumbnail image to be used for YouTube video",
             ),
         ),

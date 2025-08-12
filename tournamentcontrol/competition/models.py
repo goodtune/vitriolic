@@ -521,6 +521,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     live_stream_thumbnail_image = models.BinaryField(
         blank=True,
         null=True,
+        editable=True,
         help_text="Binary data for thumbnail image to be used for YouTube videos",
     )
 
@@ -1679,6 +1680,7 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     live_stream_thumbnail_image = models.BinaryField(
         blank=True,
         null=True,
+        editable=True,
         help_text="Binary data for thumbnail image to be used for YouTube video",
     )
 
