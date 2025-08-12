@@ -40,7 +40,6 @@ from tournamentcontrol.competition.forms import (
     MultiConfigurationForm,
     ProgressMatchesFormSet,
     ProgressTeamsFormSet,
-    RankingConfigurationForm,
     StreamControlForm,
 )
 from tournamentcontrol.competition.models import (
@@ -50,14 +49,6 @@ from tournamentcontrol.competition.models import (
     Person,
     SimpleScoreMatchStatistic,
     Stage,
-)
-from tournamentcontrol.competition.rank import (
-    DayView as RankDay,
-    DivisionView as RankDivision,
-    IndexView as RankIndex,
-    MonthView as RankMonth,
-    TeamView as RankTeam,
-    YearView as RankYear,
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
@@ -1359,33 +1350,6 @@ class TournamentCalculatorSite(Application):
         return self.render(request, templates, context)
 
 
-class RankingSite(Application):
-    kwargs_form_class = RankingConfigurationForm
-
-    def __init__(self, name="ranking", app_name="ranking", **kwargs):
-        super().__init__(name=name, app_name=app_name, **kwargs)
-
-    def get_urls(self):
-        urlpatterns = [
-            path("", RankIndex.as_view(), name="index"),
-            path("<int:year>/", RankYear.as_view(), name="year"),
-            path("<int:year>/<str:month>/", RankMonth.as_view(), name="month"),
-            path("<int:year>/<str:month>/<int:day>/", RankDay.as_view(), name="day"),
-            path(
-                "<int:year>/<str:month>/<int:day>/<slug:slug>/",
-                RankDivision.as_view(),
-                name="rank",
-            ),
-            path(
-                "<int:year>/<str:month>/<int:day>/<slug:slug>/<slug:team>/",
-                RankTeam.as_view(),
-                name="team",
-            ),
-        ]
-        return urlpatterns
-
-
 competition = CompetitionSite()
 registration = RegistrationSite()
 calculator = TournamentCalculatorSite()
-ranking = RankingSite()
