@@ -1836,7 +1836,10 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
             team_eval_related = getattr(self, f"{field}_eval_related")
 
         try:
-            stage, group, position = stage_group_position_re.match(team_eval).groups()
+            match = stage_group_position_re.match(team_eval)
+            if not match:
+                raise AttributeError("Invalid stage_group_position pattern")
+            stage, group, position = match.groups()
         except (AttributeError, TypeError):
             if not team_undecided and self.is_bye:
                 return ByeTeam()
@@ -1971,9 +1974,12 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                         team = team_eval_related._winner_loser(team_eval)
                     else:
                         try:
-                            stage, group, position = stage_group_position_re.match(
-                                team_eval
-                            ).groups()
+                            match = stage_group_position_re.match(team_eval)
+                            if not match:
+                                raise AttributeError(
+                                    "Invalid stage_group_position pattern"
+                                )
+                            stage, group, position = match.groups()
                         except (AttributeError, TypeError):
                             logger.exception(
                                 "Failed evaluating `stage_group_position` %s for %s",
