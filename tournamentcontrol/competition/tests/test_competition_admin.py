@@ -1560,3 +1560,33 @@ class BackendTests(MessagesTestMixin, TestCase):
             match.refresh_from_db()
             self.assertFalse(match.live_stream)
             self.assertIsNone(match.external_identifier)
+    def test_undo_draw_with_dependent_matches(self):
+        """Test that undo_draw handles matches with eval_related dependencies correctly."""
+        # Create a stage with two rounds as described in the issue
+        stage = factories.StageFactory.create()
+        
+        # Round 1: Create two matches (1 vs 2)
+        match1 = factories.MatchFactory.create(stage=stage, round=1, label="Match 1")
+        
+        # Round 2: Create matches that depend on Round 1 results
+        # These matches will have eval_related fields pointing to match1
+        match2 = factories.MatchFactory.create(
+            stage=stage, 
+            round=2, 
+            label="Winner vs Loser",
+            home_team_eval_related=match1,  # Home team is winner of match1
+            away_team_eval_related=match1   # Away team is loser of match1
+        )
+        
+        # Verify the setup - match2 should reference match1
+        self.assertEqual(match2.home_team_eval_related, match1)
+        self.assertEqual(match2.away_team_eval_related, match1)
+        
+        # Now test the undo_draw view - this should work without ProtectedError
+        undo_draw_url = stage.url_names["undo"]
+        
+        self.post(undo_draw_url.url_name, *undo_draw_url.args)
+        self.response_302()  # Should redirect successfully without error
+        
+        # Verify all matches from the stage were deleted
+        self.assertEqual(Match.objects.filter(stage=stage).count(), 0)
