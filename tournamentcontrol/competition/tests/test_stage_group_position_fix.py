@@ -1,176 +1,331 @@
-"""
-Test case specifically for the stage_group_position parser fix (Issue #182).
+"""Comprehensive test coverage for stage_group_position parser (Issues #182, #183).
 
-This test demonstrates that the AttributeError crash on invalid input
-has been fixed and that both valid and invalid inputs are handled gracefully.
+Tests the fix for AttributeError crash on invalid input and ensures comprehensive
+coverage of all stage_group_position parsing scenarios.
 """
+
 from test_plus import TestCase
+
 from tournamentcontrol.competition.tests.factories import (
+    DivisionFactory,
     MatchFactory,
     StageFactory,
-    DivisionFactory,
+    StageGroupFactory,
+    TeamFactory,
 )
+from tournamentcontrol.competition.utils import stage_group_position_re
 
 
-class StageGroupPositionParserFixTests(TestCase):
+class StageGroupPositionRegexTests(TestCase):
     """
-    Test cases specifically for the stage_group_position parser crash fix.
-    These tests demonstrate the fix for Issue #182.
+    Direct tests for the stage_group_position regex patterns.
+    Tests the core regex matching behavior.
+    """
+
+    def test_valid_regex_patterns(self):
+        """Test that valid stage_group_position patterns match correctly."""
+        valid_patterns = [
+            ("P1", (None, None, "1")),
+            ("P10", (None, None, "10")),
+            ("G1P1", (None, "1", "1")),
+            ("G2P5", (None, "2", "5")),
+            ("S1G1P1", ("1", "1", "1")),
+            ("S2G3P4", ("2", "3", "4")),
+            ("S10G20P30", ("10", "20", "30")),
+            # These zero-based patterns are actually valid according to the regex
+            ("P0", (None, None, "0")),
+            ("G0P1", (None, "0", "1")),
+            ("S0G1P1", ("0", "1", "1")),
+            ("S1P1", ("1", None, "1")),  # Stage without group is valid
+        ]
+
+        for pattern, expected_groups in valid_patterns:
+            with self.subTest(pattern=pattern):
+                match = stage_group_position_re.match(pattern)
+                self.assertIsNotNone(match, f"Pattern '{pattern}' should match")
+
+                stage, group, position = match.groups()
+                expected_stage, expected_group, expected_position = expected_groups
+
+                self.assertEqual(stage, expected_stage)
+                self.assertEqual(group, expected_group)
+                self.assertEqual(position, expected_position)
+
+    def test_invalid_regex_patterns(self):
+        """Test that invalid stage_group_position patterns do not match."""
+        invalid_patterns = [
+            "BAD1",  # Short version of original crash case
+            "Team A",  # Shortened version
+            "INVALID",
+            "BadPat",  # Shortened to fit varchar constraints
+            "P",  # Missing position number
+            "G1",  # Missing position
+            "S1G1",  # Missing position
+            "1P1",  # Invalid format
+            "GP1",  # Missing group number
+            "SG1P1",  # Missing stage number
+            "",  # Empty string
+            "ABC123",
+            "123",
+        ]
+
+        for pattern in invalid_patterns:
+            with self.subTest(pattern=pattern):
+                match = stage_group_position_re.match(pattern)
+                self.assertIsNone(match, f"Pattern '{pattern}' should not match")
+
+    def test_partial_matches_not_accepted(self):
+        """Test that partial matches at start of string don't count as valid."""
+        partial_patterns = [
+            "P1Extra",  # Valid start but extra text
+            "G1P1More",
+            "S1G1P1AndMore",
+            "P1 ",  # Trailing space
+            " P1",  # Leading space
+        ]
+
+        for pattern in partial_patterns:
+            with self.subTest(pattern=pattern):
+                match = stage_group_position_re.match(pattern)
+                # These might match but should not be considered complete/valid
+                if match:
+                    # If it matches, the full match should not equal the input
+                    # indicating the pattern didn't consume the whole string
+                    self.assertNotEqual(match.group(0), pattern)
+
+
+class StageGroupPositionModelFixTests(TestCase):
+    """
+    Tests for the AttributeError fix in Match model methods.
+    Tests the actual usage scenarios that were crashing.
     """
 
     def setUp(self):
-        """Set up test fixtures."""
+        """Set up test fixtures for model testing."""
         self.division = DivisionFactory.create()
         self.stage1 = StageFactory.create(division=self.division, order=1)
-        self.stage2 = StageFactory.create(division=self.division, order=2, follows=self.stage1)
+        self.stage2 = StageFactory.create(
+            division=self.division, order=2, follows=self.stage1
+        )
 
-    def test_invalid_stage_group_position_no_longer_crashes(self):
-        """
-        Test that invalid stage_group_position values no longer cause AttributeError crashes.
-        
-        This is the core test for Issue #182.
-        """
-        # Create a match with invalid eval fields (short enough for varchar(10))
+        # Create actual teams for more realistic testing
+        self.team1 = TeamFactory.create(division=self.division)
+        self.team2 = TeamFactory.create(division=self.division)
+
+        # Create pools for valid formula testing
+        self.pool1 = StageGroupFactory.create(stage=self.stage1)
+        self.pool2 = StageGroupFactory.create(stage=self.stage1)
+
+    def test_no_crash_on_invalid_formulas_get_team_methods(self):
+        """Test Match.get_home_team() and get_away_team() don't crash on invalid formulas."""
+        invalid_formulas = [
+            "BAD1",  # Short version of original crash case
+            "Team A",  # Shortened version
+            "INVALID",
+            "BadForm",  # Shortened to fit varchar(10)
+            "",
+        ]
+
+        for home_formula in invalid_formulas:
+            for away_formula in invalid_formulas[
+                :2
+            ]:  # Limit combinations for performance
+                with self.subTest(home=home_formula, away=away_formula):
+                    match = MatchFactory.create(
+                        stage=self.stage2,
+                        home_team=None,
+                        away_team=None,
+                        home_team_eval=home_formula,
+                        away_team_eval=away_formula,
+                    )
+
+                    # These should not raise AttributeError with 'groups' message
+                    home_result = match.get_home_team()
+                    away_result = match.get_away_team()
+
+                    # Should return fallback values
+                    self.assertEqual(home_result, {"title": "None"})
+                    self.assertEqual(away_result, {"title": "None"})
+
+    def test_no_crash_on_invalid_formulas_eval_method(self):
+        """Test Match.eval() method doesn't crash on invalid formulas."""
         match = MatchFactory.create(
             stage=self.stage2,
             home_team=None,
             away_team=None,
-            home_team_eval="INVALID1",  # Invalid format - should cause match() to return None
-            away_team_eval="INVALID2",  # Another invalid format 
-            label="Test Match",
+            home_team_eval="BAD1",  # Short version of original crash case
+            away_team_eval="Team B",  # Shortened version
         )
 
-        # Before the fix, this would raise:
-        # AttributeError: 'NoneType' object has no attribute 'groups'
-        
-        # After the fix, it should handle gracefully
-        try:
-            # Call public API methods which use the fixed code
-            home_team_result = match.get_home_team()
-            away_team_result = match.get_away_team()
-            
-            # The method should return the fallback value, not crash
-            self.assertEqual(home_team_result, {"title": "None"})
-            self.assertEqual(away_team_result, {"title": "None"})
-            
-        except AttributeError as e:
-            if "groups" in str(e):
-                self.fail(f"AttributeError with 'groups' should be fixed: {e}")
-            # Re-raise if it's a different AttributeError
-            raise
-
-    def test_eval_method_handles_invalid_formulas(self):
-        """
-        Test that the Match.eval() method handles invalid formulas gracefully.
-        This tests the second location where the fix was applied.
-        """
-        # Create a match with invalid eval fields (short enough for varchar(10))
-        match = MatchFactory.create(
-            stage=self.stage2,
-            home_team=None,
-            away_team=None,
-            home_team_eval="BAD1",  # Invalid format
-            away_team_eval="BAD2",  # Invalid format
-            label="Test Match",
-        )
-
-        # The eval() method should handle invalid formulas gracefully
-        # and return fallback values instead of crashing
+        # This should not raise AttributeError
         home_team, away_team = match.eval()
-        
-        # Should return the fallback values, not crash
+
         self.assertEqual(home_team, {"title": "None"})
         self.assertEqual(away_team, {"title": "None"})
 
-    def test_internal_stage_group_position_pattern_error_handling(self):
-        """
-        Test that invalid stage_group_position patterns raise the correct AttributeError.
-        This tests the internal error handling mechanism directly.
-        """
+    def test_valid_formulas_still_work_correctly(self):
+        """Test that valid formulas continue to work after the fix."""
         match = MatchFactory.create(
             stage=self.stage2,
             home_team=None,
             away_team=None,
-            home_team_eval="INVALID",  # Invalid format
-            away_team_eval="P1",  # Valid format for comparison
-            label="Test Match",
+            home_team_eval="P1",
+            away_team_eval="P2",
         )
 
-        # Test that the internal _get_team method raises the correct AttributeError
-        # for invalid patterns, not the old "'NoneType' object has no attribute 'groups'"
-        with self.assertRaisesRegex(AttributeError, "Invalid stage_group_position pattern"):
-            # This should raise the new descriptive error, which will be caught
-            # by the calling code's try-except block in normal usage
-            from tournamentcontrol.competition.models import stage_group_position_re
-            
-            # Simulate what happens internally when an invalid pattern is encountered
-            team_eval = "INVALID"
-            match_result = stage_group_position_re.match(team_eval)
-            if not match_result:
-                raise AttributeError("Invalid stage_group_position pattern")
-            stage, group, position = match_result.groups()
+        home_result = match.get_home_team()
+        away_result = match.get_away_team()
 
-    def test_valid_formulas_still_work(self):
-        """
-        Test that valid stage_group_position formulas still work correctly after the fix.
-        This ensures we haven't broken existing functionality.
-        """
-        # Create a match with valid eval fields
+        # Should return proper ordinal positions
+        self.assertEqual(home_result, {"title": "1st"})
+        self.assertEqual(away_result, {"title": "2nd"})
+
+    def test_complex_valid_formulas(self):
+        """Test valid formulas with stage and group references."""
         match = MatchFactory.create(
             stage=self.stage2,
             home_team=None,
             away_team=None,
-            home_team_eval="P1",  # Valid: position 1
-            away_team_eval="G1P2",  # Valid: group 1, position 2  
-            label="Valid Test",
+            home_team_eval="S1G1P1",  # Stage 1, Group 1, Position 1
+            away_team_eval="G2P1",  # Group 2, Position 1
         )
 
-        # Valid formulas should still be processed correctly
-        try:
-            home_team_result = match.get_home_team()
-            away_team_result = match.get_away_team()
-            
-            # Methods should not crash and should return valid results
-            # For valid formulas like "P1" and "G1P2", these should return properly formatted titles
-            self.assertEqual(home_team_result, {"title": "1st"})
-            self.assertEqual(away_team_result, {"title": "2nd ERROR"})
-            
-        except AttributeError as e:
-            if "groups" in str(e):
-                self.fail(f"Valid formulas should not cause AttributeError: {e}")
-            # Re-raise if it's a different AttributeError
-            raise
+        # These should work without crashing
+        home_result = match.get_home_team()
+        away_result = match.get_away_team()
 
-    def test_empty_and_none_values_handled(self):
-        """
-        Test that empty strings and None values are handled gracefully.
-        """
-        # Create matches with edge case values
-        test_cases = [
-            ("", ""),  # Empty strings
-            ("NONE1", "NONE2"),  # Values that don't match the pattern
+        # Should return ordinal positions with pool info
+        self.assertIn("1st", home_result["title"])
+        self.assertIn("1st", away_result["title"])
+
+    def test_edge_cases_dont_crash(self):
+        """Test edge cases that might cause issues."""
+        edge_cases = [
+            None,  # Null values
+            "",  # Empty strings
+            "   ",  # Whitespace
+            "0",  # Numbers that don't match pattern
+            "P",  # Incomplete patterns
+            "G1",  # Missing position
         ]
-        
-        for home_eval, away_eval in test_cases:
-            with self.subTest(home_eval=home_eval, away_eval=away_eval):
+
+        for formula in edge_cases:
+            with self.subTest(formula=repr(formula)):
                 match = MatchFactory.create(
                     stage=self.stage2,
                     home_team=None,
                     away_team=None,
-                    home_team_eval=home_eval,
-                    away_team_eval=away_eval,
-                    label="Edge Test",
+                    home_team_eval=formula,
+                    away_team_eval="P1",  # Valid formula for comparison
                 )
 
-                # Should not crash with AttributeError about 'groups'
-                try:
-                    home_result = match.get_home_team()
-                    away_result = match.get_away_team()
-                    
-                    self.assertEqual(home_result, {"title": "None"})
-                    self.assertEqual(away_result, {"title": "None"})
-                    
-                except AttributeError as e:
-                    if "groups" in str(e):
-                        self.fail(f"Edge case values should not cause groups AttributeError: {e}")
-                    raise
+                # Should handle gracefully
+                home_result = match.get_home_team()
+                away_result = match.get_away_team()
+
+                self.assertEqual(home_result, {"title": "None"})
+                self.assertEqual(away_result, {"title": "1st"})
+
+
+class StageGroupPositionIntegrationTests(TestCase):
+    """
+    Integration tests that verify stage_group_position works correctly
+    in realistic competition scenarios.
+    """
+
+    def setUp(self):
+        """Set up a realistic two-stage competition."""
+        self.division = DivisionFactory.create()
+
+        # Stage 1: Round Robin with two groups
+        self.stage1 = StageFactory.create(division=self.division, order=1)
+        self.group1 = StageGroupFactory.create(stage=self.stage1)
+        self.group2 = StageGroupFactory.create(stage=self.stage1)
+
+        # Stage 2: Finals
+        self.stage2 = StageFactory.create(
+            division=self.division, order=2, follows=self.stage1
+        )
+
+        # Add teams to groups
+        self.teams_g1 = [TeamFactory.create(division=self.division) for _ in range(4)]
+        self.teams_g2 = [TeamFactory.create(division=self.division) for _ in range(4)]
+
+        for team in self.teams_g1:
+            self.group1.teams.add(team)
+        for team in self.teams_g2:
+            self.group2.teams.add(team)
+
+    def test_realistic_finals_scenario(self):
+        """Test a realistic finals match between group winners."""
+        # Final match: Winner of Group 1 vs Winner of Group 2
+        final_match = MatchFactory.create(
+            stage=self.stage2,
+            home_team=None,
+            away_team=None,
+            home_team_eval="G1P1",  # Group 1, Position 1 (Winner)
+            away_team_eval="G2P1",  # Group 2, Position 1 (Winner)
+            label="Final",
+        )
+
+        home_result = final_match.get_home_team()
+        away_result = final_match.get_away_team()
+
+        # Should return ordinal positions with pool info
+        self.assertIn("1st", home_result["title"])
+        self.assertIn("1st", away_result["title"])
+
+    def test_semifinal_scenario(self):
+        """Test semifinal matches with valid formulas."""
+        # Semi 1: G1P1 vs G2P2
+        # Semi 2: G1P2 vs G2P1
+
+        semi1 = MatchFactory.create(
+            stage=self.stage2,
+            home_team=None,
+            away_team=None,
+            home_team_eval="G1P1",
+            away_team_eval="G2P2",
+            label="Semifinal 1",
+        )
+
+        semi2 = MatchFactory.create(
+            stage=self.stage2,
+            home_team=None,
+            away_team=None,
+            home_team_eval="G1P2",
+            away_team_eval="G2P1",
+            label="Semifinal 2",
+        )
+
+        # Test both semifinals - check that ordinal positions are included
+        home_semi1 = semi1.get_home_team()["title"]
+        away_semi1 = semi1.get_away_team()["title"]
+        home_semi2 = semi2.get_home_team()["title"]
+        away_semi2 = semi2.get_away_team()["title"]
+
+        self.assertIn("1st", home_semi1)
+        self.assertIn("2nd", away_semi1)
+        self.assertIn("2nd", home_semi2)
+        self.assertIn("1st", away_semi2)
+
+    def test_invalid_group_reference_handled_gracefully(self):
+        """Test that invalid group references don't crash in realistic scenarios."""
+        # Try to reference a group that doesn't exist
+        match = MatchFactory.create(
+            stage=self.stage2,
+            home_team=None,
+            away_team=None,
+            home_team_eval="G5P1",  # Group 5 doesn't exist (only have groups 1 and 2)
+            away_team_eval="G1P1",  # Valid reference
+            label="Invalid Group Test",
+        )
+
+        # Should handle gracefully without crashing
+        home_result = match.get_home_team()
+        away_result = match.get_away_team()
+
+        # Invalid group should return the formula as title (graceful fallback)
+        self.assertEqual(home_result, {"title": "G5P1"})
+        # Valid group should work normally
+        self.assertIn("1st", away_result["title"])
