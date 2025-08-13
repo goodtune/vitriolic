@@ -28,6 +28,11 @@ from django.utils.translation import gettext_lazy as _
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload, MediaInMemoryUpload, MediaUpload
+import magic
+import requests
+
+from tournamentcontrol.competition._mediaupload import MediaMemoryUpload
 from timezone_field.fields import TimeZoneField
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
@@ -513,6 +518,12 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     live_stream_token_uri = models.URLField(null=True)
     live_stream_scopes = PG.ArrayField(models.CharField(max_length=200), null=True)
     live_stream_thumbnail = models.URLField(blank=True, null=True)
+    live_stream_thumbnail_image = models.BinaryField(
+        blank=True,
+        null=True,
+        editable=True,
+        help_text="Binary data for thumbnail image to be used for YouTube videos",
+    )
 
     complete = BooleanField(
         default=False,
@@ -655,6 +666,17 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         for timeslot in self.timeslots.exclude(exc):
             rset.rrule(timeslot.rrule())
         return [dt.time() for dt in rset]
+
+    def get_thumbnail_media_upload(self) -> MediaUpload | None:
+        """
+        Get a MediaMemoryUpload instance for this season's thumbnail.
+        
+        Returns:
+            MediaMemoryUpload or None if no thumbnail is set
+        """
+        if self.live_stream_thumbnail_image:
+            return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
+        return None
 
 
 class Place(AdminUrlMixin, OrderedSitemapNode):
@@ -1655,6 +1677,12 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         max_length=50, blank=True, null=True, db_index=True
     )
     live_stream_thumbnail = models.URLField(blank=True, null=True)
+    live_stream_thumbnail_image = models.BinaryField(
+        blank=True,
+        null=True,
+        editable=True,
+        help_text="Binary data for thumbnail image to be used for YouTube video",
+    )
 
     objects = MatchManager()
 
@@ -2004,6 +2032,38 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
 
     def __repr__(self):
         return f"<Match: {self.round!s}: {self!s}>"
+    
+    def get_thumbnail_media_upload(self) -> MediaUpload | None:
+        """
+        Get a MediaMemoryUpload instance for this match's thumbnail.
+        Falls back to season thumbnail and then URL-based thumbnails if no database image is available.
+        
+        Returns:
+            MediaMemoryUpload or None if no thumbnail is available
+        """
+        # Try match-specific thumbnail first
+        if self.live_stream_thumbnail_image:
+            return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
+        
+        # Fall back to season thumbnail
+        season = self.stage.division.season
+        if season.live_stream_thumbnail_image:
+            return MediaMemoryUpload(season.live_stream_thumbnail_image, resumable=True)
+        
+        # Fall back to URL-based thumbnails if no database image available
+        thumbnail_url = self.live_stream_thumbnail or season.live_stream_thumbnail
+        if thumbnail_url:
+            img = requests.get(thumbnail_url)
+            img.raise_for_status()
+            
+            return MediaInMemoryUpload(
+                img.content,
+                mimetype=img.headers["Content-Type"],
+                resumable=True,
+            )
+        
+        return None
+    
 
 
 class LadderBase(models.Model):
