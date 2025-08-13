@@ -2347,9 +2347,14 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
-    @registration
     @staff_login_required_m
-    def transfer_person(self, request, club, extra_context, person, **kwargs):
+    def transfer_person(self, request, club_id, person_id, **kwargs):
+        club = get_object_or_404(Club, pk=club_id)
+        person = get_object_or_404(Person, pk=person_id)
+        
+        extra_context = kwargs.pop("extra_context", {})
+        extra_context.update({"club": club, "person": person})
+        
         return self.generic_edit(
             request,
             Person,
