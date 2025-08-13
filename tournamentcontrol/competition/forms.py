@@ -14,11 +14,17 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.forms import BooleanField as BooleanChoiceField
 from django.forms.formsets import (
-    DELETION_FIELD_NAME, INITIAL_FORM_COUNT, MAX_NUM_FORM_COUNT,
-    TOTAL_FORM_COUNT, ManagementForm, formset_factory,
+    DELETION_FIELD_NAME,
+    INITIAL_FORM_COUNT,
+    MAX_NUM_FORM_COUNT,
+    TOTAL_FORM_COUNT,
+    ManagementForm,
+    formset_factory,
 )
 from django.forms.models import (
-    BaseInlineFormSet, BaseModelFormSet, inlineformset_factory,
+    BaseInlineFormSet,
+    BaseModelFormSet,
+    inlineformset_factory,
     modelformset_factory,
 )
 from django.urls import reverse_lazy
@@ -30,10 +36,13 @@ from modelforms.forms import ModelForm
 from pyparsing import ParseException
 
 from touchtechnology.common.forms.fields import (
-    ModelChoiceField, ModelMultipleChoiceField,
+    ModelChoiceField,
+    ModelMultipleChoiceField,
 )
 from touchtechnology.common.forms.mixins import (
-    BootstrapFormControlMixin, SuperUserSlugMixin, UserMixin,
+    BootstrapFormControlMixin,
+    SuperUserSlugMixin,
+    UserMixin,
 )
 from touchtechnology.common.forms.widgets import (
     SelectDateTimeWidget as SelectDateTimeWidgetBase,
@@ -43,15 +52,39 @@ from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
 from tournamentcontrol.competition.draw import seeded_tournament
 from tournamentcontrol.competition.fields import URLField
 from tournamentcontrol.competition.models import (
-    ByeTeam, Club, ClubAssociation, ClubRole, Competition, Division,
-    DivisionExclusionDate, DrawFormat, Ground, LadderEntry, Match, Person,
-    Place, Season, SeasonAssociation, SeasonExclusionDate, SeasonMatchTime,
-    SimpleScoreMatchStatistic, Stage, StageGroup, Team, TeamAssociation,
-    TeamRole, UndecidedTeam, Venue, stage_group_position_re,
+    ByeTeam,
+    Club,
+    ClubAssociation,
+    ClubRole,
+    Competition,
+    Division,
+    DivisionExclusionDate,
+    DrawFormat,
+    Ground,
+    LadderEntry,
+    Match,
+    Person,
+    Place,
+    Season,
+    SeasonAssociation,
+    SeasonExclusionDate,
+    SeasonMatchTime,
+    SimpleScoreMatchStatistic,
+    Stage,
+    StageGroup,
+    Team,
+    TeamAssociation,
+    TeamRole,
+    UndecidedTeam,
+    Venue,
+    stage_group_position_re,
 )
 from tournamentcontrol.competition.signals.custom import score_updated
 from tournamentcontrol.competition.utils import (
-    FauxQueryset, legitimate_bye_match, match_unplayed, time_choice,
+    FauxQueryset,
+    legitimate_bye_match,
+    match_unplayed,
+    time_choice,
 )
 
 logger = logging.getLogger(__name__)
@@ -244,13 +277,6 @@ class MultiConfigurationForm(PlaceholderConfigurationBase):
             label=_("Competition"),
             widget=forms.CheckboxSelectMultiple,
         )
-
-
-class RankingConfigurationForm(PlaceholderConfigurationBase):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["start"] = forms.CharField(required=False)
-        self.fields["decay"] = forms.CharField(required=False)
 
 
 class PersonEditForm(BootstrapFormControlMixin, ModelForm):
