@@ -32,13 +32,6 @@ class OrderedSitemapNodeFactory(SitemapNodeBaseFactory):
     order = factory.Sequence(lambda n: (n + 1))
 
 
-class RankDivisionFactory(OrderedSitemapNodeFactory):
-    class Meta:
-        model = models.RankDivision
-
-    title = factory.Sequence(lambda n: "Division %d" % n)
-
-
 class ClubFactory(SitemapNodeBaseFactory):
     class Meta:
         model = models.Club
