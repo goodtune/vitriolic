@@ -481,7 +481,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path("<uuid:person_id>/", self.edit_person, name="edit"),
                 path("<uuid:person_id>/delete/", self.delete_person, name="delete"),
                 path("<uuid:person_id>/merge/", self.merge_person, name="merge"),
-                path("<uuid:person_id>/transfer/", self.transfer_person, name="transfer"),
+                path(
+                    "<uuid:person_id>/transfer/", self.transfer_person, name="transfer"
+                ),
             ],
             self.app_name,
         )
@@ -2400,14 +2402,20 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def delete_club(self, request, club_id, **kwargs):
         return self.generic_delete(request, Club, pk=club_id, permission_required=True)
 
-    @registration
     @staff_login_required_m
-    def edit_person(self, request, club, extra_context, person=None, **kwargs):
-        if person is None:
+    def edit_person(self, request, club_id, person_id=None, **kwargs):
+        club = get_object_or_404(Club, pk=club_id)
+
+        if person_id is None:
             person = Person(club=club)
+        else:
+            person = get_object_or_404(Person, pk=person_id)
+
+        extra_context = kwargs.pop("extra_context", {})
+        extra_context.update({"club": club, "person": person, "component": self})
         return self.generic_edit(
             request,
-            club.members,
+            Person,
             instance=person,
             form_class=PersonEditForm,
             related=("statistics",),
@@ -2420,10 +2428,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def transfer_person(self, request, club_id, person_id, **kwargs):
         club = get_object_or_404(Club, pk=club_id)
         person = get_object_or_404(Person, pk=person_id)
-        
+
         extra_context = kwargs.pop("extra_context", {})
-        extra_context.update({"club": club, "person": person})
-        
+        extra_context.update({"club": club, "person": person, "component": self})
+
         return self.generic_edit(
             request,
             Person,

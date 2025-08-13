@@ -1,21 +1,6 @@
 {% extends "touchtechnology/admin/edit.html" %}
 {% load i18n common %}
 
-{% block form-fieldset %}
-	<div class="heading-block">
-		<h3>{{ model|type|capfirst }}</h3>
-		{% if object.pk %}
-			<div class="actions">
-				<a href="{% url 'tournamentcontrol.competition:club:person:transfer' club_id=object.club.pk person_id=object.pk %}" 
-				   title="{% trans 'Transfer' %} {{ object.get_full_name }}" 
-				   class="btn btn-sm btn-warning">
-					<i class="fa fa-exchange"></i> {% trans "Transfer" %}
-				</a>
-			</div>
-		{% endif %}
-	</div>
-	{{ block.super }}
-{% endblock %}
 
 {% block extracss %}
 	<link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}/DataTables-1.10.12/css/dataTables.bootstrap.min.css"/>
