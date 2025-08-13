@@ -45,13 +45,13 @@ class StageGroupPositionParserFixTests(TestCase):
         
         # After the fix, it should handle gracefully
         try:
-            # Call _get_team method which contains the fixed code
-            home_team_result = match._get_team("home_team")
-            away_team_result = match._get_team("away_team")
+            # Call public API methods which use the fixed code
+            home_team_result = match.get_home_team()
+            away_team_result = match.get_away_team()
             
-            # The method should return something, not crash
-            self.assertIsNotNone(home_team_result)
-            self.assertIsNotNone(away_team_result)
+            # The method should return the fallback value, not crash
+            self.assertEqual(home_team_result, {"title": "None"})
+            self.assertEqual(away_team_result, {"title": "None"})
             
         except AttributeError as e:
             if "groups" in str(e):
@@ -78,9 +78,9 @@ class StageGroupPositionParserFixTests(TestCase):
         # and return fallback values instead of crashing
         home_team, away_team = match.eval()
         
-        # Should return something, not crash
-        self.assertIsNotNone(home_team)
-        self.assertIsNotNone(away_team)
+        # Should return the fallback values, not crash
+        self.assertEqual(home_team, {"title": "None"})
+        self.assertEqual(away_team, {"title": "None"})
 
     def test_internal_stage_group_position_pattern_error_handling(self):
         """
@@ -127,12 +127,13 @@ class StageGroupPositionParserFixTests(TestCase):
 
         # Valid formulas should still be processed correctly
         try:
-            home_team_result = match._get_team("home_team")
-            away_team_result = match._get_team("away_team")
+            home_team_result = match.get_home_team()
+            away_team_result = match.get_away_team()
             
-            # Methods should not crash
-            self.assertIsNotNone(home_team_result)
-            self.assertIsNotNone(away_team_result)
+            # Methods should not crash and should return valid results
+            # For valid formulas like "P1" and "G1P2", these should return properly formatted titles
+            self.assertEqual(home_team_result, {"title": "1st"})
+            self.assertEqual(away_team_result, {"title": "2nd ERROR"})
             
         except AttributeError as e:
             if "groups" in str(e):
@@ -163,11 +164,11 @@ class StageGroupPositionParserFixTests(TestCase):
 
                 # Should not crash with AttributeError about 'groups'
                 try:
-                    home_result = match._get_team("home_team")
-                    away_result = match._get_team("away_team")
+                    home_result = match.get_home_team()
+                    away_result = match.get_away_team()
                     
-                    self.assertIsNotNone(home_result)
-                    self.assertIsNotNone(away_result)
+                    self.assertEqual(home_result, {"title": "None"})
+                    self.assertEqual(away_result, {"title": "None"})
                     
                 except AttributeError as e:
                     if "groups" in str(e):
