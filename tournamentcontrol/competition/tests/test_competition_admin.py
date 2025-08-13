@@ -1674,25 +1674,21 @@ class BackendTests(MessagesTestMixin, TestCase):
         )
 
         # Verify the complex dependency structure is set up correctly
-        # Note: match1 and match2 have actual teams, others have eval-based teams
-        all_matches = list(stage.matches.all()._team_titles().order_by("round", "pk"))
-
-        # First two matches should have actual teams
-        self.assertEqual(len(all_matches), 6)
-
-        # Verify matches 3-6 have the expected eval-based team titles
-        match3_teams = (all_matches[2].home_team_title, all_matches[2].away_team_title)
-        match4_teams = (all_matches[3].home_team_title, all_matches[3].away_team_title)
-        match5_teams = (all_matches[4].home_team_title, all_matches[4].away_team_title)
-        match6_teams = (all_matches[5].home_team_title, all_matches[5].away_team_title)
-
-        self.assertEqual(match3_teams, ("Winner Match 1", "Winner Match 2"))
-        self.assertEqual(match4_teams, ("Loser Match 1", "Loser Match 2"))
-        self.assertEqual(match5_teams, ("Winner Winners Semi", "Loser Losers Semi"))
-        self.assertEqual(match6_teams, ("Loser Winners Semi", "Winner Losers Semi"))
-
-        # Verify that we have 6 matches total before deletion
-        self.assertEqual(stage.matches.count(), 6)
+        expected_teams = [
+            # match1 and match2 have actual teams (from factory)
+            (match1.home_team.title, match1.away_team.title),
+            (match2.home_team.title, match2.away_team.title),
+            # matches 3-6 have eval-based team titles
+            ("Winner Match 1", "Winner Match 2"),  # match3
+            ("Loser Match 1", "Loser Match 2"),  # match4
+            ("Winner Winners Semi", "Loser Losers Semi"),  # match5
+            ("Loser Winners Semi", "Winner Losers Semi"),  # match6
+        ]
+        actual_teams = [
+            (m.home_team_title, m.away_team_title)
+            for m in stage.matches.all()._team_titles().order_by("round", "pk")
+        ]
+        self.assertCountEqual(actual_teams, expected_teams)
 
         # Now test the undo_draw view with this complex dependency structure
         # This should work without ProtectedError despite the interleaved dependencies

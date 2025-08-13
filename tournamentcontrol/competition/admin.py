@@ -1521,12 +1521,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
         # Multi-stage deletion to handle complex eval_related dependencies
         # Keep deleting matches until all are gone, starting with the most dependent ones
-        while Match.objects.filter(stage=stage).exists():
-            # Get all matches for this stage
-            stage_matches = Match.objects.filter(stage=stage)
-
+        while stage.matches.exists():
             # Find matches that have eval_related fields (dependent matches)
-            dependent_matches = stage_matches.filter(
+            dependent_matches = stage.matches.filter(
                 Q(home_team_eval_related__isnull=False)
                 | Q(away_team_eval_related__isnull=False)
             )
@@ -1549,7 +1546,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     deletable_dependent.delete()
                 else:
                     # If no dependent matches can be deleted, try deleting non-dependent ones
-                    non_dependent_matches = stage_matches.filter(
+                    non_dependent_matches = stage.matches.filter(
                         home_team_eval_related__isnull=True,
                         away_team_eval_related__isnull=True,
                     )
@@ -1560,7 +1557,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                         break
             else:
                 # No dependent matches left, delete all remaining matches
-                stage_matches.delete()
+                stage.matches.all().delete()
 
         messages.success(request, _("Your draw has been undone."))
         return self.redirect(division.urls["edit"])
