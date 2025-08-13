@@ -1564,10 +1564,8 @@ class BackendTests(MessagesTestMixin, TestCase):
         # Create a stage with two rounds as described in the issue
         stage = factories.StageFactory.create()
 
-        # Round 1: Create match without teams assigned
-        match1 = factories.MatchFactory.create(
-            stage=stage, round=1, label="Match 1", home_team=None, away_team=None
-        )
+        # Round 1: Create match with teams assigned by factory
+        match1 = factories.MatchFactory.create(stage=stage, round=1, label="Match 1")
 
         # Round 2: Create matches that depend on Round 1 results
         # These matches will have eval_related fields pointing to match1
@@ -1585,7 +1583,10 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # Verify that the dependent match shows the correct team titles
         expected_matches = [
-            (None, None),  # match1 has no teams assigned
+            (
+                match1.home_team.title,
+                match1.away_team.title,
+            ),  # match1 has teams assigned by factory
             ("Winner Match 1", "Loser Match 1"),  # match2 references match1
         ]
         actual_matches = [
