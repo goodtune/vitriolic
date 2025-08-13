@@ -10,6 +10,10 @@ from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.common.tests.factories import UserFactory
+from tournamentcontrol.competition.ai.schemas import (
+    DivisionStructure,
+    StageFixture,
+)
 from tournamentcontrol.competition.models import (
     Division,
     Ground,
@@ -1505,6 +1509,223 @@ class BackendTests(MessagesTestMixin, TestCase):
             match.refresh_from_db()
             self.assertFalse(match.live_stream)
             self.assertIsNone(match.external_identifier)
+
+    def test_json_division_builder_post_invalid_json(self):
+        """Test that invalid JSON shows validation errors."""
+        season = factories.SeasonFactory.create()
+
+        invalid_json = '{"invalid": json syntax}'
+
+        data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "10",
+            "form-0-json_data": invalid_json,
+        }
+
+        self.post(
+            "admin:fixja:competition:season:json-builder",
+            season.competition.pk,
+            season.pk,
+            data=data,
+        )
+        self.response_200()  # Should stay on form with errors
+
+        # Check that no divisions were created
+        self.assertEqual(season.divisions.count(), 0)
+
+        # Check for validation error
+        formset = self.get_context("formset")
+        self.assertIsNotNone(formset)
+        self.assertFalse(formset.is_valid())
+
+    def test_json_division_builder_post_empty_json(self):
+        """Test that empty JSON shows validation errors instead of success."""
+        season = factories.SeasonFactory.create()
+
+        # Empty form submission
+        data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "10",
+            "form-0-json_data": "",  # Empty data
+        }
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:json-builder",
+                season.competition.pk,
+                season.pk,
+                data=data,
+            )
+            self.response_200()  # Should stay on form with errors
+
+        # Check that no divisions were created
+        self.assertEqual(season.divisions.count(), 0)
+
+        # Check for validation error
+        formset = self.get_context("formset")
+        self.assertIsNotNone(formset)
+        self.assertFalse(formset.is_valid())
+
+        # Check for specific required field error
+        form = formset.forms[0]
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors, {"json_data": ["This field is required."]})
+
+    def test_json_division_builder_post_valid_json(self):
+        """Test that valid JSON creates divisions successfully."""
+
+        season = factories.SeasonFactory.create()
+
+        # Create a valid DivisionStructure and convert to JSON
+        structure = DivisionStructure(
+            title="Test Division",
+            teams=["Team A", "Team B", "Team C", "Team D"],
+            draw_formats={
+                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
+            },
+            stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
+        )
+        valid_json = structure.model_dump_json()
+
+        data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "10",
+            "form-0-json_data": valid_json,
+        }
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:json-builder",
+                season.competition.pk,
+                season.pk,
+                data=data,
+            )
+            self.response_302()  # Should redirect after successful save
+
+        # Check that division was created
+        self.assertEqual(season.divisions.count(), 1)
+        division = season.divisions.first()
+        self.assertEqual(division.title, "Test Division")
+
+    def test_json_division_builder_duplicate_existing_division_name(self):
+        """Test that existing division names cause validation errors."""
+
+        season = factories.SeasonFactory.create()
+        # Create an existing division
+        existing_division = factories.DivisionFactory.create(
+            season=season, title="Existing Division"
+        )
+
+        # Try to create a division with the same name
+        structure = DivisionStructure(
+            title="Existing Division",  # Same name as existing division
+            teams=["Team A", "Team B", "Team C", "Team D"],
+            draw_formats={
+                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
+            },
+            stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
+        )
+        conflicting_json = structure.model_dump_json()
+
+        data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "10",
+            "form-0-json_data": conflicting_json,
+        }
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:json-builder",
+                season.competition.pk,
+                season.pk,
+                data=data,
+            )
+            self.response_200()  # Should stay on form with errors
+
+        # Check that no new divisions were created
+        self.assertEqual(season.divisions.count(), 1)  # Still just the existing one
+        self.assertEqual(season.divisions.first(), existing_division)
+
+        # Check for validation error
+        formset = self.get_context("formset")
+        self.assertIsNotNone(formset)
+        self.assertFalse(formset.is_valid())
+
+        # Check for specific duplicate name error
+        form = formset.forms[0]
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.errors,
+            {"json_data": ["A division of that name already exists in this season."]},
+        )
+
+    def test_json_division_builder_duplicate_names_within_forms(self):
+        """Test that duplicate division names within the same formset cause validation errors."""
+
+        season = factories.SeasonFactory.create()
+
+        # Create two divisions with the same name
+        structure1 = DivisionStructure(
+            title="Duplicate Name",
+            teams=["Team A", "Team B", "Team C", "Team D"],
+            draw_formats={
+                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
+            },
+            stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
+        )
+        structure2 = DivisionStructure(
+            title="Duplicate Name",  # Same name as first structure
+            teams=["Team E", "Team F", "Team G", "Team H"],
+            draw_formats={
+                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
+            },
+            stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
+        )
+
+        json1 = structure1.model_dump_json()
+        json2 = structure2.model_dump_json()
+
+        data = {
+            "form-TOTAL_FORMS": "2",
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "10",
+            "form-0-json_data": json1,
+            "form-1-json_data": json2,
+        }
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:json-builder",
+                season.competition.pk,
+                season.pk,
+                data=data,
+            )
+            self.response_200()  # Should stay on form with errors
+
+        # Check that no divisions were created
+        self.assertEqual(season.divisions.count(), 0)
+
+        # Check for validation error
+        formset = self.get_context("formset")
+        self.assertIsNotNone(formset)
+        self.assertFalse(formset.is_valid())
+
+        # Check that both forms have duplicate name errors
+        for i in [0, 1]:
+            form = formset.forms[i]
+            self.assertFalse(form.is_valid())
+            self.assertEqual(
+                form.errors, {"json_data": ["Division names must be unique."]}
+            )
 
     def test_edit_match_youtube_api_basic_guard_clause(self):
         """

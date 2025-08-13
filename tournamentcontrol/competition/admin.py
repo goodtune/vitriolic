@@ -12,7 +12,12 @@ from django.contrib import messages
 from django.db import models
 from django.db.models import Case, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
-from django.http import Http404, HttpResponse, HttpResponseGone, HttpResponseRedirect
+from django.http import (
+    Http404,
+    HttpResponse,
+    HttpResponseGone,
+    HttpResponseRedirect,
+)
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
@@ -42,6 +47,7 @@ from tournamentcontrol.competition.forms import (
     ClubRoleForm,
     CompetitionForm,
     DivisionForm,
+    DivisionStructureJSONFormSet,
     DrawFormatForm,
     DrawGenerationFormSet,
     DrawGenerationMatchFormSet,
@@ -389,6 +395,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     "<int:season_id>/ai-competition/",
                     self.ai_competition_wizard,
                     name="ai-competition",
+                ),
+                path(
+                    "<int:season_id>/json-builder/",
+                    self.json_division_builder,
+                    name="json-builder",
                 ),
                 path(
                     "<int:season_id>/reschedule/",
@@ -1559,16 +1570,16 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             # Build match video URL for description
             match_url = request.build_absolute_uri(
                 reverse(
-                    'competition:match-video',
+                    "competition:match-video",
                     kwargs={
-                        'competition': competition.slug,
-                        'season': season.slug,
-                        'division': division.slug,
-                        'match': obj.pk,
-                    }
+                        "competition": competition.slug,
+                        "season": season.slug,
+                        "division": division.slug,
+                        "match": obj.pk,
+                    },
                 )
             )
-            
+
             description = (
                 f"Live stream of the {division} division of {competition} {season} "
                 f"from {obj.play_at.ground.venue}.\n"
@@ -1876,7 +1887,16 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         templates = self.template_path("reschedule.html")
         return self.render(request, templates, context)
 
-    def _build_match_queryset(self, season, date, time=None, division=None, stage=None, round=None, visual=False):
+    def _build_match_queryset(
+        self,
+        season,
+        date,
+        time=None,
+        division=None,
+        stage=None,
+        round=None,
+        visual=False,
+    ):
         """Build queryset for match scheduling."""
         where = Q(date=date, is_bye=False)
 
@@ -1953,7 +1973,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             "scheduled_matches": scheduled_matches,
         }
 
-    def _handle_visual_schedule_form(self, request, queryset, places, timeslots, extra_context, templates, season):
+    def _handle_visual_schedule_form(
+        self, request, queryset, places, timeslots, extra_context, templates, season
+    ):
         """Handle form processing for visual schedule."""
         if request.method == "POST":
             formset = MatchScheduleFormSet(
@@ -2011,14 +2033,20 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     ):
         """Match scheduling interface - supports both standard and visual modes."""
         # Extract extra_context from kwargs (injected by decorator)
-        extra_context = kwargs.pop('extra_context', {})
-        
+        extra_context = kwargs.pop("extra_context", {})
+
         queryset = self._build_match_queryset(
-            season, date, time=time, division=division, stage=stage, round=round, visual=visual
+            season,
+            date,
+            time=time,
+            division=division,
+            stage=stage,
+            round=round,
+            visual=visual,
         )
-        
+
         venues, places = self._build_venues_and_places(season)
-        
+
         # Get timeslots for the day
         timeslots = season.get_timeslots(date)
 
@@ -2027,23 +2055,30 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             if not timeslots:
                 messages.error(
                     request,
-                    _("The visual scheduler can only be used when timeslots are specified for this season.")
+                    _(
+                        "The visual scheduler can only be used when timeslots are specified for this season."
+                    ),
                 )
                 return self.redirect(season.urls["edit"])
 
             # Handle visual schedule form processing and build context
             formset = self._handle_visual_schedule_form(
-                request, queryset, places, timeslots, extra_context, 
-                self.template_path("match/visual_schedule.html"), season
+                request,
+                queryset,
+                places,
+                timeslots,
+                extra_context,
+                self.template_path("match/visual_schedule.html"),
+                season,
             )
-            
+
             # If POST resulted in redirect, return it
             if isinstance(formset, HttpResponseRedirect):
                 return formset
 
             # Build visual-specific context
             visual_context = self._build_visual_context(queryset)
-            
+
             context = {
                 "formset": formset,
                 "season": season,
@@ -2183,6 +2218,26 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         )
         wizard = AICompetitionWizard.as_view(form_list=[AIPromptForm, AIPlanReviewForm])
         return wizard(request)
+
+    @staff_login_required_m
+    @competition_by_pk_m
+    def json_division_builder(self, request, competition, season, **extra_context):
+        """JSON-based division structure builder for power users."""
+
+        return self.generic_edit_multiple(
+            request,
+            season.divisions,  # Use season's divisions manager
+            formset_class=DivisionStructureJSONFormSet,
+            formset_kwargs={"instance": season},  # Pass season as instance
+            post_save_redirect=self.redirect(season.urls["edit"]),
+            templates=self.template_path("json_division_builder.html"),
+            extra_context={
+                **extra_context,
+                "season": season,
+                "competition": competition,
+                "cancel_url": season.urls["edit"],
+            },
+        )
 
     @competition_by_pk_m
     @staff_login_required_m
