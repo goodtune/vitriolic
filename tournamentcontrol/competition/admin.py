@@ -2332,19 +2332,64 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 Case(When(statistics__match__stage__division=division, then=F(field)))
             )
 
-        people = (
-            Person.objects.select_related("club")
-            .annotate(
-                played=_get_clause("statistics__played"),
-                points=_get_clause("statistics__points"),
-                mvp=_get_clause("statistics__mvp"),
-                club_id_field=F("club_id"),  # Explicitly include club_id in GROUP BY
-            )
-            .exclude(played=None)
-        )
+        # Use raw SQL to handle GROUP BY properly for PostgreSQL
+        # Similar to the approach used in Club._mvp_related
+        from django.db import connection
+        
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT 
+                    p.uuid,
+                    p.first_name,
+                    p.last_name,
+                    p.club_id,
+                    c.title as club_title,
+                    SUM(CASE WHEN m.stage_id IN (
+                        SELECT id FROM competition_stage WHERE division_id = %s
+                    ) THEN s.played ELSE 0 END) as played,
+                    SUM(CASE WHEN m.stage_id IN (
+                        SELECT id FROM competition_stage WHERE division_id = %s
+                    ) THEN s.points ELSE 0 END) as points,
+                    SUM(CASE WHEN m.stage_id IN (
+                        SELECT id FROM competition_stage WHERE division_id = %s
+                    ) THEN s.mvp ELSE 0 END) as mvp
+                FROM competition_person p
+                LEFT JOIN competition_club c ON p.club_id = c.id
+                LEFT JOIN competition_simplescorematchstatistic s ON p.uuid = s.player_id
+                LEFT JOIN competition_match m ON s.match_id = m.id
+                GROUP BY p.uuid, p.first_name, p.last_name, p.club_id, c.title
+                HAVING SUM(CASE WHEN m.stage_id IN (
+                    SELECT id FROM competition_stage WHERE division_id = %s
+                ) THEN s.played ELSE 0 END) > 0
+                ORDER BY points DESC, played ASC
+            """, [division.pk, division.pk, division.pk, division.pk])
+            
+            # Convert results to objects compatible with the template
+            from types import SimpleNamespace
+            
+            def make_person_like(row):
+                person_like = SimpleNamespace()
+                person_like.uuid = row[0]
+                person_like.first_name = row[1] 
+                person_like.last_name = row[2]
+                person_like.played = row[5] or 0
+                person_like.points = row[6] or 0
+                person_like.mvp = row[7] or 0
+                
+                # Create a club-like object
+                club_like = SimpleNamespace()
+                club_like.title = row[4]
+                person_like.club = club_like
+                
+                return person_like
 
-        scorers = people.order_by("-points", "played")
-        mvp = people.order_by("-mvp", "played")
+            scorers_data = cursor.fetchall()
+            
+        # Convert to lists of person-like objects
+        scorers = [make_person_like(row) for row in scorers_data]
+        
+        # For MVP, re-order by mvp score
+        mvp = sorted(scorers, key=lambda x: (-x.mvp, x.played))
 
         context = {
             "scorers": scorers,
