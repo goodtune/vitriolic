@@ -4,7 +4,6 @@ import logging
 import operator
 from datetime import timedelta
 from operator import or_
-from zoneinfo import ZoneInfo
 
 import markdown
 from dateutil.relativedelta import relativedelta

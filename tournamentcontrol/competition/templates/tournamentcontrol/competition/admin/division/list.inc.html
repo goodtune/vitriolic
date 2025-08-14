@@ -1,6 +1,13 @@
 {% extends "mvp/list.split.inc.html" %}
 {% load i18n %}
 
+{% block actions %}
+	<a href="{% url 'admin:fixja:competition:season:json-builder' competition.pk season.pk %}" title="{% trans "JSON Division Builder" %}" role="button">
+		<i class="fa fa-sitemap"></i>
+	</a>
+	{{ block.super }}
+{% endblock %}
+
 {% block table-headings %}
 	{{ block.super }}
 	<th>{% trans "Short title" %}</th>
