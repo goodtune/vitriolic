@@ -1759,3 +1759,75 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # Verify all matches from the stage were deleted despite complex dependencies
         self.assertCountEqual(stage.matches.all(), [])
+
+    def test_highest_point_scorer_view(self):
+        """
+        Test that the highest point scorer (scorers) view works without SQL errors.
+        
+        This test reproduces the PostgreSQL GROUP BY error that occurs when using
+        select_related("club") with aggregation queries.
+        """
+        # Create test data: division with teams, players, and match statistics
+        division = factories.DivisionFactory.create()
+        team1 = factories.TeamFactory.create(division=division)
+        team2 = factories.TeamFactory.create(division=division)
+        
+        # Create match between the teams
+        stage = factories.StageFactory.create(division=division)
+        match = factories.MatchFactory.create(
+            stage=stage, 
+            home_team=team1, 
+            away_team=team2,
+            home_team_score=3,
+            away_team_score=1
+        )
+        
+        # Create team associations (players)
+        player1 = factories.TeamAssociationFactory.create(
+            team=team1, 
+            is_player=True,
+            person__club=team1.club
+        ).person
+        player2 = factories.TeamAssociationFactory.create(
+            team=team2, 
+            is_player=True,
+            person__club=team2.club
+        ).person
+        
+        # Create match statistics for players
+        from tournamentcontrol.competition.models import SimpleScoreMatchStatistic
+        SimpleScoreMatchStatistic.objects.create(
+            match=match,
+            player=player1,
+            number=1,
+            played=1,
+            points=5,
+            mvp=1
+        )
+        SimpleScoreMatchStatistic.objects.create(
+            match=match,
+            player=player2,
+            number=2,
+            played=1,
+            points=2,
+            mvp=0
+        )
+        
+        # Test accessing the scorers view - should not raise SQL errors
+        with self.login(self.superuser):
+            url_name = "admin:competition:competition:season:division:scorers"
+            args = (
+                division.season.competition.pk,
+                division.season.pk,
+                division.pk,
+            )
+            self.get(url_name, *args)
+            self.response_200()
+            
+            # Verify the content includes player information
+            self.assertResponseContains(player1.first_name)
+            self.assertResponseContains(player1.last_name)
+            self.assertResponseContains(player1.club.title)
+            self.assertResponseContains(player2.first_name)
+            self.assertResponseContains(player2.last_name) 
+            self.assertResponseContains(player2.club.title)

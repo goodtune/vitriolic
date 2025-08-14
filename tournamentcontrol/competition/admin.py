@@ -2338,6 +2338,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 played=_get_clause("statistics__played"),
                 points=_get_clause("statistics__points"),
                 mvp=_get_clause("statistics__mvp"),
+                club_id_field=F("club_id"),  # Explicitly include club_id in GROUP BY
             )
             .exclude(played=None)
         )
