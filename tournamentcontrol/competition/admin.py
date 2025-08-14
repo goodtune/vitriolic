@@ -492,6 +492,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path("<uuid:person_id>/", self.edit_person, name="edit"),
                 path("<uuid:person_id>/delete/", self.delete_person, name="delete"),
                 path("<uuid:person_id>/merge/", self.merge_person, name="merge"),
+                path(
+                    "<uuid:person_id>/transfer/", self.transfer_person, name="transfer"
+                ),
             ],
             self.app_name,
         )
@@ -1529,7 +1532,47 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def undo_draw(self, request, division, stage, **kwargs):
         LadderSummary.objects.filter(stage=stage).delete()
         LadderEntry.objects.filter(match__stage=stage).delete()
-        Match.objects.filter(stage=stage).delete()
+
+        # Multi-stage deletion to handle complex eval_related dependencies
+        # Keep deleting matches until all are gone, starting with the most dependent ones
+        while stage.matches.exists():
+            # Find matches that have eval_related fields (dependent matches)
+            dependent_matches = stage.matches.filter(
+                Q(home_team_eval_related__isnull=False)
+                | Q(away_team_eval_related__isnull=False)
+            )
+
+            if dependent_matches.exists():
+                # Find matches that are NOT referenced by other matches
+                # These are the "leaf" matches in the dependency tree that can be safely deleted
+                referenced_match_ids = set()
+                for match in dependent_matches:
+                    if match.home_team_eval_related_id:
+                        referenced_match_ids.add(match.home_team_eval_related_id)
+                    if match.away_team_eval_related_id:
+                        referenced_match_ids.add(match.away_team_eval_related_id)
+
+                # Delete dependent matches that are not referenced by others
+                deletable_dependent = dependent_matches.exclude(
+                    pk__in=referenced_match_ids
+                )
+                if deletable_dependent.exists():
+                    deletable_dependent.delete()
+                else:
+                    # If no dependent matches can be deleted, try deleting non-dependent ones
+                    non_dependent_matches = stage.matches.filter(
+                        home_team_eval_related__isnull=True,
+                        away_team_eval_related__isnull=True,
+                    )
+                    if non_dependent_matches.exists():
+                        non_dependent_matches.delete()
+                    else:
+                        # This shouldn't happen, but break to avoid infinite loop
+                        break
+            else:
+                # No dependent matches left, delete all remaining matches
+                stage.matches.all().delete()
+
         messages.success(request, _("Your draw has been undone."))
         return self.redirect(division.urls["edit"])
 
@@ -2410,20 +2453,48 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def delete_club(self, request, club_id, **kwargs):
         return self.generic_delete(request, Club, pk=club_id, permission_required=True)
 
-    @registration
     @staff_login_required_m
-    def edit_person(self, request, club, extra_context, person=None, **kwargs):
-        if person is None:
+    def edit_person(self, request, club_id, person_id=None, **kwargs):
+        club = get_object_or_404(Club, pk=club_id)
+
+        if person_id is None:
             person = Person(club=club)
+        else:
+            person = get_object_or_404(Person, pk=person_id)
+
+        extra_context = kwargs.pop("extra_context", {})
+        extra_context.update({"club": club, "person": person, "component": self})
         return self.generic_edit(
             request,
-            club.members,
+            Person,
             instance=person,
             form_class=PersonEditForm,
             related=("statistics",),
             post_save_redirect=self.redirect(person.club.urls["edit"]),
             permission_required=True,
             extra_context=extra_context,
+        )
+
+    @staff_login_required_m
+    def transfer_person(self, request, club_id, person_id, **kwargs):
+        club = get_object_or_404(Club, pk=club_id)
+        person = get_object_or_404(Person, pk=person_id)
+
+        extra_context = kwargs.pop("extra_context", {})
+        extra_context.update({"club": club, "person": person, "component": self})
+
+        return self.generic_edit(
+            request,
+            Person,
+            instance=person,
+            form_fields=("club",),
+            related=(),
+            post_save_redirect=self.redirect(club.urls["edit"]),
+            permission_required=True,
+            extra_context=extra_context,
+            changed_messages=(
+                (messages.SUCCESS, _("The {model} has been transferred successfully.")),
+            ),
         )
 
     @registration

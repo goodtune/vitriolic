@@ -22,6 +22,8 @@ def allowed(components, request):
     Given a list of components, return only those which are accessible to the
     specified user. Used to hide options from the tab-bar in the admin UI.
     """
+    if components is None:
+        return []
 
     def show(t):
         __, module, __, instance, schemas = t

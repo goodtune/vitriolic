@@ -279,13 +279,6 @@ class MultiConfigurationForm(PlaceholderConfigurationBase):
         )
 
 
-class RankingConfigurationForm(PlaceholderConfigurationBase):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["start"] = forms.CharField(required=False)
-        self.fields["decay"] = forms.CharField(required=False)
-
-
 class PersonEditForm(BootstrapFormControlMixin, ModelForm):
     class Meta:
         model = Person

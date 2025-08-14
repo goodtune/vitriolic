@@ -14,7 +14,6 @@ INSTALL = (
     "MultiCompetitionSite",
     "RegistrationSite",
     "TournamentCalculatorSite",
-    "RankingSite",
 )
 
 __version__ = "2.4.14"
