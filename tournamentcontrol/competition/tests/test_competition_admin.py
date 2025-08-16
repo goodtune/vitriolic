@@ -1759,3 +1759,58 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # Verify all matches from the stage were deleted despite complex dependencies
         self.assertCountEqual(stage.matches.all(), [])
+
+    def test_create_match_with_live_streaming_enabled(self):
+        """
+        Test that creating a new match with live streaming enabled doesn't cause
+        NoReverseMatch when trying to build the match video URL.
+
+        This test reproduces the exact issue from the problem statement where:
+        - A season has live streaming enabled with YouTube credentials
+        - A new match is being created (obj.pk is None)
+        - The pre_save_callback tries to build a match-video URL using obj.pk
+        - This causes NoReverseMatch: Reverse for 'match-video' with keyword arguments 
+          '{'match': None}' not found
+        """
+        # Create a stage with live streaming enabled AND YouTube credentials configured
+        # This ensures we get past the guard clause and reach the problematic URL building code
+        stage = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_client_id="test_client_id",
+            division__season__live_stream_client_secret="test_client_secret",
+        )
+
+        # Create a ground for the match - needs time slot
+        ground = factories.GroundFactory.create(venue__season=stage.division.season)
+        
+        # Create teams for the match
+        home_team = factories.TeamFactory.create(division=stage.division)
+        away_team = factories.TeamFactory.create(division=stage.division)
+
+        # Try to create a new match using the same pattern as test_bug_85_add_match_season_live_stream
+        # but with live_stream enabled to trigger the bug
+        data = {
+            "home_team": home_team.pk,
+            "away_team": away_team.pk,
+            "label": "Test Match",
+            "round": 1,
+            "date": "2025-05-01",
+            "time": "10:00",
+            "play_at": ground.pk,
+            "include_in_ladder": "1",
+            "live_stream": "1",  # Enable live streaming to trigger the URL building
+            "thumbnail_url": "",
+        }
+        
+        with self.login(self.superuser):
+            # This should trigger the NoReverseMatch error before the fix
+            # After the fix, this should work without error
+            add_match = Match(stage=stage).url_names["add"]
+            response = self.post(
+                add_match.url_name,
+                *add_match.args,
+                data=data,
+            )
+            # After the fix, this should succeed (redirect or success response)
+            # We accept either 200 (success) or 302 (redirect) as valid
+            self.assertIn(response.status_code, [200, 302])
