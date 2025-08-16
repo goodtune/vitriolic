@@ -13,10 +13,7 @@ from django.db import models
 from django.db.models import Case, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
 from django.http import (
-    Http404,
-    HttpResponse,
-    HttpResponseGone,
-    HttpResponseRedirect,
+    Http404, HttpResponse, HttpResponseGone, HttpResponseRedirect,
 )
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
@@ -27,90 +24,40 @@ from googleapiclient.errors import HttpError
 
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.common.decorators import (
-    csrf_exempt_m,
-    staff_login_required_m,
+    csrf_exempt_m, staff_login_required_m,
 )
 from touchtechnology.common.prince import prince
 from tournamentcontrol.competition.dashboard import (
-    BasicResultWidget,
-    DetailResultWidget,
-    MostValuableWidget,
-    ProgressStageWidget,
-    ScoresheetWidget,
+    BasicResultWidget, DetailResultWidget, MostValuableWidget,
+    ProgressStageWidget, ScoresheetWidget,
 )
 from tournamentcontrol.competition.decorators import (
-    competition_by_pk_m,
-    registration,
+    competition_by_pk_m, registration,
 )
 from tournamentcontrol.competition.forms import (
-    ClubAssociationForm,
-    ClubRoleForm,
-    CompetitionForm,
-    DivisionForm,
-    DrawFormatForm,
-    DrawGenerationFormSet,
-    DrawGenerationMatchFormSet,
-    GroundForm,
-    MatchEditForm,
-    MatchRefereeForm,
-    MatchScheduleFormSet,
-    MatchStreamForm,
-    MatchWashoutFormSet,
-    PersonEditForm,
-    PersonMergeForm,
-    RescheduleDateFormSet,
-    SeasonAssociationFormSet,
-    SeasonForm,
-    SeasonMatchTimeFormSet,
-    StageForm,
-    StageGroupForm,
-    TeamAssociationForm,
-    TeamAssociationFormSet,
-    TeamForm,
-    TeamRoleForm,
-    UndecidedTeamForm,
+    ClubAssociationForm, ClubRoleForm, CompetitionForm, DivisionForm,
+    DrawFormatForm, DrawGenerationFormSet, DrawGenerationMatchFormSet,
+    GroundForm, MatchEditForm, MatchRefereeForm, MatchScheduleFormSet,
+    MatchStreamForm, MatchWashoutFormSet, PersonEditForm, PersonMergeForm,
+    RescheduleDateFormSet, SeasonAssociationFormSet, SeasonForm,
+    SeasonMatchTimeFormSet, StageForm, StageGroupForm, TeamAssociationForm,
+    TeamAssociationFormSet, TeamForm, TeamRoleForm, UndecidedTeamForm,
     VenueForm,
 )
 from tournamentcontrol.competition.models import (
-    Club,
-    ClubAssociation,
-    ClubRole,
-    Competition,
-    Division,
-    DivisionExclusionDate,
-    DrawFormat,
-    Ground,
-    LadderEntry,
-    LadderSummary,
-    Match,
-    MatchScoreSheet,
-    Person,
-    Place,
-    Season,
-    SeasonAssociation,
-    SeasonExclusionDate,
-    SeasonMatchTime,
-    SeasonReferee,
-    Stage,
-    StageGroup,
-    Team,
-    TeamAssociation,
-    TeamRole,
-    UndecidedTeam,
-    Venue,
+    Club, ClubAssociation, ClubRole, Competition, Division,
+    DivisionExclusionDate, DrawFormat, Ground, LadderEntry, LadderSummary,
+    Match, MatchScoreSheet, Person, Place, Season, SeasonAssociation,
+    SeasonExclusionDate, SeasonMatchTime, SeasonReferee, Stage, StageGroup,
+    Team, TeamAssociation, TeamRole, UndecidedTeam, Venue,
 )
 from tournamentcontrol.competition.sites import CompetitionAdminMixin
 from tournamentcontrol.competition.tasks import (
-    generate_pdf_grid,
-    generate_pdf_scorecards,
-    set_youtube_thumbnail,
+    generate_pdf_grid, generate_pdf_scorecards, set_youtube_thumbnail,
 )
 from tournamentcontrol.competition.utils import (
-    FauxQueryset,
-    generate_fixture_grid,
-    generate_scorecards,
-    legitimate_bye_match,
-    match_unplayed,
+    FauxQueryset, generate_fixture_grid, generate_scorecards,
+    legitimate_bye_match, match_unplayed,
 )
 from tournamentcontrol.competition.wizards import DrawGenerationWizard
 
@@ -1613,12 +1560,12 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                         },
                     )
                 )
-                
+
                 # Safely get venue information
                 venue_info = ""
                 if obj.play_at and obj.play_at.ground and obj.play_at.ground.venue:
                     venue_info = f"from {obj.play_at.ground.venue}"
-                
+
                 description = (
                     f"Live stream of the {division} division of {competition} {season}"
                     f"{' ' + venue_info if venue_info else ''}.\n"
@@ -1637,7 +1584,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 venue_info = ""
                 if obj.play_at and obj.play_at.ground and obj.play_at.ground.venue:
                     venue_info = f"from {obj.play_at.ground.venue}"
-                
+
                 description = (
                     f"Live stream of the {division} division of {competition} {season}"
                     f"{' ' + venue_info if venue_info else ''}.\n"
