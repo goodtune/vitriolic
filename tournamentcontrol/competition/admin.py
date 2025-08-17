@@ -19,6 +19,7 @@ from django.http import (
     HttpResponseRedirect,
 )
 from django.shortcuts import get_object_or_404
+from django.template.loader import render_to_string
 from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
@@ -1587,18 +1588,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             if not (season.live_stream_client_id and season.live_stream_client_secret):
                 return obj
 
-            if obj.label:
-                title = (
-                    f"{division} | {obj.label}: "
-                    f"{obj.get_home_team_plain()} vs {obj.get_away_team_plain()} | "
-                    f"{competition} {season}"
-                )
-            else:
-                title = (
-                    f"{division} | {obj.get_home_team_plain()} vs "
-                    f"{obj.get_away_team_plain()} | {competition} {season}"
-                )
-
             # Build match video URL for description
             match_url = request.build_absolute_uri(
                 reverse(
@@ -1612,17 +1601,37 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 )
             )
 
-            description = (
-                f"Live stream of the {division} division of {competition} {season} "
-                f"from {obj.play_at.ground.venue}.\n"
-                f"\n"
-                f"Watch {obj.get_home_team_plain()} take on "
-                f"{obj.get_away_team_plain()} on {obj.play_at}.\n"
-                f"\n"
-                f"Full match details are available at {match_url}\n"
-                f"\n"
-                f"Subscribe to receive notifications of upcoming matches."
+            # Create context for template rendering
+            template_context = {
+                "match": obj,
+                "competition": competition,
+                "season": season,
+                "division": division,
+                "stage": stage,
+                "match_url": match_url,
+            }
+
+            # Render title from template with hierarchical fallback
+            title_templates = self.template_path(
+                "match/live_stream/title.txt",
+                competition.slug,
+                season.slug,
+                division.slug,
+                stage.slug,
             )
+            title = render_to_string(title_templates, template_context, request).strip()
+
+            # Render description from template with hierarchical fallback
+            description_templates = self.template_path(
+                "match/live_stream/description.txt",
+                competition.slug,
+                season.slug,
+                division.slug,
+                stage.slug,
+            )
+            description = render_to_string(
+                description_templates, template_context, request
+            ).strip()
 
             start_time = obj.get_datetime(ZoneInfo("UTC"))
             stop_time = obj.get_datetime(ZoneInfo("UTC")) + relativedelta(
