@@ -18,7 +18,7 @@ class ListTeamSerializer(serializers.ModelSerializer):
 
 
 class LadderSummarySerializer(serializers.ModelSerializer):
-    team = ListTeamSerializer(read_only=True)
+    team = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = models.LadderSummary
@@ -38,6 +38,9 @@ class LadderSummarySerializer(serializers.ModelSerializer):
             "bonus_points",
             "points",
         )
+
+    def get_team(self, obj):
+        return obj.team.pk
 
 
 class ListMatchSerializer(serializers.ModelSerializer):
@@ -136,6 +139,6 @@ class DivisionViewSet(SlugViewSet):
                 "teams__club",
                 "stages__matches__home_team",
                 "stages__matches__away_team",
-                "stages__ladder_summary__team__club",
+                "stages__ladder_summary",
             )
         )

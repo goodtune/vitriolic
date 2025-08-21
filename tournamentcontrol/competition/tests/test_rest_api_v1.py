@@ -175,6 +175,7 @@ class APITests(TestCase):
                                 },
                             },
                         ],
+                        "ladder_summary": [],
                     }
                 ],
             },
@@ -296,7 +297,7 @@ class APITests(TestCase):
 
         # Check first team (higher points)
         first_team = ladder_summary[0]
-        self.assertEqual(first_team["team"]["id"], self.team1.id)
+        self.assertEqual(first_team["team"], self.team1.id)
         self.assertEqual(first_team["played"], 5)
         self.assertEqual(first_team["win"], 3)
         self.assertEqual(first_team["loss"], 2)
@@ -307,7 +308,7 @@ class APITests(TestCase):
 
         # Check second team (lower points)
         second_team = ladder_summary[1]
-        self.assertEqual(second_team["team"]["id"], self.team2.id)
+        self.assertEqual(second_team["team"], self.team2.id)
         self.assertEqual(second_team["played"], 5)
         self.assertEqual(second_team["win"], 2)
         self.assertEqual(second_team["loss"], 3)
