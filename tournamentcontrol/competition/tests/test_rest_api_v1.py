@@ -238,3 +238,79 @@ class APITests(TestCase):
             slug=self.stage.slug,
         )
         self.response_200()
+
+    def test_division_detail_includes_ladder_summary(self):
+        """Test that division-detail endpoint includes ladder_summary in stages"""
+        # Create some ladder summary data
+        from tournamentcontrol.competition.models import LadderSummary
+        
+        ladder1 = LadderSummary.objects.create(
+            stage=self.stage,
+            team=self.team1,
+            played=5,
+            win=3,
+            loss=2,
+            score_for=100,
+            score_against=80,
+            difference=20,
+            points=6,
+        )
+        ladder2 = LadderSummary.objects.create(
+            stage=self.stage,
+            team=self.team2,
+            played=5,
+            win=2,
+            loss=3,
+            score_for=80,
+            score_against=100,
+            difference=-20,
+            points=4,
+        )
+
+        self.get(
+            "v1:division-detail",
+            competition_slug=self.competition.slug,
+            season_slug=self.season.slug,
+            slug=self.division.slug,
+        )
+        self.response_200()
+        
+        # Parse the response
+        import json
+        response_data = json.loads(self.last_response.content)
+        
+        # Ensure stages have ladder_summary field
+        self.assertIn("stages", response_data)
+        self.assertEqual(len(response_data["stages"]), 1)
+        
+        stage_data = response_data["stages"][0]
+        self.assertIn("ladder_summary", stage_data)
+        
+        # Check ladder summary data
+        ladder_summary = stage_data["ladder_summary"]
+        self.assertEqual(len(ladder_summary), 2)
+        
+        # Sort by points to ensure consistent order
+        ladder_summary.sort(key=lambda x: x["points"], reverse=True)
+        
+        # Check first team (higher points)
+        first_team = ladder_summary[0]
+        self.assertEqual(first_team["team"]["id"], self.team1.id)
+        self.assertEqual(first_team["played"], 5)
+        self.assertEqual(first_team["win"], 3)
+        self.assertEqual(first_team["loss"], 2)
+        self.assertEqual(first_team["score_for"], 100)
+        self.assertEqual(first_team["score_against"], 80)
+        self.assertEqual(first_team["difference"], "20.000")
+        self.assertEqual(first_team["points"], "6.000")
+        
+        # Check second team (lower points)
+        second_team = ladder_summary[1]
+        self.assertEqual(second_team["team"]["id"], self.team2.id)
+        self.assertEqual(second_team["played"], 5)
+        self.assertEqual(second_team["win"], 2)
+        self.assertEqual(second_team["loss"], 3)
+        self.assertEqual(second_team["score_for"], 80)
+        self.assertEqual(second_team["score_against"], 100)
+        self.assertEqual(second_team["difference"], "-20.000")
+        self.assertEqual(second_team["points"], "4.000")
