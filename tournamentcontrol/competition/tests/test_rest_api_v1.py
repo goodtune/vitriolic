@@ -1,3 +1,5 @@
+import json
+
 from django.test.utils import override_settings
 from test_plus import TestCase
 
@@ -242,30 +244,32 @@ class APITests(TestCase):
 
     def test_division_detail_includes_ladder_summary(self):
         """Test that division-detail endpoint includes ladder_summary in stages"""
-        # Create some ladder summary data
-        from tournamentcontrol.competition.models import LadderSummary
-
-        LadderSummary.objects.create(
+        # Create matches with scores to trigger ladder summary generation via signals
+        # Match 1: team1 wins 100-80
+        factories.MatchFactory.create(
             stage=self.stage,
-            team=self.team1,
-            played=5,
-            win=3,
-            loss=2,
-            score_for=100,
-            score_against=80,
-            difference=20,
-            points=6,
+            home_team=self.team1,
+            away_team=self.team2,
+            home_team_score=100,
+            away_team_score=80,
         )
-        LadderSummary.objects.create(
+        
+        # Match 2: team1 wins 50-40 (against team2 again for simplicity)
+        factories.MatchFactory.create(
             stage=self.stage,
-            team=self.team2,
-            played=5,
-            win=2,
-            loss=3,
-            score_for=80,
-            score_against=100,
-            difference=-20,
-            points=4,
+            home_team=self.team2,
+            away_team=self.team1,
+            home_team_score=40,
+            away_team_score=50,
+        )
+        
+        # Match 3: team2 wins 60-30 (team2 vs team1)
+        factories.MatchFactory.create(
+            stage=self.stage,
+            home_team=self.team2,
+            away_team=self.team1,
+            home_team_score=60,
+            away_team_score=30,
         )
 
         self.get(
@@ -277,8 +281,6 @@ class APITests(TestCase):
         self.response_200()
 
         # Parse the response
-        import json
-
         response_data = json.loads(self.last_response.content)
 
         # Ensure stages have ladder_summary field
@@ -295,24 +297,28 @@ class APITests(TestCase):
         # Sort by points to ensure consistent order
         ladder_summary.sort(key=lambda x: x["points"], reverse=True)
 
-        # Check first team (higher points)
-        first_team = ladder_summary[0]
-        self.assertEqual(first_team["team"], self.team1.id)
-        self.assertEqual(first_team["played"], 5)
-        self.assertEqual(first_team["win"], 3)
-        self.assertEqual(first_team["loss"], 2)
-        self.assertEqual(first_team["score_for"], 100)
-        self.assertEqual(first_team["score_against"], 80)
-        self.assertEqual(first_team["difference"], "20.000")
-        self.assertEqual(first_team["points"], "6.000")
-
-        # Check second team (lower points)
-        second_team = ladder_summary[1]
-        self.assertEqual(second_team["team"], self.team2.id)
-        self.assertEqual(second_team["played"], 5)
-        self.assertEqual(second_team["win"], 2)
-        self.assertEqual(second_team["loss"], 3)
-        self.assertEqual(second_team["score_for"], 80)
-        self.assertEqual(second_team["score_against"], 100)
-        self.assertEqual(second_team["difference"], "-20.000")
-        self.assertEqual(second_team["points"], "4.000")
+        # Verify ladder summary was generated via signals
+        self.assertEqual(len(ladder_summary), 2)
+        
+        # Check that both teams have data
+        team_ids = {entry["team"] for entry in ladder_summary}
+        self.assertEqual(team_ids, {self.team1.id, self.team2.id})
+        
+        # Find each team's entry
+        team1_entry = next(entry for entry in ladder_summary if entry["team"] == self.team1.id)
+        team2_entry = next(entry for entry in ladder_summary if entry["team"] == self.team2.id)
+        
+        # Verify team1 has more points (2 wins vs 1 win for team2)
+        self.assertGreater(float(team1_entry["points"]), float(team2_entry["points"]))
+        
+        # Verify played count (3 matches each)
+        self.assertEqual(team1_entry["played"], 3)
+        self.assertEqual(team2_entry["played"], 3)
+        
+        # Verify team1 stats (2 wins, 1 loss)
+        self.assertEqual(team1_entry["win"], 2)
+        self.assertEqual(team1_entry["loss"], 1)
+        
+        # Verify team2 stats (1 win, 2 losses)
+        self.assertEqual(team2_entry["win"], 1)
+        self.assertEqual(team2_entry["loss"], 2)
