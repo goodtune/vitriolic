@@ -243,8 +243,8 @@ class APITests(TestCase):
         """Test that division-detail endpoint includes ladder_summary in stages"""
         # Create some ladder summary data
         from tournamentcontrol.competition.models import LadderSummary
-        
-        ladder1 = LadderSummary.objects.create(
+
+        LadderSummary.objects.create(
             stage=self.stage,
             team=self.team1,
             played=5,
@@ -255,7 +255,7 @@ class APITests(TestCase):
             difference=20,
             points=6,
         )
-        ladder2 = LadderSummary.objects.create(
+        LadderSummary.objects.create(
             stage=self.stage,
             team=self.team2,
             played=5,
@@ -274,25 +274,26 @@ class APITests(TestCase):
             slug=self.division.slug,
         )
         self.response_200()
-        
+
         # Parse the response
         import json
+
         response_data = json.loads(self.last_response.content)
-        
+
         # Ensure stages have ladder_summary field
         self.assertIn("stages", response_data)
         self.assertEqual(len(response_data["stages"]), 1)
-        
+
         stage_data = response_data["stages"][0]
         self.assertIn("ladder_summary", stage_data)
-        
+
         # Check ladder summary data
         ladder_summary = stage_data["ladder_summary"]
         self.assertEqual(len(ladder_summary), 2)
-        
+
         # Sort by points to ensure consistent order
         ladder_summary.sort(key=lambda x: x["points"], reverse=True)
-        
+
         # Check first team (higher points)
         first_team = ladder_summary[0]
         self.assertEqual(first_team["team"]["id"], self.team1.id)
@@ -303,7 +304,7 @@ class APITests(TestCase):
         self.assertEqual(first_team["score_against"], 80)
         self.assertEqual(first_team["difference"], "20.000")
         self.assertEqual(first_team["points"], "6.000")
-        
+
         # Check second team (lower points)
         second_team = ladder_summary[1]
         self.assertEqual(second_team["team"]["id"], self.team2.id)
