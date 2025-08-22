@@ -8,7 +8,6 @@ from tournamentcontrol.competition.tests import factories
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
 class APITests(TestCase):
-
     @classmethod
     def setUpTestData(cls):
         """Create test data once for all tests."""
@@ -244,142 +243,203 @@ class APITests(TestCase):
 
     def test_division_detail_includes_ladder_summary(self):
         """Test that division-detail endpoint includes ladder_summary in stages"""
+        stage = factories.StageFactory.create(division__season=self.season)
+
         # Create matches with scores to trigger ladder summary generation via signals
         # Match 1: team1 wins 100-80
-        factories.MatchFactory.create(
-            stage=self.stage,
-            home_team=self.team1,
-            away_team=self.team2,
+        match1 = factories.MatchFactory.create(
+            stage=stage,
+            play_at=self.ground,
             home_team_score=100,
             away_team_score=80,
+            date="2025-08-22",
+            time="09:00:00",
+            datetime="2025-08-22T09:00:00.000000Z",
+            round=1,
         )
 
         # Match 2: team1 wins 50-40 (team2 home, team1 away)
-        factories.MatchFactory.create(
-            stage=self.stage,
-            home_team=self.team2,
-            away_team=self.team1,
+        match2 = factories.MatchFactory.create(
+            stage=stage,
+            play_at=self.ground,
+            home_team=match1.away_team,
+            away_team=match1.home_team,
             home_team_score=40,
             away_team_score=50,
+            date="2025-08-22",
+            time="12:00:00",
+            datetime="2025-08-22T12:00:00.000000Z",
+            round=2,
         )
 
         # Match 3: team2 wins 60-30 (team2 home, team1 away)
-        factories.MatchFactory.create(
-            stage=self.stage,
-            home_team=self.team2,
-            away_team=self.team1,
+        match3 = factories.MatchFactory.create(
+            stage=stage,
+            play_at=self.ground,
+            home_team=match1.away_team,
+            away_team=match1.home_team,
             home_team_score=60,
             away_team_score=30,
+            date="2025-08-22",
+            time="15:00:00",
+            datetime="2025-08-22T15:00:00.000000Z",
+            round=3,
         )
 
         self.get(
             "v1:division-detail",
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
-            slug=self.division.slug,
+            slug=stage.division.slug,
         )
         self.response_200()
 
-        # Parse the actual response to extract the key parts we want to validate
-        actual_response = json.loads(self.last_response.content)
-
-        # Find the ladder summary data by team ID for validation
-        stage_data = actual_response["stages"][0]
-        ladder_summary = stage_data["ladder_summary"]
-
-        # Sort by team ID for consistent comparison
-        ladder_summary.sort(key=lambda x: x["team"])
-
-        # Expected ladder summary structure - team1 should have more points (2 wins vs 1 win)
-        expected_ladder_summary = [
-            {
-                "team": self.team1.id,
-                "played": 3,
-                "win": 2,
-                "loss": 1,
-                "draw": 0,
-                "bye": 0,
-                "forfeit_for": 0,
-                "forfeit_against": 0,
-                "score_for": 180,
-                "score_against": 180,
-                "difference": "0.000",
-                "percentage": "100.00",
-                "points": "7.000",  # 3*2 + 1*1 = 7 (2 wins, 1 loss using division formula)
-                "bonus_points": 0,
-            },
-            {
-                "team": self.team2.id,
-                "played": 3,
-                "win": 1,
-                "loss": 2,
-                "draw": 0,
-                "bye": 0,
-                "forfeit_for": 0,
-                "forfeit_against": 0,
-                "score_for": 180,
-                "score_against": 180,
-                "difference": "0.000",
-                "percentage": "100.00",
-                "points": "5.000",  # 3*1 + 1*2 = 5 (1 win, 2 losses using division formula)
-                "bonus_points": 0,
-            },
-        ]
-
-        # Define expected complete response structure
-        expected_response = {
-            "title": self.division.title,
-            "slug": self.division.slug,
-            "url": f"http://testserver/api/v1/competitions/{self.competition.slug}/seasons/{self.season.slug}/divisions/{self.division.slug}/",
+        expected_payload = {
+            "title": stage.division.title,
+            "slug": stage.division.slug,
+            "url": f"http://testserver/api/v1/competitions/{self.competition.slug}/seasons/{self.season.slug}/divisions/{stage.division.slug}/",
             "teams": [
                 {
-                    "id": self.team1.id,
-                    "title": self.team1.title,
-                    "slug": self.team1.slug,
+                    "id": match1.home_team.id,
+                    "title": match1.home_team.title,
+                    "slug": match1.home_team.slug,
                     "club": {
-                        "title": self.team1.club.title,
-                        "slug": self.team1.club.slug,
-                        "abbreviation": "",
-                        "short_title": "",
-                        "url": f"http://testserver/api/v1/clubs/{self.team1.club.slug}/",
-                        "website": "",
-                        "facebook": "",
-                        "twitter": "",
-                        "youtube": "",
+                        "abbreviation": match1.home_team.club.abbreviation,
+                        "facebook": match1.home_team.club.facebook,
+                        "short_title": match1.home_team.club.short_title,
+                        "slug": match1.home_team.club.slug,
+                        "title": match1.home_team.club.title,
+                        "twitter": match1.home_team.club.twitter,
+                        "url": f"http://testserver/api/v1/clubs/{match1.home_team.club.slug}/",
+                        "website": match1.home_team.club.website,
+                        "youtube": match1.home_team.club.youtube,
                     },
                 },
                 {
-                    "id": self.team2.id,
-                    "title": self.team2.title,
-                    "slug": self.team2.slug,
+                    "id": match1.away_team.id,
+                    "title": match1.away_team.title,
+                    "slug": match1.away_team.slug,
                     "club": {
-                        "title": self.team2.club.title,
-                        "slug": self.team2.club.slug,
-                        "abbreviation": "",
-                        "short_title": "",
-                        "url": f"http://testserver/api/v1/clubs/{self.team2.club.slug}/",
-                        "website": "",
-                        "facebook": "",
-                        "twitter": "",
-                        "youtube": "",
+                        "abbreviation": match1.away_team.club.abbreviation,
+                        "facebook": match1.away_team.club.facebook,
+                        "short_title": match1.away_team.club.short_title,
+                        "slug": match1.away_team.club.slug,
+                        "title": match1.away_team.club.title,
+                        "twitter": match1.away_team.club.twitter,
+                        "url": f"http://testserver/api/v1/clubs/{match1.away_team.club.slug}/",
+                        "website": match1.away_team.club.website,
+                        "youtube": match1.away_team.club.youtube,
                     },
                 },
             ],
             "stages": [
                 {
-                    "title": self.stage.title,
-                    "slug": self.stage.slug,
-                    "url": f"http://testserver/api/v1/competitions/{self.competition.slug}/seasons/{self.season.slug}/divisions/{self.division.slug}/stages/{self.stage.slug}/",
+                    "title": stage.title,
+                    "slug": stage.slug,
+                    "url": f"http://testserver/api/v1/competitions/{self.competition.slug}/seasons/{self.season.slug}/divisions/{stage.division.slug}/stages/{stage.slug}/",
                     "matches": [
-                        # We'll check that matches are included but not their exact structure since it includes varying data
+                        {
+                            "id": match1.id,
+                            "uuid": str(match1.uuid),
+                            "round": "Round 1",
+                            "date": "2025-08-22",
+                            "time": "09:00:00",
+                            "datetime": "2025-08-22T09:00:00Z",
+                            "is_bye": False,
+                            "is_washout": False,
+                            "home_team": match1.home_team.id,
+                            "home_team_score": 100,
+                            "away_team": match1.away_team.id,
+                            "away_team_score": 80,
+                            "referees": [],
+                            "videos": None,
+                            "play_at": {
+                                "id": self.ground.id,
+                                "title": self.ground.title,
+                                "abbreviation": self.ground.abbreviation,
+                                "timezone": str(self.ground.timezone),
+                            },
+                        },
+                        {
+                            "id": match2.id,
+                            "uuid": str(match2.uuid),
+                            "round": "Round 2",
+                            "date": "2025-08-22",
+                            "time": "12:00:00",
+                            "datetime": "2025-08-22T12:00:00Z",
+                            "is_bye": False,
+                            "is_washout": False,
+                            "home_team": match2.home_team.id,
+                            "home_team_score": 40,
+                            "away_team": match2.away_team.id,
+                            "away_team_score": 50,
+                            "referees": [],
+                            "videos": None,
+                            "play_at": {
+                                "id": self.ground.id,
+                                "title": self.ground.title,
+                                "abbreviation": self.ground.abbreviation,
+                                "timezone": str(self.ground.timezone),
+                            },
+                        },
+                        {
+                            "id": match3.id,
+                            "uuid": str(match3.uuid),
+                            "round": "Round 3",
+                            "date": "2025-08-22",
+                            "time": "15:00:00",
+                            "datetime": "2025-08-22T15:00:00Z",
+                            "is_bye": False,
+                            "is_washout": False,
+                            "home_team": match3.home_team.id,
+                            "home_team_score": 60,
+                            "away_team": match3.away_team.id,
+                            "away_team_score": 30,
+                            "referees": [],
+                            "videos": None,
+                            "play_at": {
+                                "id": self.ground.id,
+                                "title": self.ground.title,
+                                "abbreviation": self.ground.abbreviation,
+                                "timezone": str(self.ground.timezone),
+                            },
+                        },
                     ],
-                    "ladder_summary": expected_ladder_summary,
+                    "ladder_summary": [
+                        {
+                            "team": match1.home_team.id,
+                            "played": 3,
+                            "win": 2,
+                            "loss": 1,
+                            "draw": 0,
+                            "bye": 0,
+                            "forfeit_for": 0,
+                            "forfeit_against": 0,
+                            "score_for": 180,
+                            "score_against": 180,
+                            "difference": "0.000",
+                            "percentage": "100.00",
+                            "points": "7.000",
+                            "bonus_points": 0,
+                        },
+                        {
+                            "team": match1.away_team.id,
+                            "played": 3,
+                            "win": 1,
+                            "loss": 2,
+                            "draw": 0,
+                            "bye": 0,
+                            "forfeit_for": 0,
+                            "forfeit_against": 0,
+                            "score_for": 180,
+                            "score_against": 180,
+                            "difference": "0.000",
+                            "percentage": "100.00",
+                            "points": "5.000",
+                            "bonus_points": 0,
+                        },
+                    ],
                 }
             ],
         }
-
-        # Test the complete structure but extract matches separately since they have dynamic data
-        actual_matches = stage_data["matches"]
-        expected_response["stages"][0]["matches"] = actual_matches
-
-        self.assertJSONEqual(self.last_response.content, expected_response)
+        self.assertJSONEqual(self.last_response.content, expected_payload)
