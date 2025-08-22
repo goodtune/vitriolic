@@ -253,8 +253,8 @@ class APITests(TestCase):
             home_team_score=100,
             away_team_score=80,
         )
-        
-        # Match 2: team1 wins 50-40 (against team2 again for simplicity)
+
+        # Match 2: team1 wins 50-40 (team2 home, team1 away)
         factories.MatchFactory.create(
             stage=self.stage,
             home_team=self.team2,
@@ -262,8 +262,8 @@ class APITests(TestCase):
             home_team_score=40,
             away_team_score=50,
         )
-        
-        # Match 3: team2 wins 60-30 (team2 vs team1)
+
+        # Match 3: team2 wins 60-30 (team2 home, team1 away)
         factories.MatchFactory.create(
             stage=self.stage,
             home_team=self.team2,
@@ -280,45 +280,106 @@ class APITests(TestCase):
         )
         self.response_200()
 
-        # Parse the response
-        response_data = json.loads(self.last_response.content)
+        # Parse the actual response to extract the key parts we want to validate
+        actual_response = json.loads(self.last_response.content)
 
-        # Ensure stages have ladder_summary field
-        self.assertIn("stages", response_data)
-        self.assertEqual(len(response_data["stages"]), 1)
-
-        stage_data = response_data["stages"][0]
-        self.assertIn("ladder_summary", stage_data)
-
-        # Check ladder summary data
+        # Find the ladder summary data by team ID for validation
+        stage_data = actual_response["stages"][0]
         ladder_summary = stage_data["ladder_summary"]
-        self.assertEqual(len(ladder_summary), 2)
 
-        # Sort by points to ensure consistent order
-        ladder_summary.sort(key=lambda x: x["points"], reverse=True)
+        # Sort by team ID for consistent comparison
+        ladder_summary.sort(key=lambda x: x["team"])
 
-        # Verify ladder summary was generated via signals
-        self.assertEqual(len(ladder_summary), 2)
-        
-        # Check that both teams have data
-        team_ids = {entry["team"] for entry in ladder_summary}
-        self.assertEqual(team_ids, {self.team1.id, self.team2.id})
-        
-        # Find each team's entry
-        team1_entry = next(entry for entry in ladder_summary if entry["team"] == self.team1.id)
-        team2_entry = next(entry for entry in ladder_summary if entry["team"] == self.team2.id)
-        
-        # Verify team1 has more points (2 wins vs 1 win for team2)
-        self.assertGreater(float(team1_entry["points"]), float(team2_entry["points"]))
-        
-        # Verify played count (3 matches each)
-        self.assertEqual(team1_entry["played"], 3)
-        self.assertEqual(team2_entry["played"], 3)
-        
-        # Verify team1 stats (2 wins, 1 loss)
-        self.assertEqual(team1_entry["win"], 2)
-        self.assertEqual(team1_entry["loss"], 1)
-        
-        # Verify team2 stats (1 win, 2 losses)
-        self.assertEqual(team2_entry["win"], 1)
-        self.assertEqual(team2_entry["loss"], 2)
+        # Expected ladder summary structure - team1 should have more points (2 wins vs 1 win)
+        expected_ladder_summary = [
+            {
+                "team": self.team1.id,
+                "played": 3,
+                "win": 2,
+                "loss": 1,
+                "draw": 0,
+                "bye": 0,
+                "forfeit_for": 0,
+                "forfeit_against": 0,
+                "score_for": 180,
+                "score_against": 180,
+                "difference": "0.000",
+                "percentage": "100.00",
+                "points": "7.000",  # 3*2 + 1*1 = 7 (2 wins, 1 loss using division formula)
+                "bonus_points": 0,
+            },
+            {
+                "team": self.team2.id,
+                "played": 3,
+                "win": 1,
+                "loss": 2,
+                "draw": 0,
+                "bye": 0,
+                "forfeit_for": 0,
+                "forfeit_against": 0,
+                "score_for": 180,
+                "score_against": 180,
+                "difference": "0.000",
+                "percentage": "100.00",
+                "points": "5.000",  # 3*1 + 1*2 = 5 (1 win, 2 losses using division formula)
+                "bonus_points": 0,
+            },
+        ]
+
+        # Define expected complete response structure
+        expected_response = {
+            "title": self.division.title,
+            "slug": self.division.slug,
+            "url": f"http://testserver/api/v1/competitions/{self.competition.slug}/seasons/{self.season.slug}/divisions/{self.division.slug}/",
+            "teams": [
+                {
+                    "id": self.team1.id,
+                    "title": self.team1.title,
+                    "slug": self.team1.slug,
+                    "club": {
+                        "title": self.team1.club.title,
+                        "slug": self.team1.club.slug,
+                        "abbreviation": "",
+                        "short_title": "",
+                        "url": f"http://testserver/api/v1/clubs/{self.team1.club.slug}/",
+                        "website": "",
+                        "facebook": "",
+                        "twitter": "",
+                        "youtube": "",
+                    },
+                },
+                {
+                    "id": self.team2.id,
+                    "title": self.team2.title,
+                    "slug": self.team2.slug,
+                    "club": {
+                        "title": self.team2.club.title,
+                        "slug": self.team2.club.slug,
+                        "abbreviation": "",
+                        "short_title": "",
+                        "url": f"http://testserver/api/v1/clubs/{self.team2.club.slug}/",
+                        "website": "",
+                        "facebook": "",
+                        "twitter": "",
+                        "youtube": "",
+                    },
+                },
+            ],
+            "stages": [
+                {
+                    "title": self.stage.title,
+                    "slug": self.stage.slug,
+                    "url": f"http://testserver/api/v1/competitions/{self.competition.slug}/seasons/{self.season.slug}/divisions/{self.division.slug}/stages/{self.stage.slug}/",
+                    "matches": [
+                        # We'll check that matches are included but not their exact structure since it includes varying data
+                    ],
+                    "ladder_summary": expected_ladder_summary,
+                }
+            ],
+        }
+
+        # Test the complete structure but extract matches separately since they have dynamic data
+        actual_matches = stage_data["matches"]
+        expected_response["stages"][0]["matches"] = actual_matches
+
+        self.assertJSONEqual(self.last_response.content, expected_response)
