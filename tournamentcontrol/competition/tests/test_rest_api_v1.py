@@ -1,4 +1,3 @@
-import json
 
 from django.test.utils import override_settings
 from test_plus import TestCase
@@ -443,3 +442,271 @@ class APITests(TestCase):
             ],
         }
         self.assertJSONEqual(self.last_response.content, expected_payload)
+
+    def test_stage_groups_exposure_in_api(self):
+        """Test that stage groups (pools) are properly exposed in the API"""
+        # Create a stage with pools
+        stage_with_pools = factories.StageFactory.create(division__season=self.season)
+
+        # Create stage groups (pools)
+        pool1 = factories.StageGroupFactory.create(
+            stage=stage_with_pools, title="Pool A"
+        )
+        pool2 = factories.StageGroupFactory.create(
+            stage=stage_with_pools, title="Pool B"
+        )
+
+        # Create teams for the pools
+        team_pool1_1 = factories.TeamFactory.create(division=stage_with_pools.division)
+        team_pool1_2 = factories.TeamFactory.create(division=stage_with_pools.division)
+        team_pool2_1 = factories.TeamFactory.create(division=stage_with_pools.division)
+        team_pool2_2 = factories.TeamFactory.create(division=stage_with_pools.division)
+
+        # Create matches in pools
+        match_pool1 = factories.MatchFactory.create(
+            stage=stage_with_pools,
+            stage_group=pool1,
+            home_team=team_pool1_1,
+            away_team=team_pool1_2,
+            play_at=self.ground,
+        )
+        match_pool2 = factories.MatchFactory.create(
+            stage=stage_with_pools,
+            stage_group=pool2,
+            home_team=team_pool2_1,
+            away_team=team_pool2_2,
+            play_at=self.ground,
+        )
+
+        # Create ladder summary entries for pools
+        factories.LadderSummaryFactory.create(
+            stage=stage_with_pools,
+            stage_group=pool1,
+            team=team_pool1_1,
+        )
+        factories.LadderSummaryFactory.create(
+            stage=stage_with_pools,
+            stage_group=pool1,
+            team=team_pool1_2,
+        )
+
+        # Test division detail endpoint
+        self.get(
+            "v1:division-detail",
+            competition_slug=self.competition.slug,
+            season_slug=self.season.slug,
+            slug=stage_with_pools.division.slug,
+        )
+        self.response_200()
+
+        response_data = self.last_response.json()
+
+        # Find our stage in the response
+        stage_data = None
+        for stage in response_data["stages"]:
+            if stage["slug"] == stage_with_pools.slug:
+                stage_data = stage
+                break
+
+        self.assertIsNotNone(stage_data, "Stage with pools not found in response")
+
+        # Validate pools are exposed
+        self.assertIn("pools", stage_data, "pools field missing from stage data")
+        pools = stage_data["pools"]
+        self.assertEqual(len(pools), 2, f"Expected 2 pools, got {len(pools)}")
+
+        # Validate pool structure
+        pool_ids = [pool["id"] for pool in pools]
+        pool_titles = [pool["title"] for pool in pools]
+        self.assertIn(pool1.pk, pool_ids, "Pool 1 ID not found in pools")
+        self.assertIn(pool2.pk, pool_ids, "Pool 2 ID not found in pools")
+        self.assertIn("Pool A", pool_titles, "Pool A title not found")
+        self.assertIn("Pool B", pool_titles, "Pool B title not found")
+
+        # Validate matches have stage_group field
+        matches = stage_data["matches"]
+        match_pool1_data = None
+        match_pool2_data = None
+
+        for match in matches:
+            if match["id"] == match_pool1.id:
+                match_pool1_data = match
+            elif match["id"] == match_pool2.id:
+                match_pool2_data = match
+
+        self.assertIsNotNone(match_pool1_data, "Match from pool 1 not found")
+        self.assertIsNotNone(match_pool2_data, "Match from pool 2 not found")
+
+        self.assertIn(
+            "stage_group", match_pool1_data, "stage_group field missing from match"
+        )
+        self.assertEqual(
+            match_pool1_data["stage_group"],
+            pool1.pk,
+            "Match pool 1 stage_group ID incorrect",
+        )
+
+        self.assertIn(
+            "stage_group", match_pool2_data, "stage_group field missing from match"
+        )
+        self.assertEqual(
+            match_pool2_data["stage_group"],
+            pool2.pk,
+            "Match pool 2 stage_group ID incorrect",
+        )
+
+        # Validate ladder summaries have stage_group field
+        ladder_summaries = stage_data["ladder_summary"]
+
+        ladder_pool1_team1_data = None
+        ladder_pool1_team2_data = None
+
+        for ladder in ladder_summaries:
+            if ladder["team"] == team_pool1_1.pk:
+                ladder_pool1_team1_data = ladder
+            elif ladder["team"] == team_pool1_2.pk:
+                ladder_pool1_team2_data = ladder
+
+        self.assertIsNotNone(
+            ladder_pool1_team1_data, "Ladder entry for pool 1 team 1 not found"
+        )
+        self.assertIsNotNone(
+            ladder_pool1_team2_data, "Ladder entry for pool 1 team 2 not found"
+        )
+
+        self.assertIn(
+            "stage_group",
+            ladder_pool1_team1_data,
+            "stage_group field missing from ladder summary",
+        )
+        self.assertEqual(
+            ladder_pool1_team1_data["stage_group"],
+            pool1.pk,
+            "Ladder pool 1 stage_group ID incorrect",
+        )
+
+        self.assertIn(
+            "stage_group",
+            ladder_pool1_team2_data,
+            "stage_group field missing from ladder summary",
+        )
+        self.assertEqual(
+            ladder_pool1_team2_data["stage_group"],
+            pool1.pk,
+            "Ladder pool 1 stage_group ID incorrect",
+        )
+
+    def test_stage_detail_with_pools(self):
+        """Test that stage detail endpoint also exposes pools correctly"""
+        # Create a stage with pools
+        stage_with_pools = factories.StageFactory.create(division__season=self.season)
+
+        # Create stage groups (pools)
+        pool1 = factories.StageGroupFactory.create(
+            stage=stage_with_pools, title="Pool A"
+        )
+        pool2 = factories.StageGroupFactory.create(
+            stage=stage_with_pools, title="Pool B"
+        )
+
+        # Test stage detail endpoint
+        self.get(
+            "v1:stage-detail",
+            competition_slug=self.competition.slug,
+            season_slug=self.season.slug,
+            division_slug=stage_with_pools.division.slug,
+            slug=stage_with_pools.slug,
+        )
+        self.response_200()
+
+        response_data = self.last_response.json()
+
+        # Validate pools are exposed
+        self.assertIn("pools", response_data, "pools field missing from stage detail")
+        pools = response_data["pools"]
+        self.assertEqual(len(pools), 2, f"Expected 2 pools, got {len(pools)}")
+
+        # Validate pool structure
+        pool_ids = [pool["id"] for pool in pools]
+        pool_titles = [pool["title"] for pool in pools]
+        self.assertIn(pool1.pk, pool_ids, "Pool 1 ID not found in stage detail pools")
+        self.assertIn(pool2.pk, pool_ids, "Pool 2 ID not found in stage detail pools")
+        self.assertIn("Pool A", pool_titles, "Pool A title not found in stage detail")
+        self.assertIn("Pool B", pool_titles, "Pool B title not found in stage detail")
+
+    def test_matches_and_ladders_without_pools(self):
+        """Test that matches and ladder summaries without stage groups return null for stage_group field"""
+        # Use existing stage without pools
+        stage = self.stage
+
+        # Create a match without stage_group
+        match_no_pool = factories.MatchFactory.create(
+            stage=stage,
+            stage_group=None,  # Explicitly no pool
+            home_team=self.team1,
+            away_team=self.team2,
+            play_at=self.ground,
+        )
+
+        # Create ladder summary without stage_group
+        factories.LadderSummaryFactory.create(
+            stage=stage,
+            stage_group=None,  # Explicitly no pool
+            team=self.team1,
+        )
+
+        # Test division detail endpoint
+        self.get(
+            "v1:division-detail",
+            competition_slug=self.competition.slug,
+            season_slug=self.season.slug,
+            slug=stage.division.slug,
+        )
+        self.response_200()
+
+        response_data = self.last_response.json()
+
+        # Find our stage in the response
+        stage_data = None
+        for stage_item in response_data["stages"]:
+            if stage_item["slug"] == stage.slug:
+                stage_data = stage_item
+                break
+
+        self.assertIsNotNone(stage_data, "Stage not found in response")
+
+        # Check that pools field exists and is empty
+        self.assertIn("pools", stage_data, "pools field missing from stage data")
+        self.assertEqual(
+            stage_data["pools"], [], "Expected empty pools list for stage without pools"
+        )
+
+        # Find our match and verify stage_group is null
+        match_data = None
+        for match in stage_data["matches"]:
+            if match["id"] == match_no_pool.id:
+                match_data = match
+                break
+
+        self.assertIsNotNone(match_data, "Match without pool not found")
+        self.assertIn("stage_group", match_data, "stage_group field missing from match")
+        self.assertIsNone(
+            match_data["stage_group"],
+            "Expected null stage_group for match without pool",
+        )
+
+        # Find our ladder summary and verify stage_group is null
+        ladder_data = None
+        for ladder in stage_data["ladder_summary"]:
+            if ladder["team"] == self.team1.pk:
+                ladder_data = ladder
+                break
+
+        self.assertIsNotNone(ladder_data, "Ladder summary without pool not found")
+        self.assertIn(
+            "stage_group", ladder_data, "stage_group field missing from ladder summary"
+        )
+        self.assertIsNone(
+            ladder_data["stage_group"],
+            "Expected null stage_group for ladder summary without pool",
+        )
