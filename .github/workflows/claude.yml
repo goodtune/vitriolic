@@ -58,7 +58,7 @@ jobs:
             Bash(ruff check *),
             Bash(ruff check --fix *),
             Bash(uvx tox *),
-            Bash(tox*),
+            Bash(tox *),
             Bash(git status),
             Bash(git diff *),
             Bash(git log *),
