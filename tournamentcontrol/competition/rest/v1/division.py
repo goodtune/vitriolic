@@ -8,6 +8,41 @@ from .season import PlaceSerializer
 from .viewsets import SlugViewSet
 
 
+class ListTeamSerializer(serializers.ModelSerializer):
+
+    club = ClubSerializer(read_only=True)
+
+    class Meta:
+        model = models.Team
+        fields = ("id", "title", "slug", "club")
+
+
+class LadderSummarySerializer(serializers.ModelSerializer):
+    team = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = models.LadderSummary
+        fields = (
+            "team",
+            "played",
+            "win",
+            "loss",
+            "draw",
+            "bye",
+            "forfeit_for",
+            "forfeit_against",
+            "score_for",
+            "score_against",
+            "difference",
+            "percentage",
+            "bonus_points",
+            "points",
+        )
+
+    def get_team(self, obj):
+        return obj.team.pk
+
+
 class ListMatchSerializer(serializers.ModelSerializer):
     round = serializers.SerializerMethodField(read_only=True)
     home_team = serializers.SerializerMethodField(read_only=True)
@@ -58,20 +93,12 @@ class ListStageSerializer(NestedHyperlinkedModelSerializer):
     }
 
     matches = ListMatchSerializer(many=True, read_only=True)
+    ladder_summary = LadderSummarySerializer(many=True, read_only=True)
 
     class Meta:
         model = models.Stage
-        fields = ("title", "slug", "url", "matches")
+        fields = ("title", "slug", "url", "matches", "ladder_summary")
         extra_kwargs = {"url": {"lookup_field": "slug", "view_name": "v1:stage-detail"}}
-
-
-class ListTeamSerializer(serializers.ModelSerializer):
-
-    club = ClubSerializer(read_only=True)
-
-    class Meta:
-        model = models.Team
-        fields = ("id", "title", "slug", "club")
 
 
 class ListDivisionSerializer(NestedHyperlinkedModelSerializer):
@@ -112,5 +139,6 @@ class DivisionViewSet(SlugViewSet):
                 "teams__club",
                 "stages__matches__home_team",
                 "stages__matches__away_team",
+                "stages__ladder_summary",
             )
         )
