@@ -1,12 +1,8 @@
 import textwrap
 
-from django.contrib.auth.models import User
-from django.test import Client
 from test_plus import TestCase
 
-from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition import utils
-from tournamentcontrol.competition.models import UndecidedTeam
 from tournamentcontrol.competition.tests.factories import (
     DivisionFactory,
     MatchFactory,
@@ -449,7 +445,8 @@ class TwoStageFormulaProblemTests(TestCase):
         # Create a mix of valid and invalid UndecidedTeam objects
         # Note: Don't set both label and formula as per UndecidedTeamForm validation
         valid_team = UndecidedTeamFactory.create(
-            stage=self.finals_stage, formula="G1P1"  # Valid
+            stage=self.finals_stage,
+            formula="G1P1",  # Valid
         )
 
         invalid_team = UndecidedTeamFactory.create(

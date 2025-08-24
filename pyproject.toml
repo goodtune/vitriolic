@@ -58,6 +58,7 @@ news = [
     "python-magic",
 ]
 competition = [
+    "pydantic>=2.0",
     "celery>5",
     "cloudinary",
     "django-embed-video",
@@ -71,6 +72,7 @@ competition = [
     "icalendar",
     "internationaltouch-oauth2client",
     "markdown",
+    "openai>=1.0.0",
     "pyparsing",
     "python-dateutil",
 ]

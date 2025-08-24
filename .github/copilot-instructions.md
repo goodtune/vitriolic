@@ -2,10 +2,6 @@ This is a Python based repository, it provides a Django reusable application tha
 
 ## Code Standards
 
-### Required Before Each Commit
-
-- Run `isort`, `black`, and `ruff check` before committing any changes to ensure proper code formatting and linting
-
 ### Development Flow
 
 - **Unit Tests**: `tox` to run the full unit test suite across Django/Python versions
