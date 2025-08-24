@@ -45,6 +45,11 @@ from tournamentcontrol.competition.constants import (
     WIN_LOSE,
     LiveStreamPrivacy,
 )
+from tournamentcontrol.competition.draw.schemas import (
+    DivisionStructure,
+    PoolFixture,
+    StageFixture,
+)
 from tournamentcontrol.competition.managers import (
     LadderEntryManager,
     MatchManager,
@@ -218,7 +223,8 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         Supercedes _mvp_annotate due to GROUP BY exceptions. Take full control
         of the query. See the history for the earlier implementation.
         """
-        query = """
+        query = (
+            """
             SELECT
                 "competition_person"."uuid",
                 "competition_person"."first_name",
@@ -264,9 +270,11 @@ class Club(AdminUrlMixin, SitemapNodeBase):
             ORDER BY
                 "competition_person"."last_name" ASC,
                 "competition_person"."first_name" ASC
-        """ % {  # noqa: E501
-            "user": get_user_model()._meta.db_table
-        }
+        """
+            % {  # noqa: E501
+                "user": get_user_model()._meta.db_table
+            }
+        )
         params = {
             "club": self.pk,
         }
@@ -812,6 +820,240 @@ class Division(
         for stage in self.stages.all():
             res.update(stage.matches_by_date())
         return res
+
+    def to_division_structure(self):
+        """
+        Export this Division to a DivisionStructure.
+
+        Returns:
+            DivisionStructure representation of this division
+
+        Raises:
+            ValueError: If division contains unsupported features (UndecidedTeam entries)
+        """
+
+        # Check for UndecidedTeam entries
+        for stage in self.stages.all():
+            if stage.undecided_teams.exists():
+                raise ValueError(
+                    f"Stage '{stage.title}' contains UndecidedTeam entries. "
+                    "Cannot export divisions with undecided teams."
+                )
+            for pool in stage.pools.all():
+                if pool.undecided_teams.exists():
+                    raise ValueError(
+                        f"Pool '{pool.title}' in stage '{stage.title}' contains UndecidedTeam entries. "
+                        "Cannot export divisions with undecided teams."
+                    )
+
+        # Get all teams
+        teams = list(self.teams.values_list("title", flat=True))
+
+        # Collect all unique draw formats and build dictionary
+        draw_formats = {}
+        draw_format_refs = {}  # Maps draw_format_string -> ref_name
+
+        # Process stages and collect draw formats
+        stages = []
+        for stage in self.stages.order_by("order"):
+            stage_fixture = self._process_stage_for_export(
+                stage, teams, draw_formats, draw_format_refs
+            )
+            stages.append(stage_fixture)
+
+        return DivisionStructure(
+            title=self.title, teams=teams, draw_formats=draw_formats, stages=stages
+        )
+
+    def _process_stage_for_export(self, stage, teams, draw_formats, draw_format_refs):
+        """Process a stage and return a StageFixture."""
+
+        pools = stage.pools.order_by("order")
+
+        if pools.exists():
+            # Stage has pools
+            pool_fixtures = []
+            for pool in pools:
+                pool_fixture = self._process_pool_for_export(
+                    pool, teams, draw_formats, draw_format_refs
+                )
+                pool_fixtures.append(pool_fixture)
+
+            return StageFixture(
+                title=stage.title,
+                draw_format_ref=None,  # Pool stages don't have stage-level draw_format
+                pools=pool_fixtures,
+            )
+        else:
+            # Stage without pools - knockout stage
+            matches = stage.matches.order_by("round", "pk")
+            draw_format_string = self._generate_draw_format_for_export(matches, teams)
+            draw_format_ref = self._get_or_create_draw_format_ref_for_export(
+                draw_format_string,
+                f"{stage.title} Format",
+                draw_formats,
+                draw_format_refs,
+            )
+
+            return StageFixture(
+                title=stage.title, draw_format_ref=draw_format_ref, pools=None
+            )
+
+    def _process_pool_for_export(self, pool, teams, draw_formats, draw_format_refs):
+        """Process a pool and return a PoolFixture."""
+
+        # Get teams in this pool
+        pool_teams = []
+        pool_matches = pool.matches.all()
+
+        # Extract unique teams from matches
+        team_ids = set()
+        for match in pool_matches:
+            if match.home_team:
+                team_ids.add(match.home_team.pk)
+            if match.away_team:
+                team_ids.add(match.away_team.pk)
+
+        # Get team titles and convert to indices
+        pool_team_objects = list(Team.objects.filter(pk__in=team_ids).order_by("title"))
+        for team in pool_team_objects:
+            try:
+                pool_teams.append(teams.index(team.title))
+            except ValueError:
+                raise ValueError(
+                    f"Team '{team.title}' not found in division teams list"
+                )
+
+        # Generate draw format
+        matches = pool.matches.order_by("round", "pk")
+        draw_format_string = self._generate_draw_format_for_export(
+            matches, teams, pool_team_objects
+        )
+        draw_format_ref = self._get_or_create_draw_format_ref_for_export(
+            draw_format_string, f"{pool.title} Format", draw_formats, draw_format_refs
+        )
+
+        return PoolFixture(
+            title=pool.title, draw_format_ref=draw_format_ref, teams=pool_teams
+        )
+
+    def _generate_draw_format_for_export(self, matches, all_teams, pool_teams=None):
+        """Generate a draw_format string from matches."""
+        from collections import OrderedDict
+
+        if not matches.exists():
+            return ""
+
+        # Sort by database ID for deterministic ordering (reflects creation order)
+        match_list = list(matches.order_by("id"))
+
+        # Create mapping from database ID to sequential match ID
+        db_id_to_match_id = {match.id: idx + 1 for idx, match in enumerate(match_list)}
+
+        # Group matches by round
+        rounds = OrderedDict()
+        for match in match_list:
+            round_num = match.round or 1
+            if round_num not in rounds:
+                rounds[round_num] = []
+            rounds[round_num].append(match)
+
+        draw_lines = []
+
+        for round_num in sorted(rounds.keys()):
+            if len(rounds) > 1:  # Only add ROUND headers if multiple rounds
+                draw_lines.append("ROUND")
+
+            for match in rounds[round_num]:
+                match_id = db_id_to_match_id[match.id]
+                line_parts = [str(match_id) + ":"]
+
+                # Get home team
+                home_team = self._get_team_identifier_for_export(
+                    match, "home", all_teams, pool_teams, db_id_to_match_id
+                )
+
+                # Get away team
+                away_team = self._get_team_identifier_for_export(
+                    match, "away", all_teams, pool_teams, db_id_to_match_id
+                )
+
+                line_parts.append(f"{home_team} vs {away_team}")
+
+                # Add label if present
+                if match.label:
+                    line_parts.append(match.label)
+
+                draw_lines.append(" ".join(line_parts))
+
+        return "\n".join(draw_lines)
+
+    def _get_team_identifier_for_export(
+        self, match, side, all_teams, pool_teams=None, db_id_to_match_id=None
+    ):
+        """Get the team identifier for a match side (home/away)."""
+        team = getattr(match, f"{side}_team")
+        team_undecided = getattr(match, f"{side}_team_undecided")
+        team_eval = getattr(match, f"{side}_team_eval")
+        team_eval_related = getattr(match, f"{side}_team_eval_related")
+
+        if team_undecided:
+            # UndecidedTeam - use formula
+            return team_undecided.formula
+
+        elif team_eval:
+            # Handle W/L references that need match IDs
+            if team_eval in ["W", "L"] and team_eval_related and db_id_to_match_id:
+                # Look up the match ID using the database ID mapping
+                related_match_id = db_id_to_match_id.get(team_eval_related.id)
+                if related_match_id:
+                    return f"{team_eval}{related_match_id}"
+            # Direct eval string (W1, L1, G1P1, etc.) - already complete
+            return team_eval
+
+        elif match.is_bye:
+            # Bye match - whichever side is unset should be 0
+            return "0"
+
+        elif team:
+            # Regular team
+            if pool_teams:
+                # For pool matches, use 1-based index within the pool
+                try:
+                    return str(pool_teams.index(team) + 1)
+                except ValueError:
+                    # Fallback to global team index
+                    return str(all_teams.index(team.title) + 1)
+            else:
+                # For knockout matches, use global team index
+                return str(all_teams.index(team.title) + 1)
+
+        else:
+            # Unknown - shouldn't happen but handle gracefully
+            return "?"
+
+    def _get_or_create_draw_format_ref_for_export(
+        self, draw_format_string, format_name, draw_formats, draw_format_refs
+    ):
+        """Get or create a reference for a draw format string."""
+        if not draw_format_string:
+            return None
+
+        # Check if we already have this format
+        if draw_format_string in draw_format_refs:
+            return draw_format_refs[draw_format_string]
+
+        # Use the format name as the key (make it unique if needed)
+        ref_name = format_name
+        counter = 1
+        while ref_name in draw_formats:
+            counter += 1
+            ref_name = f"{format_name} {counter}"
+
+        draw_format_refs[draw_format_string] = ref_name
+        draw_formats[ref_name] = draw_format_string
+
+        return ref_name
 
 
 class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
@@ -2076,13 +2318,6 @@ class DrawFormat(AdminUrlMixin, models.Model):
 
     def _get_url_args(self):
         return (self.pk,)
-
-    def generator(self, stage, start_date=None):
-        from tournamentcontrol.competition.draw import DrawGenerator
-
-        generator = DrawGenerator(stage, start_date)
-        generator.parse(self.text)
-        return generator
 
     def __str__(self):
         return self.name
