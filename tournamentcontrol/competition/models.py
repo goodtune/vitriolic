@@ -2303,6 +2303,9 @@ class LadderSummary(LadderBase):
         )
         unique_together = ("stage", "team")
 
+    def __repr__(self):
+        return f"<LadderSummary: {self.stage!s} - {self.stage_group!s} - {self.team!s}>"
+
 
 class DrawFormat(AdminUrlMixin, models.Model):
     name = models.CharField(max_length=50)

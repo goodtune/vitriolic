@@ -155,7 +155,7 @@ class DrawFormatFixturesTestCase(TestCase):
         """Generate draw format for regrouped pool, excluding matches between teams from same original pool."""
         # Generate all round-robin matches - returns list of rounds, each round is list of pairings
         schedule = round_robin(teams)
-        
+
         # Flatten to get all matches and filter out matches between teams from same original group
         valid_matches = []
         for round_pairings in schedule:
@@ -163,15 +163,15 @@ class DrawFormatFixturesTestCase(TestCase):
                 # Skip bye matches (team = 0)
                 if team1 == 0 or team2 == 0:
                     continue
-                    
+
                 # Extract group number from team reference (e.g., "G1P1" -> "G1", "G5P3" -> "G5")
                 group1 = team1[:2]  # "G1", "G2", etc.
                 group2 = team2[:2]
-                
+
                 # Only include matches between teams from different original groups
                 if group1 != group2:
                     valid_matches.append((team1, team2))
-        
+
         # Convert to draw format string
         format_lines = []
         match_id = 1
@@ -182,7 +182,7 @@ class DrawFormatFixturesTestCase(TestCase):
                     home, away = valid_matches[i + j]
                     format_lines.append(f"{match_id}: {home} vs {away}")
                     match_id += 1
-        
+
         return "\n".join(format_lines)
 
     def test_eccentric_24_team_format(self):
@@ -193,21 +193,21 @@ class DrawFormatFixturesTestCase(TestCase):
             draw_formats={
                 "Initial Pools": round_robin_format(4),
                 # Pool G: 1st from groups 1&5, 2nd from group 3, 3rd from groups 1&5, 4th from group 3
-                "Pool G": self._regrouped_pool_format([
-                    "G1P1", "G5P1", "G3P2", "G1P3", "G5P3", "G3P4"
-                ]),
-                # Pool H: 1st from groups 2&6, 2nd from group 4, 3rd from groups 2&6, 4th from group 4  
-                "Pool H": self._regrouped_pool_format([
-                    "G2P1", "G6P1", "G4P2", "G2P3", "G6P3", "G4P4"
-                ]),
+                "Pool G": self._regrouped_pool_format(
+                    ["G1P1", "G5P1", "G3P2", "G1P3", "G5P3", "G3P4"]
+                ),
+                # Pool H: 1st from groups 2&6, 2nd from group 4, 3rd from groups 2&6, 4th from group 4
+                "Pool H": self._regrouped_pool_format(
+                    ["G2P1", "G6P1", "G4P2", "G2P3", "G6P3", "G4P4"]
+                ),
                 # Pool I: 1st from group 3, 2nd from groups 1&5, 3rd from group 3, 4th from groups 1&5
-                "Pool I": self._regrouped_pool_format([
-                    "G3P1", "G1P2", "G5P2", "G3P3", "G1P4", "G5P4"
-                ]),
+                "Pool I": self._regrouped_pool_format(
+                    ["G3P1", "G1P2", "G5P2", "G3P3", "G1P4", "G5P4"]
+                ),
                 # Pool J: 1st from group 4, 2nd from groups 2&6, 3rd from group 4, 4th from groups 2&6
-                "Pool J": self._regrouped_pool_format([
-                    "G4P1", "G2P2", "G6P2", "G4P3", "G2P4", "G6P4"
-                ]),
+                "Pool J": self._regrouped_pool_format(
+                    ["G4P1", "G2P2", "G6P2", "G4P3", "G2P4", "G6P4"]
+                ),
                 "Championship Finals": "\n".join(
                     str(r) for r in single_elimination_final_format(4)
                 ),

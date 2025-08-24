@@ -445,7 +445,8 @@ class TwoStageFormulaProblemTests(TestCase):
         # Create a mix of valid and invalid UndecidedTeam objects
         # Note: Don't set both label and formula as per UndecidedTeamForm validation
         valid_team = UndecidedTeamFactory.create(
-            stage=self.finals_stage, formula="G1P1"  # Valid
+            stage=self.finals_stage,
+            formula="G1P1",  # Valid
         )
 
         invalid_team = UndecidedTeamFactory.create(
