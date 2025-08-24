@@ -1,7 +1,8 @@
-
 from django.test.utils import override_settings
 from test_plus import TestCase
 
+from tournamentcontrol.competition.draw import schemas
+from tournamentcontrol.competition.draw.builders import build
 from tournamentcontrol.competition.tests import factories
 
 
@@ -45,6 +46,7 @@ class APITests(TestCase):
             home_team=cls.team1,
             away_team=cls.team2,
             play_at=cls.ground,
+            round=1,
         )
 
     def test_club_list(self):
@@ -149,11 +151,13 @@ class APITests(TestCase):
                         "title": self.stage.title,
                         "slug": self.stage.slug,
                         "url": f"http://testserver/api/v1/competitions/{self.competition.slug}/seasons/{self.season.slug}/divisions/{self.division.slug}/stages/{self.stage.slug}/",
+                        "pools": [],
                         "matches": [
                             {
                                 "id": self.match.id,
                                 "uuid": str(self.match.uuid),
-                                "round": f"Round {self.match.round}",
+                                "round": "Round 1",
+                                "stage_group": None,
                                 "date": self.match.date.isoformat(),
                                 "time": self.match.time.isoformat(),
                                 "datetime": self.match.datetime.strftime(
@@ -336,11 +340,13 @@ class APITests(TestCase):
                     "title": stage.title,
                     "slug": stage.slug,
                     "url": f"http://testserver/api/v1/competitions/{self.competition.slug}/seasons/{self.season.slug}/divisions/{stage.division.slug}/stages/{stage.slug}/",
+                    "pools": [],
                     "matches": [
                         {
                             "id": match1.id,
                             "uuid": str(match1.uuid),
                             "round": "Round 1",
+                            "stage_group": None,
                             "date": "2025-08-22",
                             "time": "09:00:00",
                             "datetime": "2025-08-22T09:00:00Z",
@@ -363,6 +369,7 @@ class APITests(TestCase):
                             "id": match2.id,
                             "uuid": str(match2.uuid),
                             "round": "Round 2",
+                            "stage_group": None,
                             "date": "2025-08-22",
                             "time": "12:00:00",
                             "datetime": "2025-08-22T12:00:00Z",
@@ -385,6 +392,7 @@ class APITests(TestCase):
                             "id": match3.id,
                             "uuid": str(match3.uuid),
                             "round": "Round 3",
+                            "stage_group": None,
                             "date": "2025-08-22",
                             "time": "15:00:00",
                             "datetime": "2025-08-22T15:00:00Z",
@@ -407,6 +415,7 @@ class APITests(TestCase):
                     "ladder_summary": [
                         {
                             "team": match1.home_team.id,
+                            "stage_group": None,
                             "played": 3,
                             "win": 2,
                             "loss": 1,
@@ -423,6 +432,7 @@ class APITests(TestCase):
                         },
                         {
                             "team": match1.away_team.id,
+                            "stage_group": None,
                             "played": 3,
                             "win": 1,
                             "loss": 2,
@@ -443,270 +453,417 @@ class APITests(TestCase):
         }
         self.assertJSONEqual(self.last_response.content, expected_payload)
 
+    maxDiff = None
+
     def test_stage_groups_exposure_in_api(self):
         """Test that stage groups (pools) are properly exposed in the API"""
-        # Create a stage with pools
-        stage_with_pools = factories.StageFactory.create(division__season=self.season)
-
-        # Create stage groups (pools)
-        pool1 = factories.StageGroupFactory.create(
-            stage=stage_with_pools, title="Pool A"
-        )
-        pool2 = factories.StageGroupFactory.create(
-            stage=stage_with_pools, title="Pool B"
-        )
-
-        # Create teams for the pools
-        team_pool1_1 = factories.TeamFactory.create(division=stage_with_pools.division)
-        team_pool1_2 = factories.TeamFactory.create(division=stage_with_pools.division)
-        team_pool2_1 = factories.TeamFactory.create(division=stage_with_pools.division)
-        team_pool2_2 = factories.TeamFactory.create(division=stage_with_pools.division)
-
-        # Create matches in pools
-        match_pool1 = factories.MatchFactory.create(
-            stage=stage_with_pools,
-            stage_group=pool1,
-            home_team=team_pool1_1,
-            away_team=team_pool1_2,
-            play_at=self.ground,
-        )
-        match_pool2 = factories.MatchFactory.create(
-            stage=stage_with_pools,
-            stage_group=pool2,
-            home_team=team_pool2_1,
-            away_team=team_pool2_2,
-            play_at=self.ground,
+        # Define a division structure with pools and ladder summaries
+        spec = schemas.DivisionStructure(
+            title="Pool Tournament",
+            teams=["Alpha", "Beta", "Gamma", "Delta"],
+            stages=[
+                schemas.StageFixture(
+                    title="Pool Round",
+                    pools=[
+                        schemas.PoolFixture(
+                            title="Pool A",
+                            teams=[0, 1],  # Alpha, Beta
+                            draw_format_ref="single_match",
+                        ),
+                        schemas.PoolFixture(
+                            title="Pool B",
+                            teams=[2, 3],  # Gamma, Delta
+                            draw_format_ref="single_match",
+                        ),
+                    ],
+                )
+            ],
+            draw_formats={"single_match": "M(1,2)"},
         )
 
-        # Create ladder summary entries for pools
-        factories.LadderSummaryFactory.create(
-            stage=stage_with_pools,
-            stage_group=pool1,
-            team=team_pool1_1,
-        )
-        factories.LadderSummaryFactory.create(
-            stage=stage_with_pools,
-            stage_group=pool1,
-            team=team_pool1_2,
-        )
+        # Build the division structure
+        division = build(self.season, spec)
+        stage = division.stages.first()
+        pools = list(stage.pools.all())
+
+        # Score matches to trigger ladder summary generation via signals
+        for match in stage.matches.all():
+            match.home_team_score = 50
+            match.away_team_score = 40
+            match.date = "2025-08-22"
+            match.time = "09:00:00"
+            match.datetime = "2025-08-22T09:00:00.000000Z"
+            match.play_at = self.ground
+            match.save()
 
         # Test division detail endpoint
         self.get(
             "v1:division-detail",
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
-            slug=stage_with_pools.division.slug,
+            slug=division.slug,
         )
         self.response_200()
 
-        response_data = self.last_response.json()
+        expected_payload = {
+            "title": division.title,
+            "slug": division.slug,
+            "url": f"http://testserver/api/v1/competitions/{self.competition.slug}/seasons/{self.season.slug}/divisions/{division.slug}/",
+            "teams": [
+                {
+                    "id": t.id,
+                    "title": t.title,
+                    "slug": t.slug,
+                    "club": (
+                        {
+                            "abbreviation": t.club.abbreviation,
+                            "facebook": t.club.facebook,
+                            "short_title": t.club.short_title,
+                            "slug": t.club.slug,
+                            "title": t.club.title,
+                            "twitter": t.club.twitter,
+                            "url": f"http://testserver/api/v1/clubs/{t.club.slug}/",
+                            "website": t.club.website,
+                            "youtube": t.club.youtube,
+                        }
+                        if t.club
+                        else None
+                    ),
+                }
+                for t in division.teams.all()
+            ],
+            "stages": [
+                {
+                    "title": stage.title,
+                    "slug": stage.slug,
+                    "url": f"http://testserver/api/v1/competitions/{self.competition.slug}/seasons/{self.season.slug}/divisions/{division.slug}/stages/{stage.slug}/",
+                    "pools": [
+                        {
+                            "id": p.id,
+                            "title": p.title,
+                        }
+                        for p in pools
+                    ],
+                    "matches": [
+                        {
+                            "id": m.id,
+                            "uuid": str(m.uuid),
+                            "round": m.label or f"Round {m.round}",
+                            "date": m.date,
+                            "time": m.time,
+                            "datetime": m.datetime,
+                            "is_bye": m.is_bye,
+                            "is_washout": m.is_washout,
+                            "home_team": (
+                                m.home_team.pk
+                                if hasattr(m.home_team, "pk")
+                                else m.home_team
+                            ),
+                            "home_team_score": m.home_team_score,
+                            "away_team": (
+                                m.away_team.pk
+                                if hasattr(m.away_team, "pk")
+                                else m.away_team
+                            ),
+                            "away_team_score": m.away_team_score,
+                            "stage_group": m.stage_group.pk if m.stage_group else None,
+                            "referees": [],
+                            "videos": m.videos,
+                            "play_at": (
+                                {
+                                    "id": m.play_at.id,
+                                    "title": m.play_at.title,
+                                    "abbreviation": m.play_at.abbreviation,
+                                    "timezone": str(m.play_at.timezone),
+                                }
+                                if m.play_at
+                                else None
+                            ),
+                        }
+                        for m in stage.matches.all()
+                    ],
+                    "ladder_summary": [
+                        {
+                            "team": ls.team.id,
+                            "stage_group": (
+                                ls.stage_group.pk if ls.stage_group else None
+                            ),
+                            "played": ls.played,
+                            "win": ls.win,
+                            "loss": ls.loss,
+                            "draw": ls.draw,
+                            "bye": ls.bye,
+                            "forfeit_for": ls.forfeit_for,
+                            "forfeit_against": ls.forfeit_against,
+                            "score_for": ls.score_for,
+                            "score_against": ls.score_against,
+                            "difference": str(ls.difference),
+                            "percentage": (
+                                str(ls.percentage)
+                                if ls.percentage is not None
+                                else None
+                            ),
+                            "points": str(ls.points),
+                            "bonus_points": ls.bonus_points,
+                        }
+                        for ls in stage.ladder_summary.all()
+                    ],
+                }
+            ],
+        }
 
-        # Find our stage in the response
-        stage_data = None
-        for stage in response_data["stages"]:
-            if stage["slug"] == stage_with_pools.slug:
-                stage_data = stage
-                break
-
-        self.assertIsNotNone(stage_data, "Stage with pools not found in response")
-
-        # Validate pools are exposed
-        self.assertIn("pools", stage_data, "pools field missing from stage data")
-        pools = stage_data["pools"]
-        self.assertEqual(len(pools), 2, f"Expected 2 pools, got {len(pools)}")
-
-        # Validate pool structure
-        pool_ids = [pool["id"] for pool in pools]
-        pool_titles = [pool["title"] for pool in pools]
-        self.assertIn(pool1.pk, pool_ids, "Pool 1 ID not found in pools")
-        self.assertIn(pool2.pk, pool_ids, "Pool 2 ID not found in pools")
-        self.assertIn("Pool A", pool_titles, "Pool A title not found")
-        self.assertIn("Pool B", pool_titles, "Pool B title not found")
-
-        # Validate matches have stage_group field
-        matches = stage_data["matches"]
-        match_pool1_data = None
-        match_pool2_data = None
-
-        for match in matches:
-            if match["id"] == match_pool1.id:
-                match_pool1_data = match
-            elif match["id"] == match_pool2.id:
-                match_pool2_data = match
-
-        self.assertIsNotNone(match_pool1_data, "Match from pool 1 not found")
-        self.assertIsNotNone(match_pool2_data, "Match from pool 2 not found")
-
-        self.assertIn(
-            "stage_group", match_pool1_data, "stage_group field missing from match"
-        )
-        self.assertEqual(
-            match_pool1_data["stage_group"],
-            pool1.pk,
-            "Match pool 1 stage_group ID incorrect",
-        )
-
-        self.assertIn(
-            "stage_group", match_pool2_data, "stage_group field missing from match"
-        )
-        self.assertEqual(
-            match_pool2_data["stage_group"],
-            pool2.pk,
-            "Match pool 2 stage_group ID incorrect",
-        )
-
-        # Validate ladder summaries have stage_group field
-        ladder_summaries = stage_data["ladder_summary"]
-
-        ladder_pool1_team1_data = None
-        ladder_pool1_team2_data = None
-
-        for ladder in ladder_summaries:
-            if ladder["team"] == team_pool1_1.pk:
-                ladder_pool1_team1_data = ladder
-            elif ladder["team"] == team_pool1_2.pk:
-                ladder_pool1_team2_data = ladder
-
-        self.assertIsNotNone(
-            ladder_pool1_team1_data, "Ladder entry for pool 1 team 1 not found"
-        )
-        self.assertIsNotNone(
-            ladder_pool1_team2_data, "Ladder entry for pool 1 team 2 not found"
-        )
-
-        self.assertIn(
-            "stage_group",
-            ladder_pool1_team1_data,
-            "stage_group field missing from ladder summary",
-        )
-        self.assertEqual(
-            ladder_pool1_team1_data["stage_group"],
-            pool1.pk,
-            "Ladder pool 1 stage_group ID incorrect",
-        )
-
-        self.assertIn(
-            "stage_group",
-            ladder_pool1_team2_data,
-            "stage_group field missing from ladder summary",
-        )
-        self.assertEqual(
-            ladder_pool1_team2_data["stage_group"],
-            pool1.pk,
-            "Ladder pool 1 stage_group ID incorrect",
-        )
+        self.assertJSONEqual(self.last_response.content, expected_payload)
 
     def test_stage_detail_with_pools(self):
         """Test that stage detail endpoint also exposes pools correctly"""
-        # Create a stage with pools
-        stage_with_pools = factories.StageFactory.create(division__season=self.season)
+        # Define a division structure with pools
+        spec = schemas.DivisionStructure(
+            title="Pool Competition",
+            teams=["Team 1", "Team 2", "Team 3", "Team 4"],
+            stages=[
+                schemas.StageFixture(
+                    title="Pool Stage",
+                    pools=[
+                        schemas.PoolFixture(
+                            title="Pool A",
+                            teams=[0, 1],  # Team 1, Team 2
+                            draw_format_ref="pool_round_robin",
+                        ),
+                        schemas.PoolFixture(
+                            title="Pool B",
+                            teams=[2, 3],  # Team 3, Team 4
+                            draw_format_ref="pool_round_robin",
+                        ),
+                    ],
+                )
+            ],
+            draw_formats={"pool_round_robin": "R(1,2)"},
+        )
 
-        # Create stage groups (pools)
-        pool1 = factories.StageGroupFactory.create(
-            stage=stage_with_pools, title="Pool A"
-        )
-        pool2 = factories.StageGroupFactory.create(
-            stage=stage_with_pools, title="Pool B"
-        )
+        # Build the division structure
+        division = build(self.season, spec)
+        stage = division.stages.first()
+        pools = list(stage.pools.all())
 
         # Test stage detail endpoint
         self.get(
             "v1:stage-detail",
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
-            division_slug=stage_with_pools.division.slug,
-            slug=stage_with_pools.slug,
+            division_slug=division.slug,
+            slug=stage.slug,
         )
         self.response_200()
 
-        response_data = self.last_response.json()
+        expected_payload = {
+            "title": stage.title,
+            "slug": stage.slug,
+            "teams": [
+                {
+                    "id": t.id,
+                    "title": t.title,
+                    "slug": t.slug,
+                    "club": (
+                        {
+                            "abbreviation": t.club.abbreviation,
+                            "facebook": t.club.facebook,
+                            "short_title": t.club.short_title,
+                            "slug": t.club.slug,
+                            "title": t.club.title,
+                            "twitter": t.club.twitter,
+                            "url": f"http://testserver/api/v1/clubs/{t.club.slug}/",
+                            "website": t.club.website,
+                            "youtube": t.club.youtube,
+                        }
+                        if t.club
+                        else None
+                    ),
+                }
+                for t in division.teams.all()
+            ],
+            "matches": [
+                {
+                    "id": m.id,
+                    "uuid": str(m.uuid),
+                    "round": m.label or f"Round {m.round}",
+                    "date": m.date,
+                    "time": m.time,
+                    "datetime": m.datetime,
+                    "is_bye": m.is_bye,
+                    "is_washout": m.is_washout,
+                    "home_team": (
+                        m.home_team.pk if hasattr(m.home_team, "pk") else m.home_team
+                    ),
+                    "home_team_score": m.home_team_score,
+                    "away_team": (
+                        m.away_team.pk if hasattr(m.away_team, "pk") else m.away_team
+                    ),
+                    "away_team_score": m.away_team_score,
+                    "stage_group": m.stage_group.pk if m.stage_group else None,
+                    "referees": [],
+                    "videos": m.videos,
+                    "play_at": (
+                        {
+                            "id": m.play_at.id,
+                            "title": m.play_at.title,
+                            "abbreviation": m.play_at.abbreviation,
+                            "timezone": str(m.play_at.timezone),
+                        }
+                        if m.play_at
+                        else None
+                    ),
+                }
+                for m in stage.matches.all()
+            ],
+            "pools": [
+                {
+                    "id": p.id,
+                    "title": p.title,
+                }
+                for p in pools
+            ],
+        }
 
-        # Validate pools are exposed
-        self.assertIn("pools", response_data, "pools field missing from stage detail")
-        pools = response_data["pools"]
-        self.assertEqual(len(pools), 2, f"Expected 2 pools, got {len(pools)}")
-
-        # Validate pool structure
-        pool_ids = [pool["id"] for pool in pools]
-        pool_titles = [pool["title"] for pool in pools]
-        self.assertIn(pool1.pk, pool_ids, "Pool 1 ID not found in stage detail pools")
-        self.assertIn(pool2.pk, pool_ids, "Pool 2 ID not found in stage detail pools")
-        self.assertIn("Pool A", pool_titles, "Pool A title not found in stage detail")
-        self.assertIn("Pool B", pool_titles, "Pool B title not found in stage detail")
+        self.assertJSONEqual(self.last_response.content, expected_payload)
 
     def test_matches_and_ladders_without_pools(self):
         """Test that matches and ladder summaries without stage groups return null for stage_group field"""
-        # Use existing stage without pools
-        stage = self.stage
-
-        # Create a match without stage_group
-        match_no_pool = factories.MatchFactory.create(
-            stage=stage,
-            stage_group=None,  # Explicitly no pool
-            home_team=self.team1,
-            away_team=self.team2,
-            play_at=self.ground,
+        # Define a simple division structure without pools
+        spec = schemas.DivisionStructure(
+            title="Test Division",
+            teams=["Team A", "Team B", "Team C", "Team D"],
+            stages=[
+                schemas.StageFixture(
+                    title="Round Robin",
+                    draw_format_ref="round_robin",
+                )
+            ],
+            draw_formats={"round_robin": "R(1,2,3,4)"},
         )
 
-        # Create ladder summary without stage_group
-        factories.LadderSummaryFactory.create(
-            stage=stage,
-            stage_group=None,  # Explicitly no pool
-            team=self.team1,
-        )
+        # Build the division structure
+        division = build(self.season, spec)
+        stage = division.stages.first()
+
+        # Get matches from the built structure and add scores to trigger ladder generation
+        matches = list(stage.matches.all())
+        if matches:
+            # Score the first match to trigger ladder summary generation
+            match = matches[0]
+            match.home_team_score = 100
+            match.away_team_score = 80
+            match.date = "2025-08-22"
+            match.time = "09:00:00"
+            match.datetime = "2025-08-22T09:00:00.000000Z"
+            match.play_at = self.ground
+            match.save()
 
         # Test division detail endpoint
         self.get(
             "v1:division-detail",
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
-            slug=stage.division.slug,
+            slug=division.slug,
         )
         self.response_200()
 
-        response_data = self.last_response.json()
+        expected_payload = {
+            "title": division.title,
+            "slug": division.slug,
+            "url": f"http://testserver/api/v1/competitions/{self.competition.slug}/seasons/{self.season.slug}/divisions/{division.slug}/",
+            "teams": [
+                {
+                    "id": t.id,
+                    "title": t.title,
+                    "slug": t.slug,
+                    "club": (
+                        {
+                            "abbreviation": t.club.abbreviation,
+                            "facebook": t.club.facebook,
+                            "short_title": t.club.short_title,
+                            "slug": t.club.slug,
+                            "title": t.club.title,
+                            "twitter": t.club.twitter,
+                            "url": f"http://testserver/api/v1/clubs/{t.club.slug}/",
+                            "website": t.club.website,
+                            "youtube": t.club.youtube,
+                        }
+                        if t.club
+                        else None
+                    ),
+                }
+                for t in division.teams.all()
+            ],
+            "stages": [
+                {
+                    "title": stage.title,
+                    "slug": stage.slug,
+                    "url": f"http://testserver/api/v1/competitions/{self.competition.slug}/seasons/{self.season.slug}/divisions/{division.slug}/stages/{stage.slug}/",
+                    "pools": [],  # Empty pools for stage without pools
+                    "matches": [
+                        {
+                            "id": m.id,
+                            "uuid": str(m.uuid),
+                            "round": m.label or f"Round {m.round}",
+                            "date": m.date,
+                            "time": m.time,
+                            "datetime": m.datetime,
+                            "is_bye": m.is_bye,
+                            "is_washout": m.is_washout,
+                            "home_team": (
+                                m.home_team.pk
+                                if hasattr(m.home_team, "pk")
+                                else m.home_team
+                            ),
+                            "home_team_score": m.home_team_score,
+                            "away_team": (
+                                m.away_team.pk
+                                if hasattr(m.away_team, "pk")
+                                else m.away_team
+                            ),
+                            "away_team_score": m.away_team_score,
+                            "stage_group": None,  # No pool
+                            "referees": [],
+                            "videos": m.videos,
+                            "play_at": (
+                                {
+                                    "id": m.play_at.id,
+                                    "title": m.play_at.title,
+                                    "abbreviation": m.play_at.abbreviation,
+                                    "timezone": str(m.play_at.timezone),
+                                }
+                                if m.play_at
+                                else None
+                            ),
+                        }
+                        for m in stage.matches.all()
+                    ],
+                    "ladder_summary": [
+                        {
+                            "team": ls.team.id,
+                            "stage_group": None,  # No pool
+                            "played": ls.played,
+                            "win": ls.win,
+                            "loss": ls.loss,
+                            "draw": ls.draw,
+                            "bye": ls.bye,
+                            "forfeit_for": ls.forfeit_for,
+                            "forfeit_against": ls.forfeit_against,
+                            "score_for": ls.score_for,
+                            "score_against": ls.score_against,
+                            "difference": str(ls.difference),
+                            "percentage": (
+                                str(ls.percentage)
+                                if ls.percentage is not None
+                                else None
+                            ),
+                            "points": str(ls.points),
+                            "bonus_points": ls.bonus_points,
+                        }
+                        for ls in stage.ladder_summary.all()
+                    ],
+                }
+            ],
+        }
 
-        # Find our stage in the response
-        stage_data = None
-        for stage_item in response_data["stages"]:
-            if stage_item["slug"] == stage.slug:
-                stage_data = stage_item
-                break
-
-        self.assertIsNotNone(stage_data, "Stage not found in response")
-
-        # Check that pools field exists and is empty
-        self.assertIn("pools", stage_data, "pools field missing from stage data")
-        self.assertEqual(
-            stage_data["pools"], [], "Expected empty pools list for stage without pools"
-        )
-
-        # Find our match and verify stage_group is null
-        match_data = None
-        for match in stage_data["matches"]:
-            if match["id"] == match_no_pool.id:
-                match_data = match
-                break
-
-        self.assertIsNotNone(match_data, "Match without pool not found")
-        self.assertIn("stage_group", match_data, "stage_group field missing from match")
-        self.assertIsNone(
-            match_data["stage_group"],
-            "Expected null stage_group for match without pool",
-        )
-
-        # Find our ladder summary and verify stage_group is null
-        ladder_data = None
-        for ladder in stage_data["ladder_summary"]:
-            if ladder["team"] == self.team1.pk:
-                ladder_data = ladder
-                break
-
-        self.assertIsNotNone(ladder_data, "Ladder summary without pool not found")
-        self.assertIn(
-            "stage_group", ladder_data, "stage_group field missing from ladder summary"
-        )
-        self.assertIsNone(
-            ladder_data["stage_group"],
-            "Expected null stage_group for ladder summary without pool",
-        )
+        self.assertJSONEqual(self.last_response.content, expected_payload)
