@@ -142,7 +142,7 @@ class FilterForm(forms.Form):
         matches = self.matches.filter(query_filter)
         if not matches.count():
             raise forms.ValidationError(
-                _("There are no matches that satisfy " "your criteria.")
+                _("There are no matches that satisfy your criteria.")
             )
 
         data["matches"] = matches
