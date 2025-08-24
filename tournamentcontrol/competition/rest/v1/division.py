@@ -19,11 +19,13 @@ class ListTeamSerializer(serializers.ModelSerializer):
 
 class LadderSummarySerializer(serializers.ModelSerializer):
     team = serializers.SerializerMethodField(read_only=True)
+    stage_group = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = models.LadderSummary
         fields = (
             "team",
+            "stage_group",
             "played",
             "win",
             "loss",
@@ -42,11 +44,15 @@ class LadderSummarySerializer(serializers.ModelSerializer):
     def get_team(self, obj):
         return obj.team.pk
 
+    def get_stage_group(self, obj):
+        return obj.stage_group.pk if obj.stage_group else None
+
 
 class ListMatchSerializer(serializers.ModelSerializer):
     round = serializers.SerializerMethodField(read_only=True)
     home_team = serializers.SerializerMethodField(read_only=True)
     away_team = serializers.SerializerMethodField(read_only=True)
+    stage_group = serializers.SerializerMethodField(read_only=True)
     play_at = PlaceSerializer(read_only=True)
 
     class Meta:
@@ -64,6 +70,7 @@ class ListMatchSerializer(serializers.ModelSerializer):
             "home_team_score",
             "away_team",
             "away_team_score",
+            "stage_group",
             "referees",
             "videos",
             "play_at",
@@ -84,6 +91,9 @@ class ListMatchSerializer(serializers.ModelSerializer):
     def get_away_team(self, obj):
         return self._get_team(obj, "away")
 
+    def get_stage_group(self, obj):
+        return obj.stage_group.pk if obj.stage_group else None
+
 
 class ListStageSerializer(NestedHyperlinkedModelSerializer):
     parent_lookup_kwargs = {
@@ -94,11 +104,15 @@ class ListStageSerializer(NestedHyperlinkedModelSerializer):
 
     matches = ListMatchSerializer(many=True, read_only=True)
     ladder_summary = LadderSummarySerializer(many=True, read_only=True)
+    pools = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = models.Stage
-        fields = ("title", "slug", "url", "matches", "ladder_summary")
+        fields = ("title", "slug", "url", "matches", "ladder_summary", "pools")
         extra_kwargs = {"url": {"lookup_field": "slug", "view_name": "v1:stage-detail"}}
+
+    def get_pools(self, obj):
+        return [{"id": pool.pk, "title": pool.title} for pool in obj.pools.all()]
 
 
 class ListDivisionSerializer(NestedHyperlinkedModelSerializer):
