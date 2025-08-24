@@ -453,8 +453,6 @@ class APITests(TestCase):
         }
         self.assertJSONEqual(self.last_response.content, expected_payload)
 
-    maxDiff = None
-
     def test_stage_groups_exposure_in_api(self):
         """Test that stage groups (pools) are properly exposed in the API"""
         # Define a division structure with pools and ladder summaries
