@@ -10,7 +10,7 @@ from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.common.tests.factories import UserFactory
-from tournamentcontrol.competition.ai.schemas import (
+from tournamentcontrol.competition.draw.schemas import (
     DivisionStructure,
     StageFixture,
 )
@@ -557,57 +557,48 @@ class GoodViewTests(TestCase):
         """Test transferring a person from one club to another."""
         original_club = factories.ClubFactory.create(title="Original Club")
         target_club = factories.ClubFactory.create(title="Target Club")
-        
+
         # Create a person with team associations
         person = factories.PersonFactory.create(
-            club=original_club,
-            first_name="Transfer", 
-            last_name="Test"
+            club=original_club, first_name="Transfer", last_name="Test"
         )
-        
+
         # Create a team association to ensure it's preserved after transfer
         division = factories.DivisionFactory.create()
         division.season.competition.clubs.add(original_club, target_club)
         team = factories.TeamFactory.create(club=original_club, division=division)
         team_association = factories.TeamAssociationFactory.create(
-            team=team, 
-            person=person
+            team=team, person=person
         )
-        
+
         # Verify initial state
         self.assertEqual(person.club, original_club)
         self.assertEqual(team_association.person, person)
-        
+
         # Test the transfer view requires login
         self.assertLoginRequired(
-            "admin:fixja:club:person:transfer", 
-            original_club.pk, 
-            person.pk
+            "admin:fixja:club:person:transfer", original_club.pk, person.pk
         )
-        
+
         with self.login(self.superuser):
             # Test GET request shows the form
-            self.get(
-                "admin:fixja:club:person:transfer", 
-                original_club.pk, 
-                person.pk
-            )
+            self.get("admin:fixja:club:person:transfer", original_club.pk, person.pk)
             self.response_200()
-            
+
             # Test POST request transfers the person
             data = {"club": target_club.pk}
             self.post(
                 "admin:fixja:club:person:transfer",
                 original_club.pk,
                 person.pk,
-                data=data
+                data=data,
             )
             self.response_302()
-            
+
             # Verify the person was transferred
             person.refresh_from_db()
             self.assertEqual(person.club, target_club)
-            
+
             # Verify team association is preserved
             team_association.refresh_from_db()
             self.assertEqual(team_association.person, person)
@@ -1850,7 +1841,7 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # Round 2: Create matches that depend on Round 1 results
         # These matches will have eval_related fields pointing to match1
-        match2 = factories.MatchFactory.create(
+        _match2 = factories.MatchFactory.create(
             stage=stage,
             round=2,
             label="Winner vs Loser",
@@ -1931,7 +1922,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         )
 
         # Round 3: Create matches with cross-dependencies on Round 2
-        match5 = factories.MatchFactory.create(
+        _match5 = factories.MatchFactory.create(
             stage=stage,
             round=3,
             label="Final",
@@ -1942,7 +1933,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             away_team_eval="L",  # Loser of match4 (cross-dependency)
             away_team_eval_related=match4,
         )
-        match6 = factories.MatchFactory.create(
+        _match6 = factories.MatchFactory.create(
             stage=stage,
             round=3,
             label="3rd Place",
@@ -1980,3 +1971,49 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # Verify all matches from the stage were deleted despite complex dependencies
         self.assertCountEqual(stage.matches.all(), [])
+
+    def test_division_export_json(self):
+        """Test that division JSON export works correctly."""
+        # Create a simple division with teams and a stage
+        division = factories.DivisionFactory.create(title="Test Division")
+
+        # Create some teams
+        team1 = factories.TeamFactory.create(division=division, title="Team A")
+        team2 = factories.TeamFactory.create(division=division, title="Team B")
+
+        # Create a stage with a simple match
+        stage = factories.StageFactory.create(division=division, title="Round Robin")
+        factories.MatchFactory.create(
+            stage=stage,
+            home_team=team1,
+            away_team=team2,
+            round=1,
+        )
+
+        with self.login(self.superuser):
+            # Test the export view
+            self.get(
+                "admin:fixja:competition:season:division:export-json",
+                division.season.competition.pk,
+                division.season.pk,
+                division.pk,
+            )
+            self.response_200()
+
+            # Check response content type and headers
+            response = self.last_response
+            self.assertEqual(response["content-type"], "application/json")
+            self.assertIn("attachment", response["Content-Disposition"])
+            expected_filename = f"{division.season.competition.slug}_{division.season.slug}_{division.slug}.json"
+            self.assertIn(expected_filename, response["Content-Disposition"])
+
+            # Parse the JSON content
+            import json
+
+            json_data = json.loads(response.content.decode())
+
+            # Verify basic structure
+            self.assertEqual(json_data["title"], "Test Division")
+            self.assertEqual(json_data["teams"], ["Team A", "Team B"])
+            self.assertEqual(len(json_data["stages"]), 1)
+            self.assertEqual(json_data["stages"][0]["title"], "Round Robin")

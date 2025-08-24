@@ -5,7 +5,7 @@ from argparse import ArgumentParser
 
 from django.core.management.base import BaseCommand
 
-from tournamentcontrol.competition.ai.schemas import DivisionStructure
+from tournamentcontrol.competition.draw.schemas import DivisionStructure
 
 
 class Command(BaseCommand):

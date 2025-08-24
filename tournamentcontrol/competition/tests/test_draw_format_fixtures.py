@@ -11,13 +11,13 @@ that AI models should be able to generate. Each fixture includes:
 - Validation criteria
 """
 
-import json
+import itertools
 import textwrap
 
 from test_plus import TestCase
 
-from tournamentcontrol.competition.ai.executor import build
-from tournamentcontrol.competition.ai.schemas import (
+from tournamentcontrol.competition.draw.builders import build
+from tournamentcontrol.competition.draw.schemas import (
     DivisionStructure,
     PoolFixture,
     StageFixture,
@@ -28,7 +28,6 @@ from tournamentcontrol.competition.utils import (
     round_robin,
     round_robin_format,
     single_elimination_final_format,
-    stage_group_position_re,
 )
 
 
@@ -46,21 +45,22 @@ class DrawFormatFixturesTestCase(TestCase):
         fixture = DivisionStructure(
             title="It's a Knockout!",
             teams=["NSW", "QLD", "WA", "VIC"],
-            stages=[
-                StageFixture(
-                    title="Knockout Finals",
-                    draw_format=textwrap.dedent(
-                        """\
+            draw_formats={
+                "Knockout": textwrap.dedent(
+                    """\
                         ROUND
                         1: 1 vs 2 Semi 1
                         2: 3 vs 4 Semi 2
                         ROUND
                         3: L1 vs L2 Bronze
                         ROUND
-                        4: W1 vs W2 Final
-                        """
-                    ),
-                    pools=None,
+                        4: W1 vs W2 Final"""
+                )
+            },
+            stages=[
+                StageFixture(
+                    title="Knockout Finals",
+                    draw_format_ref="Knockout",
                 )
             ],
         )
@@ -88,7 +88,11 @@ class DrawFormatFixturesTestCase(TestCase):
         """Test case for a simple two-pool format with finals."""
         fixture = DivisionStructure(
             title="Simple Two Pools with Finals",
-            teams=[f"Team {i+1}" for i in range(8)],
+            teams=[f"Team {i + 1}" for i in range(8)],
+            draw_formats={
+                "Pool Play": round_robin_format(4),
+                "Finals": "\n".join(str(r) for r in single_elimination_final_format(2)),
+            },
             stages=[
                 StageFixture(
                     title="Pool Play",
@@ -96,22 +100,19 @@ class DrawFormatFixturesTestCase(TestCase):
                     pools=[
                         PoolFixture(
                             title="Pool A",
-                            draw_format=round_robin_format(4),
+                            draw_format_ref="Pool Play",
                             teams=[0, 1, 2, 3],
                         ),
                         PoolFixture(
                             title="Pool B",
-                            draw_format=round_robin_format(4),
+                            draw_format_ref="Pool Play",
                             teams=[4, 5, 6, 7],
                         ),
                     ],
                 ),
                 StageFixture(
                     title="Finals",
-                    draw_format="\n".join(
-                        str(r) for r in single_elimination_final_format(2)
-                    ),
-                    pools=None,
+                    draw_format_ref="Finals",
                 ),
             ],
         )
@@ -150,19 +151,74 @@ class DrawFormatFixturesTestCase(TestCase):
         ]
         self.assertCountEqual(actual_matches, expected_matches)
 
+    def _regrouped_pool_format(self, teams):
+        """Generate draw format for regrouped pool, excluding matches between teams from same original pool."""
+        # Generate all round-robin matches - returns list of rounds, each round is list of pairings
+        schedule = round_robin(teams)
+        
+        # Flatten to get all matches and filter out matches between teams from same original group
+        valid_matches = []
+        for round_pairings in schedule:
+            for team1, team2 in round_pairings:
+                # Skip bye matches (team = 0)
+                if team1 == 0 or team2 == 0:
+                    continue
+                    
+                # Extract group number from team reference (e.g., "G1P1" -> "G1", "G5P3" -> "G5")
+                group1 = team1[:2]  # "G1", "G2", etc.
+                group2 = team2[:2]
+                
+                # Only include matches between teams from different original groups
+                if group1 != group2:
+                    valid_matches.append((team1, team2))
+        
+        # Convert to draw format string
+        format_lines = []
+        match_id = 1
+        for i in range(0, len(valid_matches), 3):  # Group into rounds of 3 matches
+            format_lines.append("ROUND")
+            for j in range(3):
+                if i + j < len(valid_matches):
+                    home, away = valid_matches[i + j]
+                    format_lines.append(f"{match_id}: {home} vs {away}")
+                    match_id += 1
+        
+        return "\n".join(format_lines)
+
     def test_eccentric_24_team_format(self):
         """Test case for an eccentric 24-team format with multiple stages."""
         fixture = DivisionStructure(
             title="Eccentric 24-Team Format",
             teams=[f"Team {i}" for i in range(1, 25)],
+            draw_formats={
+                "Initial Pools": round_robin_format(4),
+                # Pool G: 1st from groups 1&5, 2nd from group 3, 3rd from groups 1&5, 4th from group 3
+                "Pool G": self._regrouped_pool_format([
+                    "G1P1", "G5P1", "G3P2", "G1P3", "G5P3", "G3P4"
+                ]),
+                # Pool H: 1st from groups 2&6, 2nd from group 4, 3rd from groups 2&6, 4th from group 4  
+                "Pool H": self._regrouped_pool_format([
+                    "G2P1", "G6P1", "G4P2", "G2P3", "G6P3", "G4P4"
+                ]),
+                # Pool I: 1st from group 3, 2nd from groups 1&5, 3rd from group 3, 4th from groups 1&5
+                "Pool I": self._regrouped_pool_format([
+                    "G3P1", "G1P2", "G5P2", "G3P3", "G1P4", "G5P4"
+                ]),
+                # Pool J: 1st from group 4, 2nd from groups 2&6, 3rd from group 4, 4th from groups 2&6
+                "Pool J": self._regrouped_pool_format([
+                    "G4P1", "G2P2", "G6P2", "G4P3", "G2P4", "G6P4"
+                ]),
+                "Championship Finals": "\n".join(
+                    str(r) for r in single_elimination_final_format(4)
+                ),
+            },
             stages=[
                 StageFixture(
                     title="Initial Pools",
-                    draw_format=None,
                     pools=[
                         PoolFixture(
                             title=f"Pool {chr(ord('A') + i)}",  # A, B, C, D, E, F
-                            draw_format=round_robin_format(4),
+                            draw_format_ref="Initial Pools",
                             teams=[j for j in range(i * 4, (i + 1) * 4)],
                         )
                         for i in range(6)  # 6 pools of 4
@@ -170,37 +226,17 @@ class DrawFormatFixturesTestCase(TestCase):
                 ),
                 StageFixture(
                     title="Regrouped Pools",
-                    draw_format=None,
                     pools=[
                         PoolFixture(
                             title=f"Pool {chr(ord('G') + p)}",  # G, H, I, J
-                            draw_format="\n".join(
-                                "ROUND\n"
-                                + "\n".join(
-                                    f"{i + round_num * len(matches) + 1}: {a} vs {b}"
-                                    for i, (a, b) in enumerate(matches)
-                                    if stage_group_position_re.match(a).groups()[:2]
-                                    != stage_group_position_re.match(b).groups()[:2]
-                                )
-                                for round_num, matches in enumerate(
-                                    round_robin(
-                                        [
-                                            f"G{group}P{position}"
-                                            for position in range(1, 5)
-                                            for group in range(1, 7)
-                                        ][p::4]
-                                    )
-                                )
-                            ),
+                            draw_format_ref=f"Pool {chr(ord('G') + p)}",
                         )
                         for p in range(4)
                     ],
                 ),
                 StageFixture(
                     title="Championship Finals",
-                    draw_format="\n".join(
-                        str(r) for r in single_elimination_final_format(4)
-                    ),
+                    draw_format_ref="Championship Finals",
                 ),
             ],
         )
@@ -377,15 +413,19 @@ class DrawFormatFixturesTestCase(TestCase):
     def test_simple_redraw_format(self):
         fixure = DivisionStructure(
             title="Simple Redraw Format",
-            teams=[f"Team {i+1}" for i in range(4)],
+            teams=[f"Team {i + 1}" for i in range(4)],
+            draw_formats={
+                "Round Robin": round_robin_format(4),
+                "Seeded Round Robin": round_robin_format(["P1", "P2", "P3", "P4"]),
+            },
             stages=[
                 StageFixture(
                     title="Seeding Stage",
-                    draw_format=round_robin_format(4),
+                    draw_format_ref="Round Robin",
                 ),
                 StageFixture(
                     title="Finals Stage",
-                    draw_format=round_robin_format(["P1", "P2", "P3", "P4"]),
+                    draw_format_ref="Seeded Round Robin",
                 ),
             ],
         )
@@ -423,10 +463,13 @@ class DrawFormatFixturesTestCase(TestCase):
             {
                 "title": "Test Series",
                 "teams": ["Australia", "New Zealand"],
+                "draw_formats": {
+                    "Best of Three": "ROUND\n1: 1 vs 2 1st Test\nROUND\n2: 1 vs 2 2nd Test\nROUND\n3: 1 vs 2 3rd Test"
+                },
                 "stages": [
                     {
                         "title": "Best of Three",
-                        "draw_format": "ROUND\n1: 1 vs 2 1st Test\nROUND\n2: 1 vs 2 2nd Test\nROUND\n3: 1 vs 2 3rd Test",
+                        "draw_format_ref": "Best of Three",
                     },
                 ],
             }

@@ -11,6 +11,7 @@ from django.contrib import messages
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.forms import array as PGA
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Q
 from django.forms import BooleanField as BooleanChoiceField
 from django.forms.formsets import (
@@ -49,7 +50,10 @@ from touchtechnology.common.forms.widgets import (
 )
 from touchtechnology.content.forms import PlaceholderConfigurationBase
 from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
-from tournamentcontrol.competition.draw import seeded_tournament
+from tournamentcontrol.competition.draw.algorithms import seeded_tournament
+from tournamentcontrol.competition.draw.builders import build
+from tournamentcontrol.competition.draw.generators import DrawGenerator
+from tournamentcontrol.competition.draw.schemas import DivisionStructure
 from tournamentcontrol.competition.fields import URLField
 from tournamentcontrol.competition.models import (
     ByeTeam,
@@ -767,8 +771,6 @@ class TeamForm(SuperUserSlugMixin, ModelForm):
 
 class DrawFormatForm(BootstrapFormControlMixin, ModelForm):
     def clean_text(self):
-        from tournamentcontrol.competition.draw import DrawGenerator
-
         text = self.cleaned_data.get("text").strip()
         try:
             DrawGenerator.validate(text)
@@ -901,9 +903,9 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
 
         # restrict the list of referees to those registered this season
         if "referees" in self.fields:
-            self.fields["referees"].queryset = (
-                self.instance.stage.division.season.referees.all()
-            )
+            self.fields[
+                "referees"
+            ].queryset = self.instance.stage.division.season.referees.all()
 
         # remove `stage_group` field if the `division` has no children
         if not self.instance.stage.pools.count():
@@ -1678,7 +1680,10 @@ class DrawGenerationForm(BootstrapFormControlMixin, forms.Form):
     def generator(self):
         format = self.cleaned_data.get("format")
         start_date = self.cleaned_data.get("start_date")
-        return format.generator(self.instance, start_date)
+
+        generator = DrawGenerator(self.instance, start_date)
+        generator.parse(format.text)
+        return generator
 
     def clean_start_date(self):
         start_date = self.cleaned_data.get("start_date")
@@ -1783,9 +1788,9 @@ class TeamAssociationForm(UserMixin, ModelForm):
     def __init__(self, team, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["person"].queryset = team.club.members.all()
-        self.fields["roles"].queryset = (
-            team.division.season.competition.team_roles.all()
-        )
+        self.fields[
+            "roles"
+        ].queryset = team.division.season.competition.team_roles.all()
 
     class Meta:
         model = TeamAssociation
@@ -2131,9 +2136,6 @@ class DivisionStructureJSONForm(forms.Form):
 
         try:
             # Validate against DivisionStructure schema
-            from tournamentcontrol.competition.ai.schemas import (
-                DivisionStructure,
-            )
 
             structure = DivisionStructure(**parsed_json)
 
@@ -2164,9 +2166,6 @@ class DivisionStructureJSONForm(forms.Form):
             raise ValueError("No valid DivisionStructure found")
 
         # Use transaction to ensure atomicity
-        from django.db import transaction
-
-        from tournamentcontrol.competition.ai.executor import build
 
         if commit:
             with transaction.atomic():

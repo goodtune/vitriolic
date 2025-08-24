@@ -25,4 +25,7 @@
 			<i class="fa fa-bar-chart"></i>
 			&nbsp;{% trans "Leaders" %}
 		</a>
+		<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:competition:season:division:export-json' competition.pk season.pk obj.pk %}" role="button" title="{% trans "Export as JSON" %}">
+			<i class="fa fa-download"></i>
+		</a>
 {% endblock %}

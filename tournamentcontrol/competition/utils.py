@@ -19,6 +19,8 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from touchtechnology.common.prince import prince
+from tournamentcontrol.competition.draw.schemas import MatchDescriptor, RoundDescriptor
+
 
 logger = logging.getLogger(__name__)
 
@@ -416,11 +418,6 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
                            match will be scheduled.
     :return: list
     """
-    from tournamentcontrol.competition.draw import (
-        MatchDescriptor,
-        RoundDescriptor,
-    )
-
     # Start building our final series with the initial round. Each match is
     # ordered so that the pool from which the highest seeds were originally
     # placed (pool 1) are farthest away from the second highest seed (pool 2).

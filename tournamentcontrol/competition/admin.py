@@ -378,6 +378,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     "<int:division_id>/exclusion/",
                     include(divisionexclusion_urls, namespace="divisionexclusiondate"),
                 ),
+                path(
+                    "<int:division_id>/export.json",
+                    self.division_export_json,
+                    name="export-json",
+                ),
             ],
             self.app_name,
         )
@@ -664,9 +669,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         a.order = bo
         a.save()
 
-        fmt = _(
-            'The %(model)s "%(title)s" has been ' "reordered %(direction)s the list."
-        )
+        fmt = _('The %(model)s "%(title)s" has been reordered %(direction)s the list.')
         messages.info(
             request,
             fmt
@@ -1225,6 +1228,27 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
+    def division_export_json(self, request, competition, season, division, **kwargs):
+        """Export division as JSON DivisionStructure."""
+        try:
+            division_structure = division.to_division_structure()
+        except Exception as e:
+            messages.error(request, f"Failed to export division: {e}")
+            return self.redirect(division.urls["edit"])
+
+        response = HttpResponse(
+            division_structure.model_dump_json(),
+            content_type="application/json",
+        )
+        response["Content-Disposition"] = (
+            "attachment; "
+            f'filename="{competition.slug}_{season.slug}_{division.slug}.json"'
+        )
+
+        return response
+
+    @competition_by_pk_m
+    @staff_login_required_m
     def edit_divisionexclusiondate(
         self, request, division, extra_context, pk=None, **kwargs
     ):
@@ -1391,7 +1415,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             request,
             Team,
             instance=team,
-            post_save_redirect="admin:fixja:competition:season:" "division:team:list",
+            post_save_redirect="admin:fixja:competition:season:division:team:list",
             post_save_redirect_args=(
                 competition.pk,
                 season.pk,

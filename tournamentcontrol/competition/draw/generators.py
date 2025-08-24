@@ -1,51 +1,22 @@
 import datetime
-import functools
 import itertools
 import logging
 import re
 from collections import defaultdict
-from decimal import Decimal
 from typing import Optional
 
 from dateutil.rrule import DAILY, WEEKLY, rrule, rruleset
 from django.db.models import Max
-from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
-from first import first
 
-from tournamentcontrol.competition.models import (
-    Match,
-    Stage,
-    StageGroup,
-    Team,
-    UndecidedTeam,
+from tournamentcontrol.competition.draw.algorithms import coerce_datetime
+from tournamentcontrol.competition.draw.schemas import (
+    WIN_LOSE_RE,
+    MatchDescriptor,
+    RoundDescriptor,
 )
-from tournamentcontrol.competition.utils import (
-    ceiling,
-    final_series_rounds,
-    grouper,
-    round_robin_format,
-    single_elimination_final_format,
-)
-
-win_lose_re = re.compile(r"(?P<result>[WL])(?P<match_id>\d+)")
+from tournamentcontrol.competition.models import Stage, StageGroup
 
 logger = logging.getLogger(__name__)
-
-
-def coerce_datetime(start_date):
-    """
-    When operating with time zone aware objects we're better off converting
-    our plain old date instances to datetime instances before handing them
-    to the rruleset.
-
-    The datetime will be set to the current timezone.
-    """
-    if isinstance(start_date, datetime.date):
-        start_date = datetime.datetime.combine(start_date, datetime.time())
-    if not timezone.is_aware(start_date):
-        start_date = timezone.make_aware(start_date, timezone.get_current_timezone())
-    return start_date
 
 
 def weekly_date_generator(stage, start_date=None):
@@ -98,242 +69,6 @@ def tournament_date_generator(stage, start_date=None, games_per_day=None):
     for dates in map(lambda dt: itertools.repeat(dt.date(), games_per_day), ruleset):
         for date in dates:
             yield date
-
-
-def optimum_tournament_pool_count(
-    number_of_teams, days_available, max_per_day=1, min_per_day=1
-):
-    """
-    Using the available input variables, decide how many pools to divide a
-    division into.
-
-    :param number_of_teams: number of teams that make up the division
-    :type number_of_teams: int
-    :param days_available: number of days available for play
-    :type days_available: int
-    :param max_per_day: max number of games a team may play in one day
-    :type max_per_day: int
-    :param min_per_day: min number of prelim games a team must play in one day
-    :type min_per_day: int
-    :return: number of pools to split the division into
-    :rtype: decimal.Decimal or None
-    """
-    # turn all of our input into Decimal types
-    number_of_teams = Decimal(number_of_teams)
-    days_available = Decimal(days_available)
-    max_per_day = Decimal(max_per_day)
-    min_per_day = Decimal(min_per_day)
-
-    for n in range(4):
-        number_of_pools = pow(2, n)
-        largest_pool_size = ceiling(number_of_teams / number_of_pools)
-        # smallest_pool_size = floor(number_of_teams / number_of_pools)
-        preliminary_rounds = largest_pool_size - 1
-        elimination_rounds = final_series_rounds(number_of_pools)
-        elimination_days = ceiling(elimination_rounds / max_per_day, 0.5)
-        total_rounds = preliminary_rounds + elimination_rounds
-        days_required = total_rounds / max_per_day
-
-        # Make sure we are playing enough games per day through preliminary
-        # stage of the tournament.
-        if preliminary_rounds / max_per_day > days_available - elimination_days:
-            logger.warning(
-                "Too many games (%s) to be played before the finals with %s pools.",
-                preliminary_rounds,
-                number_of_pools,
-            )
-            continue
-
-        # Make sure we are playing enough games during the preliminary stages
-        if preliminary_rounds / max_per_day > days_available - elimination_days:
-            logger.warning(
-                "Not enough time (%s days) to play %s games at %s games per day.",
-                days_available - elimination_days,
-                preliminary_rounds,
-                max_per_day,
-            )
-            continue
-
-        if days_required <= days_available:
-            return number_of_pools
-
-
-def seeded_tournament(seeded_team_list, days_available, max_per_day=1, min_per_day=1):
-    """
-    Using the available input variables, divide the list of seeded teams into
-    the appropriate number of pools. Produce suitable draw formats definitions
-    to execute the tournament.
-
-    :param seeded_team_list: list of teams ordered by seeding rank
-    :type seeded_team_list: int
-    :param days_available: number of days available for play
-    :type days_available: int
-    :param max_per_day: max number of games a team may play in one day
-    :type max_per_day: int
-    :param min_per_day: min number of prelim games a team must play in one day
-    :type min_per_day: int
-    :returns: pools (list of lists) and draw_formats (list of dicts)
-    :rtype: dict
-    """
-    number_of_teams = len(seeded_team_list)
-    number_of_pools = optimum_tournament_pool_count(
-        number_of_teams,
-        days_available,
-        max_per_day,
-        min_per_day,
-    )
-
-    if isinstance(first(seeded_team_list), str):
-
-        @functools.total_ordering
-        class Team(object):
-            def __init__(self, st, order):
-                self.st = st
-                self.order = order
-
-            def __eq__(self, other):
-                return self.order == other.order
-
-            def __ne__(self, other):
-                return not (self == other)
-
-            def __lt__(self, other):
-                return self.order < other.order
-
-            def __str__(self):
-                return self.st
-
-            def __repr__(self):
-                return "<Team: {} ({})>".format(self.st, self.order)
-
-        seeded_team_list = [
-            Team(t, order=order) for order, t in enumerate(seeded_team_list, 1)
-        ]
-
-    if number_of_pools is None:
-        raise ValueError("Incompatible set of constraints")
-
-    # split teams into number of pools, employing the "serpent" pattern
-    pools = sorted(
-        zip(
-            *[
-                g if i % 2 else reversed(g)
-                for i, g in enumerate(grouper(seeded_team_list, number_of_pools))
-            ]
-        ),
-        key=None,
-    )
-
-    # remove any None items from each pool
-    pools = [[p for p in pool if p] for pool in pools]
-
-    # produce round robin formats
-    draw_formats = [
-        {
-            "label": "Round Robin (%d/%d teams)" % (size - 1, size),
-            "format": round_robin_format(range(1, size + 1)),
-        }
-        # unique set of pool sizes requiring individual draw formats
-        for size in sorted(
-            set([int(ceiling(size, 2)) for size in [len(pool) for pool in pools]])
-        )
-    ]
-
-    # produce finals formats
-    draw_formats += [
-        {
-            "label": _("Final Series (%s pools)") % number_of_pools,
-            "format": single_elimination_final_format(
-                number_of_pools,
-                bronze_playoff=_("Bronze Medal"),
-            ),
-        }
-    ]
-
-    return dict(pools=pools, draw_formats=draw_formats)
-
-
-class RoundDescriptor(object):
-    def __init__(self, count, round_label, **kwargs):
-        self.count = count
-        self.round_label = round_label
-        self.matches = []
-
-    def add(self, match):
-        self.matches.append(match)
-
-    def generate(self, generator, stage, date):
-        return [m.generate(generator, stage, self, date) for m in self.matches]
-
-    def __str__(self):
-        return "\n".join(
-            ["ROUND %s" % self.round_label] + [str(m) for m in self.matches]
-        )
-
-
-class MatchDescriptor(object):
-    def __init__(self, match_id, home_team, away_team, match_label=None, **kwargs):
-        self.match_id = match_id
-        self.home_team = home_team
-        self.away_team = away_team
-        self.match_label = match_label
-
-    def __str__(self):
-        if self.match_label:
-            return "%s: %s vs %s %s" % (
-                self.match_id,
-                self.home_team,
-                self.away_team,
-                self.match_label,
-            )
-        return "%s: %s vs %s" % (self.match_id, self.home_team, self.away_team)
-
-    def generate(self, generator, stage, round, date):
-        if isinstance(stage, StageGroup):
-            stages = {
-                "stage": stage.stage,
-                "stage_group": stage,
-            }
-            include_in_ladder = stage.stage.keep_ladder
-        else:
-            stages = {"stage": stage}
-            include_in_ladder = stage.keep_ladder
-
-        match = Match(
-            label=self.match_label or round.round_label,
-            include_in_ladder=include_in_ladder,
-            round=round.count,
-            date=date,
-            **stages,
-        )
-
-        setattr(match, "descriptor", self)
-
-        home_team = generator.team(self.home_team)
-        away_team = generator.team(self.away_team)
-
-        if home_team is None:
-            match.is_bye = True
-        elif isinstance(home_team, UndecidedTeam):
-            match.home_team_undecided = home_team
-        elif isinstance(home_team, Team):
-            match.home_team = home_team
-        else:
-            match.home_team_eval = home_team
-
-        if away_team is None:
-            match.is_bye = True
-        elif isinstance(away_team, UndecidedTeam):
-            match.away_team_undecided = away_team
-        elif isinstance(away_team, Team):
-            match.away_team = away_team
-        else:
-            match.away_team_eval = away_team
-
-        if match.home_team_eval or match.away_team_eval:
-            match.evaluated = False
-
-        return (self.match_id, match)
 
 
 class MatchCollection(object):
@@ -394,23 +129,23 @@ class MatchCollection(object):
 class DrawGenerator(object):
     """
     DrawGenerator parses tournament draw format strings and generates Match objects.
-    
+
     DRAW FORMAT SYNTAX:
-    
+
     The draw format uses a simple text-based syntax to describe tournament brackets:
-    
+
     ROUND [optional_label]
     match_id: team1 vs team2 [optional_match_label]
-    
+
     TEAM REFERENCES:
     - Direct indices: 1, 2, 3, 4 (refers to teams by their position in the division)
-    - Winner references: W1, W2 (winner of match ID 1, 2)  
+    - Winner references: W1, W2 (winner of match ID 1, 2)
     - Loser references: L1, L2 (loser of match ID 1, 2)
     - Pool position references: G1P1, G2P3 (Group 1 Position 1, Group 2 Position 3)
     - Stage references: S1G1P2 (Stage 1 Group 1 Position 2)
-    
+
     EXAMPLES:
-    
+
     Simple Knockout (4 teams):
     ```
     ROUND
@@ -418,10 +153,10 @@ class DrawGenerator(object):
     2: 3 vs 4 Semi 2
     ROUND
     3: L1 vs L2 Bronze
-    ROUND  
+    ROUND
     4: W1 vs W2 Final
     ```
-    
+
     Round Robin (4 teams):
     ```
     ROUND
@@ -434,17 +169,18 @@ class DrawGenerator(object):
     5: 1 vs 4
     6: 2 vs 3
     ```
-    
+
     Complex Multi-Stage with Pool References:
     ```
     ROUND
     1: G1P1 vs G1P2 Pool Winner Playoff
     2: G2P3 vs G2P4 Consolation
     ```
-    
+
     The generator processes these formats and creates Match objects with proper
     team assignments and progression logic.
     """
+
     regex = re.compile(
         r"""  # noqa
         (?:
@@ -562,7 +298,7 @@ class DrawGenerator(object):
 
                 # update the related match values and store only the W or L
                 for team in ("home", "away"):
-                    team_eval = win_lose_re.match(
+                    team_eval = WIN_LOSE_RE.match(
                         getattr(match, f"{team}_team_eval") or ""
                     )
                     if team_eval:
