@@ -33,13 +33,16 @@ This is a Python based repository, it provides a Django reusable application tha
     - **All imports must be at the head of the file** - never place import statements inside functions or methods
     - Never use try/except for imports of required dependencies - imports should be at the head of the file
     - Only use inline imports to avoid circular import issues
-7. **Template Conventions**:
+7. **Logging Guidelines**:
+    - Use printf-style interpolation for log messages instead of f-strings for better performance
+    - Example: `logger.info("Message with %s and %s", var1, var2)` not `logger.info(f"Message with {var1} and {var2}")`
+8. **Template Conventions**:
     - Use `self.template_path()` method to find templates instead of hardcoding template paths
     - Follow existing patterns for template path construction
-8. **URL and Test Conventions**:
+9. **URL and Test Conventions**:
     - Always use named URLs in tests with `self.reverse()` instead of hardcoded URL strings
     - Use ORM reverse relations to find related objects instead of manual queries
-9. **Permission and Security Guidelines**:
+10. **Permission and Security Guidelines**:
     - Protected views must use the same permission level as related functionality (e.g., stream views)
     - Always test both authorized and unauthorized access to protected endpoints
     - Use `@login_required_m` and `permissions_required()` for consistent security patterns
