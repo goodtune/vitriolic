@@ -2020,17 +2020,17 @@ class BackendTests(MessagesTestMixin, TestCase):
 
     def test_bug_203_add_match_with_live_streaming_enabled(self):
         """
-        Test that creating a new match with live streaming enabled and YouTube 
+        Test that creating a new match with live streaming enabled and YouTube
         credentials configured does not raise NoReverseMatch error.
 
-        This test reproduces the issue described in #203 where creating new matches 
+        This test reproduces the issue described in #203 where creating new matches
         in the admin interface failed with:
-        
-        django.urls.exceptions.NoReverseMatch: Reverse for 'match-video' with 
-        keyword arguments {'competition': 'other-events', 'season': 'european-seniors-cup-2025', 
+
+        django.urls.exceptions.NoReverseMatch: Reverse for 'match-video' with
+        keyword arguments {'competition': 'other-events', 'season': 'european-seniors-cup-2025',
         'division': 'mixed-30', 'match': None} not found.
 
-        The error occurred because the pre_save_callback tried to build a match video URL 
+        The error occurred because the pre_save_callback tried to build a match video URL
         using obj.pk before the match was saved (obj.pk was None).
 
         The fix added a conditional check: if obj.pk is not None: before building the URL.
@@ -2042,8 +2042,8 @@ class BackendTests(MessagesTestMixin, TestCase):
         stage_no_creds = factories.StageFactory.create(
             division__season__live_stream=True,
             division__season__live_stream_project_id=None,  # No credentials
-            division__season__live_stream_client_id=None,   # No credentials  
-            division__season__live_stream_client_secret=None, # No credentials
+            division__season__live_stream_client_id=None,  # No credentials
+            division__season__live_stream_client_secret=None,  # No credentials
         )
 
         team1 = factories.TeamFactory.create(division=stage_no_creds.division)
@@ -2065,7 +2065,9 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.response_302()
 
         # Verify match was created successfully
-        match = Match.objects.filter(stage=stage_no_creds, label="Test Match No Creds").first()
+        match = Match.objects.filter(
+            stage=stage_no_creds, label="Test Match No Creds"
+        ).first()
         self.assertIsNotNone(match, "Match should have been created successfully")
 
         # Now test the scenario that was causing the original issue:
@@ -2074,41 +2076,41 @@ class BackendTests(MessagesTestMixin, TestCase):
         #
         # The NoReverseMatch issue was fixed by adding the obj.pk check,
         # but there are still other issues in the YouTube API code.
-        # 
+        #
         # For this test, we'll focus on proving that the NoReverseMatch
         # specific issue is resolved by testing at the code level.
-        
+
         season_with_creds = factories.SeasonFactory.create(
             live_stream=True,
             live_stream_project_id="test-project-123",
-            live_stream_client_id="test-client-id", 
+            live_stream_client_id="test-client-id",
             live_stream_client_secret="test-client-secret",
         )
-        
+
         division = factories.DivisionFactory.create(season=season_with_creds)
         stage_with_creds = factories.StageFactory.create(division=division)
-        
+
         # Simulate the pre_save_callback being called with a new match (obj.pk = None)
         # This should no longer raise NoReverseMatch due to the fix
         from tournamentcontrol.competition.admin import CompetitionAdminComponent
         from django.test import RequestFactory
-        
-        request = RequestFactory().post('/test/')
+
+        request = RequestFactory().post("/test/")
         request.user = self.superuser
         component = CompetitionAdminComponent(None)
-        
+
         # Create a new match object (pk will be None)
         new_match = Match(stage=stage_with_creds)
         self.assertIsNone(new_match.pk, "New match should have pk=None")
-        
+
         # The key test: Before the fix, this would raise NoReverseMatch
         # After the fix, it should handle obj.pk=None gracefully
         from django.urls import reverse
-        
+
         try:
             # Simulate the fixed logic: check if obj.pk is not None before building URL
             # This is the core of the fix that prevents the NoReverseMatch error
-            
+
             # Test the case that was causing the issue: new match with pk=None
             if new_match.pk is not None:  # This is the fix - checking pk first
                 # Before the fix, this would have been attempted with match=None
@@ -2120,25 +2122,25 @@ class BackendTests(MessagesTestMixin, TestCase):
                 # This prevents the NoReverseMatch error
                 # The original code would have tried to build the URL here
                 # and failed with NoReverseMatch: ... 'match': None} not found.
-                
+
                 # Verify that we correctly identify this as a new match
                 self.assertIsNone(new_match.pk, "New match should have pk=None")
-                
+
                 # The fix: we don't attempt to build the URL when pk is None
                 # This is what prevents the NoReverseMatch error
-                
+
             # If we reach here, the logic works correctly
             # The fix successfully handles both cases:
             # 1. new matches (pk=None) - skip URL building
             # 2. existing matches (pk exists) - build URL normally
-            
+
         except Exception as e:
             self.fail(f"Fix logic failed unexpectedly: {e}")
-        
+
         # Additional verification: Test the logic with a saved match
         saved_match = factories.MatchFactory.create(stage=stage_with_creds)
         self.assertIsNotNone(saved_match.pk, "Saved match should have a pk")
-        
+
         # With the fix, URL building should be attempted for saved matches
         # We can't test the actual URL building due to namespace issues in the test environment,
         # but we can verify the logic condition
