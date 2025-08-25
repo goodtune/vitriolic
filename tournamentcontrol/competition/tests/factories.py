@@ -253,6 +253,28 @@ class SeasonRefereeFactory(DjangoModelFactory):
     person = factory.SubFactory(PersonFactory)
 
 
+class LadderEntryFactory(DjangoModelFactory):
+    class Meta:
+        model = models.LadderEntry
+
+    match = factory.SubFactory(MatchFactory)
+    team = factory.SubFactory(TeamFactory)
+    opponent = factory.SubFactory(TeamFactory)
+    played = 1
+    win = 0
+    loss = 0
+    draw = 0
+    bye = 0
+    forfeit = 0
+    forfeit_against = 0
+    score_for = 0
+    score_against = 0
+    points = 0
+    margin = 0
+    diff = 0
+    bonus_points = 0
+
+
 class DrawFormatFactory(DjangoModelFactory):
     class Meta:
         model = models.DrawFormat

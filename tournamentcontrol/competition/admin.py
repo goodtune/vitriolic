@@ -47,6 +47,7 @@ from tournamentcontrol.competition.forms import (
     ClubRoleForm,
     CompetitionForm,
     DivisionForm,
+    DivisionStructureJSONFormSet,
     DrawFormatForm,
     DrawGenerationFormSet,
     DrawGenerationMatchFormSet,
@@ -377,6 +378,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     "<int:division_id>/exclusion/",
                     include(divisionexclusion_urls, namespace="divisionexclusiondate"),
                 ),
+                path(
+                    "<int:division_id>/export.json",
+                    self.division_export_json,
+                    name="export-json",
+                ),
             ],
             self.app_name,
         )
@@ -390,6 +396,16 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 ),
                 path("<int:season_id>/callback", self.oauth_callback, name="callback"),
                 path("<int:season_id>/delete/", self.delete_season, name="delete"),
+                path(
+                    "<int:season_id>/ai-competition/",
+                    self.ai_competition_wizard,
+                    name="ai-competition",
+                ),
+                path(
+                    "<int:season_id>/json-builder/",
+                    self.json_division_builder,
+                    name="json-builder",
+                ),
                 path(
                     "<int:season_id>/reschedule/",
                     self.match_reschedule,
@@ -653,9 +669,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         a.order = bo
         a.save()
 
-        fmt = _(
-            'The %(model)s "%(title)s" has been ' "reordered %(direction)s the list."
-        )
+        fmt = _('The %(model)s "%(title)s" has been reordered %(direction)s the list.')
         messages.info(
             request,
             fmt
@@ -1214,6 +1228,27 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
+    def division_export_json(self, request, competition, season, division, **kwargs):
+        """Export division as JSON DivisionStructure."""
+        try:
+            division_structure = division.to_division_structure()
+        except Exception as e:
+            messages.error(request, f"Failed to export division: {e}")
+            return self.redirect(division.urls["edit"])
+
+        response = HttpResponse(
+            division_structure.model_dump_json(),
+            content_type="application/json",
+        )
+        response["Content-Disposition"] = (
+            "attachment; "
+            f'filename="{competition.slug}_{season.slug}_{division.slug}.json"'
+        )
+
+        return response
+
+    @competition_by_pk_m
+    @staff_login_required_m
     def edit_divisionexclusiondate(
         self, request, division, extra_context, pk=None, **kwargs
     ):
@@ -1380,7 +1415,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             request,
             Team,
             instance=team,
-            post_save_redirect="admin:fixja:competition:season:" "division:team:list",
+            post_save_redirect="admin:fixja:competition:season:division:team:list",
             post_save_redirect_args=(
                 competition.pk,
                 season.pk,
@@ -2225,11 +2260,51 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @staff_login_required_m
     def scorecard_report(self, request, **extra_context):
-        from .wizards import FilterForm, SeasonForm, scorecardwizard_factory
+        from tournamentcontrol.competition.wizards import (
+            FilterForm,
+            SeasonForm,
+            scorecardwizard_factory,
+        )
 
         ScorecardWizard = scorecardwizard_factory(app=self, extra_context=extra_context)
         wizard = ScorecardWizard.as_view(form_list=[SeasonForm, FilterForm])
         return wizard(request)
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def ai_competition_wizard(self, request, competition, season, **extra_context):
+        """AI-powered competition structure generation wizard."""
+        from tournamentcontrol.competition.wizards import (
+            AIPlanReviewForm,
+            AIPromptForm,
+            ai_competition_wizard_factory,
+        )
+
+        AICompetitionWizard = ai_competition_wizard_factory(
+            season=season, app=self, extra_context=extra_context
+        )
+        wizard = AICompetitionWizard.as_view(form_list=[AIPromptForm, AIPlanReviewForm])
+        return wizard(request)
+
+    @staff_login_required_m
+    @competition_by_pk_m
+    def json_division_builder(self, request, competition, season, **extra_context):
+        """JSON-based division structure builder for power users."""
+
+        return self.generic_edit_multiple(
+            request,
+            season.divisions,  # Use season's divisions manager
+            formset_class=DivisionStructureJSONFormSet,
+            formset_kwargs={"instance": season},  # Pass season as instance
+            post_save_redirect=self.redirect(season.urls["edit"]),
+            templates=self.template_path("json_division_builder.html"),
+            extra_context={
+                **extra_context,
+                "season": season,
+                "competition": competition,
+                "cancel_url": season.urls["edit"],
+            },
+        )
 
     @competition_by_pk_m
     @staff_login_required_m
