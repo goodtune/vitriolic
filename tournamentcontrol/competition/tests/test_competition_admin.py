@@ -6,6 +6,7 @@ from dateutil.rrule import DAILY
 from django import VERSION
 from django.contrib import messages
 from django.template import Context, Template
+from django.test import RequestFactory
 from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 
@@ -1991,32 +1992,30 @@ class BackendTests(MessagesTestMixin, TestCase):
         )
 
         with self.login(self.superuser):
-            # Test the export view
             self.get(
                 "admin:fixja:competition:season:division:export-json",
                 division.season.competition.pk,
                 division.season.pk,
                 division.pk,
             )
-            self.response_200()
+        self.response_200()
 
-            # Check response content type and headers
-            response = self.last_response
-            self.assertEqual(response["content-type"], "application/json")
-            self.assertIn("attachment", response["Content-Disposition"])
-            expected_filename = f"{division.season.competition.slug}_{division.season.slug}_{division.slug}.json"
-            self.assertIn(expected_filename, response["Content-Disposition"])
+        # Check response content type and headers
+        self.assertResponseHeaders(
+            {
+                "Content-Type": "application/json",
+                "Content-Disposition": f'attachment; filename="{division.season.competition.slug}_{division.season.slug}_{division.slug}.json"',
+            }
+        )
 
-            # Parse the JSON content
-            import json
+        structure = DivisionStructure.model_validate_json(
+            self.last_response.content.decode()
+        )
 
-            json_data = json.loads(response.content.decode())
-
-            # Verify basic structure
-            self.assertEqual(json_data["title"], "Test Division")
-            self.assertEqual(json_data["teams"], ["Team A", "Team B"])
-            self.assertEqual(len(json_data["stages"]), 1)
-            self.assertEqual(json_data["stages"][0]["title"], "Round Robin")
+        # Verify basic structure
+        self.assertEqual(structure.title, "Test Division")
+        self.assertEqual(structure.teams, ["Team A", "Team B"])
+        self.assertEqual([s.title for s in structure.stages], ["Round Robin"])
 
     def test_bug_203_add_match_with_live_streaming_enabled(self):
         """
@@ -2092,12 +2091,9 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # Simulate the pre_save_callback being called with a new match (obj.pk = None)
         # This should no longer raise NoReverseMatch due to the fix
-        from tournamentcontrol.competition.admin import CompetitionAdminComponent
-        from django.test import RequestFactory
 
         request = RequestFactory().post("/test/")
         request.user = self.superuser
-        component = CompetitionAdminComponent(None)
 
         # Create a new match object (pk will be None)
         new_match = Match(stage=stage_with_creds)
@@ -2105,7 +2101,6 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # The key test: Before the fix, this would raise NoReverseMatch
         # After the fix, it should handle obj.pk=None gracefully
-        from django.urls import reverse
 
         try:
             # Simulate the fixed logic: check if obj.pk is not None before building URL
