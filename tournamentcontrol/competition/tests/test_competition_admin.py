@@ -18,6 +18,8 @@ from tournamentcontrol.competition.models import (
     Division,
     Ground,
     Match,
+    Person,
+    SimpleScoreMatchStatistic,
     Stage,
     StageGroup,
     Team,
@@ -744,6 +746,79 @@ class BackendTests(MessagesTestMixin, TestCase):
             )
             self.assertResponseNotContains("Mixed 4", html=False)
             self.assertResponseContains("4th Division Mixed", html=False)
+
+    def test_scorers_view_basic(self):
+        """Test that scorers view loads correctly with basic match and statistics data"""
+        # Create basic structure
+        stage = factories.StageFactory.create()
+        division = stage.division
+
+        # Create teams and players
+        team = factories.TeamFactory.create(division=division)
+        person = factories.PersonFactory.create(club=team.club)
+
+        # Create team association
+        team_association = factories.TeamAssociationFactory.create(
+            team=team, person=person
+        )
+
+        # Create a match
+        match = factories.MatchFactory.create(
+            stage=stage,
+            home_team=team,
+            away_team=factories.TeamFactory.create(division=division),
+        )
+
+        # Create match statistics for the player
+        SimpleScoreMatchStatistic.objects.create(
+            match=match, player=person, played=1, points=10, mvp=2
+        )
+
+        # Test the scorers view
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:competition:season:division:scorers",
+                division.season.competition.pk,
+                division.season.pk,
+                division.pk,
+            )
+            self.response_200()
+
+        # Get context data directly
+        scorers = self.get_context("scorers")
+        mvp = self.get_context("mvp")
+
+        # Expected data structure from Django ORM values()
+        expected_scorer = {
+            "uuid": person.uuid,
+            "first_name": person.first_name,
+            "last_name": person.last_name,
+            "club__title": team.club.title,
+            "played": 1,
+            "points": 10,
+            "mvp": 2,
+        }
+
+        # Assert direct equality with expected data
+        self.assertEqual([expected_scorer], list(scorers))
+        self.assertEqual([expected_scorer], list(mvp))
+
+        # Assert HTML structure contains the expected table rows
+        expected_scorer_row = (
+            f"<td>{person.first_name} {person.last_name}</td>"
+            f"<td>{team.club.title}</td>"
+            f"<td>1</td>"  # played
+            f"<td>10</td>"  # points
+        )
+        expected_mvp_row = (
+            f"<td>{person.first_name} {person.last_name}</td>"
+            f"<td>{team.club.title}</td>"
+            f"<td>1</td>"  # played
+            f"<td>2</td>"  # mvp
+        )
+
+        self.assertResponseContains(expected_scorer_row, html=True)
+        self.assertResponseContains(expected_mvp_row, html=True)
 
     def test_update_club(self):
         """

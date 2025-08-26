@@ -92,6 +92,7 @@ from tournamentcontrol.competition.models import (
     SeasonExclusionDate,
     SeasonMatchTime,
     SeasonReferee,
+    SimpleScoreMatchStatistic,
     Stage,
     StageGroup,
     Team,
@@ -2398,76 +2399,42 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def highest_point_scorer(self, request, division, extra_context, **kwargs):
-        def _get_clause(field, aggregate=Sum):
-            """
-            Local function to produce a Aggregate(Case(When())) instance which
-            can be used to extract individual totals for the division.
-            """
-            return aggregate(
-                Case(When(statistics__match__stage__division=division, then=F(field)))
+        # Get the statistics directly and group by person
+        # This approach avoids GROUP BY issues by working with the statistics model directly
+        statistics = (
+            SimpleScoreMatchStatistic.objects.filter(match__stage__division=division)
+            .values(
+                "player__uuid",
+                "player__first_name",
+                "player__last_name",
+                "player__club__title",
             )
-
-        # Use raw SQL to handle GROUP BY properly for PostgreSQL
-        # Similar to the approach used in Club._mvp_related
-        from django.db import connection
-
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT 
-                    p.uuid,
-                    p.first_name,
-                    p.last_name,
-                    p.club_id,
-                    c.title as club_title,
-                    SUM(CASE WHEN m.stage_id IN (
-                        SELECT id FROM competition_stage WHERE division_id = %s
-                    ) THEN s.played ELSE 0 END) as played,
-                    SUM(CASE WHEN m.stage_id IN (
-                        SELECT id FROM competition_stage WHERE division_id = %s
-                    ) THEN s.points ELSE 0 END) as points,
-                    SUM(CASE WHEN m.stage_id IN (
-                        SELECT id FROM competition_stage WHERE division_id = %s
-                    ) THEN s.mvp ELSE 0 END) as mvp
-                FROM competition_person p
-                LEFT JOIN competition_club c ON p.club_id = c.id
-                LEFT JOIN competition_simplescorematchstatistic s ON p.uuid = s.player_id
-                LEFT JOIN competition_match m ON s.match_id = m.id
-                GROUP BY p.uuid, p.first_name, p.last_name, p.club_id, c.title
-                HAVING SUM(CASE WHEN m.stage_id IN (
-                    SELECT id FROM competition_stage WHERE division_id = %s
-                ) THEN s.played ELSE 0 END) > 0
-                ORDER BY points DESC, played ASC
-            """,
-                [division.pk, division.pk, division.pk, division.pk],
+            .annotate(
+                uuid=F("player__uuid"),
+                first_name=F("player__first_name"),
+                last_name=F("player__last_name"),
+                club__title=F("player__club__title"),
+                played=Sum("played"),
+                points=Sum("points"),
+                mvp=Sum("mvp"),
             )
+            .exclude(played__isnull=True)
+            .exclude(played=0)
+            .values(
+                "uuid",
+                "first_name",
+                "last_name",
+                "club__title",
+                "played",
+                "points",
+                "mvp",
+            )
+            .order_by("-points", "played")
+        )
 
-            # Convert results to objects compatible with the template
-            from types import SimpleNamespace
-
-            def make_person_like(row):
-                person_like = SimpleNamespace()
-                person_like.uuid = row[0]
-                person_like.first_name = row[1]
-                person_like.last_name = row[2]
-                person_like.played = row[5] or 0
-                person_like.points = row[6] or 0
-                person_like.mvp = row[7] or 0
-
-                # Create a club-like object
-                club_like = SimpleNamespace()
-                club_like.title = row[4]
-                person_like.club = club_like
-
-                return person_like
-
-            scorers_data = cursor.fetchall()
-
-        # Convert to lists of person-like objects
-        scorers = [make_person_like(row) for row in scorers_data]
-
-        # For MVP, re-order by mvp score
-        mvp = sorted(scorers, key=lambda x: (-x.mvp, x.played))
+        # Create separate querysets for different ordering
+        scorers = statistics.order_by("-points", "played")
+        mvp = statistics.order_by("-mvp", "played")
 
         context = {
             "scorers": scorers,
