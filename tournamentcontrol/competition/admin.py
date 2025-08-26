@@ -92,6 +92,7 @@ from tournamentcontrol.competition.models import (
     SeasonExclusionDate,
     SeasonMatchTime,
     SeasonReferee,
+    SimpleScoreMatchStatistic,
     Stage,
     StageGroup,
     Team,
@@ -2423,27 +2424,42 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def highest_point_scorer(self, request, division, extra_context, **kwargs):
-        def _get_clause(field, aggregate=Sum):
-            """
-            Local function to produce a Aggregate(Case(When())) instance which
-            can be used to extract individual totals for the division.
-            """
-            return aggregate(
-                Case(When(statistics__match__stage__division=division, then=F(field)))
+        # Get the statistics directly and group by person
+        # This approach avoids GROUP BY issues by working with the statistics model directly
+        statistics = (
+            SimpleScoreMatchStatistic.objects.filter(match__stage__division=division)
+            .values(
+                "player__uuid",
+                "player__first_name",
+                "player__last_name",
+                "player__club__title",
             )
-
-        people = (
-            Person.objects.select_related("club")
             .annotate(
-                played=_get_clause("statistics__played"),
-                points=_get_clause("statistics__points"),
-                mvp=_get_clause("statistics__mvp"),
+                uuid=F("player__uuid"),
+                first_name=F("player__first_name"),
+                last_name=F("player__last_name"),
+                club__title=F("player__club__title"),
+                played=Sum("played"),
+                points=Sum("points"),
+                mvp=Sum("mvp"),
             )
-            .exclude(played=None)
+            .exclude(played__isnull=True)
+            .exclude(played=0)
+            .values(
+                "uuid",
+                "first_name",
+                "last_name",
+                "club__title",
+                "played",
+                "points",
+                "mvp",
+            )
+            .order_by("-points", "played")
         )
 
-        scorers = people.order_by("-points", "played")
-        mvp = people.order_by("-mvp", "played")
+        # Create separate querysets for different ordering
+        scorers = statistics.order_by("-points", "played")
+        mvp = statistics.order_by("-mvp", "played")
 
         context = {
             "scorers": scorers,
