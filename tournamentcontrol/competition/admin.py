@@ -1636,32 +1636,63 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 )
 
             # Build match video URL for description
-            match_url = request.build_absolute_uri(
-                reverse(
-                    "competition:match-video",
-                    kwargs={
-                        "competition": competition.slug,
-                        "season": season.slug,
-                        "division": division.slug,
-                        "match": obj.pk,
-                    },
+            # Only build the URL if the match has been saved and has a primary key
+            if obj.pk is not None:
+                match_url = request.build_absolute_uri(
+                    reverse(
+                        "competition:match-video",
+                        kwargs={
+                            "competition": competition.slug,
+                            "season": season.slug,
+                            "division": division.slug,
+                            "match": obj.pk,
+                        },
+                    )
                 )
-            )
 
-            description = (
-                f"Live stream of the {division} division of {competition} {season} "
-                f"from {obj.play_at.ground.venue}.\n"
-                f"\n"
-                f"Watch {obj.get_home_team_plain()} take on "
-                f"{obj.get_away_team_plain()} on {obj.play_at}.\n"
-                f"\n"
-                f"Full match details are available at {match_url}\n"
-                f"\n"
-                f"Subscribe to receive notifications of upcoming matches."
-            )
+                # Safely get venue information
+                venue_info = ""
+                if obj.play_at and obj.play_at.ground and obj.play_at.ground.venue:
+                    venue_info = f"from {obj.play_at.ground.venue}"
+
+                description = (
+                    f"Live stream of the {division} division of {competition} {season}"
+                    f"{' ' + venue_info if venue_info else ''}.\n"
+                    f"\n"
+                    f"Watch {obj.get_home_team_plain()} take on "
+                    f"{obj.get_away_team_plain()}"
+                    f"{' on ' + str(obj.play_at) if obj.play_at else ''}.\n"
+                    f"\n"
+                    f"Full match details are available at {match_url}\n"
+                    f"\n"
+                    f"Subscribe to receive notifications of upcoming matches."
+                )
+            else:
+                # For new matches without a pk, omit the match URL from description
+                # Safely get venue information
+                venue_info = ""
+                if obj.play_at and obj.play_at.ground and obj.play_at.ground.venue:
+                    venue_info = f"from {obj.play_at.ground.venue}"
+
+                description = (
+                    f"Live stream of the {division} division of {competition} {season}"
+                    f"{' ' + venue_info if venue_info else ''}.\n"
+                    f"\n"
+                    f"Watch {obj.get_home_team_plain()} take on "
+                    f"{obj.get_away_team_plain()}"
+                    f"{' on ' + str(obj.play_at) if obj.play_at else ''}.\n"
+                    f"\n"
+                    f"Subscribe to receive notifications of upcoming matches."
+                )
 
             start_time = obj.get_datetime(ZoneInfo("UTC"))
-            stop_time = obj.get_datetime(ZoneInfo("UTC")) + relativedelta(
+            
+            # Skip YouTube API interaction if we don't have valid start time
+            # This can happen for new matches that don't have complete date/time data
+            if start_time is None:
+                return
+                
+            stop_time = start_time + relativedelta(
                 minutes=50
             )  # FIXME: hard coded
 
