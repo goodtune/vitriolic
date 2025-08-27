@@ -1562,11 +1562,8 @@ class BackendTests(MessagesTestMixin, TestCase):
             self.assertFalse(match.live_stream)
             self.assertIsNone(match.external_identifier)
 
-    @mock.patch(
-        "tournamentcontrol.competition.models.Season.youtube",
-        new_callable=mock.PropertyMock,
-    )
-    def test_edit_match_youtube_refresh_error_handling(self, mock_youtube_property):
+    @mock.patch("googleapiclient.discovery.build")
+    def test_edit_match_youtube_refresh_error_handling(self, mock_build):
         """
         Test that RefreshError from expired OAuth2 tokens is properly handled.
 
@@ -1617,7 +1614,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         mock_youtube_service.liveBroadcasts.return_value.delete.return_value = (
             mock_delete
         )
-        mock_youtube_property.return_value = mock_youtube_service
+        mock_build.return_value = mock_youtube_service
 
         edit_match_url = match.url_names["edit"]
 
