@@ -16,7 +16,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.postgres import fields as PG
 from django.core import validators
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Count, DateField, DateTimeField, Q, Sum, TimeField
 from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
 from django.template import Template
@@ -25,6 +25,8 @@ from django.utils import timezone
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
+from google.auth.exceptions import RefreshError
+from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -591,20 +593,46 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             **kwargs,
         )
 
-    @cached_property
+    @property
     def youtube(self):
-        return build(
-            "youtube",
-            "v3",
-            credentials=Credentials(
-                client_id=self.live_stream_client_id,
-                client_secret=self.live_stream_client_secret,
-                token=self.live_stream_token,
-                refresh_token=self.live_stream_refresh_token,
-                token_uri=self.live_stream_token_uri,
-                scopes=self.live_stream_scopes,
-            ),
+        credentials = Credentials(
+            client_id=self.live_stream_client_id,
+            client_secret=self.live_stream_client_secret,
+            token=self.live_stream_token,
+            refresh_token=self.live_stream_refresh_token,
+            token_uri=self.live_stream_token_uri,
+            scopes=self.live_stream_scopes,
         )
+
+        # Enable automatic refresh for expired tokens
+        if credentials.expired and credentials.refresh_token:
+            try:
+                credentials.refresh(Request())
+                # Update stored tokens after successful refresh with transaction safety
+                with transaction.atomic():
+                    self.live_stream_token = credentials.token
+                    self.save(update_fields=["live_stream_token"])
+                logger.info(
+                    "Successfully refreshed YouTube OAuth token for season %s", self.pk
+                )
+            except RefreshError as e:
+                # Log error and re-raise for proper error handling
+                logger.error(
+                    "Failed to refresh YouTube credentials for season %s: %s",
+                    self.pk,
+                    e,
+                )
+                raise
+            except Exception as e:
+                # Log unexpected errors and re-raise
+                logger.error(
+                    "Unexpected error refreshing YouTube credentials for season %s: %s",
+                    self.pk,
+                    e,
+                )
+                raise
+
+        return build("youtube", "v3", credentials=credentials)
 
     @property
     def datetimes(self):
