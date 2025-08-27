@@ -3,7 +3,6 @@ import logging
 
 from django.db.models import Count, Q
 from django.utils import timezone
-from django.utils.functional import lazy
 from django.utils.translation import gettext_lazy as _
 
 from touchtechnology.admin.base import DashboardWidget
@@ -43,6 +42,7 @@ def matches_require_basic_results(now=None, matches=None):
         home_team_score=None,
         away_team_score=None,
         is_washout=False,
+        include_in_ladder=True,
     ).select_related(
         "stage__division__season__competition",
         "play_at",
@@ -126,49 +126,21 @@ def matches_progression_possible():
         # If there are any unplayed or unprocessed matches in the preceding
         # stage, then we do not want to consider this match as viable for
         # progression.
-        logger.debug(
-            "Evaluate %r - home_team=%s home_team_eval=%s home_team_eval_related=%s",
-            match,
-            match.home_team,
-            match.home_team_eval,
-            match.home_team_eval_related,
-        )
-        logger.debug(
-            "Evaluate %r - away_team=%s away_team_eval=%s away_team_eval_related=%s",
-            match,
-            match.away_team,
-            match.away_team_eval,
-            match.away_team_eval_related,
-        )
         if _stage_cache[match.stage_id]:
-            logger.warning(
-                "Can't eval %s from stage %r (%s matches)",
-                match,
-                match.stage,
-                _stage_cache[match.stage_id],
-            )
             return False
 
         # If the home or away team can be determined we would want to progress
         # the match. This should only catch Px, GxPx, Wx, Lx - for
         # UndecidedTeam cases we need to catch them all together.
-        home_team, away_team = match.eval()
+        home_team, away_team = match.eval(lazy=True)
         if match.home_team is None and isinstance(home_team, Team):
             return True
         elif match.away_team is None and isinstance(away_team, Team):
             return True
 
         if match.stage.undecided_teams.exists() and _stage_cache[match.stage_id] == 0:
-            logger.warning(
-                "Found undecided teams and no matches left for %s in stage %r",
-                match,
-                match.stage,
-            )
             return True
 
-        logger.warning(
-            "Can't evaluate %r - home_team=%r away_team=%r", match, home_team, away_team
-        )
         return False
 
     matches = [m for m in matches if _can_evaluate(m)]
@@ -178,20 +150,10 @@ def matches_progression_possible():
 
 def stages_require_progression():
     matches = matches_progression_possible()
-
-    # Turn the list of matches with progressions into a nested OrderedDict
-    # for use in the template. Use of OrderedDict means our ordering set
-    # above will not be lost.
-    stages = collections.OrderedDict()
+    stages = {}
     for m in matches:
-        stages.setdefault(m.stage.division, collections.OrderedDict()).setdefault(
-            m.stage, []
-        ).append(m)
-
+        stages.setdefault(m.stage.division, {}).setdefault(m.stage, []).append(m)
     return stages
-
-
-lazy_stages_require_progression = lazy(stages_require_progression, dict)
 
 
 #
@@ -242,7 +204,7 @@ class ProgressStageWidget(DashboardWidget):
     template = "tournamentcontrol/competition/admin/widgets/progress/stages.html"
 
     def _get_context(self):
-        stages = lazy_stages_require_progression()
+        stages = stages_require_progression()
 
         context = {"stages": stages}
         return context
