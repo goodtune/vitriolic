@@ -1,0 +1,7 @@
+Live stream of the {{ division }} division of {{ competition }} {{ season }} from {{ match.play_at.ground.venue }}.
+
+Watch {{ match.get_home_team_plain }} take on {{ match.get_away_team_plain }} on {{ match.play_at }}.
+
+Full match details are available at {{ match_url }}
+
+Subscribe to receive notifications of upcoming matches.
