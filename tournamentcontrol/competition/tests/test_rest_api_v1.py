@@ -60,33 +60,41 @@ class APITests(TestCase):
         """Test club-detail endpoint"""
         self.get("v1:club-detail", slug=self.club.slug)
         self.response_200()
-
-    def test_club_status_field_in_api(self):
-        """Test that club status field is exposed in the API"""
-        self.get("v1:club-detail", slug=self.club.slug)
-        self.response_200()
         
         response_data = self.last_response.json()
         self.assertEqual(response_data["status"], "active")
-        
-    def test_club_status_field_different_values(self):
-        """Test that different club status values are properly serialized"""
+
+    def test_clubs_api_with_different_statuses(self):
+        """Test Clubs API endpoint with clubs of different statuses"""
         from tournamentcontrol.competition.constants import ClubStatus
         
-        # Test inactive status
+        # Create clubs with different statuses
+        active_club = factories.ClubFactory.create()
         inactive_club = factories.ClubFactory.create()
         inactive_club.status = ClubStatus.INACTIVE
         inactive_club.save()
         
+        hidden_club = factories.ClubFactory.create()
+        hidden_club.status = ClubStatus.HIDDEN
+        hidden_club.save()
+        
+        # Test club list endpoint includes status field
+        self.get("v1:club-list")
+        self.response_200()
+        response_data = self.last_response.json()
+        
+        # Find clubs in response and verify status field - response_data is a list
+        club_statuses = {club["slug"]: club["status"] for club in response_data}
+        
+        self.assertEqual(club_statuses[active_club.slug], "active")
+        self.assertEqual(club_statuses[inactive_club.slug], "inactive")
+        self.assertEqual(club_statuses[hidden_club.slug], "hidden")
+        
+        # Test individual club detail endpoints
         self.get("v1:club-detail", slug=inactive_club.slug)
         self.response_200()
         response_data = self.last_response.json()
         self.assertEqual(response_data["status"], "inactive")
-        
-        # Test hidden status
-        hidden_club = factories.ClubFactory.create()
-        hidden_club.status = ClubStatus.HIDDEN
-        hidden_club.save()
         
         self.get("v1:club-detail", slug=hidden_club.slug)
         self.response_200()
