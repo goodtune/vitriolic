@@ -2093,7 +2093,8 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.assertEqual(structure.teams, ["Team A", "Team B"])
         self.assertEqual([s.title for s in structure.stages], ["Round Robin"])
 
-    def test_bug_203_add_match_with_live_streaming_enabled(self):
+    @patch("googleapiclient.discovery.build")
+    def test_bug_203_add_match_with_live_streaming_enabled(self, mock_discovery_build):
         """
         Test that creating a match through admin UI does not raise NoReverseMatch
         when live streaming is enabled with YouTube credentials configured.
@@ -2123,13 +2124,6 @@ class BackendTests(MessagesTestMixin, TestCase):
             "thumbnail_url": "",
         }
         
-        # Mock the YouTube API and datetime method to prevent API calls and datetime issues
-        from datetime import datetime
-        from zoneinfo import ZoneInfo
-        mock_datetime = datetime(2025, 5, 1, 14, 0, 0, tzinfo=ZoneInfo("UTC"))
-        
-        with patch("googleapiclient.discovery.build"), \
-             patch.object(Match, "get_datetime", return_value=mock_datetime):
-            add_match = Match(stage=stage).url_names["add"]
-            self.post(add_match.url_name, *add_match.args, data=data)
-            self.response_302()
+        add_match = Match(stage=stage).url_names["add"]
+        self.post(add_match.url_name, *add_match.args, data=data)
+        self.response_302()
