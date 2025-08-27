@@ -1686,7 +1686,13 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 )
 
             start_time = obj.get_datetime(ZoneInfo("UTC"))
-            stop_time = obj.get_datetime(ZoneInfo("UTC")) + relativedelta(
+            
+            # Skip YouTube API interaction if we don't have valid start time
+            # This can happen for new matches that don't have complete date/time data
+            if start_time is None:
+                return
+                
+            stop_time = start_time + relativedelta(
                 minutes=50
             )  # FIXME: hard coded
 
