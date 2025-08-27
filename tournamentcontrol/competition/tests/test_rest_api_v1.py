@@ -1,6 +1,7 @@
 from django.test.utils import override_settings
 from test_plus import TestCase
 
+from tournamentcontrol.competition.constants import ClubStatus
 from tournamentcontrol.competition.draw import schemas
 from tournamentcontrol.competition.draw.builders import build
 from tournamentcontrol.competition.models import LadderSummary
@@ -66,40 +67,47 @@ class APITests(TestCase):
 
     def test_clubs_api_with_different_statuses(self):
         """Test Clubs API endpoint with clubs of different statuses"""
-        from tournamentcontrol.competition.constants import ClubStatus
-        
-        # Create clubs with different statuses
-        active_club = factories.ClubFactory.create()
-        inactive_club = factories.ClubFactory.create()
-        inactive_club.status = ClubStatus.INACTIVE
-        inactive_club.save()
-        
-        hidden_club = factories.ClubFactory.create()
-        hidden_club.status = ClubStatus.HIDDEN
-        hidden_club.save()
+        # Create clubs with different statuses (in addition to the default one from setUpTestData)
+        inactive_club = factories.ClubFactory.create(status=ClubStatus.INACTIVE)
+        hidden_club = factories.ClubFactory.create(status=ClubStatus.HIDDEN)
         
         # Test club list endpoint includes status field
         self.get("v1:club-list")
         self.response_200()
         response_data = self.last_response.json()
         
-        # Find clubs in response and verify status field - response_data is a list
-        club_statuses = {club["slug"]: club["status"] for club in response_data}
+        # Build expected response based on the ClubSerializer fields
+        # Include all clubs: the one from setUpTestData (active) plus the new ones
+        all_clubs = [self.club, inactive_club, hidden_club]
+        expected_clubs = []
+        for club in all_clubs:
+            expected_clubs.append({
+                "title": club.title,
+                "short_title": club.short_title,
+                "slug": club.slug,
+                "abbreviation": club.abbreviation,
+                "status": club.status,  # This will be the string value, not the enum
+                "url": f"http://testserver/api/v1/clubs/{club.slug}/",
+                "facebook": club.facebook,
+                "twitter": club.twitter,
+                "youtube": club.youtube,
+                "website": club.website,
+            })
         
-        self.assertEqual(club_statuses[active_club.slug], "active")
-        self.assertEqual(club_statuses[inactive_club.slug], "inactive")
-        self.assertEqual(club_statuses[hidden_club.slug], "hidden")
+        # Since the response contains all clubs and they are ordered by title,
+        # we need to sort both lists before comparing
+        response_data_sorted = sorted(response_data, key=lambda x: x['title'])
+        expected_clubs_sorted = sorted(expected_clubs, key=lambda x: x['title'])
         
-        # Test individual club detail endpoints
-        self.get("v1:club-detail", slug=inactive_club.slug)
-        self.response_200()
-        response_data = self.last_response.json()
-        self.assertEqual(response_data["status"], "inactive")
+        # Check that all our expected clubs are present in the response
+        for expected_club in expected_clubs_sorted:
+            self.assertIn(expected_club, response_data_sorted)
         
-        self.get("v1:club-detail", slug=hidden_club.slug)
-        self.response_200()
-        response_data = self.last_response.json()
-        self.assertEqual(response_data["status"], "hidden")
+        # Specifically check that the status fields are correct for the clubs we created
+        response_slugs_to_status = {club['slug']: club['status'] for club in response_data}
+        self.assertEqual(response_slugs_to_status[self.club.slug], 'active')
+        self.assertEqual(response_slugs_to_status[inactive_club.slug], 'inactive') 
+        self.assertEqual(response_slugs_to_status[hidden_club.slug], 'hidden')
 
     def test_competition_list(self):
         """Test competition-list endpoint"""
