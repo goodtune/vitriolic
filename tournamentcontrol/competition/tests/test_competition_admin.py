@@ -1562,8 +1562,11 @@ class BackendTests(MessagesTestMixin, TestCase):
             self.assertFalse(match.live_stream)
             self.assertIsNone(match.external_identifier)
 
-    @mock.patch("googleapiclient.discovery.build")
-    def test_edit_match_youtube_refresh_error_handling(self, mock_build):
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_edit_match_youtube_refresh_error_handling(self, mock_youtube_property):
         """
         Test that RefreshError from expired OAuth2 tokens is properly handled.
 
@@ -1574,8 +1577,11 @@ class BackendTests(MessagesTestMixin, TestCase):
         Refs: https://github.com/goodtune/vitriolic/issues/147
         """
 
-        # Create a stage with live streaming enabled and proper credentials
+        # Create a stage similar to working tests but with YouTube credentials configured
         stage = factories.StageFactory.create(
+            title="Test Stage",
+            division__title="Test Division",
+            division__season__title="Test Season",
             division__season__live_stream=True,
             division__season__live_stream_client_id="test-client-id",
             division__season__live_stream_client_secret="test-client-secret",
@@ -1589,10 +1595,15 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         ground = factories.GroundFactory.create(venue__season=stage.division.season)
 
-        # Create a match with an existing external identifier (simulating a previously created stream)
         match = factories.MatchFactory.create(
             stage=stage,
             play_at=ground,
+            home_team__title="Home Team",
+            home_team__division=stage.division,
+            away_team__title="Away Team",
+            away_team__division=stage.division,
+            date=date(2025, 5, 1),
+            include_in_ladder=True,
             live_stream=True,
             external_identifier="existing-video-id",
         )
@@ -1606,7 +1617,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         mock_youtube_service.liveBroadcasts.return_value.delete.return_value = (
             mock_delete
         )
-        mock_build.return_value = mock_youtube_service
+        mock_youtube_property.return_value = mock_youtube_service
 
         edit_match_url = match.url_names["edit"]
 
@@ -1619,14 +1630,16 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "round": match.round or 1,
                 "date": match.date.strftime("%Y-%m-%d"),
                 "time": match.time.strftime("%H:%M"),
-                "play_at": ground.pk,
+                "play_at": match.play_at.pk,
                 "include_in_ladder": str(int(match.include_in_ladder)),
                 "live_stream": "0",  # Turn OFF live streaming to trigger delete
                 "thumbnail_url": "",
             }
 
             # This should handle the RefreshError gracefully and redirect
-            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            response = self.post(
+                edit_match_url.url_name, *edit_match_url.args, data=data
+            )
             self.response_302()  # Should redirect successfully
 
             # Verify that an error message was shown to the user
