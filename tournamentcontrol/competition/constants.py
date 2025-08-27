@@ -23,3 +23,9 @@ class LiveStreamPrivacy(models.TextChoices):
     PUBLIC = "public", _("Public")
     PRIVATE = "private", _("Private")
     UNLISTED = "unlisted", _("Unlisted")
+
+
+class ClubStatus(models.TextChoices):
+    ACTIVE = "active", _("Active")
+    INACTIVE = "inactive", _("Inactive")
+    HIDDEN = "hidden", _("Hidden")

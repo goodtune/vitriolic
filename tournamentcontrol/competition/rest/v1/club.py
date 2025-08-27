@@ -12,6 +12,7 @@ class ClubSerializer(serializers.HyperlinkedModelSerializer):
             "short_title",
             "slug",
             "abbreviation",
+            "status",
             "url",
             "facebook",
             "twitter",

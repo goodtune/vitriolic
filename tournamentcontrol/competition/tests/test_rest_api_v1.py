@@ -61,6 +61,38 @@ class APITests(TestCase):
         self.get("v1:club-detail", slug=self.club.slug)
         self.response_200()
 
+    def test_club_status_field_in_api(self):
+        """Test that club status field is exposed in the API"""
+        self.get("v1:club-detail", slug=self.club.slug)
+        self.response_200()
+        
+        response_data = self.last_response.json()
+        self.assertEqual(response_data["status"], "active")
+        
+    def test_club_status_field_different_values(self):
+        """Test that different club status values are properly serialized"""
+        from tournamentcontrol.competition.constants import ClubStatus
+        
+        # Test inactive status
+        inactive_club = factories.ClubFactory.create()
+        inactive_club.status = ClubStatus.INACTIVE
+        inactive_club.save()
+        
+        self.get("v1:club-detail", slug=inactive_club.slug)
+        self.response_200()
+        response_data = self.last_response.json()
+        self.assertEqual(response_data["status"], "inactive")
+        
+        # Test hidden status
+        hidden_club = factories.ClubFactory.create()
+        hidden_club.status = ClubStatus.HIDDEN
+        hidden_club.save()
+        
+        self.get("v1:club-detail", slug=hidden_club.slug)
+        self.response_200()
+        response_data = self.last_response.json()
+        self.assertEqual(response_data["status"], "hidden")
+
     def test_competition_list(self):
         """Test competition-list endpoint"""
         self.get("v1:competition-list")
@@ -124,6 +156,7 @@ class APITests(TestCase):
                             "facebook": self.club.facebook,
                             "short_title": self.club.short_title,
                             "slug": self.club.slug,
+                            "status": "active",
                             "title": self.club.title,
                             "twitter": self.club.twitter,
                             "url": f"http://testserver/api/v1/clubs/{self.club.slug}/",
@@ -140,6 +173,7 @@ class APITests(TestCase):
                             "facebook": self.team2.club.facebook,
                             "short_title": self.team2.club.short_title,
                             "slug": self.team2.club.slug,
+                            "status": "active",
                             "title": self.team2.club.title,
                             "twitter": self.team2.club.twitter,
                             "url": f"http://testserver/api/v1/clubs/{self.team2.club.slug}/",
@@ -313,6 +347,7 @@ class APITests(TestCase):
                         "facebook": match1.home_team.club.facebook,
                         "short_title": match1.home_team.club.short_title,
                         "slug": match1.home_team.club.slug,
+                        "status": "active",
                         "title": match1.home_team.club.title,
                         "twitter": match1.home_team.club.twitter,
                         "url": f"http://testserver/api/v1/clubs/{match1.home_team.club.slug}/",
@@ -329,6 +364,7 @@ class APITests(TestCase):
                         "facebook": match1.away_team.club.facebook,
                         "short_title": match1.away_team.club.short_title,
                         "slug": match1.away_team.club.slug,
+                        "status": "active",
                         "title": match1.away_team.club.title,
                         "twitter": match1.away_team.club.twitter,
                         "url": f"http://testserver/api/v1/clubs/{match1.away_team.club.slug}/",
@@ -767,6 +803,7 @@ class APITests(TestCase):
                             "facebook": t.club.facebook,
                             "short_title": t.club.short_title,
                             "slug": t.club.slug,
+                            "status": "active",
                             "title": t.club.title,
                             "twitter": t.club.twitter,
                             "url": f"http://testserver/api/v1/clubs/{t.club.slug}/",
@@ -880,6 +917,7 @@ class APITests(TestCase):
                             "facebook": t.club.facebook,
                             "short_title": t.club.short_title,
                             "slug": t.club.slug,
+                            "status": "active",
                             "title": t.club.title,
                             "twitter": t.club.twitter,
                             "url": f"http://testserver/api/v1/clubs/{t.club.slug}/",
