@@ -2509,6 +2509,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 "youtube",
                 "primary",
                 "primary_position",
+                "status",
                 "slug",
                 "slug_locked",
             ),

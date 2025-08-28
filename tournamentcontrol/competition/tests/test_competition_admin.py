@@ -835,6 +835,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             "website": "",
             "twitter": "",
             "primary": "",
+            "status": "active",
             "slug": "bare-back-riders",
             "slug_locked": "0",
         }

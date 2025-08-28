@@ -1,9 +1,10 @@
 from django.test.utils import override_settings
 from test_plus import TestCase
 
+from tournamentcontrol.competition.constants import ClubStatus
 from tournamentcontrol.competition.draw import schemas
 from tournamentcontrol.competition.draw.builders import build
-from tournamentcontrol.competition.models import LadderSummary
+from tournamentcontrol.competition.models import Club, LadderSummary
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin_format
 
@@ -60,6 +61,37 @@ class APITests(TestCase):
         """Test club-detail endpoint"""
         self.get("v1:club-detail", slug=self.club.slug)
         self.response_200()
+
+        response_data = self.last_response.json()
+        self.assertEqual(response_data["status"], "active")
+
+    def test_clubs_api_with_different_statuses(self):
+        """Test that club-list endpoint includes status field for clubs with different statuses"""
+        inactive_club = factories.ClubFactory.create(status=ClubStatus.INACTIVE)
+        hidden_club = factories.ClubFactory.create(status=ClubStatus.HIDDEN)
+
+        self.get("v1:club-list")
+        self.response_200()
+
+        # Build expected payload for all clubs ordered by title
+        all_clubs = Club.objects.all().order_by("title")
+        expected_payload = [
+            {
+                "title": club.title,
+                "short_title": club.short_title,
+                "slug": club.slug,
+                "abbreviation": club.abbreviation,
+                "status": club.status,
+                "url": f"http://testserver/api/v1/clubs/{club.slug}/",
+                "facebook": club.facebook,
+                "twitter": club.twitter,
+                "youtube": club.youtube,
+                "website": club.website,
+            }
+            for club in all_clubs
+        ]
+
+        self.assertJSONEqual(self.last_response.content, expected_payload)
 
     def test_competition_list(self):
         """Test competition-list endpoint"""
@@ -124,6 +156,7 @@ class APITests(TestCase):
                             "facebook": self.club.facebook,
                             "short_title": self.club.short_title,
                             "slug": self.club.slug,
+                            "status": "active",
                             "title": self.club.title,
                             "twitter": self.club.twitter,
                             "url": f"http://testserver/api/v1/clubs/{self.club.slug}/",
@@ -140,6 +173,7 @@ class APITests(TestCase):
                             "facebook": self.team2.club.facebook,
                             "short_title": self.team2.club.short_title,
                             "slug": self.team2.club.slug,
+                            "status": "active",
                             "title": self.team2.club.title,
                             "twitter": self.team2.club.twitter,
                             "url": f"http://testserver/api/v1/clubs/{self.team2.club.slug}/",
@@ -313,6 +347,7 @@ class APITests(TestCase):
                         "facebook": match1.home_team.club.facebook,
                         "short_title": match1.home_team.club.short_title,
                         "slug": match1.home_team.club.slug,
+                        "status": "active",
                         "title": match1.home_team.club.title,
                         "twitter": match1.home_team.club.twitter,
                         "url": f"http://testserver/api/v1/clubs/{match1.home_team.club.slug}/",
@@ -329,6 +364,7 @@ class APITests(TestCase):
                         "facebook": match1.away_team.club.facebook,
                         "short_title": match1.away_team.club.short_title,
                         "slug": match1.away_team.club.slug,
+                        "status": "active",
                         "title": match1.away_team.club.title,
                         "twitter": match1.away_team.club.twitter,
                         "url": f"http://testserver/api/v1/clubs/{match1.away_team.club.slug}/",
@@ -767,6 +803,7 @@ class APITests(TestCase):
                             "facebook": t.club.facebook,
                             "short_title": t.club.short_title,
                             "slug": t.club.slug,
+                            "status": "active",
                             "title": t.club.title,
                             "twitter": t.club.twitter,
                             "url": f"http://testserver/api/v1/clubs/{t.club.slug}/",
@@ -880,6 +917,7 @@ class APITests(TestCase):
                             "facebook": t.club.facebook,
                             "short_title": t.club.short_title,
                             "slug": t.club.slug,
+                            "status": "active",
                             "title": t.club.title,
                             "twitter": t.club.twitter,
                             "url": f"http://testserver/api/v1/clubs/{t.club.slug}/",
