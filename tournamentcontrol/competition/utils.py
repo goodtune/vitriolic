@@ -19,6 +19,8 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from touchtechnology.common.prince import prince
+from tournamentcontrol.competition.draw.schemas import MatchDescriptor, RoundDescriptor
+
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +100,9 @@ def team_title_case_clause(team):
                 ),
                 When(
                     ~Q(**{f"{team}_undecided__formula": ""}),
-                    then=StageGroupPosition(Cast(f"{team}_undecided__formula", output_field=CharField())),
+                    then=StageGroupPosition(
+                        Cast(f"{team}_undecided__formula", output_field=CharField())
+                    ),
                 ),
                 default=Value(None, output_field=CharField()),
             ),
@@ -322,11 +326,39 @@ def round_robin_format(
     teams: Union[int, Iterable], rounds: Optional[int] = None
 ) -> str:
     """
-    Generate a formatted string for a round-robin tournament.
+    Generate a formatted DrawGenerator string for a round-robin tournament.
 
-    :param teams: either an integer (number of teams) or an iterable of teams
-    :param rounds: number of rounds to generate (optional)
-    :return: formatted string showing the tournament schedule
+    This creates a complete round-robin schedule where every team plays every
+    other team. The output uses DrawGenerator syntax compatible with the
+    tournament system.
+
+    Args:
+        teams: either an integer (number of teams) or an iterable of teams
+        rounds: number of rounds to generate (optional, defaults to complete
+                round-robin)
+
+    Returns:
+        formatted string showing the tournament schedule in DrawGenerator format
+
+    Examples:
+        4-team round robin:
+        >>> round_robin_format(4)
+        ('ROUND\n1: 1 vs 4\n2: 2 vs 3\nROUND\n3: 1 vs 3\n4: 4 vs 2\n'
+         'ROUND\n5: 1 vs 2\n6: 3 vs 4')
+
+        Custom team names:
+        >>> round_robin_format(['Red', 'Blue', 'Green'])
+        ('ROUND\n1: Red vs 0\n2: Blue vs Green\nROUND\n3: Red vs Green\n'
+         '4: 0 vs Blue\nROUND\n5: Red vs Blue\n6: Green vs 0')
+
+    Note:
+        - Teams are referenced by their 1-based position (1, 2, 3...)
+        - Uneven number of teams will have a "bye" (represented as 0)
+        - Each ROUND section contains matches played together
+          (ie. before the next round)
+        - Total matches for n teams: n*(n-1)/2
+        - For 4 teams: 6 matches across 3 rounds
+        - For 6 teams: 15 matches across 5 rounds
     """
     # If teams is an integer, convert it to a range starting from 1
     if isinstance(teams, int):
@@ -386,11 +418,6 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
                            match will be scheduled.
     :return: list
     """
-    from tournamentcontrol.competition.draw import (
-        MatchDescriptor,
-        RoundDescriptor,
-    )
-
     # Start building our final series with the initial round. Each match is
     # ordered so that the pool from which the highest seeds were originally
     # placed (pool 1) are farthest away from the second highest seed (pool 2).
@@ -398,8 +425,8 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
 
     if number_of_pools == 1:
         initial = RoundDescriptor(2, final_series_round_label(2))
-        initial.add(MatchDescriptor(1, "P1", "P4"))
-        initial.add(MatchDescriptor(2, "P2", "P3"))
+        initial.add(MatchDescriptor(1, "P1", "P4", f"{initial.round_label} 1"))
+        initial.add(MatchDescriptor(2, "P2", "P3", f"{initial.round_label} 2"))
 
     else:
         initial = RoundDescriptor(
@@ -411,6 +438,7 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
                 pool + 1,
                 "G%dP1" % (pool + 1),
                 "G%dP2" % (number_of_pools - pool),
+                f"{initial.round_label} {pool + 1}",
             )
             initial.add(match)
 
@@ -436,6 +464,7 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
                 series[-1].matches[-1].match_id + i + 1,
                 "W%s" % (series[-1].matches[i].match_id),
                 "W%s" % (series[-1].matches[-1 - i].match_id),
+                f"{this_round.round_label} {i + 1}",
             )
             this_round.add(match)
 

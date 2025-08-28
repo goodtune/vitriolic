@@ -43,7 +43,7 @@
 					{% for person in scorers %}
 						<tr>
 							<td>{{ person.first_name }} {{ person.last_name }}</td>
-							<td>{{ person.club.title }}</td>
+							<td>{{ person.club__title }}</td>
 							<td>{{ person.played|default:0 }}</td>
 							<td>{{ person.points|default:0 }}</td>
 						</tr>
@@ -72,7 +72,7 @@
 					{% for person in mvp %}
 						<tr>
 							<td>{{ person.first_name }} {{ person.last_name }}</td>
-							<td>{{ person.club.title }}</td>
+							<td>{{ person.club__title }}</td>
 							<td>{{ person.played|default:0 }}</td>
 							<td>{{ person.mvp|default:0 }}</td>
 						</tr>

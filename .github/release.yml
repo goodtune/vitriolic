@@ -9,6 +9,7 @@ changelog:
           - dependencies
           - maintenance
           - performance
+          - removed
     - title: ":rocket: Performance"
       labels:
         - performance
@@ -18,6 +19,9 @@ changelog:
     - title: ":broom: Maintenance"
       labels:
         - maintenance
+    - title: ":scissors: Removals"
+      labels:
+        - removed
     - title: ":wrench: Dependencies"
       labels:
         - dependencies

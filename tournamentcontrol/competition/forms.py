@@ -11,6 +11,7 @@ from django.contrib import messages
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.forms import array as PGA
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Q
 from django.forms import BooleanField as BooleanChoiceField
 from django.forms.formsets import (
@@ -49,7 +50,10 @@ from touchtechnology.common.forms.widgets import (
 )
 from touchtechnology.content.forms import PlaceholderConfigurationBase
 from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
-from tournamentcontrol.competition.draw import seeded_tournament
+from tournamentcontrol.competition.draw.algorithms import seeded_tournament
+from tournamentcontrol.competition.draw.builders import build
+from tournamentcontrol.competition.draw.generators import DrawGenerator
+from tournamentcontrol.competition.draw.schemas import DivisionStructure
 from tournamentcontrol.competition.fields import URLField
 from tournamentcontrol.competition.models import (
     ByeTeam,
@@ -314,13 +318,6 @@ class MultiConfigurationForm(PlaceholderConfigurationBase):
             label=_("Competition"),
             widget=forms.CheckboxSelectMultiple,
         )
-
-
-class RankingConfigurationForm(PlaceholderConfigurationBase):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["start"] = forms.CharField(required=False)
-        self.fields["decay"] = forms.CharField(required=False)
 
 
 class PersonEditForm(BootstrapFormControlMixin, ModelForm):
@@ -816,8 +813,6 @@ class TeamForm(SuperUserSlugMixin, ModelForm):
 
 class DrawFormatForm(BootstrapFormControlMixin, ModelForm):
     def clean_text(self):
-        from tournamentcontrol.competition.draw import DrawGenerator
-
         text = self.cleaned_data.get("text").strip()
         try:
             DrawGenerator.validate(text)
@@ -950,9 +945,9 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
 
         # restrict the list of referees to those registered this season
         if "referees" in self.fields:
-            self.fields["referees"].queryset = (
-                self.instance.stage.division.season.referees.all()
-            )
+            self.fields[
+                "referees"
+            ].queryset = self.instance.stage.division.season.referees.all()
 
         # remove `stage_group` field if the `division` has no children
         if not self.instance.stage.pools.count():
@@ -1732,7 +1727,10 @@ class DrawGenerationForm(BootstrapFormControlMixin, forms.Form):
     def generator(self):
         format = self.cleaned_data.get("format")
         start_date = self.cleaned_data.get("start_date")
-        return format.generator(self.instance, start_date)
+
+        generator = DrawGenerator(self.instance, start_date)
+        generator.parse(format.text)
+        return generator
 
     def clean_start_date(self):
         start_date = self.cleaned_data.get("start_date")
@@ -1837,9 +1835,9 @@ class TeamAssociationForm(UserMixin, ModelForm):
     def __init__(self, team, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["person"].queryset = team.club.members.all()
-        self.fields["roles"].queryset = (
-            team.division.season.competition.team_roles.all()
-        )
+        self.fields[
+            "roles"
+        ].queryset = team.division.season.competition.team_roles.all()
 
     class Meta:
         model = TeamAssociation
@@ -2132,3 +2130,176 @@ class StreamControlForm(forms.Form):
                 messages.error(request, f"{match}: {exc.reason}")
             else:
                 messages.success(request, f"{match}: broadcast is {broadcast_status!r}")
+
+
+class DivisionStructureJSONForm(forms.Form):
+    """Form for inputting DivisionStructure JSON."""
+
+    json_data = forms.CharField(
+        required=True,
+        widget=forms.Textarea(
+            attrs={
+                "rows": 5,
+                "class": "form-control",
+                "placeholder": "Enter DivisionStructure JSON here...",
+                "style": "font-family: monospace; resize: vertical;",
+            }
+        ),
+        label="",  # No label
+        help_text=mark_safe(
+            "Paste the <code>DivisionStructure</code> JSON to build the division."
+        ),
+    )
+
+    def __init__(self, season, *args, **kwargs):
+        # Store required season
+        self.season = season
+        # Extract instance (not used but expected by ModelForm duck-typing)
+        self.instance = kwargs.pop("instance", None)
+        super().__init__(*args, **kwargs)
+
+    def has_changed(self):
+        """Override to ensure forms with empty data are still validated."""
+        # Check if form has been submitted (has data)
+        if not self.data:
+            return False
+
+        # If form data exists, always validate it (even if empty)
+        # This ensures required field validation works
+        return True
+
+    def clean_json_data(self):
+        """Validate that the JSON is valid and parses to a DivisionStructure."""
+        json_data = self.cleaned_data["json_data"]
+
+        if not json_data.strip():
+            raise forms.ValidationError("JSON data is required.")
+
+        try:
+            # Parse JSON
+            parsed_json = json.loads(json_data)
+        except json.JSONDecodeError as e:
+            raise forms.ValidationError(f"Invalid JSON: {e}")
+
+        try:
+            # Validate against DivisionStructure schema
+
+            structure = DivisionStructure(**parsed_json)
+
+            # Store the validated structure for later use
+            self.cleaned_data["_division_structure"] = structure
+        except ValidationError as e:
+            raise forms.ValidationError(f"Invalid DivisionStructure: {e}")
+
+        # Check if a division with this name already exists in the season
+        if self.season.divisions.filter(title=structure.title).exists():
+            raise forms.ValidationError(
+                "A division of that name already exists in this season."
+            )
+
+        return json_data
+
+    def get_division_structure(self):
+        """Get the validated DivisionStructure instance."""
+        return self.cleaned_data.get("_division_structure")
+
+    def save(self, commit=True):
+        """Build the division using the validated DivisionStructure."""
+        if not self.is_valid():
+            raise ValueError("Form is not valid")
+
+        structure = self.get_division_structure()
+        if not structure:
+            raise ValueError("No valid DivisionStructure found")
+
+        # Use transaction to ensure atomicity
+
+        if commit:
+            with transaction.atomic():
+                return build(self.season, structure)
+        else:
+            # Return a placeholder for non-commit saves
+            return Division(season=self.season, title="JSON Division (not saved)")
+
+
+class DivisionStructureJSONFormSet(forms.BaseFormSet):
+    """Custom formset that duck-types as a ModelFormSet."""
+
+    def __init__(self, *args, **kwargs):
+        # Extract queryset and instance (for duck-typing compatibility)
+        self.queryset = kwargs.pop("queryset", None)
+        self.instance = kwargs.pop("instance", None)
+        self._season = self.instance  # Season is passed as instance
+        super().__init__(*args, **kwargs)
+
+    def _construct_form(self, i, **kwargs):
+        # Pass season as first argument to each form
+        kwargs["season"] = self._season
+        return super()._construct_form(i, **kwargs)
+
+    @property
+    def empty_form(self):
+        """Return an empty form instance for use in templates."""
+        form_kwargs = self.get_form_kwargs(None)
+        form_kwargs["season"] = self._season
+        form_kwargs["prefix"] = self.add_prefix("__prefix__")
+        return self.form(**form_kwargs)
+
+    def clean(self):
+        """Validate cross-form constraints."""
+        super().clean()
+
+        # Collect division titles from valid forms
+        division_titles = []
+        valid_forms = []
+
+        for form in self.forms:
+            if (
+                form.is_valid()
+                and form.cleaned_data
+                and not form.cleaned_data.get("DELETE", False)
+            ):
+                structure = form.get_division_structure()
+                if structure:
+                    division_titles.append(structure.title)
+                    valid_forms.append((form, structure))
+
+        # Check for duplicates within the formset
+        seen_titles = set()
+        duplicate_titles = set()
+
+        for title in division_titles:
+            if title in seen_titles:
+                duplicate_titles.add(title)
+            else:
+                seen_titles.add(title)
+
+        # Add errors to forms with duplicate titles
+        if duplicate_titles:
+            for form, structure in valid_forms:
+                if structure.title in duplicate_titles:
+                    form.add_error("json_data", "Division names must be unique.")
+
+    def save(self, commit=True):
+        """Save all valid forms."""
+        divisions = []
+        for form in self.forms:
+            if (
+                form.is_valid()
+                and form.cleaned_data
+                and not form.cleaned_data.get("DELETE", False)
+            ):
+                division = form.save(commit=commit)
+                divisions.append(division)
+        return divisions
+
+
+# Create the formset with proper configuration
+DivisionStructureJSONFormSet = formset_factory(
+    DivisionStructureJSONForm,
+    formset=DivisionStructureJSONFormSet,
+    extra=1,
+    can_delete=False,
+    max_num=10,  # Reasonable limit for number of divisions
+    validate_max=True,
+)

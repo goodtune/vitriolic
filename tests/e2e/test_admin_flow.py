@@ -58,7 +58,6 @@ class TestAdminFlow:
             ]
         )
 
-    @pytest.mark.skip(reason="Test needs to be rewritten")
     def test_add_home_page(self, authenticated_page: Page, live_server):
         """
         Test creating the site's root home page via admin interface.
@@ -89,22 +88,32 @@ class TestAdminFlow:
         """
         page = authenticated_page
 
-        # Navigate to content/page admin
-        page.goto(f"{live_server.url}/admin/common/sitemapnode/add/")
+        # Navigate to content management (Sitemap)
+        page.goto(f"{live_server.url}/admin/content/")
+
+        new_page = page.get_by_role("link", name="New page")
+        expect(new_page).to_be_visible()
+        new_page.click()
 
         # Fill out the home page form
-        page.fill('input[name="title"]', "Home")
-        page.fill('input[name="slug"]', "home")
-
-        # Set as homepage by making parent empty and setting as root
-        page.locator('select[name="content_type"]').select_option(label="Page")
+        page.fill('input[name="parent-form-title"]', "Home")
+        page.fill('input[name="parent-form-slug"]', "home")
 
         # Save the page
-        page.click('input[name="_save"]')
+        page.click('button[type="submit"]')
 
         # Verify the home page was created
-        expect(page).to_have_url("**/admin/common/sitemapnode/")
-        expect(page.locator(".success")).to_be_visible()
+        expect(page).to_have_url(f"{live_server.url}/admin/content/")
+
+        # Verify that a home page link with URL "/" is visible
+        site_root = page.get_by_role("link", name="/")
+        expect(site_root).to_be_visible()
+        
+        # Navigate directly to the root URL to test if the home page is functional
+        page.goto(f"{live_server.url}/")
+        
+        # Verify that the home page was served (not a 404 or redirect)
+        expect(page).to_have_url(f"{live_server.url}/")
 
     @pytest.mark.skip(reason="Test needs to be rewritten")
     def test_add_news_application(self, authenticated_page: Page, live_server):
