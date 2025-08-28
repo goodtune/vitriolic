@@ -713,7 +713,7 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     def get_thumbnail_media_upload(self) -> MediaUpload | None:
         """
         Get a MediaMemoryUpload instance for this season's thumbnail.
-        
+
         Returns:
             MediaMemoryUpload or None if no thumbnail is set
         """
@@ -2309,38 +2309,37 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
 
     def __repr__(self):
         return f"<Match: {self.round!s}: {self!s}>"
-    
+
     def get_thumbnail_media_upload(self) -> MediaUpload | None:
         """
         Get a MediaMemoryUpload instance for this match's thumbnail.
         Falls back to season thumbnail and then URL-based thumbnails if no database image is available.
-        
+
         Returns:
             MediaMemoryUpload or None if no thumbnail is available
         """
         # Try match-specific thumbnail first
         if self.live_stream_thumbnail_image:
             return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
-        
+
         # Fall back to season thumbnail
         season = self.stage.division.season
         if season.live_stream_thumbnail_image:
             return MediaMemoryUpload(season.live_stream_thumbnail_image, resumable=True)
-        
+
         # Fall back to URL-based thumbnails if no database image available
         thumbnail_url = self.live_stream_thumbnail or season.live_stream_thumbnail
         if thumbnail_url:
             img = requests.get(thumbnail_url)
             img.raise_for_status()
-            
+
             return MediaInMemoryUpload(
                 img.content,
                 mimetype=img.headers["Content-Type"],
                 resumable=True,
             )
-        
+
         return None
-    
 
 
 class LadderBase(models.Model):

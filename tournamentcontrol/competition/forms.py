@@ -207,6 +207,7 @@ class ThumbnailImageWidget(forms.ClearableFileInput):
     """
     Widget for handling binary image data uploads.
     """
+
     def format_value(self, value):
         # Don't try to format binary data for display
         return None
@@ -215,35 +216,39 @@ class ThumbnailImageWidget(forms.ClearableFileInput):
 class ThumbnailImageField(forms.FileField):
     """
     Custom field for handling thumbnail image uploads that works directly with BinaryField.
-    
+
     This field accepts image file uploads and converts them to binary data.
     """
-    
+
     widget = ThumbnailImageWidget
-    
+
     def __init__(self, *args, **kwargs):
-        kwargs.setdefault('help_text', 'Upload an image file for use as a YouTube thumbnail')
-        kwargs.setdefault('required', False)
+        kwargs.setdefault(
+            "help_text", "Upload an image file for use as a YouTube thumbnail"
+        )
+        kwargs.setdefault("required", False)
         super().__init__(*args, **kwargs)
-        
+
     def to_python(self, data):
         # Handle file upload data
-        if hasattr(data, 'read'):
+        if hasattr(data, "read"):
             # Check if it's an image
-            if hasattr(data, 'content_type') and data.content_type:
-                if not data.content_type.startswith('image/'):
-                    raise forms.ValidationError('Please upload an image file.')
-            
+            if hasattr(data, "content_type") and data.content_type:
+                if not data.content_type.startswith("image/"):
+                    raise forms.ValidationError("Please upload an image file.")
+
             data.seek(0)  # Ensure we're at the start of the file
             binary_data = data.read()
-            
+
             # Validate file size (5MB limit for thumbnails)
             max_size = 5 * 1024 * 1024  # 5MB
             if len(binary_data) > max_size:
-                raise forms.ValidationError(f'Image file too large. Maximum size is {max_size // (1024 * 1024)}MB.')
-            
+                raise forms.ValidationError(
+                    f"Image file too large. Maximum size is {max_size // (1024 * 1024)}MB."
+                )
+
             return binary_data
-            
+
         return super().to_python(data)
 
 
@@ -1085,7 +1090,7 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
         videos = self.cleaned_data.get("videos")
         if any(videos):
             return videos
-    
+
     class Meta:
         model = Match
         fields = (
