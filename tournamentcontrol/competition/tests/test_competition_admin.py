@@ -1,6 +1,6 @@
 import unittest
 from datetime import date, datetime, time
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 from zoneinfo import ZoneInfo
 
 from dateutil.rrule import DAILY
@@ -2133,33 +2133,80 @@ class BackendTests(MessagesTestMixin, TestCase):
         """
         Test that RefreshError from expired OAuth2 tokens is properly handled.
 
-        This test verifies that the admin interface has the proper exception
-        handling code in place for RefreshError situations.
+        This test verifies that the admin interface has proper exception
+        handling for RefreshError situations by:
+        1. Checking that RefreshError is imported in the admin module
+        2. Verifying the exception handling code exists with the correct error message
+        3. Testing basic admin form functionality (without triggering YouTube API)
+
+        While this test doesn't reproduce the exact RefreshError scenario
+        (which requires complex YouTube API mocking), it verifies that the
+        fix for issue #147 is in place and the admin form works correctly.
 
         Refs: https://github.com/goodtune/vitriolic/issues/147
         """
-
-        # Verify that the RefreshError handling code is present in the admin
-        # by checking that the exception is imported and the handling logic exists
+        # Test 1: Verify that RefreshError handling code exists in admin
         from tournamentcontrol.competition.admin import (
             RefreshError as AdminRefreshError,
         )
 
+        # Confirm RefreshError is imported and available
         self.assertEqual(RefreshError, AdminRefreshError)
 
-        # Verify that the error message is defined in the admin code
-        admin_code_path = "/home/runner/work/vitriolic/vitriolic/tournamentcontrol/competition/admin.py"
-        with open(admin_code_path, "r") as f:
-            admin_content = f.read()
+        # Test 2: Verify the error message and handling logic exists
+        import inspect
 
-        self.assertIn("YouTube authorization has expired", admin_content)
-        self.assertIn("except RefreshError", admin_content)
+        from tournamentcontrol.competition import admin as admin_module
+
+        admin_source = inspect.getsource(admin_module)
+        self.assertIn("except RefreshError", admin_source)
         self.assertIn(
-            "Please re-authorize to continue using live streaming features",
-            admin_content,
+            "YouTube authorization has expired. Please re-authorize to continue using live streaming features.",
+            admin_source,
+        )
+        self.assertIn("return self.redirect", admin_source)
+
+        # Test 3: Basic form functionality test - ensuring the admin form works
+        # Create a stage similar to the working test (no credentials to avoid API calls)
+        stage = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_client_id=None,
+            division__season__live_stream_client_secret=None,
         )
 
-        # This confirms that the RefreshError handling is implemented correctly
-        # A full integration test would require complex mocking of YouTube API
-        # initialization that occurs during Django's form processing
-        self.assertTrue(True)  # Test passes if the error handling code is present
+        # Create a ground
+        ground = factories.GroundFactory.create(venue__season=stage.division.season)
+
+        # Create a match
+        match = factories.MatchFactory.create(
+            stage=stage,
+            play_at=ground,
+            live_stream=True,
+            external_identifier=None,
+        )
+
+        # Test editing the match - this should work without triggering YouTube API
+        edit_match_url = match.url_names["edit"]
+        with self.login(self.superuser):
+            # Turn off live streaming to ensure no YouTube API calls
+            data = {
+                "home_team": match.home_team.pk,
+                "away_team": match.away_team.pk,
+                "label": match.label or "Test Match",
+                "round": match.round or 1,
+                "date": match.date.strftime("%Y-%m-%d"),
+                "time": match.time.strftime("%H:%M"),
+                "play_at": ground.pk,
+                "include_in_ladder": "1" if match.include_in_ladder else "0",
+                "live_stream": "0",  # Turn OFF live streaming
+                "thumbnail_url": "",
+            }
+
+            # This should complete successfully
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            self.response_302()  # Should redirect successfully
+
+            # Verify the match was updated
+            match.refresh_from_db()
+            self.assertFalse(match.live_stream)
+            self.assertIsNone(match.external_identifier)
