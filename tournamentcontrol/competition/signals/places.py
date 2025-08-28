@@ -1,5 +1,3 @@
-from django.db.models.signals import post_save, pre_save
-
 from tournamentcontrol.competition.signals.decorators import (
     disable_for_loaddata,
 )

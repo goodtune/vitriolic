@@ -4,8 +4,8 @@ import logging
 import operator
 from datetime import timedelta
 from operator import or_
-from zoneinfo import ZoneInfo
 
+import markdown
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.contrib import messages
@@ -14,6 +14,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Case, Count, F, Q, Sum, When
 from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
+from django.template.loader import render_to_string
 from django.urls import include, path, re_path, reverse
 from django.urls.exceptions import NoReverseMatch
 from django.utils import timezone
@@ -38,23 +39,15 @@ from tournamentcontrol.competition.forms import (
     MultiConfigurationForm,
     ProgressMatchesFormSet,
     ProgressTeamsFormSet,
-    RankingConfigurationForm,
     StreamControlForm,
 )
 from tournamentcontrol.competition.models import (
     Competition,
+    Ground,
     Match,
     Person,
     SimpleScoreMatchStatistic,
     Stage,
-)
-from tournamentcontrol.competition.rank import (
-    DayView as RankDay,
-    DivisionView as RankDivision,
-    IndexView as RankIndex,
-    MonthView as RankMonth,
-    TeamView as RankTeam,
-    YearView as RankYear,
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
@@ -452,6 +445,11 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             path("results/", include(self.result_urls())),
             path("runsheet/", include(self.runsheet_urls())),
             path("stream/", include(self.stream_urls())),
+            re_path(
+                r"^stream-instructions\.(?P<format>md|html)$",
+                self.stream_instructions,
+                name="stream-instructions",
+            ),
             path("<slug:division>.ics", self.calendar, name="calendar"),
             path("<slug:division>/", self.division, name="division"),
             path("<slug:division>:<slug:stage>/", self.stage, name="stage"),
@@ -1237,6 +1235,45 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         templates = self.template_path("forfeit.html")
         return self.render(request, templates, context)
 
+    @competition_by_slug_m
+    @login_required_m
+    def stream_instructions(
+        self, request, competition, season, format, extra_context, **kwargs
+    ):
+        """
+        Render live streaming instructions template with season-specific data.
+        Supports both markdown (.md) and HTML (.html) output formats.
+        """
+        has_permission = permissions_required(request, Match, return_403=True)
+        if has_permission is not None:
+            return has_permission
+
+        if extra_context is None:
+            extra_context = {}
+
+        # Find all grounds with stream keys using ORM reverse relations
+        streaming_grounds = Ground.objects.filter(
+            venue__season=season, stream_key__isnull=False
+        ).exclude(stream_key="")
+
+        context = {
+            "competition": competition,
+            "season": season,
+            "streaming_grounds": streaming_grounds,
+        }
+        context.update(extra_context)
+
+        # Render the markdown template
+        templates = self.template_path("live_streaming_instructions.md")
+        content = render_to_string(templates, context, request=request)
+
+        if format == "html":
+            # Convert markdown to HTML
+            html_content = markdown.markdown(content, extensions=["tables"])
+            return HttpResponse(html_content, content_type="text/html; charset=utf-8")
+
+        return HttpResponse(content, content_type="text/markdown")
+
 
 class MultiCompetitionSite(CompetitionSite):
     kwargs_form_class = MultiConfigurationForm
@@ -1312,33 +1349,6 @@ class TournamentCalculatorSite(Application):
         return self.render(request, templates, context)
 
 
-class RankingSite(Application):
-    kwargs_form_class = RankingConfigurationForm
-
-    def __init__(self, name="ranking", app_name="ranking", **kwargs):
-        super().__init__(name=name, app_name=app_name, **kwargs)
-
-    def get_urls(self):
-        urlpatterns = [
-            path("", RankIndex.as_view(), name="index"),
-            path("<int:year>/", RankYear.as_view(), name="year"),
-            path("<int:year>/<str:month>/", RankMonth.as_view(), name="month"),
-            path("<int:year>/<str:month>/<int:day>/", RankDay.as_view(), name="day"),
-            path(
-                "<int:year>/<str:month>/<int:day>/<slug:slug>/",
-                RankDivision.as_view(),
-                name="rank",
-            ),
-            path(
-                "<int:year>/<str:month>/<int:day>/<slug:slug>/<slug:team>/",
-                RankTeam.as_view(),
-                name="team",
-            ),
-        ]
-        return urlpatterns
-
-
 competition = CompetitionSite()
 registration = RegistrationSite()
 calculator = TournamentCalculatorSite()
-ranking = RankingSite()

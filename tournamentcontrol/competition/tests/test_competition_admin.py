@@ -1,22 +1,28 @@
 import unittest
 from datetime import date, datetime, time
-from unittest import mock
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from dateutil.rrule import DAILY
 from django import VERSION
 from django.contrib import messages
 from django.template import Context, Template
+from django.test import RequestFactory
 from django.urls import reverse
 from google.auth.exceptions import RefreshError
 from test_plus import TestCase as BaseTestCase
 
-from touchtechnology.admin.mixins import AdminUrlLookup
 from touchtechnology.common.tests.factories import UserFactory
+from tournamentcontrol.competition.draw.schemas import (
+    DivisionStructure,
+    StageFixture,
+)
 from tournamentcontrol.competition.models import (
     Division,
     Ground,
     Match,
+    Person,
+    SimpleScoreMatchStatistic,
     Stage,
     StageGroup,
     Team,
@@ -552,6 +558,57 @@ class GoodViewTests(TestCase):
             ),
         )
 
+    def test_transfer_person(self):
+        """Test transferring a person from one club to another."""
+        original_club = factories.ClubFactory.create(title="Original Club")
+        target_club = factories.ClubFactory.create(title="Target Club")
+
+        # Create a person with team associations
+        person = factories.PersonFactory.create(
+            club=original_club, first_name="Transfer", last_name="Test"
+        )
+
+        # Create a team association to ensure it's preserved after transfer
+        division = factories.DivisionFactory.create()
+        division.season.competition.clubs.add(original_club, target_club)
+        team = factories.TeamFactory.create(club=original_club, division=division)
+        team_association = factories.TeamAssociationFactory.create(
+            team=team, person=person
+        )
+
+        # Verify initial state
+        self.assertEqual(person.club, original_club)
+        self.assertEqual(team_association.person, person)
+
+        # Test the transfer view requires login
+        self.assertLoginRequired(
+            "admin:fixja:club:person:transfer", original_club.pk, person.pk
+        )
+
+        with self.login(self.superuser):
+            # Test GET request shows the form
+            self.get("admin:fixja:club:person:transfer", original_club.pk, person.pk)
+            self.response_200()
+
+            # Test POST request transfers the person
+            data = {"club": target_club.pk}
+            self.post(
+                "admin:fixja:club:person:transfer",
+                original_club.pk,
+                person.pk,
+                data=data,
+            )
+            self.response_302()
+
+            # Verify the person was transferred
+            person.refresh_from_db()
+            self.assertEqual(person.club, target_club)
+
+            # Verify team association is preserved
+            team_association.refresh_from_db()
+            self.assertEqual(team_association.person, person)
+            self.assertEqual(team_association.team, team)
+
     def test_edit_clubassociation(self):
         association = factories.ClubAssociationFactory.create()
         self.assertLoginRequired(
@@ -692,6 +749,79 @@ class BackendTests(MessagesTestMixin, TestCase):
             )
             self.assertResponseNotContains("Mixed 4", html=False)
             self.assertResponseContains("4th Division Mixed", html=False)
+
+    def test_scorers_view_basic(self):
+        """Test that scorers view loads correctly with basic match and statistics data"""
+        # Create basic structure
+        stage = factories.StageFactory.create()
+        division = stage.division
+
+        # Create teams and players
+        team = factories.TeamFactory.create(division=division)
+        person = factories.PersonFactory.create(club=team.club)
+
+        # Create team association
+        team_association = factories.TeamAssociationFactory.create(
+            team=team, person=person
+        )
+
+        # Create a match
+        match = factories.MatchFactory.create(
+            stage=stage,
+            home_team=team,
+            away_team=factories.TeamFactory.create(division=division),
+        )
+
+        # Create match statistics for the player
+        SimpleScoreMatchStatistic.objects.create(
+            match=match, player=person, played=1, points=10, mvp=2
+        )
+
+        # Test the scorers view
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:competition:season:division:scorers",
+                division.season.competition.pk,
+                division.season.pk,
+                division.pk,
+            )
+            self.response_200()
+
+        # Get context data directly
+        scorers = self.get_context("scorers")
+        mvp = self.get_context("mvp")
+
+        # Expected data structure from Django ORM values()
+        expected_scorer = {
+            "uuid": person.uuid,
+            "first_name": person.first_name,
+            "last_name": person.last_name,
+            "club__title": team.club.title,
+            "played": 1,
+            "points": 10,
+            "mvp": 2,
+        }
+
+        # Assert direct equality with expected data
+        self.assertEqual([expected_scorer], list(scorers))
+        self.assertEqual([expected_scorer], list(mvp))
+
+        # Assert HTML structure contains the expected table rows
+        expected_scorer_row = (
+            f"<td>{person.first_name} {person.last_name}</td>"
+            f"<td>{team.club.title}</td>"
+            f"<td>1</td>"  # played
+            f"<td>10</td>"  # points
+        )
+        expected_mvp_row = (
+            f"<td>{person.first_name} {person.last_name}</td>"
+            f"<td>{team.club.title}</td>"
+            f"<td>1</td>"  # played
+            f"<td>2</td>"  # mvp
+        )
+
+        self.assertResponseContains(expected_scorer_row, html=True)
+        self.assertResponseContains(expected_mvp_row, html=True)
 
     def test_update_club(self):
         """
@@ -1509,6 +1639,223 @@ class BackendTests(MessagesTestMixin, TestCase):
             self.assertFalse(match.live_stream)
             self.assertIsNone(match.external_identifier)
 
+    def test_json_division_builder_post_invalid_json(self):
+        """Test that invalid JSON shows validation errors."""
+        season = factories.SeasonFactory.create()
+
+        invalid_json = '{"invalid": json syntax}'
+
+        data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "10",
+            "form-0-json_data": invalid_json,
+        }
+
+        self.post(
+            "admin:fixja:competition:season:json-builder",
+            season.competition.pk,
+            season.pk,
+            data=data,
+        )
+        self.response_200()  # Should stay on form with errors
+
+        # Check that no divisions were created
+        self.assertEqual(season.divisions.count(), 0)
+
+        # Check for validation error
+        formset = self.get_context("formset")
+        self.assertIsNotNone(formset)
+        self.assertFalse(formset.is_valid())
+
+    def test_json_division_builder_post_empty_json(self):
+        """Test that empty JSON shows validation errors instead of success."""
+        season = factories.SeasonFactory.create()
+
+        # Empty form submission
+        data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "10",
+            "form-0-json_data": "",  # Empty data
+        }
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:json-builder",
+                season.competition.pk,
+                season.pk,
+                data=data,
+            )
+            self.response_200()  # Should stay on form with errors
+
+        # Check that no divisions were created
+        self.assertEqual(season.divisions.count(), 0)
+
+        # Check for validation error
+        formset = self.get_context("formset")
+        self.assertIsNotNone(formset)
+        self.assertFalse(formset.is_valid())
+
+        # Check for specific required field error
+        form = formset.forms[0]
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors, {"json_data": ["This field is required."]})
+
+    def test_json_division_builder_post_valid_json(self):
+        """Test that valid JSON creates divisions successfully."""
+
+        season = factories.SeasonFactory.create()
+
+        # Create a valid DivisionStructure and convert to JSON
+        structure = DivisionStructure(
+            title="Test Division",
+            teams=["Team A", "Team B", "Team C", "Team D"],
+            draw_formats={
+                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
+            },
+            stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
+        )
+        valid_json = structure.model_dump_json()
+
+        data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "10",
+            "form-0-json_data": valid_json,
+        }
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:json-builder",
+                season.competition.pk,
+                season.pk,
+                data=data,
+            )
+            self.response_302()  # Should redirect after successful save
+
+        # Check that division was created
+        self.assertEqual(season.divisions.count(), 1)
+        division = season.divisions.first()
+        self.assertEqual(division.title, "Test Division")
+
+    def test_json_division_builder_duplicate_existing_division_name(self):
+        """Test that existing division names cause validation errors."""
+
+        season = factories.SeasonFactory.create()
+        # Create an existing division
+        existing_division = factories.DivisionFactory.create(
+            season=season, title="Existing Division"
+        )
+
+        # Try to create a division with the same name
+        structure = DivisionStructure(
+            title="Existing Division",  # Same name as existing division
+            teams=["Team A", "Team B", "Team C", "Team D"],
+            draw_formats={
+                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
+            },
+            stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
+        )
+        conflicting_json = structure.model_dump_json()
+
+        data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "10",
+            "form-0-json_data": conflicting_json,
+        }
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:json-builder",
+                season.competition.pk,
+                season.pk,
+                data=data,
+            )
+            self.response_200()  # Should stay on form with errors
+
+        # Check that no new divisions were created
+        self.assertEqual(season.divisions.count(), 1)  # Still just the existing one
+        self.assertEqual(season.divisions.first(), existing_division)
+
+        # Check for validation error
+        formset = self.get_context("formset")
+        self.assertIsNotNone(formset)
+        self.assertFalse(formset.is_valid())
+
+        # Check for specific duplicate name error
+        form = formset.forms[0]
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.errors,
+            {"json_data": ["A division of that name already exists in this season."]},
+        )
+
+    def test_json_division_builder_duplicate_names_within_forms(self):
+        """Test that duplicate division names within the same formset cause validation errors."""
+
+        season = factories.SeasonFactory.create()
+
+        # Create two divisions with the same name
+        structure1 = DivisionStructure(
+            title="Duplicate Name",
+            teams=["Team A", "Team B", "Team C", "Team D"],
+            draw_formats={
+                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
+            },
+            stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
+        )
+        structure2 = DivisionStructure(
+            title="Duplicate Name",  # Same name as first structure
+            teams=["Team E", "Team F", "Team G", "Team H"],
+            draw_formats={
+                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
+            },
+            stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
+        )
+
+        json1 = structure1.model_dump_json()
+        json2 = structure2.model_dump_json()
+
+        data = {
+            "form-TOTAL_FORMS": "2",
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "10",
+            "form-0-json_data": json1,
+            "form-1-json_data": json2,
+        }
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:json-builder",
+                season.competition.pk,
+                season.pk,
+                data=data,
+            )
+            self.response_200()  # Should stay on form with errors
+
+        # Check that no divisions were created
+        self.assertEqual(season.divisions.count(), 0)
+
+        # Check for validation error
+        formset = self.get_context("formset")
+        self.assertIsNotNone(formset)
+        self.assertFalse(formset.is_valid())
+
+        # Check that both forms have duplicate name errors
+        for i in [0, 1]:
+            form = formset.forms[i]
+            self.assertFalse(form.is_valid())
+            self.assertEqual(
+                form.errors, {"json_data": ["Division names must be unique."]}
+            )
+
     def test_edit_match_youtube_api_basic_guard_clause(self):
         """
         Test that the YouTube API guard clauses work correctly.
@@ -1562,6 +1909,226 @@ class BackendTests(MessagesTestMixin, TestCase):
             self.assertFalse(match.live_stream)
             self.assertIsNone(match.external_identifier)
 
+    def test_undo_draw_with_dependent_matches(self):
+        """Test that undo_draw handles matches with eval_related dependencies correctly."""
+        # Create a stage with two rounds as described in the issue
+        stage = factories.StageFactory.create()
+
+        # Round 1: Create match with teams assigned by factory
+        match1 = factories.MatchFactory.create(stage=stage, round=1, label="Match 1")
+
+        # Round 2: Create matches that depend on Round 1 results
+        # These matches will have eval_related fields pointing to match1
+        _match2 = factories.MatchFactory.create(
+            stage=stage,
+            round=2,
+            label="Winner vs Loser",
+            home_team=None,  # Don't create teams, rely on eval fields
+            away_team=None,
+            home_team_eval="W",  # Home team is winner of match1
+            home_team_eval_related=match1,
+            away_team_eval="L",  # Away team is loser of match1
+            away_team_eval_related=match1,
+        )
+
+        # Verify that the dependent match shows the correct team titles
+        expected_matches = [
+            (
+                match1.home_team.title,
+                match1.away_team.title,
+            ),  # match1 has teams assigned by factory
+            ("Winner Match 1", "Loser Match 1"),  # match2 references match1
+        ]
+        actual_matches = [
+            (m.home_team_title, m.away_team_title)
+            for m in stage.matches.order_by("round", "pk")._team_titles()
+        ]
+        self.assertCountEqual(actual_matches, expected_matches)
+
+        # Now test the undo_draw view - this should work without ProtectedError
+        undo_draw_url = stage.url_names["undo"]
+
+        self.post(undo_draw_url.url_name, *undo_draw_url.args)
+        self.response_302()  # Should redirect successfully without error
+
+        # Verify all matches from the stage were deleted
+        self.assertCountEqual(stage.matches.all(), [])
+
+    def test_undo_draw_with_complex_interleaved_dependencies(self):
+        """
+        Test that undo_draw handles complex interleaved match dependencies correctly.
+
+        This test creates a tournament bracket-like structure with multiple rounds
+        where matches depend on results from previous rounds in a complex way:
+        - Round 1: Two base matches
+        - Round 2: Two matches depending on Round 1 results (winners vs winners, losers vs losers)
+        - Round 3: Two matches depending on Round 2 results with cross-dependencies
+
+        This tests that the ordering of deletion doesn't matter and that all
+        dependent matches are properly handled regardless of their creation order
+        or interdependencies.
+        """
+        stage = factories.StageFactory.create()
+
+        # Round 1: Create two base matches
+        match1 = factories.MatchFactory.create(stage=stage, round=1, label="Match 1")
+        match2 = factories.MatchFactory.create(stage=stage, round=1, label="Match 2")
+
+        # Round 2: Create matches that depend on Round 1 results
+        # Set home_team=None, away_team=None to rely on eval fields
+        match3 = factories.MatchFactory.create(
+            stage=stage,
+            round=2,
+            label="Winners Semi",
+            home_team=None,
+            away_team=None,
+            home_team_eval="W",  # Winner of match1
+            home_team_eval_related=match1,
+            away_team_eval="W",  # Winner of match2
+            away_team_eval_related=match2,
+        )
+        match4 = factories.MatchFactory.create(
+            stage=stage,
+            round=2,
+            label="Losers Semi",
+            home_team=None,
+            away_team=None,
+            home_team_eval="L",  # Loser of match1
+            home_team_eval_related=match1,
+            away_team_eval="L",  # Loser of match2
+            away_team_eval_related=match2,
+        )
+
+        # Round 3: Create matches with cross-dependencies on Round 2
+        _match5 = factories.MatchFactory.create(
+            stage=stage,
+            round=3,
+            label="Final",
+            home_team=None,
+            away_team=None,
+            home_team_eval="W",  # Winner of match3
+            home_team_eval_related=match3,
+            away_team_eval="L",  # Loser of match4 (cross-dependency)
+            away_team_eval_related=match4,
+        )
+        _match6 = factories.MatchFactory.create(
+            stage=stage,
+            round=3,
+            label="3rd Place",
+            home_team=None,
+            away_team=None,
+            home_team_eval="L",  # Loser of match3
+            home_team_eval_related=match3,
+            away_team_eval="W",  # Winner of match4 (cross-dependency)
+            away_team_eval_related=match4,
+        )
+
+        # Verify the complex dependency structure is set up correctly
+        expected_teams = [
+            # match1 and match2 have actual teams (from factory)
+            (match1.home_team.title, match1.away_team.title),
+            (match2.home_team.title, match2.away_team.title),
+            # matches 3-6 have eval-based team titles
+            ("Winner Match 1", "Winner Match 2"),  # match3
+            ("Loser Match 1", "Loser Match 2"),  # match4
+            ("Winner Winners Semi", "Loser Losers Semi"),  # match5
+            ("Loser Winners Semi", "Winner Losers Semi"),  # match6
+        ]
+        actual_teams = [
+            (m.home_team_title, m.away_team_title)
+            for m in stage.matches.all()._team_titles().order_by("round", "pk")
+        ]
+        self.assertCountEqual(actual_teams, expected_teams)
+
+        # Now test the undo_draw view with this complex dependency structure
+        # This should work without ProtectedError despite the interleaved dependencies
+        undo_draw_url = stage.url_names["undo"]
+
+        self.post(undo_draw_url.url_name, *undo_draw_url.args)
+        self.response_302()  # Should redirect successfully without error
+
+        # Verify all matches from the stage were deleted despite complex dependencies
+        self.assertCountEqual(stage.matches.all(), [])
+
+    def test_division_export_json(self):
+        """Test that division JSON export works correctly."""
+        # Create a simple division with teams and a stage
+        division = factories.DivisionFactory.create(title="Test Division")
+
+        # Create some teams
+        team1 = factories.TeamFactory.create(division=division, title="Team A")
+        team2 = factories.TeamFactory.create(division=division, title="Team B")
+
+        # Create a stage with a simple match
+        stage = factories.StageFactory.create(division=division, title="Round Robin")
+        factories.MatchFactory.create(
+            stage=stage,
+            home_team=team1,
+            away_team=team2,
+            round=1,
+        )
+
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:competition:season:division:export-json",
+                division.season.competition.pk,
+                division.season.pk,
+                division.pk,
+            )
+        self.response_200()
+
+        # Check response content type and headers
+        self.assertResponseHeaders(
+            {
+                "Content-Type": "application/json",
+                "Content-Disposition": f'attachment; filename="{division.season.competition.slug}_{division.season.slug}_{division.slug}.json"',
+            }
+        )
+
+        structure = DivisionStructure.model_validate_json(
+            self.last_response.content.decode()
+        )
+
+        # Verify basic structure
+        self.assertEqual(structure.title, "Test Division")
+        self.assertEqual(structure.teams, ["Team A", "Team B"])
+        self.assertEqual([s.title for s in structure.stages], ["Round Robin"])
+
+    @patch("googleapiclient.discovery.build")
+    def test_bug_203_add_match_with_live_streaming_enabled(self, mock_discovery_build):
+        """
+        Test that creating a match through admin UI does not raise NoReverseMatch
+        when live streaming is enabled with YouTube credentials configured.
+
+        Refs: https://github.com/goodtune/vitriolic/issues/203
+        """
+        stage = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_project_id="test-project-123",
+            division__season__live_stream_client_id="test-client-id",
+            division__season__live_stream_client_secret="test-client-secret",
+        )
+        team1 = factories.TeamFactory.create(division=stage.division)
+        team2 = factories.TeamFactory.create(division=stage.division)
+        ground = factories.GroundFactory.create()
+
+        data = {
+            "home_team": team1.pk,
+            "away_team": team2.pk,
+            "label": "Test Match",
+            "round": 1,
+            "date": "2025-05-01",
+            "time": "14:00:00",
+            "play_at": ground.pk,
+            "include_in_ladder": "1",
+            "live_stream": "0",
+            "thumbnail_url": "",
+        }
+
+        add_match = Match(stage=stage).url_names["add"]
+        self.post(add_match.url_name, *add_match.args, data=data)
+        self.response_302()
+
     def test_edit_match_youtube_refresh_error_handling(self):
         """
         Test that RefreshError from expired OAuth2 tokens is properly handled.
@@ -1571,21 +2138,27 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         Refs: https://github.com/goodtune/vitriolic/issues/147
         """
-        
+
         # Verify that the RefreshError handling code is present in the admin
         # by checking that the exception is imported and the handling logic exists
-        from tournamentcontrol.competition.admin import RefreshError as AdminRefreshError
+        from tournamentcontrol.competition.admin import (
+            RefreshError as AdminRefreshError,
+        )
+
         self.assertEqual(RefreshError, AdminRefreshError)
-        
+
         # Verify that the error message is defined in the admin code
         admin_code_path = "/home/runner/work/vitriolic/vitriolic/tournamentcontrol/competition/admin.py"
-        with open(admin_code_path, 'r') as f:
+        with open(admin_code_path, "r") as f:
             admin_content = f.read()
-            
+
         self.assertIn("YouTube authorization has expired", admin_content)
         self.assertIn("except RefreshError", admin_content)
-        self.assertIn("Please re-authorize to continue using live streaming features", admin_content)
-        
+        self.assertIn(
+            "Please re-authorize to continue using live streaming features",
+            admin_content,
+        )
+
         # This confirms that the RefreshError handling is implemented correctly
         # A full integration test would require complex mocking of YouTube API
         # initialization that occurs during Django's form processing

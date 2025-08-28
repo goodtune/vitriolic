@@ -1,3 +1,5 @@
 /.coverage
 /htmlcov
 /news/*.png
+/staticfiles
+/test-results

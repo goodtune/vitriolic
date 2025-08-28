@@ -1,4 +1,5 @@
 import datetime
+from zoneinfo import ZoneInfo
 
 import factory
 import factory.fuzzy
@@ -29,13 +30,6 @@ class OrderedSitemapNodeFactory(SitemapNodeBaseFactory):
     """
 
     order = factory.Sequence(lambda n: (n + 1))
-
-
-class RankDivisionFactory(OrderedSitemapNodeFactory):
-    class Meta:
-        model = models.RankDivision
-
-    title = factory.Sequence(lambda n: "Division %d" % n)
 
 
 class ClubFactory(SitemapNodeBaseFactory):
@@ -73,7 +67,7 @@ class SeasonFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Season
 
-    title = factory.Sequence(lambda n: str(range(2015, 1900, -1)[n]))
+    title = factory.Sequence(lambda n: str(2015 - (n % 115)))
     timezone = factory.Faker("timezone")
 
     competition = factory.SubFactory(CompetitionFactory)
@@ -190,7 +184,7 @@ class MatchFactory(DjangoModelFactory):
     )
 
     datetime = factory.fuzzy.FuzzyDateTime(
-        datetime.datetime(2008, 1, 1, tzinfo=datetime.timezone.utc)
+        datetime.datetime(2008, 1, 1, tzinfo=ZoneInfo("UTC"))
     )
 
     date = factory.LazyAttribute(lambda o: o.datetime.date())
@@ -257,6 +251,28 @@ class SeasonRefereeFactory(DjangoModelFactory):
     season = factory.SubFactory(SeasonFactory)
     club = factory.SubFactory(ClubFactory)
     person = factory.SubFactory(PersonFactory)
+
+
+class LadderEntryFactory(DjangoModelFactory):
+    class Meta:
+        model = models.LadderEntry
+
+    match = factory.SubFactory(MatchFactory)
+    team = factory.SubFactory(TeamFactory)
+    opponent = factory.SubFactory(TeamFactory)
+    played = 1
+    win = 0
+    loss = 0
+    draw = 0
+    bye = 0
+    forfeit = 0
+    forfeit_against = 0
+    score_for = 0
+    score_against = 0
+    points = 0
+    margin = 0
+    diff = 0
+    bonus_points = 0
 
 
 class DrawFormatFactory(DjangoModelFactory):
