@@ -47,18 +47,18 @@ def set_youtube_thumbnail(match_pk):
     """
     Asynchronously use the Google YouTube Data API to set the thumbnail for
     the match specified.
+
+    This function uses the database-stored thumbnail images via the
+    MediaMemoryUpload class, with fallback logic handled by the model.
     """
     obj = Match.objects.get(pk=match_pk)
     season = obj.stage.division.season
 
-    img = requests.get(obj.live_stream_thumbnail or season.live_stream_thumbnail)
-    img.raise_for_status()
+    # Get thumbnail media upload (with built-in fallback logic)
+    media_body = obj.get_thumbnail_media_upload()
 
-    media_body = MediaInMemoryUpload(
-        img.content,
-        mimetype=img.headers["Content-Type"],
-        resumable=True,
-    )
+    if media_body is None:
+        raise ValueError(f"No thumbnail available for match {match_pk}")
 
     obj.stage.division.season.youtube.thumbnails().set(
         videoId=obj.external_identifier,
