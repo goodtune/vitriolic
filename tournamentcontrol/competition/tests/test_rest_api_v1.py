@@ -4,7 +4,7 @@ from test_plus import TestCase
 from tournamentcontrol.competition.constants import ClubStatus
 from tournamentcontrol.competition.draw import schemas
 from tournamentcontrol.competition.draw.builders import build
-from tournamentcontrol.competition.models import LadderSummary
+from tournamentcontrol.competition.models import Club, LadderSummary
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin_format
 
@@ -61,27 +61,22 @@ class APITests(TestCase):
         """Test club-detail endpoint"""
         self.get("v1:club-detail", slug=self.club.slug)
         self.response_200()
-        
+
         response_data = self.last_response.json()
         self.assertEqual(response_data["status"], "active")
 
     def test_clubs_api_with_different_statuses(self):
-        """Test Clubs API endpoint with clubs of different statuses"""
-        # Create clubs with different statuses and predictable titles
-        inactive_club = factories.ClubFactory.create(title="Inactive Club", status=ClubStatus.INACTIVE)
-        hidden_club = factories.ClubFactory.create(title="Hidden Club", status=ClubStatus.HIDDEN)
-        
-        # Test club list endpoint includes status field
+        """Test that club-list endpoint includes status field for clubs with different statuses"""
+        inactive_club = factories.ClubFactory.create(status=ClubStatus.INACTIVE)
+        hidden_club = factories.ClubFactory.create(status=ClubStatus.HIDDEN)
+
         self.get("v1:club-list")
         self.response_200()
-        
-        # Get all clubs from database to build expected response
-        from tournamentcontrol.competition.models import Club
-        all_clubs = list(Club.objects.all().order_by('title'))
-        
-        expected_payload = []
-        for club in all_clubs:
-            expected_payload.append({
+
+        # Build expected payload for all clubs ordered by title
+        all_clubs = Club.objects.all().order_by("title")
+        expected_payload = [
+            {
                 "title": club.title,
                 "short_title": club.short_title,
                 "slug": club.slug,
@@ -92,8 +87,10 @@ class APITests(TestCase):
                 "twitter": club.twitter,
                 "youtube": club.youtube,
                 "website": club.website,
-            })
-        
+            }
+            for club in all_clubs
+        ]
+
         self.assertJSONEqual(self.last_response.content, expected_payload)
 
     def test_competition_list(self):
