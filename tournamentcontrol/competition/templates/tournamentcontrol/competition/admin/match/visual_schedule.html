@@ -68,7 +68,6 @@
     <div class="main-content">
         <!-- Left sidebar with match hierarchy -->
         <div class="match-sidebar"
-             :class="{ 'drop-zone': dragTarget?.type === 'unschedule' }"
              @dragover.prevent="handleUnscheduleDragOver($event)"
              @dragleave="handleDragLeave($event)"
              @drop="handleUnscheduleDrop($event)">
@@ -95,7 +94,7 @@
                             x-show="!matches[{{ match.id }}]?.scheduled"
                             class="match-item unscheduled division-{{ match.stage.division.order }}"
                             draggable="true"
-                            @dragstart="startDrag(getMatch({{ match.id }}), $event)"
+                            @dragstart="startDrag(getMatch({{ match.id }}),event)"
                             @dragend="endDrag($event)"
                             :data-match-id="{{ match.id }}"
                         >
@@ -148,10 +147,7 @@
                             <template x-for="place in placesData" :key="'cell_' + rowIndex + '_' + place.id">
                                 <div
                                     class="grid-cell"
-                                    :class="{
-                                        'occupied': isOccupied(place.id, timeslot),
-                                        'drop-zone': dragTarget?.place == place.id && dragTarget?.time == timeslot && dragTarget?.type === 'schedule'
-                                    }"
+                                    :class="{ 'occupied': isOccupied(place.id, timeslot) }"
                                     @dragover.prevent="handleDragOver($event, place.id, timeslot)"
                                     @dragleave="handleDragLeave($event)"
                                     @drop="handleDrop($event, place.id, timeslot)"
@@ -162,7 +158,7 @@
                                         <div
                                             :class="'match-item scheduled division-' + match.division_order"
                                             draggable="true"
-                                            @dragstart="startDrag(match, $event)"
+                                            @dragstart="startDrag(match,event)"
                                             @dragend="endDrag($event)"
                                             :data-match-id="match.id"
                                         >
@@ -191,6 +187,15 @@ function visualSchedule() {
         draggedMatch: null,
         dragTarget: null,
         hasChanges: false,
+
+        // Performance optimization state
+        dragState: {
+            isThrottled: false,
+            lastCellId: null,
+            precomputedTargets: new Map(),
+            rafId: null,
+            currentHighlight: null
+        },
 
         init() {
             // Initialize collapsed sections - default to collapsed
@@ -261,7 +266,7 @@ function visualSchedule() {
             if (match.label) {
                 return match.label;
             } else if (!match.is_final) {
-                return `Round ${match.round}`;
+                return `Round{match.round}`;
             }
             return '';
         },
@@ -274,26 +279,152 @@ function visualSchedule() {
             this.draggedMatch = match;
             event.dataTransfer.setData('text/plain', match.id);
             event.target.classList.add('dragging');
+
+            // Precompute all valid drop targets
+            this.precomputeDropTargets();
+        },
+
+        precomputeDropTargets() {
+            this.dragState.precomputedTargets.clear();
+
+            // Get all grid cells and their positions
+            const gridCells = document.querySelectorAll('.grid-cell');
+            gridCells.forEach(cell => {
+                const placeId = cell.dataset.place;
+                const time = cell.dataset.time;
+                const rect = cell.getBoundingClientRect();
+                const cellId = `${placeId}_${time}`;
+
+                this.dragState.precomputedTargets.set(cellId, {
+                    placeId,
+                    time,
+                    rect,
+                    element: cell,
+                    isOccupied: this.isOccupied(placeId, time)
+                });
+            });
+        },
+
+        getCellIdFromPoint(x, y) {
+            for (const [cellId, target] of this.dragState.precomputedTargets) {
+                const { rect } = target;
+                if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                    return cellId;
+                }
+            }
+            return null;
         },
 
         endDrag(event) {
             event.target.classList.remove('dragging');
             this.draggedMatch = null;
             this.dragTarget = null;
+
+            // Clean up performance state
+            this.dragState.lastCellId = null;
+            this.dragState.precomputedTargets.clear();
+            if (this.dragState.rafId) {
+                cancelAnimationFrame(this.dragState.rafId);
+                this.dragState.rafId = null;
+            }
+            if (this.dragState.currentHighlight) {
+                this.dragState.currentHighlight.classList.remove('drop-zone');
+                this.dragState.currentHighlight = null;
+            }
+            this.dragState.isThrottled = false;
         },
 
         handleDragOver(event, placeId, time) {
             event.preventDefault();
-            this.dragTarget = { place: placeId, time: time, type: 'schedule' };
+
+            // Early bail if already throttled
+            if (this.dragState.isThrottled) {
+                return;
+            }
+
+            // Create cell ID for comparison
+            const cellId = `${placeId}_${time}`;
+
+            // Early bail if we haven't moved to a new cell
+            if (this.dragState.lastCellId === cellId) {
+                return;
+            }
+
+            // Throttle using requestAnimationFrame
+            this.dragState.isThrottled = true;
+            this.dragState.rafId = requestAnimationFrame(() => {
+                // Only update if we're still over the same cell
+                const currentCellId = this.getCellIdFromPoint(event.clientX, event.clientY);
+                if (currentCellId === cellId) {
+                    this.dragState.lastCellId = cellId;
+
+                    // Use direct DOM manipulation instead of Alpine reactivity for performance
+                    this.updateDragHighlight(placeId, time, 'schedule');
+                }
+                this.dragState.isThrottled = false;
+            });
+        },
+
+        updateDragHighlight(placeId, time, type) {
+            // Remove previous highlight
+            if (this.dragState.currentHighlight) {
+                this.dragState.currentHighlight.classList.remove('drop-zone');
+            }
+
+            // Add new highlight directly to DOM
+            if (type === 'schedule') {
+                const cell = document.querySelector(`[data-place="${placeId}"][data-time="${time}"]`);
+                if (cell) {
+                    cell.classList.add('drop-zone');
+                    this.dragState.currentHighlight = cell;
+                }
+
+                // Update dragTarget only when absolutely necessary for drop handling
+                if (!this.dragTarget || this.dragTarget.place !== placeId || this.dragTarget.time !== time) {
+                    this.dragTarget = { place: placeId, time: time, type: 'schedule' };
+                }
+            } else if (type === 'unschedule') {
+                const sidebar = document.querySelector('.match-sidebar');
+                if (sidebar) {
+                    sidebar.classList.add('drop-zone');
+                    this.dragState.currentHighlight = sidebar;
+                }
+
+                // Update dragTarget only when necessary
+                if (!this.dragTarget || this.dragTarget.type !== 'unschedule') {
+                    this.dragTarget = { type: 'unschedule' };
+                }
+            }
         },
 
         handleUnscheduleDragOver(event) {
             event.preventDefault();
-            this.dragTarget = { type: 'unschedule' };
+
+            // Early bail if already throttled
+            if (this.dragState.isThrottled) {
+                return;
+            }
+
+            // Early bail if already targeting unschedule
+            if (this.dragTarget?.type === 'unschedule') {
+                return;
+            }
+
+            // Throttle using requestAnimationFrame
+            this.dragState.isThrottled = true;
+            this.dragState.rafId = requestAnimationFrame(() => {
+                this.updateDragHighlight(null, null, 'unschedule');
+                this.dragState.isThrottled = false;
+            });
         },
 
         handleDragLeave(event) {
             if (!event.currentTarget.contains(event.relatedTarget)) {
+                // Clean up highlights
+                if (this.dragState.currentHighlight) {
+                    this.dragState.currentHighlight.classList.remove('drop-zone');
+                    this.dragState.currentHighlight = null;
+                }
                 this.dragTarget = null;
             }
         },

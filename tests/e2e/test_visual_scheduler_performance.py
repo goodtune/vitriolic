@@ -1,220 +1,140 @@
 """Performance tests for Visual Scheduler with large datasets."""
 
 import pytest
+from datetime import date, time
 from playwright.sync_api import Page, expect
 
+from tournamentcontrol.competition.tests.factories import (
+    SeasonFactory,
+    VenueFactory,
+    GroundFactory,
+    SeasonMatchTimeFactory,
+)
+from tournamentcontrol.competition.draw.schemas import DivisionStructure, StageFixture
+from tournamentcontrol.competition.draw.builders import build
+from tournamentcontrol.competition.utils import round_robin_format
 
-@pytest.mark.skip("Test needs to be rewritten")
+
 class TestVisualSchedulerPerformance:
-    """
-    Performance test suite for Visual Scheduler with large datasets.
-
-    This test class focuses on validating the Visual Scheduler's performance
-    characteristics when handling large tournament datasets. The Visual Scheduler
-    is a critical component for managing match scheduling through drag-and-drop
-    interfaces.
-
-    Key performance concerns being tested:
-    - Page load times with hundreds/thousands of matches
-    - Drag-and-drop responsiveness with complex layouts
-    - Memory usage and potential leaks during extended sessions
-    - JavaScript execution performance with DOM manipulation
-
-    All tests are currently skipped pending Visual Scheduler implementation
-    and proper dataset fixture creation.
-    """
+    """Performance tests for Visual Scheduler drag-and-drop operations."""
 
     @pytest.fixture
-    def large_dataset(self, db):
-        """
-        Create a large dataset for realistic performance testing.
+    def dataset(self, db):
+        """Create test dataset with matches scheduled on grid."""
+        season = SeasonFactory.create(timezone="Australia/Sydney")
+        venue = VenueFactory.create(season=season)
+        grounds = GroundFactory.create_batch(6, venue=venue)
 
-        This fixture should generate a substantial tournament structure
-        with realistic data volumes to stress-test the Visual Scheduler:
+        timeslot = SeasonMatchTimeFactory.create(
+            season=season,
+            start=time(8, 0),
+            interval=30,
+            count=20,
+        )
 
-        Expected data scale:
-        - Multiple competitions and seasons
-        - 5-10 divisions per season
-        - 8-16 teams per division
-        - 50-100 matches per division
-        - 6-12 playing fields
-        - Multiple time slots per day
+        team_names = [f"Team {chr(65 + i)}" for i in range(8)]
+        division_spec = DivisionStructure(
+            title="Performance Test Division",
+            teams=team_names,
+            draw_formats={"round_robin": round_robin_format(8)},
+            stages=[StageFixture(title="Round Robin", draw_format_ref="round_robin")],
+        )
 
-        This simulates a large regional tournament with hundreds of
-        matches that need to be scheduled efficiently.
+        division = build(season, division_spec)
+        division.points_formula = "3*win + 2*draw + 1*loss"
+        division.forfeit_for_score = 5
+        division.forfeit_against_score = 0
+        division.include_forfeits_in_played = True
+        division.games_per_day = 2
+        division.save()
 
-        Prerequisites:
-        - Tournament control models (Competition, Season, Division, etc.)
-        - Match and scheduling models available
-        - Factory classes for efficient data generation
+        # Schedule all matches on grid
+        time_ground_combinations = [
+            (time_slot, ground) for time_slot in timeslot.rrule() for ground in grounds
+        ]
 
-        Returns:
-        - Dictionary containing created objects and statistics
+        for match, (start_time, play_at) in zip(
+            division.matches.all(),
+            time_ground_combinations,
+        ):
+            match.date = date(2024, 6, 15)
+            match.time = start_time
+            match.play_at = play_at
+            match.save()
 
-        Currently not implemented - requires model structure finalization.
-        """
-        # This would need to be implemented with proper Django models
-        # For now, we'll create a placeholder that can be extended
-        pass
+        return season
 
-    def test_visual_scheduler_load_time(self, authenticated_page: Page, live_server):
-        """
-        Test Visual Scheduler page load performance with large datasets.
-
-        Measures the time required to load and render the Visual Scheduler
-        interface when populated with a realistic volume of tournament data.
-        This test identifies performance bottlenecks in initial page rendering.
-
-        Performance targets:
-        - Initial page load: < 3 seconds for 500+ matches
-        - DOM ready state: < 2 seconds for basic interactivity
-        - Full render complete: < 5 seconds for complex layouts
-
-        Prerequisites:
-        - Visual Scheduler interface implemented and accessible
-        - Large dataset fixture providing realistic data volumes
-        - Tournament structure with matches and scheduling constraints
-
-        Expected behavior:
-        - Page loads without timeout errors
-        - All matches render correctly in scheduler grid
-        - Drag-and-drop functionality initializes properly
-        - Performance metrics stay within acceptable limits
-
-        Limitations:
-        - Currently tests basic competition admin page as placeholder
-        - Requires actual Visual Scheduler URL and implementation
-        - Performance thresholds need calibration with real data
-
-        Args:
-            authenticated_page: Pre-authenticated Playwright page
-            live_server: Django live server fixture
-        """
+    def test_visual_scheduler_load_time(
+        self, authenticated_page: Page, live_server, dataset
+    ):
+        """Test Visual Scheduler page loads within 5 seconds."""
         page = authenticated_page
+        season = dataset
 
-        # Navigate to visual scheduler (this URL would need to be adjusted based on actual routing)
-        # page.goto(f"{live_server.url}/admin/competition/season/1/visual-schedule/")
+        visual_scheduler_url = f"{live_server.url}/admin/fixja/competition/{season.competition.pk}/seasons/{season.pk}/20240615/visual-schedule/"
 
-        # For now, we'll test navigation to the competitions section
-        page.goto(f"{live_server.url}/admin/competition/")
+        start_time = page.evaluate("performance.now()")
+        page.goto(visual_scheduler_url)
+        expect(page.locator(".visual-schedule-container")).to_be_visible(timeout=10000)
+        end_time = page.evaluate("performance.now()")
 
-        # Measure page load time
-        with page.expect_response("**") as response_info:
-            page.reload()
+        load_time = end_time - start_time
+        assert load_time < 5000, f"Load time {load_time}ms exceeded 5000ms"
 
-        response = response_info.value
-        # Basic performance check - page should load in under 5 seconds
-        # In a real implementation, we'd measure JavaScript execution time,
-        # DOM rendering time, and drag-and-drop responsiveness
-
-        assert response.status == 200
-
-    def test_drag_drop_performance(self, authenticated_page: Page, live_server):
-        """
-        Test drag-and-drop operation responsiveness with large datasets.
-
-        Validates that drag-and-drop scheduling operations remain responsive
-        and accurate when the Visual Scheduler contains hundreds of matches
-        and complex scheduling constraints.
-
-        Performance targets:
-        - Drag initiation response: < 100ms
-        - Drop operation completion: < 500ms
-        - UI feedback during drag: Smooth 60fps animation
-        - Validation and conflict detection: < 200ms
-
-        Test scenarios:
-        - Drag match to different time slot
-        - Drag match to different field
-        - Drag match causing scheduling conflicts
-        - Multiple rapid drag operations
-        - Drag operations while scrolling through large dataset
-
-        Prerequisites:
-        - Visual Scheduler with full drag-and-drop implementation
-        - Large dataset with realistic scheduling constraints
-        - Conflict detection and validation logic active
-
-        Expected behavior:
-        - All drag operations complete within performance targets
-        - Visual feedback remains smooth throughout operation
-        - Scheduling conflicts properly detected and indicated
-        - No UI freezing or unresponsiveness during operations
-
-        Limitations:
-        - Currently tests basic page navigation as placeholder
-        - Requires actual Visual Scheduler implementation
-        - Performance measurement needs Chrome DevTools integration
-
-        Args:
-            authenticated_page: Pre-authenticated Playwright page
-            live_server: Django live server fixture
-        """
+    def test_drag_drop_performance(
+        self, authenticated_page: Page, live_server, dataset
+    ):
+        """Test drag-and-drop completes within 1 second and stays under 10% CPU."""
         page = authenticated_page
+        season = dataset
 
-        # This test would:
-        # 1. Create a season with many matches, fields, and time slots
-        # 2. Open the Visual Scheduler
-        # 3. Measure the time it takes to perform drag and drop operations
-        # 4. Assert that operations complete within acceptable time limits
+        visual_scheduler_url = f"{live_server.url}/admin/fixja/competition/{season.competition.pk}/seasons/{season.pk}/20240615/visual-schedule/"
+        page.goto(visual_scheduler_url)
+        expect(page.locator(".visual-schedule-container")).to_be_visible(timeout=10000)
 
-        # Placeholder implementation
-        page.goto(f"{live_server.url}/admin/competition/")
-        expect(page.locator("h1")).to_contain_text("Competition administration")
+        # Enable runtime domain for CPU profiling
+        cdp = page.context.new_cdp_session(page)
+        cdp.send("Runtime.enable")
+        cdp.send("Profiler.enable")
 
-    def test_scheduler_memory_usage(self, authenticated_page: Page, live_server):
-        """
-        Test memory usage patterns and leak detection for Visual Scheduler.
+        # Drag match from grid to unscheduled pane
+        first_match = page.locator(".match-item.scheduled").first
+        unscheduled_pane = page.locator(".match-sidebar")
 
-        Monitors browser memory consumption during extended Visual Scheduler
-        sessions to identify potential memory leaks and excessive usage that
-        could impact user experience during long scheduling sessions.
+        cdp.send("Profiler.start")
+        start_time = page.evaluate("performance.now()")
+        first_match.drag_to(unscheduled_pane)
+        end_time = page.evaluate("performance.now()")
+        profile = cdp.send("Profiler.stop")
 
-        Memory targets:
-        - Initial load: < 50MB for typical dataset (500 matches)
-        - After 30 operations: < 100MB total
-        - Memory growth rate: < 1MB per 10 drag operations
-        - No continuous memory leaks over extended usage
+        drag_time = end_time - start_time
+        cpu_time = sum(node.get("hitCount", 0) for node in profile["profile"]["nodes"])
+        cpu_utilization = (cpu_time / (drag_time * 1000)) * 100 if drag_time > 0 else 0
 
-        Test scenarios:
-        - Baseline memory usage after initial load
-        - Memory usage after repeated drag-and-drop operations
-        - Memory behavior during view switching (day/week/field views)
-        - Memory cleanup after session completion
+        assert drag_time < 1000, (
+            f"Drag to unscheduled took {drag_time}ms, expected < 1000ms"
+        )
+        assert cpu_utilization < 10, (
+            f"CPU utilization {cpu_utilization:.1f}% exceeded 10%"
+        )
 
-        Prerequisites:
-        - Visual Scheduler implementation with complex data handling
-        - Chrome DevTools Protocol integration for memory monitoring
-        - Large dataset for realistic memory pressure testing
+        # Drag another match to vacant grid cell
+        second_match = page.locator(".match-item.scheduled").first
+        vacant_cell = page.locator(".grid-cell:not(:has(.match-item))").first
 
-        Expected behavior:
-        - Memory usage remains within acceptable limits
-        - No continuous memory growth over extended sessions
-        - Proper cleanup of event listeners and DOM references
-        - Stable performance over multiple hours of usage
+        cdp.send("Profiler.start")
+        start_time = page.evaluate("performance.now()")
+        second_match.drag_to(vacant_cell)
+        end_time = page.evaluate("performance.now()")
+        profile = cdp.send("Profiler.stop")
 
-        Limitations:
-        - Currently tests basic page navigation as placeholder
-        - Requires Chrome DevTools Protocol implementation
-        - Memory measurement needs specialized Playwright configuration
-        - Baseline targets need calibration with actual implementation
+        drag_time = end_time - start_time
+        cpu_time = sum(node.get("hitCount", 0) for node in profile["profile"]["nodes"])
+        cpu_utilization = (cpu_time / (drag_time * 1000)) * 100 if drag_time > 0 else 0
 
-        Args:
-            authenticated_page: Pre-authenticated Playwright page
-            live_server: Django live server fixture
-        """
-        page = authenticated_page
-
-        # This test would:
-        # 1. Monitor browser memory usage
-        # 2. Load Visual Scheduler with large dataset
-        # 3. Perform various operations
-        # 4. Check for memory leaks or excessive usage
-
-        # Placeholder implementation
-        page.goto(f"{live_server.url}/admin/competition/")
-
-        # In a real implementation, we'd use Chrome DevTools Protocol
-        # to monitor memory usage and performance metrics
-
-        expect(page.locator("h1")).to_contain_text("Competition administration")
+        assert drag_time < 1000, (
+            f"Drag to vacant cell took {drag_time}ms, expected < 1000ms"
+        )
+        assert cpu_utilization < 10, (
+            f"CPU utilization {cpu_utilization:.1f}% exceeded 10%"
+        )
