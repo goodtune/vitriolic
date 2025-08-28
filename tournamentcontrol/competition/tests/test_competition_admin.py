@@ -1,11 +1,13 @@
 import unittest
 from datetime import date, datetime, time
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from dateutil.rrule import DAILY
 from django import VERSION
 from django.contrib import messages
 from django.template import Context, Template
+from django.test import RequestFactory
 from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 
@@ -2066,29 +2068,62 @@ class BackendTests(MessagesTestMixin, TestCase):
         )
 
         with self.login(self.superuser):
-            # Test the export view
             self.get(
                 "admin:fixja:competition:season:division:export-json",
                 division.season.competition.pk,
                 division.season.pk,
                 division.pk,
             )
-            self.response_200()
+        self.response_200()
 
-            # Check response content type and headers
-            response = self.last_response
-            self.assertEqual(response["content-type"], "application/json")
-            self.assertIn("attachment", response["Content-Disposition"])
-            expected_filename = f"{division.season.competition.slug}_{division.season.slug}_{division.slug}.json"
-            self.assertIn(expected_filename, response["Content-Disposition"])
+        # Check response content type and headers
+        self.assertResponseHeaders(
+            {
+                "Content-Type": "application/json",
+                "Content-Disposition": f'attachment; filename="{division.season.competition.slug}_{division.season.slug}_{division.slug}.json"',
+            }
+        )
 
-            # Parse the JSON content
-            import json
+        structure = DivisionStructure.model_validate_json(
+            self.last_response.content.decode()
+        )
 
-            json_data = json.loads(response.content.decode())
+        # Verify basic structure
+        self.assertEqual(structure.title, "Test Division")
+        self.assertEqual(structure.teams, ["Team A", "Team B"])
+        self.assertEqual([s.title for s in structure.stages], ["Round Robin"])
 
-            # Verify basic structure
-            self.assertEqual(json_data["title"], "Test Division")
-            self.assertEqual(json_data["teams"], ["Team A", "Team B"])
-            self.assertEqual(len(json_data["stages"]), 1)
-            self.assertEqual(json_data["stages"][0]["title"], "Round Robin")
+    @patch("googleapiclient.discovery.build")
+    def test_bug_203_add_match_with_live_streaming_enabled(self, mock_discovery_build):
+        """
+        Test that creating a match through admin UI does not raise NoReverseMatch
+        when live streaming is enabled with YouTube credentials configured.
+
+        Refs: https://github.com/goodtune/vitriolic/issues/203
+        """
+        stage = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_project_id="test-project-123",
+            division__season__live_stream_client_id="test-client-id",
+            division__season__live_stream_client_secret="test-client-secret",
+        )
+        team1 = factories.TeamFactory.create(division=stage.division)
+        team2 = factories.TeamFactory.create(division=stage.division)
+        ground = factories.GroundFactory.create()
+        
+        data = {
+            "home_team": team1.pk,
+            "away_team": team2.pk,
+            "label": "Test Match",
+            "round": 1,
+            "date": "2025-05-01",
+            "time": "14:00:00",
+            "play_at": ground.pk,
+            "include_in_ladder": "1",
+            "live_stream": "0",
+            "thumbnail_url": "",
+        }
+        
+        add_match = Match(stage=stage).url_names["add"]
+        self.post(add_match.url_name, *add_match.args, data=data)
+        self.response_302()
