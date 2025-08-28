@@ -75,6 +75,7 @@ competition = [
     "openai>=1.0.0",
     "pyparsing",
     "python-dateutil",
+    "python-magic",
 ]
 # Deprecated optional dependencies
 redis = []

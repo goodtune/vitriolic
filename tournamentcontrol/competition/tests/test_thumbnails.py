@@ -2,13 +2,11 @@
 Tests for YouTube thumbnail management functionality.
 """
 
-import io
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from django.test import TestCase
 
 from tournamentcontrol.competition._mediaupload import MediaMemoryUpload
-from tournamentcontrol.competition.models import Season, Match
 from tournamentcontrol.competition.tests.factories import SeasonFactory, MatchFactory
 
 
@@ -72,7 +70,8 @@ class SeasonThumbnailTestCase(TestCase):
     
     def test_set_thumbnail_image(self):
         """Test setting thumbnail image on season."""
-        self.season.set_thumbnail_image(self.image_data)
+        self.season.live_stream_thumbnail_image = self.image_data
+        self.season.save()
         
         self.season.refresh_from_db()
         self.assertEqual(self.season.live_stream_thumbnail_image, self.image_data)
@@ -131,7 +130,7 @@ class MatchThumbnailTestCase(TestCase):
         mock_magic.return_value = self.season_mimetype
         
         # Set season thumbnail
-        self.season.thumbnail_image = self.season_image_data
+        self.season.live_stream_thumbnail_image = self.season_image_data
         self.season.save()
         
         # Match has no thumbnail
@@ -161,7 +160,7 @@ class MatchThumbnailTestCase(TestCase):
         mock_magic.side_effect = mock_magic_side_effect
         
         # Set both season and match thumbnails
-        self.season.thumbnail_image = self.season_image_data
+        self.season.live_stream_thumbnail_image = self.season_image_data
         self.season.save()
         
         self.match.live_stream_thumbnail_image = self.image_data

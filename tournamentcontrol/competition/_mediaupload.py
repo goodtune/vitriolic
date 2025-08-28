@@ -7,7 +7,9 @@ with in-memory data instead of files.
 """
 
 import io
-from googleapiclient.http import HttpRequest, MediaUpload
+
+import magic
+from googleapiclient.http import MediaUpload
 
 
 class MediaMemoryUpload(MediaUpload):
@@ -25,10 +27,13 @@ class MediaMemoryUpload(MediaUpload):
     """
     
     def __init__(self, data, chunksize=1024*1024, resumable=False):
-        import magic
         super().__init__()
         self._data = data
-        self._mimetype = magic.from_buffer(data, mime=True)
+        try:
+            self._mimetype = magic.from_buffer(data, mime=True)
+        except Exception:
+            # Fallback to generic binary type if magic fails
+            self._mimetype = 'application/octet-stream'
         self._chunksize = chunksize
         self._resumable = resumable
         self._stream = io.BytesIO(data)

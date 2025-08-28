@@ -235,7 +235,14 @@ class ThumbnailImageField(forms.FileField):
                     raise forms.ValidationError('Please upload an image file.')
             
             data.seek(0)  # Ensure we're at the start of the file
-            return data.read()
+            binary_data = data.read()
+            
+            # Validate file size (5MB limit for thumbnails)
+            max_size = 5 * 1024 * 1024  # 5MB
+            if len(binary_data) > max_size:
+                raise forms.ValidationError(f'Image file too large. Maximum size is {max_size // (1024 * 1024)}MB.')
+            
+            return binary_data
             
         return super().to_python(data)
 
@@ -424,7 +431,7 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
             ),
         }
         field_classes = {
-            "live_stream_thumbnail_image": "tournamentcontrol.competition.forms.ThumbnailImageField",
+            "live_stream_thumbnail_image": ThumbnailImageField,
         }
 
     def __init__(self, *args, **kwargs):
@@ -1095,7 +1102,7 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
             "live_stream_thumbnail_image",
         )
         field_classes = {
-            "live_stream_thumbnail_image": "tournamentcontrol.competition.forms.ThumbnailImageField",
+            "live_stream_thumbnail_image": ThumbnailImageField,
         }
         labels = {
             "home_team_undecided": _("Home team"),

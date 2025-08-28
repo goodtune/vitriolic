@@ -30,8 +30,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload, MediaInMemoryUpload, MediaUpload
-import magic
+from googleapiclient.http import MediaInMemoryUpload, MediaUpload
 import requests
 
 from tournamentcontrol.competition._mediaupload import MediaMemoryUpload
