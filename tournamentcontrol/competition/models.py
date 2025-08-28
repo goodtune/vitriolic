@@ -45,6 +45,7 @@ from tournamentcontrol.competition.constants import (
     GENDER_CHOICES,
     SEASON_MODE_CHOICES,
     WIN_LOSE,
+    ClubStatus,
     LiveStreamPrivacy,
 )
 from tournamentcontrol.competition.draw.schemas import (
@@ -214,6 +215,13 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         max_length=3,
         blank=True,
         help_text=_("Optional 3-letter abbreviation to be used on scoreboards."),
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=ClubStatus.choices,
+        default=ClubStatus.ACTIVE,
+        db_index=True,
+        help_text=_("Current status of the club."),
     )
 
     class Meta:
