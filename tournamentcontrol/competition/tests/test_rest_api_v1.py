@@ -67,26 +67,26 @@ class APITests(TestCase):
 
     def test_clubs_api_with_different_statuses(self):
         """Test Clubs API endpoint with clubs of different statuses"""
-        # Create clubs with different statuses (in addition to the default one from setUpTestData)
-        inactive_club = factories.ClubFactory.create(status=ClubStatus.INACTIVE)
-        hidden_club = factories.ClubFactory.create(status=ClubStatus.HIDDEN)
+        # Create clubs with different statuses and predictable titles
+        inactive_club = factories.ClubFactory.create(title="Inactive Club", status=ClubStatus.INACTIVE)
+        hidden_club = factories.ClubFactory.create(title="Hidden Club", status=ClubStatus.HIDDEN)
         
         # Test club list endpoint includes status field
         self.get("v1:club-list")
         self.response_200()
-        response_data = self.last_response.json()
         
-        # Build expected response based on the ClubSerializer fields
-        # Include all clubs: the one from setUpTestData (active) plus the new ones
-        all_clubs = [self.club, inactive_club, hidden_club]
-        expected_clubs = []
+        # Get all clubs from database to build expected response
+        from tournamentcontrol.competition.models import Club
+        all_clubs = list(Club.objects.all().order_by('title'))
+        
+        expected_payload = []
         for club in all_clubs:
-            expected_clubs.append({
+            expected_payload.append({
                 "title": club.title,
                 "short_title": club.short_title,
                 "slug": club.slug,
                 "abbreviation": club.abbreviation,
-                "status": club.status,  # This will be the string value, not the enum
+                "status": club.status,
                 "url": f"http://testserver/api/v1/clubs/{club.slug}/",
                 "facebook": club.facebook,
                 "twitter": club.twitter,
@@ -94,20 +94,7 @@ class APITests(TestCase):
                 "website": club.website,
             })
         
-        # Since the response contains all clubs and they are ordered by title,
-        # we need to sort both lists before comparing
-        response_data_sorted = sorted(response_data, key=lambda x: x['title'])
-        expected_clubs_sorted = sorted(expected_clubs, key=lambda x: x['title'])
-        
-        # Check that all our expected clubs are present in the response
-        for expected_club in expected_clubs_sorted:
-            self.assertIn(expected_club, response_data_sorted)
-        
-        # Specifically check that the status fields are correct for the clubs we created
-        response_slugs_to_status = {club['slug']: club['status'] for club in response_data}
-        self.assertEqual(response_slugs_to_status[self.club.slug], 'active')
-        self.assertEqual(response_slugs_to_status[inactive_club.slug], 'inactive') 
-        self.assertEqual(response_slugs_to_status[hidden_club.slug], 'hidden')
+        self.assertJSONEqual(self.last_response.content, expected_payload)
 
     def test_competition_list(self):
         """Test competition-list endpoint"""
