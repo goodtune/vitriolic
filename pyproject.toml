@@ -27,6 +27,7 @@ dynamic = ["version"]
 dev = [
     "black>=25.1.0",
     "isort>=6.0.1",
+    "ruff>=0.12.8",
 ]
 test = [
     "coverage",
@@ -57,6 +58,7 @@ news = [
     "python-magic",
 ]
 competition = [
+    "pydantic>=2.0",
     "celery>5",
     "cloudinary",
     "django-embed-video",
@@ -70,6 +72,7 @@ competition = [
     "icalendar",
     "internationaltouch-oauth2client",
     "markdown",
+    "openai>=1.0.0",
     "pyparsing",
     "python-dateutil",
 ]

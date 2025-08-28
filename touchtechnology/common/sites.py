@@ -1046,7 +1046,7 @@ class Application(object):
 
             # Build user-friendly error message
             error_parts = []
-            for obj_type, objects in object_types.items():
+            for obj_type, objects in sorted(object_types.items()):
                 if len(objects) == 1:
                     error_parts.append(f"1 {obj_type}: {objects[0]}")
                 else:

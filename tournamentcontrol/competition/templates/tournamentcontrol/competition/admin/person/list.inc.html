@@ -27,6 +27,12 @@
 			{% trans "Merge" %}
 		</a>
 	</li>
+	<li role="presentation">
+		<a role="button" href="{% url 'admin:fixja:club:person:transfer' club.pk obj.pk %}">
+			<i class="fa fa-exchange fa-fw"></i>
+			{% trans "Transfer" %}
+		</a>
+	</li>
 	{{ block.super }}
 {% endblock %}
 

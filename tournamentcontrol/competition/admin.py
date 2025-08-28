@@ -12,7 +12,12 @@ from django.contrib import messages
 from django.db import models
 from django.db.models import Case, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
-from django.http import Http404, HttpResponse, HttpResponseGone, HttpResponseRedirect
+from django.http import (
+    Http404,
+    HttpResponse,
+    HttpResponseGone,
+    HttpResponseRedirect,
+)
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
@@ -42,6 +47,7 @@ from tournamentcontrol.competition.forms import (
     ClubRoleForm,
     CompetitionForm,
     DivisionForm,
+    DivisionStructureJSONFormSet,
     DrawFormatForm,
     DrawGenerationFormSet,
     DrawGenerationMatchFormSet,
@@ -86,6 +92,7 @@ from tournamentcontrol.competition.models import (
     SeasonExclusionDate,
     SeasonMatchTime,
     SeasonReferee,
+    SimpleScoreMatchStatistic,
     Stage,
     StageGroup,
     Team,
@@ -372,6 +379,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     "<int:division_id>/exclusion/",
                     include(divisionexclusion_urls, namespace="divisionexclusiondate"),
                 ),
+                path(
+                    "<int:division_id>/export.json",
+                    self.division_export_json,
+                    name="export-json",
+                ),
             ],
             self.app_name,
         )
@@ -385,6 +397,16 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 ),
                 path("<int:season_id>/callback", self.oauth_callback, name="callback"),
                 path("<int:season_id>/delete/", self.delete_season, name="delete"),
+                path(
+                    "<int:season_id>/ai-competition/",
+                    self.ai_competition_wizard,
+                    name="ai-competition",
+                ),
+                path(
+                    "<int:season_id>/json-builder/",
+                    self.json_division_builder,
+                    name="json-builder",
+                ),
                 path(
                     "<int:season_id>/reschedule/",
                     self.match_reschedule,
@@ -476,6 +498,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path("<uuid:person_id>/", self.edit_person, name="edit"),
                 path("<uuid:person_id>/delete/", self.delete_person, name="delete"),
                 path("<uuid:person_id>/merge/", self.merge_person, name="merge"),
+                path(
+                    "<uuid:person_id>/transfer/", self.transfer_person, name="transfer"
+                ),
             ],
             self.app_name,
         )
@@ -645,9 +670,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         a.order = bo
         a.save()
 
-        fmt = _(
-            'The %(model)s "%(title)s" has been ' "reordered %(direction)s the list."
-        )
+        fmt = _('The %(model)s "%(title)s" has been reordered %(direction)s the list.')
         messages.info(
             request,
             fmt
@@ -1206,6 +1229,27 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
+    def division_export_json(self, request, competition, season, division, **kwargs):
+        """Export division as JSON DivisionStructure."""
+        try:
+            division_structure = division.to_division_structure()
+        except Exception as e:
+            messages.error(request, f"Failed to export division: {e}")
+            return self.redirect(division.urls["edit"])
+
+        response = HttpResponse(
+            division_structure.model_dump_json(),
+            content_type="application/json",
+        )
+        response["Content-Disposition"] = (
+            "attachment; "
+            f'filename="{competition.slug}_{season.slug}_{division.slug}.json"'
+        )
+
+        return response
+
+    @competition_by_pk_m
+    @staff_login_required_m
     def edit_divisionexclusiondate(
         self, request, division, extra_context, pk=None, **kwargs
     ):
@@ -1372,7 +1416,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             request,
             Team,
             instance=team,
-            post_save_redirect="admin:fixja:competition:season:" "division:team:list",
+            post_save_redirect="admin:fixja:competition:season:division:team:list",
             post_save_redirect_args=(
                 competition.pk,
                 season.pk,
@@ -1513,7 +1557,47 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def undo_draw(self, request, division, stage, **kwargs):
         LadderSummary.objects.filter(stage=stage).delete()
         LadderEntry.objects.filter(match__stage=stage).delete()
-        Match.objects.filter(stage=stage).delete()
+
+        # Multi-stage deletion to handle complex eval_related dependencies
+        # Keep deleting matches until all are gone, starting with the most dependent ones
+        while stage.matches.exists():
+            # Find matches that have eval_related fields (dependent matches)
+            dependent_matches = stage.matches.filter(
+                Q(home_team_eval_related__isnull=False)
+                | Q(away_team_eval_related__isnull=False)
+            )
+
+            if dependent_matches.exists():
+                # Find matches that are NOT referenced by other matches
+                # These are the "leaf" matches in the dependency tree that can be safely deleted
+                referenced_match_ids = set()
+                for match in dependent_matches:
+                    if match.home_team_eval_related_id:
+                        referenced_match_ids.add(match.home_team_eval_related_id)
+                    if match.away_team_eval_related_id:
+                        referenced_match_ids.add(match.away_team_eval_related_id)
+
+                # Delete dependent matches that are not referenced by others
+                deletable_dependent = dependent_matches.exclude(
+                    pk__in=referenced_match_ids
+                )
+                if deletable_dependent.exists():
+                    deletable_dependent.delete()
+                else:
+                    # If no dependent matches can be deleted, try deleting non-dependent ones
+                    non_dependent_matches = stage.matches.filter(
+                        home_team_eval_related__isnull=True,
+                        away_team_eval_related__isnull=True,
+                    )
+                    if non_dependent_matches.exists():
+                        non_dependent_matches.delete()
+                    else:
+                        # This shouldn't happen, but break to avoid infinite loop
+                        break
+            else:
+                # No dependent matches left, delete all remaining matches
+                stage.matches.all().delete()
+
         messages.success(request, _("Your draw has been undone."))
         return self.redirect(division.urls["edit"])
 
@@ -1552,32 +1636,63 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 )
 
             # Build match video URL for description
-            match_url = request.build_absolute_uri(
-                reverse(
-                    'competition:match-video',
-                    kwargs={
-                        'competition': competition.slug,
-                        'season': season.slug,
-                        'division': division.slug,
-                        'match': obj.pk,
-                    }
+            # Only build the URL if the match has been saved and has a primary key
+            if obj.pk is not None:
+                match_url = request.build_absolute_uri(
+                    reverse(
+                        "competition:match-video",
+                        kwargs={
+                            "competition": competition.slug,
+                            "season": season.slug,
+                            "division": division.slug,
+                            "match": obj.pk,
+                        },
+                    )
                 )
-            )
-            
-            description = (
-                f"Live stream of the {division} division of {competition} {season} "
-                f"from {obj.play_at.ground.venue}.\n"
-                f"\n"
-                f"Watch {obj.get_home_team_plain()} take on "
-                f"{obj.get_away_team_plain()} on {obj.play_at}.\n"
-                f"\n"
-                f"Full match details are available at {match_url}\n"
-                f"\n"
-                f"Subscribe to receive notifications of upcoming matches."
-            )
+
+                # Safely get venue information
+                venue_info = ""
+                if obj.play_at and obj.play_at.ground and obj.play_at.ground.venue:
+                    venue_info = f"from {obj.play_at.ground.venue}"
+
+                description = (
+                    f"Live stream of the {division} division of {competition} {season}"
+                    f"{' ' + venue_info if venue_info else ''}.\n"
+                    f"\n"
+                    f"Watch {obj.get_home_team_plain()} take on "
+                    f"{obj.get_away_team_plain()}"
+                    f"{' on ' + str(obj.play_at) if obj.play_at else ''}.\n"
+                    f"\n"
+                    f"Full match details are available at {match_url}\n"
+                    f"\n"
+                    f"Subscribe to receive notifications of upcoming matches."
+                )
+            else:
+                # For new matches without a pk, omit the match URL from description
+                # Safely get venue information
+                venue_info = ""
+                if obj.play_at and obj.play_at.ground and obj.play_at.ground.venue:
+                    venue_info = f"from {obj.play_at.ground.venue}"
+
+                description = (
+                    f"Live stream of the {division} division of {competition} {season}"
+                    f"{' ' + venue_info if venue_info else ''}.\n"
+                    f"\n"
+                    f"Watch {obj.get_home_team_plain()} take on "
+                    f"{obj.get_away_team_plain()}"
+                    f"{' on ' + str(obj.play_at) if obj.play_at else ''}.\n"
+                    f"\n"
+                    f"Subscribe to receive notifications of upcoming matches."
+                )
 
             start_time = obj.get_datetime(ZoneInfo("UTC"))
-            stop_time = obj.get_datetime(ZoneInfo("UTC")) + relativedelta(
+            
+            # Skip YouTube API interaction if we don't have valid start time
+            # This can happen for new matches that don't have complete date/time data
+            if start_time is None:
+                return
+                
+            stop_time = start_time + relativedelta(
                 minutes=50
             )  # FIXME: hard coded
 
@@ -1871,7 +1986,16 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         templates = self.template_path("reschedule.html")
         return self.render(request, templates, context)
 
-    def _build_match_queryset(self, season, date, time=None, division=None, stage=None, round=None, visual=False):
+    def _build_match_queryset(
+        self,
+        season,
+        date,
+        time=None,
+        division=None,
+        stage=None,
+        round=None,
+        visual=False,
+    ):
         """Build queryset for match scheduling."""
         where = Q(date=date, is_bye=False)
 
@@ -1948,7 +2072,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             "scheduled_matches": scheduled_matches,
         }
 
-    def _handle_visual_schedule_form(self, request, queryset, places, timeslots, extra_context, templates, season):
+    def _handle_visual_schedule_form(
+        self, request, queryset, places, timeslots, extra_context, templates, season
+    ):
         """Handle form processing for visual schedule."""
         if request.method == "POST":
             formset = MatchScheduleFormSet(
@@ -2006,14 +2132,20 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     ):
         """Match scheduling interface - supports both standard and visual modes."""
         # Extract extra_context from kwargs (injected by decorator)
-        extra_context = kwargs.pop('extra_context', {})
-        
+        extra_context = kwargs.pop("extra_context", {})
+
         queryset = self._build_match_queryset(
-            season, date, time=time, division=division, stage=stage, round=round, visual=visual
+            season,
+            date,
+            time=time,
+            division=division,
+            stage=stage,
+            round=round,
+            visual=visual,
         )
-        
+
         venues, places = self._build_venues_and_places(season)
-        
+
         # Get timeslots for the day
         timeslots = season.get_timeslots(date)
 
@@ -2022,23 +2154,30 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             if not timeslots:
                 messages.error(
                     request,
-                    _("The visual scheduler can only be used when timeslots are specified for this season.")
+                    _(
+                        "The visual scheduler can only be used when timeslots are specified for this season."
+                    ),
                 )
                 return self.redirect(season.urls["edit"])
 
             # Handle visual schedule form processing and build context
             formset = self._handle_visual_schedule_form(
-                request, queryset, places, timeslots, extra_context, 
-                self.template_path("match/visual_schedule.html"), season
+                request,
+                queryset,
+                places,
+                timeslots,
+                extra_context,
+                self.template_path("match/visual_schedule.html"),
+                season,
             )
-            
+
             # If POST resulted in redirect, return it
             if isinstance(formset, HttpResponseRedirect):
                 return formset
 
             # Build visual-specific context
             visual_context = self._build_visual_context(queryset)
-            
+
             context = {
                 "formset": formset,
                 "season": season,
@@ -2153,11 +2292,51 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @staff_login_required_m
     def scorecard_report(self, request, **extra_context):
-        from .wizards import FilterForm, SeasonForm, scorecardwizard_factory
+        from tournamentcontrol.competition.wizards import (
+            FilterForm,
+            SeasonForm,
+            scorecardwizard_factory,
+        )
 
         ScorecardWizard = scorecardwizard_factory(app=self, extra_context=extra_context)
         wizard = ScorecardWizard.as_view(form_list=[SeasonForm, FilterForm])
         return wizard(request)
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def ai_competition_wizard(self, request, competition, season, **extra_context):
+        """AI-powered competition structure generation wizard."""
+        from tournamentcontrol.competition.wizards import (
+            AIPlanReviewForm,
+            AIPromptForm,
+            ai_competition_wizard_factory,
+        )
+
+        AICompetitionWizard = ai_competition_wizard_factory(
+            season=season, app=self, extra_context=extra_context
+        )
+        wizard = AICompetitionWizard.as_view(form_list=[AIPromptForm, AIPlanReviewForm])
+        return wizard(request)
+
+    @staff_login_required_m
+    @competition_by_pk_m
+    def json_division_builder(self, request, competition, season, **extra_context):
+        """JSON-based division structure builder for power users."""
+
+        return self.generic_edit_multiple(
+            request,
+            season.divisions,  # Use season's divisions manager
+            formset_class=DivisionStructureJSONFormSet,
+            formset_kwargs={"instance": season},  # Pass season as instance
+            post_save_redirect=self.redirect(season.urls["edit"]),
+            templates=self.template_path("json_division_builder.html"),
+            extra_context={
+                **extra_context,
+                "season": season,
+                "competition": competition,
+                "cancel_url": season.urls["edit"],
+            },
+        )
 
     @competition_by_pk_m
     @staff_login_required_m
@@ -2251,27 +2430,42 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def highest_point_scorer(self, request, division, extra_context, **kwargs):
-        def _get_clause(field, aggregate=Sum):
-            """
-            Local function to produce a Aggregate(Case(When())) instance which
-            can be used to extract individual totals for the division.
-            """
-            return aggregate(
-                Case(When(statistics__match__stage__division=division, then=F(field)))
+        # Get the statistics directly and group by person
+        # This approach avoids GROUP BY issues by working with the statistics model directly
+        statistics = (
+            SimpleScoreMatchStatistic.objects.filter(match__stage__division=division)
+            .values(
+                "player__uuid",
+                "player__first_name",
+                "player__last_name",
+                "player__club__title",
             )
-
-        people = (
-            Person.objects.select_related("club")
             .annotate(
-                played=_get_clause("statistics__played"),
-                points=_get_clause("statistics__points"),
-                mvp=_get_clause("statistics__mvp"),
+                uuid=F("player__uuid"),
+                first_name=F("player__first_name"),
+                last_name=F("player__last_name"),
+                club__title=F("player__club__title"),
+                played=Sum("played"),
+                points=Sum("points"),
+                mvp=Sum("mvp"),
             )
-            .exclude(played=None)
+            .exclude(played__isnull=True)
+            .exclude(played=0)
+            .values(
+                "uuid",
+                "first_name",
+                "last_name",
+                "club__title",
+                "played",
+                "points",
+                "mvp",
+            )
+            .order_by("-points", "played")
         )
 
-        scorers = people.order_by("-points", "played")
-        mvp = people.order_by("-mvp", "played")
+        # Create separate querysets for different ordering
+        scorers = statistics.order_by("-points", "played")
+        mvp = statistics.order_by("-mvp", "played")
 
         context = {
             "scorers": scorers,
@@ -2315,6 +2509,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 "youtube",
                 "primary",
                 "primary_position",
+                "status",
                 "slug",
                 "slug_locked",
             ),
@@ -2330,20 +2525,48 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def delete_club(self, request, club_id, **kwargs):
         return self.generic_delete(request, Club, pk=club_id, permission_required=True)
 
-    @registration
     @staff_login_required_m
-    def edit_person(self, request, club, extra_context, person=None, **kwargs):
-        if person is None:
+    def edit_person(self, request, club_id, person_id=None, **kwargs):
+        club = get_object_or_404(Club, pk=club_id)
+
+        if person_id is None:
             person = Person(club=club)
+        else:
+            person = get_object_or_404(Person, pk=person_id)
+
+        extra_context = kwargs.pop("extra_context", {})
+        extra_context.update({"club": club, "person": person, "component": self})
         return self.generic_edit(
             request,
-            club.members,
+            Person,
             instance=person,
             form_class=PersonEditForm,
             related=("statistics",),
             post_save_redirect=self.redirect(person.club.urls["edit"]),
             permission_required=True,
             extra_context=extra_context,
+        )
+
+    @staff_login_required_m
+    def transfer_person(self, request, club_id, person_id, **kwargs):
+        club = get_object_or_404(Club, pk=club_id)
+        person = get_object_or_404(Person, pk=person_id)
+
+        extra_context = kwargs.pop("extra_context", {})
+        extra_context.update({"club": club, "person": person, "component": self})
+
+        return self.generic_edit(
+            request,
+            Person,
+            instance=person,
+            form_fields=("club",),
+            related=(),
+            post_save_redirect=self.redirect(club.urls["edit"]),
+            permission_required=True,
+            extra_context=extra_context,
+            changed_messages=(
+                (messages.SUCCESS, _("The {model} has been transferred successfully.")),
+            ),
         )
 
     @registration
