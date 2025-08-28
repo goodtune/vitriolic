@@ -162,7 +162,9 @@ def _generate_matches_from_draw_format(
 
         logger.debug(f"DrawGenerator produced {len(matches)} matches")
         if len(matches) == 0:
-            logger.warning(f"No matches generated from draw format: {draw_format[:100]}...")
+            logger.warning(
+                f"No matches generated from draw format: {draw_format[:100]}..."
+            )
 
         # Update stage_group for pool matches
         if stage_group:

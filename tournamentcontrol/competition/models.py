@@ -225,8 +225,7 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         Supercedes _mvp_annotate due to GROUP BY exceptions. Take full control
         of the query. See the history for the earlier implementation.
         """
-        query = (
-            """
+        query = """
             SELECT
                 "competition_person"."uuid",
                 "competition_person"."first_name",
@@ -272,11 +271,9 @@ class Club(AdminUrlMixin, SitemapNodeBase):
             ORDER BY
                 "competition_person"."last_name" ASC,
                 "competition_person"."first_name" ASC
-        """
-            % {  # noqa: E501
-                "user": get_user_model()._meta.db_table
-            }
-        )
+        """ % {  # noqa: E501
+            "user": get_user_model()._meta.db_table
+        }
         params = {
             "club": self.pk,
         }

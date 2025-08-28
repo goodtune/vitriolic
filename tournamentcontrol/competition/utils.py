@@ -19,8 +19,10 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from touchtechnology.common.prince import prince
-from tournamentcontrol.competition.draw.schemas import MatchDescriptor, RoundDescriptor
-
+from tournamentcontrol.competition.draw.schemas import (
+    MatchDescriptor,
+    RoundDescriptor,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -903,9 +903,9 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
 
         # restrict the list of referees to those registered this season
         if "referees" in self.fields:
-            self.fields[
-                "referees"
-            ].queryset = self.instance.stage.division.season.referees.all()
+            self.fields["referees"].queryset = (
+                self.instance.stage.division.season.referees.all()
+            )
 
         # remove `stage_group` field if the `division` has no children
         if not self.instance.stage.pools.count():
@@ -1788,9 +1788,9 @@ class TeamAssociationForm(UserMixin, ModelForm):
     def __init__(self, team, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["person"].queryset = team.club.members.all()
-        self.fields[
-            "roles"
-        ].queryset = team.division.season.competition.team_roles.all()
+        self.fields["roles"].queryset = (
+            team.division.season.competition.team_roles.all()
+        )
 
     class Meta:
         model = TeamAssociation
