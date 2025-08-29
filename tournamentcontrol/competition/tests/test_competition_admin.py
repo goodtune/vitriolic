@@ -2111,7 +2111,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         team1 = factories.TeamFactory.create(division=stage.division)
         team2 = factories.TeamFactory.create(division=stage.division)
         ground = factories.GroundFactory.create()
-        
+
         data = {
             "home_team": team1.pk,
             "away_team": team2.pk,
@@ -2124,7 +2124,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             "live_stream": "0",
             "thumbnail_url": "",
         }
-        
+
         add_match = Match(stage=stage).url_names["add"]
         self.post(add_match.url_name, *add_match.args, data=data)
         self.response_302()
