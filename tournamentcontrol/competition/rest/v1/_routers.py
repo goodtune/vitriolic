@@ -7,6 +7,7 @@ from tournamentcontrol.competition.rest.v1 import (
     club,
     competition,
     division,
+    livestream,
     season,
     stage,
 )
@@ -37,6 +38,7 @@ season_router = routers.NestedDefaultRouter(
 season_router.register(r"divisions", division.DivisionViewSet, basename="division")
 season_router.register(r"players", _247.PersonViewSet, basename="players")
 season_router.register(r"matches", _birdi.MatchViewSet, basename="match")
+season_router.register(r"livestreams", livestream.LiveStreamViewSet, basename="livestream")
 
 division_router = routers.NestedDefaultRouter(
     season_router, r"divisions", lookup="division"
