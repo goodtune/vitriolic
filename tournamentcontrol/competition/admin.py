@@ -398,11 +398,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path("<int:season_id>/callback", self.oauth_callback, name="callback"),
                 path("<int:season_id>/delete/", self.delete_season, name="delete"),
                 path(
-                    "<int:season_id>/ai-competition/",
-                    self.ai_competition_wizard,
-                    name="ai-competition",
-                ),
-                path(
                     "<int:season_id>/json-builder/",
                     self.json_division_builder,
                     name="json-builder",
@@ -1686,15 +1681,13 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 )
 
             start_time = obj.get_datetime(ZoneInfo("UTC"))
-            
+
             # Skip YouTube API interaction if we don't have valid start time
             # This can happen for new matches that don't have complete date/time data
             if start_time is None:
                 return
-                
-            stop_time = start_time + relativedelta(
-                minutes=50
-            )  # FIXME: hard coded
+
+            stop_time = start_time + relativedelta(minutes=50)  # FIXME: hard coded
 
             body = {
                 "snippet": {
@@ -2302,27 +2295,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         wizard = ScorecardWizard.as_view(form_list=[SeasonForm, FilterForm])
         return wizard(request)
 
-    @competition_by_pk_m
-    @staff_login_required_m
-    def ai_competition_wizard(self, request, competition, season, **extra_context):
-        """AI-powered competition structure generation wizard."""
-        from tournamentcontrol.competition.wizards import (
-            AIPlanReviewForm,
-            AIPromptForm,
-            ai_competition_wizard_factory,
-        )
-
-        AICompetitionWizard = ai_competition_wizard_factory(
-            season=season, app=self, extra_context=extra_context
-        )
-        wizard = AICompetitionWizard.as_view(form_list=[AIPromptForm, AIPlanReviewForm])
-        return wizard(request)
-
     @staff_login_required_m
     @competition_by_pk_m
     def json_division_builder(self, request, competition, season, **extra_context):
         """JSON-based division structure builder for power users."""
-
         return self.generic_edit_multiple(
             request,
             season.divisions,  # Use season's divisions manager
