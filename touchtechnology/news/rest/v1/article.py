@@ -14,14 +14,7 @@ class CategorySerializer(serializers.ModelSerializer):
 class ListArticleSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Article
-        fields = (
-            "headline", 
-            "slug", 
-            "abstract", 
-            "published", 
-            "byline",
-            "is_active"
-        )
+        fields = ("headline", "slug", "abstract", "published", "byline", "is_active")
 
 
 class ArticleSerializer(ListArticleSerializer):
@@ -45,7 +38,11 @@ class CategoryViewSet(SlugViewSet):
 
 
 class ArticleViewSet(SlugViewSet):
-    queryset = models.Article.objects.filter(is_active=True).select_related().prefetch_related('categories')
+    queryset = (
+        models.Article.objects.filter(is_active=True)
+        .select_related()
+        .prefetch_related("categories")
+    )
     serializer_class = ArticleSerializer
     list_serializer_class = ListArticleSerializer
 
@@ -56,6 +53,5 @@ class TranslationViewSet(SlugViewSet):
 
     def get_queryset(self):
         return models.Translation.objects.filter(
-            article__slug=self.kwargs["article_slug"],
-            article__is_active=True
+            article__slug=self.kwargs["article_slug"], article__is_active=True
         )

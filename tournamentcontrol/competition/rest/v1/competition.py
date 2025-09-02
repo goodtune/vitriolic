@@ -22,7 +22,10 @@ class ListCompetitionSerializer(serializers.HyperlinkedModelSerializer):
         model = models.Competition
         fields = ("title", "slug", "url")
         extra_kwargs = {
-            "url": {"lookup_field": "slug", "view_name": "v1:competition:competition-detail"}
+            "url": {
+                "lookup_field": "slug",
+                "view_name": "v1:competition:competition-detail",
+            }
         }
 
 

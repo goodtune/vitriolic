@@ -8,12 +8,21 @@ urlpatterns = [
 ]
 
 # Dynamically add API endpoints based on installed apps
-if apps.is_installed('touchtechnology.news'):
+if apps.is_installed("touchtechnology.news"):
     urlpatterns.append(
-        path("news/", include(("touchtechnology.news.rest.v1.urls", "news"), namespace="news"))
+        path(
+            "news/",
+            include(("touchtechnology.news.rest.v1.urls", "news"), namespace="news"),
+        )
     )
 
-if apps.is_installed('tournamentcontrol.competition'):
+if apps.is_installed("tournamentcontrol.competition"):
     urlpatterns.append(
-        path("", include(("tournamentcontrol.competition.rest.v1.urls", "competition"), namespace="competition"))
+        path(
+            "",
+            include(
+                ("tournamentcontrol.competition.rest.v1.urls", "competition"),
+                namespace="competition",
+            ),
+        )
     )

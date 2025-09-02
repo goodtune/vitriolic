@@ -1,8 +1,11 @@
 from django.urls import reverse
-from test_plus import TestCase
 from rest_framework.test import APIClient
+from test_plus import TestCase
 
-from touchtechnology.news.tests.factories import ArticleFactory, CategoryFactory
+from touchtechnology.news.tests.factories import (
+    ArticleFactory,
+    CategoryFactory,
+)
 
 
 class NewsAPITestCase(TestCase):

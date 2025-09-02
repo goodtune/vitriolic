@@ -18,7 +18,7 @@ router = Router()
 router.register(r"categories", article.CategoryViewSet)
 router.register(r"articles", article.ArticleViewSet)
 
-article_router = routers.NestedDefaultRouter(
-    router, r"articles", lookup="article"
+article_router = routers.NestedDefaultRouter(router, r"articles", lookup="article")
+article_router.register(
+    r"translations", article.TranslationViewSet, basename="translation"
 )
-article_router.register(r"translations", article.TranslationViewSet, basename="translation")

@@ -9,7 +9,6 @@ from .viewsets import SlugViewSet
 
 
 class ListTeamSerializer(serializers.ModelSerializer):
-
     club = ClubSerializer(read_only=True)
 
     class Meta:
@@ -109,7 +108,9 @@ class ListStageSerializer(NestedHyperlinkedModelSerializer):
     class Meta:
         model = models.Stage
         fields = ("title", "slug", "url", "matches", "ladder_summary", "pools")
-        extra_kwargs = {"url": {"lookup_field": "slug", "view_name": "v1:competition:stage-detail"}}
+        extra_kwargs = {
+            "url": {"lookup_field": "slug", "view_name": "v1:competition:stage-detail"}
+        }
 
     def get_pools(self, obj):
         return [{"id": pool.pk, "title": pool.title} for pool in obj.pools.all()]
@@ -125,7 +126,10 @@ class ListDivisionSerializer(NestedHyperlinkedModelSerializer):
         model = models.Division
         fields = ("title", "slug", "url")
         extra_kwargs = {
-            "url": {"lookup_field": "slug", "view_name": "v1:competition:division-detail"},
+            "url": {
+                "lookup_field": "slug",
+                "view_name": "v1:competition:division-detail",
+            },
             "season": {"lookup_field": "slug"},
         }
 

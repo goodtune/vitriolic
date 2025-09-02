@@ -48,7 +48,10 @@ class ListDivisionSerializer(NestedHyperlinkedModelSerializer):
         model = models.Division
         fields = ("title", "slug", "url")
         extra_kwargs = {
-            "url": {"lookup_field": "slug", "view_name": "v1:competition:division-detail"},
+            "url": {
+                "lookup_field": "slug",
+                "view_name": "v1:competition:division-detail",
+            },
             "season": {"lookup_field": "slug"},
         }
 
@@ -60,7 +63,10 @@ class ListSeasonSerializer(NestedHyperlinkedModelSerializer):
         model = models.Season
         fields = ("title", "slug", "url")
         extra_kwargs = {
-            "url": {"lookup_field": "slug", "view_name": "v1:competition:season-detail"},
+            "url": {
+                "lookup_field": "slug",
+                "view_name": "v1:competition:season-detail",
+            },
             "competition": {"lookup_field": "slug"},
         }
 

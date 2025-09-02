@@ -67,14 +67,13 @@ class APITests(TestCase):
 
     def test_clubs_api_with_different_statuses(self):
         """Test that club-list endpoint includes status field for clubs with different statuses"""
-        inactive_club = factories.ClubFactory.create(status=ClubStatus.INACTIVE)
-        hidden_club = factories.ClubFactory.create(status=ClubStatus.HIDDEN)
+        factories.ClubFactory.create(status=ClubStatus.INACTIVE)
+        factories.ClubFactory.create(status=ClubStatus.HIDDEN)
 
         self.get("v1:competition:club-list")
         self.response_200()
 
         # Build expected payload for all clubs ordered by title
-        all_clubs = Club.objects.all().order_by("title")
         expected_payload = [
             {
                 "title": club.title,
@@ -88,7 +87,7 @@ class APITests(TestCase):
                 "youtube": club.youtube,
                 "website": club.website,
             }
-            for club in all_clubs
+            for club in Club.objects.all().order_by("title")
         ]
 
         self.assertJSONEqual(self.last_response.content, expected_payload)
@@ -528,7 +527,6 @@ class APITests(TestCase):
         division.save()
 
         stage = division.stages.first()
-        pools = [p for p in stage.pools.all()]
 
         # Score matches to trigger ladder summary generation via signals
         for match in stage.matches.all():
