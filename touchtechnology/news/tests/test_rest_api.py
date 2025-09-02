@@ -14,7 +14,7 @@ class NewsAPITestCase(TestCase):
 
     def test_categories_list_endpoint(self):
         """Test that categories list endpoint returns active categories."""
-        url = reverse("v1:category-list")
+        url = reverse("v1:news:category-list")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         # Check if it's a paginated response or direct list
@@ -29,7 +29,7 @@ class NewsAPITestCase(TestCase):
 
     def test_categories_detail_endpoint(self):
         """Test that category detail endpoint returns category data."""
-        url = reverse("v1:category-detail", kwargs={"slug": self.category.slug})
+        url = reverse("v1:news:category-detail", kwargs={"slug": self.category.slug})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["slug"], self.category.slug)
@@ -37,7 +37,7 @@ class NewsAPITestCase(TestCase):
 
     def test_articles_list_endpoint(self):
         """Test that articles list endpoint returns active articles."""
-        url = reverse("v1:article-list")
+        url = reverse("v1:news:article-list")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         # Direct list response (not paginated)
@@ -46,7 +46,7 @@ class NewsAPITestCase(TestCase):
 
     def test_articles_detail_endpoint(self):
         """Test that article detail endpoint returns article data with copy content."""
-        url = reverse("v1:article-detail", kwargs={"slug": self.article.slug})
+        url = reverse("v1:news:article-detail", kwargs={"slug": self.article.slug})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["slug"], self.article.slug)
@@ -57,7 +57,7 @@ class NewsAPITestCase(TestCase):
     def test_inactive_categories_excluded(self):
         """Test that inactive categories are excluded from API responses."""
         inactive_category = CategoryFactory(is_active=False)
-        url = reverse("v1:category-list")
+        url = reverse("v1:news:category-list")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         slugs = [cat["slug"] for cat in response.data]
@@ -66,7 +66,7 @@ class NewsAPITestCase(TestCase):
     def test_inactive_articles_excluded(self):
         """Test that inactive articles are excluded from API responses."""
         inactive_article = ArticleFactory(is_active=False)
-        url = reverse("v1:article-list")
+        url = reverse("v1:news:article-list")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         slugs = [art["slug"] for art in response.data]

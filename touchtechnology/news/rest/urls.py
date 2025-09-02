@@ -8,5 +8,4 @@ urlpatterns = [
             namespace="v1",
         ),
     ),
-    path("api-auth/", include("rest_framework.urls")),
 ]
