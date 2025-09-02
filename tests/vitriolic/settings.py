@@ -26,6 +26,9 @@ SECRET_KEY = "3h_k7=3wv&i&#^36t=zv)l99bijpp06j((ld%7u7&3u)2!8iq8"
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
+# Test mode flag - used by admin component registration to allow re-registration
+TESTING = True
+
 ALLOWED_HOSTS = []
 
 SITE_ID = 1

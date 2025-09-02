@@ -54,12 +54,12 @@ class APITests(TestCase):
 
     def test_club_list(self):
         """Test club-list endpoint"""
-        self.get("v1:club-list")
+        self.get("v1:competition:club-list")
         self.response_200()
 
     def test_club_detail(self):
         """Test club-detail endpoint"""
-        self.get("v1:club-detail", slug=self.club.slug)
+        self.get("v1:competition:club-detail", slug=self.club.slug)
         self.response_200()
 
         response_data = self.last_response.json()
@@ -67,14 +67,13 @@ class APITests(TestCase):
 
     def test_clubs_api_with_different_statuses(self):
         """Test that club-list endpoint includes status field for clubs with different statuses"""
-        inactive_club = factories.ClubFactory.create(status=ClubStatus.INACTIVE)
-        hidden_club = factories.ClubFactory.create(status=ClubStatus.HIDDEN)
+        factories.ClubFactory.create(status=ClubStatus.INACTIVE)
+        factories.ClubFactory.create(status=ClubStatus.HIDDEN)
 
-        self.get("v1:club-list")
+        self.get("v1:competition:club-list")
         self.response_200()
 
         # Build expected payload for all clubs ordered by title
-        all_clubs = Club.objects.all().order_by("title")
         expected_payload = [
             {
                 "title": club.title,
@@ -88,25 +87,25 @@ class APITests(TestCase):
                 "youtube": club.youtube,
                 "website": club.website,
             }
-            for club in all_clubs
+            for club in Club.objects.all().order_by("title")
         ]
 
         self.assertJSONEqual(self.last_response.content, expected_payload)
 
     def test_competition_list(self):
         """Test competition-list endpoint"""
-        self.get("v1:competition-list")
+        self.get("v1:competition:competition-list")
         self.response_200()
 
     def test_competition_detail(self):
         """Test competition-detail endpoint"""
-        self.get("v1:competition-detail", slug=self.competition.slug)
+        self.get("v1:competition:competition-detail", slug=self.competition.slug)
         self.response_200()
 
     def test_season_list(self):
         """Test season-list endpoint"""
         self.get(
-            "v1:season-list",
+            "v1:competition:season-list",
             competition_slug=self.competition.slug,
         )
         self.response_200()
@@ -114,7 +113,7 @@ class APITests(TestCase):
     def test_season_detail(self):
         """Test season-detail endpoint"""
         self.get(
-            "v1:season-detail",
+            "v1:competition:season-detail",
             competition_slug=self.competition.slug,
             slug=self.season.slug,
         )
@@ -123,7 +122,7 @@ class APITests(TestCase):
     def test_division_list(self):
         """Test division-list endpoint"""
         self.get(
-            "v1:division-list",
+            "v1:competition:division-list",
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
         )
@@ -132,7 +131,7 @@ class APITests(TestCase):
     def test_division_detail(self):
         """Test division-detail endpoint"""
         self.get(
-            "v1:division-detail",
+            "v1:competition:division-detail",
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
             slug=self.division.slug,
@@ -224,7 +223,7 @@ class APITests(TestCase):
     def test_players_list(self):
         """Test players-list endpoint"""
         self.get(
-            "v1:players-list",
+            "v1:competition:players-list",
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
         )
@@ -233,7 +232,7 @@ class APITests(TestCase):
     def test_players_detail(self):
         """Test players-detail endpoint"""
         self.get(
-            "v1:players-detail",
+            "v1:competition:players-detail",
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
             id=self.team_association.pk,
@@ -243,7 +242,7 @@ class APITests(TestCase):
     def test_match_list(self):
         """Test match-list endpoint"""
         self.get(
-            "v1:match-list",
+            "v1:competition:match-list",
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
         )
@@ -252,7 +251,7 @@ class APITests(TestCase):
     def test_match_detail(self):
         """Test match-detail endpoint"""
         self.get(
-            "v1:match-detail",
+            "v1:competition:match-detail",
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
             uuid=self.match.uuid,
@@ -262,7 +261,7 @@ class APITests(TestCase):
     def test_stage_list(self):
         """Test stage-list endpoint"""
         self.get(
-            "v1:stage-list",
+            "v1:competition:stage-list",
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
             division_slug=self.division.slug,
@@ -272,7 +271,7 @@ class APITests(TestCase):
     def test_stage_detail(self):
         """Test stage-detail endpoint"""
         self.get(
-            "v1:stage-detail",
+            "v1:competition:stage-detail",
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
             division_slug=self.division.slug,
@@ -326,7 +325,7 @@ class APITests(TestCase):
         )
 
         self.get(
-            "v1:division-detail",
+            "v1:competition:division-detail",
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
             slug=stage.division.slug,
@@ -528,7 +527,6 @@ class APITests(TestCase):
         division.save()
 
         stage = division.stages.first()
-        pools = [p for p in stage.pools.all()]
 
         # Score matches to trigger ladder summary generation via signals
         for match in stage.matches.all():
@@ -553,7 +551,7 @@ class APITests(TestCase):
 
         # Test division detail endpoint
         self.get(
-            "v1:division-detail",
+            "v1:competition:division-detail",
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
             slug=division.slug,
@@ -781,7 +779,7 @@ class APITests(TestCase):
 
         # Test stage detail endpoint
         self.get(
-            "v1:stage-detail",
+            "v1:competition:stage-detail",
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
             division_slug=division.slug,
@@ -895,7 +893,7 @@ class APITests(TestCase):
 
         # Test division detail endpoint
         self.get(
-            "v1:division-detail",
+            "v1:competition:division-detail",
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
             slug=division.slug,
