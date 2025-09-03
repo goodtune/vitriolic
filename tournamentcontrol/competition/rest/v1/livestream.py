@@ -119,7 +119,7 @@ class LiveStreamMatchSerializer(serializers.ModelSerializer):
         if isinstance(team, (models.Team, models.ByeTeam)):
             if hasattr(team, 'pk'):
                 # Return full team data for decided teams
-                return TeamSerializer(team).data
+                return TeamSerializer(team, context=self.context).data
             else:
                 # Handle ByeTeam
                 return {'id': None, 'title': str(team), 'slug': None, 'club': None}
@@ -251,7 +251,7 @@ class LiveStreamViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(matches_by_date)
     
     @action(detail=True, methods=['post'], serializer_class=LiveStreamTransitionSerializer)
-    def transition(self, request, uuid=None):
+    def transition(self, request, competition_slug=None, season_slug=None, uuid=None):
         """
         Transition the live stream status of a specific match.
         
