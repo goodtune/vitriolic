@@ -7,6 +7,6 @@ accounts = AccountsSite()
 
 urlpatterns = [
     path("accounts/", accounts.urls),
-    path("api/", include("tournamentcontrol.competition.rest.urls")),
+    path("api/", include("touchtechnology.common.rest.urls")),
     path("", competition.urls),
 ]
