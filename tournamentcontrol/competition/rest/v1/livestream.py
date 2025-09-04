@@ -76,8 +76,7 @@ class LiveStreamMatchSerializer(serializers.ModelSerializer):
     """
     Serializer for matches with live streaming capabilities.
     
-    Includes nested details of Stage, Division, Season, and Competition
-    as requested in the issue.
+    Includes nested details of Stage, Division, Season, and Competition.
     """
     
     stage = StageSerializer(read_only=True)
@@ -183,30 +182,19 @@ class LiveStreamViewSet(viewsets.ReadOnlyModelViewSet):
             external_identifier=''
         )
         
-        # Optional date range filtering
-        date_gte = self.request.query_params.get('date_gte')
+        # Optional date range filtering using Django conventions
+        date_gte = self.request.query_params.get('date__gte')
         if date_gte:
-            try:
-                date_gte = datetime.strptime(date_gte, '%Y-%m-%d').date()
-                queryset = queryset.filter(date__gte=date_gte)
-            except ValueError:
-                pass  # Ignore invalid date format
+            queryset = queryset.filter(date__gte=date_gte)
         
-        date_lte = self.request.query_params.get('date_lte')
+        date_lte = self.request.query_params.get('date__lte')
         if date_lte:
-            try:
-                date_lte = datetime.strptime(date_lte, '%Y-%m-%d').date()
-                queryset = queryset.filter(date__lte=date_lte)
-            except ValueError:
-                pass  # Ignore invalid date format
+            queryset = queryset.filter(date__lte=date_lte)
         
         # Optional season filtering
         season_id = self.request.query_params.get('season_id')
         if season_id:
-            try:
-                queryset = queryset.filter(stage__division__season_id=int(season_id))
-            except ValueError:
-                pass  # Ignore invalid season ID
+            queryset = queryset.filter(stage__division__season_id=season_id)
         
         return queryset.order_by('date', 'time', 'datetime')
     
@@ -214,15 +202,12 @@ class LiveStreamViewSet(viewsets.ReadOnlyModelViewSet):
         """
         Check that the user has permission to access live streaming features.
         
-        Uses the same permissions as the existing stream control views.
+        Requires 'change_match' permission, not necessarily superuser.
         """
         super().check_permissions(request)
         
-        # Use the same permission check as the stream control views
-        has_permission = permissions_required(
-            request, models.Match, return_403=False
-        )
-        if has_permission is not None:
+        # Check for change_match permission
+        if not request.user.has_perm('competition.change_match'):
             self.permission_denied(
                 request, 
                 message="You do not have permission to access live streaming features."
@@ -251,7 +236,7 @@ class LiveStreamViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(matches_by_date)
     
     @action(detail=True, methods=['post'], serializer_class=LiveStreamTransitionSerializer)
-    def transition(self, request, competition_slug=None, season_slug=None, uuid=None):
+    def transition(self, request, uuid=None):
         """
         Transition the live stream status of a specific match.
         

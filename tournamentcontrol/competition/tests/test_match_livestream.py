@@ -5,6 +5,7 @@ Test live streaming functionality on Match model.
 import warnings
 from unittest import mock
 
+from googleapiclient.errors import HttpError
 from test_plus import TestCase
 
 from tournamentcontrol.competition.exceptions import (
@@ -146,7 +147,6 @@ class MatchLiveStreamTests(TestCase):
     @mock.patch("tournamentcontrol.competition.models.build")
     def test_transition_with_youtube_api_exception_handling(self, mock_build):
         """Test that YouTube API exceptions are propagated properly."""
-        from googleapiclient.errors import HttpError
         
         # Mock YouTube service to raise HttpError
         mock_youtube = mock.Mock()

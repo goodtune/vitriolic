@@ -23,23 +23,21 @@ The Competition API is accessible at `/api/v1/` as part of the unified REST API 
 ### Live Streaming API
 
 #### Overview
-The live streaming API provides endpoints for managing YouTube live stream broadcasts for tournament matches. This API requires superuser authentication and integrates with the Google YouTube Data API v3.
+The live streaming API provides standalone endpoints for managing YouTube live stream broadcasts for tournament matches. This API requires `change_match` permission and integrates with the Google YouTube Data API v3.
 
 #### Authentication & Permissions
 - **Authentication Required**: All endpoints require user authentication
-- **Superuser Required**: Live streaming endpoints require superuser permissions
+- **Permission Required**: Live streaming endpoints require `change_match` permission (not necessarily superuser)
 - **YouTube Integration**: Requires valid YouTube API credentials and live streaming setup
 
 #### Match Listing
-**Endpoint**: `GET /api/v1/competitions/{competition_slug}/seasons/{season_slug}/livestreams/`
+**Endpoint**: `GET /api/v1/livestreams/`
 
 Lists all matches with live streaming capabilities, grouped by date.
 
 **Parameters:**
-- `competition_slug` (path) - Competition slug identifier
-- `season_slug` (path) - Season slug identifier  
-- `date_gte` (query, optional) - Filter matches from date (YYYY-MM-DD format)
-- `date_lte` (query, optional) - Filter matches to date (YYYY-MM-DD format)
+- `date__gte` (query, optional) - Filter matches from date (YYYY-MM-DD format)
+- `date__lte` (query, optional) - Filter matches to date (YYYY-MM-DD format)
 - `season_id` (query, optional) - Filter by specific season ID
 
 **Response Format:**
@@ -138,25 +136,21 @@ Lists all matches with live streaming capabilities, grouped by date.
 ```
 
 #### Match Detail
-**Endpoint**: `GET /api/v1/competitions/{competition_slug}/seasons/{season_slug}/livestreams/{uuid}/`
+**Endpoint**: `GET /api/v1/livestreams/{uuid}/`
 
 Retrieves detailed information for a specific match by UUID.
 
 **Parameters:**
-- `competition_slug` (path) - Competition slug identifier
-- `season_slug` (path) - Season slug identifier
 - `uuid` (path) - Match UUID
 
 **Response**: Same format as individual match in listing endpoint.
 
 #### Stream Status Transition
-**Endpoint**: `POST /api/v1/competitions/{competition_slug}/seasons/{season_slug}/livestreams/{uuid}/transition/`
+**Endpoint**: `POST /api/v1/livestreams/{uuid}/transition/`
 
 Transitions the live stream status of a specific match broadcast on YouTube.
 
 **Parameters:**
-- `competition_slug` (path) - Competition slug identifier  
-- `season_slug` (path) - Season slug identifier
 - `uuid` (path) - Match UUID
 
 **Request Body:**
@@ -252,22 +246,15 @@ All endpoints use consistent Django URL naming:
 from django.urls import reverse
 
 # List matches with live streaming
-reverse('v1:competition:livestream-list', kwargs={
-    'competition_slug': 'national-championship',
-    'season_slug': '2023'
-})
+reverse('v1:competition:livestream-list')
 
 # Get specific match details  
 reverse('v1:competition:livestream-detail', kwargs={
-    'competition_slug': 'national-championship',
-    'season_slug': '2023',
     'uuid': '123e4567-e89b-12d3-a456-426614174000'
 })
 
 # Transition stream status
 reverse('v1:competition:livestream-transition', kwargs={
-    'competition_slug': 'national-championship', 
-    'season_slug': '2023',
     'uuid': '123e4567-e89b-12d3-a456-426614174000'
 })
 ```
@@ -302,9 +289,6 @@ The live streaming API includes comprehensive test coverage:
 
 **Run Tests:**
 ```bash
-# Run all competition API tests
-tox -e dj52-py313 -- tournamentcontrol.competition.tests.test_rest_api_v1
-
 # Run live streaming tests specifically  
 tox -e dj52-py313 -- tournamentcontrol.competition.tests.test_livestream_api
 ```
@@ -340,7 +324,7 @@ For matches to appear in live streaming endpoints:
 
 ## Security Considerations
 
-- **Superuser Only**: All live streaming operations require superuser privileges
+- **Permission Required**: All live streaming operations require `change_match` permission
 - **YouTube Integration**: API keys and OAuth credentials should be stored securely
 - **Stream Keys**: RTMP stream keys should be treated as sensitive data
 - **Rate Limiting**: Consider implementing rate limiting for YouTube API calls

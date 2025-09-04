@@ -4,7 +4,7 @@ This module provides a unified REST API entrypoint that consolidates all applica
 
 ## API Structure
 
-All APIs are accessible under the unified `/api/` endpoint with version-first organization:
+All APIs are accessible under the unified API endpoint (commonly `/api/` but project-configurable) with version-first organization:
 
 - **Root API**: `/api/` - Discoverable API root with available versions
 - **Version 1**: `/api/v1/` - All v1 APIs consolidated under this namespace
@@ -24,7 +24,7 @@ Provides access to news articles and categories.
 - `GET /api/v1/news/articles/{article_slug}/translations/{locale}/` - Get translation details
 
 ### Competition API (`/api/v1/`)
-Provides access to competition, tournament, and live streaming functionality.
+Provides access to competition and tournament functionality.
 
 **Core Endpoints:**
 - `GET /api/v1/competitions/` - List competitions
@@ -34,10 +34,13 @@ Provides access to competition, tournament, and live streaming functionality.
 - `GET /api/v1/clubs/` - List clubs
 - `GET /api/v1/clubs/{slug}/` - Get club details
 
-**Live Streaming API:**
-- `GET /api/v1/competitions/{competition_slug}/seasons/{season_slug}/livestreams/` - List matches with live streaming capability
-- `GET /api/v1/competitions/{competition_slug}/seasons/{season_slug}/livestreams/{uuid}/` - Get specific match details
-- `POST /api/v1/competitions/{competition_slug}/seasons/{season_slug}/livestreams/{uuid}/transition/` - Transition live stream status
+### Live Streaming API (`/api/v1/`)
+Provides standalone live streaming management for matches.
+
+**Live Streaming Endpoints:**
+- `GET /api/v1/livestreams/` - List matches with live streaming capability
+- `GET /api/v1/livestreams/{uuid}/` - Get specific match details
+- `POST /api/v1/livestreams/{uuid}/transition/` - Transition live stream status
 
 ## Features
 
@@ -57,13 +60,13 @@ All APIs follow a consistent, version-first pattern:
 This provides:
 - **Version-first organization**: Easy to add new API versions
 - **Predictable URLs**: Consistent patterns across all modules
-- **SEO-friendly**: Slug-based lookups for all resources
+- **User-friendly**: Slug-based lookups for all resources
 - **Namespace isolation**: Each module has its own namespace (`v1:news:`, `v1:competition:`)
 
 ### Authentication & Permissions
 - **Authentication**: Uses Django REST Framework's built-in authentication
 - **Permissions**: Module-specific permission classes
-- **Live Streaming**: Requires superuser permissions for stream management
+- **Live Streaming**: Requires `change_match` permission for stream management
 
 ## Response Format
 
@@ -82,7 +85,7 @@ All API endpoints return standard Django REST Framework JSON responses with cons
   "news": "http://example.com/api/v1/news/",
   "competitions": "http://example.com/api/v1/competitions/",
   "clubs": "http://example.com/api/v1/clubs/",
-  "livestreams": "http://example.com/api/v1/competitions/{competition_slug}/seasons/{season_slug}/livestreams/"
+  "livestreams": "http://example.com/api/v1/livestreams/"
 }
 ```
 
@@ -92,14 +95,14 @@ All API endpoints return standard Django REST Framework JSON responses with cons
 The live streaming API provides endpoints for managing YouTube live stream broadcasts for tournament matches.
 
 ### Authentication
-All live streaming endpoints require authentication and superuser permissions.
+All live streaming endpoints require authentication and `change_match` permission.
 
 ### Match Listing (`GET /livestreams/`)
 Returns matches grouped by date with live streaming capabilities.
 
 **Query Parameters:**
-- `date_gte`: Filter matches from this date (YYYY-MM-DD)
-- `date_lte`: Filter matches up to this date (YYYY-MM-DD)
+- `date__gte`: Filter matches from this date (YYYY-MM-DD)
+- `date__lte`: Filter matches up to this date (YYYY-MM-DD)
 - `season_id`: Filter by specific season ID
 
 **Response Format:**
@@ -174,6 +177,12 @@ Transitions the live stream status of a specific match.
 - `testing` - Set broadcast to testing mode
 - `live` - Go live with broadcast
 - `complete` - End the broadcast
+
+**Error Responses:**
+- `400 Bad Request`: Invalid status or validation error
+- `403 Forbidden`: Insufficient permissions (`change_match` required)
+- `404 Not Found`: Match not found or doesn't have streaming capability
+- `500 Internal Server Error`: Unexpected error (e.g., YouTube API issues)
 
 **Response:**
 ```json

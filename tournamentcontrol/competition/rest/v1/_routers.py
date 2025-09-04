@@ -26,6 +26,7 @@ class Router(DefaultRouter):
 router = Router()
 router.register(r"clubs", club.ClubViewSet)
 router.register(r"competitions", competition.CompetitionViewSet)
+router.register(r"livestreams", livestream.LiveStreamViewSet, basename="livestream")
 
 competition_router = routers.NestedDefaultRouter(
     router, r"competitions", lookup="competition"
@@ -38,7 +39,6 @@ season_router = routers.NestedDefaultRouter(
 season_router.register(r"divisions", division.DivisionViewSet, basename="division")
 season_router.register(r"players", _247.PersonViewSet, basename="players")
 season_router.register(r"matches", _birdi.MatchViewSet, basename="match")
-season_router.register(r"livestreams", livestream.LiveStreamViewSet, basename="livestream")
 
 division_router = routers.NestedDefaultRouter(
     season_router, r"divisions", lookup="division"
