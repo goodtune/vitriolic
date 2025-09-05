@@ -119,7 +119,7 @@ Lists all matches with live streaming capabilities, grouped by date.
         "state": "NSW",
         "postcode": "2000"
       },
-      "external_identifier": "youtube_broadcast_id_123",
+      "external_identifier": "youtube_broadcast_123",
       "live_stream": true,
       "live_stream_bind": "rtmp_stream_key",
       "live_stream_thumbnail": "/media/livestream/thumbnails/match_123.jpg"
@@ -171,7 +171,7 @@ Transitions the live stream status of a specific match broadcast on YouTube.
   "success": true,
   "message": "Successfully transitioned to live",
   "youtube_response": {
-    "id": "youtube_broadcast_id_123",
+    "id": "youtube_broadcast_123",
     "status": {
       "lifeCycleStatus": "live"
     }
