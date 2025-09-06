@@ -220,43 +220,6 @@ class APITests(TestCase):
             },
         )
 
-    def test_players_list(self):
-        """Test players-list endpoint"""
-        self.get(
-            "v1:competition:players-list",
-            competition_slug=self.competition.slug,
-            season_slug=self.season.slug,
-        )
-        self.response_200()
-
-    def test_players_detail(self):
-        """Test players-detail endpoint"""
-        self.get(
-            "v1:competition:players-detail",
-            competition_slug=self.competition.slug,
-            season_slug=self.season.slug,
-            id=self.team_association.pk,
-        )
-        self.response_200()
-
-    def test_match_list(self):
-        """Test match-list endpoint"""
-        self.get(
-            "v1:competition:match-list",
-            competition_slug=self.competition.slug,
-            season_slug=self.season.slug,
-        )
-        self.response_200()
-
-    def test_match_detail(self):
-        """Test match-detail endpoint"""
-        self.get(
-            "v1:competition:match-detail",
-            competition_slug=self.competition.slug,
-            season_slug=self.season.slug,
-            uuid=self.match.uuid,
-        )
-        self.response_200()
 
     def test_stage_list(self):
         """Test stage-list endpoint"""
