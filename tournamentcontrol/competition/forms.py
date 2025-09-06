@@ -2,6 +2,7 @@ import collections
 import datetime
 import json
 import logging
+import warnings
 
 from dateutil.parser import parse
 from dateutil.rrule import DAILY, WEEKLY
@@ -33,6 +34,11 @@ from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _, ngettext
 from first import first
 from googleapiclient.errors import HttpError
+
+from tournamentcontrol.competition.exceptions import (
+    LiveStreamError,
+    LiveStreamTransitionWarning,
+)
 from modelforms.forms import ModelForm
 from pyparsing import ParseException
 
@@ -2074,15 +2080,27 @@ class StreamControlForm(forms.Form):
 
         for match in queryset:
             try:
-                youtube.liveBroadcasts().transition(
-                    broadcastStatus=broadcast_status,
-                    id=match.external_identifier,
-                    part="snippet,status",
-                ).execute()
+                # Use the new Match method for live stream transition
+                match.transition_live_stream(broadcast_status, youtube)
+                messages.success(request, f"{match}: broadcast is {broadcast_status!r}")
+            except LiveStreamError as exc:
+                messages.error(request, f"{match}: {exc}")
             except HttpError as exc:
                 messages.error(request, f"{match}: {exc.reason}")
-            else:
-                messages.success(request, f"{match}: broadcast is {broadcast_status!r}")
+            except Exception as exc:
+                # Catch any warnings that are raised as exceptions
+                with warnings.catch_warnings(record=True) as w:
+                    warnings.simplefilter("always")
+                    try:
+                        # Re-attempt without catching warnings
+                        match.transition_live_stream(broadcast_status, youtube)
+                        messages.success(request, f"{match}: broadcast is {broadcast_status!r}")
+                        # Display any warnings as info messages
+                        for warning in w:
+                            if issubclass(warning.category, LiveStreamTransitionWarning):
+                                messages.info(request, f"{match}: {warning.message}")
+                    except Exception as final_exc:
+                        messages.error(request, f"{match}: {final_exc}")
 
 
 class DivisionStructureJSONForm(forms.Form):

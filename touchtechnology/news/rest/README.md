@@ -4,22 +4,22 @@ This module provides a REST API for the news functionality with the following en
 
 ## API Endpoints
 
-The API is available at `/api/news/v1/` and includes:
+The API is available at `/api/v1/news/` as part of the unified REST API structure and includes:
 
 ### Categories
-- `GET /api/news/v1/categories/` - List all active categories
-- `GET /api/news/v1/categories/{slug}/` - Get category details by slug
+- `GET /api/v1/news/categories/` - List all active categories
+- `GET /api/v1/news/categories/{slug}/` - Get category details by slug
 
 ### Articles  
-- `GET /api/news/v1/articles/` - List all active articles
-- `GET /api/news/v1/articles/{slug}/` - Get article details by slug
+- `GET /api/v1/news/articles/` - List all active articles
+- `GET /api/v1/news/articles/{slug}/` - Get article details by slug
 
 ### Translations (nested under articles)
-- `GET /api/news/v1/articles/{article_slug}/translations/` - List translations for an article
-- `GET /api/news/v1/articles/{article_slug}/translations/{locale}/` - Get translation details
+- `GET /api/v1/news/articles/{article_slug}/translations/` - List translations for an article
+- `GET /api/v1/news/articles/{article_slug}/translations/{locale}/` - Get translation details
 
 ### API Root
-- `GET /api/news/v1/` - API root view with available endpoints
+- `GET /api/v1/news/` - API root view with available endpoints
 
 ## Features
 
