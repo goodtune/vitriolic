@@ -15,25 +15,25 @@ class DivisionLaddersGroupByTestCase(TestCase):
     
     def setUp(self):
         """Set up test data."""
-        self.user = SuperUserFactory()
+        self.user = SuperUserFactory.create()
         
         # Create test division with related objects using factories
-        self.division = DivisionFactory()
+        self.division = DivisionFactory.create()
         
         # Create a stage that will be included in ladders (keep_ladder=True is default)
-        self.stage = StageFactory(
+        self.stage = StageFactory.create(
             title="Test Stage",
             division=self.division,
             keep_ladder=True
         )
         
         # Create some pools to test pool_count functionality
-        self.pool1 = StageGroupFactory(
+        self.pool1 = StageGroupFactory.create(
             title="Pool A",
             stage=self.stage
         )
         
-        self.pool2 = StageGroupFactory(
+        self.pool2 = StageGroupFactory.create(
             title="Pool B", 
             stage=self.stage
         )
@@ -57,7 +57,7 @@ class DivisionLaddersGroupByTestCase(TestCase):
         """Test Division.ladders() works with stages that have no pools."""
         
         # Create a stage with no pools
-        stage_no_pools = StageFactory(
+        stage_no_pools = StageFactory.create(
             title="Stage No Pools",
             division=self.division,
             keep_ladder=True
@@ -80,7 +80,7 @@ class DivisionLaddersGroupByTestCase(TestCase):
         """Test that stages with keep_ladder=False are excluded."""
         
         # Create a stage that shouldn't keep ladder
-        StageFactory(
+        StageFactory.create(
             title="Non Ladder Stage",
             division=self.division,
             keep_ladder=False
