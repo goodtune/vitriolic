@@ -845,9 +845,11 @@ class Division(
 
     def ladders(self):
         res = collections.OrderedDict()
-        for stage in self.stages.exclude(keep_ladder=False).annotate(
-            pool_count=Count("pools")
-        ):
+        # Use prefetch_related to avoid N+1 queries while avoiding GROUP BY issues
+        stages_with_pools = self.stages.exclude(keep_ladder=False).prefetch_related('pools')
+        for stage in stages_with_pools:
+            # Set pool_count without triggering additional queries due to prefetch
+            stage.pool_count = len(stage.pools.all())
             res.update(stage.ladders())
         return res
 
