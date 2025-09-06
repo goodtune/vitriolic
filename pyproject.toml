@@ -62,6 +62,7 @@ competition = [
     "celery>5",
     "cloudinary",
     "django-embed-video",
+    "django-filter",
     "django-formtools",
     "django-htmx>=1.23.2",
     "django-mathfilters",

@@ -7,8 +7,10 @@ This module provides REST API endpoints for managing live streams of matches.
 import warnings
 from datetime import datetime
 
+import django_filters
 from django.db.models import Q
 from django.http import Http404
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -147,6 +149,30 @@ class LiveStreamTransitionSerializer(serializers.Serializer):
     )
 
 
+class LiveStreamMatchFilter(django_filters.FilterSet):
+    """
+    FilterSet for livestream matches with proper date validation.
+    """
+    date__gte = django_filters.DateFilter(
+        field_name='date',
+        lookup_expr='gte',
+        help_text='Filter matches from this date onwards (YYYY-MM-DD format)'
+    )
+    date__lte = django_filters.DateFilter(
+        field_name='date', 
+        lookup_expr='lte',
+        help_text='Filter matches up to this date (YYYY-MM-DD format)'
+    )
+    season_id = django_filters.NumberFilter(
+        field_name='stage__division__season_id',
+        help_text='Filter by season ID'
+    )
+    
+    class Meta:
+        model = models.Match
+        fields = ['date__gte', 'date__lte', 'season_id']
+
+
 class LiveStreamViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for live streaming matches.
@@ -160,17 +186,17 @@ class LiveStreamViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = LiveStreamMatchSerializer
     lookup_field = 'uuid'
     permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = LiveStreamMatchFilter
     
     def get_queryset(self):
         """
         Get queryset of matches with live streaming capability.
         
-        Filters by:
-        - Matches with external_identifier (live stream ID)
-        - Optional date range filtering (date_gte, date_lte)
-        - Optional season filtering (season_id)
+        Returns matches that have an external_identifier (live stream ID).
+        Additional filtering is handled by the FilterSet.
         """
-        queryset = models.Match.objects.select_related(
+        return models.Match.objects.select_related(
             'stage__division__season__competition',
             'home_team__club',
             'away_team__club',
@@ -180,23 +206,7 @@ class LiveStreamViewSet(viewsets.ReadOnlyModelViewSet):
             external_identifier__isnull=False
         ).exclude(
             external_identifier=''
-        )
-        
-        # Optional date range filtering using Django conventions
-        date_gte = self.request.query_params.get('date__gte')
-        if date_gte:
-            queryset = queryset.filter(date__gte=date_gte)
-        
-        date_lte = self.request.query_params.get('date__lte')
-        if date_lte:
-            queryset = queryset.filter(date__lte=date_lte)
-        
-        # Optional season filtering
-        season_id = self.request.query_params.get('season_id')
-        if season_id:
-            queryset = queryset.filter(stage__division__season_id=season_id)
-        
-        return queryset.order_by('date', 'time', 'datetime')
+        ).order_by('date', 'time', 'datetime')
     
     def check_permissions(self, request):
         """
