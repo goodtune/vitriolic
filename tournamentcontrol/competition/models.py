@@ -4,6 +4,7 @@
 import collections
 import logging
 import uuid
+import warnings
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -64,6 +65,11 @@ from tournamentcontrol.competition.query import (
     StatisticQuerySet,
 )
 from tournamentcontrol.competition.signals import match_forfeit
+from tournamentcontrol.competition.exceptions import (
+    LiveStreamIdentifierMissing,
+    LiveStreamTransitionWarning,
+    InvalidLiveStreamTransition,
+)
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
     combine_and_localize,
@@ -2274,6 +2280,80 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                                 pass
             res[index] = team
         return tuple(res)
+
+    def transition_live_stream(self, status, youtube_service=None):
+        """
+        Transition the live stream status of this match.
+        
+        Args:
+            status (str): The target broadcast status ('testing', 'live', 'complete')
+            youtube_service: Optional YouTube API service instance. If None, will use
+                           season's YouTube service.
+        
+        Returns:
+            dict: Response from YouTube API
+            
+        Raises:
+            LiveStreamIdentifierMissing: If the match has no external_identifier
+            InvalidLiveStreamTransition: If the transition is invalid
+            LiveStreamTransitionWarning: Warning for potentially invalid transitions
+        """
+        # Check if match has live stream identifier
+        if not self.external_identifier:
+            raise LiveStreamIdentifierMissing(
+                f"Match {self} does not have a live stream identifier"
+            )
+        
+        # Define valid transitions
+        valid_transitions = {
+            'testing': ['live'],
+            'live': ['complete'],
+            'complete': []
+        }
+        
+        # Get current broadcast status from YouTube if available
+        current_status = None
+        if youtube_service:
+            try:
+                response = youtube_service.liveBroadcasts().list(
+                    part='status',
+                    id=self.external_identifier
+                ).execute()
+                if response.get('items'):
+                    current_status = response['items'][0]['status']['lifeCycleStatus']
+            except Exception:
+                # If we can't get current status, proceed anyway
+                pass
+        
+        # Check for invalid transitions based on known current status
+        if current_status:
+            valid_next_states = valid_transitions.get(current_status, [])
+            if status not in valid_next_states and status != current_status:
+                if current_status == 'complete':
+                    # Can't transition from complete to anything
+                    raise InvalidLiveStreamTransition(
+                        f"Cannot transition from '{current_status}' to '{status}' "
+                        f"for match {self}"
+                    )
+                else:
+                    # Issue warning for potentially invalid transitions
+                    warnings.warn(
+                        f"Potentially invalid transition from '{current_status}' to '{status}' "
+                        f"for match {self}",
+                        LiveStreamTransitionWarning
+                    )
+        
+        # Use provided service or get from season
+        service = youtube_service or self.stage.division.season.youtube
+        
+        # Make the API call to transition the broadcast
+        response = service.liveBroadcasts().transition(
+            broadcastStatus=status,
+            id=self.external_identifier,
+            part="snippet,status",
+        ).execute()
+        
+        return response
 
     def __str__(self):
         return self.title
