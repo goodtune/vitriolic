@@ -75,6 +75,7 @@ competition = [
     "markdown",
     "pyparsing",
     "python-dateutil",
+    "python-magic",
 ]
 # Deprecated optional dependencies
 redis = []
