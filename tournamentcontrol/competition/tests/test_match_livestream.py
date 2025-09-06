@@ -40,7 +40,7 @@ class MatchLiveStreamTests(TestCase):
         # Match with live stream identifier
         self.match_with_stream = factories.MatchFactory.create(
             stage=self.stage,
-            external_identifier="youtube_broadcast_123",
+            external_identifier="yt_broadcast_123",
             live_stream=True,
         )
         
@@ -64,7 +64,7 @@ class MatchLiveStreamTests(TestCase):
         """Test successful live stream transition."""
         # Mock YouTube service
         mock_youtube = mock.Mock()
-        mock_response = {'id': 'youtube_broadcast_123', 'status': 'live'}
+        mock_response = {'id': 'yt_broadcast_123', 'status': 'live'}
         mock_youtube.liveBroadcasts.return_value.transition.return_value.execute.return_value = mock_response
         mock_build.return_value = mock_youtube
         
@@ -77,7 +77,7 @@ class MatchLiveStreamTests(TestCase):
         # Verify YouTube API was called correctly
         mock_youtube.liveBroadcasts.return_value.transition.assert_called_once_with(
             broadcastStatus='live',
-            id='youtube_broadcast_123',
+            id='yt_broadcast_123',
             part='snippet,status'
         )
 
@@ -219,6 +219,6 @@ class MatchLiveStreamTests(TestCase):
         self.assertEqual(response['status'], 'live')
         mock_youtube.liveBroadcasts.return_value.transition.assert_called_once_with(
             broadcastStatus='live',
-            id='youtube_broadcast_123',
+            id='yt_broadcast_123',
             part='snippet,status'
         )
