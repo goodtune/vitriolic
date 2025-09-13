@@ -798,11 +798,23 @@ class BaseMatchFormMixin(BootstrapFormControlMixin):
         if not self.instance or self.instance.stage is None:
             return
 
-        # set the queryset of the `home_team` and `away_team` fields
-        team_ids = self.instance.stage.division.teams.values_list("id", flat=True)
-        undecided_team_ids = self.instance.stage.undecided_teams.values_list(
-            "id", flat=True
+        # Check if ignore_group_validation is set on the instance or in the data
+        ignore_validation = (
+            getattr(self.instance, 'ignore_group_validation', False) or
+            (self.data and self.data.get('ignore_group_validation') in ['1', 'on', 'true', 'True'])
         )
+
+        if ignore_validation:
+            # For cross-division matches, allow teams from all divisions in the season
+            season = self.instance.stage.division.season
+            team_ids = Team.objects.filter(division__season=season).values_list("id", flat=True)
+            undecided_team_ids = UndecidedTeam.objects.filter(stage__division__season=season).values_list("id", flat=True)
+        else:
+            # set the queryset of the `home_team` and `away_team` fields
+            team_ids = self.instance.stage.division.teams.values_list("id", flat=True)
+            undecided_team_ids = self.instance.stage.undecided_teams.values_list(
+                "id", flat=True
+            )
 
         for prefix in ("home", "away"):
             for suffix, ids in (("", team_ids), ("_undecided", undecided_team_ids)):
@@ -913,27 +925,6 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
             (self.data and self.data.get('ignore_group_validation') in ['1', 'on', 'true', 'True'])
         )
 
-        # If ignore_group_validation is set, allow all teams from the season
-        if ignore_validation:
-            # Allow teams from all divisions in the season for cross-division matches
-            season_teams = Team.objects.filter(
-                division__season=self.instance.stage.division.season
-            )
-            # Override BaseMatchFormMixin's restrictions
-            if "home_team" in self.fields:
-                self.fields["home_team"].queryset = season_teams
-            if "away_team" in self.fields:
-                self.fields["away_team"].queryset = season_teams
-                
-            # Also allow undecided teams from all stages in the season
-            season_undecided = UndecidedTeam.objects.filter(
-                stage__division__season=self.instance.stage.division.season
-            )
-            if "home_team_undecided" in self.fields:
-                self.fields["home_team_undecided"].queryset = season_undecided
-            if "away_team_undecided" in self.fields:
-                self.fields["away_team_undecided"].queryset = season_undecided
-
         # restrict the list of referees to those registered this season
         if "referees" in self.fields:
             self.fields[
@@ -994,7 +985,11 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
     def clean_home_team(self):
         pool = self.cleaned_data.get("stage_group")
         team = self.cleaned_data.get("home_team")
-        ignore_validation = self.cleaned_data.get("ignore_group_validation", False)
+        # Check ignore_group_validation from both cleaned_data and raw data
+        ignore_validation = (
+            self.cleaned_data.get("ignore_group_validation", False) or
+            (self.data and self.data.get('ignore_group_validation') in ['1', 'on', 'true', 'True'])
+        )
         
         if not ignore_validation:
             if (
@@ -1018,7 +1013,11 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
     def clean_away_team(self):
         pool = self.cleaned_data.get("stage_group")
         team = self.cleaned_data.get("away_team")
-        ignore_validation = self.cleaned_data.get("ignore_group_validation", False)
+        # Check ignore_group_validation from both cleaned_data and raw data
+        ignore_validation = (
+            self.cleaned_data.get("ignore_group_validation", False) or
+            (self.data and self.data.get('ignore_group_validation') in ['1', 'on', 'true', 'True'])
+        )
         
         if not ignore_validation:
             if (
@@ -1046,7 +1045,11 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
     def clean_home_team_undecided(self):
         pool = self.cleaned_data.get("stage_group")
         team = self.cleaned_data.get("home_team_undecided")
-        ignore_validation = self.cleaned_data.get("ignore_group_validation", False)
+        # Check ignore_group_validation from both cleaned_data and raw data
+        ignore_validation = (
+            self.cleaned_data.get("ignore_group_validation", False) or
+            (self.data and self.data.get('ignore_group_validation') in ['1', 'on', 'true', 'True'])
+        )
         
         if not ignore_validation:
             if pool and team and team not in pool.undecided_teams.all():
@@ -1061,7 +1064,11 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
     def clean_away_team_undecided(self):
         pool = self.cleaned_data.get("stage_group")
         team = self.cleaned_data.get("away_team_undecided")
-        ignore_validation = self.cleaned_data.get("ignore_group_validation", False)
+        # Check ignore_group_validation from both cleaned_data and raw data
+        ignore_validation = (
+            self.cleaned_data.get("ignore_group_validation", False) or
+            (self.data and self.data.get('ignore_group_validation') in ['1', 'on', 'true', 'True'])
+        )
         
         if not ignore_validation:
             if pool and team and team not in pool.undecided_teams.all():
