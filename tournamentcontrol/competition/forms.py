@@ -907,6 +907,33 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
         if not self.instance or not self.instance.stage:
             return
 
+        # Check if ignore_group_validation is set on the instance or in the data
+        ignore_validation = (
+            getattr(self.instance, 'ignore_group_validation', False) or
+            (self.data and self.data.get('ignore_group_validation') in ['1', 'on', 'true', 'True'])
+        )
+
+        # If ignore_group_validation is set, allow all teams from the season
+        if ignore_validation:
+            # Allow teams from all divisions in the season for cross-division matches
+            season_teams = Team.objects.filter(
+                division__season=self.instance.stage.division.season
+            )
+            # Override BaseMatchFormMixin's restrictions
+            if "home_team" in self.fields:
+                self.fields["home_team"].queryset = season_teams
+            if "away_team" in self.fields:
+                self.fields["away_team"].queryset = season_teams
+                
+            # Also allow undecided teams from all stages in the season
+            season_undecided = UndecidedTeam.objects.filter(
+                stage__division__season=self.instance.stage.division.season
+            )
+            if "home_team_undecided" in self.fields:
+                self.fields["home_team_undecided"].queryset = season_undecided
+            if "away_team_undecided" in self.fields:
+                self.fields["away_team_undecided"].queryset = season_undecided
+
         # restrict the list of referees to those registered this season
         if "referees" in self.fields:
             self.fields[
@@ -919,8 +946,8 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
         elif "stage_group" in self.fields:
             self.fields["stage_group"].queryset = self.instance.stage.pools.all()
 
-        # restrict the team choices if we have pools set
-        if self.instance.stage_group:
+        # restrict the team choices if we have pools set and not ignoring validation
+        if self.instance.stage_group and not ignore_validation:
             self.fields["home_team"].queryset = self.instance.stage_group.teams.all()
             self.fields["home_team"].empty_label = ""
             if self.instance.home_team:
@@ -967,43 +994,49 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
     def clean_home_team(self):
         pool = self.cleaned_data.get("stage_group")
         team = self.cleaned_data.get("home_team")
-        if (
-            pool
-            and team
-            and team not in pool.teams.all()
-            and team != self.instance.home_team
-        ):
-            raise forms.ValidationError(
-                _('Team "%(team)s" is not in pool "%(pool)s".')
-                % {"team": team.title, "pool": pool.title}
-            )
-        if (
-            team
-            and team not in self.instance.stage.division.teams.all()
-            and team != self.instance.home_team
-        ):
-            raise forms.ValidationError(_("This team is not in this division."))
+        ignore_validation = self.cleaned_data.get("ignore_group_validation", False)
+        
+        if not ignore_validation:
+            if (
+                pool
+                and team
+                and team not in pool.teams.all()
+                and team != self.instance.home_team
+            ):
+                raise forms.ValidationError(
+                    _('Team "%(team)s" is not in pool "%(pool)s".')
+                    % {"team": team.title, "pool": pool.title}
+                )
+            if (
+                team
+                and team not in self.instance.stage.division.teams.all()
+                and team != self.instance.home_team
+            ):
+                raise forms.ValidationError(_("This team is not in this division."))
         return team
 
     def clean_away_team(self):
         pool = self.cleaned_data.get("stage_group")
         team = self.cleaned_data.get("away_team")
-        if (
-            pool
-            and team
-            and team not in pool.teams.all()
-            and team != self.instance.away_team
-        ):
-            raise forms.ValidationError(
-                _('Team "%(team)s" is not in pool "%(pool)s".')
-                % {"team": team.title, "pool": pool.title}
-            )
-        if (
-            team
-            and team not in self.instance.stage.division.teams.all()
-            and team != self.instance.away_team
-        ):
-            raise forms.ValidationError(_("This team is not in this division."))
+        ignore_validation = self.cleaned_data.get("ignore_group_validation", False)
+        
+        if not ignore_validation:
+            if (
+                pool
+                and team
+                and team not in pool.teams.all()
+                and team != self.instance.away_team
+            ):
+                raise forms.ValidationError(
+                    _('Team "%(team)s" is not in pool "%(pool)s".')
+                    % {"team": team.title, "pool": pool.title}
+                )
+            if (
+                team
+                and team not in self.instance.stage.division.teams.all()
+                and team != self.instance.away_team
+            ):
+                raise forms.ValidationError(_("This team is not in this division."))
         if team and team == self.cleaned_data.get("home_team"):
             raise forms.ValidationError(
                 _("Teams cannot be scheduled to play against itself.")
@@ -1013,25 +1046,31 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
     def clean_home_team_undecided(self):
         pool = self.cleaned_data.get("stage_group")
         team = self.cleaned_data.get("home_team_undecided")
-        if pool and team and team not in pool.undecided_teams.all():
-            raise forms.ValidationError(
-                _('Team "%(team)s" is not in pool "%(pool)s".')
-                % {"team": team.title, "pool": pool.title}
-            )
-        if team and team not in self.instance.stage.undecided_teams.all():
-            raise forms.ValidationError(_("This team is not in this division."))
+        ignore_validation = self.cleaned_data.get("ignore_group_validation", False)
+        
+        if not ignore_validation:
+            if pool and team and team not in pool.undecided_teams.all():
+                raise forms.ValidationError(
+                    _('Team "%(team)s" is not in pool "%(pool)s".')
+                    % {"team": team.title, "pool": pool.title}
+                )
+            if team and team not in self.instance.stage.undecided_teams.all():
+                raise forms.ValidationError(_("This team is not in this division."))
         return team
 
     def clean_away_team_undecided(self):
         pool = self.cleaned_data.get("stage_group")
         team = self.cleaned_data.get("away_team_undecided")
-        if pool and team and team not in pool.undecided_teams.all():
-            raise forms.ValidationError(
-                _('Team "%(team)s" is not in pool "%(pool)s".')
-                % {"team": team.title, "pool": pool.title}
-            )
-        if team and team not in self.instance.stage.undecided_teams.all():
-            raise forms.ValidationError(_("This team is not in this division."))
+        ignore_validation = self.cleaned_data.get("ignore_group_validation", False)
+        
+        if not ignore_validation:
+            if pool and team and team not in pool.undecided_teams.all():
+                raise forms.ValidationError(
+                    _('Team "%(team)s" is not in pool "%(pool)s".')
+                    % {"team": team.title, "pool": pool.title}
+                )
+            if team and team not in self.instance.stage.undecided_teams.all():
+                raise forms.ValidationError(_("This team is not in this division."))
         if team and team == self.cleaned_data.get("home_team_undecided"):
             raise forms.ValidationError(
                 _("Teams cannot be scheduled to play against itself.")
@@ -1055,6 +1094,7 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
             "round",
             "date",
             "include_in_ladder",
+            "ignore_group_validation",
             "videos",
         )
         labels = {
@@ -1077,6 +1117,7 @@ class MatchStreamForm(MatchEditForm):
             "round",
             "date",
             "include_in_ladder",
+            "ignore_group_validation",
             "live_stream",
             "live_stream_thumbnail",
             # "external_identifier",
