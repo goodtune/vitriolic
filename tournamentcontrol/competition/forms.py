@@ -793,7 +793,14 @@ class BaseMatchFormMixin(BootstrapFormControlMixin):
     def _should_use_cross_division_teams(self):
         """
         Determine if this form should allow cross-division team selection.
-        Checks both the model instance and form data for the ignore_group_validation flag.
+        
+        This method checks both the model instance and form data for the 
+        ignore_group_validation flag. Subclasses can override this method
+        to provide alternative behavior (e.g., always return True for
+        cross-division forms).
+        
+        Note: This check must happen in __init__ rather than clean() methods
+        because querysets need to be set before the form is rendered to the user.
         """
         return (
             self.instance.ignore_group_validation or
@@ -1165,6 +1172,32 @@ class DrawGenerationMatchForm(MatchEditForm):
             "away_team_undecided",
             "date",
         )
+
+
+class CrossDivisionMatchFormMixin:
+    """
+    Mixin that overrides queryset behavior to allow cross-division team selection.
+    Use this mixin when creating forms specifically for cross-division matches.
+    """
+    def _should_use_cross_division_teams(self):
+        """Always use cross-division teams for this form type."""
+        return True
+
+
+class CrossDivisionMatchEditForm(CrossDivisionMatchFormMixin, MatchEditForm):
+    """
+    Form for creating/editing cross-division matches.
+    This form allows team selection from all divisions within the season.
+    """
+    pass
+
+
+class CrossDivisionMatchStreamForm(CrossDivisionMatchFormMixin, MatchStreamForm):
+    """
+    Form for creating/editing cross-division matches with streaming capabilities.
+    This form allows team selection from all divisions within the season.
+    """
+    pass
 
 
 BaseDrawGenerationMatchFormSet = modelformset_factory(
