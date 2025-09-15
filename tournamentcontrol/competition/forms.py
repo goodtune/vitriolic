@@ -802,10 +802,17 @@ class BaseMatchFormMixin(BootstrapFormControlMixin):
         Note: This check must happen in __init__ rather than clean() methods
         because querysets need to be set before the form is rendered to the user.
         """
-        return (
-            self.instance.ignore_group_validation or
-            (self.data and self.data.get('ignore_group_validation') in ['1', 'on', 'true', 'True'])
-        )
+        # Check instance first
+        if self.instance.ignore_group_validation:
+            return True
+        
+        # If form has data, check the submitted value using Django's standard conversion   
+        if self.data:
+            raw_value = self.data.get('ignore_group_validation')
+            # Handle common form representations of boolean True
+            return raw_value in ('1', 'on', 'true', 'True', True)
+        
+        return False
 
     def __init__(self, timeslots=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1197,7 +1204,6 @@ class CrossDivisionMatchStreamForm(CrossDivisionMatchFormMixin, MatchStreamForm)
     Form for creating/editing cross-division matches with streaming capabilities.
     This form allows team selection from all divisions within the season.
     """
-    pass
 
 
 BaseDrawGenerationMatchFormSet = modelformset_factory(

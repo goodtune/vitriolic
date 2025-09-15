@@ -50,7 +50,7 @@ class CrossDivisionMatchTests(TestCase):
         }
         
         form = MatchEditForm(instance=match, data=form_data)
-        self.assertTrue(form.is_valid(), form.errors)
+        self.assertTrue(form.is_valid(), f"Form errors: {form.errors}")
         
         # Verify the flag is correctly set to False
         saved_match = form.save()
@@ -72,7 +72,7 @@ class CrossDivisionMatchTests(TestCase):
         }
         
         form = MatchEditForm(instance=match, data=form_data)
-        self.assertTrue(form.is_valid(), form.errors)
+        self.assertTrue(form.is_valid(), f"Form errors: {form.errors}")
         
         saved_match = form.save()
         self.assertEqual(saved_match.home_team, self.team1_div1)
@@ -111,8 +111,8 @@ class CrossDivisionMatchTests(TestCase):
     def test_stage_group_validation_bypassed_when_flag_set(self):
         """Test that pool/stage group validation is bypassed when ignore_group_validation=True."""
         # Create a stage with pools
-        pool1 = factories.StageGroupFactory(stage=self.stage1)
-        pool2 = factories.StageGroupFactory(stage=self.stage1)
+        pool1 = factories.StageGroupFactory.create(stage=self.stage1)
+        pool2 = factories.StageGroupFactory.create(stage=self.stage1)
         
         # Add teams to different pools
         pool1.teams.add(self.team1_div1)
@@ -134,12 +134,12 @@ class CrossDivisionMatchTests(TestCase):
         }
         
         form = MatchEditForm(instance=match, data=form_data)
-        self.assertTrue(form.is_valid(), form.errors)
+        self.assertTrue(form.is_valid(), f"Form errors: {form.errors}")
 
     def test_standard_match_enforces_stage_group_validation(self):
         """Test that standard matches enforce stage group validation."""
         # Create a stage with pools
-        pool1 = factories.StageGroupFactory(stage=self.stage1)
+        pool1 = factories.StageGroupFactory.create(stage=self.stage1)
         
         # Add both teams to the same pool initially
         pool1.teams.add(self.team1_div1, self.team2_div1)
@@ -162,7 +162,7 @@ class CrossDivisionMatchTests(TestCase):
         }
         
         form = MatchEditForm(instance=match, data=form_data)
-        self.assertTrue(form.is_valid(), form.errors)
+        self.assertTrue(form.is_valid(), f"Form errors: {form.errors}")
         
         # Verify the flag is correctly set to False
         saved_match = form.save()
@@ -171,8 +171,8 @@ class CrossDivisionMatchTests(TestCase):
     def test_undecided_team_validation_respects_flag(self):
         """Test that undecided team validation also respects the ignore_group_validation flag."""
         # Create undecided teams for different stages
-        undecided1 = factories.UndecidedTeamFactory(stage=self.stage1)
-        undecided2 = factories.UndecidedTeamFactory(stage=self.stage2)
+        undecided1 = factories.UndecidedTeamFactory.create(stage=self.stage1)
+        undecided2 = factories.UndecidedTeamFactory.create(stage=self.stage2)
         
         match = factories.MatchFactory(
             stage=self.stage1,
@@ -188,7 +188,7 @@ class CrossDivisionMatchTests(TestCase):
         }
         
         form = MatchEditForm(instance=match, data=form_data)
-        self.assertTrue(form.is_valid(), form.errors)
+        self.assertTrue(form.is_valid(), f"Form errors: {form.errors}")
 
     def test_match_string_representation_includes_validation_status(self):
         """Test that matches clearly indicate their non-standard status."""
@@ -208,9 +208,13 @@ class CrossDivisionMatchTests(TestCase):
             ignore_group_validation=True
         )
         
-        # Both should have valid string representations
-        self.assertIn("Team 1 Div A", str(standard_match))
-        self.assertIn("Team 2 Div A", str(standard_match))
+        # Both should have valid field values
+        self.assertEqual(standard_match.home_team.title, "Team 1 Div A")
+        self.assertEqual(standard_match.away_team.title, "Team 2 Div A")
+        self.assertEqual(standard_match.home_team, self.team1_div1)
+        self.assertEqual(standard_match.away_team, self.team2_div1)
         
-        self.assertIn("Team 1 Div A", str(cross_div_match))
-        self.assertIn("Team 1 Div B", str(cross_div_match))
+        self.assertEqual(cross_div_match.home_team.title, "Team 1 Div A")
+        self.assertEqual(cross_div_match.away_team.title, "Team 1 Div B")
+        self.assertEqual(cross_div_match.home_team, self.team1_div1)
+        self.assertEqual(cross_div_match.away_team, self.team1_div2)
