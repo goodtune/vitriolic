@@ -1006,8 +1006,11 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
     def clean_home_team(self):
         pool = self.cleaned_data.get("stage_group")
         team = self.cleaned_data.get("home_team")
-        # Check ignore_group_validation from cleaned_data
-        ignore_validation = self.cleaned_data.get("ignore_group_validation", False)
+        # Check ignore_group_validation from both cleaned_data and raw data
+        ignore_validation = (
+            self.cleaned_data.get("ignore_group_validation", False) or
+            (self.data and self.data.get('ignore_group_validation') in ['1', 'on', 'true', 'True'])
+        )
         
         if not ignore_validation:
             if (
@@ -1031,8 +1034,11 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
     def clean_away_team(self):
         pool = self.cleaned_data.get("stage_group")
         team = self.cleaned_data.get("away_team")
-        # Check ignore_group_validation from cleaned_data
-        ignore_validation = self.cleaned_data.get("ignore_group_validation", False)
+        # Check ignore_group_validation from both cleaned_data and raw data
+        ignore_validation = (
+            self.cleaned_data.get("ignore_group_validation", False) or
+            (self.data and self.data.get('ignore_group_validation') in ['1', 'on', 'true', 'True'])
+        )
         
         if not ignore_validation:
             if (
@@ -1060,8 +1066,11 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
     def clean_home_team_undecided(self):
         pool = self.cleaned_data.get("stage_group")
         team = self.cleaned_data.get("home_team_undecided")
-        # Check ignore_group_validation from cleaned_data
-        ignore_validation = self.cleaned_data.get("ignore_group_validation", False)
+        # Check ignore_group_validation from both cleaned_data and raw data
+        ignore_validation = (
+            self.cleaned_data.get("ignore_group_validation", False) or
+            (self.data and self.data.get('ignore_group_validation') in ['1', 'on', 'true', 'True'])
+        )
         
         if not ignore_validation:
             if pool and team and team not in pool.undecided_teams.all():
@@ -1076,8 +1085,11 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
     def clean_away_team_undecided(self):
         pool = self.cleaned_data.get("stage_group")
         team = self.cleaned_data.get("away_team_undecided")
-        # Check ignore_group_validation from cleaned_data
-        ignore_validation = self.cleaned_data.get("ignore_group_validation", False)
+        # Check ignore_group_validation from both cleaned_data and raw data
+        ignore_validation = (
+            self.cleaned_data.get("ignore_group_validation", False) or
+            (self.data and self.data.get('ignore_group_validation') in ['1', 'on', 'true', 'True'])
+        )
         
         if not ignore_validation:
             if pool and team and team not in pool.undecided_teams.all():
