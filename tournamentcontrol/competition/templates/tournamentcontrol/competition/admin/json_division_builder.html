@@ -100,7 +100,7 @@
 		$(document).ready(function() {
 			var totalForms = $('#id_form-TOTAL_FORMS');
 			var maxForms = parseInt($('#id_form-MAX_NUM_FORMS').val()) || 10;
-			
+
 			// Disable form fields in the empty form template to prevent validation issues
 			$('#empty-form input, #empty-form select, #empty-form textarea').prop('disabled', true);
 
@@ -136,7 +136,7 @@
 
 				// Replace __prefix__ in the form
 				newForm.html(newForm.html().replace(/__prefix__/g, formCount));
-				
+
 				// Enable form fields (they should be disabled in the template)
 				newForm.find('input, select, textarea').prop('disabled', false);
 

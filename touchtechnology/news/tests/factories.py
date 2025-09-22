@@ -36,3 +36,4 @@ class CategoryFactory(DjangoModelFactory):
         model = Category
 
     title = factory.Faker("country")
+    slug = factory.LazyAttribute(lambda a: slugify(a.title))
