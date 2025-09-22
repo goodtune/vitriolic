@@ -180,7 +180,7 @@ class OrderedSitemapNode(SitemapNodeBase):
         ordering = ("order",)
 
 
-class Competition(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
+class Competition(AdminUrlMixin, OrderedSitemapNode):
     enabled = BooleanField(default=True)
     clubs = ManyToManyField("Club", blank=True, related_name="competitions")
 
@@ -476,9 +476,7 @@ class Person(AdminUrlMixin, models.Model):
         )
 
 
-class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
-    rank_importance_parent_attr = "competition"
-
+class Season(AdminUrlMixin, OrderedSitemapNode):
     competition = ForeignKey(Competition, related_name="seasons", on_delete=PROTECT)
     hashtag = models.CharField(
         max_length=30,
@@ -783,15 +781,11 @@ class Ground(Place):
 class Division(
     AdminUrlMixin,
     ModelDiffMixin,
-    RankDivisionMixin,
-    RankImportanceMixin,
     OrderedSitemapNode,
 ):
     """
     A model that represents a division within a competition.
     """
-
-    rank_importance_parent_attr = "season"
 
     season = ForeignKey(Season, related_name="divisions", on_delete=PROTECT)
 
@@ -1098,9 +1092,7 @@ class Division(
         return ref_name
 
 
-class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
-    rank_importance_parent_attr = "division"
-
+class Stage(AdminUrlMixin, OrderedSitemapNode):
     division = ForeignKey(
         Division, related_name="stages", label_from_instance="title", on_delete=PROTECT
     )
@@ -1255,13 +1247,11 @@ class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         return res
 
 
-class StageGroup(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
+class StageGroup(AdminUrlMixin, OrderedSitemapNode):
     """
     A model which represents a sub-grouping of a division; often called a
     'pool', but could also be used to represent a combined division.
     """
-
-    rank_importance_parent_attr = "stage"
 
     stage = ForeignKey(Stage, related_name="pools", on_delete=PROTECT)
     carry_ladder = BooleanField(
@@ -1336,7 +1326,7 @@ class StageGroup(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         return res
 
 
-class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
+class Team(AdminUrlMixin, OrderedSitemapNode):
     """
     A model which represents a team in a competition. A team may not yet be
     placed into a division, as it might only be at the nomination stage.
@@ -1345,8 +1335,6 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
     over-ruled and locked by an administrator (for example, to remove a name
     which contains profanity) on a per-team basis.
     """
-
-    rank_division_parent_attr = "division"
 
     names_locked = BooleanField(
         default=False,
@@ -1803,7 +1791,7 @@ class SeasonAssociation(AdminUrlMixin, models.Model):
         unique_together = ("season", "person")
 
 
-class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
+class Match(AdminUrlMixin, models.Model):
     uuid = models.UUIDField(
         primary_key=False,
         default=uuid.uuid4,
@@ -1811,8 +1799,6 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         unique=True,
         db_index=True,
     )
-
-    rank_importance_parent_attr = ("stage_group", "stage")
 
     stage = ForeignKey(
         Stage,
