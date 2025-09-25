@@ -2,12 +2,21 @@
 Tests for YouTube thumbnail management functionality.
 """
 
+import io
 from unittest.mock import patch
 
 from django.test import TestCase
+from PIL import Image
 
 from tournamentcontrol.competition._mediaupload import MediaMemoryUpload
-from tournamentcontrol.competition.tests.factories import SeasonFactory, MatchFactory
+from tournamentcontrol.competition.tests.factories import (
+    MatchFactory,
+    SeasonFactory,
+)
+from tournamentcontrol.competition.utils import (
+    ThumbnailPreview,
+    create_thumbnail_preview,
+)
 
 
 class MediaMemoryUploadTestCase(TestCase):
@@ -170,3 +179,124 @@ class MatchThumbnailTestCase(TestCase):
         # Should use match thumbnail, not season
         self.assertEqual(upload.mimetype(), self.mimetype)
         self.assertEqual(upload.size(), len(self.image_data))
+
+
+class ThumbnailPreviewTestCase(TestCase):
+    """Test PIL-based thumbnail preview functionality."""
+
+    def setUp(self):
+        # Create a small test image
+        self.test_image = Image.new("RGB", (100, 100), color="red")
+        self.image_buffer = io.BytesIO()
+        self.test_image.save(self.image_buffer, format="PNG")
+        self.image_data = self.image_buffer.getvalue()
+
+        # Create a large test image
+        self.large_image = Image.new("RGB", (2000, 1500), color="blue")
+        self.large_buffer = io.BytesIO()
+        self.large_image.save(self.large_buffer, format="JPEG")
+        self.large_image_data = self.large_buffer.getvalue()
+
+    def test_create_thumbnail_preview_success(self):
+        """Test successful creation of thumbnail preview."""
+        result = create_thumbnail_preview(self.image_data)
+
+        self.assertIsNotNone(result.image_data)
+        self.assertIsInstance(result.image_data, bytes)
+        self.assertEqual(result.original_mime_type, "image/png")
+
+        # Test data URL generation
+        data_url = result.to_data_url()
+        self.assertIsNotNone(data_url)
+        self.assertTrue(data_url.startswith("data:image/jpeg;base64,"))
+
+    def test_create_thumbnail_preview_large_image(self):
+        """Test thumbnail preview creation with large image."""
+        result = create_thumbnail_preview(
+            self.large_image_data, max_width=640, max_height=480
+        )
+
+        self.assertIsNotNone(result.image_data)
+        self.assertIsInstance(result.image_data, bytes)
+        self.assertEqual(result.original_mime_type, "image/jpeg")
+
+        # Test data URL generation
+        data_url = result.to_data_url()
+        self.assertIsNotNone(data_url)
+        self.assertTrue(data_url.startswith("data:image/jpeg;base64,"))
+
+        # Verify the preview is smaller than original
+        self.assertLess(len(result.image_data), len(self.large_image_data))
+
+    def test_create_thumbnail_preview_rgba_conversion(self):
+        """Test that RGBA images are properly converted to RGB."""
+        rgba_image = Image.new(
+            "RGBA", (100, 100), color=(255, 0, 0, 128)
+        )  # Semi-transparent red
+        rgba_buffer = io.BytesIO()
+        rgba_image.save(rgba_buffer, format="PNG")
+        rgba_data = rgba_buffer.getvalue()
+
+        result = create_thumbnail_preview(rgba_data)
+
+        self.assertIsNotNone(result.image_data)
+        self.assertIsInstance(result.image_data, bytes)
+        self.assertEqual(result.original_mime_type, "image/png")
+
+        # Test data URL generation
+        data_url = result.to_data_url()
+        self.assertIsNotNone(data_url)
+        self.assertTrue(data_url.startswith("data:image/jpeg;base64,"))
+
+    def test_create_thumbnail_preview_custom_quality(self):
+        """Test thumbnail creation with custom quality settings."""
+        result_high = create_thumbnail_preview(self.image_data, quality=95)
+        result_low = create_thumbnail_preview(self.image_data, quality=50)
+
+        self.assertIsNotNone(result_high.image_data)
+        self.assertIsNotNone(result_low.image_data)
+        self.assertIsInstance(result_high.image_data, bytes)
+        self.assertIsInstance(result_low.image_data, bytes)
+        # Lower quality should result in smaller file
+        self.assertLess(len(result_low.image_data), len(result_high.image_data))
+
+    def test_create_thumbnail_preview_invalid_data(self):
+        """Test thumbnail creation with invalid image data."""
+        invalid_data = b"not an image"
+        result = create_thumbnail_preview(invalid_data)
+
+        self.assertIsNone(result.image_data)
+        self.assertIsNone(result.original_mime_type)
+
+        # Test data URL generation with invalid data
+        data_url = result.to_data_url()
+        self.assertIsNone(data_url)
+
+    def test_create_thumbnail_preview_aspect_ratio_preservation(self):
+        """Test that aspect ratio is preserved during thumbnail creation."""
+        # Create a wide image (2:1 aspect ratio)
+        wide_image = Image.new("RGB", (200, 100), color="green")
+        wide_buffer = io.BytesIO()
+        wide_image.save(wide_buffer, format="JPEG")
+        wide_data = wide_buffer.getvalue()
+
+        result = create_thumbnail_preview(wide_data, max_width=640, max_height=480)
+
+        self.assertIsNotNone(result.image_data)
+        self.assertIsInstance(result.image_data, bytes)
+
+        # Test data URL generation
+        data_url = result.to_data_url()
+        self.assertIsNotNone(data_url)
+
+        # Now we can easily verify the actual dimensions by decoding the image data
+        result_image = Image.open(io.BytesIO(result.image_data))
+        result_width, result_height = result_image.size
+
+        # Verify aspect ratio is preserved (2:1 ratio)
+        aspect_ratio = result_width / result_height
+        self.assertAlmostEqual(aspect_ratio, 2.0, places=1)
+
+        # Verify it fits within the specified bounds
+        self.assertLessEqual(result_width, 640)
+        self.assertLessEqual(result_height, 480)

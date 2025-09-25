@@ -102,3 +102,6 @@ multi_line_output = 5
 [tool.black]
 line-length = 88
 target-version = ["py39", "py312"]
+
+[tool.ruff]
+line-length = 88

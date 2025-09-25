@@ -2,6 +2,7 @@ import collections
 import functools
 import logging
 import operator
+import re
 from datetime import timedelta
 from operator import or_
 
@@ -50,6 +51,7 @@ from tournamentcontrol.competition.models import (
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
+    create_thumbnail_preview,
     legitimate_bye_match,
     team_needs_progressing,
 )
@@ -439,12 +441,17 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             path("forfeit/", self.forfeit_list, name="forfeit-list"),
             path("forfeit/<int:match>/", self.forfeit, name="forfeit"),
             path("videos/", self.season_videos, name="season-videos"),
+            path("thumbnail/", self.season_thumbnail, name="season-thumbnail"),
+            path(
+                "thumbnail/<int:width>x<int:height>/",
+                self.season_thumbnail,
+                name="season-thumbnail",
+            ),
             path("club:<slug:club>/", self.club, name="club"),
             path("club:<slug:club>.ics", self.calendar, name="calendar"),
             path("results/", include(self.result_urls())),
             path("runsheet/", include(self.runsheet_urls())),
             path("stream/", include(self.stream_urls())),
-
             path("<slug:division>.ics", self.calendar, name="calendar"),
             path("<slug:division>/", self.division, name="division"),
             path("<slug:division>:<slug:stage>/", self.stage, name="stage"),
@@ -454,6 +461,16 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                 "<slug:division>/match:<int:match>/video/",
                 self.match_video,
                 name="match-video",
+            ),
+            path(
+                "<slug:division>/match:<int:match>/thumbnail/",
+                self.match_thumbnail,
+                name="match-thumbnail",
+            ),
+            path(
+                "<slug:division>/match:<int:match>/thumbnail/<int:width>x<int:height>/",
+                self.match_thumbnail,
+                name="match-thumbnail",
             ),
             path("<slug:division>/<slug:team>.ics", self.calendar, name="calendar"),
             path("<slug:division>/<slug:team>/", self.team, name="team"),
@@ -1199,7 +1216,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         if request.method == "POST":
             # use the forfeit API to advise who made lodged the forfeit
             UNABLE_TO_POST = _(
-                "Unable to post forfeit, please contact the " "competition manager."
+                "Unable to post forfeit, please contact the competition manager."
             )
             try:
                 success = match.forfeit(team, request.user.person)
@@ -1230,7 +1247,39 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         templates = self.template_path("forfeit.html")
         return self.render(request, templates, context)
 
+    @competition_by_slug_m
+    def season_thumbnail(
+        self, request, competition, season, width=None, height=None, **kwargs
+    ):
+        """
+        Serve season thumbnail images.
 
+        URLs:
+        - /season/thumbnail/ - serves original image
+        - /season/thumbnail/<width>x<height>/ - serves resized image
+        """
+        return season.live_stream_thumbnail_response(width=width, height=height)
+
+    @competition_by_slug_m
+    def match_thumbnail(
+        self,
+        request,
+        competition,
+        season,
+        division,
+        match,
+        width=None,
+        height=None,
+        **kwargs,
+    ):
+        """
+        Serve match thumbnail images.
+
+        URLs:
+        - /match/thumbnail/ - serves original image (falls back to season thumbnail)
+        - /match/thumbnail/<width>x<height>/ - serves resized image
+        """
+        return match.live_stream_thumbnail_response(width=width, height=height)
 
 
 class MultiCompetitionSite(CompetitionSite):
