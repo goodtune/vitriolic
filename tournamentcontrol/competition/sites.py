@@ -2,7 +2,6 @@ import collections
 import functools
 import logging
 import operator
-import re
 from datetime import timedelta
 from operator import or_
 
@@ -14,12 +13,12 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Case, Count, F, Q, Sum, When
 from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
-from django.template.loader import render_to_string
 from django.urls import include, path, re_path, reverse
 from django.urls.exceptions import NoReverseMatch
 from django.utils import timezone
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext, gettext_lazy as _
+from django.views.decorators.cache import cache_page
 from guardian.utils import get_40x_or_None
 from icalendar import Calendar, Event
 
@@ -43,7 +42,6 @@ from tournamentcontrol.competition.forms import (
 )
 from tournamentcontrol.competition.models import (
     Competition,
-    Ground,
     Match,
     Person,
     SimpleScoreMatchStatistic,
@@ -51,12 +49,13 @@ from tournamentcontrol.competition.models import (
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
-    create_thumbnail_preview,
     legitimate_bye_match,
     team_needs_progressing,
 )
 
 LOG = logging.getLogger(__name__)
+
+THUMBNAIL_CACHE_TTL = 300  # 5 minutes
 
 
 def permissions_required(
@@ -441,10 +440,14 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             path("forfeit/", self.forfeit_list, name="forfeit-list"),
             path("forfeit/<int:match>/", self.forfeit, name="forfeit"),
             path("videos/", self.season_videos, name="season-videos"),
-            path("thumbnail/", self.season_thumbnail, name="season-thumbnail"),
+            path(
+                "thumbnail/",
+                cache_page(THUMBNAIL_CACHE_TTL)(self.season_thumbnail),
+                name="season-thumbnail",
+            ),
             path(
                 "thumbnail/<int:width>x<int:height>/",
-                self.season_thumbnail,
+                cache_page(THUMBNAIL_CACHE_TTL)(self.season_thumbnail),
                 name="season-thumbnail",
             ),
             path("club:<slug:club>/", self.club, name="club"),
@@ -464,12 +467,12 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             ),
             path(
                 "<slug:division>/match:<int:match>/thumbnail/",
-                self.match_thumbnail,
+                cache_page(THUMBNAIL_CACHE_TTL)(self.match_thumbnail),
                 name="match-thumbnail",
             ),
             path(
                 "<slug:division>/match:<int:match>/thumbnail/<int:width>x<int:height>/",
-                self.match_thumbnail,
+                cache_page(THUMBNAIL_CACHE_TTL)(self.match_thumbnail),
                 name="match-thumbnail",
             ),
             path("<slug:division>/<slug:team>.ics", self.calendar, name="calendar"),
