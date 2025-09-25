@@ -1204,8 +1204,8 @@ class BackendTests(MessagesTestMixin, TestCase):
         }
         # Unsaved instance means we don't have to trim the final positional argument.
         add_match = Match(stage=stage).url_names["add"]
-        files = {"live_stream_thumbnail_image": ""}
-        self.post(add_match.url_name, *add_match.args, data=data, extra={"files": files})
+        data["live_stream_thumbnail_image"] = ""
+        self.post(add_match.url_name, *add_match.args, data=data)
         self.response_302()
 
     def test_bug_100_add_stagegroup(self):
@@ -1628,9 +1628,9 @@ class BackendTests(MessagesTestMixin, TestCase):
             }
 
             # This should complete successfully without TypeError
-            files = {"live_stream_thumbnail_image": ""}
+            data["live_stream_thumbnail_image"] = ""
             self.post(
-                edit_match_url.url_name, *edit_match_url.args, data=data, extra={"files": files}
+                edit_match_url.url_name, *edit_match_url.args, data=data
             )
             self.response_302()  # Should redirect successfully
 
@@ -1901,9 +1901,9 @@ class BackendTests(MessagesTestMixin, TestCase):
             }
 
             # This should complete successfully without TypeError
-            files = {"live_stream_thumbnail_image": ""}
+            data["live_stream_thumbnail_image"] = ""
             self.post(
-                edit_match_url.url_name, *edit_match_url.args, data=data, extra={"files": files}
+                edit_match_url.url_name, *edit_match_url.args, data=data
             )
             self.response_302()  # Should redirect successfully
 
@@ -2129,6 +2129,6 @@ class BackendTests(MessagesTestMixin, TestCase):
         }
 
         add_match = Match(stage=stage).url_names["add"]
-        files = {"live_stream_thumbnail_image": ""}
-        self.post(add_match.url_name, *add_match.args, data=data, extra={"files": files})
+        data["live_stream_thumbnail_image"] = ""
+        self.post(add_match.url_name, *add_match.args, data=data)
         self.response_302()
