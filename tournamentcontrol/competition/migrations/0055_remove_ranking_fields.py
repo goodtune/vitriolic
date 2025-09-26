@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("competition", "0052_add_club_status"),
+        ("competition", "0054_migrate_thumbnail_urls_to_binary"),
     ]
 
     operations = [
