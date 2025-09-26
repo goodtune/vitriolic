@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from django.test.utils import override_settings
@@ -354,8 +354,6 @@ class FrontEndTests(TestCase):
             team.division.season.competition.slug,
             team.division.season.slug,
         )
-
-
 
 
 class StreamInstructionsTests(TestCase):
