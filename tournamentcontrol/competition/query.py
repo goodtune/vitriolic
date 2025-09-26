@@ -28,7 +28,6 @@ class StageQuerySet(QuerySet):
         return self.filter(keep_ladder=True, ladder_summary__isnull=False).distinct()
 
 
-
 class MatchQuerySet(QuerySet):
     def future(self, date=None):
         if date is None:

@@ -8,6 +8,7 @@ import warnings
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
+import requests
 from cloudinary.models import CloudinaryField
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
@@ -18,6 +19,7 @@ from django.contrib.postgres import fields as PG
 from django.core import validators
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
+from django.http import Http404, HttpResponse
 from django.db.models import Count, DateField, DateTimeField, Q, Sum, TimeField
 from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
 from django.template import Template
@@ -31,6 +33,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaInMemoryUpload, MediaUpload
 from timezone_field.fields import TimeZoneField
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
@@ -42,6 +45,7 @@ from touchtechnology.common.db.models import (
     ManyToManyField,
 )
 from touchtechnology.common.models import SitemapNodeBase
+from tournamentcontrol.competition._mediaupload import MediaMemoryUpload
 from tournamentcontrol.competition.constants import (
     GENDER_CHOICES,
     SEASON_MODE_CHOICES,
@@ -54,6 +58,11 @@ from tournamentcontrol.competition.draw.schemas import (
     PoolFixture,
     StageFixture,
 )
+from tournamentcontrol.competition.exceptions import (
+    InvalidLiveStreamTransition,
+    LiveStreamIdentifierMissing,
+    LiveStreamTransitionWarning,
+)
 from tournamentcontrol.competition.managers import (
     LadderEntryManager,
     MatchManager,
@@ -65,14 +74,11 @@ from tournamentcontrol.competition.query import (
     StatisticQuerySet,
 )
 from tournamentcontrol.competition.signals import match_forfeit
-from tournamentcontrol.competition.exceptions import (
-    LiveStreamIdentifierMissing,
-    LiveStreamTransitionWarning,
-    InvalidLiveStreamTransition,
-)
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
     combine_and_localize,
+    create_thumbnail_preview,
+    create_thumbnail_response,
     stage_group_position,
     stage_group_position_re,
     team_and_division,
@@ -537,6 +543,12 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     live_stream_token_uri = models.URLField(null=True)
     live_stream_scopes = PG.ArrayField(models.CharField(max_length=200), null=True)
     live_stream_thumbnail = models.URLField(blank=True, null=True)
+    live_stream_thumbnail_image = models.BinaryField(
+        blank=True,
+        null=True,
+        editable=True,
+        help_text="Image to be used as thumbnail image on the YouTube platform",
+    )
 
     complete = BooleanField(
         default=False,
@@ -705,6 +717,35 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         for timeslot in self.timeslots.exclude(exc):
             rset.rrule(timeslot.rrule())
         return [dt.time() for dt in rset]
+
+    def get_thumbnail_media_upload(self) -> MediaUpload | None:
+        """
+        Get a MediaMemoryUpload instance for this season's thumbnail.
+
+        Returns:
+            MediaMemoryUpload or None if no thumbnail is set
+        """
+        if self.live_stream_thumbnail_image:
+            return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
+        return None
+
+    def live_stream_thumbnail_response(self, width=None, height=None) -> HttpResponse:
+        """
+        Get HttpResponse for this season's thumbnail image.
+
+        Args:
+            width (int, optional): Maximum width for resizing
+            height (int, optional): Maximum height for resizing
+
+        Returns:
+            HttpResponse: Image response with appropriate headers
+
+        Raises:
+            Http404: If no thumbnail is available or processing fails
+        """
+        return create_thumbnail_response(
+            self.live_stream_thumbnail_image, width, height
+        )
 
 
 class Place(AdminUrlMixin, OrderedSitemapNode):
@@ -981,8 +1022,6 @@ class Division(
 
     def _generate_draw_format_for_export(self, matches, all_teams, pool_teams=None):
         """Generate a draw_format string from matches."""
-        from collections import OrderedDict
-
         if not matches.exists():
             return ""
 
@@ -993,7 +1032,7 @@ class Division(
         db_id_to_match_id = {match.id: idx + 1 for idx, match in enumerate(match_list)}
 
         # Group matches by round
-        rounds = OrderedDict()
+        rounds = collections.OrderedDict()
         for match in match_list:
             round_num = match.round or 1
             if round_num not in rounds:
@@ -1935,6 +1974,12 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         max_length=50, blank=True, null=True, db_index=True
     )
     live_stream_thumbnail = models.URLField(blank=True, null=True)
+    live_stream_thumbnail_image = models.BinaryField(
+        blank=True,
+        null=True,
+        editable=True,
+        help_text="Image to be used as thumbnail image on the YouTube platform",
+    )
 
     objects = MatchManager()
 
@@ -2282,15 +2327,15 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
     def transition_live_stream(self, status, youtube_service=None):
         """
         Transition the live stream status of this match.
-        
+
         Args:
             status (str): The target broadcast status ('testing', 'live', 'complete')
             youtube_service: Optional YouTube API service instance. If None, will use
                            season's YouTube service.
-        
+
         Returns:
             dict: Response from YouTube API
-            
+
         Raises:
             LiveStreamIdentifierMissing: If the match has no external_identifier
             InvalidLiveStreamTransition: If the transition is invalid
@@ -2301,33 +2346,30 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
             raise LiveStreamIdentifierMissing(
                 f"Match {self} does not have a live stream identifier"
             )
-        
+
         # Define valid transitions
-        valid_transitions = {
-            'testing': ['live'],
-            'live': ['complete'],
-            'complete': []
-        }
-        
+        valid_transitions = {"testing": ["live"], "live": ["complete"], "complete": []}
+
         # Get current broadcast status from YouTube if available
         current_status = None
         if youtube_service:
             try:
-                response = youtube_service.liveBroadcasts().list(
-                    part='status',
-                    id=self.external_identifier
-                ).execute()
-                if response.get('items'):
-                    current_status = response['items'][0]['status']['lifeCycleStatus']
+                response = (
+                    youtube_service.liveBroadcasts()
+                    .list(part="status", id=self.external_identifier)
+                    .execute()
+                )
+                if response.get("items"):
+                    current_status = response["items"][0]["status"]["lifeCycleStatus"]
             except Exception:
                 # If we can't get current status, proceed anyway
                 pass
-        
+
         # Check for invalid transitions based on known current status
         if current_status:
             valid_next_states = valid_transitions.get(current_status, [])
             if status not in valid_next_states and status != current_status:
-                if current_status == 'complete':
+                if current_status == "complete":
                     # Can't transition from complete to anything
                     raise InvalidLiveStreamTransition(
                         f"Cannot transition from '{current_status}' to '{status}' "
@@ -2338,19 +2380,23 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                     warnings.warn(
                         f"Potentially invalid transition from '{current_status}' to '{status}' "
                         f"for match {self}",
-                        LiveStreamTransitionWarning
+                        LiveStreamTransitionWarning,
                     )
-        
+
         # Use provided service or get from season
         service = youtube_service or self.stage.division.season.youtube
-        
+
         # Make the API call to transition the broadcast
-        response = service.liveBroadcasts().transition(
-            broadcastStatus=status,
-            id=self.external_identifier,
-            part="snippet,status",
-        ).execute()
-        
+        response = (
+            service.liveBroadcasts()
+            .transition(
+                broadcastStatus=status,
+                id=self.external_identifier,
+                part="snippet,status",
+            )
+            .execute()
+        )
+
         return response
 
     def __str__(self):
@@ -2358,6 +2404,47 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
 
     def __repr__(self):
         return f"<Match: {self.round!s}: {self!s}>"
+
+    def get_thumbnail_media_upload(self) -> MediaUpload | None:
+        """
+        Get a MediaMemoryUpload instance for this match's thumbnail.
+        Falls back to season thumbnail if match has no specific thumbnail.
+
+        Returns:
+            MediaMemoryUpload or None if no thumbnail is available
+        """
+        # Try match-specific thumbnail first
+        if self.live_stream_thumbnail_image:
+            return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
+
+        # Fall back to season thumbnail
+        season = self.stage.division.season
+        if season.live_stream_thumbnail_image:
+            return MediaMemoryUpload(season.live_stream_thumbnail_image, resumable=True)
+
+        return None
+
+    def live_stream_thumbnail_response(self, width=None, height=None) -> HttpResponse:
+        """
+        Get HttpResponse for this match's thumbnail image.
+        Falls back to season thumbnail if match has no specific thumbnail.
+
+        Args:
+            width (int, optional): Maximum width for resizing
+            height (int, optional): Maximum height for resizing
+
+        Returns:
+            HttpResponse: Image response with appropriate headers
+
+        Raises:
+            Http404: If no thumbnail is available or processing fails
+        """
+        return create_thumbnail_response(
+            self.live_stream_thumbnail_image
+            or self.stage.division.season.live_stream_thumbnail_image,
+            width,
+            height,
+        )
 
 
 class LadderBase(models.Model):

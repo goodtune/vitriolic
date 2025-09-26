@@ -4,6 +4,7 @@ import json
 import logging
 import warnings
 
+import magic
 from dateutil.parser import parse
 from dateutil.rrule import DAILY, WEEKLY
 from django import forms
@@ -34,11 +35,6 @@ from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _, ngettext
 from first import first
 from googleapiclient.errors import HttpError
-
-from tournamentcontrol.competition.exceptions import (
-    LiveStreamError,
-    LiveStreamTransitionWarning,
-)
 from modelforms.forms import ModelForm
 from pyparsing import ParseException
 
@@ -60,6 +56,10 @@ from tournamentcontrol.competition.draw.algorithms import seeded_tournament
 from tournamentcontrol.competition.draw.builders import build
 from tournamentcontrol.competition.draw.generators import DrawGenerator
 from tournamentcontrol.competition.draw.schemas import DivisionStructure
+from tournamentcontrol.competition.exceptions import (
+    LiveStreamError,
+    LiveStreamTransitionWarning,
+)
 from tournamentcontrol.competition.fields import URLField
 from tournamentcontrol.competition.models import (
     ByeTeam,
@@ -92,6 +92,8 @@ from tournamentcontrol.competition.models import (
 from tournamentcontrol.competition.signals.custom import score_updated
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
+    ThumbnailPreview,
+    create_thumbnail_preview,
     legitimate_bye_match,
     match_unplayed,
     time_choice,
@@ -207,6 +209,137 @@ class SelectDateTimeWidget(SelectDateTimeWidgetBase):
         if value:
             value = parse(value)
         return super(SelectDateTimeWidget, self).decompress(value)
+
+
+class ThumbnailImageWidget(forms.ClearableFileInput):
+    """
+    Widget for handling binary image data uploads with integrated preview support.
+    """
+
+    template_name = "tournamentcontrol/competition/widgets/thumbnail_image_widget.html"
+
+    def format_value(self, value):
+        # For binary data, we need to indicate that there's an existing image
+        # but we can't display the raw bytes
+        if value:
+            return "Current thumbnail"
+        return None
+
+    def get_context(self, name, value, attrs):
+        """Add thumbnail-specific context to the template."""
+        context = super().get_context(name, value, attrs)
+
+        # Add clear checkbox information for ClearableFileInput functionality
+        if value:
+            context["widget"]["clear_checkbox_name"] = self.clear_checkbox_name(name)
+            context["widget"]["clear_checkbox_id"] = self.clear_checkbox_id(name)
+
+            try:
+                # Detect MIME type and size
+                mime_type = magic.from_buffer(value, mime=True)
+
+                context["mime_type"] = mime_type
+                context["file_size_bytes"] = len(value)
+
+                # Create downscaled preview using PIL - works for any size image
+                preview_result = create_thumbnail_preview(value)
+                if preview_result.image_data:
+                    context["preview_data_url"] = preview_result.to_data_url()
+                    # Use detected MIME type from magic if PIL couldn't determine it
+                    if (
+                        preview_result.original_mime_type
+                        and preview_result.original_mime_type != "image/jpeg"
+                    ):
+                        context["mime_type"] = preview_result.original_mime_type
+                else:
+                    context["preview_failed"] = True
+
+            except Exception:
+                # Fallback if magic detection fails
+                context["file_size_bytes"] = len(value)
+
+                # Try to create preview anyway with PIL
+                preview_result = create_thumbnail_preview(value)
+                if preview_result.image_data:
+                    context["preview_data_url"] = preview_result.to_data_url()
+                else:
+                    context["preview_failed"] = True
+
+        return context
+
+    def value_from_datadict(self, data, files, name):
+        # Get the uploaded file (if any)
+        upload = super().value_from_datadict(data, files, name)
+
+        # Check if user clicked "Clear" checkbox
+        if self.clear_checkbox_name(name) in data:
+            return False  # Signal to clear the field
+
+        return upload
+
+    def use_required_attribute(self, initial):
+        return False  # Never make this required in HTML since we handle binary data
+
+
+class ThumbnailImageField(forms.FileField):
+    """
+    Custom field for handling thumbnail image uploads that works directly with BinaryField.
+
+    This field accepts image file uploads and converts them to binary data.
+    It also properly handles clearing existing binary data.
+    """
+
+    widget = ThumbnailImageWidget
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault(
+            "help_text",
+            "Upload an image to use as the thumbnail on YouTube. Supported formats: JPEG, PNG, GIF.",
+        )
+        kwargs.setdefault("required", False)
+        super().__init__(*args, **kwargs)
+
+    def to_python(self, data):
+        # Handle clearing the field
+        if data is False:
+            return None
+
+        # Handle file upload data
+        if hasattr(data, "read"):
+            # Check if it's an image
+            if hasattr(data, "content_type") and data.content_type:
+                if not data.content_type.startswith("image/"):
+                    raise forms.ValidationError("Please upload an image file.")
+
+            data.seek(0)  # Ensure we're at the start of the file
+            binary_data = data.read()
+
+            # Validate file size (5MB limit for thumbnails)
+            max_size = 5 * 1024 * 1024  # 5MB
+            if len(binary_data) > max_size:
+                raise forms.ValidationError(
+                    f"Image file too large. Maximum size is {max_size // (1024 * 1024)}MB."
+                )
+
+            return binary_data
+
+        # If no file uploaded and no clear signal, return the field's sentinel value
+        # This tells Django to keep the existing value
+        if data is None:
+            return forms.fields.FILE_INPUT_CONTRADICTION
+
+        return super().to_python(data)
+
+    def has_changed(self, initial, data):
+        """
+        Return True if data differs from initial.
+        For binary fields, we consider it changed if a new file is uploaded or cleared.
+        """
+        if data is False:  # Clear was requested
+            return bool(initial)
+        if hasattr(data, "read"):  # New file uploaded
+            return True
+        return False
 
 
 class ConstructFormMixin(object):
@@ -367,7 +500,7 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
             "live_stream_project_id",
             "live_stream_client_id",
             "live_stream_client_secret",
-            "live_stream_thumbnail",
+            "live_stream_thumbnail_image",
             "timezone",
             "start_date",
             "mode",
@@ -382,13 +515,13 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
             "copy": _("Notes (Public)"),
             "live_stream_project_id": _("Project ID"),
             "live_stream_client_id": _("Client ID"),
-            "live_stream_thumbnail": _("Thumbnail URL"),
+            "live_stream_thumbnail_image": _("Video Thumbnail"),
         }
         help_texts = {
             "copy": _("Optional. Will be displayed in the front end if provided."),
-            "live_stream_thumbnail": _(
-                "URL to the default thumbnail image for all live streams."
-            ),
+        }
+        field_classes = {
+            "live_stream_thumbnail_image": ThumbnailImageField,
         }
 
     def __init__(self, *args, **kwargs):
@@ -909,9 +1042,9 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
 
         # restrict the list of referees to those registered this season
         if "referees" in self.fields:
-            self.fields[
-                "referees"
-            ].queryset = self.instance.stage.division.season.referees.all()
+            self.fields["referees"].queryset = (
+                self.instance.stage.division.season.referees.all()
+            )
 
         # remove `stage_group` field if the `division` has no children
         if not self.instance.stage.pools.count():
@@ -1056,10 +1189,15 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
             "date",
             "include_in_ladder",
             "videos",
+            "live_stream_thumbnail_image",
         )
+        field_classes = {
+            "live_stream_thumbnail_image": ThumbnailImageField,
+        }
         labels = {
             "home_team_undecided": _("Home team"),
             "away_team_undecided": _("Away team"),
+            "live_stream_thumbnail_image": _("Video Thumbnail"),
         }
         formfield_callback = _match_edit_form_formfield_callback
 
@@ -1078,19 +1216,22 @@ class MatchStreamForm(MatchEditForm):
             "date",
             "include_in_ladder",
             "live_stream",
-            "live_stream_thumbnail",
+            "live_stream_thumbnail_image",
             # "external_identifier",
         )
         labels = {
             "home_team_undecided": _("Home team"),
             "away_team_undecided": _("Away team"),
-            "live_stream_thumbnail": _("Thumbnail URL"),
+            "live_stream_thumbnail_image": _("Video Thumbnail"),
         }
         help_texts = {
-            "live_stream_thumbnail": _(
-                "URL to the thumbnail image for the live stream. "
-                "If not set for the match, the season default will be used."
+            "live_stream_thumbnail_image": _(
+                "Upload a custom thumbnail for this match. "
+                "If not set, the season's default thumbnail will be used."
             ),
+        }
+        field_classes = {
+            "live_stream_thumbnail_image": ThumbnailImageField,
         }
 
 
@@ -2087,7 +2228,7 @@ class StreamControlForm(forms.Form):
                 messages.error(request, f"{match}: {exc}")
             except HttpError as exc:
                 messages.error(request, f"{match}: {exc.reason}")
-            except Exception as exc:
+            except Exception:
                 # Catch any warnings that are raised as exceptions
                 with warnings.catch_warnings(record=True) as w:
                     warnings.simplefilter("always")

@@ -1,7 +1,10 @@
+import base64
 import collections
+import io
 import logging
 import math
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from itertools import zip_longest
@@ -17,10 +20,13 @@ from django.http import HttpResponse
 from django.template.loader import select_template
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from PIL import Image
 
 from touchtechnology.common.prince import prince
-from tournamentcontrol.competition.draw.schemas import MatchDescriptor, RoundDescriptor
-
+from tournamentcontrol.competition.draw.schemas import (
+    MatchDescriptor,
+    RoundDescriptor,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -728,3 +734,139 @@ def regrade(team, to, from_date=None):
 def team_and_division(o):
     "For use on Model.team_clashes as label_from_instance argument."
     return "%s (%s)" % (o.title, o.division.title)
+
+
+#
+# Image processing utilities
+#
+
+
+@dataclass(frozen=True)
+class ThumbnailPreview:
+    """
+    Result of thumbnail preview generation.
+
+    Attributes:
+        image_data: Raw image bytes for the preview image, or None if generation failed
+        original_mime_type: MIME type of the original image, or None if unknown
+    """
+
+    image_data: bytes | None = None
+    original_mime_type: str | None = None
+
+    def to_data_url(self) -> str | None:
+        """
+        Convert the thumbnail preview to a base64 data URL for use in templates.
+
+        Returns:
+            Base64 data URL string, or None if no image data is available
+        """
+        if not self.image_data:
+            return None
+
+        preview_data = base64.b64encode(self.image_data).decode("utf-8")
+        return f"data:image/jpeg;base64,{preview_data}"
+
+
+def create_thumbnail_response(image_data, width=None, height=None):
+    """
+    Create an HttpResponse for serving thumbnail image data.
+
+    Args:
+        image_data (bytes): Raw image data
+        width (int, optional): Maximum width for resizing
+        height (int, optional): Maximum height for resizing
+
+    Returns:
+        HttpResponse: Image response with appropriate headers
+
+    Raises:
+        Http404: If no image data provided or processing fails
+    """
+    from django.http import Http404, HttpResponse
+
+    if not image_data:
+        raise Http404("No thumbnail available")
+
+    # If dimensions specified, create a resized preview
+    if width is not None and height is not None:
+        # Validate dimensions
+        if width > 2048 or height > 2048 or width < 1 or height < 1:
+            raise Http404("Dimensions out of allowed range (1-2048)")
+
+        preview_result = create_thumbnail_preview(
+            image_data, max_width=width, max_height=height
+        )
+        if preview_result.image_data:
+            response_data = preview_result.image_data
+            content_type = "image/jpeg"  # Preview is always JPEG
+        else:
+            raise Http404("Failed to create thumbnail preview")
+    else:
+        # Serve original data as-is
+        response_data = image_data
+        # Try to detect content type from data, default to image/jpeg
+        if image_data.startswith(b"\xff\xd8\xff"):
+            content_type = "image/jpeg"
+        elif image_data.startswith(b"\x89PNG\r\n\x1a\n"):
+            content_type = "image/png"
+        elif image_data.startswith(b"GIF"):
+            content_type = "image/gif"
+        else:
+            content_type = "image/jpeg"  # Default fallback
+
+    response = HttpResponse(response_data, content_type=content_type)
+    response["Cache-Control"] = "max-age=3600"  # Cache for 1 hour
+    return response
+
+
+def create_thumbnail_preview(
+    image_data, max_width=640, max_height=480, quality=90
+) -> ThumbnailPreview:
+    """
+    Create a downscaled preview image from binary image data.
+
+    Args:
+        image_data (bytes): Binary image data
+        max_width (int): Maximum width for the preview
+        max_height (int): Maximum height for the preview
+        quality (int): JPEG compression quality (1-100)
+
+    Returns:
+        ThumbnailPreview: Contains raw image_data bytes and original_mime_type, or None values if processing fails
+    """
+    try:
+        # Open the image from binary data
+        image = Image.open(io.BytesIO(image_data))
+
+        # Get original format info
+        original_format = image.format
+        original_mime = (
+            f"image/{original_format.lower()}" if original_format else "image/jpeg"
+        )
+
+        # Convert to RGB if necessary (for JPEG output)
+        if image.mode in ("RGBA", "LA", "P"):
+            # Create a white background for transparency
+            background = Image.new("RGB", image.size, (255, 255, 255))
+            if image.mode == "P":
+                image = image.convert("RGBA")
+            background.paste(
+                image, mask=image.split()[-1] if image.mode in ("RGBA", "LA") else None
+            )
+            image = background
+        elif image.mode != "RGB":
+            image = image.convert("RGB")
+
+        # Calculate the thumbnail size maintaining aspect ratio
+        image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+
+        # Save to a BytesIO buffer as JPEG for efficient preview
+        output_buffer = io.BytesIO()
+        image.save(output_buffer, format="JPEG", quality=quality, optimize=True)
+
+    except Exception as e:
+        logger.warning(f"Failed to create thumbnail preview: {e}")
+        return ThumbnailPreview()
+
+    return ThumbnailPreview(output_buffer.getvalue(), original_mime)
