@@ -1646,23 +1646,23 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             }
 
             # Render title from template with hierarchical fallback
-            title_templates = self.template_path(
-                "match/live_stream/title.txt",
-                competition.slug,
-                season.slug,
-                division.slug,
-                stage.slug,
-            )
+            title_templates = [
+                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/{competition.slug}/match/live_stream/title.txt",
+                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/match/live_stream/title.txt",
+                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/match/live_stream/title.txt",
+                f"tournamentcontrol/competition/{stage.slug}/match/live_stream/title.txt",
+                f"tournamentcontrol/competition/match/live_stream/title.txt",
+            ]
             title = render_to_string(title_templates, template_context, request).strip()
 
             # Render description from template with hierarchical fallback
-            description_templates = self.template_path(
-                "match/live_stream/description.txt",
-                competition.slug,
-                season.slug,
-                division.slug,
-                stage.slug,
-            )
+            description_templates = [
+                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/{competition.slug}/match/live_stream/description.txt",
+                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/match/live_stream/description.txt",
+                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/match/live_stream/description.txt",
+                f"tournamentcontrol/competition/{stage.slug}/match/live_stream/description.txt",
+                f"tournamentcontrol/competition/match/live_stream/description.txt",
+            ]
             description = render_to_string(
                 description_templates, template_context, request
             ).strip()
