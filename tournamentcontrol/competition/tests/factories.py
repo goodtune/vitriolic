@@ -44,7 +44,6 @@ class CompetitionFactory(OrderedSitemapNodeFactory):
         model = models.Competition
 
     title = factory.Sequence(lambda n: "Competition %d" % n)
-    rank_importance = 1
 
 
 class ClubRoleFactory(SitemapNodeBaseFactory):

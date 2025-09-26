@@ -474,7 +474,6 @@ class CompetitionForm(SuperUserSlugMixin, ModelForm):
         fields = (
             "title",
             "short_title",
-            "rank_importance",
             "enabled",
             "copy",
             "slug",
@@ -608,7 +607,6 @@ class DivisionForm(SuperUserSlugMixin, ModelForm):
         fields = (
             "title",
             "short_title",
-            "rank_division",
             "copy",
             "draft",
             "points_formula",
@@ -673,7 +671,6 @@ class StageForm(SuperUserSlugMixin, ModelForm):
             "title",
             "short_title",
             "follows",
-            "rank_importance",
             "keep_ladder",
             "scale_group_points",
             "carry_ladder",
@@ -736,7 +733,6 @@ class StageGroupForm(SuperUserSlugMixin, ModelForm):
         fields = (
             "title",
             "short_title",
-            "rank_importance",
             "carry_ladder",
             "teams",
             "slug",
@@ -873,7 +869,6 @@ class TeamForm(SuperUserSlugMixin, ModelForm):
             "club",
             "title",
             "short_title",
-            "rank_division",
             "copy",
             "names_locked",
             "slug",
