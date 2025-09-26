@@ -16,7 +16,7 @@ dependencies = [
     "django-modelforms",
     "django-mptt",
     "django-timezone-field",
-    "django>=3.2",
+    "django>=4.2",
     "first",
     "namedentities",
     "psycopg",
