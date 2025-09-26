@@ -1,12 +1,5 @@
 from django.conf import settings
-from django.db.models import (
-    Case,
-    ExpressionWrapper,
-    F,
-    FloatField,
-    Func,
-    When,
-)
+from django.db.models import Case, ExpressionWrapper, F, FloatField, Func, When
 from django.db.models.query import QuerySet
 from django.utils import timezone
 from django.utils.module_loading import import_string
