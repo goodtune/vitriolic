@@ -1,0 +1,156 @@
+{% extends "touchtechnology/admin/edit.html" %}
+{% load common %}
+{% load i18n %}
+
+{% block tab-panes %}
+	<div class="tab-pane active" id="{{ model|type|slugify }}-tab">
+		<div class="heading-block">
+			{% spaceless %}
+				<div class="actions fa-2x">
+					<a href="#" id="add-form" title="{% trans "Add Division" %}" role="button">
+						<i class="fa fa-plus-square"></i>
+					</a>
+				</div>
+				<h3>{{ model|type|capfirst }}</h3>
+			{% endspaceless %}
+		</div>
+
+		{% block form-fieldset %}
+	<p>
+		{% blocktrans %}
+		Use this interface to build divisions from JSON.
+		Each form accepts a complete <code>DivisionStructure</code> JSON object that will be
+		validated and used to create teams, stages, pools, and matches.
+		{% endblocktrans %}
+	</p>
+	<p class="mb-0">
+		<strong>{% trans "Note:" %}</strong>
+		{% trans "All divisions will be created within a single transaction - if any division fails to build, all changes will be rolled back." %}
+	</p>
+
+	{{ formset.management_form }}
+
+	<div id="json-formset">
+		{% for form in formset %}
+			<fieldset class="json-form" data-form-index="{{ forloop.counter0 }}">
+				{% if not forloop.first %}
+					<div class="form-group">
+						<button type="button" class="btn btn-sm btn-danger remove-form pull-right">
+							<i class="fa fa-trash"></i> {% trans "Remove" %}
+						</button>
+					</div>
+				{% endif %}
+				{% for f in form %}
+					<div class="form-group">
+						{{ f }}
+						{% if f.help_text %}
+							<p class="help-block">{{ f.help_text }}</p>
+						{% endif %}
+						{% if f.errors %}
+							<div class="text-danger">
+								{% for error in f.errors %}
+									<small>{{ error }}</small>
+								{% endfor %}
+							</div>
+						{% endif %}
+					</div>
+				{% endfor %}
+			</fieldset>
+		{% endfor %}
+	</div>
+
+	<!-- Empty form template -->
+	<fieldset class="json-form hidden" id="empty-form">
+		<div class="form-group">
+			<button type="button" class="btn btn-sm btn-danger remove-form pull-right">
+				<i class="fa fa-trash"></i> {% trans "Remove" %}
+			</button>
+		</div>
+		{% for f in formset.empty_form %}
+			<div class="form-group">
+				{{ f }}
+				{% if f.help_text %}
+					<p class="help-block">{{ f.help_text }}</p>
+				{% endif %}
+				{% if f.errors %}
+					<div class="text-danger">
+						{% for error in f.errors %}
+							<small>{{ error }}</small>
+						{% endfor %}
+					</div>
+				{% endif %}
+			</div>
+		{% endfor %}
+	</fieldset>
+
+		{% endblock form-fieldset %}
+
+		<div class="form-group">
+			<div class="text-center">
+				<button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
+				&nbsp;<a class="btn btn-default" href="{% block cancel-url %}{{ cancel_url }}{% endblock %}">{% trans "Cancel" %}</a>
+			</div>
+		</div>
+	</div>
+{% endblock %}
+
+{% block extrajs %}
+	{{ block.super }}
+	<script>
+		$(document).ready(function() {
+			var totalForms = $('#id_form-TOTAL_FORMS');
+			var maxForms = parseInt($('#id_form-MAX_NUM_FORMS').val()) || 10;
+
+			// Disable form fields in the empty form template to prevent validation issues
+			$('#empty-form input, #empty-form select, #empty-form textarea').prop('disabled', true);
+
+			function updateFormIndices() {
+				$('#json-formset .json-form').each(function(index) {
+					$(this).attr('data-form-index', index);
+
+					// Update form field names and IDs
+					$(this).find('input, select, textarea').each(function() {
+						var name = $(this).attr('name');
+						var id = $(this).attr('id');
+
+						if (name) {
+							$(this).attr('name', name.replace(/form-\d+/, 'form-' + index));
+						}
+						if (id) {
+							$(this).attr('id', id.replace(/form-\d+/, 'form-' + index));
+						}
+					});
+				});
+			}
+
+			$('#add-form').click(function() {
+				var formCount = parseInt(totalForms.val());
+				if (formCount >= maxForms) {
+					alert('Maximum number of forms (' + maxForms + ') reached.');
+					return;
+				}
+
+				var newForm = $('#empty-form').clone();
+				newForm.removeClass('hidden').attr('id', '');
+				newForm.attr('data-form-index', formCount);
+
+				// Replace __prefix__ in the form
+				newForm.html(newForm.html().replace(/__prefix__/g, formCount));
+
+				// Enable form fields (they should be disabled in the template)
+				newForm.find('input, select, textarea').prop('disabled', false);
+
+				$('#json-formset').append(newForm);
+				totalForms.val(formCount + 1);
+				updateFormIndices();
+			});
+
+			$(document).on('click', '.remove-form', function() {
+				$(this).closest('.json-form').remove();
+				var formCount = parseInt(totalForms.val());
+				totalForms.val(formCount - 1);
+				updateFormIndices();
+			});
+		});
+	</script>
+{% endblock %}

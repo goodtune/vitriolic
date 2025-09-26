@@ -221,9 +221,9 @@ class TestMCPClientE2E:
             406,
             422,
         ]  # Valid processing or expected errors
-        assert (
-            response.status_code in expected_statuses
-        ), f"Expected MCP endpoint to process request, got {response.status_code}"
+        assert response.status_code in expected_statuses, (
+            f"Expected MCP endpoint to process request, got {response.status_code}"
+        )
 
     @pytest.mark.django_db(transaction=True)
     def test_http_mcp_tools_list(self, live_server):
@@ -250,9 +250,9 @@ class TestMCPClientE2E:
             406,
             422,
         ]  # Valid processing or expected protocol errors
-        assert (
-            response.status_code in expected_statuses
-        ), f"Expected MCP endpoint to process tools/list request, got {response.status_code}"
+        assert response.status_code in expected_statuses, (
+            f"Expected MCP endpoint to process tools/list request, got {response.status_code}"
+        )
 
         # If successful (2xx), should return valid JSON
         if 200 <= response.status_code < 300:
@@ -278,6 +278,6 @@ class TestMCPClientE2E:
                     ]
 
                     for expected_tool in expected_tools:
-                        assert (
-                            expected_tool in tool_names
-                        ), f"Expected tool '{expected_tool}' not found in {tool_names}"
+                        assert expected_tool in tool_names, (
+                            f"Expected tool '{expected_tool}' not found in {tool_names}"
+                        )

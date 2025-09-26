@@ -4,9 +4,7 @@ import logging
 import operator
 from datetime import timedelta
 from operator import or_
-from zoneinfo import ZoneInfo
 
-import markdown
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.contrib import messages
@@ -15,12 +13,12 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Case, Count, F, Q, Sum, When
 from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
-from django.template.loader import render_to_string
 from django.urls import include, path, re_path, reverse
 from django.urls.exceptions import NoReverseMatch
 from django.utils import timezone
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext, gettext_lazy as _
+from django.views.decorators.cache import cache_page
 from guardian.utils import get_40x_or_None
 from icalendar import Calendar, Event
 
@@ -40,24 +38,14 @@ from tournamentcontrol.competition.forms import (
     MultiConfigurationForm,
     ProgressMatchesFormSet,
     ProgressTeamsFormSet,
-    RankingConfigurationForm,
     StreamControlForm,
 )
 from tournamentcontrol.competition.models import (
     Competition,
-    Ground,
     Match,
     Person,
     SimpleScoreMatchStatistic,
     Stage,
-)
-from tournamentcontrol.competition.rank import (
-    DayView as RankDay,
-    DivisionView as RankDivision,
-    IndexView as RankIndex,
-    MonthView as RankMonth,
-    TeamView as RankTeam,
-    YearView as RankYear,
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
@@ -66,6 +54,8 @@ from tournamentcontrol.competition.utils import (
 )
 
 LOG = logging.getLogger(__name__)
+
+THUMBNAIL_CACHE_TTL = 300  # 5 minutes
 
 
 def permissions_required(
@@ -450,16 +440,21 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             path("forfeit/", self.forfeit_list, name="forfeit-list"),
             path("forfeit/<int:match>/", self.forfeit, name="forfeit"),
             path("videos/", self.season_videos, name="season-videos"),
+            path(
+                "thumbnail/",
+                cache_page(THUMBNAIL_CACHE_TTL)(self.season_thumbnail),
+                name="season-thumbnail",
+            ),
+            path(
+                "thumbnail/<int:width>x<int:height>/",
+                cache_page(THUMBNAIL_CACHE_TTL)(self.season_thumbnail),
+                name="season-thumbnail",
+            ),
             path("club:<slug:club>/", self.club, name="club"),
             path("club:<slug:club>.ics", self.calendar, name="calendar"),
             path("results/", include(self.result_urls())),
             path("runsheet/", include(self.runsheet_urls())),
             path("stream/", include(self.stream_urls())),
-            re_path(
-                r"^stream-instructions\.(?P<format>md|html)$",
-                self.stream_instructions,
-                name="stream-instructions",
-            ),
             path("<slug:division>.ics", self.calendar, name="calendar"),
             path("<slug:division>/", self.division, name="division"),
             path("<slug:division>:<slug:stage>/", self.stage, name="stage"),
@@ -469,6 +464,16 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                 "<slug:division>/match:<int:match>/video/",
                 self.match_video,
                 name="match-video",
+            ),
+            path(
+                "<slug:division>/match:<int:match>/thumbnail/",
+                cache_page(THUMBNAIL_CACHE_TTL)(self.match_thumbnail),
+                name="match-thumbnail",
+            ),
+            path(
+                "<slug:division>/match:<int:match>/thumbnail/<int:width>x<int:height>/",
+                cache_page(THUMBNAIL_CACHE_TTL)(self.match_thumbnail),
+                name="match-thumbnail",
             ),
             path("<slug:division>/<slug:team>.ics", self.calendar, name="calendar"),
             path("<slug:division>/<slug:team>/", self.team, name="team"),
@@ -1214,7 +1219,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         if request.method == "POST":
             # use the forfeit API to advise who made lodged the forfeit
             UNABLE_TO_POST = _(
-                "Unable to post forfeit, please contact the " "competition manager."
+                "Unable to post forfeit, please contact the competition manager."
             )
             try:
                 success = match.forfeit(team, request.user.person)
@@ -1246,43 +1251,38 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         return self.render(request, templates, context)
 
     @competition_by_slug_m
-    @login_required_m
-    def stream_instructions(
-        self, request, competition, season, format, extra_context, **kwargs
+    def season_thumbnail(
+        self, request, competition, season, width=None, height=None, **kwargs
     ):
         """
-        Render live streaming instructions template with season-specific data.
-        Supports both markdown (.md) and HTML (.html) output formats.
+        Serve season thumbnail images.
+
+        URLs:
+        - /season/thumbnail/ - serves original image
+        - /season/thumbnail/<width>x<height>/ - serves resized image
         """
-        has_permission = permissions_required(request, Match, return_403=True)
-        if has_permission is not None:
-            return has_permission
+        return season.live_stream_thumbnail_response(width=width, height=height)
 
-        if extra_context is None:
-            extra_context = {}
+    @competition_by_slug_m
+    def match_thumbnail(
+        self,
+        request,
+        competition,
+        season,
+        division,
+        match,
+        width=None,
+        height=None,
+        **kwargs,
+    ):
+        """
+        Serve match thumbnail images.
 
-        # Find all grounds with stream keys using ORM reverse relations
-        streaming_grounds = Ground.objects.filter(
-            venue__season=season, stream_key__isnull=False
-        ).exclude(stream_key="")
-
-        context = {
-            "competition": competition,
-            "season": season,
-            "streaming_grounds": streaming_grounds,
-        }
-        context.update(extra_context)
-
-        # Render the markdown template
-        templates = self.template_path("live_streaming_instructions.md")
-        content = render_to_string(templates, context, request=request)
-
-        if format == "html":
-            # Convert markdown to HTML
-            html_content = markdown.markdown(content, extensions=["tables"])
-            return HttpResponse(html_content, content_type="text/html; charset=utf-8")
-
-        return HttpResponse(content, content_type="text/markdown")
+        URLs:
+        - /match/thumbnail/ - serves original image (falls back to season thumbnail)
+        - /match/thumbnail/<width>x<height>/ - serves resized image
+        """
+        return match.live_stream_thumbnail_response(width=width, height=height)
 
 
 class MultiCompetitionSite(CompetitionSite):
@@ -1359,33 +1359,6 @@ class TournamentCalculatorSite(Application):
         return self.render(request, templates, context)
 
 
-class RankingSite(Application):
-    kwargs_form_class = RankingConfigurationForm
-
-    def __init__(self, name="ranking", app_name="ranking", **kwargs):
-        super().__init__(name=name, app_name=app_name, **kwargs)
-
-    def get_urls(self):
-        urlpatterns = [
-            path("", RankIndex.as_view(), name="index"),
-            path("<int:year>/", RankYear.as_view(), name="year"),
-            path("<int:year>/<str:month>/", RankMonth.as_view(), name="month"),
-            path("<int:year>/<str:month>/<int:day>/", RankDay.as_view(), name="day"),
-            path(
-                "<int:year>/<str:month>/<int:day>/<slug:slug>/",
-                RankDivision.as_view(),
-                name="rank",
-            ),
-            path(
-                "<int:year>/<str:month>/<int:day>/<slug:slug>/<slug:team>/",
-                RankTeam.as_view(),
-                name="team",
-            ),
-        ]
-        return urlpatterns
-
-
 competition = CompetitionSite()
 registration = RegistrationSite()
 calculator = TournamentCalculatorSite()
-ranking = RankingSite()

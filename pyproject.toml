@@ -16,7 +16,7 @@ dependencies = [
     "django-modelforms",
     "django-mptt",
     "django-timezone-field",
-    "django>=3.2",
+    "django>=4.2",
     "first",
     "namedentities",
     "psycopg",
@@ -27,6 +27,7 @@ dynamic = ["version"]
 dev = [
     "black>=25.1.0",
     "isort>=6.0.1",
+    "ruff>=0.12.8",
 ]
 test = [
     "coverage",
@@ -57,9 +58,11 @@ news = [
     "python-magic",
 ]
 competition = [
+    "pydantic>=2.0",
     "celery>5",
     "cloudinary",
     "django-embed-video",
+    "django-filter",
     "django-formtools",
     "django-htmx>=1.23.2",
     "django-mathfilters",
@@ -72,6 +75,7 @@ competition = [
     "markdown",
     "pyparsing",
     "python-dateutil",
+    "python-magic",
 ]
 # Deprecated optional dependencies
 redis = []
@@ -98,3 +102,6 @@ multi_line_output = 5
 [tool.black]
 line-length = 88
 target-version = ["py39", "py312"]
+
+[tool.ruff]
+line-length = 88

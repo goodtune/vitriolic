@@ -4,9 +4,11 @@
 import collections
 import logging
 import uuid
+import warnings
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
+import requests
 from cloudinary.models import CloudinaryField
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
@@ -16,7 +18,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.postgres import fields as PG
 from django.core import validators
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
+from django.http import Http404, HttpResponse
 from django.db.models import Count, DateField, DateTimeField, Q, Sum, TimeField
 from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
 from django.template import Template
@@ -25,9 +28,12 @@ from django.utils import timezone
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
+from google.auth.exceptions import RefreshError
+from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaInMemoryUpload, MediaUpload
 from timezone_field.fields import TimeZoneField
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
@@ -39,11 +45,23 @@ from touchtechnology.common.db.models import (
     ManyToManyField,
 )
 from touchtechnology.common.models import SitemapNodeBase
+from tournamentcontrol.competition._mediaupload import MediaMemoryUpload
 from tournamentcontrol.competition.constants import (
     GENDER_CHOICES,
     SEASON_MODE_CHOICES,
     WIN_LOSE,
+    ClubStatus,
     LiveStreamPrivacy,
+)
+from tournamentcontrol.competition.draw.schemas import (
+    DivisionStructure,
+    PoolFixture,
+    StageFixture,
+)
+from tournamentcontrol.competition.exceptions import (
+    InvalidLiveStreamTransition,
+    LiveStreamIdentifierMissing,
+    LiveStreamTransitionWarning,
 )
 from tournamentcontrol.competition.managers import (
     LadderEntryManager,
@@ -59,6 +77,8 @@ from tournamentcontrol.competition.signals import match_forfeit
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
     combine_and_localize,
+    create_thumbnail_preview,
+    create_thumbnail_response,
     stage_group_position,
     stage_group_position_re,
     team_and_division,
@@ -208,6 +228,13 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         blank=True,
         help_text=_("Optional 3-letter abbreviation to be used on scoreboards."),
     )
+    status = models.CharField(
+        max_length=20,
+        choices=ClubStatus.choices,
+        default=ClubStatus.ACTIVE,
+        db_index=True,
+        help_text=_("Current status of the club."),
+    )
 
     class Meta:
         ordering = ("title",)
@@ -218,7 +245,8 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         Supercedes _mvp_annotate due to GROUP BY exceptions. Take full control
         of the query. See the history for the earlier implementation.
         """
-        query = """
+        query = (
+            """
             SELECT
                 "competition_person"."uuid",
                 "competition_person"."first_name",
@@ -264,9 +292,11 @@ class Club(AdminUrlMixin, SitemapNodeBase):
             ORDER BY
                 "competition_person"."last_name" ASC,
                 "competition_person"."first_name" ASC
-        """ % {  # noqa: E501
-            "user": get_user_model()._meta.db_table
-        }
+        """
+            % {  # noqa: E501
+                "user": get_user_model()._meta.db_table
+            }
+        )
         params = {
             "club": self.pk,
         }
@@ -513,6 +543,12 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
     live_stream_token_uri = models.URLField(null=True)
     live_stream_scopes = PG.ArrayField(models.CharField(max_length=200), null=True)
     live_stream_thumbnail = models.URLField(blank=True, null=True)
+    live_stream_thumbnail_image = models.BinaryField(
+        blank=True,
+        null=True,
+        editable=True,
+        help_text="Image to be used as thumbnail image on the YouTube platform",
+    )
 
     complete = BooleanField(
         default=False,
@@ -583,20 +619,46 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
             **kwargs,
         )
 
-    @cached_property
+    @property
     def youtube(self):
-        return build(
-            "youtube",
-            "v3",
-            credentials=Credentials(
-                client_id=self.live_stream_client_id,
-                client_secret=self.live_stream_client_secret,
-                token=self.live_stream_token,
-                refresh_token=self.live_stream_refresh_token,
-                token_uri=self.live_stream_token_uri,
-                scopes=self.live_stream_scopes,
-            ),
+        credentials = Credentials(
+            client_id=self.live_stream_client_id,
+            client_secret=self.live_stream_client_secret,
+            token=self.live_stream_token,
+            refresh_token=self.live_stream_refresh_token,
+            token_uri=self.live_stream_token_uri,
+            scopes=self.live_stream_scopes,
         )
+
+        # Enable automatic refresh for expired tokens
+        if credentials.expired and credentials.refresh_token:
+            try:
+                credentials.refresh(Request())
+                # Update stored tokens after successful refresh with transaction safety
+                with transaction.atomic():
+                    self.live_stream_token = credentials.token
+                    self.save(update_fields=["live_stream_token"])
+                logger.info(
+                    "Successfully refreshed YouTube OAuth token for season %s", self.pk
+                )
+            except RefreshError as e:
+                # Log error and re-raise for proper error handling
+                logger.error(
+                    "Failed to refresh YouTube credentials for season %s: %s",
+                    self.pk,
+                    e,
+                )
+                raise
+            except Exception as e:
+                # Log unexpected errors and re-raise
+                logger.error(
+                    "Unexpected error refreshing YouTube credentials for season %s: %s",
+                    self.pk,
+                    e,
+                )
+                raise
+
+        return build("youtube", "v3", credentials=credentials)
 
     @property
     def datetimes(self):
@@ -655,6 +717,35 @@ class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         for timeslot in self.timeslots.exclude(exc):
             rset.rrule(timeslot.rrule())
         return [dt.time() for dt in rset]
+
+    def get_thumbnail_media_upload(self) -> MediaUpload | None:
+        """
+        Get a MediaMemoryUpload instance for this season's thumbnail.
+
+        Returns:
+            MediaMemoryUpload or None if no thumbnail is set
+        """
+        if self.live_stream_thumbnail_image:
+            return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
+        return None
+
+    def live_stream_thumbnail_response(self, width=None, height=None) -> HttpResponse:
+        """
+        Get HttpResponse for this season's thumbnail image.
+
+        Args:
+            width (int, optional): Maximum width for resizing
+            height (int, optional): Maximum height for resizing
+
+        Returns:
+            HttpResponse: Image response with appropriate headers
+
+        Raises:
+            Http404: If no thumbnail is available or processing fails
+        """
+        return create_thumbnail_response(
+            self.live_stream_thumbnail_image, width, height
+        )
 
 
 class Place(AdminUrlMixin, OrderedSitemapNode):
@@ -812,6 +903,238 @@ class Division(
         for stage in self.stages.all():
             res.update(stage.matches_by_date())
         return res
+
+    def to_division_structure(self):
+        """
+        Export this Division to a DivisionStructure.
+
+        Returns:
+            DivisionStructure representation of this division
+
+        Raises:
+            ValueError: If division contains unsupported features (UndecidedTeam entries)
+        """
+
+        # Check for UndecidedTeam entries
+        for stage in self.stages.all():
+            if stage.undecided_teams.exists():
+                raise ValueError(
+                    f"Stage '{stage.title}' contains UndecidedTeam entries. "
+                    "Cannot export divisions with undecided teams."
+                )
+            for pool in stage.pools.all():
+                if pool.undecided_teams.exists():
+                    raise ValueError(
+                        f"Pool '{pool.title}' in stage '{stage.title}' contains UndecidedTeam entries. "
+                        "Cannot export divisions with undecided teams."
+                    )
+
+        # Get all teams
+        teams = list(self.teams.values_list("title", flat=True))
+
+        # Collect all unique draw formats and build dictionary
+        draw_formats = {}
+        draw_format_refs = {}  # Maps draw_format_string -> ref_name
+
+        # Process stages and collect draw formats
+        stages = []
+        for stage in self.stages.order_by("order"):
+            stage_fixture = self._process_stage_for_export(
+                stage, teams, draw_formats, draw_format_refs
+            )
+            stages.append(stage_fixture)
+
+        return DivisionStructure(
+            title=self.title, teams=teams, draw_formats=draw_formats, stages=stages
+        )
+
+    def _process_stage_for_export(self, stage, teams, draw_formats, draw_format_refs):
+        """Process a stage and return a StageFixture."""
+
+        pools = stage.pools.order_by("order")
+
+        if pools.exists():
+            # Stage has pools
+            pool_fixtures = []
+            for pool in pools:
+                pool_fixture = self._process_pool_for_export(
+                    pool, teams, draw_formats, draw_format_refs
+                )
+                pool_fixtures.append(pool_fixture)
+
+            return StageFixture(
+                title=stage.title,
+                draw_format_ref=None,  # Pool stages don't have stage-level draw_format
+                pools=pool_fixtures,
+            )
+        else:
+            # Stage without pools - knockout stage
+            matches = stage.matches.order_by("round", "pk")
+            draw_format_string = self._generate_draw_format_for_export(matches, teams)
+            draw_format_ref = self._get_or_create_draw_format_ref_for_export(
+                draw_format_string,
+                f"{stage.title} Format",
+                draw_formats,
+                draw_format_refs,
+            )
+
+            return StageFixture(
+                title=stage.title, draw_format_ref=draw_format_ref, pools=None
+            )
+
+    def _process_pool_for_export(self, pool, teams, draw_formats, draw_format_refs):
+        """Process a pool and return a PoolFixture."""
+
+        # Get teams in this pool
+        pool_teams = []
+        pool_matches = pool.matches.all()
+
+        # Extract unique teams from matches
+        team_ids = set()
+        for match in pool_matches:
+            if match.home_team:
+                team_ids.add(match.home_team.pk)
+            if match.away_team:
+                team_ids.add(match.away_team.pk)
+
+        # Get team titles and convert to indices
+        pool_team_objects = list(Team.objects.filter(pk__in=team_ids).order_by("title"))
+        for team in pool_team_objects:
+            try:
+                pool_teams.append(teams.index(team.title))
+            except ValueError:
+                raise ValueError(
+                    f"Team '{team.title}' not found in division teams list"
+                )
+
+        # Generate draw format
+        matches = pool.matches.order_by("round", "pk")
+        draw_format_string = self._generate_draw_format_for_export(
+            matches, teams, pool_team_objects
+        )
+        draw_format_ref = self._get_or_create_draw_format_ref_for_export(
+            draw_format_string, f"{pool.title} Format", draw_formats, draw_format_refs
+        )
+
+        return PoolFixture(
+            title=pool.title, draw_format_ref=draw_format_ref, teams=pool_teams
+        )
+
+    def _generate_draw_format_for_export(self, matches, all_teams, pool_teams=None):
+        """Generate a draw_format string from matches."""
+        if not matches.exists():
+            return ""
+
+        # Sort by database ID for deterministic ordering (reflects creation order)
+        match_list = list(matches.order_by("id"))
+
+        # Create mapping from database ID to sequential match ID
+        db_id_to_match_id = {match.id: idx + 1 for idx, match in enumerate(match_list)}
+
+        # Group matches by round
+        rounds = collections.OrderedDict()
+        for match in match_list:
+            round_num = match.round or 1
+            if round_num not in rounds:
+                rounds[round_num] = []
+            rounds[round_num].append(match)
+
+        draw_lines = []
+
+        for round_num in sorted(rounds.keys()):
+            if len(rounds) > 1:  # Only add ROUND headers if multiple rounds
+                draw_lines.append("ROUND")
+
+            for match in rounds[round_num]:
+                match_id = db_id_to_match_id[match.id]
+                line_parts = [str(match_id) + ":"]
+
+                # Get home team
+                home_team = self._get_team_identifier_for_export(
+                    match, "home", all_teams, pool_teams, db_id_to_match_id
+                )
+
+                # Get away team
+                away_team = self._get_team_identifier_for_export(
+                    match, "away", all_teams, pool_teams, db_id_to_match_id
+                )
+
+                line_parts.append(f"{home_team} vs {away_team}")
+
+                # Add label if present
+                if match.label:
+                    line_parts.append(match.label)
+
+                draw_lines.append(" ".join(line_parts))
+
+        return "\n".join(draw_lines)
+
+    def _get_team_identifier_for_export(
+        self, match, side, all_teams, pool_teams=None, db_id_to_match_id=None
+    ):
+        """Get the team identifier for a match side (home/away)."""
+        team = getattr(match, f"{side}_team")
+        team_undecided = getattr(match, f"{side}_team_undecided")
+        team_eval = getattr(match, f"{side}_team_eval")
+        team_eval_related = getattr(match, f"{side}_team_eval_related")
+
+        if team_undecided:
+            # UndecidedTeam - use formula
+            return team_undecided.formula
+
+        elif team_eval:
+            # Handle W/L references that need match IDs
+            if team_eval in ["W", "L"] and team_eval_related and db_id_to_match_id:
+                # Look up the match ID using the database ID mapping
+                related_match_id = db_id_to_match_id.get(team_eval_related.id)
+                if related_match_id:
+                    return f"{team_eval}{related_match_id}"
+            # Direct eval string (W1, L1, G1P1, etc.) - already complete
+            return team_eval
+
+        elif match.is_bye:
+            # Bye match - whichever side is unset should be 0
+            return "0"
+
+        elif team:
+            # Regular team
+            if pool_teams:
+                # For pool matches, use 1-based index within the pool
+                try:
+                    return str(pool_teams.index(team) + 1)
+                except ValueError:
+                    # Fallback to global team index
+                    return str(all_teams.index(team.title) + 1)
+            else:
+                # For knockout matches, use global team index
+                return str(all_teams.index(team.title) + 1)
+
+        else:
+            # Unknown - shouldn't happen but handle gracefully
+            return "?"
+
+    def _get_or_create_draw_format_ref_for_export(
+        self, draw_format_string, format_name, draw_formats, draw_format_refs
+    ):
+        """Get or create a reference for a draw format string."""
+        if not draw_format_string:
+            return None
+
+        # Check if we already have this format
+        if draw_format_string in draw_format_refs:
+            return draw_format_refs[draw_format_string]
+
+        # Use the format name as the key (make it unique if needed)
+        ref_name = format_name
+        counter = 1
+        while ref_name in draw_formats:
+            counter += 1
+            ref_name = f"{format_name} {counter}"
+
+        draw_format_refs[draw_format_string] = ref_name
+        draw_formats[ref_name] = draw_format_string
+
+        return ref_name
 
 
 class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
@@ -1015,13 +1338,9 @@ class StageGroup(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
 
     @property
     def ladder(self):
-        team_ids = set()
-        for m in self.matches.all():
-            if m.home_team is not None:
-                team_ids.add(m.home_team_id)
-            if m.away_team is not None:
-                team_ids.add(m.away_team_id)
-        return LadderSummary.objects.filter(stage=self.stage, team__in=team_ids)
+        return LadderSummary.objects.filter(
+            stage=self.stage, team__in=self.teams.values_list("pk", flat=True)
+        )
 
     def ladders(self):
         return {self: self.ladder_summary.select_related("team__club")}
@@ -1655,6 +1974,12 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         max_length=50, blank=True, null=True, db_index=True
     )
     live_stream_thumbnail = models.URLField(blank=True, null=True)
+    live_stream_thumbnail_image = models.BinaryField(
+        blank=True,
+        null=True,
+        editable=True,
+        help_text="Image to be used as thumbnail image on the YouTube platform",
+    )
 
     objects = MatchManager()
 
@@ -1836,7 +2161,10 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
             team_eval_related = getattr(self, f"{field}_eval_related")
 
         try:
-            stage, group, position = stage_group_position_re.match(team_eval).groups()
+            match = stage_group_position_re.match(team_eval)
+            if not match:
+                raise AttributeError("Invalid stage_group_position pattern")
+            stage, group, position = match.groups()
         except (AttributeError, TypeError):
             if not team_undecided and self.is_bye:
                 return ByeTeam()
@@ -1971,9 +2299,12 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
                         team = team_eval_related._winner_loser(team_eval)
                     else:
                         try:
-                            stage, group, position = stage_group_position_re.match(
-                                team_eval
-                            ).groups()
+                            match = stage_group_position_re.match(team_eval)
+                            if not match:
+                                raise AttributeError(
+                                    "Invalid stage_group_position pattern"
+                                )
+                            stage, group, position = match.groups()
                         except (AttributeError, TypeError):
                             logger.exception(
                                 "Failed evaluating `stage_group_position` %s for %s",
@@ -1993,11 +2324,127 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
             res[index] = team
         return tuple(res)
 
+    def transition_live_stream(self, status, youtube_service=None):
+        """
+        Transition the live stream status of this match.
+
+        Args:
+            status (str): The target broadcast status ('testing', 'live', 'complete')
+            youtube_service: Optional YouTube API service instance. If None, will use
+                           season's YouTube service.
+
+        Returns:
+            dict: Response from YouTube API
+
+        Raises:
+            LiveStreamIdentifierMissing: If the match has no external_identifier
+            InvalidLiveStreamTransition: If the transition is invalid
+            LiveStreamTransitionWarning: Warning for potentially invalid transitions
+        """
+        # Check if match has live stream identifier
+        if not self.external_identifier:
+            raise LiveStreamIdentifierMissing(
+                f"Match {self} does not have a live stream identifier"
+            )
+
+        # Define valid transitions
+        valid_transitions = {"testing": ["live"], "live": ["complete"], "complete": []}
+
+        # Get current broadcast status from YouTube if available
+        current_status = None
+        if youtube_service:
+            try:
+                response = (
+                    youtube_service.liveBroadcasts()
+                    .list(part="status", id=self.external_identifier)
+                    .execute()
+                )
+                if response.get("items"):
+                    current_status = response["items"][0]["status"]["lifeCycleStatus"]
+            except Exception:
+                # If we can't get current status, proceed anyway
+                pass
+
+        # Check for invalid transitions based on known current status
+        if current_status:
+            valid_next_states = valid_transitions.get(current_status, [])
+            if status not in valid_next_states and status != current_status:
+                if current_status == "complete":
+                    # Can't transition from complete to anything
+                    raise InvalidLiveStreamTransition(
+                        f"Cannot transition from '{current_status}' to '{status}' "
+                        f"for match {self}"
+                    )
+                else:
+                    # Issue warning for potentially invalid transitions
+                    warnings.warn(
+                        f"Potentially invalid transition from '{current_status}' to '{status}' "
+                        f"for match {self}",
+                        LiveStreamTransitionWarning,
+                    )
+
+        # Use provided service or get from season
+        service = youtube_service or self.stage.division.season.youtube
+
+        # Make the API call to transition the broadcast
+        response = (
+            service.liveBroadcasts()
+            .transition(
+                broadcastStatus=status,
+                id=self.external_identifier,
+                part="snippet,status",
+            )
+            .execute()
+        )
+
+        return response
+
     def __str__(self):
         return self.title
 
     def __repr__(self):
         return f"<Match: {self.round!s}: {self!s}>"
+
+    def get_thumbnail_media_upload(self) -> MediaUpload | None:
+        """
+        Get a MediaMemoryUpload instance for this match's thumbnail.
+        Falls back to season thumbnail if match has no specific thumbnail.
+
+        Returns:
+            MediaMemoryUpload or None if no thumbnail is available
+        """
+        # Try match-specific thumbnail first
+        if self.live_stream_thumbnail_image:
+            return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
+
+        # Fall back to season thumbnail
+        season = self.stage.division.season
+        if season.live_stream_thumbnail_image:
+            return MediaMemoryUpload(season.live_stream_thumbnail_image, resumable=True)
+
+        return None
+
+    def live_stream_thumbnail_response(self, width=None, height=None) -> HttpResponse:
+        """
+        Get HttpResponse for this match's thumbnail image.
+        Falls back to season thumbnail if match has no specific thumbnail.
+
+        Args:
+            width (int, optional): Maximum width for resizing
+            height (int, optional): Maximum height for resizing
+
+        Returns:
+            HttpResponse: Image response with appropriate headers
+
+        Raises:
+            Http404: If no thumbnail is available or processing fails
+        """
+        return create_thumbnail_response(
+            self.live_stream_thumbnail_image
+            or self.stage.division.season.live_stream_thumbnail_image,
+            width,
+            height,
+        )
 
 
 class LadderBase(models.Model):
@@ -2055,6 +2502,9 @@ class LadderSummary(LadderBase):
         )
         unique_together = ("stage", "team")
 
+    def __repr__(self):
+        return f"<LadderSummary: {self.stage!s} - {self.stage_group!s} - {self.team!s}>"
+
 
 class DrawFormat(AdminUrlMixin, models.Model):
     name = models.CharField(max_length=50)
@@ -2070,13 +2520,6 @@ class DrawFormat(AdminUrlMixin, models.Model):
 
     def _get_url_args(self):
         return (self.pk,)
-
-    def generator(self, stage, start_date=None):
-        from tournamentcontrol.competition.draw import DrawGenerator
-
-        generator = DrawGenerator(stage, start_date)
-        generator.parse(self.text)
-        return generator
 
     def __str__(self):
         return self.name

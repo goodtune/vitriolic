@@ -1,8 +1,6 @@
 from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
-from django.test import override_settings
-
 from tournamentcontrol.competition.models import Match
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.tests.test_competition_admin import TestCase
