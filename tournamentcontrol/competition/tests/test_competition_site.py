@@ -356,9 +356,10 @@ class FrontEndTests(TestCase):
         )
 
 
-@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
-class StreamInstructionsViewTests(TestCase):
-    """Test the stream-instructions view for both markdown and HTML formats."""
+
+
+class StreamInstructionsTests(TestCase):
+    """Test suite for stream instructions endpoint."""
 
     user_factory = SuperUserFactory
 

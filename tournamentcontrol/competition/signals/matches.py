@@ -134,7 +134,7 @@ def notify_match_forfeit_email(sender, match, team, *args, **kwargs):
 
     # construct and send an email to the players in the opposition
     subject = Template(
-        "Your {{ match.time }} game against {{ team.title }} " "has been forfeit"
+        "Your {{ match.time }} game against {{ team.title }} has been forfeit"
     ).render(context)
     message = ""
     from_email = settings.DEFAULT_FROM_EMAIL
@@ -144,8 +144,7 @@ def notify_match_forfeit_email(sender, match, team, *args, **kwargs):
 
     # construct and send an email to the competition administrators
     subject = Template(
-        "Forfeit: {{ match }} [{{ match.time }}, "
-        "{{ match.date }}, {{ match.play_at }}]"
+        "Forfeit: {{ match }} [{{ match.time }}, {{ match.date }}, {{ match.play_at }}]"
     ).render(context)
     recipient_list = [formataddr((p.get_full_name(), p.email)) for p in administrators]
 

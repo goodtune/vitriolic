@@ -185,5 +185,7 @@ def team_ladder_entry_aggregation(sender, instance, created=None, *args, **kwarg
     aggregate.update({"percentage": percentage})
 
     instance.team.ladder_summary.create(
-        stage=instance.match.stage, stage_group=instance.match.stage_group, **aggregate
+        stage=instance.match.stage,
+        stage_group=instance.team.stage_group,
+        **aggregate,
     )

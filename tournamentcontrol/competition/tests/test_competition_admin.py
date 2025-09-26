@@ -1,5 +1,6 @@
 import unittest
 from datetime import date, datetime, time
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from dateutil.rrule import DAILY
@@ -10,10 +11,15 @@ from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.common.tests.factories import UserFactory
+from tournamentcontrol.competition.draw.schemas import (
+    DivisionStructure,
+    StageFixture,
+)
 from tournamentcontrol.competition.models import (
     Division,
     Ground,
     Match,
+    SimpleScoreMatchStatistic,
     Stage,
     StageGroup,
     Team,
@@ -741,6 +747,77 @@ class BackendTests(MessagesTestMixin, TestCase):
             self.assertResponseNotContains("Mixed 4", html=False)
             self.assertResponseContains("4th Division Mixed", html=False)
 
+    def test_scorers_view_basic(self):
+        """Test that scorers view loads correctly with basic match and statistics data"""
+        # Create basic structure
+        stage = factories.StageFactory.create()
+        division = stage.division
+
+        # Create teams and players
+        team = factories.TeamFactory.create(division=division)
+        person = factories.PersonFactory.create(club=team.club)
+
+        # Create team association
+        factories.TeamAssociationFactory.create(team=team, person=person)
+
+        # Create a match
+        match = factories.MatchFactory.create(
+            stage=stage,
+            home_team=team,
+            away_team=factories.TeamFactory.create(division=division),
+        )
+
+        # Create match statistics for the player
+        SimpleScoreMatchStatistic.objects.create(
+            match=match, player=person, played=1, points=10, mvp=2
+        )
+
+        # Test the scorers view
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:competition:season:division:scorers",
+                division.season.competition.pk,
+                division.season.pk,
+                division.pk,
+            )
+            self.response_200()
+
+        # Get context data directly
+        scorers = self.get_context("scorers")
+        mvp = self.get_context("mvp")
+
+        # Expected data structure from Django ORM values()
+        expected_scorer = {
+            "uuid": person.uuid,
+            "first_name": person.first_name,
+            "last_name": person.last_name,
+            "club__title": team.club.title,
+            "played": 1,
+            "points": 10,
+            "mvp": 2,
+        }
+
+        # Assert direct equality with expected data
+        self.assertEqual([expected_scorer], list(scorers))
+        self.assertEqual([expected_scorer], list(mvp))
+
+        # Assert HTML structure contains the expected table rows
+        expected_scorer_row = (
+            f"<td>{person.first_name} {person.last_name}</td>"
+            f"<td>{team.club.title}</td>"
+            f"<td>1</td>"  # played
+            f"<td>10</td>"  # points
+        )
+        expected_mvp_row = (
+            f"<td>{person.first_name} {person.last_name}</td>"
+            f"<td>{team.club.title}</td>"
+            f"<td>1</td>"  # played
+            f"<td>2</td>"  # mvp
+        )
+
+        self.assertResponseContains(expected_scorer_row, html=True)
+        self.assertResponseContains(expected_mvp_row, html=True)
+
     def test_update_club(self):
         """
         Using the admin interface, update an existing Club and ensure that the
@@ -754,6 +831,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             "website": "",
             "twitter": "",
             "primary": "",
+            "status": "active",
             "slug": "bare-back-riders",
             "slug_locked": "0",
         }
@@ -1122,10 +1200,11 @@ class BackendTests(MessagesTestMixin, TestCase):
             "date": "2025-04-28",
             "include_in_ladder": "0",
             "live_stream": "0",
-            "thumbnail_url": "",
+            "live_stream_thumbnail_image-clear": "0",
         }
         # Unsaved instance means we don't have to trim the final positional argument.
         add_match = Match(stage=stage).url_names["add"]
+        data["live_stream_thumbnail_image"] = ""
         self.post(add_match.url_name, *add_match.args, data=data)
         self.response_302()
 
@@ -1545,17 +1624,237 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "play_at": ground.pk,
                 "include_in_ladder": "1" if match.include_in_ladder else "0",
                 "live_stream": "0",  # Turn OFF live streaming
-                "thumbnail_url": "",
+                "live_stream_thumbnail_image-clear": "0",
             }
 
             # This should complete successfully without TypeError
-            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            data["live_stream_thumbnail_image"] = ""
+            self.post(
+                edit_match_url.url_name, *edit_match_url.args, data=data
+            )
             self.response_302()  # Should redirect successfully
 
             # Verify the match was updated
             match.refresh_from_db()
             self.assertFalse(match.live_stream)
             self.assertIsNone(match.external_identifier)
+
+    def test_json_division_builder_post_invalid_json(self):
+        """Test that invalid JSON shows validation errors."""
+        season = factories.SeasonFactory.create()
+
+        invalid_json = '{"invalid": json syntax}'
+
+        data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "10",
+            "form-0-json_data": invalid_json,
+        }
+
+        self.post(
+            "admin:fixja:competition:season:json-builder",
+            season.competition.pk,
+            season.pk,
+            data=data,
+        )
+        self.response_200()  # Should stay on form with errors
+
+        # Check that no divisions were created
+        self.assertEqual(season.divisions.count(), 0)
+
+        # Check for validation error
+        formset = self.get_context("formset")
+        self.assertIsNotNone(formset)
+        self.assertFalse(formset.is_valid())
+
+    def test_json_division_builder_post_empty_json(self):
+        """Test that empty JSON shows validation errors instead of success."""
+        season = factories.SeasonFactory.create()
+
+        # Empty form submission
+        data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "10",
+            "form-0-json_data": "",  # Empty data
+        }
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:json-builder",
+                season.competition.pk,
+                season.pk,
+                data=data,
+            )
+            self.response_200()  # Should stay on form with errors
+
+        # Check that no divisions were created
+        self.assertEqual(season.divisions.count(), 0)
+
+        # Check for validation error
+        formset = self.get_context("formset")
+        self.assertIsNotNone(formset)
+        self.assertFalse(formset.is_valid())
+
+        # Check for specific required field error
+        form = formset.forms[0]
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors, {"json_data": ["This field is required."]})
+
+    def test_json_division_builder_post_valid_json(self):
+        """Test that valid JSON creates divisions successfully."""
+
+        season = factories.SeasonFactory.create()
+
+        # Create a valid DivisionStructure and convert to JSON
+        structure = DivisionStructure(
+            title="Test Division",
+            teams=["Team A", "Team B", "Team C", "Team D"],
+            draw_formats={
+                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
+            },
+            stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
+        )
+        valid_json = structure.model_dump_json()
+
+        data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "10",
+            "form-0-json_data": valid_json,
+        }
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:json-builder",
+                season.competition.pk,
+                season.pk,
+                data=data,
+            )
+            self.response_302()  # Should redirect after successful save
+
+        # Check that division was created
+        self.assertEqual(season.divisions.count(), 1)
+        division = season.divisions.first()
+        self.assertEqual(division.title, "Test Division")
+
+    def test_json_division_builder_duplicate_existing_division_name(self):
+        """Test that existing division names cause validation errors."""
+
+        season = factories.SeasonFactory.create()
+        # Create an existing division
+        existing_division = factories.DivisionFactory.create(
+            season=season, title="Existing Division"
+        )
+
+        # Try to create a division with the same name
+        structure = DivisionStructure(
+            title="Existing Division",  # Same name as existing division
+            teams=["Team A", "Team B", "Team C", "Team D"],
+            draw_formats={
+                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
+            },
+            stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
+        )
+        conflicting_json = structure.model_dump_json()
+
+        data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "10",
+            "form-0-json_data": conflicting_json,
+        }
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:json-builder",
+                season.competition.pk,
+                season.pk,
+                data=data,
+            )
+            self.response_200()  # Should stay on form with errors
+
+        # Check that no new divisions were created
+        self.assertEqual(season.divisions.count(), 1)  # Still just the existing one
+        self.assertEqual(season.divisions.first(), existing_division)
+
+        # Check for validation error
+        formset = self.get_context("formset")
+        self.assertIsNotNone(formset)
+        self.assertFalse(formset.is_valid())
+
+        # Check for specific duplicate name error
+        form = formset.forms[0]
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.errors,
+            {"json_data": ["A division of that name already exists in this season."]},
+        )
+
+    def test_json_division_builder_duplicate_names_within_forms(self):
+        """Test that duplicate division names within the same formset cause validation errors."""
+
+        season = factories.SeasonFactory.create()
+
+        # Create two divisions with the same name
+        structure1 = DivisionStructure(
+            title="Duplicate Name",
+            teams=["Team A", "Team B", "Team C", "Team D"],
+            draw_formats={
+                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
+            },
+            stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
+        )
+        structure2 = DivisionStructure(
+            title="Duplicate Name",  # Same name as first structure
+            teams=["Team E", "Team F", "Team G", "Team H"],
+            draw_formats={
+                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
+            },
+            stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
+        )
+
+        json1 = structure1.model_dump_json()
+        json2 = structure2.model_dump_json()
+
+        data = {
+            "form-TOTAL_FORMS": "2",
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "10",
+            "form-0-json_data": json1,
+            "form-1-json_data": json2,
+        }
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:json-builder",
+                season.competition.pk,
+                season.pk,
+                data=data,
+            )
+            self.response_200()  # Should stay on form with errors
+
+        # Check that no divisions were created
+        self.assertEqual(season.divisions.count(), 0)
+
+        # Check for validation error
+        formset = self.get_context("formset")
+        self.assertIsNotNone(formset)
+        self.assertFalse(formset.is_valid())
+
+        # Check that both forms have duplicate name errors
+        for i in [0, 1]:
+            form = formset.forms[i]
+            self.assertFalse(form.is_valid())
+            self.assertEqual(
+                form.errors, {"json_data": ["Division names must be unique."]}
+            )
 
     def test_edit_match_youtube_api_basic_guard_clause(self):
         """
@@ -1598,11 +1897,14 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "play_at": ground.pk,
                 "include_in_ladder": "1" if match.include_in_ladder else "0",
                 "live_stream": "0",
-                "thumbnail_url": "",
+                "live_stream_thumbnail_image-clear": "0",
             }
 
             # This should complete successfully without TypeError
-            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            data["live_stream_thumbnail_image"] = ""
+            self.post(
+                edit_match_url.url_name, *edit_match_url.args, data=data
+            )
             self.response_302()  # Should redirect successfully
 
             # Verify the match was updated
@@ -1620,7 +1922,7 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # Round 2: Create matches that depend on Round 1 results
         # These matches will have eval_related fields pointing to match1
-        match2 = factories.MatchFactory.create(
+        _match2 = factories.MatchFactory.create(
             stage=stage,
             round=2,
             label="Winner vs Loser",
@@ -1701,7 +2003,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         )
 
         # Round 3: Create matches with cross-dependencies on Round 2
-        match5 = factories.MatchFactory.create(
+        _match5 = factories.MatchFactory.create(
             stage=stage,
             round=3,
             label="Final",
@@ -1712,7 +2014,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             away_team_eval="L",  # Loser of match4 (cross-dependency)
             away_team_eval_related=match4,
         )
-        match6 = factories.MatchFactory.create(
+        _match6 = factories.MatchFactory.create(
             stage=stage,
             round=3,
             label="3rd Place",
@@ -1750,3 +2052,83 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # Verify all matches from the stage were deleted despite complex dependencies
         self.assertCountEqual(stage.matches.all(), [])
+
+    def test_division_export_json(self):
+        """Test that division JSON export works correctly."""
+        # Create a simple division with teams and a stage
+        division = factories.DivisionFactory.create(title="Test Division")
+
+        # Create some teams
+        team1 = factories.TeamFactory.create(division=division, title="Team A")
+        team2 = factories.TeamFactory.create(division=division, title="Team B")
+
+        # Create a stage with a simple match
+        stage = factories.StageFactory.create(division=division, title="Round Robin")
+        factories.MatchFactory.create(
+            stage=stage,
+            home_team=team1,
+            away_team=team2,
+            round=1,
+        )
+
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:competition:season:division:export-json",
+                division.season.competition.pk,
+                division.season.pk,
+                division.pk,
+            )
+        self.response_200()
+
+        # Check response content type and headers
+        self.assertResponseHeaders(
+            {
+                "Content-Type": "application/json",
+                "Content-Disposition": f'attachment; filename="{division.season.competition.slug}_{division.season.slug}_{division.slug}.json"',
+            }
+        )
+
+        structure = DivisionStructure.model_validate_json(
+            self.last_response.content.decode()
+        )
+
+        # Verify basic structure
+        self.assertEqual(structure.title, "Test Division")
+        self.assertEqual(structure.teams, ["Team A", "Team B"])
+        self.assertEqual([s.title for s in structure.stages], ["Round Robin"])
+
+    @patch("googleapiclient.discovery.build")
+    def test_bug_203_add_match_with_live_streaming_enabled(self, mock_discovery_build):
+        """
+        Test that creating a match through admin UI does not raise NoReverseMatch
+        when live streaming is enabled with YouTube credentials configured.
+
+        Refs: https://github.com/goodtune/vitriolic/issues/203
+        """
+        stage = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_project_id="test-project-123",
+            division__season__live_stream_client_id="test-client-id",
+            division__season__live_stream_client_secret="test-client-secret",
+        )
+        team1 = factories.TeamFactory.create(division=stage.division)
+        team2 = factories.TeamFactory.create(division=stage.division)
+        ground = factories.GroundFactory.create()
+
+        data = {
+            "home_team": team1.pk,
+            "away_team": team2.pk,
+            "label": "Test Match",
+            "round": 1,
+            "date": "2025-05-01",
+            "time": "14:00:00",
+            "play_at": ground.pk,
+            "include_in_ladder": "1",
+            "live_stream": "0",
+            "live_stream_thumbnail_image-clear": "0",
+        }
+
+        add_match = Match(stage=stage).url_names["add"]
+        data["live_stream_thumbnail_image"] = ""
+        self.post(add_match.url_name, *add_match.args, data=data)
+        self.response_302()

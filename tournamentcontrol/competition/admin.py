@@ -48,6 +48,7 @@ from tournamentcontrol.competition.forms import (
     ClubRoleForm,
     CompetitionForm,
     DivisionForm,
+    DivisionStructureJSONFormSet,
     DrawFormatForm,
     DrawGenerationFormSet,
     DrawGenerationMatchFormSet,
@@ -92,6 +93,7 @@ from tournamentcontrol.competition.models import (
     SeasonExclusionDate,
     SeasonMatchTime,
     SeasonReferee,
+    SimpleScoreMatchStatistic,
     Stage,
     StageGroup,
     Team,
@@ -378,6 +380,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     "<int:division_id>/exclusion/",
                     include(divisionexclusion_urls, namespace="divisionexclusiondate"),
                 ),
+                path(
+                    "<int:division_id>/export.json",
+                    self.division_export_json,
+                    name="export-json",
+                ),
             ],
             self.app_name,
         )
@@ -391,6 +398,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 ),
                 path("<int:season_id>/callback", self.oauth_callback, name="callback"),
                 path("<int:season_id>/delete/", self.delete_season, name="delete"),
+                path(
+                    "<int:season_id>/json-builder/",
+                    self.json_division_builder,
+                    name="json-builder",
+                ),
                 path(
                     "<int:season_id>/reschedule/",
                     self.match_reschedule,
@@ -654,9 +666,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         a.order = bo
         a.save()
 
-        fmt = _(
-            'The %(model)s "%(title)s" has been ' "reordered %(direction)s the list."
-        )
+        fmt = _('The %(model)s "%(title)s" has been reordered %(direction)s the list.')
         messages.info(
             request,
             fmt
@@ -1215,6 +1225,27 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
+    def division_export_json(self, request, competition, season, division, **kwargs):
+        """Export division as JSON DivisionStructure."""
+        try:
+            division_structure = division.to_division_structure()
+        except Exception as e:
+            messages.error(request, f"Failed to export division: {e}")
+            return self.redirect(division.urls["edit"])
+
+        response = HttpResponse(
+            division_structure.model_dump_json(),
+            content_type="application/json",
+        )
+        response["Content-Disposition"] = (
+            "attachment; "
+            f'filename="{competition.slug}_{season.slug}_{division.slug}.json"'
+        )
+
+        return response
+
+    @competition_by_pk_m
+    @staff_login_required_m
     def edit_divisionexclusiondate(
         self, request, division, extra_context, pk=None, **kwargs
     ):
@@ -1381,7 +1412,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             request,
             Team,
             instance=team,
-            post_save_redirect="admin:fixja:competition:season:" "division:team:list",
+            post_save_redirect="admin:fixja:competition:season:division:team:list",
             post_save_redirect_args=(
                 competition.pk,
                 season.pk,
@@ -1589,17 +1620,20 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 return obj
 
             # Build match video URL for description
-            match_url = request.build_absolute_uri(
-                reverse(
-                    "competition:match-video",
-                    kwargs={
-                        "competition": competition.slug,
-                        "season": season.slug,
-                        "division": division.slug,
-                        "match": obj.pk,
-                    },
+            # Only build the URL if the match has been saved and has a primary key
+            match_url = None
+            if obj.pk is not None:
+                match_url = request.build_absolute_uri(
+                    reverse(
+                        "competition:match-video",
+                        kwargs={
+                            "competition": competition.slug,
+                            "season": season.slug,
+                            "division": division.slug,
+                            "match": obj.pk,
+                        },
+                    )
                 )
-            )
 
             # Create context for template rendering
             template_context = {
@@ -1634,9 +1668,13 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             ).strip()
 
             start_time = obj.get_datetime(ZoneInfo("UTC"))
-            stop_time = obj.get_datetime(ZoneInfo("UTC")) + relativedelta(
-                minutes=50
-            )  # FIXME: hard coded
+
+            # Skip YouTube API interaction if we don't have valid start time
+            # This can happen for new matches that don't have complete date/time data
+            if start_time is None:
+                return
+
+            stop_time = start_time + relativedelta(minutes=50)  # FIXME: hard coded
 
             body = {
                 "snippet": {
@@ -2234,11 +2272,34 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @staff_login_required_m
     def scorecard_report(self, request, **extra_context):
-        from .wizards import FilterForm, SeasonForm, scorecardwizard_factory
+        from tournamentcontrol.competition.wizards import (
+            FilterForm,
+            SeasonForm,
+            scorecardwizard_factory,
+        )
 
         ScorecardWizard = scorecardwizard_factory(app=self, extra_context=extra_context)
         wizard = ScorecardWizard.as_view(form_list=[SeasonForm, FilterForm])
         return wizard(request)
+
+    @staff_login_required_m
+    @competition_by_pk_m
+    def json_division_builder(self, request, competition, season, **extra_context):
+        """JSON-based division structure builder for power users."""
+        return self.generic_edit_multiple(
+            request,
+            season.divisions,  # Use season's divisions manager
+            formset_class=DivisionStructureJSONFormSet,
+            formset_kwargs={"instance": season},  # Pass season as instance
+            post_save_redirect=self.redirect(season.urls["edit"]),
+            templates=self.template_path("json_division_builder.html"),
+            extra_context={
+                **extra_context,
+                "season": season,
+                "competition": competition,
+                "cancel_url": season.urls["edit"],
+            },
+        )
 
     @competition_by_pk_m
     @staff_login_required_m
@@ -2332,27 +2393,42 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def highest_point_scorer(self, request, division, extra_context, **kwargs):
-        def _get_clause(field, aggregate=Sum):
-            """
-            Local function to produce a Aggregate(Case(When())) instance which
-            can be used to extract individual totals for the division.
-            """
-            return aggregate(
-                Case(When(statistics__match__stage__division=division, then=F(field)))
+        # Get the statistics directly and group by person
+        # This approach avoids GROUP BY issues by working with the statistics model directly
+        statistics = (
+            SimpleScoreMatchStatistic.objects.filter(match__stage__division=division)
+            .values(
+                "player__uuid",
+                "player__first_name",
+                "player__last_name",
+                "player__club__title",
             )
-
-        people = (
-            Person.objects.select_related("club")
             .annotate(
-                played=_get_clause("statistics__played"),
-                points=_get_clause("statistics__points"),
-                mvp=_get_clause("statistics__mvp"),
+                uuid=F("player__uuid"),
+                first_name=F("player__first_name"),
+                last_name=F("player__last_name"),
+                club__title=F("player__club__title"),
+                played=Sum("played"),
+                points=Sum("points"),
+                mvp=Sum("mvp"),
             )
-            .exclude(played=None)
+            .exclude(played__isnull=True)
+            .exclude(played=0)
+            .values(
+                "uuid",
+                "first_name",
+                "last_name",
+                "club__title",
+                "played",
+                "points",
+                "mvp",
+            )
+            .order_by("-points", "played")
         )
 
-        scorers = people.order_by("-points", "played")
-        mvp = people.order_by("-mvp", "played")
+        # Create separate querysets for different ordering
+        scorers = statistics.order_by("-points", "played")
+        mvp = statistics.order_by("-mvp", "played")
 
         context = {
             "scorers": scorers,
@@ -2396,6 +2472,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 "youtube",
                 "primary",
                 "primary_position",
+                "status",
                 "slug",
                 "slug_locked",
             ),

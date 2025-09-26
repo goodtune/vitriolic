@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 from test_plus import TestCase
 
-from tournamentcontrol.competition.draw import (
+from tournamentcontrol.competition.draw.generators import (
     tournament_date_generator,
     weekly_date_generator,
 )
@@ -41,7 +41,7 @@ class DrawGenerationUtilities(TestCase):
         self.assertCountEqual(
             cm.output,
             [
-                f"DEBUG:tournamentcontrol.competition.draw:"
+                f"DEBUG:tournamentcontrol.competition.draw.generators:"
                 f"Tournament date generator: '{self.stage.title}' (2022-08-02 00:00:00+00:00:3)",
             ],
         )
@@ -63,7 +63,7 @@ class DrawGenerationUtilities(TestCase):
         self.assertCountEqual(
             cm.output,
             [
-                f"DEBUG:tournamentcontrol.competition.draw:"
+                f"DEBUG:tournamentcontrol.competition.draw.generators:"
                 f"Weekly date generator: '{self.stage.title}' (2022-08-02 00:00:00+00:00)",
             ],
         )
