@@ -1582,12 +1582,12 @@ class BackendTests(MessagesTestMixin, TestCase):
     def test_edit_match_without_external_identifier_youtube_api(self):
         """
         Test that editing a match with live streaming enabled but without
-        external_identifier doesn't cause TypeError when YouTube API bind() is called.
+        external_identifier doesn't cause TypeError when YouTube API operations are called.
 
         This test covers the original bug scenario where:
         - A match has live_stream=True
         - But obj.external_identifier is None
-        - The pre_save_callback tried to bind the stream without checking identifiers
+        - The signal handler tried to bind the stream without checking identifiers
         - This caused TypeError: Missing required parameter "id"
         """
         # Create a stage with live streaming enabled but no YouTube credentials
@@ -1611,33 +1611,36 @@ class BackendTests(MessagesTestMixin, TestCase):
         )
 
         # Test editing the match - this should not raise TypeError
-        edit_match_url = match.url_names["edit"]
-        with self.login(self.superuser):
-            # Turn off live streaming to resolve the problematic state
-            data = {
-                "home_team": match.home_team.pk,
-                "away_team": match.away_team.pk,
-                "label": match.label or "Test Match",
-                "round": match.round or 1,
-                "date": match.date.strftime("%Y-%m-%d"),
-                "time": match.time.strftime("%H:%M"),
-                "play_at": ground.pk,
-                "include_in_ladder": "1" if match.include_in_ladder else "0",
-                "live_stream": "0",  # Turn OFF live streaming
-                "live_stream_thumbnail_image-clear": "0",
-            }
+        # Mock the signal handler to verify it's called but doesn't make API calls
+        with mock.patch('tournamentcontrol.competition.signals.matches.set_youtube_thumbnail') as mock_thumbnail_task:
+            edit_match_url = match.url_names["edit"]
+            with self.login(self.superuser):
+                # Turn off live streaming to resolve the problematic state
+                data = {
+                    "home_team": match.home_team.pk,
+                    "away_team": match.away_team.pk,
+                    "label": match.label or "Test Match",
+                    "round": match.round or 1,
+                    "date": match.date.strftime("%Y-%m-%d"),
+                    "time": match.time.strftime("%H:%M"),
+                    "play_at": ground.pk,
+                    "include_in_ladder": "1" if match.include_in_ladder else "0",
+                    "live_stream": "0",  # Turn OFF live streaming
+                    "live_stream_thumbnail_image-clear": "0",
+                }
 
-            # This should complete successfully without TypeError
-            data["live_stream_thumbnail_image"] = ""
-            self.post(
-                edit_match_url.url_name, *edit_match_url.args, data=data
-            )
-            self.response_302()  # Should redirect successfully
+                # This should complete successfully without TypeError
+                self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+                self.response_302()  # Should redirect successfully
 
-            # Verify the match was updated
-            match.refresh_from_db()
-            self.assertFalse(match.live_stream)
-            self.assertIsNone(match.external_identifier)
+                # Verify the match was updated
+                match.refresh_from_db()
+                self.assertFalse(match.live_stream)
+                self.assertIsNone(match.external_identifier)
+                
+                # Verify the signal handler was triggered but didn't queue thumbnail task
+                # since no credentials are configured (guard clause)
+                mock_thumbnail_task.s.assert_not_called()
 
     def test_json_division_builder_post_invalid_json(self):
         """Test that invalid JSON shows validation errors."""
@@ -1884,33 +1887,35 @@ class BackendTests(MessagesTestMixin, TestCase):
         )
 
         # Edit the match - should not cause TypeError due to guard clause
-        edit_match_url = match.url_names["edit"]
-        with self.login(self.superuser):
-            # Turn off live streaming
-            data = {
-                "home_team": match.home_team.pk,
-                "away_team": match.away_team.pk,
-                "label": match.label or "Test Match",
-                "round": match.round or 1,
-                "date": match.date.strftime("%Y-%m-%d"),
-                "time": match.time.strftime("%H:%M"),
-                "play_at": ground.pk,
-                "include_in_ladder": "1" if match.include_in_ladder else "0",
-                "live_stream": "0",
-                "live_stream_thumbnail_image-clear": "0",
-            }
+        # Mock to verify signal handler behavior
+        with mock.patch('tournamentcontrol.competition.signals.matches.set_youtube_thumbnail') as mock_thumbnail_task:
+            edit_match_url = match.url_names["edit"]
+            with self.login(self.superuser):
+                # Turn off live streaming
+                data = {
+                    "home_team": match.home_team.pk,
+                    "away_team": match.away_team.pk,
+                    "label": match.label or "Test Match",
+                    "round": match.round or 1,
+                    "date": match.date.strftime("%Y-%m-%d"),
+                    "time": match.time.strftime("%H:%M"),
+                    "play_at": ground.pk,
+                    "include_in_ladder": "1" if match.include_in_ladder else "0",
+                    "live_stream": "0",
+                    "thumbnail_url": "",
+                }
 
-            # This should complete successfully without TypeError
-            data["live_stream_thumbnail_image"] = ""
-            self.post(
-                edit_match_url.url_name, *edit_match_url.args, data=data
-            )
-            self.response_302()  # Should redirect successfully
+                # This should complete successfully without TypeError
+                self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+                self.response_302()  # Should redirect successfully
 
-            # Verify the match was updated
-            match.refresh_from_db()
-            self.assertFalse(match.live_stream)
-            self.assertIsNone(match.external_identifier)
+                # Verify the match was updated
+                match.refresh_from_db()
+                self.assertFalse(match.live_stream)
+                self.assertIsNone(match.external_identifier)
+                
+                # Verify signal handler guard clause prevented YouTube API calls
+                mock_thumbnail_task.s.assert_not_called()
 
     def test_undo_draw_with_dependent_matches(self):
         """Test that undo_draw handles matches with eval_related dependencies correctly."""
