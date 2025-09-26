@@ -1,0 +1,55 @@
+{% load i18n humanize %}
+<div class="thumbnail-image-widget" style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; background: #f9f9f9;">
+    {% if widget.value %}
+        <div class="current-thumbnail-display" style="display: flex; align-items: flex-start; gap: 20px; margin-bottom: 15px;">
+            {% if preview_data_url %}
+                <div class="thumbnail-preview" style="flex: 0 0 50%;">
+                    <img src="{{ preview_data_url }}"
+                         style="width: 100%; height: auto; max-height: 200px; object-fit: contain; border: 1px solid #ccc; border-radius: 3px; background: white;"
+                         alt="{% trans 'Current thumbnail' %}">
+                </div>
+                <div class="thumbnail-info" style="flex: 1; min-width: 0;">
+            {% else %}
+                <div class="thumbnail-info" style="flex: 1;">
+            {% endif %}
+                <p style="margin: 0 0 8px 0; font-weight: 500; color: #333; font-size: 1.1em;">
+                    {% trans "Current thumbnail" %}
+                </p>
+                <p style="margin: 0 0 8px 0; font-size: 0.9em; color: #666;">
+                    {{ mime_type|default:"Image" }} • {{ file_size_bytes|filesizeformat }}
+                </p>
+                {% if preview_failed %}
+                    <p style="margin: 0 0 8px 0; font-size: 0.85em; color: #888;">
+                        {% trans "Preview unavailable (unsupported format)" %}
+                    </p>
+                {% endif %}
+
+                {% if widget.clear_checkbox_name %}
+                    <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd;">
+                        <label style="font-weight: normal; color: #666; cursor: pointer; display: flex; align-items: center;">
+                            <input type="checkbox" name="{{ widget.clear_checkbox_name }}" id="{{ widget.clear_checkbox_id }}" style="margin-right: 8px;">
+                            {% trans "Remove current thumbnail" %}
+                        </label>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div style="border-top: 1px solid #ddd; padding-top: 15px;">
+            <label style="font-weight: 500; color: #333; margin-bottom: 8px; display: block;">
+                {% trans "Replace with new image:" %}
+            </label>
+            <input type="{{ widget.type }}" name="{{ widget.name }}"{% include "django/forms/widgets/attrs.html" %}>
+        </div>
+    {% else %}
+        <div class="no-thumbnail-state">
+            <p style="margin: 0 0 15px 0; font-size: 0.9em; color: #666; text-align: center; padding: 20px; background: white; border: 2px dashed #ddd; border-radius: 4px;">
+                {% trans "No thumbnail currently set" %}
+            </p>
+            <label style="font-weight: 500; color: #333; margin-bottom: 8px; display: block;">
+                {% trans "Upload thumbnail image:" %}
+            </label>
+            <input type="{{ widget.type }}" name="{{ widget.name }}"{% include "django/forms/widgets/attrs.html" %}>
+        </div>
+    {% endif %}
+</div>

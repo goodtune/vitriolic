@@ -7,7 +7,6 @@ from dateutil.rrule import DAILY
 from django import VERSION
 from django.contrib import messages
 from django.template import Context, Template
-from django.test import RequestFactory
 from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 
@@ -20,7 +19,6 @@ from tournamentcontrol.competition.models import (
     Division,
     Ground,
     Match,
-    Person,
     SimpleScoreMatchStatistic,
     Stage,
     StageGroup,
@@ -760,9 +758,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         person = factories.PersonFactory.create(club=team.club)
 
         # Create team association
-        team_association = factories.TeamAssociationFactory.create(
-            team=team, person=person
-        )
+        factories.TeamAssociationFactory.create(team=team, person=person)
 
         # Create a match
         match = factories.MatchFactory.create(
@@ -1204,10 +1200,11 @@ class BackendTests(MessagesTestMixin, TestCase):
             "date": "2025-04-28",
             "include_in_ladder": "0",
             "live_stream": "0",
-            "thumbnail_url": "",
+            "live_stream_thumbnail_image-clear": "0",
         }
         # Unsaved instance means we don't have to trim the final positional argument.
         add_match = Match(stage=stage).url_names["add"]
+        data["live_stream_thumbnail_image"] = ""
         self.post(add_match.url_name, *add_match.args, data=data)
         self.response_302()
 
@@ -1627,11 +1624,14 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "play_at": ground.pk,
                 "include_in_ladder": "1" if match.include_in_ladder else "0",
                 "live_stream": "0",  # Turn OFF live streaming
-                "thumbnail_url": "",
+                "live_stream_thumbnail_image-clear": "0",
             }
 
             # This should complete successfully without TypeError
-            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            data["live_stream_thumbnail_image"] = ""
+            self.post(
+                edit_match_url.url_name, *edit_match_url.args, data=data
+            )
             self.response_302()  # Should redirect successfully
 
             # Verify the match was updated
@@ -1897,11 +1897,14 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "play_at": ground.pk,
                 "include_in_ladder": "1" if match.include_in_ladder else "0",
                 "live_stream": "0",
-                "thumbnail_url": "",
+                "live_stream_thumbnail_image-clear": "0",
             }
 
             # This should complete successfully without TypeError
-            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            data["live_stream_thumbnail_image"] = ""
+            self.post(
+                edit_match_url.url_name, *edit_match_url.args, data=data
+            )
             self.response_302()  # Should redirect successfully
 
             # Verify the match was updated
@@ -2122,9 +2125,10 @@ class BackendTests(MessagesTestMixin, TestCase):
             "play_at": ground.pk,
             "include_in_ladder": "1",
             "live_stream": "0",
-            "thumbnail_url": "",
+            "live_stream_thumbnail_image-clear": "0",
         }
 
         add_match = Match(stage=stage).url_names["add"]
+        data["live_stream_thumbnail_image"] = ""
         self.post(add_match.url_name, *add_match.args, data=data)
         self.response_302()

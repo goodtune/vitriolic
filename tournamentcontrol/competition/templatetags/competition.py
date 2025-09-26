@@ -151,9 +151,7 @@ def score(match, team, template_name="tournamentcontrol/competition/_score.html"
         elif team_score == opponent_score:
             result = "drew"
         else:
-            raise ValueError(
-                "An error has occured while determining the " "match result."
-            )
+            raise ValueError("An error has occured while determining the match result.")
     else:
         result = None
 

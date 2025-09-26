@@ -1,0 +1,1 @@
+{% if match.label %}{{ division }} | {{ match.label }}: {{ match.get_home_team_plain }} vs {{ match.get_away_team_plain }} | {{ competition }} {{ season }}{% else %}{{ division }} | {{ match.get_home_team_plain }} vs {{ match.get_away_team_plain }} | {{ competition }} {{ season }}{% endif %}

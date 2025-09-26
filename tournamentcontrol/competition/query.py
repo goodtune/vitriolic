@@ -1,11 +1,5 @@
-from django.db.models import (
-    Case,
-    ExpressionWrapper,
-    F,
-    FloatField,
-    Func,
-    When,
-)
+from django.conf import settings
+from django.db.models import Case, ExpressionWrapper, F, FloatField, Func, When
 from django.db.models.query import QuerySet
 from django.utils import timezone
 
@@ -24,7 +18,6 @@ class DivisionQuerySet(QuerySet):
 class StageQuerySet(QuerySet):
     def with_ladder(self):
         return self.filter(keep_ladder=True, ladder_summary__isnull=False).distinct()
-
 
 
 class MatchQuerySet(QuerySet):

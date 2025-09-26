@@ -16,7 +16,7 @@ dependencies = [
     "django-modelforms",
     "django-mptt",
     "django-timezone-field",
-    "django>=3.2",
+    "django>=4.2",
     "first",
     "namedentities",
     "psycopg",
@@ -75,6 +75,7 @@ competition = [
     "markdown",
     "pyparsing",
     "python-dateutil",
+    "python-magic",
 ]
 # Deprecated optional dependencies
 redis = []
@@ -101,3 +102,6 @@ multi_line_output = 5
 [tool.black]
 line-length = 88
 target-version = ["py39", "py312"]
+
+[tool.ruff]
+line-length = 88
