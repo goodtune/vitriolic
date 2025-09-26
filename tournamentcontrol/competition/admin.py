@@ -1651,7 +1651,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/match/live_stream/title.txt",
                 f"tournamentcontrol/competition/{stage.slug}/{division.slug}/match/live_stream/title.txt",
                 f"tournamentcontrol/competition/{stage.slug}/match/live_stream/title.txt",
-                f"tournamentcontrol/competition/match/live_stream/title.txt",
+                "tournamentcontrol/competition/match/live_stream/title.txt",
             ]
             title = render_to_string(title_templates, template_context, request).strip()
 
@@ -1661,7 +1661,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/match/live_stream/description.txt",
                 f"tournamentcontrol/competition/{stage.slug}/{division.slug}/match/live_stream/description.txt",
                 f"tournamentcontrol/competition/{stage.slug}/match/live_stream/description.txt",
-                f"tournamentcontrol/competition/match/live_stream/description.txt",
+                "tournamentcontrol/competition/match/live_stream/description.txt",
             ]
             description = render_to_string(
                 description_templates, template_context, request

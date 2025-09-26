@@ -8,7 +8,6 @@ from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.tests import factories
-from tournamentcontrol.competition.tests.factories import SuperUserFactory
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
