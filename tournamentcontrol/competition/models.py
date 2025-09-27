@@ -104,53 +104,6 @@ class AdminUrlMixin(BaseAdminUrlMixin):
         return (self.pk,)
 
 
-class RankDivisionMixin(models.Model):
-    rank_division_parent_attr = None
-
-    rank_division = models.ForeignKey(
-        "RankDivision", null=True, blank=True, on_delete=PROTECT
-    )
-
-    @property
-    def rank_division_parent(self):
-        return getattr(self, self.rank_division_parent_attr)
-
-    def get_rank_division(self):
-        if self.rank_division is not None:
-            return self.rank_division
-        if self.rank_division_parent_attr:
-            return self.rank_division_parent.get_rank_division()
-
-    class Meta:
-        abstract = True
-
-
-class RankImportanceMixin(models.Model):
-    rank_importance_parent_attr = None
-
-    rank_importance = models.DecimalField(
-        max_digits=6, decimal_places=3, null=True, blank=True
-    )
-
-    @property
-    def rank_importance_parent(self):
-        if isinstance(self.rank_importance_parent_attr, str):
-            return getattr(self, self.rank_importance_parent_attr)
-        if isinstance(self.rank_importance_parent_attr, (list, tuple)):
-            for attr in self.rank_importance_parent_attr:
-                obj = getattr(self, attr)
-                if obj is not None:
-                    return obj
-
-    def get_rank_importance(self):
-        if self.rank_importance is not None:
-            return self.rank_importance
-        if self.rank_importance_parent_attr:
-            return self.rank_importance_parent.get_rank_importance()
-
-    class Meta:
-        abstract = True
-
 
 class LadderPointsField(models.TextField):
     def formfield(self, form_class=None, **kwargs):
@@ -352,41 +305,6 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         return home | away
 
 
-class RankDivision(AdminUrlMixin, OrderedSitemapNode):
-    enabled = BooleanField(default=True)
-
-    class Meta(OrderedSitemapNode.Meta):
-        pass
-
-
-class RankTeam(models.Model):
-    club = models.ForeignKey(Club, on_delete=CASCADE)
-    division = models.ForeignKey(RankDivision, on_delete=CASCADE)
-
-    class Meta:
-        ordering = ("division",)
-        unique_together = ("club", "division")
-
-    def __str__(self):
-        return "%s (%s)" % (self.club, self.division)
-
-    def __repr__(self):
-        return "%r, %r" % (self.club, self.division)
-
-    def natural_key(self):
-        return "{} {}".format(self.club.title, self.division.title)
-
-
-class RankPoints(models.Model):
-    team = models.ForeignKey(RankTeam, on_delete=CASCADE)
-    points = models.DecimalField(default=0, max_digits=6, decimal_places=3)
-    date = models.DateField()
-
-    class Meta:
-        ordering = ("-date", "team", "-points")
-
-    def __str__(self):
-        return "%r, %r, %r" % (self.team, self.points, self.date)
 
 
 class Person(AdminUrlMixin, models.Model):
