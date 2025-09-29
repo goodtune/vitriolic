@@ -1864,6 +1864,15 @@ class Match(AdminUrlMixin, models.Model):
     round = models.IntegerField(blank=True, null=True)
 
     include_in_ladder = BooleanField(default=True)
+    ignore_group_validation = BooleanField(
+        default=False,
+        verbose_name=_("Ignore group validation"),
+        help_text=_(
+            "Allow this match to bypass strict Division and StageGroup validation. "
+            "Use for friendlies, showcase events, or cross-division matchups. "
+            "These matches will not count toward standings."
+        ),
+    )
 
     external_identifier = models.CharField(
         max_length=20, blank=True, null=True, unique=True, db_index=True
