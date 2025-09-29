@@ -13,4 +13,4 @@ class LadderEntryManager(models.Manager.from_queryset(LadderEntryQuerySet)):
 
 class MatchManager(models.Manager.from_queryset(MatchQuerySet)):
     def get_queryset(self):
-        return super().get_queryset()._rank_importance()._team_titles()
+        return super().get_queryset()._team_titles()

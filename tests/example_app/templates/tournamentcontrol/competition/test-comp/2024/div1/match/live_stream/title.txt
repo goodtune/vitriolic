@@ -1,0 +1,1 @@
+🏆 {{ division }} Championship | {% if match.label %}{{ match.label }}: {% endif %}{{ match.get_home_team_plain }} vs {{ match.get_away_team_plain }} | {{ competition }} {{ season }}
