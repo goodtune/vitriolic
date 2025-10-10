@@ -17,8 +17,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        django: [42, 52]
-        python: [311, 312, 313]
+        django: [42, 52, 60]
+        python: [311, 312, 313, 314]
+        exclude:
+          # Django 4.2 doesn't support Python 3.14
+          - django: 42
+            python: 314
+          # Django 6.0 doesn't support Python 3.11
+          - django: 60
+            python: 311
 
     steps:
       - uses: actions/checkout@v5
