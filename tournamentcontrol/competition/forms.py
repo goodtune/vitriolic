@@ -307,7 +307,7 @@ class ThumbnailImageField(forms.FileField):
         # Handle empty strings and None - treat as no input provided
         # For empty strings from form POST data, we want to keep the existing value
         # This prevents TypeError when psycopg tries to convert empty string to bytes
-        if data == "" or data is None:
+        if not data:
             return None
 
         # Handle file upload data
@@ -1035,6 +1035,10 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
         # (e.g., for empty forms)
         if not self.instance or not self.instance.stage:
             return
+
+        # remove `live_stream_thumbnail_image` field if the season is not live streamed
+        if not self.instance.stage.division.season.live_stream:
+            self.fields.pop("live_stream_thumbnail_image", None)
 
         # restrict the list of referees to those registered this season
         if "referees" in self.fields:

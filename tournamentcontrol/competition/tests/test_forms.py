@@ -52,16 +52,35 @@ class MatchEditFormTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.stage = factories.StageFactory.create()
-        cls.home_team = factories.TeamFactory.create(division=cls.stage.division)
-        cls.away_team = factories.TeamFactory.create(division=cls.stage.division)
+        # Create stages with and without live streaming enabled
+        cls.stage_with_live_stream = factories.StageFactory.create()
+        cls.stage_with_live_stream.division.season.live_stream = True
+        cls.stage_with_live_stream.division.season.save()
+        
+        cls.stage_without_live_stream = factories.StageFactory.create()
+        cls.stage_without_live_stream.division.season.live_stream = False
+        cls.stage_without_live_stream.division.season.save()
+        
+        cls.home_team_with_ls = factories.TeamFactory.create(
+            division=cls.stage_with_live_stream.division
+        )
+        cls.away_team_with_ls = factories.TeamFactory.create(
+            division=cls.stage_with_live_stream.division
+        )
+        
+        cls.home_team_without_ls = factories.TeamFactory.create(
+            division=cls.stage_without_live_stream.division
+        )
+        cls.away_team_without_ls = factories.TeamFactory.create(
+            division=cls.stage_without_live_stream.division
+        )
 
     def test_match_creation_with_empty_thumbnail_image(self):
         """Test that match can be created with empty string for thumbnail image."""
         match = factories.MatchFactory.build(
-            stage=self.stage,
-            home_team=self.home_team,
-            away_team=self.away_team,
+            stage=self.stage_with_live_stream,
+            home_team=self.home_team_with_ls,
+            away_team=self.away_team_with_ls,
         )
         
         # Simulate form submission with empty string for live_stream_thumbnail_image
@@ -69,8 +88,8 @@ class MatchEditFormTests(TestCase):
         form = MatchEditForm(
             instance=match,
             data={
-                "home_team": self.home_team.pk,
-                "away_team": self.away_team.pk,
+                "home_team": self.home_team_with_ls.pk,
+                "away_team": self.away_team_with_ls.pk,
                 "label": "",
                 "round": "",
                 "date": "",
@@ -95,9 +114,9 @@ class MatchEditFormTests(TestCase):
         """Test that editing a match with existing thumbnail and empty string preserves it."""
         # Create a match with a thumbnail
         match = factories.MatchFactory.create(
-            stage=self.stage,
-            home_team=self.home_team,
-            away_team=self.away_team,
+            stage=self.stage_with_live_stream,
+            home_team=self.home_team_with_ls,
+            away_team=self.away_team_with_ls,
             live_stream_thumbnail_image=b"fake image data",
         )
         original_thumbnail = match.live_stream_thumbnail_image
@@ -106,8 +125,8 @@ class MatchEditFormTests(TestCase):
         form = MatchEditForm(
             instance=match,
             data={
-                "home_team": self.home_team.pk,
-                "away_team": self.away_team.pk,
+                "home_team": self.home_team_with_ls.pk,
+                "away_team": self.away_team_with_ls.pk,
                 "label": "Updated",
                 "round": "",
                 "date": "",
@@ -128,3 +147,48 @@ class MatchEditFormTests(TestCase):
         saved_match.refresh_from_db()
         self.assertEqual(saved_match.live_stream_thumbnail_image, original_thumbnail)
         self.assertEqual(saved_match.label, "Updated")
+
+    def test_thumbnail_field_removed_when_season_not_live_streamed(self):
+        """Test that live_stream_thumbnail_image field is removed when season is not live streamed."""
+        match = factories.MatchFactory.build(
+            stage=self.stage_without_live_stream,
+            home_team=self.home_team_without_ls,
+            away_team=self.away_team_without_ls,
+        )
+        
+        form = MatchEditForm(instance=match)
+        
+        # Field should not be present in the form
+        self.assertNotIn("live_stream_thumbnail_image", form.fields)
+
+    def test_match_creation_without_live_stream_enabled(self):
+        """Test that match can be created when season does not have live streaming enabled."""
+        match = factories.MatchFactory.build(
+            stage=self.stage_without_live_stream,
+            home_team=self.home_team_without_ls,
+            away_team=self.away_team_without_ls,
+        )
+        
+        # Form should work without the live_stream_thumbnail_image field
+        form = MatchEditForm(
+            instance=match,
+            data={
+                "home_team": self.home_team_without_ls.pk,
+                "away_team": self.away_team_without_ls.pk,
+                "label": "",
+                "round": "",
+                "date": "",
+                "include_in_ladder": "0",
+                "videos_0": "",
+                "videos_1": "",
+                "videos_2": "",
+                "videos_3": "",
+                "videos_4": "",
+            },
+        )
+        
+        self.assertTrue(form.is_valid(), f"Form errors: {form.errors}")
+        
+        saved_match = form.save()
+        self.assertIsNotNone(saved_match.pk)
+        self.assertIsNone(saved_match.live_stream_thumbnail_image)
