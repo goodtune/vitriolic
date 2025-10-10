@@ -2,7 +2,9 @@ from test_plus import TestCase
 
 from tournamentcontrol.competition.admin import next_related_factory
 from tournamentcontrol.competition.forms import (
-    DrawFormatForm, MatchEditForm, TeamForm,
+    DrawFormatForm,
+    MatchEditForm,
+    TeamForm,
 )
 from tournamentcontrol.competition.models import Team
 from tournamentcontrol.competition.tests import factories
@@ -55,13 +57,12 @@ class MatchEditFormTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         # Create stages with and without live streaming enabled
-        cls.stage_with_live_stream = factories.StageFactory.create()
-        cls.stage_with_live_stream.division.season.live_stream = True
-        cls.stage_with_live_stream.division.season.save()
-
-        cls.stage_without_live_stream = factories.StageFactory.create()
-        cls.stage_without_live_stream.division.season.live_stream = False
-        cls.stage_without_live_stream.division.season.save()
+        cls.stage_with_live_stream = factories.StageFactory.create(
+            division__season__live_stream=True
+        )
+        cls.stage_without_live_stream = factories.StageFactory.create(
+            division__season__live_stream=False
+        )
 
         cls.home_team_with_ls = factories.TeamFactory.create(
             division=cls.stage_with_live_stream.division
