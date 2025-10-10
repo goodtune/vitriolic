@@ -1,7 +1,7 @@
 from test_plus import TestCase
 
 from tournamentcontrol.competition.admin import next_related_factory
-from tournamentcontrol.competition.forms import DrawFormatForm, TeamForm
+from tournamentcontrol.competition.forms import DrawFormatForm, MatchEditForm, TeamForm
 from tournamentcontrol.competition.models import Team
 from tournamentcontrol.competition.tests import factories
 
@@ -45,3 +45,48 @@ class TeamFormTests(TestCase):
             "text",
             ["Draw formula is invalid: line(s) '1' are not in the correct format."],
         )
+
+
+class MatchEditFormTests(TestCase):
+    """Test cases for MatchEditForm, particularly around BinaryField handling."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.stage = factories.StageFactory.create()
+        cls.home_team = factories.TeamFactory.create(division=cls.stage.division)
+        cls.away_team = factories.TeamFactory.create(division=cls.stage.division)
+
+    def test_match_creation_with_empty_thumbnail_image(self):
+        """Test that match can be created with empty string for thumbnail image."""
+        match = factories.MatchFactory.build(
+            stage=self.stage,
+            home_team=self.home_team,
+            away_team=self.away_team,
+        )
+        
+        # Simulate form submission with empty string for live_stream_thumbnail_image
+        # This matches the POST data pattern from the error report
+        form = MatchEditForm(
+            instance=match,
+            data={
+                "home_team": self.home_team.pk,
+                "away_team": self.away_team.pk,
+                "label": "",
+                "round": "",
+                "date": "",
+                "include_in_ladder": False,
+                "videos_0": "",
+                "videos_1": "",
+                "videos_2": "",
+                "videos_3": "",
+                "videos_4": "",
+                "live_stream_thumbnail_image": "",
+            },
+        )
+        
+        self.assertTrue(form.is_valid(), f"Form errors: {form.errors}")
+        
+        # This should not raise TypeError when saving
+        saved_match = form.save()
+        self.assertIsNotNone(saved_match.pk)
+        self.assertIsNone(saved_match.live_stream_thumbnail_image)

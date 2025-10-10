@@ -304,6 +304,11 @@ class ThumbnailImageField(forms.FileField):
         if data is False:
             return None
 
+        # Handle empty strings - treat them like no input
+        # This prevents TypeError when psycopg tries to convert empty string to bytes
+        if data == "":
+            return forms.fields.FILE_INPUT_CONTRADICTION
+
         # Handle file upload data
         if hasattr(data, "read"):
             # Check if it's an image
