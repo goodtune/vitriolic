@@ -74,7 +74,7 @@ class MatchEditFormTests(TestCase):
                 "label": "",
                 "round": "",
                 "date": "",
-                "include_in_ladder": False,
+                "include_in_ladder": "0",
                 "videos_0": "",
                 "videos_1": "",
                 "videos_2": "",
@@ -90,3 +90,41 @@ class MatchEditFormTests(TestCase):
         saved_match = form.save()
         self.assertIsNotNone(saved_match.pk)
         self.assertIsNone(saved_match.live_stream_thumbnail_image)
+
+    def test_match_edit_preserves_existing_thumbnail(self):
+        """Test that editing a match with existing thumbnail and empty string preserves it."""
+        # Create a match with a thumbnail
+        match = factories.MatchFactory.create(
+            stage=self.stage,
+            home_team=self.home_team,
+            away_team=self.away_team,
+            live_stream_thumbnail_image=b"fake image data",
+        )
+        original_thumbnail = match.live_stream_thumbnail_image
+        
+        # Edit the match with empty string for thumbnail (simulating form submission)
+        form = MatchEditForm(
+            instance=match,
+            data={
+                "home_team": self.home_team.pk,
+                "away_team": self.away_team.pk,
+                "label": "Updated",
+                "round": "",
+                "date": "",
+                "include_in_ladder": "1",
+                "videos_0": "",
+                "videos_1": "",
+                "videos_2": "",
+                "videos_3": "",
+                "videos_4": "",
+                "live_stream_thumbnail_image": "",
+            },
+        )
+        
+        self.assertTrue(form.is_valid(), f"Form errors: {form.errors}")
+        
+        # Save and verify thumbnail is preserved
+        saved_match = form.save()
+        saved_match.refresh_from_db()
+        self.assertEqual(saved_match.live_stream_thumbnail_image, original_thumbnail)
+        self.assertEqual(saved_match.label, "Updated")

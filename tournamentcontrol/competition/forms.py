@@ -304,10 +304,11 @@ class ThumbnailImageField(forms.FileField):
         if data is False:
             return None
 
-        # Handle empty strings - treat them like no input
+        # Handle empty strings and None - treat as no input provided
+        # For empty strings from form POST data, we want to keep the existing value
         # This prevents TypeError when psycopg tries to convert empty string to bytes
-        if data == "":
-            return forms.fields.FILE_INPUT_CONTRADICTION
+        if data == "" or data is None:
+            return None
 
         # Handle file upload data
         if hasattr(data, "read"):
@@ -327,11 +328,6 @@ class ThumbnailImageField(forms.FileField):
                 )
 
             return binary_data
-
-        # If no file uploaded and no clear signal, return the field's sentinel value
-        # This tells Django to keep the existing value
-        if data is None:
-            return forms.fields.FILE_INPUT_CONTRADICTION
 
         return super().to_python(data)
 
