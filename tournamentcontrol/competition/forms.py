@@ -300,13 +300,6 @@ class ThumbnailImageField(forms.FileField):
         super().__init__(*args, **kwargs)
 
     def to_python(self, data):
-        # Handle clearing the field
-        if data is False:
-            return None
-
-        # Handle empty strings and None - treat as no input provided
-        # For empty strings from form POST data, we want to keep the existing value
-        # This prevents TypeError when psycopg tries to convert empty string to bytes
         if not data:
             return None
 
