@@ -5,15 +5,12 @@ This module provides REST API endpoints for managing live streams of matches.
 """
 
 import warnings
-from datetime import datetime
 
 import django_filters
-from django.db.models import Q
-from django.http import Http404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import serializers, status, viewsets
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -22,7 +19,6 @@ from tournamentcontrol.competition.exceptions import (
     LiveStreamError,
     LiveStreamTransitionWarning,
 )
-from tournamentcontrol.competition.sites import permissions_required
 
 
 class LiveStreamPagination(PageNumberPagination):
