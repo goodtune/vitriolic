@@ -12,6 +12,7 @@ from django.db.models import Q
 from django.http import Http404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import serializers, status, viewsets
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -21,12 +22,18 @@ from tournamentcontrol.competition.exceptions import (
     LiveStreamError,
     LiveStreamTransitionWarning,
 )
-from tournamentcontrol.competition.rest.v1.club import ClubSerializer
-from tournamentcontrol.competition.rest.v1.season import PlaceSerializer
 from tournamentcontrol.competition.sites import permissions_required
 
 
-class CompetitionSerializer(serializers.ModelSerializer):
+class LiveStreamPagination(PageNumberPagination):
+    """Pagination class for livestream matches."""
+
+    page_size = 20
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
+class MinimalCompetitionSerializer(serializers.ModelSerializer):
     """Minimal competition details for nested serialization."""
 
     class Meta:
@@ -34,57 +41,68 @@ class CompetitionSerializer(serializers.ModelSerializer):
         fields = ("id", "title", "slug")
 
 
-class SeasonSerializer(serializers.ModelSerializer):
+class MinimalSeasonSerializer(serializers.ModelSerializer):
     """Minimal season details for nested serialization."""
-
-    competition = CompetitionSerializer(read_only=True)
 
     class Meta:
         model = models.Season
-        fields = ("id", "title", "slug", "competition")
+        fields = ("id", "title", "slug")
 
 
-class DivisionSerializer(serializers.ModelSerializer):
+class MinimalDivisionSerializer(serializers.ModelSerializer):
     """Minimal division details for nested serialization."""
-
-    season = SeasonSerializer(read_only=True)
 
     class Meta:
         model = models.Division
-        fields = ("id", "title", "slug", "season")
+        fields = ("id", "title", "slug")
 
 
-class StageSerializer(serializers.ModelSerializer):
+class MinimalStageSerializer(serializers.ModelSerializer):
     """Minimal stage details for nested serialization."""
-
-    division = DivisionSerializer(read_only=True)
 
     class Meta:
         model = models.Stage
-        fields = ("id", "title", "slug", "division")
+        fields = ("id", "title", "slug")
 
 
-class TeamSerializer(serializers.ModelSerializer):
+class MinimalClubSerializer(serializers.ModelSerializer):
+    """Minimal club details for nested serialization."""
+
+    class Meta:
+        model = models.Club
+        fields = ("id", "title", "slug")
+
+
+class MinimalTeamSerializer(serializers.ModelSerializer):
     """Minimal team details for nested serialization."""
 
-    club = ClubSerializer(read_only=True)
+    club = MinimalClubSerializer(read_only=True)
 
     class Meta:
         model = models.Team
         fields = ("id", "title", "slug", "club")
 
 
-class LiveStreamMatchSerializer(serializers.ModelSerializer):
+class LiveStreamMatchSerializer(serializers.HyperlinkedModelSerializer):
     """
     Serializer for matches with live streaming capabilities.
 
-    Includes nested details of Stage, Division, Season, and Competition.
+    Uses minimal nested data and provides URLs for full details.
     """
 
-    stage = StageSerializer(read_only=True)
+    url = serializers.HyperlinkedIdentityField(
+        view_name="v1:competition:livestream-detail",
+        lookup_field="uuid",
+    )
+    stage = MinimalStageSerializer(read_only=True)
+    division = MinimalDivisionSerializer(source="stage.division", read_only=True)
+    season = MinimalSeasonSerializer(source="stage.division.season", read_only=True)
+    competition = MinimalCompetitionSerializer(
+        source="stage.division.season.competition", read_only=True
+    )
     home_team = serializers.SerializerMethodField()
     away_team = serializers.SerializerMethodField()
-    play_at = PlaceSerializer(read_only=True)
+    venue = serializers.SerializerMethodField()
     round = serializers.SerializerMethodField()
 
     class Meta:
@@ -92,6 +110,7 @@ class LiveStreamMatchSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "uuid",
+            "url",
             "round",
             "date",
             "time",
@@ -103,7 +122,10 @@ class LiveStreamMatchSerializer(serializers.ModelSerializer):
             "away_team",
             "away_team_score",
             "stage",
-            "play_at",
+            "division",
+            "season",
+            "competition",
+            "venue",
             "external_identifier",
             "live_stream",
             "live_stream_bind",
@@ -114,13 +136,23 @@ class LiveStreamMatchSerializer(serializers.ModelSerializer):
         """Get round number or label."""
         return obj.label or f"Round {obj.round}"
 
+    def get_venue(self, obj):
+        """Get minimal venue information."""
+        if obj.play_at:
+            return {
+                "id": obj.play_at.id,
+                "title": obj.play_at.title,
+                "abbreviation": obj.play_at.abbreviation,
+            }
+        return None
+
     def _get_team(self, obj, home_or_away):
         """Get team data, handling undecided teams."""
         team = getattr(obj, f"get_{home_or_away}_team_plain")()
         if isinstance(team, (models.Team, models.ByeTeam)):
             if hasattr(team, "pk"):
-                # Return full team data for decided teams
-                return TeamSerializer(team, context=self.context).data
+                # Return minimal team data for decided teams
+                return MinimalTeamSerializer(team, context=self.context).data
             else:
                 # Handle ByeTeam
                 return {"id": None, "title": str(team), "slug": None, "club": None}
@@ -177,8 +209,8 @@ class LiveStreamViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for live streaming matches.
 
-    Provides endpoints to list matches with live streaming capabilities,
-    grouped by date, with optional filtering by date range and season.
+    Provides paginated endpoints to list matches with live streaming capabilities,
+    with optional filtering by date range and season.
 
     Also provides an endpoint to transition live stream status.
     """
@@ -188,6 +220,7 @@ class LiveStreamViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
     filterset_class = LiveStreamMatchFilter
+    pagination_class = LiveStreamPagination
 
     def get_queryset(self):
         """
@@ -226,25 +259,7 @@ class LiveStreamViewSet(viewsets.ReadOnlyModelViewSet):
                 message="You do not have permission to access live streaming features.",
             )
 
-    def list(self, request, *args, **kwargs):
-        """
-        List matches grouped by date.
 
-        Returns matches organized by their local date attribute for easier
-        mobile UI consumption.
-        """
-        queryset = self.filter_queryset(self.get_queryset())
-
-        # Group matches by date
-        matches_by_date = {}
-        for match in queryset:
-            date_key = match.date.isoformat() if match.date else None
-            if date_key:
-                if date_key not in matches_by_date:
-                    matches_by_date[date_key] = []
-                matches_by_date[date_key].append(self.get_serializer(match).data)
-
-        return Response(matches_by_date)
 
     @action(
         detail=True, methods=["post"], serializer_class=LiveStreamTransitionSerializer
