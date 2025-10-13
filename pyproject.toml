@@ -105,3 +105,6 @@ target-version = ["py39", "py312"]
 
 [tool.ruff]
 line-length = 88
+
+[tool.uv]
+prerelease = "if-necessary-or-explicit"
