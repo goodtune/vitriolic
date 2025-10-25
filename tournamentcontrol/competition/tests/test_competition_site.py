@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from django.test.utils import override_settings
@@ -8,7 +8,6 @@ from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.tests import factories
-from tournamentcontrol.competition.tests.factories import SuperUserFactory
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
@@ -354,6 +353,3 @@ class FrontEndTests(TestCase):
             team.division.season.competition.slug,
             team.division.season.slug,
         )
-
-
-

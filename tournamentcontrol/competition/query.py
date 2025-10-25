@@ -1,15 +1,7 @@
 from django.conf import settings
-from django.db.models import (
-    Case,
-    ExpressionWrapper,
-    F,
-    FloatField,
-    Func,
-    When,
-)
+from django.db.models import Case, ExpressionWrapper, F, FloatField, Func, When
 from django.db.models.query import QuerySet
 from django.utils import timezone
-from django.utils.module_loading import import_string
 
 from tournamentcontrol.competition.utils import team_title_case_clause
 
@@ -49,36 +41,6 @@ class MatchQuerySet(QuerySet):
             away_team_title=team_title_case_clause("away_team"),
         )
 
-    def _rank_importance(self):
-        """
-        Find the rank_importance of a match based on the competition hierarchy.
-        """
-        return self.annotate(
-            importance=Case(
-                When(rank_importance__isnull=False, then=F("rank_importance")),
-                When(
-                    stage_group__rank_importance__isnull=False,
-                    then=F("stage_group__rank_importance"),
-                ),
-                When(
-                    stage__rank_importance__isnull=False,
-                    then=F("stage__rank_importance"),
-                ),
-                When(
-                    stage__division__rank_importance__isnull=False,
-                    then=F("stage__division__rank_importance"),
-                ),
-                When(
-                    stage__division__season__rank_importance__isnull=False,
-                    then=F("stage__division__season__rank_importance"),
-                ),
-                When(
-                    stage__division__season__competition__rank_importance__isnull=False,
-                    then=F("stage__division__season__competition__rank_importance"),
-                ),
-            ),
-        )
-
 
 class LadderEntryQuerySet(QuerySet):
     def _all(self):
@@ -92,71 +54,6 @@ class LadderEntryQuerySet(QuerySet):
         )
 
         qs = qs.select_related("team__club")
-
-        qs = qs.annotate(
-            division=Case(
-                When(team__rank_division__isnull=False, then=F("team__rank_division")),
-                When(
-                    team__division__rank_division__isnull=False,
-                    then=F("team__division__rank_division"),
-                ),
-            ),
-            opponent_division=Case(
-                When(
-                    opponent__rank_division__isnull=False,
-                    then=F("opponent__rank_division"),
-                ),
-                When(
-                    opponent__division__rank_division__isnull=False,
-                    then=F("opponent__division__rank_division"),
-                ),
-            ),
-        )
-
-        qs = qs.annotate(
-            importance=Case(
-                When(
-                    match__rank_importance__isnull=False,
-                    then=F("match__rank_importance"),
-                ),
-                When(
-                    match__stage_group__rank_importance__isnull=False,
-                    then=F("match__stage_group__rank_importance"),
-                ),
-                When(
-                    match__stage__rank_importance__isnull=False,
-                    then=F("match__stage__rank_importance"),
-                ),
-                When(
-                    match__stage__division__rank_importance__isnull=False,
-                    then=F("match__stage__division__rank_importance"),
-                ),
-                When(
-                    match__stage__division__season__rank_importance__isnull=False,
-                    then=F("match__stage__division__season__rank_importance"),
-                ),
-                When(
-                    match__stage__division__season__competition__rank_importance__isnull=False,  # noqa: E501
-                    then=F(
-                        "match__stage__division__season__competition__rank_importance"
-                    ),
-                ),
-                output_field=FloatField(),
-            ),
-        )
-
-        RANK_POINTS_FUNC = getattr(
-            settings,
-            "TOURNAMENTCONTROL_RANK_POINTS_FUNC",
-            "tournamentcontrol.competition.rank.points_func",
-        )
-        rank_points = import_string(RANK_POINTS_FUNC)
-        qs = qs.annotate(
-            rank_points=ExpressionWrapper(
-                rank_points() * F("importance"),
-                output_field=FloatField(),
-            ),
-        )
 
         return qs
 

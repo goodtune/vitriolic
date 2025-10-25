@@ -104,53 +104,6 @@ class AdminUrlMixin(BaseAdminUrlMixin):
         return (self.pk,)
 
 
-class RankDivisionMixin(models.Model):
-    rank_division_parent_attr = None
-
-    rank_division = models.ForeignKey(
-        "RankDivision", null=True, blank=True, on_delete=PROTECT
-    )
-
-    @property
-    def rank_division_parent(self):
-        return getattr(self, self.rank_division_parent_attr)
-
-    def get_rank_division(self):
-        if self.rank_division is not None:
-            return self.rank_division
-        if self.rank_division_parent_attr:
-            return self.rank_division_parent.get_rank_division()
-
-    class Meta:
-        abstract = True
-
-
-class RankImportanceMixin(models.Model):
-    rank_importance_parent_attr = None
-
-    rank_importance = models.DecimalField(
-        max_digits=6, decimal_places=3, null=True, blank=True
-    )
-
-    @property
-    def rank_importance_parent(self):
-        if isinstance(self.rank_importance_parent_attr, str):
-            return getattr(self, self.rank_importance_parent_attr)
-        if isinstance(self.rank_importance_parent_attr, (list, tuple)):
-            for attr in self.rank_importance_parent_attr:
-                obj = getattr(self, attr)
-                if obj is not None:
-                    return obj
-
-    def get_rank_importance(self):
-        if self.rank_importance is not None:
-            return self.rank_importance
-        if self.rank_importance_parent_attr:
-            return self.rank_importance_parent.get_rank_importance()
-
-    class Meta:
-        abstract = True
-
 
 class LadderPointsField(models.TextField):
     def formfield(self, form_class=None, **kwargs):
@@ -186,7 +139,7 @@ class OrderedSitemapNode(SitemapNodeBase):
         ordering = ("order",)
 
 
-class Competition(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
+class Competition(AdminUrlMixin, OrderedSitemapNode):
     enabled = BooleanField(default=True)
     clubs = ManyToManyField("Club", blank=True, related_name="competitions")
 
@@ -352,41 +305,6 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         return home | away
 
 
-class RankDivision(AdminUrlMixin, OrderedSitemapNode):
-    enabled = BooleanField(default=True)
-
-    class Meta(OrderedSitemapNode.Meta):
-        pass
-
-
-class RankTeam(models.Model):
-    club = models.ForeignKey(Club, on_delete=CASCADE)
-    division = models.ForeignKey(RankDivision, on_delete=CASCADE)
-
-    class Meta:
-        ordering = ("division",)
-        unique_together = ("club", "division")
-
-    def __str__(self):
-        return "%s (%s)" % (self.club, self.division)
-
-    def __repr__(self):
-        return "%r, %r" % (self.club, self.division)
-
-    def natural_key(self):
-        return "{} {}".format(self.club.title, self.division.title)
-
-
-class RankPoints(models.Model):
-    team = models.ForeignKey(RankTeam, on_delete=CASCADE)
-    points = models.DecimalField(default=0, max_digits=6, decimal_places=3)
-    date = models.DateField()
-
-    class Meta:
-        ordering = ("-date", "team", "-points")
-
-    def __str__(self):
-        return "%r, %r, %r" % (self.team, self.points, self.date)
 
 
 class Person(AdminUrlMixin, models.Model):
@@ -482,9 +400,7 @@ class Person(AdminUrlMixin, models.Model):
         )
 
 
-class Season(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
-    rank_importance_parent_attr = "competition"
-
+class Season(AdminUrlMixin, OrderedSitemapNode):
     competition = ForeignKey(Competition, related_name="seasons", on_delete=PROTECT)
     hashtag = models.CharField(
         max_length=30,
@@ -824,15 +740,11 @@ class Ground(Place):
 class Division(
     AdminUrlMixin,
     ModelDiffMixin,
-    RankDivisionMixin,
-    RankImportanceMixin,
     OrderedSitemapNode,
 ):
     """
     A model that represents a division within a competition.
     """
-
-    rank_importance_parent_attr = "season"
 
     season = ForeignKey(Season, related_name="divisions", on_delete=PROTECT)
 
@@ -1137,9 +1049,7 @@ class Division(
         return ref_name
 
 
-class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
-    rank_importance_parent_attr = "division"
-
+class Stage(AdminUrlMixin, OrderedSitemapNode):
     division = ForeignKey(
         Division, related_name="stages", label_from_instance="title", on_delete=PROTECT
     )
@@ -1294,13 +1204,11 @@ class Stage(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         return res
 
 
-class StageGroup(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
+class StageGroup(AdminUrlMixin, OrderedSitemapNode):
     """
     A model which represents a sub-grouping of a division; often called a
     'pool', but could also be used to represent a combined division.
     """
-
-    rank_importance_parent_attr = "stage"
 
     stage = ForeignKey(Stage, related_name="pools", on_delete=PROTECT)
     carry_ladder = BooleanField(
@@ -1375,7 +1283,7 @@ class StageGroup(AdminUrlMixin, RankImportanceMixin, OrderedSitemapNode):
         return res
 
 
-class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
+class Team(AdminUrlMixin, OrderedSitemapNode):
     """
     A model which represents a team in a competition. A team may not yet be
     placed into a division, as it might only be at the nomination stage.
@@ -1384,8 +1292,6 @@ class Team(AdminUrlMixin, RankDivisionMixin, OrderedSitemapNode):
     over-ruled and locked by an administrator (for example, to remove a name
     which contains profanity) on a per-team basis.
     """
-
-    rank_division_parent_attr = "division"
 
     names_locked = BooleanField(
         default=False,
@@ -1842,7 +1748,7 @@ class SeasonAssociation(AdminUrlMixin, models.Model):
         unique_together = ("season", "person")
 
 
-class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
+class Match(AdminUrlMixin, models.Model):
     uuid = models.UUIDField(
         primary_key=False,
         default=uuid.uuid4,
@@ -1850,8 +1756,6 @@ class Match(AdminUrlMixin, RankImportanceMixin, models.Model):
         unique=True,
         db_index=True,
     )
-
-    rank_importance_parent_attr = ("stage_group", "stage")
 
     stage = ForeignKey(
         Stage,

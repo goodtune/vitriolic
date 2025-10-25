@@ -7,6 +7,7 @@ from django.conf import settings
 from django.contrib.sites.models import Site
 from django.core.mail import send_mail
 from django.template import Context, Template
+from django.template.loader import render_to_string
 from django.urls import reverse
 from googleapiclient.errors import HttpError
 
@@ -176,55 +177,62 @@ def match_youtube_sync(sender, instance, **kwargs):
 
     competition = season.competition
     division = obj.stage.division
-
-    if obj.label:
-        title = (
-            f"{division} | {obj.label}: "
-            f"{obj.get_home_team_plain()} vs {obj.get_away_team_plain()} | "
-            f"{competition} {season}"
-        )
-    else:
-        title = (
-            f"{division} | {obj.get_home_team_plain()} vs "
-            f"{obj.get_away_team_plain()} | {competition} {season}"
-        )
+    stage = obj.stage
 
     # Build match video URL for description using Site model
-    current_site = Site.objects.get_current()
-    match_path = reverse(
-        'competition:match-video',
-        kwargs={
-            'competition': competition.slug,
-            'season': season.slug,
-            'division': division.slug,
-            'match': obj.pk,
-        }
-    )
-    match_url = f"https://{current_site.domain}{match_path}"
-    
-    if obj.play_at and hasattr(obj.play_at, 'ground') and obj.play_at.ground.venue:
-        venue_text = f"from {obj.play_at.ground.venue}"
-        play_at_text = f"on {obj.play_at}"
-    else:
-        venue_text = ""
-        play_at_text = ""
-    
-    description = (
-        f"Live stream of the {division} division of {competition} {season} "
-        f"{venue_text}.\n"
-        f"\n"
-        f"Watch {obj.get_home_team_plain()} take on "
-        f"{obj.get_away_team_plain()} {play_at_text}.\n"
-        f"\n"
-        f"Full match details are available at {match_url}\n"
-        f"\n"
-        f"Subscribe to receive notifications of upcoming matches."
-    )
+    # Only build the URL if the match has been saved and has a primary key
+    match_url = None
+    if obj.pk is not None:
+        current_site = Site.objects.get_current()
+        match_path = reverse(
+            'competition:match-video',
+            kwargs={
+                'competition': competition.slug,
+                'season': season.slug,
+                'division': division.slug,
+                'match': obj.pk,
+            }
+        )
+        match_url = f"https://{current_site.domain}{match_path}"
+
+    # Create context for template rendering
+    template_context = {
+        "match": obj,
+        "competition": competition,
+        "season": season,
+        "division": division,
+        "stage": stage,
+        "match_url": match_url,
+    }
+
+    # Render title from template with hierarchical fallback
+    title_templates = [
+        f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/{competition.slug}/match/live_stream/title.txt",
+        f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/match/live_stream/title.txt",
+        f"tournamentcontrol/competition/{stage.slug}/{division.slug}/match/live_stream/title.txt",
+        f"tournamentcontrol/competition/{stage.slug}/match/live_stream/title.txt",
+        "tournamentcontrol/competition/match/live_stream/title.txt",
+    ]
+    title = render_to_string(title_templates, template_context).strip()
+
+    # Render description from template with hierarchical fallback
+    description_templates = [
+        f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/{competition.slug}/match/live_stream/description.txt",
+        f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/match/live_stream/description.txt",
+        f"tournamentcontrol/competition/{stage.slug}/{division.slug}/match/live_stream/description.txt",
+        f"tournamentcontrol/competition/{stage.slug}/match/live_stream/description.txt",
+        "tournamentcontrol/competition/match/live_stream/description.txt",
+    ]
+    description = render_to_string(description_templates, template_context).strip()
 
     start_time = obj.get_datetime(ZoneInfo("UTC"))
-    stop_time = obj.get_datetime(ZoneInfo("UTC")) + relativedelta(
-        minutes=50
-    )  # FIXME: hard coded
+
+    # Skip YouTube API interaction if we don't have valid start time
+    # This can happen for new matches that don't have complete date/time data
+    if start_time is None:
+        return
+
+    stop_time = start_time + relativedelta(minutes=50)  # FIXME: hard coded
 
     body = {
         "snippet": {

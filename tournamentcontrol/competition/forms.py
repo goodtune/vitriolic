@@ -300,8 +300,7 @@ class ThumbnailImageField(forms.FileField):
         super().__init__(*args, **kwargs)
 
     def to_python(self, data):
-        # Handle clearing the field
-        if data is False:
+        if not data:
             return None
 
         # Handle file upload data
@@ -322,11 +321,6 @@ class ThumbnailImageField(forms.FileField):
                 )
 
             return binary_data
-
-        # If no file uploaded and no clear signal, return the field's sentinel value
-        # This tells Django to keep the existing value
-        if data is None:
-            return forms.fields.FILE_INPUT_CONTRADICTION
 
         return super().to_python(data)
 
@@ -474,7 +468,6 @@ class CompetitionForm(SuperUserSlugMixin, ModelForm):
         fields = (
             "title",
             "short_title",
-            "rank_importance",
             "enabled",
             "copy",
             "slug",
@@ -608,7 +601,6 @@ class DivisionForm(SuperUserSlugMixin, ModelForm):
         fields = (
             "title",
             "short_title",
-            "rank_division",
             "copy",
             "draft",
             "points_formula",
@@ -673,7 +665,6 @@ class StageForm(SuperUserSlugMixin, ModelForm):
             "title",
             "short_title",
             "follows",
-            "rank_importance",
             "keep_ladder",
             "scale_group_points",
             "carry_ladder",
@@ -736,7 +727,6 @@ class StageGroupForm(SuperUserSlugMixin, ModelForm):
         fields = (
             "title",
             "short_title",
-            "rank_importance",
             "carry_ladder",
             "teams",
             "slug",
@@ -873,7 +863,6 @@ class TeamForm(SuperUserSlugMixin, ModelForm):
             "club",
             "title",
             "short_title",
-            "rank_division",
             "copy",
             "names_locked",
             "slug",
@@ -1039,6 +1028,10 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
         # (e.g., for empty forms)
         if not self.instance or not self.instance.stage:
             return
+
+        # remove `live_stream_thumbnail_image` field if the season is not live streamed
+        if not self.instance.stage.division.season.live_stream:
+            self.fields.pop("live_stream_thumbnail_image", None)
 
         # restrict the list of referees to those registered this season
         if "referees" in self.fields:

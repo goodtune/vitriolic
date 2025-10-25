@@ -86,7 +86,6 @@ def competition_by_pk(f, *a, **kw):
                     competition.seasons.select_related(
                         "competition",
                     ).prefetch_related(
-                        "divisions__rank_division",
                         "referees__person__user",
                         "referees__club",
                         "timeslots",
