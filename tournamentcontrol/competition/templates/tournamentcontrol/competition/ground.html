@@ -1,0 +1,26 @@
+{% extends "tournamentcontrol/competition/base.html" %}
+{% load i18n %}
+
+{% block page_title %}{{ competition.title }} - {{ season.title }} - {{ venue.title }} - {{ ground.title }}{% endblock %}
+
+{% block content %}
+<h1>{% trans competition.title %} - {% trans season.title %}</h1>
+<h2>{% trans venue.title %} - {% trans ground.title %}</h2>
+
+<ul id="dates">
+{% for d in dates %}
+    <li><a href="{{ d|date:'Ymd' }}/">{{ d|date }}</a></li>
+{% endfor %}
+</ul>
+
+{% for date, matches in matches_by_date.items %}
+<h3>{{ date }}</h3>
+<table class="draw">
+<tbody>
+{% for match in matches %}
+<tr><td class="time">{{ match.datetime|time }}</td><td>{{ match.get_home_team.title }}</td><td>{{ match.get_away_team.title }}</td></tr>
+{% endfor %}
+</tbody>
+</table>
+{% endfor %}
+{% endblock %}
