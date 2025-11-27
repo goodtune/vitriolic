@@ -8,7 +8,7 @@ authors = [
     { "name" = "Gary Reynolds", "email" = "gary@touch.asn.au" }
 ]
 classifiers = []
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.15"
 dependencies = [
     "django-froala-editor>=2.9",
     "django-guardian>=2.4",
@@ -105,3 +105,6 @@ target-version = ["py39", "py312"]
 
 [tool.ruff]
 line-length = 88
+
+[tool.uv]
+prerelease = "if-necessary-or-explicit"
