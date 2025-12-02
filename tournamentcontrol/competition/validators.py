@@ -16,7 +16,7 @@ def validate_logo_aspect_ratio(image, tolerance=0.1):
     If PIL is not available, validation is skipped gracefully.
     
     Args:
-        image: Django FieldFile or file-like object
+        image: Django FieldFile, InMemoryUploadedFile, or file-like object
         tolerance: Acceptable deviation from square (default 0.1 = 10%)
     
     Raises:
