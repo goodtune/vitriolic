@@ -18,6 +18,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.postgres import fields as PG
 from django.core import validators
 from django.core.exceptions import ValidationError
+from django.core.validators import FileExtensionValidator
 from django.db import models, transaction
 from django.http import Http404, HttpResponse
 from django.db.models import Count, DateField, DateTimeField, Q, Sum, TimeField
@@ -83,7 +84,10 @@ from tournamentcontrol.competition.utils import (
     stage_group_position_re,
     team_and_division,
 )
-from tournamentcontrol.competition.validators import validate_hashtag
+from tournamentcontrol.competition.validators import (
+    validate_hashtag,
+    validate_logo_aspect_ratio,
+)
 
 logger = logging.getLogger(__name__)
 lazy_get_template = lazy(get_template, Template)
@@ -142,6 +146,25 @@ class OrderedSitemapNode(SitemapNodeBase):
 class Competition(AdminUrlMixin, OrderedSitemapNode):
     enabled = BooleanField(default=True)
     clubs = ManyToManyField("Club", blank=True, related_name="competitions")
+    
+    logo_colour = models.ImageField(
+        upload_to="logos/competition/colour/",
+        blank=True,
+        null=True,
+        validators=[
+            FileExtensionValidator(allowed_extensions=["png", "jpg", "jpeg", "svg"]),
+        ],
+        help_text=_("Colour variant of the logo. Recommended: PNG, JPG, or SVG format with square (1:1) aspect ratio."),
+    )
+    logo_monochrome = models.ImageField(
+        upload_to="logos/competition/monochrome/",
+        blank=True,
+        null=True,
+        validators=[
+            FileExtensionValidator(allowed_extensions=["png", "jpg", "jpeg", "svg"]),
+        ],
+        help_text=_("Monochrome variant of the logo. Recommended: PNG, JPG, or SVG format with square (1:1) aspect ratio."),
+    )
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition"
@@ -187,6 +210,25 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         default=ClubStatus.ACTIVE,
         db_index=True,
         help_text=_("Current status of the club."),
+    )
+    
+    logo_colour = models.ImageField(
+        upload_to="logos/club/colour/",
+        blank=True,
+        null=True,
+        validators=[
+            FileExtensionValidator(allowed_extensions=["png", "jpg", "jpeg", "svg"]),
+        ],
+        help_text=_("Colour variant of the logo. Recommended: PNG, JPG, or SVG format with square (1:1) aspect ratio."),
+    )
+    logo_monochrome = models.ImageField(
+        upload_to="logos/club/monochrome/",
+        blank=True,
+        null=True,
+        validators=[
+            FileExtensionValidator(allowed_extensions=["png", "jpg", "jpeg", "svg"]),
+        ],
+        help_text=_("Monochrome variant of the logo. Recommended: PNG, JPG, or SVG format with square (1:1) aspect ratio."),
     )
 
     class Meta:
@@ -495,6 +537,25 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
             "opposition team plus these people."
         ),
     )
+    
+    logo_colour = models.ImageField(
+        upload_to="logos/season/colour/",
+        blank=True,
+        null=True,
+        validators=[
+            FileExtensionValidator(allowed_extensions=["png", "jpg", "jpeg", "svg"]),
+        ],
+        help_text=_("Colour variant of the logo. Recommended: PNG, JPG, or SVG format with square (1:1) aspect ratio."),
+    )
+    logo_monochrome = models.ImageField(
+        upload_to="logos/season/monochrome/",
+        blank=True,
+        null=True,
+        validators=[
+            FileExtensionValidator(allowed_extensions=["png", "jpg", "jpeg", "svg"]),
+        ],
+        help_text=_("Monochrome variant of the logo. Recommended: PNG, JPG, or SVG format with square (1:1) aspect ratio."),
+    )
 
     class Meta(OrderedSitemapNode.Meta):
         unique_together = (
@@ -780,6 +841,25 @@ class Division(
     # to construct the minimum data for a division.
     sportingpulse_url = models.URLField(
         max_length=1024, blank=True, null=True, editable=False
+    )
+    
+    logo_colour = models.ImageField(
+        upload_to="logos/division/colour/",
+        blank=True,
+        null=True,
+        validators=[
+            FileExtensionValidator(allowed_extensions=["png", "jpg", "jpeg", "svg"]),
+        ],
+        help_text=_("Colour variant of the logo. Recommended: PNG, JPG, or SVG format with square (1:1) aspect ratio."),
+    )
+    logo_monochrome = models.ImageField(
+        upload_to="logos/division/monochrome/",
+        blank=True,
+        null=True,
+        validators=[
+            FileExtensionValidator(allowed_extensions=["png", "jpg", "jpeg", "svg"]),
+        ],
+        help_text=_("Monochrome variant of the logo. Recommended: PNG, JPG, or SVG format with square (1:1) aspect ratio."),
     )
 
     objects = DivisionQuerySet.as_manager()
@@ -1357,6 +1437,25 @@ class Team(AdminUrlMixin, OrderedSitemapNode):
         label_from_instance=team_and_division,
         symmetrical=True,
         help_text=_("Select any teams that must not play at the same time."),
+    )
+    
+    logo_colour = models.ImageField(
+        upload_to="logos/team/colour/",
+        blank=True,
+        null=True,
+        validators=[
+            FileExtensionValidator(allowed_extensions=["png", "jpg", "jpeg", "svg"]),
+        ],
+        help_text=_("Colour variant of the logo. Recommended: PNG, JPG, or SVG format with square (1:1) aspect ratio."),
+    )
+    logo_monochrome = models.ImageField(
+        upload_to="logos/team/monochrome/",
+        blank=True,
+        null=True,
+        validators=[
+            FileExtensionValidator(allowed_extensions=["png", "jpg", "jpeg", "svg"]),
+        ],
+        help_text=_("Monochrome variant of the logo. Recommended: PNG, JPG, or SVG format with square (1:1) aspect ratio."),
     )
 
     class Meta:
