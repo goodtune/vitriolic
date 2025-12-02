@@ -84,10 +84,7 @@ from tournamentcontrol.competition.utils import (
     stage_group_position_re,
     team_and_division,
 )
-from tournamentcontrol.competition.validators import (
-    validate_hashtag,
-    validate_logo_aspect_ratio,
-)
+from tournamentcontrol.competition.validators import validate_hashtag
 
 logger = logging.getLogger(__name__)
 lazy_get_template = lazy(get_template, Template)

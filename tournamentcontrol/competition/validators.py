@@ -49,10 +49,7 @@ def validate_logo_aspect_ratio(image, tolerance=0.1):
                 code="invalid_aspect_ratio",
                 params={"ratio": f"{aspect_ratio:.2f}"}
             )
-    except (IOError, OSError) as e:
-        # If we can't open the image, let Django's file validation handle it
-        raise ValidationError(
-            _("Unable to verify image aspect ratio: %(error)s"),
-            code="image_processing_error",
-            params={"error": str(e)}
-        )
+    except (IOError, OSError):
+        # If we can't open the image, let Django's ImageField validation handle it
+        # Return silently to avoid duplicate validation errors
+        return

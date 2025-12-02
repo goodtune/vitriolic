@@ -61,8 +61,8 @@ class LogoFieldTestCase(TestPlusTestCase):
     def test_logo_fields_optional(self):
         """Verify logo fields are optional (blank=True, null=True)."""
         competition = CompetitionFactory()
-        self.assertIsNone(competition.logo_colour.name or None)
-        self.assertIsNone(competition.logo_monochrome.name or None)
+        self.assertFalse(competition.logo_colour.name)
+        self.assertFalse(competition.logo_monochrome.name)
 
     def test_logo_accepts_png(self):
         """Verify logo fields accept PNG files."""
