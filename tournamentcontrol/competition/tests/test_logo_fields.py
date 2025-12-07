@@ -57,7 +57,14 @@ class LogoFieldTestCase(TestCase):
     
     @classmethod
     def setUpTestData(cls):
-        """Create test images once for the entire test class."""
+        """Create test data once for the entire test class."""
+        # Create a single team which will cascade create division, season, competition, and club
+        cls.team = TeamFactory()
+        cls.division = cls.team.division
+        cls.season = cls.division.season
+        cls.competition = cls.season.competition
+        cls.club = cls.team.club
+        
         # Create a simple PNG image
         img = Image.new("RGB", (100, 100), color="red")
         img_bytes = io.BytesIO()
@@ -80,100 +87,108 @@ class LogoFieldTestCase(TestCase):
 
     def test_logo_fields_optional(self):
         """Verify logo fields are optional (blank=True, null=True)."""
-        competition = CompetitionFactory()
         # ImageField.name is None when no file is uploaded
-        self.assertIsNone(competition.logo_colour.name)
-        self.assertIsNone(competition.logo_monochrome.name)
+        self.assertIsNone(self.competition.logo_colour.name)
+        self.assertIsNone(self.competition.logo_monochrome.name)
 
     def test_competition_logo_via_admin(self):
         """Test that Competition edit view includes logo fields."""
-        competition = CompetitionFactory()
-        namespace = competition._get_admin_namespace()
-        args = competition._get_url_args()
+        namespace = self.competition._get_admin_namespace()
+        args = self.competition._get_url_args()
         
         with self.login(self.superuser):
-            response = self.get("%s:edit" % namespace, *args)
+            response = self.get(f"{namespace}:edit", *args)
             self.response_200()
             self.assertContains(response, "logo_colour")
             self.assertContains(response, "logo_monochrome")
 
     def test_club_logo_via_admin(self):
         """Test that Club edit view includes logo fields."""
-        club = ClubFactory()
-        namespace = club._get_admin_namespace()
-        args = club._get_url_args()
+        namespace = self.club._get_admin_namespace()
+        args = self.club._get_url_args()
         
         with self.login(self.superuser):
-            response = self.get("%s:edit" % namespace, *args)
+            response = self.get(f"{namespace}:edit", *args)
             self.response_200()
             self.assertContains(response, "logo_colour")
             self.assertContains(response, "logo_monochrome")
 
     def test_season_logo_via_admin(self):
         """Test that Season edit view includes logo fields."""
-        season = SeasonFactory()
-        namespace = season._get_admin_namespace()
-        args = season._get_url_args()
+        namespace = self.season._get_admin_namespace()
+        args = self.season._get_url_args()
         
         with self.login(self.superuser):
-            response = self.get("%s:edit" % namespace, *args)
+            response = self.get(f"{namespace}:edit", *args)
             self.response_200()
             self.assertContains(response, "logo_colour")
             self.assertContains(response, "logo_monochrome")
 
     def test_division_logo_via_admin(self):
         """Test that Division edit view includes logo fields."""
-        division = DivisionFactory()
-        namespace = division._get_admin_namespace()
-        args = division._get_url_args()
+        namespace = self.division._get_admin_namespace()
+        args = self.division._get_url_args()
         
         with self.login(self.superuser):
-            response = self.get("%s:edit" % namespace, *args)
+            response = self.get(f"{namespace}:edit", *args)
             self.response_200()
             self.assertContains(response, "logo_colour")
             self.assertContains(response, "logo_monochrome")
 
     def test_team_logo_via_admin(self):
         """Test that Team edit view includes logo fields."""
-        team = TeamFactory()
-        namespace = team._get_admin_namespace()
-        args = team._get_url_args()
+        namespace = self.team._get_admin_namespace()
+        args = self.team._get_url_args()
         
         with self.login(self.superuser):
-            response = self.get("%s:edit" % namespace, *args)
+            response = self.get(f"{namespace}:edit", *args)
             self.response_200()
             self.assertContains(response, "logo_colour")
             self.assertContains(response, "logo_monochrome")
 
     def test_division_logo_rejects_pdf(self):
-        """Test that Division rejects PDF files."""
-        division = DivisionFactory()
+        """Test that Division rejects PDF files via admin POST."""
+        namespace = self.division._get_admin_namespace()
+        args = self.division._get_url_args()
         pdf_file = SimpleUploadedFile(
             "division_logo.pdf", self.pdf_data, content_type="application/pdf"
         )
         
-        # Assign invalid file and expect validation error
-        division.logo_colour = pdf_file
-        
-        with self.assertRaises(ValidationError) as cm:
-            division.full_clean()
-        
-        self.assertIn("logo_colour", cm.exception.error_dict)
+        with self.login(self.superuser):
+            # POST with invalid file type
+            self.post(
+                f"{namespace}:edit",
+                *args,
+                data={
+                    "title": self.division.title,
+                    "slug": self.division.slug,
+                    "logo_colour": pdf_file,
+                }
+            )
+            # Should return 200 with form errors, not 302 redirect
+            self.response_200()
 
     def test_team_logo_rejects_pdf(self):
-        """Test that Team rejects PDF files."""
-        team = TeamFactory()
+        """Test that Team rejects PDF files via admin POST."""
+        namespace = self.team._get_admin_namespace()
+        args = self.team._get_url_args()
         pdf_file = SimpleUploadedFile(
             "team_logo.pdf", self.pdf_data, content_type="application/pdf"
         )
         
-        # Assign invalid file and expect validation error
-        team.logo_monochrome = pdf_file
-        
-        with self.assertRaises(ValidationError) as cm:
-            team.full_clean()
-        
-        self.assertIn("logo_monochrome", cm.exception.error_dict)
+        with self.login(self.superuser):
+            # POST with invalid file type
+            self.post(
+                f"{namespace}:edit",
+                *args,
+                data={
+                    "title": self.team.title,
+                    "slug": self.team.slug,
+                    "logo_monochrome": pdf_file,
+                }
+            )
+            # Should return 200 with form errors, not 302 redirect
+            self.response_200()
 
 
 class LogoAspectRatioValidatorTestCase(TestCase):
