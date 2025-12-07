@@ -26,10 +26,34 @@ class TestCase(BaseTestCase):
     def setUp(self):
         super().setUp()
         self.superuser = UserFactory(is_staff=True, is_superuser=True)
+    
+    def assertGoodEditView(self, viewname, *args, **kwargs):
+        test_query_count = kwargs.pop("test_query_count", 50)
+        self.assertLoginRequired(viewname, *args)
+        with self.login(self.superuser):
+            self.assertGoodView(viewname, test_query_count=test_query_count, *args)
+            if kwargs:
+                self.post(viewname, *args, **kwargs)
+                self.response_302()
+    
+    def assertGoodDeleteView(self, viewname, *args):
+        self.assertLoginRequired(viewname, *args)
+        with self.login(self.superuser):
+            self.get(viewname, *args)
+            self.response_405()
+            self.post(viewname, *args)
+            self.response_302()
+    
+    def assertGoodNamespace(self, instance, **kwargs):
+        namespace = instance._get_admin_namespace()
+        args = instance._get_url_args()
+        self.assertGoodEditView("%s:add" % namespace, *args[:-1], **kwargs)
+        self.assertGoodEditView("%s:edit" % namespace, *args, **kwargs)
+        self.assertGoodDeleteView("%s:delete" % namespace, *args)
 
 
 class LogoFieldTestCase(TestCase):
-    """Test that logo fields exist and accept valid file formats."""
+    """Test that logo fields accept valid file formats via admin views."""
     
     @classmethod
     def setUpTestData(cls):
@@ -54,36 +78,6 @@ class LogoFieldTestCase(TestCase):
         # Create invalid file (PDF)
         cls.pdf_data = b"%PDF-1.4 fake pdf content"
 
-    def test_competition_has_logo_fields(self):
-        """Verify Competition model has logo_colour and logo_monochrome fields."""
-        competition = CompetitionFactory()
-        self.assertTrue(hasattr(competition, "logo_colour"))
-        self.assertTrue(hasattr(competition, "logo_monochrome"))
-
-    def test_club_has_logo_fields(self):
-        """Verify Club model has logo_colour and logo_monochrome fields."""
-        club = ClubFactory()
-        self.assertTrue(hasattr(club, "logo_colour"))
-        self.assertTrue(hasattr(club, "logo_monochrome"))
-
-    def test_season_has_logo_fields(self):
-        """Verify Season model has logo_colour and logo_monochrome fields."""
-        season = SeasonFactory()
-        self.assertTrue(hasattr(season, "logo_colour"))
-        self.assertTrue(hasattr(season, "logo_monochrome"))
-
-    def test_division_has_logo_fields(self):
-        """Verify Division model has logo_colour and logo_monochrome fields."""
-        division = DivisionFactory()
-        self.assertTrue(hasattr(division, "logo_colour"))
-        self.assertTrue(hasattr(division, "logo_monochrome"))
-
-    def test_team_has_logo_fields(self):
-        """Verify Team model has logo_colour and logo_monochrome fields."""
-        team = TeamFactory()
-        self.assertTrue(hasattr(team, "logo_colour"))
-        self.assertTrue(hasattr(team, "logo_monochrome"))
-
     def test_logo_fields_optional(self):
         """Verify logo fields are optional (blank=True, null=True)."""
         competition = CompetitionFactory()
@@ -92,48 +86,94 @@ class LogoFieldTestCase(TestCase):
         self.assertIsNone(competition.logo_monochrome.name)
 
     def test_competition_logo_accepts_png(self):
-        """Test that Competition accepts PNG files for logos."""
+        """Test that Competition accepts PNG files for logos via admin."""
         competition = CompetitionFactory()
-        png_file = SimpleUploadedFile(
-            "competition_logo.png", self.png_data, content_type="image/png"
+        namespace = competition._get_admin_namespace()
+        args = competition._get_url_args()
+        
+        self.assertGoodEditView(
+            "%s:edit" % namespace,
+            *args,
+            data={
+                "title": competition.title,
+                "slug": competition.slug,
+                "logo_colour": SimpleUploadedFile(
+                    "competition_logo.png", self.png_data, content_type="image/png"
+                )
+            }
         )
-        
-        # Assign logo and validate
-        competition.logo_colour = png_file
-        competition.full_clean()
-        competition.save()
-        competition.refresh_from_db()
-        
-        self.assertTrue(competition.logo_colour.name)
 
     def test_club_logo_accepts_jpg(self):
-        """Test that Club accepts JPG files for logos."""
+        """Test that Club accepts JPG files for logos via admin."""
         club = ClubFactory()
-        jpg_file = SimpleUploadedFile(
-            "club_logo.jpg", self.jpg_data, content_type="image/jpeg"
+        namespace = club._get_admin_namespace()
+        args = club._get_url_args()
+        
+        self.assertGoodEditView(
+            "%s:edit" % namespace,
+            *args,
+            data={
+                "title": club.title,
+                "slug": club.slug,
+                "logo_monochrome": SimpleUploadedFile(
+                    "club_logo.jpg", self.jpg_data, content_type="image/jpeg"
+                )
+            }
         )
-        
-        # Assign logo and validate
-        club.logo_monochrome = jpg_file
-        club.full_clean()
-        club.save()
-        club.refresh_from_db()
-        
-        self.assertTrue(club.logo_monochrome.name)
 
     def test_season_logo_accepts_svg(self):
-        """Test that Season accepts SVG files for logos."""
+        """Test that Season accepts SVG files for logos via admin."""
         season = SeasonFactory()
-        svg_file = SimpleUploadedFile(
-            "season_logo.svg", self.svg_data, content_type="image/svg+xml"
+        namespace = season._get_admin_namespace()
+        args = season._get_url_args()
+        
+        self.assertGoodEditView(
+            "%s:edit" % namespace,
+            *args,
+            data={
+                "title": season.title,
+                "slug": season.slug,
+                "logo_colour": SimpleUploadedFile(
+                    "season_logo.svg", self.svg_data, content_type="image/svg+xml"
+                )
+            }
         )
+
+    def test_division_logo_accepts_png(self):
+        """Test that Division accepts PNG files for logos via admin."""
+        division = DivisionFactory()
+        namespace = division._get_admin_namespace()
+        args = division._get_url_args()
         
-        # Assign logo and validate - skip full_clean for Season due to other required fields
-        season.logo_colour = svg_file
-        season.save()
-        season.refresh_from_db()
+        self.assertGoodEditView(
+            "%s:edit" % namespace,
+            *args,
+            data={
+                "title": division.title,
+                "slug": division.slug,
+                "logo_colour": SimpleUploadedFile(
+                    "division_logo.png", self.png_data, content_type="image/png"
+                )
+            }
+        )
+
+    def test_team_logo_accepts_jpg(self):
+        """Test that Team accepts JPG files for logos via admin."""
+        team = TeamFactory()
+        namespace = team._get_admin_namespace()
+        args = team._get_url_args()
         
-        self.assertTrue(season.logo_colour.name)
+        self.assertGoodEditView(
+            "%s:edit" % namespace,
+            *args,
+            data={
+                "title": team.title,
+                "slug": team.slug,
+                "logo_monochrome": SimpleUploadedFile(
+                    "team_logo.jpg", self.jpg_data, content_type="image/jpeg"
+                )
+            }
+        )
 
     def test_division_logo_rejects_pdf(self):
         """Test that Division rejects PDF files."""
