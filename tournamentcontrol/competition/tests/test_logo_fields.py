@@ -5,7 +5,9 @@ Tests for logo field validation on Competition, Club, Season, Division, and Team
 import io
 
 from django.core.exceptions import ValidationError
+from django.core.files.storage import InMemoryStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test.utils import override_settings
 from PIL import Image
 from test_plus import TestCase as BaseTestCase
 
@@ -47,9 +49,9 @@ class TestCase(BaseTestCase):
     def assertGoodNamespace(self, instance, **kwargs):
         namespace = instance._get_admin_namespace()
         args = instance._get_url_args()
-        self.assertGoodEditView("%s:add" % namespace, *args[:-1], **kwargs)
-        self.assertGoodEditView("%s:edit" % namespace, *args, **kwargs)
-        self.assertGoodDeleteView("%s:delete" % namespace, *args)
+        self.assertGoodEditView(f"{namespace}:add", *args[:-1], **kwargs)
+        self.assertGoodEditView(f"{namespace}:edit", *args, **kwargs)
+        self.assertGoodDeleteView(f"{namespace}:delete", *args)
 
 
 class LogoFieldTestCase(TestCase):
@@ -99,8 +101,8 @@ class LogoFieldTestCase(TestCase):
         with self.login(self.superuser):
             response = self.get(f"{namespace}:edit", *args)
             self.response_200()
-            self.assertContains(response, "logo_colour")
-            self.assertContains(response, "logo_monochrome")
+            self.assertResponseContains('name="logo_colour"', html=False)
+            self.assertResponseContains('name="logo_monochrome"', html=False)
 
     def test_club_logo_via_admin(self):
         """Test that Club edit view includes logo fields."""
@@ -110,8 +112,8 @@ class LogoFieldTestCase(TestCase):
         with self.login(self.superuser):
             response = self.get(f"{namespace}:edit", *args)
             self.response_200()
-            self.assertContains(response, "logo_colour")
-            self.assertContains(response, "logo_monochrome")
+            self.assertResponseContains('name="logo_colour"', html=False)
+            self.assertResponseContains('name="logo_monochrome"', html=False)
 
     def test_season_logo_via_admin(self):
         """Test that Season edit view includes logo fields."""
@@ -121,8 +123,8 @@ class LogoFieldTestCase(TestCase):
         with self.login(self.superuser):
             response = self.get(f"{namespace}:edit", *args)
             self.response_200()
-            self.assertContains(response, "logo_colour")
-            self.assertContains(response, "logo_monochrome")
+            self.assertResponseContains('name="logo_colour"', html=False)
+            self.assertResponseContains('name="logo_monochrome"', html=False)
 
     def test_division_logo_via_admin(self):
         """Test that Division edit view includes logo fields."""
@@ -132,8 +134,8 @@ class LogoFieldTestCase(TestCase):
         with self.login(self.superuser):
             response = self.get(f"{namespace}:edit", *args)
             self.response_200()
-            self.assertContains(response, "logo_colour")
-            self.assertContains(response, "logo_monochrome")
+            self.assertResponseContains('name="logo_colour"', html=False)
+            self.assertResponseContains('name="logo_monochrome"', html=False)
 
     def test_team_logo_via_admin(self):
         """Test that Team edit view includes logo fields."""
@@ -143,8 +145,39 @@ class LogoFieldTestCase(TestCase):
         with self.login(self.superuser):
             response = self.get(f"{namespace}:edit", *args)
             self.response_200()
-            self.assertContains(response, "logo_colour")
-            self.assertContains(response, "logo_monochrome")
+            self.assertResponseContains('name="logo_colour"', html=False)
+            self.assertResponseContains('name="logo_monochrome"', html=False)
+
+    @override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
+    def test_competition_logo_upload_png(self):
+        """Test that Competition accepts PNG file uploads via admin POST."""
+        from django.core.files.storage import default_storage
+        
+        png_file = SimpleUploadedFile(
+            "competition_logo.png", self.png_data, content_type="image/png"
+        )
+        
+        # Use assertGoodEditView which handles form submission properly
+        self.assertGoodEditView(
+            f"{self.competition._get_admin_namespace()}:edit",
+            *self.competition._get_url_args(),
+            data={
+                "title": self.competition.title,
+                "slug": self.competition.slug,
+                "logo_colour": png_file,
+            }
+        )
+        
+        # Verify file was stored
+        self.competition.refresh_from_db()
+        self.assertTrue(self.competition.logo_colour.name)
+        self.assertIn("logos/competition/colour/", self.competition.logo_colour.name)
+        self.assertIn("competition_logo", self.competition.logo_colour.name)
+        
+        # Verify file exists and contents match
+        self.assertTrue(default_storage.exists(self.competition.logo_colour.name))
+        stored_content = default_storage.open(self.competition.logo_colour.name).read()
+        self.assertEqual(stored_content, self.png_data)
 
     def test_division_logo_rejects_pdf(self):
         """Test that Division rejects PDF files via admin POST."""
