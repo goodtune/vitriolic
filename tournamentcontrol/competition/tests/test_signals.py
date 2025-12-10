@@ -1,6 +1,7 @@
+from unittest import mock
 from unittest.mock import patch, MagicMock
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from tournamentcontrol.competition.models import LadderEntry, LadderSummary
 from tournamentcontrol.competition.tests import factories
@@ -60,6 +61,7 @@ class SignalHandlerTests(TestCase):
         )
 
 
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
 class YouTubeSignalHandlerTests(TestCase):
     def setUp(self):
         """Set up test fixtures for YouTube signal handler tests."""
@@ -84,7 +86,7 @@ class YouTubeSignalHandlerTests(TestCase):
             division__season=self.season_no_credentials
         )
 
-    @patch('tournamentcontrol.competition.signals.matches.set_youtube_thumbnail')
+    @patch('tournamentcontrol.competition.tasks.set_youtube_thumbnail')
     @patch('tournamentcontrol.competition.models.Season.youtube')
     def test_match_youtube_sync_guard_clause_no_credentials(self, mock_youtube, mock_thumbnail_task):
         """
@@ -105,7 +107,7 @@ class YouTubeSignalHandlerTests(TestCase):
         mock_youtube.assert_not_called()
         mock_thumbnail_task.s.assert_not_called()
 
-    @patch('tournamentcontrol.competition.signals.matches.set_youtube_thumbnail')
+    @patch('tournamentcontrol.competition.tasks.set_youtube_thumbnail')
     @patch('tournamentcontrol.competition.models.Season.youtube')
     def test_match_youtube_sync_creates_broadcast_new_live_stream(self, mock_youtube, mock_thumbnail_task):
         """
@@ -143,7 +145,7 @@ class YouTubeSignalHandlerTests(TestCase):
         # Verify thumbnail task was queued
         mock_thumbnail_task.s.assert_called_once_with(match.pk)
 
-    @patch('tournamentcontrol.competition.signals.matches.set_youtube_thumbnail')
+    @patch('tournamentcontrol.competition.tasks.set_youtube_thumbnail')
     @patch('tournamentcontrol.competition.models.Season.youtube')
     def test_match_youtube_sync_updates_existing_broadcast(self, mock_youtube, mock_thumbnail_task):
         """
@@ -175,7 +177,7 @@ class YouTubeSignalHandlerTests(TestCase):
         # Verify thumbnail task was queued
         mock_thumbnail_task.s.assert_called_once_with(match.pk)
 
-    @patch('tournamentcontrol.competition.signals.matches.set_youtube_thumbnail')
+    @patch('tournamentcontrol.competition.tasks.set_youtube_thumbnail')
     @patch('tournamentcontrol.competition.models.Season.youtube')
     def test_match_youtube_sync_deletes_broadcast_disable_streaming(self, mock_youtube, mock_thumbnail_task):
         """
@@ -187,16 +189,19 @@ class YouTubeSignalHandlerTests(TestCase):
         mock_broadcasts.delete.return_value.execute.return_value = {}
         mock_youtube.return_value.liveBroadcasts.return_value = mock_broadcasts
 
-        # Create a match with existing broadcast
+        # Create a match without triggering the signal first
         video_id = 'test-video-to-delete'
-        match = factories.MatchFactory.create(
-            stage=self.stage_with_creds,
-            live_stream=False,  # Disabled
-            external_identifier=video_id,
-            videos=[f'https://youtu.be/{video_id}', 'https://example.com/other-video'],
-        )
+        with mock.patch('tournamentcontrol.competition.signals.matches.match_youtube_sync'):
+            # Bypass signal during creation to set up test state
+            match = factories.MatchFactory.create(
+                stage=self.stage_with_creds,
+                live_stream=True,  # Initially enabled
+                external_identifier=video_id,
+                videos=[f'https://youtu.be/{video_id}', 'https://example.com/other-video'],
+            )
 
-        # Save the match (which triggers the signal)
+        # Now disable live streaming and save (which triggers the signal we want to test)
+        match.live_stream = False
         match.save()
 
         # Verify YouTube broadcast was deleted
@@ -213,7 +218,7 @@ class YouTubeSignalHandlerTests(TestCase):
         # Verify thumbnail task was not queued for deletion
         mock_thumbnail_task.s.assert_not_called()
 
-    @patch('tournamentcontrol.competition.signals.matches.set_youtube_thumbnail')
+    @patch('tournamentcontrol.competition.tasks.set_youtube_thumbnail')
     @patch('tournamentcontrol.competition.models.Season.youtube')
     def test_match_youtube_sync_clears_videos_when_empty(self, mock_youtube, mock_thumbnail_task):
         """
@@ -224,16 +229,19 @@ class YouTubeSignalHandlerTests(TestCase):
         mock_broadcasts.delete.return_value.execute.return_value = {}
         mock_youtube.return_value.liveBroadcasts.return_value = mock_broadcasts
 
-        # Create a match with only the YouTube video
+        # Create a match without triggering the signal first
         video_id = 'only-video-to-delete'
-        match = factories.MatchFactory.create(
-            stage=self.stage_with_creds,
-            live_stream=False,  # Disabled
-            external_identifier=video_id,
-            videos=[f'https://youtu.be/{video_id}'],  # Only YouTube video
-        )
+        with mock.patch('tournamentcontrol.competition.signals.matches.match_youtube_sync'):
+            # Bypass signal during creation to set up test state
+            match = factories.MatchFactory.create(
+                stage=self.stage_with_creds,
+                live_stream=True,  # Initially enabled
+                external_identifier=video_id,
+                videos=[f'https://youtu.be/{video_id}'],  # Only YouTube video
+            )
 
-        # Save the match (which triggers the signal)
+        # Now disable live streaming and save (which triggers the signal)
+        match.live_stream = False
         match.save()
 
         # Verify external_identifier was cleared and videos field is None
@@ -241,7 +249,7 @@ class YouTubeSignalHandlerTests(TestCase):
         self.assertIsNone(match.external_identifier)
         self.assertIsNone(match.videos)
 
-    @patch('tournamentcontrol.competition.signals.matches.set_youtube_thumbnail')
+    @patch('tournamentcontrol.competition.tasks.set_youtube_thumbnail')
     @patch('tournamentcontrol.competition.models.Season.youtube')
     def test_match_youtube_sync_no_action_no_live_stream_no_external_id(self, mock_youtube, mock_thumbnail_task):
         """
@@ -262,7 +270,7 @@ class YouTubeSignalHandlerTests(TestCase):
         mock_youtube.return_value.liveBroadcasts.assert_not_called()
         mock_thumbnail_task.s.assert_not_called()
 
-    @patch('tournamentcontrol.competition.signals.matches.set_youtube_thumbnail')
+    @patch('tournamentcontrol.competition.tasks.set_youtube_thumbnail')
     @patch('tournamentcontrol.competition.models.Season.youtube')  
     def test_match_youtube_sync_broadcast_title_with_label(self, mock_youtube, mock_thumbnail_task):
         """
@@ -299,7 +307,7 @@ class YouTubeSignalHandlerTests(TestCase):
         self.assertIn('Home Tigers', title)
         self.assertIn('Away Lions', title)
 
-    @patch('tournamentcontrol.competition.signals.matches.set_youtube_thumbnail')
+    @patch('tournamentcontrol.competition.tasks.set_youtube_thumbnail')
     @patch('tournamentcontrol.competition.models.Season.youtube')
     def test_match_youtube_sync_broadcast_title_without_label(self, mock_youtube, mock_thumbnail_task):
         """

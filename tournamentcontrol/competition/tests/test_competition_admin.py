@@ -1,5 +1,6 @@
 import unittest
 from datetime import date, datetime, time
+from unittest import mock
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -7,6 +8,7 @@ from dateutil.rrule import DAILY
 from django import VERSION
 from django.contrib import messages
 from django.template import Context, Template
+from django.test import override_settings
 from django.urls import reverse
 from test_plus import TestCase as BaseTestCase
 
@@ -161,6 +163,7 @@ class TemplateTests(TestCase):
             )
 
 
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
 class GoodViewTests(TestCase):
     def test_reorder_down(self):
         stage = factories.StageFactory.create()
@@ -688,6 +691,7 @@ class GoodViewTests(TestCase):
             )
 
 
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
 class BackendTests(MessagesTestMixin, TestCase):
     def setUp(self):
         super().setUp()
@@ -1612,7 +1616,7 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # Test editing the match - this should not raise TypeError
         # Mock the signal handler to verify it's called but doesn't make API calls
-        with mock.patch('tournamentcontrol.competition.signals.matches.set_youtube_thumbnail') as mock_thumbnail_task:
+        with mock.patch('tournamentcontrol.competition.tasks.set_youtube_thumbnail') as mock_thumbnail_task:
             edit_match_url = match.url_names["edit"]
             with self.login(self.superuser):
                 # Turn off live streaming to resolve the problematic state
@@ -1630,6 +1634,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 }
 
                 # This should complete successfully without TypeError
+                data["live_stream_thumbnail_image"] = ""
                 self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
                 self.response_302()  # Should redirect successfully
 
@@ -1888,7 +1893,7 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # Edit the match - should not cause TypeError due to guard clause
         # Mock to verify signal handler behavior
-        with mock.patch('tournamentcontrol.competition.signals.matches.set_youtube_thumbnail') as mock_thumbnail_task:
+        with mock.patch('tournamentcontrol.competition.tasks.set_youtube_thumbnail') as mock_thumbnail_task:
             edit_match_url = match.url_names["edit"]
             with self.login(self.superuser):
                 # Turn off live streaming

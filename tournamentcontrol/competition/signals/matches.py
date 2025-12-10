@@ -161,12 +161,12 @@ def notify_match_forfeit_email(sender, match, team, *args, **kwargs):
 def match_youtube_sync(sender, instance, **kwargs):
     """
     Handle YouTube live stream updates when a Match is saved.
-    
+
     This signal handler replaces the pre_save_callback in the edit_match admin view
     to decouple YouTube operations from the request/response cycle.
     """
     from tournamentcontrol.competition.tasks import set_youtube_thumbnail
-    
+
     obj = instance
     
     # Check if YouTube credentials are configured before attempting anything else,
@@ -181,9 +181,8 @@ def match_youtube_sync(sender, instance, **kwargs):
 
     # Build match video URL for description using Site model
     # Only build the URL if the match has been saved and has a primary key
-    match_url = None
-    if obj.pk is not None:
-        current_site = Site.objects.get_current()
+    current_site = Site.objects.get_current()
+    if obj.pk:
         match_path = reverse(
             'competition:match-video',
             kwargs={
@@ -194,6 +193,15 @@ def match_youtube_sync(sender, instance, **kwargs):
             }
         )
         match_url = f"https://{current_site.domain}{match_path}"
+    else:
+        # For new objects without a PK yet, use the competition main page as fallback
+        competition_path = reverse(
+            'competition:competition',
+            kwargs={
+                'competition': competition.slug,
+            }
+        )
+        match_url = f"https://{current_site.domain}{competition_path}"
 
     # Create context for template rendering
     template_context = {
@@ -323,3 +331,9 @@ def match_youtube_sync(sender, instance, **kwargs):
         # Without access to the request/response cycle, we can't add messages
         # to the user interface, so we just log the error
         raise
+    except Exception as exc:
+        # Catch other exceptions (e.g., authentication errors) and log them
+        # rather than crashing. This allows matches to be saved even when
+        # YouTube API credentials are invalid or the API is unavailable.
+        logger.error("Error syncing match to YouTube: %s", exc)
+        # Don't re-raise - allow the match save to complete
