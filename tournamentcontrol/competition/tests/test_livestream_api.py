@@ -6,6 +6,7 @@ from datetime import date
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from test_plus import TestCase
 
 from tournamentcontrol.competition.tests import factories
@@ -15,6 +16,7 @@ from touchtechnology.common.tests.factories import UserFactory
 User = get_user_model()
 
 
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
 class LiveStreamAPITests(TestCase):
     """Test LiveStreamViewSet REST API."""
     
