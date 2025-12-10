@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.utils.functional import SimpleLazyObject
 
 __all__ = (
@@ -15,60 +16,93 @@ __all__ = (
 
 
 # Use SimpleLazyObject to delay accessing config until actually needed
-# This avoids database access during module import
+# Fall back to Django settings if constance not ready
 def _get_app_routing():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_APP_ROUTING
+    try:
+        from constance import config
+        return config.TOUCHTECHNOLOGY_APP_ROUTING
+    except Exception:
+        return getattr(settings, "TOUCHTECHNOLOGY_APP_ROUTING", ())
 
 
 def _get_currency_abbreviation():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_CURRENCY_ABBREVIATION
+    try:
+        from constance import config
+        return config.TOUCHTECHNOLOGY_CURRENCY_ABBREVIATION
+    except Exception:
+        return getattr(settings, "TOUCHTECHNOLOGY_CURRENCY_ABBREVIATION", "AUD")
 
 
 def _get_currency_symbol():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_CURRENCY_SYMBOL
+    try:
+        from constance import config
+        return config.TOUCHTECHNOLOGY_CURRENCY_SYMBOL
+    except Exception:
+        return getattr(settings, "TOUCHTECHNOLOGY_CURRENCY_SYMBOL", "$")
 
 
 def _get_paginate_by():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_PAGINATE_BY
+    try:
+        from constance import config
+        return config.TOUCHTECHNOLOGY_PAGINATE_BY
+    except Exception:
+        return getattr(settings, "TOUCHTECHNOLOGY_PAGINATE_BY", 5)
 
 
 def _get_profile_form_class():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_PROFILE_FORM_CLASS
+    try:
+        from constance import config
+        return config.TOUCHTECHNOLOGY_PROFILE_FORM_CLASS
+    except Exception:
+        return getattr(settings, "TOUCHTECHNOLOGY_PROFILE_FORM_CLASS", "touchtechnology.common.forms_lazy.ProfileForm")
 
 
 def _get_sitemap_cache_duration():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_SITEMAP_CACHE_DURATION
+    try:
+        from constance import config
+        return config.TOUCHTECHNOLOGY_SITEMAP_CACHE_DURATION
+    except Exception:
+        return getattr(settings, "TOUCHTECHNOLOGY_SITEMAP_CACHE_DURATION", None)
 
 
 def _get_sitemap_edit_parent():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_SITEMAP_EDIT_PARENT
+    try:
+        from constance import config
+        return config.TOUCHTECHNOLOGY_SITEMAP_EDIT_PARENT
+    except Exception:
+        return getattr(settings, "TOUCHTECHNOLOGY_SITEMAP_EDIT_PARENT", False)
 
 
 def _get_sitemap_https_option():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_SITEMAP_HTTPS_OPTION
+    try:
+        from constance import config
+        return config.TOUCHTECHNOLOGY_SITEMAP_HTTPS_OPTION
+    except Exception:
+        return getattr(settings, "TOUCHTECHNOLOGY_SITEMAP_HTTPS_OPTION", False)
 
 
 def _get_sitemap_root():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_SITEMAP_ROOT
+    try:
+        from constance import config
+        return config.TOUCHTECHNOLOGY_SITEMAP_ROOT
+    except Exception:
+        return getattr(settings, "TOUCHTECHNOLOGY_SITEMAP_ROOT", None)
 
 
 def _get_storage_folder():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_STORAGE_FOLDER
+    try:
+        from constance import config
+        return config.TOUCHTECHNOLOGY_STORAGE_FOLDER
+    except Exception:
+        return getattr(settings, "TOUCHTECHNOLOGY_STORAGE_FOLDER", None)
 
 
 def _get_storage_url():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_STORAGE_URL
+    try:
+        from constance import config
+        return config.TOUCHTECHNOLOGY_STORAGE_URL
+    except Exception:
+        return getattr(settings, "TOUCHTECHNOLOGY_STORAGE_URL", None)
 
 
 APP_ROUTING = SimpleLazyObject(_get_app_routing)

@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.utils.functional import cached_property
 
 __all__ = (
@@ -8,34 +9,59 @@ __all__ = (
     "THUMBNAIL_IMAGE_PROCESSORS",
 )
 
+# Default values
+DEFAULT_DETAIL_IMAGE_KWARGS = {}
+DEFAULT_DETAIL_IMAGE_PROCESSORS = (
+    ("pilkit.processors.resize.SmartResize", (320, 240), {}),
+)
+DEFAULT_THUMBNAIL_IMAGE_KWARGS = {}
+DEFAULT_THUMBNAIL_IMAGE_PROCESSORS = (
+    ("pilkit.processors.resize.SmartResize", (160, 120), {}),
+)
+
 
 class _LazyNewsSettings:
     """Lazy accessor for news settings that defers config access until needed."""
 
     @cached_property
     def DETAIL_IMAGE_KWARGS(self):
-        from constance import config
-        return config.TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_KWARGS
+        try:
+            from constance import config
+            return config.TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_KWARGS
+        except Exception:
+            return getattr(settings, "TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_KWARGS", DEFAULT_DETAIL_IMAGE_KWARGS)
 
     @cached_property
     def DETAIL_IMAGE_PROCESSORS(self):
-        from constance import config
-        return config.TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_PROCESSORS
+        try:
+            from constance import config
+            return config.TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_PROCESSORS
+        except Exception:
+            return getattr(settings, "TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_PROCESSORS", DEFAULT_DETAIL_IMAGE_PROCESSORS)
 
     @cached_property
     def PAGINATE_BY(self):
-        from constance import config
-        return config.TOUCHTECHNOLOGY_NEWS_PAGINATE_BY
+        try:
+            from constance import config
+            return config.TOUCHTECHNOLOGY_NEWS_PAGINATE_BY
+        except Exception:
+            return getattr(settings, "TOUCHTECHNOLOGY_NEWS_PAGINATE_BY", 5)
 
     @cached_property
     def THUMBNAIL_IMAGE_KWARGS(self):
-        from constance import config
-        return config.TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_KWARGS
+        try:
+            from constance import config
+            return config.TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_KWARGS
+        except Exception:
+            return getattr(settings, "TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_KWARGS", DEFAULT_THUMBNAIL_IMAGE_KWARGS)
 
     @cached_property
     def THUMBNAIL_IMAGE_PROCESSORS(self):
-        from constance import config
-        return config.TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_PROCESSORS
+        try:
+            from constance import config
+            return config.TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_PROCESSORS
+        except Exception:
+            return getattr(settings, "TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_PROCESSORS", DEFAULT_THUMBNAIL_IMAGE_PROCESSORS)
 
 
 _settings = _LazyNewsSettings()

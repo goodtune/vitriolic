@@ -14,41 +14,66 @@ __all__ = (
 
 # Use SimpleLazyObject to delay accessing config until actually needed
 def _get_node_cache():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_NODE_CACHE
+    try:
+        from constance import config
+        return config.TOUCHTECHNOLOGY_NODE_CACHE
+    except Exception:
+        # Fallback to Django settings during migrations or if constance not ready
+        return getattr(settings, "TOUCHTECHNOLOGY_NODE_CACHE", "default")
 
 
 def _get_page_content_blocks():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_PAGE_CONTENT_BLOCKS
+    try:
+        from constance import config
+        return config.TOUCHTECHNOLOGY_PAGE_CONTENT_BLOCKS
+    except Exception:
+        return getattr(settings, "TOUCHTECHNOLOGY_PAGE_CONTENT_BLOCKS", 1)
 
 
 def _get_page_content_classes():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_PAGE_CONTENT_CLASSES
+    try:
+        from constance import config
+        return config.TOUCHTECHNOLOGY_PAGE_CONTENT_CLASSES
+    except Exception:
+        return getattr(settings, "TOUCHTECHNOLOGY_PAGE_CONTENT_CLASSES", ("copy",))
 
 
 def _get_page_template_base():
-    from constance import config
+    try:
+        from constance import config
+        value = config.TOUCHTECHNOLOGY_PAGE_TEMPLATE_BASE
+        if value:
+            return value
+    except Exception:
+        pass
     # Get project template dirs for fallback if not configured in constance
     project_template_dirs = first(getattr(settings, "TEMPLATES", ()), {}).get("DIRS", [])
     project_template_base = first(project_template_dirs, "templates")
-    return config.TOUCHTECHNOLOGY_PAGE_TEMPLATE_BASE or project_template_base
+    return getattr(settings, "TOUCHTECHNOLOGY_PAGE_TEMPLATE_BASE", None) or project_template_base
 
 
 def _get_page_template_folder():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_PAGE_TEMPLATE_FOLDER
+    try:
+        from constance import config
+        return config.TOUCHTECHNOLOGY_PAGE_TEMPLATE_FOLDER
+    except Exception:
+        return getattr(settings, "TOUCHTECHNOLOGY_PAGE_TEMPLATE_FOLDER", "touchtechnology/content/pages/")
 
 
 def _get_page_template_regex():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_PAGE_TEMPLATE_REGEX
+    try:
+        from constance import config
+        return config.TOUCHTECHNOLOGY_PAGE_TEMPLATE_REGEX
+    except Exception:
+        return getattr(settings, "TOUCHTECHNOLOGY_PAGE_TEMPLATE_REGEX", r"\.html$")
 
 
 def _get_tenant_media_public():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_TENANT_MEDIA_PUBLIC
+    try:
+        from constance import config
+        return config.TOUCHTECHNOLOGY_TENANT_MEDIA_PUBLIC
+    except Exception:
+        return getattr(settings, "TOUCHTECHNOLOGY_TENANT_MEDIA_PUBLIC", True)
 
 
 NODE_CACHE = SimpleLazyObject(_get_node_cache)
