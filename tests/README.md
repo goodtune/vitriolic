@@ -37,7 +37,7 @@ uvx tox
 ```bash
 uvx tox -e dj52-py311  # Django 5.2 with Python 3.11
 uvx tox -e dj42-py312  # Django 4.2 with Python 3.12
-uvx tox -e dj60-py314  # Django 6.0 (pre-release) with Python 3.14
+uvx tox -e dj60-py314  # Django 6.0 with Python 3.14
 ```
 
 ### Run specific unit test modules with specific Django/Python combination
