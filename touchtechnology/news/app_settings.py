@@ -1,4 +1,4 @@
-from django.utils.functional import SimpleLazyObject
+from django.utils.functional import cached_property
 
 __all__ = (
     "DETAIL_IMAGE_KWARGS",
@@ -9,35 +9,41 @@ __all__ = (
 )
 
 
-# Use SimpleLazyObject to delay accessing config until actually needed
-def _get_detail_image_kwargs():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_KWARGS
+class _LazyNewsSettings:
+    """Lazy accessor for news settings that defers config access until needed."""
+
+    @cached_property
+    def DETAIL_IMAGE_KWARGS(self):
+        from constance import config
+        return config.TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_KWARGS
+
+    @cached_property
+    def DETAIL_IMAGE_PROCESSORS(self):
+        from constance import config
+        return config.TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_PROCESSORS
+
+    @cached_property
+    def PAGINATE_BY(self):
+        from constance import config
+        return config.TOUCHTECHNOLOGY_NEWS_PAGINATE_BY
+
+    @cached_property
+    def THUMBNAIL_IMAGE_KWARGS(self):
+        from constance import config
+        return config.TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_KWARGS
+
+    @cached_property
+    def THUMBNAIL_IMAGE_PROCESSORS(self):
+        from constance import config
+        return config.TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_PROCESSORS
 
 
-def _get_detail_image_processors():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_PROCESSORS
+_settings = _LazyNewsSettings()
 
-
-def _get_paginate_by():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_NEWS_PAGINATE_BY
-
-
-def _get_thumbnail_image_kwargs():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_KWARGS
-
-
-def _get_thumbnail_image_processors():
-    from constance import config
-    return config.TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_PROCESSORS
-
-
-DETAIL_IMAGE_KWARGS = SimpleLazyObject(_get_detail_image_kwargs)
-DETAIL_IMAGE_PROCESSORS = SimpleLazyObject(_get_detail_image_processors)
-PAGINATE_BY = SimpleLazyObject(_get_paginate_by)
-THUMBNAIL_IMAGE_KWARGS = SimpleLazyObject(_get_thumbnail_image_kwargs)
-THUMBNAIL_IMAGE_PROCESSORS = SimpleLazyObject(_get_thumbnail_image_processors)
+# Export as module-level "constants" (actually properties)
+DETAIL_IMAGE_KWARGS = _settings.DETAIL_IMAGE_KWARGS
+DETAIL_IMAGE_PROCESSORS = _settings.DETAIL_IMAGE_PROCESSORS
+PAGINATE_BY = _settings.PAGINATE_BY
+THUMBNAIL_IMAGE_KWARGS = _settings.THUMBNAIL_IMAGE_KWARGS
+THUMBNAIL_IMAGE_PROCESSORS = _settings.THUMBNAIL_IMAGE_PROCESSORS
 
