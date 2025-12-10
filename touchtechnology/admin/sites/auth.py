@@ -1,5 +1,6 @@
 import uuid
 
+from constance import config
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -10,8 +11,6 @@ from django.utils.translation import gettext_lazy as _
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.forms import GroupEditForm, UserEditForm
 from touchtechnology.common.decorators import staff_login_required_m
-
-ANONYMOUS_USER_ID = getattr(settings, "ANONYMOUS_USER_ID", None)
 
 
 class UsersGroups(AdminComponent):
@@ -75,7 +74,7 @@ class UsersGroups(AdminComponent):
 
     @staff_login_required_m
     def list_users(self, request, **extra_context):
-        queryset = self.user_class.objects.exclude(pk=ANONYMOUS_USER_ID).order_by(
+        queryset = self.user_class.objects.exclude(pk=config.ANONYMOUS_USER_ID).order_by(
             *self.user_order_by
         )
         return self.generic_list(

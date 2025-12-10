@@ -2,6 +2,7 @@ import json
 import re
 from datetime import datetime
 
+from constance import config
 from django import forms
 from django.conf import settings
 from django.db.models import Min
@@ -50,7 +51,7 @@ class HTMLField(forms.CharField):
     widget = HTMLWidget
 
     def widget_attrs(self, widget):
-        options = getattr(settings, "FROALA_EDITOR_OPTIONS", {})
+        options = config.FROALA_EDITOR_OPTIONS
         return {"data-options": json.dumps(options)}
 
     def clean(self, value):

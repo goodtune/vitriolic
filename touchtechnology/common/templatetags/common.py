@@ -9,6 +9,7 @@ from importlib import metadata
 from itertools import islice, zip_longest
 from urllib.parse import parse_qsl
 
+from constance import config
 from django.conf import settings
 from django.db.models import Model, Q
 from django.db.models.query import QuerySet
@@ -380,7 +381,7 @@ def field(bf, label=None):
 @register.inclusion_tag("touchtechnology/common/templatetags/analytics.html")
 def analytics(code=None):
     if code is None:
-        code = getattr(settings, "GOOGLE_ANALYTICS", code)
+        code = config.GOOGLE_ANALYTICS
     context = {
         "code": code,
         "debug": not os.environ.get("SITE_ENV", "dev") == "live",
