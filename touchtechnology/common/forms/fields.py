@@ -174,14 +174,22 @@ class TemplatePathFormField(forms.ChoiceField):
         self.match = match
         self.recursive = recursive
         self.empty_label = empty_label
-
-        if self.match is not None:
-            self.match_re = re.compile(self.match)
+        self._match_re = None
 
         if not self.template_base.endswith("/"):
             self.template_base += "/"
 
         self.widget.choices = self.choices
+
+    @property
+    def match_re(self):
+        """Lazy compilation of match regex to handle SimpleLazyObject."""
+        if self._match_re is None and self.match is not None:
+            # Force evaluation of lazy objects
+            match_str = str(self.match) if self.match is not None else None
+            if match_str:
+                self._match_re = re.compile(match_str)
+        return self._match_re
 
     def _get_choices(self):
         return TemplateChoiceIterator(self)
