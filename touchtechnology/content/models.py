@@ -30,9 +30,16 @@ from touchtechnology.content.app_settings import (
 
 logger = logging.getLogger(__name__)
 
-PAGE_CONTENT_CLASS_CHOICES = zip(PAGE_CONTENT_CLASSES, PAGE_CONTENT_CLASSES)
 
-PAGE_CONTENT_CLASS_DEFAULT = first(PAGE_CONTENT_CLASSES)
+def _get_page_content_class_choices():
+    """Lazy function to get PAGE_CONTENT_CLASS_CHOICES."""
+    return list(zip(PAGE_CONTENT_CLASSES, PAGE_CONTENT_CLASSES))
+
+
+def _get_page_content_class_default():
+    """Lazy function to get PAGE_CONTENT_CLASS_DEFAULT."""
+    return first(PAGE_CONTENT_CLASSES)
+
 
 SITE_CACHE_KEY = "_site_cache"
 
@@ -123,8 +130,8 @@ class PageContent(models.Model):
     )
     label = models.SlugField(
         max_length=20,
-        choices=PAGE_CONTENT_CLASS_CHOICES,
-        default=PAGE_CONTENT_CLASS_DEFAULT,
+        choices=_get_page_content_class_choices,
+        default=_get_page_content_class_default,
         verbose_name=_("CSS class"),
     )
     sequence = models.PositiveIntegerField(verbose_name=_("Sequence"))

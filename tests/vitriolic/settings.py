@@ -46,7 +46,6 @@ INSTALLED_APPS = [
     "django.contrib.sites",
     "django.contrib.staticfiles",
     "constance",
-    "constance.backends.database",
     "mptt",
     "cloudinary",
     "guardian",

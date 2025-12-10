@@ -10,7 +10,7 @@ authors = [
 classifiers = []
 requires-python = ">=3.11,<3.15"
 dependencies = [
-    "django-constance[database]>=3.0",
+    "django-constance>=3.0",
     "django-froala-editor>=2.9",
     "django-guardian>=2.4",
     "django-mcp-server>=0.5.5",
