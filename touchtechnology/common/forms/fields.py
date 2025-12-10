@@ -186,9 +186,8 @@ class TemplatePathFormField(forms.ChoiceField):
         """Lazy compilation of match regex to handle SimpleLazyObject."""
         if self._match_re is None and self.match is not None:
             # Force evaluation of lazy objects
-            match_str = str(self.match) if self.match is not None else None
-            if match_str:
-                self._match_re = re.compile(match_str)
+            match_str = str(self.match)
+            self._match_re = re.compile(match_str)
         return self._match_re
 
     def _get_choices(self):

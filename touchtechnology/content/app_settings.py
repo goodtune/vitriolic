@@ -38,6 +38,19 @@ def _get_page_content_classes():
         return getattr(settings, "TOUCHTECHNOLOGY_PAGE_CONTENT_CLASSES", ("copy",))
 
 
+# Cache for project template base to avoid repeated calculation
+_project_template_base_cache = None
+
+
+def _get_project_template_base():
+    """Get the project template base directory."""
+    global _project_template_base_cache
+    if _project_template_base_cache is None:
+        project_template_dirs = first(getattr(settings, "TEMPLATES", ()), {}).get("DIRS", [])
+        _project_template_base_cache = first(project_template_dirs, "templates")
+    return _project_template_base_cache
+
+
 def _get_page_template_base():
     try:
         from constance import config
@@ -46,10 +59,8 @@ def _get_page_template_base():
             return value
     except Exception:
         pass
-    # Get project template dirs for fallback if not configured in constance
-    project_template_dirs = first(getattr(settings, "TEMPLATES", ()), {}).get("DIRS", [])
-    project_template_base = first(project_template_dirs, "templates")
-    return getattr(settings, "TOUCHTECHNOLOGY_PAGE_TEMPLATE_BASE", None) or project_template_base
+    # Use cached project template base as fallback
+    return getattr(settings, "TOUCHTECHNOLOGY_PAGE_TEMPLATE_BASE", None) or _get_project_template_base()
 
 
 def _get_page_template_folder():
