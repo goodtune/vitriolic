@@ -7,6 +7,7 @@ from django import forms
 from django.test.utils import modify_settings, override_settings
 from django.utils import timezone
 from django.utils.encoding import smart_str
+from freezegun import freeze_time
 from test_plus import TestCase
 
 from touchtechnology.common.forms.fields import SelectDateTimeField
@@ -148,6 +149,7 @@ class TimeZoneTests(TestCase):
         # FIXME: would want this to return "Enter a valid time zone."
         self.assertFormError(form, "timestamp", ["This field is required."])
 
+    @freeze_time("2013-03-24 14:30:00")
     @override_settings(TIME_ZONE="Australia/Sydney")
     def test_select_date_time_field_initial_tz(self):
         timestamp = timezone.make_aware(
@@ -160,7 +162,7 @@ class TimeZoneTests(TestCase):
         for needle in [
             '<input type="text" name="timestamp_0" value="2013-03-24" required id="id_timestamp_0">',
             '<input type="text" name="timestamp_1" value="14:30:00" required id="id_timestamp_1">',
-            '<option value="Australia/Sydney" selected>GMT+10:00 Australia/Sydney</option>',
+            '<option value="Australia/Sydney" selected>GMT+11:00 Australia/Sydney</option>',
         ]:
             with self.subTest(needle=needle):
                 self.assertInHTML(needle, haystack)

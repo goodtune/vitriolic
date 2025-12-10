@@ -1,9 +1,11 @@
 from django.test.utils import override_settings
+from freezegun import freeze_time
 from test_plus import TestCase
 
 
 @override_settings(ROOT_URLCONF="example_app.urls")
 class DateTimeFieldTest(TestCase):
+    @freeze_time("2014-07-01")
     def test_validate_form_output_tz(self):
         self.get("datetime:index")
         self.assertResponseContains(
