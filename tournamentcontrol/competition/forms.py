@@ -473,6 +473,8 @@ class CompetitionForm(SuperUserSlugMixin, ModelForm):
             "slug",
             "slug_locked",
             "clubs",
+            "logo_colour",
+            "logo_monochrome",
         )
         labels = {
             "copy": _("Description"),
@@ -503,6 +505,8 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
             "mvp_results_public",
             "slug",
             "slug_locked",
+            "logo_colour",
+            "logo_monochrome",
         )
         labels = {
             "copy": _("Notes (Public)"),
@@ -611,6 +615,8 @@ class DivisionForm(SuperUserSlugMixin, ModelForm):
             "include_forfeits_in_played",
             "slug",
             "slug_locked",
+            "logo_colour",
+            "logo_monochrome",
         )
         labels = {
             "copy": _("Notes (Public)"),
@@ -870,6 +876,8 @@ class TeamForm(SuperUserSlugMixin, ModelForm):
             "timeslots_after",
             "timeslots_before",
             "team_clashes",
+            "logo_colour",
+            "logo_monochrome",
         )
         labels = {
             "title": _("Name"),
