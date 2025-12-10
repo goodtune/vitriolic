@@ -21,10 +21,10 @@ stable as possible for as long as possible.
 
 As of this release, we target and test against:
 - Django 4.2 and 5.2 (LTS releases) with Python 3.11, 3.12, and 3.13
-- Django 5.2 with Python 3.14 (when available)
-- Django 6.0 (pre-release) with Python 3.12, 3.13, and 3.14 (when available)
+- Django 5.2 (latest patch releases) with Python 3.14 (when available)
+- Django 6.0 with Python 3.12, 3.13, and 3.14 (when available)
 
-**Note**: Testing dimensions for Django 6.0 and Python 3.14 are configured but will be skipped if the versions
-are not yet available (`skip_missing_interpreters = true` in tox.ini).
+**Note**: Testing dimensions for Python 3.14 are configured but will be skipped if the version
+is not yet available (`skip_missing_interpreters = true` in tox.ini).
 
 [wiktionary word of the day]: https://en.wiktionary.org/wiki/Wiktionary:Word_of_the_day
