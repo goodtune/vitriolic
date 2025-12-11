@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from django.conf import settings
 from django.core.checks import Error, register
@@ -10,21 +10,20 @@ class ConstanceConfigValue:
     """Represents the value structure in CONSTANCE_CONFIG."""
     default_value: Any
     help_text: str
-    specified_type: Optional[type] = None
+    specified_type: type | None = None
     
     @classmethod
     def from_config(cls, config_tuple):
-        """Create a ConstanceConfigValue from a config tuple."""
-        if not isinstance(config_tuple, (tuple, list)):
-            return None
-        if len(config_tuple) < 2:
-            return None
+        """Create a ConstanceConfigValue from a config tuple.
         
-        default_value = config_tuple[0]
-        help_text = config_tuple[1]
-        specified_type = config_tuple[2] if len(config_tuple) >= 3 else None
-        
-        return cls(default_value, help_text, specified_type)
+        Uses Pythonic approach - try to unpack and handle exceptions.
+        """
+        try:
+            return cls(*config_tuple)
+        except (TypeError, ValueError):
+            # TypeError: not a sequence, or wrong number of arguments
+            # ValueError: can also occur during unpacking
+            return None
 
 
 @dataclass

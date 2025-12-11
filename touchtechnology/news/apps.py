@@ -2,6 +2,11 @@
 
 from django.apps import AppConfig
 
+from constance import config
+from imagekit.models import ImageSpecField
+
+from touchtechnology.news.image_processors import processor_factory
+
 
 class NewsConfig(AppConfig):
     """Registers the News app with the admin interface."""
@@ -11,17 +16,13 @@ class NewsConfig(AppConfig):
 
     def ready(self):
         """Attach News admin components to the global site and initialize image fields."""
+        from touchtechnology.news.models import Article
+
         # Initialize ImageSpecFields after app is ready to avoid accessing
         # constance config during model definition
         # Use a flag to prevent multiple initializations
         if not NewsConfig._imagekit_fields_initialized:
             try:
-                from constance import config
-                from imagekit.models import ImageSpecField
-
-                from touchtechnology.news.image_processors import processor_factory
-                from touchtechnology.news.models import Article
-
                 if Article.thumbnail is None:
                     Article.thumbnail = ImageSpecField(
                         source="image",
