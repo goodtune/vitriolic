@@ -6,6 +6,28 @@ from django.core.checks import Error, register
 
 
 @dataclass
+class ConstanceConfigValue:
+    """Represents the value structure in CONSTANCE_CONFIG."""
+    default_value: Any
+    help_text: str
+    specified_type: Optional[type] = None
+    
+    @classmethod
+    def from_config(cls, config_tuple):
+        """Create a ConstanceConfigValue from a config tuple."""
+        if not isinstance(config_tuple, (tuple, list)):
+            return None
+        if len(config_tuple) < 2:
+            return None
+        
+        default_value = config_tuple[0]
+        help_text = config_tuple[1]
+        specified_type = config_tuple[2] if len(config_tuple) >= 3 else None
+        
+        return cls(default_value, help_text, specified_type)
+
+
+@dataclass
 class RequiredSetting:
     """Represents a required constance setting with validation."""
     name: str
@@ -27,9 +49,10 @@ class RequiredSetting:
             )
             return errors
         
-        # Validate that the configuration is properly structured
-        config_value = constance_config[self.name]
-        if not isinstance(config_value, (tuple, list)) or len(config_value) < 2:
+        # Parse the configuration value
+        config_value = ConstanceConfigValue.from_config(constance_config[self.name])
+        
+        if config_value is None:
             errors.append(
                 Error(
                     f"Setting '{self.name}' in CONSTANCE_CONFIG must be a tuple/list with at least (default_value, help_text).",
@@ -37,10 +60,11 @@ class RequiredSetting:
                     id=self.error_id,
                 )
             )
-        elif len(config_value) >= 3:
-            # If type is specified (3rd element), validate it's a valid type
-            specified_type = config_value[2]
-            if not isinstance(specified_type, type):
+            return errors
+        
+        # Validate type specification if present
+        if config_value.specified_type is not None:
+            if not isinstance(config_value.specified_type, type):
                 errors.append(
                     Error(
                         f"Setting '{self.name}' in CONSTANCE_CONFIG has invalid type specification.",
@@ -48,11 +72,10 @@ class RequiredSetting:
                         id=self.error_id,
                     )
                 )
-            # Validate that the specified type matches the expected type
-            elif specified_type != self.expected_type:
+            elif config_value.specified_type != self.expected_type:
                 errors.append(
                     Error(
-                        f"Setting '{self.name}' has incorrect type in CONSTANCE_CONFIG. Expected {self.expected_type.__name__}, got {specified_type.__name__}.",
+                        f"Setting '{self.name}' has incorrect type in CONSTANCE_CONFIG. Expected {self.expected_type.__name__}, got {config_value.specified_type.__name__}.",
                         hint=f"Change the type specification to {self.expected_type.__name__} in CONSTANCE_CONFIG.",
                         id=self.error_id,
                     )
