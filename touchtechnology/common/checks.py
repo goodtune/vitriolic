@@ -33,9 +33,26 @@ class RequiredSetting:
     error_id: str
     expected_type: type
     
-    def validate(self) -> list:
-        """Validate this setting in the constance config."""
+    def validate(self, constance_config_exists: bool = True) -> list:
+        """Validate this setting in the constance config.
+        
+        Args:
+            constance_config_exists: Whether CONSTANCE_CONFIG exists in settings.
+                If False, will report that the setting is missing.
+        """
         errors = []
+        
+        # If CONSTANCE_CONFIG doesn't exist, explicitly report this setting is missing
+        if not constance_config_exists:
+            errors.append(
+                Error(
+                    f"'{self.name}' must be defined in CONSTANCE_CONFIG (CONSTANCE_CONFIG is not defined)",
+                    hint=f"Add CONSTANCE_CONFIG dictionary with '{self.name}' to your settings file.",
+                    id=self.error_id,
+                )
+            )
+            return errors
+        
         constance_config = settings.CONSTANCE_CONFIG
         
         if self.name not in constance_config:
@@ -61,24 +78,32 @@ class RequiredSetting:
             )
             return errors
         
-        # Validate type specification if present
-        if config_value.specified_type is not None:
-            if not isinstance(config_value.specified_type, type):
-                errors.append(
-                    Error(
-                        f"Setting '{self.name}' in CONSTANCE_CONFIG has invalid type specification.",
-                        hint=f"The third element should be a Python type like str, int, bool, etc.",
-                        id=self.error_id,
-                    )
+        # Validate type specification
+        # Django-constance defaults to str if type is not specified, but we require explicit types
+        if config_value.specified_type is None:
+            errors.append(
+                Error(
+                    f"Setting '{self.name}' in CONSTANCE_CONFIG is missing type specification.",
+                    hint=f"Add type as third element: '{self.name}': (default_value, 'help text', {self.expected_type.__name__})",
+                    id=self.error_id,
                 )
-            elif config_value.specified_type != self.expected_type:
-                errors.append(
-                    Error(
-                        f"Setting '{self.name}' has incorrect type in CONSTANCE_CONFIG. Expected {self.expected_type.__name__}, got {config_value.specified_type.__name__}.",
-                        hint=f"Change the type specification to {self.expected_type.__name__} in CONSTANCE_CONFIG.",
-                        id=self.error_id,
-                    )
+            )
+        elif not isinstance(config_value.specified_type, type):
+            errors.append(
+                Error(
+                    f"Setting '{self.name}' in CONSTANCE_CONFIG has invalid type specification.",
+                    hint=f"The third element should be a Python type like str, int, bool, etc.",
+                    id=self.error_id,
                 )
+            )
+        elif config_value.specified_type != self.expected_type:
+            errors.append(
+                Error(
+                    f"Setting '{self.name}' has incorrect type in CONSTANCE_CONFIG. Expected {self.expected_type.__name__}, got {config_value.specified_type.__name__}.",
+                    hint=f"Change the type specification to {self.expected_type.__name__} in CONSTANCE_CONFIG.",
+                    id=self.error_id,
+                )
+            )
         
         return errors
 
@@ -120,7 +145,9 @@ def check_constance_installed(app_configs, **kwargs):
         )
 
     # Check if CONSTANCE_CONFIG is defined
-    if not hasattr(settings, "CONSTANCE_CONFIG"):
+    constance_config_exists = hasattr(settings, "CONSTANCE_CONFIG")
+    
+    if not constance_config_exists:
         errors.append(
             Error(
                 "CONSTANCE_CONFIG must be defined in settings",
@@ -128,8 +155,6 @@ def check_constance_installed(app_configs, **kwargs):
                 id="touchtechnology.common.E003",
             )
         )
-        # Early return: can't validate individual settings without CONSTANCE_CONFIG
-        return errors
 
     # Define required constance settings with their error IDs and expected types
     required_settings = [
@@ -173,8 +198,10 @@ def check_constance_installed(app_configs, **kwargs):
         RequiredSetting("ANONYMOUS_USER_ID", "touchtechnology.common.E035", int),
     ]
 
+    # Explicitly validate all required settings, even if CONSTANCE_CONFIG is missing
+    # This follows "explicit is better than implicit" - show all errors at once
     for required_setting in required_settings:
-        errors.extend(required_setting.validate())
+        errors.extend(required_setting.validate(constance_config_exists))
 
     return errors
 
