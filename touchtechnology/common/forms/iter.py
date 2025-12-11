@@ -6,15 +6,17 @@ class TemplateChoiceIterator(object):
         self.field = field
 
     def __iter__(self):
-        # Force evaluation of SimpleLazyObjects by converting to str
-        folder = os.path.join(str(self.field.template_base), str(self.field.template_folder))
+        # Evaluate SimpleLazyObjects once at start to prevent changes during iteration
+        template_base = str(self.field.template_base)
+        template_folder = str(self.field.template_folder)
+        folder = os.path.join(template_base, template_folder)
         choices = []
         if self.field.recursive:
             for root, dirs, files in os.walk(folder):
                 for f in files:
                     if self.field.match is None or self.field.match_re.search(f):
                         f = os.path.join(root, f)
-                        base = f.replace(str(self.field.template_base), "")
+                        base = f.replace(template_base, "")
                         choices.append((base, f.replace(folder, "", 1)))
         else:
             try:

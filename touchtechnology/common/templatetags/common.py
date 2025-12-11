@@ -36,7 +36,6 @@ from django.utils.text import slugify
 from guardian.core import ObjectPermissionChecker
 from namedentities import named_entities
 
-from touchtechnology.common.default_settings import CURRENCY_SYMBOL
 from touchtechnology.common.exceptions import NotModelManager
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.utils import (
@@ -380,10 +379,8 @@ def field(bf, label=None):
 
 @register.inclusion_tag("touchtechnology/common/templatetags/analytics.html")
 def analytics(code=None):
-    if code is None:
-        code = config.GOOGLE_ANALYTICS
     context = {
-        "code": code,
+        "code": code or config.GOOGLE_ANALYTICS,
         "debug": not os.environ.get("SITE_ENV", "dev") == "live",
     }
     return context
@@ -438,7 +435,7 @@ def absolute_value(value):
 @register.inclusion_tag("touchtechnology/common/templatetags/price.html")
 def price(value, extra=""):
     context = {
-        "SYMBOL": CURRENCY_SYMBOL,
+        "SYMBOL": config.TOUCHTECHNOLOGY_CURRENCY_SYMBOL,
         "AMOUNT": value or Decimal("0.00"),
         "EXTRA": extra,
     }

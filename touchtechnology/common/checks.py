@@ -101,6 +101,28 @@ def check_constance_installed(app_configs, **kwargs):
                     id=error_id,
                 )
             )
+        else:
+            # Validate that the configuration is properly structured
+            config_value = constance_config[setting_name]
+            if not isinstance(config_value, (tuple, list)) or len(config_value) < 2:
+                errors.append(
+                    Error(
+                        f"Setting '{setting_name}' in CONSTANCE_CONFIG must be a tuple/list with at least (default_value, help_text).",
+                        hint=f"Format: '{setting_name}': (default_value, 'help text') or (default_value, 'help text', type)",
+                        id=error_id,
+                    )
+                )
+            elif len(config_value) >= 3:
+                # If type is specified (3rd element), validate it's a valid type
+                specified_type = config_value[2]
+                if not isinstance(specified_type, type):
+                    errors.append(
+                        Error(
+                            f"Setting '{setting_name}' in CONSTANCE_CONFIG has invalid type specification.",
+                            hint=f"The third element should be a Python type like str, int, bool, etc.",
+                            id=error_id,
+                        )
+                    )
 
     return errors
 
