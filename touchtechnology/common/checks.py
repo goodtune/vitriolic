@@ -10,10 +10,12 @@ class RequiredSetting:
     """Represents a required constance setting with validation."""
     name: str
     error_id: str
+    expected_type: type
     
-    def validate(self, constance_config: dict) -> list:
+    def validate(self) -> list:
         """Validate this setting in the constance config."""
         errors = []
+        constance_config = settings.CONSTANCE_CONFIG
         
         if self.name not in constance_config:
             errors.append(
@@ -43,6 +45,15 @@ class RequiredSetting:
                     Error(
                         f"Setting '{self.name}' in CONSTANCE_CONFIG has invalid type specification.",
                         hint=f"The third element should be a Python type like str, int, bool, etc.",
+                        id=self.error_id,
+                    )
+                )
+            # Validate that the specified type matches the expected type
+            elif specified_type != self.expected_type:
+                errors.append(
+                    Error(
+                        f"Setting '{self.name}' has incorrect type in CONSTANCE_CONFIG. Expected {self.expected_type.__name__}, got {specified_type.__name__}.",
+                        hint=f"Change the type specification to {self.expected_type.__name__} in CONSTANCE_CONFIG.",
                         id=self.error_id,
                     )
                 )
@@ -98,51 +109,50 @@ def check_constance_installed(app_configs, **kwargs):
         # Early return: can't validate individual settings without CONSTANCE_CONFIG
         return errors
 
-    # Define required constance settings with their error IDs
+    # Define required constance settings with their error IDs and expected types
     required_settings = [
         # Prince PDF Generation
-        RequiredSetting("PRINCE_SERVER", "touchtechnology.common.E004"),
-        RequiredSetting("PRINCE_BINARY", "touchtechnology.common.E005"),
-        RequiredSetting("PRINCE_BASE_URL", "touchtechnology.common.E006"),
+        RequiredSetting("PRINCE_SERVER", "touchtechnology.common.E004", str),
+        RequiredSetting("PRINCE_BINARY", "touchtechnology.common.E005", str),
+        RequiredSetting("PRINCE_BASE_URL", "touchtechnology.common.E006", str),
         # Touch Technology Common
-        RequiredSetting("TOUCHTECHNOLOGY_APP_ROUTING", "touchtechnology.common.E007"),
-        RequiredSetting("TOUCHTECHNOLOGY_CURRENCY_ABBREVIATION", "touchtechnology.common.E008"),
-        RequiredSetting("TOUCHTECHNOLOGY_CURRENCY_SYMBOL", "touchtechnology.common.E009"),
-        RequiredSetting("TOUCHTECHNOLOGY_PAGINATE_BY", "touchtechnology.common.E010"),
-        RequiredSetting("TOUCHTECHNOLOGY_PROFILE_FORM_CLASS", "touchtechnology.common.E011"),
-        RequiredSetting("TOUCHTECHNOLOGY_SITEMAP_CACHE_DURATION", "touchtechnology.common.E012"),
-        RequiredSetting("TOUCHTECHNOLOGY_SITEMAP_EDIT_PARENT", "touchtechnology.common.E013"),
-        RequiredSetting("TOUCHTECHNOLOGY_SITEMAP_HTTPS_OPTION", "touchtechnology.common.E014"),
-        RequiredSetting("TOUCHTECHNOLOGY_SITEMAP_ROOT", "touchtechnology.common.E015"),
-        RequiredSetting("TOUCHTECHNOLOGY_STORAGE_FOLDER", "touchtechnology.common.E016"),
-        RequiredSetting("TOUCHTECHNOLOGY_STORAGE_URL", "touchtechnology.common.E017"),
+        RequiredSetting("TOUCHTECHNOLOGY_APP_ROUTING", "touchtechnology.common.E007", tuple),
+        RequiredSetting("TOUCHTECHNOLOGY_CURRENCY_ABBREVIATION", "touchtechnology.common.E008", str),
+        RequiredSetting("TOUCHTECHNOLOGY_CURRENCY_SYMBOL", "touchtechnology.common.E009", str),
+        RequiredSetting("TOUCHTECHNOLOGY_PAGINATE_BY", "touchtechnology.common.E010", int),
+        RequiredSetting("TOUCHTECHNOLOGY_PROFILE_FORM_CLASS", "touchtechnology.common.E011", str),
+        RequiredSetting("TOUCHTECHNOLOGY_SITEMAP_CACHE_DURATION", "touchtechnology.common.E012", int),
+        RequiredSetting("TOUCHTECHNOLOGY_SITEMAP_EDIT_PARENT", "touchtechnology.common.E013", bool),
+        RequiredSetting("TOUCHTECHNOLOGY_SITEMAP_HTTPS_OPTION", "touchtechnology.common.E014", bool),
+        RequiredSetting("TOUCHTECHNOLOGY_SITEMAP_ROOT", "touchtechnology.common.E015", str),
+        RequiredSetting("TOUCHTECHNOLOGY_STORAGE_FOLDER", "touchtechnology.common.E016", str),
+        RequiredSetting("TOUCHTECHNOLOGY_STORAGE_URL", "touchtechnology.common.E017", str),
         # Touch Technology Content
-        RequiredSetting("TOUCHTECHNOLOGY_NODE_CACHE", "touchtechnology.common.E018"),
-        RequiredSetting("TOUCHTECHNOLOGY_PAGE_CONTENT_BLOCKS", "touchtechnology.common.E019"),
-        RequiredSetting("TOUCHTECHNOLOGY_PAGE_CONTENT_CLASSES", "touchtechnology.common.E020"),
-        RequiredSetting("TOUCHTECHNOLOGY_PAGE_TEMPLATE_BASE", "touchtechnology.common.E021"),
-        RequiredSetting("TOUCHTECHNOLOGY_PAGE_TEMPLATE_FOLDER", "touchtechnology.common.E022"),
-        RequiredSetting("TOUCHTECHNOLOGY_PAGE_TEMPLATE_REGEX", "touchtechnology.common.E023"),
-        RequiredSetting("TOUCHTECHNOLOGY_TENANT_MEDIA_PUBLIC", "touchtechnology.common.E024"),
+        RequiredSetting("TOUCHTECHNOLOGY_NODE_CACHE", "touchtechnology.common.E018", str),
+        RequiredSetting("TOUCHTECHNOLOGY_PAGE_CONTENT_BLOCKS", "touchtechnology.common.E019", int),
+        RequiredSetting("TOUCHTECHNOLOGY_PAGE_CONTENT_CLASSES", "touchtechnology.common.E020", tuple),
+        RequiredSetting("TOUCHTECHNOLOGY_PAGE_TEMPLATE_BASE", "touchtechnology.common.E021", str),
+        RequiredSetting("TOUCHTECHNOLOGY_PAGE_TEMPLATE_FOLDER", "touchtechnology.common.E022", str),
+        RequiredSetting("TOUCHTECHNOLOGY_PAGE_TEMPLATE_REGEX", "touchtechnology.common.E023", str),
+        RequiredSetting("TOUCHTECHNOLOGY_TENANT_MEDIA_PUBLIC", "touchtechnology.common.E024", bool),
         # Touch Technology News
-        RequiredSetting("TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_KWARGS", "touchtechnology.common.E025"),
-        RequiredSetting("TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_PROCESSORS", "touchtechnology.common.E026"),
-        RequiredSetting("TOUCHTECHNOLOGY_NEWS_PAGINATE_BY", "touchtechnology.common.E027"),
-        RequiredSetting("TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_KWARGS", "touchtechnology.common.E028"),
-        RequiredSetting("TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_PROCESSORS", "touchtechnology.common.E029"),
+        RequiredSetting("TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_KWARGS", "touchtechnology.common.E025", dict),
+        RequiredSetting("TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_PROCESSORS", "touchtechnology.common.E026", tuple),
+        RequiredSetting("TOUCHTECHNOLOGY_NEWS_PAGINATE_BY", "touchtechnology.common.E027", int),
+        RequiredSetting("TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_KWARGS", "touchtechnology.common.E028", dict),
+        RequiredSetting("TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_PROCESSORS", "touchtechnology.common.E029", tuple),
         # Tournament Control Competition
-        RequiredSetting("TOURNAMENTCONTROL_COMPETITION_VIDEOS_ARRAY_SIZE", "touchtechnology.common.E030"),
-        RequiredSetting("TOURNAMENTCONTROL_SCORECARD_PDF_WAIT", "touchtechnology.common.E031"),
-        RequiredSetting("TOURNAMENTCONTROL_ASYNC_PDF_GRID", "touchtechnology.common.E032"),
+        RequiredSetting("TOURNAMENTCONTROL_COMPETITION_VIDEOS_ARRAY_SIZE", "touchtechnology.common.E030", int),
+        RequiredSetting("TOURNAMENTCONTROL_SCORECARD_PDF_WAIT", "touchtechnology.common.E031", int),
+        RequiredSetting("TOURNAMENTCONTROL_ASYNC_PDF_GRID", "touchtechnology.common.E032", bool),
         # Other
-        RequiredSetting("FROALA_EDITOR_OPTIONS", "touchtechnology.common.E033"),
-        RequiredSetting("GOOGLE_ANALYTICS", "touchtechnology.common.E034"),
-        RequiredSetting("ANONYMOUS_USER_ID", "touchtechnology.common.E035"),
+        RequiredSetting("FROALA_EDITOR_OPTIONS", "touchtechnology.common.E033", dict),
+        RequiredSetting("GOOGLE_ANALYTICS", "touchtechnology.common.E034", str),
+        RequiredSetting("ANONYMOUS_USER_ID", "touchtechnology.common.E035", int),
     ]
 
-    constance_config = getattr(settings, "CONSTANCE_CONFIG", {})
     for required_setting in required_settings:
-        errors.extend(required_setting.validate(constance_config))
+        errors.extend(required_setting.validate())
 
     return errors
 
