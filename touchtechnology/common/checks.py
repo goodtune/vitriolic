@@ -88,18 +88,16 @@ class RequiredSetting:
                     id=self.error_id,
                 )
             )
-        elif not isinstance(config_value.specified_type, type):
-            errors.append(
-                Error(
-                    f"Setting '{self.name}' in CONSTANCE_CONFIG has invalid type specification.",
-                    hint=f"The third element should be a Python type like str, int, bool, etc.",
-                    id=self.error_id,
-                )
-            )
         elif config_value.specified_type != self.expected_type:
+            # Get a string representation of the actual type, handling cases where it's not a type object
+            if isinstance(config_value.specified_type, type):
+                actual_type_str = config_value.specified_type.__name__
+            else:
+                actual_type_str = repr(config_value.specified_type)
+            
             errors.append(
                 Error(
-                    f"Setting '{self.name}' has incorrect type in CONSTANCE_CONFIG. Expected {self.expected_type.__name__}, got {config_value.specified_type.__name__}.",
+                    f"Setting '{self.name}' has incorrect type in CONSTANCE_CONFIG. Expected {self.expected_type.__name__}, got {actual_type_str}.",
                     hint=f"Change the type specification to {self.expected_type.__name__} in CONSTANCE_CONFIG.",
                     id=self.error_id,
                 )
