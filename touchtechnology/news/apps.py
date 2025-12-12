@@ -2,7 +2,6 @@
 
 from django.apps import AppConfig
 
-from constance import config
 from imagekit.models import ImageSpecField
 
 from touchtechnology.news.image_processors import processor_factory
@@ -16,6 +15,7 @@ class NewsConfig(AppConfig):
 
     def ready(self):
         """Attach News admin components to the global site and initialize image fields."""
+        from constance import config
         from touchtechnology.news.models import Article
 
         # Initialize ImageSpecFields after app is ready to avoid accessing

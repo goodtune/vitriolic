@@ -1,6 +1,5 @@
 import os.path
 
-from constance import config
 from django import forms
 from django.contrib.contenttypes.models import ContentType
 from django.core.files.storage import default_storage
@@ -108,6 +107,7 @@ class ParentChildModelForm(BootstrapFormControlMixin, ModelForm):
 
 class BaseSitemapNodeForm(SuperUserSlugMixin, ModelForm):
     def __init__(self, *args, **kwargs):
+        from constance import config
         super(BaseSitemapNodeForm, self).__init__(*args, **kwargs)
         if not self.instance.level and self.instance.slug == config.TOUCHTECHNOLOGY_SITEMAP_ROOT:
             self.fields.pop("slug", None)
@@ -139,6 +139,7 @@ class NewSitemapNodeForm(BaseSitemapNodeForm):
 
 class SitemapNodeForm(BaseSitemapNodeForm):
     def __init__(self, *args, **kwargs):
+        from constance import config
         super(SitemapNodeForm, self).__init__(*args, **kwargs)
         if not config.TOUCHTECHNOLOGY_SITEMAP_EDIT_PARENT and self.instance.pk:
             self.fields.pop("parent", None)
@@ -225,6 +226,7 @@ class PageContentFormset(BasePageContentFormset):
         super(PageContentFormset, self).__init__(instance=instance, *args, **kwargs)
 
     def total_form_count(self):
+        from constance import config
         if isinstance(config.TOUCHTECHNOLOGY_PAGE_CONTENT_BLOCKS, str):
             # We may want to overload this by tenant.
             callback = import_string(config.TOUCHTECHNOLOGY_PAGE_CONTENT_BLOCKS)
