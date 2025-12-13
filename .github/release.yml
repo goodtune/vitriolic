@@ -25,3 +25,6 @@ changelog:
     - title: ":wrench: Dependencies"
       labels:
         - dependencies
+  exclude:
+    labels:
+      - chore
