@@ -10,6 +10,7 @@ changelog:
           - maintenance
           - performance
           - removed
+          - chore
     - title: ":rocket: Performance"
       labels:
         - performance
@@ -25,3 +26,6 @@ changelog:
     - title: ":wrench: Dependencies"
       labels:
         - dependencies
+  exclude:
+    labels:
+      - chore
