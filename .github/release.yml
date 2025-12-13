@@ -10,7 +10,6 @@ changelog:
           - maintenance
           - performance
           - removed
-          - chore
     - title: ":rocket: Performance"
       labels:
         - performance
