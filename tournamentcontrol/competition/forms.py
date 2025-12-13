@@ -5,6 +5,7 @@ import logging
 import warnings
 
 import magic
+from constance import config
 from dateutil.parser import parse
 from dateutil.rrule import DAILY, WEEKLY
 from django import forms
@@ -994,7 +995,12 @@ def _match_edit_form_formfield_callback(field, **kwargs):
     `settings.TOURNAMENTCONTROL_COMPETITION_VIDEOS_ARRAY_SIZE` (default is 5)
     """
     if isinstance(field, ArrayField):
-        size = getattr(settings, "TOURNAMENTCONTROL_COMPETITION_VIDEOS_ARRAY_SIZE", 5)
+        from django.db.utils import ProgrammingError
+        try:
+            size = config.TOURNAMENTCONTROL_COMPETITION_VIDEOS_ARRAY_SIZE
+        except (ProgrammingError, Exception):
+            # If constance database table doesn't exist yet (during migrations), use default
+            size = 5
         formfield = PGA.SplitArrayField(
             URLField(required=False),
             size,

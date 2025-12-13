@@ -5,17 +5,9 @@ from django.db.models import DateTimeField, ManyToManyField
 from django.template.defaultfilters import slugify
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from imagekit.models import ImageSpecField
 
 from touchtechnology.admin.mixins import AdminUrlMixin
 from touchtechnology.common.db.models import BooleanField, HTMLField
-from touchtechnology.news.app_settings import (
-    DETAIL_IMAGE_KWARGS,
-    DETAIL_IMAGE_PROCESSORS,
-    THUMBNAIL_IMAGE_KWARGS,
-    THUMBNAIL_IMAGE_PROCESSORS,
-)
-from touchtechnology.news.image_processors import processor_factory
 from touchtechnology.news.query import ArticleQuerySet, CategoryQuerySet
 
 
@@ -58,17 +50,10 @@ class Article(AdminUrlModel):
 
     copy = HTMLField(_("Copy"), blank=True)
 
-    # image and imagekit spec files
-    thumbnail = ImageSpecField(
-        source="image",
-        processors=processor_factory(THUMBNAIL_IMAGE_PROCESSORS),
-        **THUMBNAIL_IMAGE_KWARGS,
-    )
-    detail_image = ImageSpecField(
-        source="image",
-        processors=processor_factory(DETAIL_IMAGE_PROCESSORS),
-        **DETAIL_IMAGE_KWARGS,
-    )
+    # Note: image and imagekit spec files are defined in ready() to avoid
+    # accessing config during model definition
+    thumbnail = None
+    detail_image = None
 
     last_modified = DateTimeField(auto_now=True)
 
