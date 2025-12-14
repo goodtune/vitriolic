@@ -9,7 +9,6 @@ from constance import config
 from dateutil.parser import parse
 from dateutil.rrule import DAILY, WEEKLY
 from django import forms
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.forms import array as PGA
@@ -39,17 +38,15 @@ from googleapiclient.errors import HttpError
 from modelforms.forms import ModelForm
 from pyparsing import ParseException
 
-from touchtechnology.common.forms.fields import (
+from touchtechnology.common.fields import (
     ModelChoiceField,
     ModelMultipleChoiceField,
+    SelectDateTimeWidget as SelectDateTimeWidgetBase,
 )
 from touchtechnology.common.forms.mixins import (
     BootstrapFormControlMixin,
     SuperUserSlugMixin,
     UserMixin,
-)
-from touchtechnology.common.forms.widgets import (
-    SelectDateTimeWidget as SelectDateTimeWidgetBase,
 )
 from touchtechnology.content.forms import PlaceholderConfigurationBase
 from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
@@ -93,7 +90,6 @@ from tournamentcontrol.competition.models import (
 from tournamentcontrol.competition.signals.custom import score_updated
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
-    ThumbnailPreview,
     create_thumbnail_preview,
     legitimate_bye_match,
     match_unplayed,
@@ -104,61 +100,6 @@ logger = logging.getLogger(__name__)
 
 EMPTY = [("", "---")]
 SCORE_FIELDS = set(["home_team_score", "away_team_score"])
-
-valid_ladder_identifiers = collections.OrderedDict(
-    (
-        ("win", "Win"),
-        ("draw", "Draw"),
-        ("loss", "Loss"),
-        ("bye", "Bye"),
-        ("forfeit_for", "Win by forfeit"),
-        ("forfeit_against", "Loss by forfeit"),
-        # Other potential identifiers, but they don't really make sense as
-        # variables for use in generating a ladder formula.
-        #
-        # 'score_for', 'score_against', 'played'
-    )
-)
-
-
-def ladder_points_widget(name, **attrs):
-    defaults = {"placeholder": valid_ladder_identifiers[name].lower()}
-    defaults.update(attrs)
-    return forms.TextInput(attrs=defaults)
-
-
-class LadderPointsWidget(forms.MultiWidget):
-    def __init__(self, attrs=None):
-        self.attrs = attrs or {}
-
-        widgets = tuple(
-            [ladder_points_widget(n, **self.attrs) for n in valid_ladder_identifiers]
-        )
-        super().__init__(widgets, attrs)
-
-    def decompress(self, value):
-        if not value:
-            return ""
-        values = []
-        for i in valid_ladder_identifiers:
-            ladder_entry = LadderEntry(**{i: 1})
-            calc = Calculator(ladder_entry)
-            calc.parse(value)
-            values.append(calc.evaluate() or None)
-        return values
-
-    def format_output(self, rendered_widgets):
-        output = ""
-        for label, widget in zip(valid_ladder_identifiers.values(), rendered_widgets):
-            output += f"""
-                <div class="field_wrapper">
-                    <label class="field_name">{label}</label>
-                    <div class="field text_input short">
-                        {widget}
-                    </div>
-                </div>
-            """
-        return output
 
 
 class MatchPlayedWidget(forms.widgets.Select):
@@ -178,26 +119,6 @@ class MatchPlayedWidget(forms.widgets.Select):
         return {"1": 1, "0": 0, True: 1, False: 0, "True": 1, "False": 0}.get(
             value, None
         )
-
-
-class LadderPointsField(forms.MultiValueField):
-    def __init__(self, max_length=None, *args, **kwargs):
-        fields = tuple(
-            map(
-                lambda field: forms.IntegerField(required=False, initial=0),
-                valid_ladder_identifiers,
-            )
-        )
-        kwargs["widget"] = LadderPointsWidget()
-        super().__init__(fields, *args, **kwargs)
-
-    def compress(self, data_list):
-        parts = [
-            "{}*{}".format(*each)
-            for each in zip(data_list, valid_ladder_identifiers)
-            if each[0]
-        ]
-        return " + ".join(parts)
 
 
 class SelectDateTimeWidget(SelectDateTimeWidgetBase):
@@ -1036,9 +957,9 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
 
         # restrict the list of referees to those registered this season
         if "referees" in self.fields:
-            self.fields["referees"].queryset = (
-                self.instance.stage.division.season.referees.all()
-            )
+            self.fields[
+                "referees"
+            ].queryset = self.instance.stage.division.season.referees.all()
 
         # remove `stage_group` field if the `division` has no children
         if not self.instance.stage.pools.count():
@@ -2229,10 +2150,14 @@ class StreamControlForm(forms.Form):
                     try:
                         # Re-attempt without catching warnings
                         match.transition_live_stream(broadcast_status, youtube)
-                        messages.success(request, f"{match}: broadcast is {broadcast_status!r}")
+                        messages.success(
+                            request, f"{match}: broadcast is {broadcast_status!r}"
+                        )
                         # Display any warnings as info messages
                         for warning in w:
-                            if issubclass(warning.category, LiveStreamTransitionWarning):
+                            if issubclass(
+                                warning.category, LiveStreamTransitionWarning
+                            ):
                                 messages.info(request, f"{match}: {warning.message}")
                     except Exception as final_exc:
                         messages.error(request, f"{match}: {final_exc}")

@@ -27,6 +27,7 @@ dynamic = ["version"]
 [dependency-groups]
 dev = [
     "black>=25.1.0",
+    "import-linter>=2.9",
     "isort>=6.0.1",
     "ruff>=0.12.8",
 ]
@@ -109,3 +110,48 @@ line-length = 88
 
 [tool.uv]
 prerelease = "if-necessary-or-explicit"
+
+[tool.importlinter]
+root_package = "touchtechnology"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Baseline sanity check"
+type = "forbidden"
+source_modules = ["touchtechnology", "tournamentcontrol"]
+forbidden_modules = ["psycopg"]
+
+[[tool.importlinter.contracts]]
+name = "tournamentcontrol models must not import higher layers"
+type = "forbidden"
+source_modules = [
+  "tournamentcontrol.**.models",
+]
+forbidden_modules = [
+  "tournamentcontrol.**.admin",
+  "tournamentcontrol.**.forms",
+  "tournamentcontrol.**.views",
+  "tournamentcontrol.**.serializers",
+  "tournamentcontrol.**.tasks",
+  "tournamentcontrol.**.signals",
+  "tournamentcontrol.**.api",
+  "tournamentcontrol.**.management",
+]
+
+[[tool.importlinter.contracts]]
+name = "touchtechnology models must not import higher layers"
+type = "forbidden"
+source_modules = [
+  "touchtechnology.**.models",
+  "touchtechnology.**.db.models",
+]
+forbidden_modules = [
+  "touchtechnology.**.admin",
+  "touchtechnology.**.forms",
+  "touchtechnology.**.views",
+  "touchtechnology.**.serializers",
+  "touchtechnology.**.tasks",
+  "touchtechnology.**.signals",
+  "touchtechnology.**.api",
+  "touchtechnology.**.management",
+]

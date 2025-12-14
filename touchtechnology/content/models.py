@@ -17,7 +17,7 @@ from django.utils.translation import gettext, gettext_lazy as _
 from first import first
 
 from touchtechnology.admin.mixins import AdminUrlMixin
-from touchtechnology.common.db.models import (
+from touchtechnology.common.fields import (
     BooleanField,
     HTMLField,
     TemplatePathField,
@@ -63,7 +63,9 @@ class Page(models.Model):
 
     def _get_template_base():
         # Calculate default if not set in constance
-        project_template_dirs = first(getattr(settings, "TEMPLATES", ()), {}).get("DIRS", [])
+        project_template_dirs = first(getattr(settings, "TEMPLATES", ()), {}).get(
+            "DIRS", []
+        )
         project_template_base = first(project_template_dirs, "templates")
         return config.TOUCHTECHNOLOGY_PAGE_TEMPLATE_BASE or project_template_base
 
@@ -95,8 +97,7 @@ class Page(models.Model):
         blank=True,
         verbose_name=_("Description"),
         help_text=_(
-            "Search Engines may use this when determining the "
-            "relevance of your page."
+            "Search Engines may use this when determining the relevance of your page."
         ),
     )
 
