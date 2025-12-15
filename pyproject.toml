@@ -55,7 +55,6 @@ common = []
 content = []
 news = [
     "babel",
-    "django-imagekit",
     "python-dateutil",
     "python-magic",
 ]

@@ -50,11 +50,6 @@ class Article(AdminUrlModel):
 
     copy = HTMLField(_("Copy"), blank=True)
 
-    # Note: image and imagekit spec files are defined in ready() to avoid
-    # accessing config during model definition
-    thumbnail = None
-    detail_image = None
-
     last_modified = DateTimeField(auto_now=True)
 
     objects = ArticleQuerySet.as_manager()
