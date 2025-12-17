@@ -2475,6 +2475,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 "status",
                 "slug",
                 "slug_locked",
+                "logo_colour",
+                "logo_monochrome",
             ),
             related=(
                 "members",
