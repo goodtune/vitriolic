@@ -5,7 +5,7 @@ Tests for logo field validation on Competition, Club, Season, Division, and Team
 import io
 
 from django.core.exceptions import ValidationError
-from django.core.files.storage import InMemoryStorage
+from django.core.files.storage import InMemoryStorage, default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test.utils import override_settings
 from PIL import Image
@@ -99,10 +99,10 @@ class LogoFieldTestCase(TestCase):
         args = self.competition._get_url_args()
         
         with self.login(self.superuser):
-            response = self.get(f"{namespace}:edit", *args)
+            self.get(f"{namespace}:edit", *args)
             self.response_200()
-            self.assertResponseContains('name="logo_colour"', html=False)
-            self.assertResponseContains('name="logo_monochrome"', html=False)
+            self.assertResponseContains('<label for="logo_colour"')
+            self.assertResponseContains('<label for="logo_monochrome"')
 
     def test_club_logo_via_admin(self):
         """Test that Club edit view includes logo fields."""
@@ -110,10 +110,10 @@ class LogoFieldTestCase(TestCase):
         args = self.club._get_url_args()
         
         with self.login(self.superuser):
-            response = self.get(f"{namespace}:edit", *args)
+            self.get(f"{namespace}:edit", *args)
             self.response_200()
-            self.assertResponseContains('name="logo_colour"', html=False)
-            self.assertResponseContains('name="logo_monochrome"', html=False)
+            self.assertResponseContains('<label for="logo_colour"')
+            self.assertResponseContains('<label for="logo_monochrome"')
 
     def test_season_logo_via_admin(self):
         """Test that Season edit view includes logo fields."""
@@ -121,10 +121,10 @@ class LogoFieldTestCase(TestCase):
         args = self.season._get_url_args()
         
         with self.login(self.superuser):
-            response = self.get(f"{namespace}:edit", *args)
+            self.get(f"{namespace}:edit", *args)
             self.response_200()
-            self.assertResponseContains('name="logo_colour"', html=False)
-            self.assertResponseContains('name="logo_monochrome"', html=False)
+            self.assertResponseContains('<label for="logo_colour"')
+            self.assertResponseContains('<label for="logo_monochrome"')
 
     def test_division_logo_via_admin(self):
         """Test that Division edit view includes logo fields."""
@@ -132,10 +132,10 @@ class LogoFieldTestCase(TestCase):
         args = self.division._get_url_args()
         
         with self.login(self.superuser):
-            response = self.get(f"{namespace}:edit", *args)
+            self.get(f"{namespace}:edit", *args)
             self.response_200()
-            self.assertResponseContains('name="logo_colour"', html=False)
-            self.assertResponseContains('name="logo_monochrome"', html=False)
+            self.assertResponseContains('<label for="logo_colour"')
+            self.assertResponseContains('<label for="logo_monochrome"')
 
     def test_team_logo_via_admin(self):
         """Test that Team edit view includes logo fields."""
@@ -143,16 +143,14 @@ class LogoFieldTestCase(TestCase):
         args = self.team._get_url_args()
         
         with self.login(self.superuser):
-            response = self.get(f"{namespace}:edit", *args)
+            self.get(f"{namespace}:edit", *args)
             self.response_200()
-            self.assertResponseContains('name="logo_colour"', html=False)
-            self.assertResponseContains('name="logo_monochrome"', html=False)
+            self.assertResponseContains('<label for="logo_colour"')
+            self.assertResponseContains('<label for="logo_monochrome"')
 
     @override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
     def test_competition_logo_upload_png(self):
         """Test that Competition accepts PNG file uploads via admin POST."""
-        from django.core.files.storage import default_storage
-        
         png_file = SimpleUploadedFile(
             "competition_logo.png", self.png_data, content_type="image/png"
         )
@@ -170,13 +168,11 @@ class LogoFieldTestCase(TestCase):
         
         # Verify file was stored
         self.competition.refresh_from_db()
-        self.assertTrue(self.competition.logo_colour.name)
-        self.assertIn("logos/competition/colour/", self.competition.logo_colour.name)
-        self.assertIn("competition_logo", self.competition.logo_colour.name)
+        self.assertEqual(self.competition.logo_colour.name[:27], "logos/competition/colour/competition_logo")
         
-        # Verify file exists and contents match
-        self.assertTrue(default_storage.exists(self.competition.logo_colour.name))
-        stored_content = default_storage.open(self.competition.logo_colour.name).read()
+        # Verify file exists and contents match using File API
+        self.assertTrue(self.competition.logo_colour.storage.exists(self.competition.logo_colour.name))
+        stored_content = self.competition.logo_colour.open().read()
         self.assertEqual(stored_content, self.png_data)
 
     def test_division_logo_rejects_pdf(self):
@@ -189,7 +185,7 @@ class LogoFieldTestCase(TestCase):
         
         with self.login(self.superuser):
             # POST with invalid file type
-            self.post(
+            response = self.post(
                 f"{namespace}:edit",
                 *args,
                 data={
@@ -200,6 +196,8 @@ class LogoFieldTestCase(TestCase):
             )
             # Should return 200 with form errors, not 302 redirect
             self.response_200()
+            # Verify the expected error message
+            self.assertResponseContains('File extension "pdf" is not allowed.')
 
     def test_team_logo_rejects_pdf(self):
         """Test that Team rejects PDF files via admin POST."""
@@ -211,7 +209,7 @@ class LogoFieldTestCase(TestCase):
         
         with self.login(self.superuser):
             # POST with invalid file type
-            self.post(
+            response = self.post(
                 f"{namespace}:edit",
                 *args,
                 data={
@@ -222,6 +220,8 @@ class LogoFieldTestCase(TestCase):
             )
             # Should return 200 with form errors, not 302 redirect
             self.response_200()
+            # Verify the expected error message
+            self.assertResponseContains('File extension "pdf" is not allowed.')
 
 
 class LogoAspectRatioValidatorTestCase(TestCase):
