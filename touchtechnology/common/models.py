@@ -3,6 +3,7 @@ import logging
 from os.path import join
 
 import mptt
+from constance import config
 from django.conf import settings
 from django.contrib.auth.models import Group
 from django.contrib.contenttypes.fields import GenericForeignKey
@@ -45,7 +46,6 @@ class SitemapNodeBase(models.Model):
         return self.title
 
     def clean(self):
-        from constance import config
         if config.TOUCHTECHNOLOGY_SITEMAP_ROOT is None or self.slug != config.TOUCHTECHNOLOGY_SITEMAP_ROOT:
             if not self.slug_locked or not self.slug:
                 self.slug = slugify(self.title)
@@ -168,7 +168,6 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
     disable.alters_data = True
 
     def is_home_page(self):
-        from constance import config
         return self.level == 0 and self.slug == config.TOUCHTECHNOLOGY_SITEMAP_ROOT
 
     def is_accessible(self, user):
@@ -177,7 +176,6 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         return set(groups).difference(user.groups.all())
 
     def get_absolute_url(self):
-        from constance import config
         parts = [
             ancestor.slug
             for ancestor in self.get_ancestors(include_self=True)

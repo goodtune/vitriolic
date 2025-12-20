@@ -995,12 +995,7 @@ def _match_edit_form_formfield_callback(field, **kwargs):
     `settings.TOURNAMENTCONTROL_COMPETITION_VIDEOS_ARRAY_SIZE` (default is 5)
     """
     if isinstance(field, ArrayField):
-        from django.db.utils import ProgrammingError
-        try:
-            size = config.TOURNAMENTCONTROL_COMPETITION_VIDEOS_ARRAY_SIZE
-        except (ProgrammingError, Exception):
-            # If constance database table doesn't exist yet (during migrations), use default
-            size = 5
+        size = config.TOURNAMENTCONTROL_COMPETITION_VIDEOS_ARRAY_SIZE
         formfield = PGA.SplitArrayField(
             URLField(required=False),
             size,

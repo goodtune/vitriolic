@@ -2,6 +2,7 @@ import json
 import re
 from datetime import datetime
 
+from constance import config
 from django import forms
 from django.conf import settings
 from django.db.models import Min
@@ -50,13 +51,7 @@ class HTMLField(forms.CharField):
     widget = HTMLWidget
 
     def widget_attrs(self, widget):
-        from constance import config
-        from django.db.utils import ProgrammingError
-        try:
-            options = config.FROALA_EDITOR_OPTIONS
-        except (ProgrammingError, Exception):
-            # If constance database table doesn't exist yet (during migrations), use empty options
-            options = {}
+        options = config.FROALA_EDITOR_OPTIONS
         return {"data-options": json.dumps(options)}
 
     def clean(self, value):
@@ -169,30 +164,17 @@ class TemplatePathFormField(forms.ChoiceField):
             **kwargs,
         )
 
-        # Resolve callables to actual values
-        self._template_base = template_base() if callable(template_base) else template_base
-        self._template_folder = template_folder() if callable(template_folder) else template_folder
-        self._match = match() if callable(match) else match
+        self.template_base = template_base
+        self.template_folder = template_folder
+        self.match = match
         self.recursive = recursive
         self.empty_label = empty_label
         self._match_re = None
 
-        if not self._template_base.endswith("/"):
-            self._template_base += "/"
+        if not self.template_base.endswith("/"):
+            self.template_base += "/"
 
         self.widget.choices = self.choices
-    
-    @property
-    def template_base(self):
-        return self._template_base
-    
-    @property
-    def template_folder(self):
-        return self._template_folder
-    
-    @property
-    def match(self):
-        return self._match
 
     @property
     def match_re(self):
