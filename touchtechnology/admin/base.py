@@ -1,6 +1,7 @@
 import os.path
 from urllib.parse import urlunparse
 
+from constance import config
 from django.contrib import messages
 from django.http import HttpResponseRedirect
 from django.urls import path, reverse
@@ -11,7 +12,6 @@ from touchtechnology.common.decorators import (
     never_cache_m,
     staff_login_required_m,
 )
-from touchtechnology.common.default_settings import SITEMAP_HTTPS_OPTION
 from touchtechnology.common.forms.mixins import BootstrapFormControlMixin
 from touchtechnology.common.sites import Application
 
@@ -63,7 +63,7 @@ class AdminComponentMixin(object):
                 )
                 return HttpResponseRedirect(reverse("admin:index"))
 
-        if SITEMAP_HTTPS_OPTION and not request.is_secure():
+        if config.TOUCHTECHNOLOGY_SITEMAP_HTTPS_OPTION and not request.is_secure():
             host = request.META.get("HTTP_HOST")
             path = request.META.get("PATH_INFO")
             redirect_to = urlunparse(("https", host, path, "", "", ""))

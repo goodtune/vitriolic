@@ -2,18 +2,18 @@ import logging
 import subprocess
 
 import requests
-from django.conf import settings
+from constance import config
 from django.utils.html import strip_spaces_between_tags
 
 logger = logging.getLogger(__name__)
 
 
 def prince(html, base_url=None, ttl=300, **kwargs):
-    SERVER = getattr(settings, "PRINCE_SERVER", None)
-    BINARY = getattr(settings, "PRINCE_BINARY", "/usr/local/bin/prince")
+    SERVER = config.PRINCE_SERVER
+    BINARY = config.PRINCE_BINARY
 
     if base_url is None:
-        base_url = getattr(settings, "PRINCE_BASE_URL", None)
+        base_url = config.PRINCE_BASE_URL
 
     # When celery and django-tenant-schemas are involved, this get's a bit
     # weird. This has bitten once in production so lets log it and see else

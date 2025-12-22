@@ -11,7 +11,7 @@ from django.db.utils import DatabaseError
 from django.utils.module_loading import import_string
 
 from touchtechnology.common.models import SitemapNode
-from touchtechnology.content.app_settings import TENANT_MEDIA_PUBLIC
+from constance import config
 from touchtechnology.content.models import Placeholder
 
 logger = logging.getLogger(__name__)
@@ -62,7 +62,7 @@ def get_media_storage(request):
         )
 
         public = request.tenant.schema_name == get_public_schema_name()
-        if not public or (public and not TENANT_MEDIA_PUBLIC):
+        if not public or (public and not config.TOUCHTECHNOLOGY_TENANT_MEDIA_PUBLIC):
             return os.path.join(settings.MEDIA_ROOT, request.tenant.domain_url)
 
     return settings.MEDIA_ROOT
