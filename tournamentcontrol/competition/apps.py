@@ -1,12 +1,7 @@
 """[User Facing] Django app configuration for competition logic."""
 
 from django.apps import AppConfig
-from django.db.models.signals import (
-    post_delete,
-    post_save,
-    pre_delete,
-    pre_save,
-)
+from django.db.models.signals import post_delete, post_save, pre_delete, pre_save
 
 
 class CompetitionConfig(AppConfig):
@@ -18,9 +13,7 @@ class CompetitionConfig(AppConfig):
         """Wire up signal handlers and admin registration."""
         from touchtechnology.admin.sites import site
         from touchtechnology.content import utils
-        from tournamentcontrol.competition.admin import (
-            CompetitionAdminComponent,
-        )
+        from tournamentcontrol.competition.admin import CompetitionAdminComponent
         from tournamentcontrol.competition.models import (
             Club,
             Competition,
@@ -40,7 +33,6 @@ class CompetitionConfig(AppConfig):
             changed_points_formula,
             delete_related,
             delete_team,
-            match_forfeit,
             match_saved_handler,
             notify_match_forfeit_email,
             scale_ladder_entry,
@@ -49,6 +41,9 @@ class CompetitionConfig(AppConfig):
             team_ladder_entry_aggregation,
             update_match_datetimes_on_place_timezone_change,
         )
+
+        # Custom signals moved into events.py
+        from tournamentcontrol.competition.events import match_forfeit
 
         site.register(CompetitionAdminComponent)
 

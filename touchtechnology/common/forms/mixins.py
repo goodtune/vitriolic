@@ -1,5 +1,4 @@
 from django.forms import widgets
-from django.utils.encoding import smart_str
 from django.utils.translation import gettext_lazy as _
 
 
@@ -56,30 +55,8 @@ class SuperUserSlugMixin(UserMixin):
         else:
             self.fields["slug"].required = False
             self.fields["slug"].help_text = _(
-                "If left blank, this will "
-                "be automatically set based "
-                "on the title."
+                "If left blank, this will be automatically set based on the title."
             )
-
-
-class LabelFromInstanceMixin(object):
-    def __init__(self, label_from_instance="name", *args, **kwargs):
-        super(LabelFromInstanceMixin, self).__init__(*args, **kwargs)
-        self._label_from_instance = label_from_instance
-
-    def label_from_instance(self, obj):
-        if isinstance(self._label_from_instance, str):
-            value = getattr(obj, self._label_from_instance)
-        elif callable(self._label_from_instance):
-            value = self._label_from_instance(obj)
-        else:
-            value = obj
-        if callable(value):
-            try:
-                value = value(obj)
-            except TypeError:
-                value = value()
-        return smart_str(value)
 
 
 class PermissionFormSetMixin(object):

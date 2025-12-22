@@ -8,7 +8,6 @@ import warnings
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
-import requests
 from cloudinary.models import CloudinaryField
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
@@ -19,7 +18,7 @@ from django.contrib.postgres import fields as PG
 from django.core import validators
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
-from django.http import Http404, HttpResponse
+from django.http import HttpResponse
 from django.db.models import Count, DateField, DateTimeField, Q, Sum, TimeField
 from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
 from django.template import Template
@@ -33,11 +32,11 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaInMemoryUpload, MediaUpload
+from googleapiclient.http import MediaUpload
 from timezone_field.fields import TimeZoneField
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
-from touchtechnology.common.db.models import (
+from touchtechnology.common.fields import (
     BooleanField,
     ForeignKey,
     HTMLField,
@@ -58,11 +57,13 @@ from tournamentcontrol.competition.draw.schemas import (
     PoolFixture,
     StageFixture,
 )
+from tournamentcontrol.competition.events import match_forfeit
 from tournamentcontrol.competition.exceptions import (
     InvalidLiveStreamTransition,
     LiveStreamIdentifierMissing,
     LiveStreamTransitionWarning,
 )
+from tournamentcontrol.competition.fields import LadderPointsField
 from tournamentcontrol.competition.managers import (
     LadderEntryManager,
     MatchManager,
@@ -73,11 +74,9 @@ from tournamentcontrol.competition.query import (
     StageQuerySet,
     StatisticQuerySet,
 )
-from tournamentcontrol.competition.signals import match_forfeit
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
     combine_and_localize,
-    create_thumbnail_preview,
     create_thumbnail_response,
     stage_group_position,
     stage_group_position_re,
@@ -102,18 +101,6 @@ win_lose_team_tpl = lazy_get_template(
 class AdminUrlMixin(BaseAdminUrlMixin):
     def _get_url_args(self):
         return (self.pk,)
-
-
-
-class LadderPointsField(models.TextField):
-    def formfield(self, form_class=None, **kwargs):
-        from tournamentcontrol.competition.forms import (
-            LadderPointsField as LadderPointsFormField,
-        )
-
-        if form_class is None:
-            form_class = LadderPointsFormField
-        return super(LadderPointsField, self).formfield(form_class=form_class, **kwargs)
 
 
 class TwitterField(models.CharField):
@@ -303,8 +290,6 @@ class Club(AdminUrlMixin, SitemapNodeBase):
             "home_team", "away_team"
         )
         return home | away
-
-
 
 
 class Person(AdminUrlMixin, models.Model):

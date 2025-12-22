@@ -16,14 +16,13 @@ from django.utils.safestring import mark_safe
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
-from touchtechnology.common.db.models import BooleanField
+from touchtechnology.common.fields import BooleanField
 from touchtechnology.common.mixins import NodeRelationMixin
 
 logger = logging.getLogger(__name__)
 
 
 class SitemapNodeBase(models.Model):
-
     title = models.CharField(max_length=255, verbose_name=_("Title"))
 
     short_title = models.CharField(
@@ -46,7 +45,10 @@ class SitemapNodeBase(models.Model):
         return self.title
 
     def clean(self):
-        if config.TOUCHTECHNOLOGY_SITEMAP_ROOT is None or self.slug != config.TOUCHTECHNOLOGY_SITEMAP_ROOT:
+        if (
+            config.TOUCHTECHNOLOGY_SITEMAP_ROOT is None
+            or self.slug != config.TOUCHTECHNOLOGY_SITEMAP_ROOT
+        ):
             if not self.slug_locked or not self.slug:
                 self.slug = slugify(self.title)
 
@@ -179,7 +181,10 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         parts = [
             ancestor.slug
             for ancestor in self.get_ancestors(include_self=True)
-            if not (ancestor.is_root_node() and ancestor.slug == config.TOUCHTECHNOLOGY_SITEMAP_ROOT)
+            if not (
+                ancestor.is_root_node()
+                and ancestor.slug == config.TOUCHTECHNOLOGY_SITEMAP_ROOT
+            )
         ]
 
         path = "/"

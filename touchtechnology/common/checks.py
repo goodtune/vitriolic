@@ -181,11 +181,7 @@ def check_constance_installed(app_configs, **kwargs):
         RequiredSetting("TOUCHTECHNOLOGY_PAGE_TEMPLATE_REGEX", "touchtechnology.common.E023", str),
         RequiredSetting("TOUCHTECHNOLOGY_TENANT_MEDIA_PUBLIC", "touchtechnology.common.E024", bool),
         # Touch Technology News
-        RequiredSetting("TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_KWARGS", "touchtechnology.common.E025", dict),
-        RequiredSetting("TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_PROCESSORS", "touchtechnology.common.E026", tuple),
         RequiredSetting("TOUCHTECHNOLOGY_NEWS_PAGINATE_BY", "touchtechnology.common.E027", int),
-        RequiredSetting("TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_KWARGS", "touchtechnology.common.E028", dict),
-        RequiredSetting("TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_PROCESSORS", "touchtechnology.common.E029", tuple),
         # Tournament Control Competition
         RequiredSetting("TOURNAMENTCONTROL_COMPETITION_VIDEOS_ARRAY_SIZE", "touchtechnology.common.E030", int),
         RequiredSetting("TOURNAMENTCONTROL_SCORECARD_PDF_WAIT", "touchtechnology.common.E031", int),
@@ -202,4 +198,3 @@ def check_constance_installed(app_configs, **kwargs):
         errors.extend(required_setting.validate(constance_config_exists))
 
     return errors
-

@@ -14,10 +14,7 @@ from guardian.models import GroupObjectPermission, UserObjectPermission
 from guardian.shortcuts import assign_perm, remove_perm
 from modelforms.forms import ModelForm
 
-from touchtechnology.common.forms.fields import (
-    EmailField,
-    ModelMultipleChoiceField,
-)
+from touchtechnology.common.fields import EmailFormField, ModelMultipleChoiceField
 from touchtechnology.common.forms.mixins import (
     BootstrapFormControlMixin,
     PermissionFormSetMixin,
@@ -25,10 +22,10 @@ from touchtechnology.common.forms.mixins import (
 
 
 class EmailAuthenticationForm(BootstrapFormControlMixin, AuthenticationForm):
-    username = EmailField(label=_("Email Address"))
+    username = EmailFormField(label=_("Email Address"))
 
     def __init__(self, *args, **kwargs):
-        super(EmailAuthenticationForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         for field_name in self.fields:
             self.fields[field_name].widget.attrs["class"] += " text-center"
 
@@ -36,7 +33,7 @@ class EmailAuthenticationForm(BootstrapFormControlMixin, AuthenticationForm):
 class RegistrationForm(forms.Form):
     first_name = forms.CharField(max_length=30)
     last_name = forms.CharField(max_length=30)
-    email = EmailField()
+    email = EmailFormField()
     password1 = forms.CharField(widget=forms.PasswordInput, label=_("Password"))
     password2 = forms.CharField(widget=forms.PasswordInput, label=_("Password (again)"))
 
@@ -58,9 +55,7 @@ class RegistrationForm(forms.Form):
         password2 = self.cleaned_data.get("password2")
         if password1 and password2:
             if password1 != password2:
-                raise forms.ValidationError(
-                    _("The two password fields " "didn't match.")
-                )
+                raise forms.ValidationError(_("The two password fields didn't match."))
         return password2
 
 
@@ -73,7 +68,7 @@ class PermissionForm(ModelForm):
     max_checkboxes: int = 7  # Set based on number of rows visible in MVP layout
 
     def __init__(self, permission, *args, **kwargs):
-        super(PermissionForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.content_type = ContentType.objects.get_for_model(self.instance)
         self.permission = permission
 
@@ -152,7 +147,7 @@ class PermissionForm(ModelForm):
             for grant in grant_users.union(grant_groups):
                 assign_perm(self.permission.codename, grant, self.instance)
 
-        return super(PermissionForm, self).save(*args, **kwargs)
+        return super().save(*args, **kwargs)
 
 
 def permissionformset_factory(

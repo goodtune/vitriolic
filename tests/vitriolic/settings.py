@@ -238,19 +238,7 @@ CONSTANCE_CONFIG = {
     "TOUCHTECHNOLOGY_PAGE_TEMPLATE_REGEX": (r"\.html$", "Template regex pattern", str),
     "TOUCHTECHNOLOGY_TENANT_MEDIA_PUBLIC": (True, "Media public flag", bool),
     # Touch Technology News
-    "TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_KWARGS": ({}, "Detail image kwargs", dict),
-    "TOUCHTECHNOLOGY_NEWS_DETAIL_IMAGE_PROCESSORS": (
-        (("pilkit.processors.resize.SmartResize", (320, 240), {}),),
-        "Detail image processors",
-        tuple,
-    ),
     "TOUCHTECHNOLOGY_NEWS_PAGINATE_BY": (5, "Pagination for news", int),
-    "TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_KWARGS": ({}, "Thumbnail image kwargs", dict),
-    "TOUCHTECHNOLOGY_NEWS_THUMBNAIL_IMAGE_PROCESSORS": (
-        (("pilkit.processors.resize.SmartResize", (160, 120), {}),),
-        "Thumbnail image processors",
-        tuple,
-    ),
     # Tournament Control Competition
     "TOURNAMENTCONTROL_COMPETITION_VIDEOS_ARRAY_SIZE": (
         5,

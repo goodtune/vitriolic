@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from touchtechnology.admin.mixins import AdminUrlMixin
-from touchtechnology.common.db.models import BooleanField, HTMLField
+from touchtechnology.common.fields import BooleanField, HTMLField
 from touchtechnology.news.query import ArticleQuerySet, CategoryQuerySet
 
 
@@ -39,7 +39,7 @@ class Article(AdminUrlModel):
 
     published = DateTimeField(
         verbose_name=_("Published"),
-        help_text=_("Set a date & time in the future to schedule " "an announcement."),
+        help_text=_("Set a date & time in the future to schedule an announcement."),
     )
 
     byline = models.CharField(max_length=75, blank=True, verbose_name=_("Byline"))
@@ -49,11 +49,6 @@ class Article(AdminUrlModel):
     is_active = BooleanField(default=True, verbose_name=_("Enabled"))
 
     copy = HTMLField(_("Copy"), blank=True)
-
-    # Note: image and imagekit spec files are defined in ready() to avoid
-    # accessing config during model definition
-    thumbnail = None
-    detail_image = None
 
     last_modified = DateTimeField(auto_now=True)
 
@@ -132,7 +127,7 @@ class Category(AdminUrlModel):
         max_length=50,
         blank=True,
         verbose_name=_("Short Title"),
-        help_text=_("Used in navigation, a shorter alternative " "to the main title."),
+        help_text=_("Used in navigation, a shorter alternative to the main title."),
     )
     slug = models.SlugField(max_length=75, verbose_name=_("Slug"))
     slug_locked = BooleanField(default=False, verbose_name=_("Locked Slug"))

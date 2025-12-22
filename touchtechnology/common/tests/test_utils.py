@@ -2,7 +2,7 @@ from unittest import mock
 
 from test_plus import TestCase
 
-from touchtechnology.common.forms.fields import boolean_choice_field_coerce
+from touchtechnology.common.fields import boolean_choice_field_coerce
 from touchtechnology.common.utils import get_base_url, get_mod_func
 
 
