@@ -3,6 +3,7 @@
 
 import collections
 import logging
+import random
 import uuid
 import warnings
 from datetime import datetime, timedelta
@@ -97,6 +98,20 @@ stage_group_position_tpl = lazy_get_template(
 win_lose_team_tpl = lazy_get_template(
     "tournamentcontrol/competition/_win_lose_team.txt"
 )
+
+
+def generate_random_color():
+    """
+    Generate a random hex color code.
+    
+    Returns a string in the format #RRGGBB with bright, vibrant colors
+    suitable for visual differentiation.
+    """
+    # Generate bright colors by ensuring each component is at least 128 (50% brightness)
+    r = random.randint(128, 255)
+    g = random.randint(128, 255)
+    b = random.randint(128, 255)
+    return f"#{r:02x}{g:02x}{b:02x}"
 
 
 class AdminUrlMixin(BaseAdminUrlMixin):
@@ -777,8 +792,7 @@ class Division(
 
     color = models.CharField(
         max_length=7,
-        blank=True,
-        default="",
+        default=generate_random_color,
         verbose_name=_("Color"),
         help_text=_(
             "Color for division in the visual scheduler. "
@@ -809,22 +823,11 @@ class Division(
 
     def get_color(self):
         """
-        Get the division color, falling back to a default based on order.
+        Get the division color.
+        
+        Since color is now a required field, this simply returns the stored color.
         """
-        if self.color:
-            return self.color
-        # Default colors based on division order (matching CSS)
-        default_colors = {
-            1: "#e74c3c",  # Red
-            2: "#3498db",  # Blue
-            3: "#2ecc71",  # Green
-            4: "#f39c12",  # Orange
-            5: "#9b59b6",  # Purple
-            6: "#1abc9c",  # Teal
-            7: "#e67e22",  # Dark Orange
-            8: "#34495e",  # Dark Gray
-        }
-        return default_colors.get(self.order, "#6c757d")  # Gray as ultimate fallback
+        return self.color
 
     @property
     def matches(self):
@@ -1148,8 +1151,7 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
 
     color = models.CharField(
         max_length=7,
-        blank=True,
-        default="",
+        db_default="#e8f5e8",
         verbose_name=_("Background Color"),
         help_text=_(
             "Background color for matches in the visual scheduler. "
@@ -1185,12 +1187,11 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
 
     def get_color(self):
         """
-        Get the stage background color, falling back to a light green default.
+        Get the stage background color.
+        
+        Since color has a database default, this simply returns the stored color.
         """
-        if self.color:
-            return self.color
-        # Default to light green (matching current CSS default for scheduled items)
-        return "#e8f5e8"
+        return self.color
 
     def __str__(self):
         return self.title

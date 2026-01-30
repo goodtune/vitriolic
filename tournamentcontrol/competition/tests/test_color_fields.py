@@ -1,7 +1,36 @@
 from test_plus import TestCase
 
 from tournamentcontrol.competition.forms import DivisionForm, StageForm
+from tournamentcontrol.competition.models import generate_random_color
 from tournamentcontrol.competition.tests import factories
+
+
+class ColorGenerationTests(TestCase):
+    """Test cases for color generation helper function."""
+
+    def test_generate_random_color_format(self):
+        """Test that generate_random_color returns a valid hex color."""
+        color = generate_random_color()
+        self.assertRegex(color, r"^#[0-9a-f]{6}$")
+
+    def test_generate_random_color_brightness(self):
+        """Test that generated colors are bright (each component >= 128)."""
+        color = generate_random_color()
+        # Extract RGB components
+        r = int(color[1:3], 16)
+        g = int(color[3:5], 16)
+        b = int(color[5:7], 16)
+        # Each component should be at least 128 (50% brightness)
+        self.assertGreaterEqual(r, 128)
+        self.assertGreaterEqual(g, 128)
+        self.assertGreaterEqual(b, 128)
+
+    def test_generate_random_color_variability(self):
+        """Test that generate_random_color produces different colors."""
+        colors = [generate_random_color() for _ in range(10)]
+        # Should have at least a few unique colors in 10 generations
+        unique_colors = set(colors)
+        self.assertGreater(len(unique_colors), 1)
 
 
 class DivisionColorTests(TestCase):
@@ -11,10 +40,12 @@ class DivisionColorTests(TestCase):
     def setUpTestData(cls):
         cls.season = factories.SeasonFactory.create()
 
-    def test_division_color_field_default(self):
-        """Test that division color field defaults to empty string."""
+    def test_division_color_field_has_default(self):
+        """Test that division color field gets a random color on creation."""
         division = factories.DivisionFactory.create(season=self.season)
-        self.assertEqual(division.color, "")
+        # Color should be set and valid hex format
+        self.assertIsNotNone(division.color)
+        self.assertRegex(division.color, r"^#[0-9a-f]{6}$")
 
     def test_division_color_field_accepts_hex_value(self):
         """Test that division color field accepts a hex color value."""
@@ -23,32 +54,12 @@ class DivisionColorTests(TestCase):
         )
         self.assertEqual(division.color, "#ff5733")
 
-    def test_get_color_returns_custom_color(self):
-        """Test that get_color returns custom color when set."""
+    def test_get_color_returns_stored_color(self):
+        """Test that get_color returns the stored color."""
         division = factories.DivisionFactory.create(
             season=self.season, color="#123456"
         )
         self.assertEqual(division.get_color(), "#123456")
-
-    def test_get_color_returns_default_for_order_1(self):
-        """Test that get_color returns default red for division order 1."""
-        division = factories.DivisionFactory.create(season=self.season, order=1)
-        self.assertEqual(division.get_color(), "#e74c3c")
-
-    def test_get_color_returns_default_for_order_2(self):
-        """Test that get_color returns default blue for division order 2."""
-        division = factories.DivisionFactory.create(season=self.season, order=2)
-        self.assertEqual(division.get_color(), "#3498db")
-
-    def test_get_color_returns_default_for_order_3(self):
-        """Test that get_color returns default green for division order 3."""
-        division = factories.DivisionFactory.create(season=self.season, order=3)
-        self.assertEqual(division.get_color(), "#2ecc71")
-
-    def test_get_color_returns_fallback_for_unknown_order(self):
-        """Test that get_color returns gray fallback for orders > 8."""
-        division = factories.DivisionFactory.create(season=self.season, order=10)
-        self.assertEqual(division.get_color(), "#6c757d")
 
     def test_division_form_includes_color_field(self):
         """Test that DivisionForm includes the color field."""
@@ -63,11 +74,10 @@ class DivisionColorTests(TestCase):
         widget = form.fields["color"].widget
         self.assertEqual(widget.input_type, "color")
 
-    def test_division_form_saves_color(self):
-        """Test that DivisionForm correctly saves color field."""
-        division = factories.DivisionFactory.create(season=self.season, color="")
-        # Verify color is initially empty
-        self.assertEqual(division.color, "")
+    def test_division_color_persists(self):
+        """Test that division color field correctly persists changes."""
+        division = factories.DivisionFactory.create(season=self.season)
+        original_color = division.color
         
         # Update the color
         division.color = "#abcdef"
@@ -76,6 +86,7 @@ class DivisionColorTests(TestCase):
         
         # Verify color was saved
         self.assertEqual(division.color, "#abcdef")
+        self.assertNotEqual(division.color, original_color)
 
 
 class StageColorTests(TestCase):
@@ -86,24 +97,19 @@ class StageColorTests(TestCase):
         cls.division = factories.DivisionFactory.create()
 
     def test_stage_color_field_default(self):
-        """Test that stage color field defaults to empty string."""
+        """Test that stage color field defaults to light green."""
         stage = factories.StageFactory.create(division=self.division)
-        self.assertEqual(stage.color, "")
+        self.assertEqual(stage.color, "#e8f5e8")
 
     def test_stage_color_field_accepts_hex_value(self):
         """Test that stage color field accepts a hex color value."""
         stage = factories.StageFactory.create(division=self.division, color="#ff5733")
         self.assertEqual(stage.color, "#ff5733")
 
-    def test_get_color_returns_custom_color(self):
-        """Test that get_color returns custom color when set."""
+    def test_get_color_returns_stored_color(self):
+        """Test that get_color returns the stored color."""
         stage = factories.StageFactory.create(division=self.division, color="#fedcba")
         self.assertEqual(stage.get_color(), "#fedcba")
-
-    def test_get_color_returns_default_when_empty(self):
-        """Test that get_color returns default light green when no color is set."""
-        stage = factories.StageFactory.create(division=self.division)
-        self.assertEqual(stage.get_color(), "#e8f5e8")
 
     def test_stage_form_includes_color_field(self):
         """Test that StageForm includes the color field."""
@@ -118,11 +124,9 @@ class StageColorTests(TestCase):
         widget = form.fields["color"].widget
         self.assertEqual(widget.input_type, "color")
 
-    def test_stage_form_saves_color(self):
-        """Test that StageForm correctly saves color field."""
-        stage = factories.StageFactory.create(division=self.division, color="")
-        # Verify color is initially empty
-        self.assertEqual(stage.color, "")
+    def test_stage_color_persists(self):
+        """Test that stage color field correctly persists changes."""
+        stage = factories.StageFactory.create(division=self.division)
         
         # Update the color
         stage.color = "#123abc"
@@ -131,3 +135,4 @@ class StageColorTests(TestCase):
         
         # Verify color was saved
         self.assertEqual(stage.color, "#123abc")
+

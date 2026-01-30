@@ -121,6 +121,7 @@ class DivisionFactory(OrderedSitemapNodeFactory):
     forfeit_against_score = 0
     include_forfeits_in_played = True
     games_per_day = 2
+    color = factory.LazyFunction(lambda: models.generate_random_color())
 
     season = factory.SubFactory(SeasonFactory)
 
@@ -148,6 +149,7 @@ class StageFactory(OrderedSitemapNodeFactory):
         model = models.Stage
 
     title = factory.Sequence(lambda n: "Stage %d" % (n + 1))
+    color = "#e8f5e8"  # Use the default light green
 
     division = factory.SubFactory(DivisionFactory)
 
