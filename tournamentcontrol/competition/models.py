@@ -775,6 +775,17 @@ class Division(
         ),
     )
 
+    color = models.CharField(
+        max_length=7,
+        blank=True,
+        default="",
+        verbose_name=_("Color"),
+        help_text=_(
+            "Color for division in the visual scheduler. "
+            "Affects the left border of match cards and division headers."
+        ),
+    )
+
     # This is an advanced feature, we would not wish to surface it under
     # normal circumstances, but the theory is that we can use the report URL
     # to construct the minimum data for a division.
@@ -795,6 +806,25 @@ class Division(
 
     def _get_url_args(self):
         return (self.season.competition_id, self.season_id, self.pk)
+
+    def get_color(self):
+        """
+        Get the division color, falling back to a default based on order.
+        """
+        if self.color:
+            return self.color
+        # Default colors based on division order (matching CSS)
+        default_colors = {
+            1: "#e74c3c",  # Red
+            2: "#3498db",  # Blue
+            3: "#2ecc71",  # Green
+            4: "#f39c12",  # Orange
+            5: "#9b59b6",  # Purple
+            6: "#1abc9c",  # Teal
+            7: "#e67e22",  # Dark Orange
+            8: "#34495e",  # Dark Gray
+        }
+        return default_colors.get(self.order, "#6c757d")  # Gray as ultimate fallback
 
     @property
     def matches(self):
@@ -1116,6 +1146,17 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
         ),
     )
 
+    color = models.CharField(
+        max_length=7,
+        blank=True,
+        default="",
+        verbose_name=_("Background Color"),
+        help_text=_(
+            "Background color for matches in the visual scheduler. "
+            "Used to highlight matches of increased importance."
+        ),
+    )
+
     matches_needing_printing = ManyToManyField(
         "Match", blank=True, related_name="to_be_printed"
     )
@@ -1141,6 +1182,15 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
 
     def _get_url_names(self):
         return super()._get_url_names() + ["build", "undo", "progress"]
+
+    def get_color(self):
+        """
+        Get the stage background color, falling back to a light blue default.
+        """
+        if self.color:
+            return self.color
+        # Default to light blue (matching current CSS default for scheduled items)
+        return "#e8f5e8"
 
     def __str__(self):
         return self.title
