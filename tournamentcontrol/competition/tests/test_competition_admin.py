@@ -712,6 +712,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             "forfeit_for_score": "5",
             "forfeit_against_score": "0",
             "include_forfeits_in_played": "1",
+            "color": "#ff5733",  # Add color field since it's now mandatory
             "slug": "",
             "slug_locked": "0",
         }
