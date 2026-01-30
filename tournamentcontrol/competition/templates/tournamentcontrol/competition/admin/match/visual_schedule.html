@@ -270,7 +270,7 @@ function visualSchedule() {
             if (match.label) {
                 return match.label;
             } else if (!match.is_final) {
-                return `Round{match.round}`;
+                return `Round ${match.round}`;
             }
             return '';
         },
