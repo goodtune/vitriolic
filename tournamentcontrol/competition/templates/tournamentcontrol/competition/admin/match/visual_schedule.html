@@ -75,7 +75,7 @@
         <!-- Division/Stage hierarchy -->
         {% for division, stages in matches_hierarchy.items %}
         <div class="division-group">
-            <div class="division-header" @click="toggleSection('div_{{ division.id }}')" style="{% if division.color %}background-color: {{ division.color }};{% endif %}">
+            <div class="division-header" @click="toggleSection('div_{{ division.id }}')" style="{% if division.get_color %}background-color: {{ division.get_color }};{% endif %}">
                 <span x-show="!collapsedSections.div_{{ division.id }}">▼</span>
                 <span x-show="collapsedSections.div_{{ division.id }}">▶</span>
                 {{ division.title }}

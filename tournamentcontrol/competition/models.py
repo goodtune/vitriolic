@@ -1185,11 +1185,11 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
 
     def get_color(self):
         """
-        Get the stage background color, falling back to a light blue default.
+        Get the stage background color, falling back to a light green default.
         """
         if self.color:
             return self.color
-        # Default to light blue (matching current CSS default for scheduled items)
+        # Default to light green (matching current CSS default for scheduled items)
         return "#e8f5e8"
 
     def __str__(self):
