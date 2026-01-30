@@ -798,6 +798,12 @@ class Division(
             "Color for division in the visual scheduler. "
             "Affects the left border of match cards and division headers."
         ),
+        validators=[
+            validators.RegexValidator(
+                regex=r'^#[0-9a-fA-F]{6}$',
+                message=_('Enter a valid hex color code (e.g., #ff5733)'),
+            )
+        ],
     )
 
     # This is an advanced feature, we would not wish to surface it under
@@ -1157,6 +1163,12 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
             "Background color for matches in the visual scheduler. "
             "Used to highlight matches of increased importance."
         ),
+        validators=[
+            validators.RegexValidator(
+                regex=r'^#[0-9a-fA-F]{6}$',
+                message=_('Enter a valid hex color code (e.g., #ff5733)'),
+            )
+        ],
     )
 
     matches_needing_printing = ManyToManyField(

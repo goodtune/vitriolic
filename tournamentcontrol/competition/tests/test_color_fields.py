@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from test_plus import TestCase
 
 from tournamentcontrol.competition.forms import DivisionForm, StageForm
@@ -31,6 +32,55 @@ class ColorGenerationTests(TestCase):
         # With 128^3 possible colors, should have at least 8 unique in 10 generations
         unique_colors = set(colors)
         self.assertGreaterEqual(len(unique_colors), 8)
+
+
+class ColorValidationTests(TestCase):
+    """Test cases for color field validation."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create()
+        cls.division = factories.DivisionFactory.create()
+
+    def test_division_color_accepts_valid_hex(self):
+        """Test that division color field accepts valid hex codes."""
+        division = factories.DivisionFactory.create(season=self.season, color="#abc123")
+        division.full_clean()  # Should not raise
+        self.assertEqual(division.color, "#abc123")
+
+    def test_division_color_rejects_invalid_format(self):
+        """Test that division color field rejects invalid formats."""
+        division = factories.DivisionFactory.build(season=self.season, color="red")
+        with self.assertRaises(ValidationError) as cm:
+            division.full_clean()
+        self.assertIn("color", cm.exception.message_dict)
+
+    def test_division_color_rejects_short_hex(self):
+        """Test that division color field rejects short hex codes."""
+        division = factories.DivisionFactory.build(season=self.season, color="#abc")
+        with self.assertRaises(ValidationError) as cm:
+            division.full_clean()
+        self.assertIn("color", cm.exception.message_dict)
+
+    def test_division_color_rejects_no_hash(self):
+        """Test that division color field requires # prefix."""
+        division = factories.DivisionFactory.build(season=self.season, color="abc123")
+        with self.assertRaises(ValidationError) as cm:
+            division.full_clean()
+        self.assertIn("color", cm.exception.message_dict)
+
+    def test_stage_color_accepts_valid_hex(self):
+        """Test that stage color field accepts valid hex codes."""
+        stage = factories.StageFactory.create(division=self.division, color="#123ABC")
+        stage.full_clean()  # Should not raise
+        self.assertEqual(stage.color, "#123ABC")
+
+    def test_stage_color_rejects_invalid_format(self):
+        """Test that stage color field rejects invalid formats."""
+        stage = factories.StageFactory.build(division=self.division, color="blue")
+        with self.assertRaises(ValidationError) as cm:
+            stage.full_clean()
+        self.assertIn("color", cm.exception.message_dict)
 
 
 class DivisionColorTests(TestCase):

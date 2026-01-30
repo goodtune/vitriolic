@@ -34,11 +34,6 @@ def populate_division_colors(apps, schema_editor):
             division.save(update_fields=["color"])
 
 
-def reverse_population(apps, schema_editor):
-    """No-op reverse - we don't want to clear colors on rollback."""
-    pass
-
-
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -46,7 +41,10 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(populate_division_colors, reverse_population),
+        migrations.RunPython(
+            populate_division_colors, 
+            reverse_code=migrations.RunPython.noop
+        ),
         # Note: Stage colors are handled by db_default in migration 0057,
         # so no data migration needed for stages
     ]
