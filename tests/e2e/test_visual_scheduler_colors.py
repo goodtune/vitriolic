@@ -2,6 +2,7 @@
 
 import pytest
 from datetime import date, time
+from pathlib import Path
 from playwright.sync_api import Page, expect
 
 from tournamentcontrol.competition.tests.factories import (
@@ -99,7 +100,7 @@ class TestVisualSchedulerColors:
         }
 
     def test_division_header_colors(
-        self, authenticated_page: Page, live_server, color_dataset
+        self, authenticated_page: Page, live_server, color_dataset, screenshot_dir
     ):
         """
         Test that division headers display custom colors in the sidebar.
@@ -125,6 +126,10 @@ class TestVisualSchedulerColors:
         # Wait for page to load
         expect(page.locator(".visual-schedule-container")).to_be_visible(timeout=10000)
 
+        # Take screenshot showing division header colors
+        screenshot_path = screenshot_dir / "division_header_colors.png"
+        page.screenshot(path=str(screenshot_path), full_page=True)
+
         # Check Red Division header has red background
         red_division_header = page.locator(".division-header").filter(
             has_text="Red Division"
@@ -148,7 +153,7 @@ class TestVisualSchedulerColors:
         assert blue_bg_color == "rgb(0, 0, 255)", f"Expected blue background, got {blue_bg_color}"
 
     def test_match_card_division_border_colors(
-        self, authenticated_page: Page, live_server, color_dataset
+        self, authenticated_page: Page, live_server, color_dataset, screenshot_dir
     ):
         """
         Test that match cards display division colors on their left border.
@@ -174,6 +179,10 @@ class TestVisualSchedulerColors:
         # Wait for page to load
         expect(page.locator(".visual-schedule-container")).to_be_visible(timeout=10000)
 
+        # Take screenshot showing match card border colors
+        screenshot_path = screenshot_dir / "match_card_border_colors.png"
+        page.screenshot(path=str(screenshot_path), full_page=True)
+
         # Check scheduled match from Red Division has red left border
         scheduled_red_match = page.locator(".match-item.scheduled").filter(
             has_text="Team A vs Team B"
@@ -195,7 +204,7 @@ class TestVisualSchedulerColors:
         assert blue_border == "rgb(0, 0, 255)", f"Expected blue border, got {blue_border}"
 
     def test_match_card_stage_background_colors(
-        self, authenticated_page: Page, live_server, color_dataset
+        self, authenticated_page: Page, live_server, color_dataset, screenshot_dir
     ):
         """
         Test that scheduled match cards display stage background colors.
@@ -220,6 +229,10 @@ class TestVisualSchedulerColors:
         
         # Wait for page to load
         expect(page.locator(".visual-schedule-container")).to_be_visible(timeout=10000)
+
+        # Take screenshot showing match card background colors
+        screenshot_path = screenshot_dir / "match_card_background_colors.png"
+        page.screenshot(path=str(screenshot_path), full_page=True)
 
         # Check match from Light Yellow stage has light yellow background
         yellow_match = page.locator(".match-item.scheduled").filter(

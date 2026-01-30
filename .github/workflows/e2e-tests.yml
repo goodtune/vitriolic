@@ -18,6 +18,8 @@ jobs:
       uses: astral-sh/setup-uv@v7
 
     - name: Run E2E tests via tox
+      env:
+        SCREENSHOTS_DIR: tests/screenshots
       run: |
         uvx tox -e e2e
 
@@ -30,3 +32,11 @@ jobs:
           .tox/e2e/log/
           tests/test-results/
         retention-days: 5
+
+    - name: Upload test screenshots
+      uses: actions/upload-artifact@v6
+      if: always()
+      with:
+        name: e2e-test-screenshots
+        path: tests/screenshots/
+        retention-days: 7
