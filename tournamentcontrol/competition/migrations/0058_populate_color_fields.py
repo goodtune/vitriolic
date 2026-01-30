@@ -4,7 +4,13 @@ from django.db import migrations
 
 
 def populate_division_colors(apps, schema_editor):
-    """Populate division colors for existing records using order-based defaults."""
+    """
+    Populate division colors for existing records using order-based defaults.
+    
+    Note: Migration 0057 adds the color field with a callable default, but that only
+    applies to NEW instances created after the migration. Existing records need to be
+    updated here.
+    """
     Division = apps.get_model("competition", "Division")
     
     # Default colors based on division order (matching original CSS)
@@ -19,22 +25,13 @@ def populate_division_colors(apps, schema_editor):
         8: "#34495e",  # Dark Gray
     }
     
-    # Update divisions that have empty color (from migration 0057)
-    for division in Division.objects.filter(color=""):
-        # Use order-based color if available, otherwise use gray
-        division.color = default_colors.get(division.order, "#6c757d")
-        division.save(update_fields=["color"])
-
-
-def populate_stage_colors(apps, schema_editor):
-    """Populate stage colors for existing records."""
-    Stage = apps.get_model("competition", "Stage")
-    
-    # Update stages that have empty color (from migration 0057)
-    # The db_default should handle this, but we ensure it explicitly
-    for stage in Stage.objects.filter(color=""):
-        stage.color = "#e8f5e8"
-        stage.save(update_fields=["color"])
+    # Update all divisions that don't have a color set
+    # (which should be all existing ones after migration 0057)
+    for division in Division.objects.all():
+        if not division.color:
+            # Use order-based color if available, otherwise use gray
+            division.color = default_colors.get(division.order, "#6c757d")
+            division.save(update_fields=["color"])
 
 
 def reverse_population(apps, schema_editor):
@@ -50,5 +47,6 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunPython(populate_division_colors, reverse_population),
-        migrations.RunPython(populate_stage_colors, reverse_population),
+        # Note: Stage colors are handled by db_default in migration 0057,
+        # so no data migration needed for stages
     ]

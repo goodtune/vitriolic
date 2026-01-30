@@ -28,9 +28,9 @@ class ColorGenerationTests(TestCase):
     def test_generate_random_color_variability(self):
         """Test that generate_random_color produces different colors."""
         colors = [generate_random_color() for _ in range(10)]
-        # Should have at least a few unique colors in 10 generations
+        # With 128^3 possible colors, should have at least 8 unique in 10 generations
         unique_colors = set(colors)
-        self.assertGreater(len(unique_colors), 1)
+        self.assertGreaterEqual(len(unique_colors), 8)
 
 
 class DivisionColorTests(TestCase):
