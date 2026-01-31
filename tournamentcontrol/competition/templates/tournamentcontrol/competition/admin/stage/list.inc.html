@@ -25,4 +25,12 @@
 			&nbsp;{% trans "Build" %}
 		</a>
 	{% endif %}
+	<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:reorder' 'stage:division' obj.pk "up" %}" role="button">
+		<i class="fa fa-chevron-up"></i>
+		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Up" %}</span>
+	</a>
+	<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:reorder' 'stage:division' obj.pk "down" %}" role="button">
+		<i class="fa fa-chevron-down"></i>
+		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Down" %}</span>
+	</a>
 {% endblock %}
