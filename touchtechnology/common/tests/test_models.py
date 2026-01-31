@@ -19,21 +19,12 @@ class SitemapNodeTests(TestCase):
         node = factories.SitemapNodeFactory.create(
             title='Test \u201csmart quotes\u201d and \u2018apostrophes\u2019'
         )
-        # This should not raise UnicodeDecodeError
-        repr_str = repr(node)
-        # Verify the repr string is valid and contains the class name
-        self.assertIn("SitemapNode", repr_str)
-        self.assertIn("Test", repr_str)
-        # Verify that the repr is ASCII-safe (contains escaped Unicode)
-        # The smart quotes should be escaped as \u201c, \u201d, \u2018, \u2019
-        self.assertIn(r"\u201c", repr_str)
-        self.assertIn(r"\u201d", repr_str)
-        # Verify it's a valid ASCII string
-        repr_str.encode('ascii')
+        # Verify the repr matches the expected ASCII-safe format
+        expected = f'<SitemapNode: "Test \\u201csmart quotes\\u201d and \\u2018apostrophes\\u2019" ({node.level}:{node.lft},{node.rght})>'
+        self.assertEqual(repr(node), expected)
 
     def test_logging_with_unicode_title_in_repr(self):
         """Test that logging with %r and Unicode title doesn't crash."""
-        import logging
         # Create a SitemapNode with Unicode characters
         node = factories.SitemapNodeFactory.create(
             title='Test \u201csmart quotes\u201d'
@@ -41,7 +32,7 @@ class SitemapNodeTests(TestCase):
         # This should not raise UnicodeDecodeError when logging with %r
         with self.assertLogs('touchtechnology.common.models', level='DEBUG') as cm:
             node.disable()
-        # Verify the log message was created
-        self.assertEqual(len(cm.output), 1)
-        self.assertIn('Disabling node', cm.output[0])
+        # Verify the exact log message was created
+        expected_log = f'DEBUG:touchtechnology.common.models:Disabling node {repr(node)}'
+        self.assertCountEqual(cm.output, [expected_log])
 
