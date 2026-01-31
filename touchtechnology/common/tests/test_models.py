@@ -31,8 +31,8 @@ class SitemapNodeTests(TestCase):
         # Verify it's a valid ASCII string
         repr_str.encode('ascii')
 
-    def test_disable_with_unicode_title(self):
-        """Test that disabling a node with Unicode title doesn't crash logging."""
+    def test_logging_with_unicode_title_in_repr(self):
+        """Test that logging with %r and Unicode title doesn't crash."""
         import logging
         # Create a SitemapNode with Unicode characters
         node = factories.SitemapNodeFactory.create(

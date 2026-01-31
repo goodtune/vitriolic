@@ -156,8 +156,8 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         return (self.level, self.lft) < (other.level, other.lft)
 
     def __repr__(self):
-        return '<{0}: {1} ({2}:{3},{4})>'.format(
-            self.__class__.__name__, ascii(self.title), self.level, self.lft, self.rght
+        return '<{0}: "{1}" ({2}:{3},{4})>'.format(
+            self.__class__.__name__, ascii(self.title)[1:-1], self.level, self.lft, self.rght
         )
 
     def disable(self):
