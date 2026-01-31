@@ -603,6 +603,7 @@ class DivisionForm(SuperUserSlugMixin, ModelForm):
             "short_title",
             "copy",
             "draft",
+            "color",
             "points_formula",
             "bonus_points_formula",
             "games_per_day",
@@ -623,6 +624,7 @@ class DivisionForm(SuperUserSlugMixin, ModelForm):
         }
         widgets = {
             "bonus_points_formula": forms.TextInput,
+            "color": forms.TextInput(attrs={"type": "color"}),
         }
 
     def _clean_formula(self, field_name, calculator_class):
@@ -669,9 +671,13 @@ class StageForm(SuperUserSlugMixin, ModelForm):
             "scale_group_points",
             "carry_ladder",
             "keep_mvp",
+            "color",
             "slug",
             "slug_locked",
         )
+        widgets = {
+            "color": forms.TextInput(attrs={"type": "color"}),
+        }
 
 
 class StageGroupForm(SuperUserSlugMixin, ModelForm):

@@ -3,6 +3,7 @@
 
 import collections
 import logging
+import random
 import uuid
 import warnings
 from datetime import datetime, timedelta
@@ -97,6 +98,20 @@ stage_group_position_tpl = lazy_get_template(
 win_lose_team_tpl = lazy_get_template(
     "tournamentcontrol/competition/_win_lose_team.txt"
 )
+
+
+def generate_random_color():
+    """
+    Generate a random hex color code.
+    
+    Returns a string in the format #RRGGBB with bright, vibrant colors
+    suitable for visual differentiation.
+    """
+    # Generate bright colors by ensuring each component is at least 128 (50% brightness)
+    r = random.randint(128, 255)
+    g = random.randint(128, 255)
+    b = random.randint(128, 255)
+    return f"#{r:02x}{g:02x}{b:02x}"
 
 
 class AdminUrlMixin(BaseAdminUrlMixin):
@@ -775,6 +790,22 @@ class Division(
         ),
     )
 
+    color = models.CharField(
+        max_length=7,
+        default=generate_random_color,
+        verbose_name=_("Color"),
+        help_text=_(
+            "Color for division in the visual scheduler. "
+            "Affects the left border of match cards and division headers."
+        ),
+        validators=[
+            validators.RegexValidator(
+                regex=r'^#[0-9a-fA-F]{6}$',
+                message=_('Enter a valid hex color code (e.g., #ff5733)'),
+            )
+        ],
+    )
+
     # This is an advanced feature, we would not wish to surface it under
     # normal circumstances, but the theory is that we can use the report URL
     # to construct the minimum data for a division.
@@ -795,6 +826,14 @@ class Division(
 
     def _get_url_args(self):
         return (self.season.competition_id, self.season_id, self.pk)
+
+    def get_color(self):
+        """
+        Get the division color.
+        
+        Since color is now a required field, this simply returns the stored color.
+        """
+        return self.color
 
     @property
     def matches(self):
@@ -1116,6 +1155,22 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
         ),
     )
 
+    color = models.CharField(
+        max_length=7,
+        db_default="#e8f5e8",
+        verbose_name=_("Background Color"),
+        help_text=_(
+            "Background color for matches in the visual scheduler. "
+            "Used to highlight matches of increased importance."
+        ),
+        validators=[
+            validators.RegexValidator(
+                regex=r'^#[0-9a-fA-F]{6}$',
+                message=_('Enter a valid hex color code (e.g., #ff5733)'),
+            )
+        ],
+    )
+
     matches_needing_printing = ManyToManyField(
         "Match", blank=True, related_name="to_be_printed"
     )
@@ -1141,6 +1196,14 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
 
     def _get_url_names(self):
         return super()._get_url_names() + ["build", "undo", "progress"]
+
+    def get_color(self):
+        """
+        Get the stage background color.
+        
+        Since color has a database default, this simply returns the stored color.
+        """
+        return self.color
 
     def __str__(self):
         return self.title

@@ -1,5 +1,7 @@
 """Pytest configuration and shared fixtures for E2E tests."""
 
+import os
+from pathlib import Path
 import pytest
 from playwright.sync_api import Page
 
@@ -11,6 +13,21 @@ def browser_context_args():
         "viewport": {"width": 1920, "height": 1080},
         "ignore_https_errors": True,
     }
+
+
+@pytest.fixture(scope="session")
+def screenshot_dir():
+    """
+    Create and return the directory for storing test screenshots.
+    
+    Returns:
+        Path: Directory path for screenshots
+    """
+    # Use environment variable if set (for CI), otherwise use local dir
+    base_dir = os.environ.get("SCREENSHOTS_DIR", "screenshots")
+    screenshots_path = Path(base_dir)
+    screenshots_path.mkdir(parents=True, exist_ok=True)
+    return screenshots_path
 
 
 @pytest.fixture
