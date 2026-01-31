@@ -242,6 +242,70 @@ class GoodViewTests(TestCase):
             )
             self.response_404()
 
+    def test_stage_reorder_down(self):
+        division = factories.DivisionFactory.create()
+        stage_a = factories.StageFactory.create(division=division, order=1)
+        stage_b = factories.StageFactory.create(division=division, order=2)
+        stage_c = factories.StageFactory.create(division=division, order=3)
+
+        with self.login(self.superuser):
+            # Without a HTTP_REFERER set this should throw a 404
+            self.get("admin:fixja:reorder", "stage:division", stage_b.pk, "down")
+            self.response_404()
+
+            # The first time we try to shift this down it will work because it
+            # isn't last in it's set.
+            self.get(
+                "admin:fixja:reorder",
+                "stage:division",
+                stage_b.pk,
+                "down",
+                extra=dict(HTTP_REFERER="http://testserver/"),
+            )
+            self.response_302()
+
+            # This time, however, it should fail because we're now last.
+            self.get(
+                "admin:fixja:reorder",
+                "stage:division",
+                stage_b.pk,
+                "down",
+                extra=dict(HTTP_REFERER="http://testserver/"),
+            )
+            self.response_404()
+
+    def test_stage_reorder_up(self):
+        division = factories.DivisionFactory.create()
+        stage_a = factories.StageFactory.create(division=division, order=1)
+        stage_b = factories.StageFactory.create(division=division, order=2)
+        stage_c = factories.StageFactory.create(division=division, order=3)
+
+        with self.login(self.superuser):
+            # Without a HTTP_REFERER set this should throw a 404
+            self.get("admin:fixja:reorder", "stage:division", stage_b.pk, "up")
+            self.response_404()
+
+            # The first time we try to shift this up it will work because it
+            # isn't first in it's set.
+            self.get(
+                "admin:fixja:reorder",
+                "stage:division",
+                stage_b.pk,
+                "up",
+                extra=dict(HTTP_REFERER="http://testserver/"),
+            )
+            self.response_302()
+
+            # This time, however, it should fail because we're now first.
+            self.get(
+                "admin:fixja:reorder",
+                "stage:division",
+                stage_b.pk,
+                "up",
+                extra=dict(HTTP_REFERER="http://testserver/"),
+            )
+            self.response_404()
+
     def test_index(self):
         self.assertLoginRequired("admin:fixja:index")
         with self.login(self.superuser):
