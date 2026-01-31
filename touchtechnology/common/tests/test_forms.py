@@ -6,7 +6,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 
 from touchtechnology.common.forms.auth import permissionformset_factory
-from touchtechnology.common.forms.fields import EmailField, HTMLField
+from touchtechnology.common.fields import EmailFormField, HTMLFormField
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.tests import factories
 
@@ -14,12 +14,12 @@ from touchtechnology.common.tests import factories
 class CustomFormField(TestCase):
     def test_email_field(self):
         self.assertFieldOutput(
-            EmailField,
+            EmailFormField,
             {"a@a.com": "a@a.com", "B@B.COM": "b@b.com"},
             {"aaa": ["Enter a valid email address."]},
         )
         self.assertFieldOutput(
-            EmailField,
+            EmailFormField,
             {"a@a.com": "a@a.com", "B@B.COM": "B@B.COM"},
             {"aaa": ["Enter a valid email address."]},
             (),
@@ -32,7 +32,7 @@ class CustomFormField(TestCase):
             "Penn\u00a0& Teller": "Penn&nbsp;& Teller",
             "sauté": "saut&eacute;",
         }
-        self.assertFieldOutput(HTMLField, valid, {})
+        self.assertFieldOutput(HTMLFormField, valid, {})
 
     maxDiff = None
 

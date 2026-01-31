@@ -2,6 +2,7 @@ import logging
 import os.path
 from urllib.parse import urljoin
 
+from constance import config
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import forms, get_user_model, views
@@ -33,10 +34,6 @@ from touchtechnology.common.decorators import (
     login_required_m,
     node2extracontext,
     require_POST_m,
-)
-from touchtechnology.common.default_settings import (
-    PAGINATE_BY,
-    PROFILE_FORM_CLASS,
 )
 from touchtechnology.common.utils import (
     get_all_perms_for_model_cached,
@@ -342,7 +339,7 @@ class Application(object):
         }
 
         if paginate_by is None:
-            paginate_by = PAGINATE_BY
+            paginate_by = config.TOUCHTECHNOLOGY_PAGINATE_BY
 
         # Ensure that paginate_by is an integer to prevent ZeroDivisionError
         # inside the Django paginator steps.
@@ -1103,7 +1100,7 @@ class Application(object):
 class AccountsSite(Application):
     def __init__(self, name="accounts", app_name="accounts", *args, **kwargs):
         super(AccountsSite, self).__init__(name=name, app_name=app_name)
-        self.profile_form_class = kwargs.pop("profile_form_class", PROFILE_FORM_CLASS)
+        self.profile_form_class = kwargs.pop("profile_form_class", config.TOUCHTECHNOLOGY_PROFILE_FORM_CLASS)
         self.user_model = get_user_model()
 
     @property

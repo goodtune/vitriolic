@@ -5,6 +5,8 @@
 import logging
 from importlib import import_module
 
+from constance import config
+from django.conf import settings
 from django.contrib.contenttypes.fields import GenericRelation
 from django.core.cache import caches
 from django.db import models
@@ -15,24 +17,25 @@ from django.utils.translation import gettext, gettext_lazy as _
 from first import first
 
 from touchtechnology.admin.mixins import AdminUrlMixin
-from touchtechnology.common.db.models import (
+from touchtechnology.common.fields import (
     BooleanField,
     HTMLField,
     TemplatePathField,
 )
-from touchtechnology.content.app_settings import (
-    NODE_CACHE,
-    PAGE_CONTENT_CLASSES,
-    PAGE_TEMPLATE_BASE,
-    PAGE_TEMPLATE_FOLDER,
-    PAGE_TEMPLATE_REGEX,
-)
 
 logger = logging.getLogger(__name__)
 
-PAGE_CONTENT_CLASS_CHOICES = zip(PAGE_CONTENT_CLASSES, PAGE_CONTENT_CLASSES)
 
-PAGE_CONTENT_CLASS_DEFAULT = first(PAGE_CONTENT_CLASSES)
+def _get_page_content_class_choices():
+    """Lazy function to get PAGE_CONTENT_CLASS_CHOICES."""
+    classes = config.TOUCHTECHNOLOGY_PAGE_CONTENT_CLASSES
+    return list(zip(classes, classes))
+
+
+def _get_page_content_class_default():
+    """Lazy function to get PAGE_CONTENT_CLASS_DEFAULT."""
+    return first(config.TOUCHTECHNOLOGY_PAGE_CONTENT_CLASSES)
+
 
 SITE_CACHE_KEY = "_site_cache"
 
@@ -58,12 +61,20 @@ class Page(models.Model):
 
     # allows us to customise the template on a per page basis
 
+    def _get_template_base():
+        # Calculate default if not set in constance
+        project_template_dirs = first(getattr(settings, "TEMPLATES", ()), {}).get(
+            "DIRS", []
+        )
+        project_template_base = first(project_template_dirs, "templates")
+        return config.TOUCHTECHNOLOGY_PAGE_TEMPLATE_BASE or project_template_base
+
     template = TemplatePathField(
         max_length=200,
         blank=True,
-        template_base=PAGE_TEMPLATE_BASE,
-        template_folder=PAGE_TEMPLATE_FOLDER,
-        match=PAGE_TEMPLATE_REGEX,
+        template_base=_get_template_base(),
+        template_folder=config.TOUCHTECHNOLOGY_PAGE_TEMPLATE_FOLDER,
+        match=config.TOUCHTECHNOLOGY_PAGE_TEMPLATE_REGEX,
         recursive=True,
         verbose_name=_("Template"),
     )
@@ -86,8 +97,7 @@ class Page(models.Model):
         blank=True,
         verbose_name=_("Description"),
         help_text=_(
-            "Search Engines may use this when determining the "
-            "relevance of your page."
+            "Search Engines may use this when determining the relevance of your page."
         ),
     )
 
@@ -123,8 +133,8 @@ class PageContent(models.Model):
     )
     label = models.SlugField(
         max_length=20,
-        choices=PAGE_CONTENT_CLASS_CHOICES,
-        default=PAGE_CONTENT_CLASS_DEFAULT,
+        choices=_get_page_content_class_choices,
+        default=_get_page_content_class_default,
         verbose_name=_("CSS class"),
     )
     sequence = models.PositiveIntegerField(verbose_name=_("Sequence"))
@@ -226,7 +236,7 @@ class Placeholder(models.Model):
     def invalidate_cache(self):
         # Since this is forced cache invalidation, we should log it.
         logger.info("Forced invalidation of Application cache.")
-        cache = caches[NODE_CACHE]
+        cache = caches[config.TOUCHTECHNOLOGY_NODE_CACHE]
         return cache.clear()
 
     invalidate_cache.alters_data = True

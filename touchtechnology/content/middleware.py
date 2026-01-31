@@ -16,10 +16,8 @@ from django.utils.deprecation import MiddlewareMixin
 from guardian.conf import settings as guardian_settings
 from mptt.utils import tree_item_iterator
 
-from touchtechnology.common.default_settings import (
-    SITEMAP_HTTPS_OPTION,
-    SITEMAP_ROOT,
-)
+from constance import config
+
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.sitemaps import NodeSitemap
 from touchtechnology.common.sites import AccountsSite
@@ -74,7 +72,7 @@ class SitemapNodeMiddleware(MiddlewareMixin):
 
             def get_absolute_url(n, st):
                 assert not n.is_root_node()
-                offset = 1 if st["ancestors"][0].slug == SITEMAP_ROOT else 0
+                offset = 1 if st["ancestors"][0].slug == config.TOUCHTECHNOLOGY_SITEMAP_ROOT else 0
                 paths = [ancestor.slug for ancestor in st["ancestors"][offset:]]
                 if paths:
                     return os.path.join(os.path.join(*paths), n.slug)
@@ -89,7 +87,7 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                     logger.debug("%r has disabled ancestor, omit from urlconf", node)
                     continue
 
-                if node.is_root_node() and node.slug == SITEMAP_ROOT:
+                if node.is_root_node() and node.slug == config.TOUCHTECHNOLOGY_SITEMAP_ROOT:
                     part = ""
                 elif node.is_root_node():
                     part = node.slug
@@ -233,7 +231,7 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                     return HttpResponseForbidden()
 
         if (
-            SITEMAP_HTTPS_OPTION
+            config.TOUCHTECHNOLOGY_SITEMAP_HTTPS_OPTION
             and node
             and node.require_https
             and not request.is_secure()

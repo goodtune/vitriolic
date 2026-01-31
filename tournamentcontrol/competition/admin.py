@@ -5,6 +5,7 @@ import logging
 import operator
 from zoneinfo import ZoneInfo
 
+from constance import config
 from dateutil.relativedelta import relativedelta
 from django.apps import apps
 from django.conf import settings
@@ -116,8 +117,6 @@ from tournamentcontrol.competition.utils import (
     match_unplayed,
 )
 from tournamentcontrol.competition.wizards import DrawGenerationWizard
-
-SCORECARD_PDF_WAIT = getattr(settings, "TOURNAMENTCONTROL_SCORECARD_PDF_WAIT", 5)
 
 log = logging.getLogger(__name__)
 
@@ -1860,10 +1859,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         for key, val in request.GET.items():
             extra_context.setdefault(key, val)
 
-        if (
-            getattr(settings, "TOURNAMENTCONTROL_ASYNC_PDF_GRID", False)
-            and mode == "pdf"
-        ):
+        if config.TOURNAMENTCONTROL_ASYNC_PDF_GRID and mode == "pdf":
             result = generate_pdf_grid.delay(season, extra_context)
             redirect_to = self.reverse(
                 "competition:season:grid-async",
@@ -1881,10 +1877,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @csrf_exempt_m
     @staff_login_required_m
     def day_grid(self, request, season, date, mode, extra_context, **kwargs):
-        if (
-            getattr(settings, "TOURNAMENTCONTROL_ASYNC_PDF_GRID", False)
-            and mode == "pdf"
-        ):
+        if config.TOURNAMENTCONTROL_ASYNC_PDF_GRID and mode == "pdf":
             extra_context.pop("admin", None)
             extra_context.pop("component", None)
             result = generate_pdf_grid.delay(season, extra_context, date)
@@ -1916,7 +1909,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
         templates = self.template_path("wait.html", "scorecards")
         response = self.render(request, templates, extra_context)
-        response["Refresh"] = SCORECARD_PDF_WAIT
+        response["Refresh"] = config.TOURNAMENTCONTROL_SCORECARD_PDF_WAIT
         return response
 
     @competition_by_pk_m
@@ -2387,7 +2380,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
         templates = self.template_path("wait.html", "scorecards")
         response = self.render(request, templates, extra_context)
-        response["Refresh"] = SCORECARD_PDF_WAIT
+        response["Refresh"] = config.TOURNAMENTCONTROL_SCORECARD_PDF_WAIT
         return response
 
     @competition_by_pk_m

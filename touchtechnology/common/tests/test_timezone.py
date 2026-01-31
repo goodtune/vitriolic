@@ -10,7 +10,7 @@ from django.utils.encoding import smart_str
 from freezegun import freeze_time
 from test_plus import TestCase
 
-from touchtechnology.common.forms.fields import SelectDateTimeField
+from touchtechnology.common.fields import SelectDateTimeField
 
 
 class TestForm1(forms.Form):
