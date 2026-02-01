@@ -656,23 +656,6 @@ class DivisionColorForm(ModelForm):
         widgets = {
             "color": forms.TextInput(attrs={"type": "color"}),
         }
-    
-    def clean_color(self):
-        """Validate color uniqueness within the season."""
-        color = self.cleaned_data.get("color")
-        if not color:
-            return color
-        
-        # Check for duplicate colors in the same season
-        season = self.instance.season
-        duplicate_exists = Division.objects.filter(
-            season=season, color=color
-        ).exclude(pk=self.instance.pk).exists()
-        
-        if duplicate_exists:
-            raise ValidationError("This color is already used by another division")
-        
-        return color
 
 
 class StageForm(SuperUserSlugMixin, ModelForm):

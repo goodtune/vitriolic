@@ -819,6 +819,7 @@ class Division(
         unique_together = (
             ("title", "season"),
             ("slug", "season"),
+            ("season", "color"),
         )
         constraints = [
             models.UniqueConstraint(
