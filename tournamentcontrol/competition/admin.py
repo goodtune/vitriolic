@@ -3,6 +3,7 @@ import collections
 import functools
 import logging
 import operator
+import re
 from zoneinfo import ZoneInfo
 
 from dateutil.relativedelta import relativedelta
@@ -1238,7 +1239,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         color = request.POST.get("color", "").strip()
         
         # Validate color format
-        import re
         if not re.match(r'^#[0-9a-fA-F]{6}$', color):
             return HttpResponse(
                 '<span class="text-danger">Invalid color format</span>',
