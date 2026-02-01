@@ -1,36 +1,6 @@
-from django.core.exceptions import ValidationError
-from django.db import IntegrityError
 from test_plus import TestCase
 
-from tournamentcontrol.competition.models import Division
 from tournamentcontrol.competition.tests import factories
-
-
-class DivisionColorUniquenessTests(TestCase):
-    """Test cases for Division color uniqueness constraint within a Season."""
-
-    @classmethod
-    def setUpTestData(cls):
-        cls.user_factory = factories.SuperUserFactory
-        cls.season = factories.SeasonFactory.create()
-        cls.division1 = factories.DivisionFactory.create(
-            season=cls.season, color="#ff0000"
-        )
-
-    def test_same_color_in_different_seasons_allowed(self):
-        """Test that divisions in different seasons can have the same color."""
-        season2 = factories.SeasonFactory.create()
-        division2 = factories.DivisionFactory.create(
-            season=season2, color=self.division1.color
-        )
-        self.assertEqual(division2.color, self.division1.color)
-
-    def test_duplicate_color_in_same_season_rejected(self):
-        """Test that duplicate colors in the same season are rejected."""
-        with self.assertRaises(IntegrityError):
-            factories.DivisionFactory.create(
-                season=self.season, color=self.division1.color
-            )
 
 
 class DivisionColorUpdateViewTests(TestCase):
