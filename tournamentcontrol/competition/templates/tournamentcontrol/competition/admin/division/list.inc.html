@@ -11,14 +11,50 @@
 {% block table-headings %}
 	{{ block.super }}
 	<th>{% trans "Short title" %}</th>
+	<th>{% trans "Color" %}</th>
 {% endblock %}
 
 {% block table-columns %}
 	{{ block.super }}
 	<td>{{ obj.short_title|default:"-" }}</td>
+	<td class="color-picker-cell">
+		<style>
+			.color-picker-cell {
+				white-space: nowrap;
+			}
+			.color-picker-wrapper {
+				display: inline-flex;
+				align-items: center;
+				gap: 8px;
+			}
+			.color-picker-wrapper input[type="color"] {
+				width: 50px;
+				height: 30px;
+				border: 1px solid #ccc;
+				border-radius: 4px;
+				cursor: pointer;
+			}
+			.color-status {
+				display: inline-block;
+				min-width: 20px;
+			}
+		</style>
+		<div class="color-picker-wrapper">
+			<input 
+				type="color" 
+				name="color-{{ obj.pk }}" 
+				value="{{ obj.color }}"
+				hx-post="{% url 'admin:fixja:competition:season:division:update-color' competition.pk season.pk obj.pk %}"
+				hx-trigger="change"
+				hx-target="#color-status-{{ obj.pk }}"
+				hx-swap="innerHTML"
+			>
+			<span id="color-status-{{ obj.pk }}" class="color-status"></span>
+		</div>
+	</td>
 {% endblock %}
 
-{% block empty-row-colspan %}3{% endblock %}
+{% block empty-row-colspan %}4{% endblock %}
 
 {% block row-buttons-extra %}
 		<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:competition:season:division:scorers' competition.pk season.pk obj.pk %}" role="button">

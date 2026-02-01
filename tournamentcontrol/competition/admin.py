@@ -368,6 +368,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path("<int:division_id>/", self.edit_division, name="edit"),
                 path("<int:division_id>/delete/", self.delete_division, name="delete"),
                 path(
+                    "<int:division_id>/update-color/",
+                    self.update_division_color,
+                    name="update-color",
+                ),
+                path(
                     "<int:division_id>/stage/", include(stage_urls, namespace="stage")
                 ),
                 path("<int:division_id>/teams/", include(team_urls, namespace="team")),
@@ -1221,6 +1226,42 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             pk=division.pk,
             permission_required=True,
             post_delete_redirect=post_delete_redirect,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def update_division_color(self, request, season, division, **kwargs):
+        """Handle inline HTMX update of division color."""
+        if request.method != "POST":
+            return HttpResponse(status=405)  # Method not allowed
+        
+        color = request.POST.get("color", "").strip()
+        
+        # Validate color format
+        import re
+        if not re.match(r'^#[0-9a-fA-F]{6}$', color):
+            return HttpResponse(
+                '<span class="text-danger">Invalid color format</span>',
+                status=400
+            )
+        
+        # Check for uniqueness within the season
+        if Division.objects.filter(
+            season=season, color=color
+        ).exclude(pk=division.pk).exists():
+            return HttpResponse(
+                '<span class="text-danger">This color is already used by another division</span>',
+                status=400
+            )
+        
+        # Update the color
+        division.color = color
+        division.save(update_fields=["color"])
+        
+        # Return success response
+        return HttpResponse(
+            '<span class="text-success">✓</span>',
+            status=200
         )
 
     @competition_by_pk_m

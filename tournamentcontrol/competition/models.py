@@ -820,6 +820,12 @@ class Division(
             ("title", "season"),
             ("slug", "season"),
         )
+        constraints = [
+            models.UniqueConstraint(
+                fields=["season", "color"],
+                name="division_color_unique_per_season",
+            ),
+        ]
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:division"
