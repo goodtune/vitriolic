@@ -25,7 +25,6 @@ from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _, ngettext
-from django.views.decorators.http import require_http_methods
 from googleapiclient.errors import HttpError
 
 from touchtechnology.admin.base import AdminComponent
@@ -1233,9 +1232,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
-    @require_http_methods(["POST"])
     def update_division_color(self, request, season, division, **kwargs):
         """Handle inline HTMX update of division color."""
+        if request.method != "POST":
+            return HttpResponse(status=405)
+        
         form = DivisionColorForm(request.POST, instance=division)
         
         if form.is_valid():

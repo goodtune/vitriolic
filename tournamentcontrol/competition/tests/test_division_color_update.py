@@ -24,118 +24,102 @@ class DivisionColorUpdateViewTests(TestCase):
 
     def test_update_color_success(self):
         """Test successful color update via HTMX endpoint."""
-        response = self.client.post(
-            self.reverse(
-                "admin:fixja:competition:season:division:update-color",
-                self.competition.pk,
-                self.season.pk,
-                self.division1.pk,
-            ),
+        self.post(
+            "admin:fixja:competition:season:division:update-color",
+            self.competition.pk,
+            self.season.pk,
+            self.division1.pk,
             data={"color": "#0000ff"}
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("✓", response.content.decode())
+        self.response_200()
+        self.assertResponseContains("✓")
         
         self.division1.refresh_from_db()
         self.assertEqual(self.division1.color, "#0000ff")
 
     def test_update_color_requires_post(self):
         """Test that the endpoint requires POST method."""
-        response = self.client.get(
-            self.reverse(
-                "admin:fixja:competition:season:division:update-color",
-                self.competition.pk,
-                self.season.pk,
-                self.division1.pk,
-            )
+        self.get(
+            "admin:fixja:competition:season:division:update-color",
+            self.competition.pk,
+            self.season.pk,
+            self.division1.pk,
         )
-        self.assertEqual(response.status_code, 405)
+        self.assertEqual(self.last_response.status_code, 405)
 
     def test_update_color_invalid_format(self):
         """Test that invalid color formats are rejected."""
-        response = self.client.post(
-            self.reverse(
-                "admin:fixja:competition:season:division:update-color",
-                self.competition.pk,
-                self.season.pk,
-                self.division1.pk,
-            ),
+        self.post(
+            "admin:fixja:competition:season:division:update-color",
+            self.competition.pk,
+            self.season.pk,
+            self.division1.pk,
             data={"color": "red"}
         )
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("color", response.content.decode().lower())
+        self.assertEqual(self.last_response.status_code, 400)
+        self.assertIn("color", self.last_response.content.decode().lower())
 
     def test_update_color_missing_hash(self):
         """Test that color without # prefix is rejected."""
-        response = self.client.post(
-            self.reverse(
-                "admin:fixja:competition:season:division:update-color",
-                self.competition.pk,
-                self.season.pk,
-                self.division1.pk,
-            ),
+        self.post(
+            "admin:fixja:competition:season:division:update-color",
+            self.competition.pk,
+            self.season.pk,
+            self.division1.pk,
             data={"color": "ff0000"}
         )
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("color", response.content.decode().lower())
+        self.assertEqual(self.last_response.status_code, 400)
+        self.assertIn("color", self.last_response.content.decode().lower())
 
     def test_update_color_short_hex(self):
         """Test that short hex codes are rejected."""
-        response = self.client.post(
-            self.reverse(
-                "admin:fixja:competition:season:division:update-color",
-                self.competition.pk,
-                self.season.pk,
-                self.division1.pk,
-            ),
+        self.post(
+            "admin:fixja:competition:season:division:update-color",
+            self.competition.pk,
+            self.season.pk,
+            self.division1.pk,
             data={"color": "#f00"}
         )
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("color", response.content.decode().lower())
+        self.assertEqual(self.last_response.status_code, 400)
+        self.assertIn("color", self.last_response.content.decode().lower())
 
     def test_update_color_duplicate_rejected(self):
         """Test that duplicate colors in the same season are rejected."""
-        response = self.client.post(
-            self.reverse(
-                "admin:fixja:competition:season:division:update-color",
-                self.competition.pk,
-                self.season.pk,
-                self.division1.pk,
-            ),
+        self.post(
+            "admin:fixja:competition:season:division:update-color",
+            self.competition.pk,
+            self.season.pk,
+            self.division1.pk,
             data={"color": self.division2.color}
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.last_response.status_code, 400)
         # Check for error message about duplicate color
-        content = response.content.decode()
+        content = self.last_response.content.decode()
         self.assertIn("color", content.lower())
 
     def test_update_color_same_value_allowed(self):
         """Test that updating to the same color value is allowed."""
-        response = self.client.post(
-            self.reverse(
-                "admin:fixja:competition:season:division:update-color",
-                self.competition.pk,
-                self.season.pk,
-                self.division1.pk,
-            ),
+        self.post(
+            "admin:fixja:competition:season:division:update-color",
+            self.competition.pk,
+            self.season.pk,
+            self.division1.pk,
             data={"color": self.division1.color}
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("✓", response.content.decode())
+        self.response_200()
+        self.assertResponseContains("✓")
 
     def test_update_color_unauthorized_access(self):
         """Test that unauthorized users cannot update colors."""
         self.client.logout()
-        response = self.client.post(
-            self.reverse(
-                "admin:fixja:competition:season:division:update-color",
-                self.competition.pk,
-                self.season.pk,
-                self.division1.pk,
-            ),
+        self.post(
+            "admin:fixja:competition:season:division:update-color",
+            self.competition.pk,
+            self.season.pk,
+            self.division1.pk,
             data={"color": "#0000ff"}
         )
-        self.assertEqual(response.status_code, 302)  # Redirect to login
+        self.response_302()  # Redirect to login
 
 
 class DivisionListColorWidgetTests(TestCase):
