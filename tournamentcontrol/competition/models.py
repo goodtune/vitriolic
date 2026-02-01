@@ -21,7 +21,7 @@ from django.core import validators
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.http import Http404, HttpResponse
-from django.db.models import Count, DateField, DateTimeField, Q, Sum, TimeField
+from django.db.models import Count, DateField, DateTimeField, Q, Sum, TimeField, UniqueConstraint
 from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
 from django.template import Template
 from django.template.loader import get_template
@@ -512,10 +512,16 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
     )
 
     class Meta(OrderedSitemapNode.Meta):
-        unique_together = (
-            ("title", "competition"),
-            ("slug", "competition"),
-        )
+        constraints = [
+            UniqueConstraint(
+                fields=["title", "competition"],
+                name="competition_season_unique_title_competition",
+            ),
+            UniqueConstraint(
+                fields=["slug", "competition"],
+                name="competition_season_unique_slug_competition",
+            ),
+        ]
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season"
@@ -816,10 +822,16 @@ class Division(
     objects = DivisionQuerySet.as_manager()
 
     class Meta(OrderedSitemapNode.Meta):
-        unique_together = (
-            ("title", "season"),
-            ("slug", "season"),
-        )
+        constraints = [
+            UniqueConstraint(
+                fields=["title", "season"],
+                name="competition_division_unique_title_season",
+            ),
+            UniqueConstraint(
+                fields=["slug", "season"],
+                name="competition_division_unique_slug_season",
+            ),
+        ]
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:division"
@@ -1178,10 +1190,16 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
     objects = StageQuerySet.as_manager()
 
     class Meta(OrderedSitemapNode.Meta):
-        unique_together = (
-            ("title", "division"),
-            ("slug", "division"),
-        )
+        constraints = [
+            UniqueConstraint(
+                fields=["title", "division"],
+                name="competition_stage_unique_title_division",
+            ),
+            UniqueConstraint(
+                fields=["slug", "division"],
+                name="competition_stage_unique_slug_division",
+            ),
+        ]
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:division:stage"
@@ -1289,7 +1307,12 @@ class StageGroup(AdminUrlMixin, OrderedSitemapNode):
 
     class Meta(OrderedSitemapNode.Meta):
         verbose_name = "pool"
-        unique_together = ("stage", "order")
+        constraints = [
+            UniqueConstraint(
+                fields=["stage", "order"],
+                name="competition_stagegroup_unique_stage_order",
+            ),
+        ]
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:division:stage:stagegroup"
@@ -1429,12 +1452,17 @@ class Team(AdminUrlMixin, OrderedSitemapNode):
             "stage_group__order",
             "order",
         )
-        unique_together = (("title", "division"),)
+        constraints = [
+            UniqueConstraint(
+                fields=["title", "division"],
+                name="competition_team_unique_title_division",
+            ),
+        ]
 
     def clean(self):
         errors = {}
 
-        # Ensure the Meta.unique_together constraint is applied consistently
+        # Ensure the UniqueConstraint is applied consistently (case-insensitive)
         other_teams = self.division.teams.exclude(pk=self.pk)
         if other_teams.filter(title__iexact=self.title):
             errors.setdefault("title", []).append(
@@ -1689,7 +1717,12 @@ class ClubAssociation(AdminUrlMixin, models.Model):
 
     class Meta:
         ordering = ("person__last_name", "person__first_name")
-        unique_together = ("club", "person")
+        constraints = [
+            UniqueConstraint(
+                fields=["club", "person"],
+                name="competition_clubassociation_unique_club_person",
+            ),
+        ]
         verbose_name = _("Official")
         verbose_name_plural = _("Officials")
 
@@ -1741,7 +1774,12 @@ class TeamAssociation(AdminUrlMixin, models.Model):
             "person__last_name",
             "person__first_name",
         )
-        unique_together = ("team", "person")
+        constraints = [
+            UniqueConstraint(
+                fields=["team", "person"],
+                name="competition_teamassociation_unique_team_person",
+            ),
+        ]
         verbose_name = "linked person"
         verbose_name_plural = "linked people"
 
@@ -1785,7 +1823,12 @@ class SeasonReferee(AdminUrlMixin, models.Model):
             "person__last_name",
             "person__first_name",
         )
-        unique_together = ("season", "person")
+        constraints = [
+            UniqueConstraint(
+                fields=["season", "person"],
+                name="competition_seasonreferee_unique_season_person",
+            ),
+        ]
         verbose_name = _("referee")
 
     def _get_admin_namespace(self):
@@ -1808,7 +1851,12 @@ class SeasonAssociation(AdminUrlMixin, models.Model):
             "person__last_name",
             "person__first_name",
         )
-        unique_together = ("season", "person")
+        constraints = [
+            UniqueConstraint(
+                fields=["season", "person"],
+                name="competition_seasonassociation_unique_season_person",
+            ),
+        ]
 
 
 class Match(AdminUrlMixin, models.Model):
@@ -2467,7 +2515,12 @@ class LadderSummary(LadderBase):
             "-percentage",
             "team__title",
         )
-        unique_together = ("stage", "team")
+        constraints = [
+            UniqueConstraint(
+                fields=["stage", "team"],
+                name="competition_laddersummary_unique_stage_team",
+            ),
+        ]
 
     def __repr__(self):
         return f"<LadderSummary: {self.stage!s} - {self.stage_group!s} - {self.team!s}>"
@@ -2509,7 +2562,12 @@ class SeasonExclusionDate(ExclusionDateBase):
     season = ForeignKey("Season", related_name="exclusions", on_delete=CASCADE)
 
     class Meta(ExclusionDateBase.Meta):
-        unique_together = ("season", "date")
+        constraints = [
+            UniqueConstraint(
+                fields=["season", "date"],
+                name="competition_seasonexclusiondate_unique_season_date",
+            ),
+        ]
         verbose_name = "exclusion date"
 
     def _get_admin_namespace(self):
@@ -2523,7 +2581,12 @@ class DivisionExclusionDate(ExclusionDateBase):
     division = ForeignKey("Division", related_name="exclusions", on_delete=CASCADE)
 
     class Meta:
-        unique_together = ("division", "date")
+        constraints = [
+            UniqueConstraint(
+                fields=["division", "date"],
+                name="competition_divisionexclusiondate_unique_division_date",
+            ),
+        ]
         verbose_name = "exclusion date"
 
     def _get_admin_namespace(self):
