@@ -1470,6 +1470,123 @@ class BackendTests(MessagesTestMixin, TestCase):
                 ],
             )
 
+    def test_bulk_divisions(self):
+        """
+        Test the bulk division creation functionality.
+        """
+        season = factories.SeasonFactory.create()
+        
+        # Test GET request to bulk divisions page
+        self.assertLoginRequired(
+            "admin:fixja:competition:season:division:bulk",
+            season.competition_id,
+            season.pk,
+        )
+        with self.login(self.superuser):
+            self.assertGoodView(
+                "admin:fixja:competition:season:division:bulk",
+                season.competition_id,
+                season.pk,
+            )
+
+        # Test POST request to create divisions
+        data = {
+            "form-TOTAL_FORMS": "2",
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "1000",
+            "form-0-title": "Men's Division",
+            "form-0-short_title": "Men",
+            "form-0-games_per_day": "3",
+            "form-0-forfeit_for_score": "5",
+            "form-0-forfeit_against_score": "0",
+            "form-0-draft": "0",
+            "form-1-title": "Women's Division", 
+            "form-1-short_title": "Women",
+            "form-1-games_per_day": "2",
+            "form-1-forfeit_for_score": "3",
+            "form-1-forfeit_against_score": "0",
+            "form-1-draft": "1",
+        }
+        
+        # Initially no divisions
+        self.assertEqual(season.divisions.count(), 0)
+        
+        # Post the form
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:division:bulk",
+                season.competition_id,
+                season.pk,
+                data=data,
+            )
+            self.response_302()
+
+        # Check divisions were created
+        season.refresh_from_db()
+        self.assertEqual(season.divisions.count(), 2)
+        
+        divisions = season.divisions.order_by("order")
+        
+        # Check first division
+        men_div = divisions[0]
+        self.assertEqual(men_div.title, "Men's Division")
+        self.assertEqual(men_div.short_title, "Men")
+        self.assertEqual(men_div.games_per_day, 3)
+        self.assertEqual(men_div.forfeit_for_score, 5)
+        self.assertEqual(men_div.forfeit_against_score, 0)
+        self.assertFalse(men_div.draft)
+        self.assertEqual(men_div.order, 1)
+        
+        # Check second division  
+        women_div = divisions[1]
+        self.assertEqual(women_div.title, "Women's Division")
+        self.assertEqual(women_div.short_title, "Women")
+        self.assertEqual(women_div.games_per_day, 2)
+        self.assertEqual(women_div.forfeit_for_score, 3)
+        self.assertEqual(women_div.forfeit_against_score, 0)
+        self.assertTrue(women_div.draft)
+        self.assertEqual(women_div.order, 2)
+
+    def test_bulk_divisions_ordering_with_existing(self):
+        """
+        Test that bulk division creation properly handles ordering when there are existing divisions.
+        """
+        season = factories.SeasonFactory.create()
+        
+        # Create an existing division
+        existing_division = factories.DivisionFactory.create(season=season, order=1)
+        
+        # Test creating new divisions
+        data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "0", 
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "1000",
+            "form-0-title": "New Division",
+            "form-0-short_title": "New",
+            "form-0-games_per_day": "2",
+            "form-0-forfeit_for_score": "4",
+            "form-0-forfeit_against_score": "0",
+            "form-0-draft": "0",
+        }
+        
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:division:bulk",
+                season.competition_id,
+                season.pk,
+                data=data,
+            )
+            self.response_302()
+
+        # Check the new division has correct order
+        season.refresh_from_db()
+        self.assertEqual(season.divisions.count(), 2)
+        
+        new_division = season.divisions.get(title="New Division")
+        self.assertEqual(new_division.order, 2)  # Should be N+1 where N=1
+
     def test_draw_generation_wizard_empty_form_bug(self):
         """
         Test that the draw generation wizard doesn't crash with TypeError when
