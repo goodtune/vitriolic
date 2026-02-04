@@ -7,6 +7,7 @@ from tournamentcontrol.competition.signals.ladders import (  # noqa
     team_ladder_entry_aggregation,
 )
 from tournamentcontrol.competition.signals.matches import (  # noqa
+    match_youtube_sync,
     match_saved_handler,
     notify_match_forfeit_email,
 )
