@@ -16,7 +16,9 @@
 			<ul id="myTab" class="nav nav-layout-sidebar nav-stacked">
 				{% block tab-links %}
 					<li class="active">
-						<a href="#{{ model|type|slugify }}-tab" data-toggle="tab">
+						<a href="#{{ model|type|slugify }}-tab"
+						   {% if htmx_admin_tabs %}class="htmx-tab-link" data-tab-id="{{ model|type|slugify }}-tab"{% endif %}
+						   data-toggle="tab">
 							<i class="fa fa-chevron-right fa-fw"></i>
 							&nbsp;{% trans "Edit" %} {{ model|type }}
 						</a>
@@ -25,10 +27,23 @@
 					{% if object.pk %}
 						{% for manager, name in object|related:related %}
 							<li{% if not object.pk %} class="disabled"{% endif %}>
-								<a href={% if object.pk %}"#{{ name }}-tab" data-toggle="tab"{% else %}"#"{% endif %}>
-									<i class="fa fa-chevron-right fa-fw"></i>
-									&nbsp;{{ manager.all|types|capfirst }}
-								</a>
+								{% if htmx_admin_tabs %}
+									<a href="#{{ name }}-tab"
+									   class="htmx-tab-link"
+									   data-tab-id="{{ name }}-tab"
+									   hx-get="?_htmx_tab={{ name }}"
+									   hx-target="#{{ name }}-tab"
+									   hx-swap="innerHTML"
+									   data-toggle="tab">
+										<i class="fa fa-chevron-right fa-fw"></i>
+										&nbsp;{{ manager.all|types|capfirst }}
+									</a>
+								{% else %}
+									<a href={% if object.pk %}"#{{ name }}-tab" data-toggle="tab"{% else %}"#"{% endif %}>
+										<i class="fa fa-chevron-right fa-fw"></i>
+										&nbsp;{{ manager.all|types|capfirst }}
+									</a>
+								{% endif %}
 							</li>
 						{% endfor %}
 					{% endif %}
@@ -39,12 +54,19 @@
 		<div class="col-md-9 col-sm-8 layout-main">
 			{% bootstrap_messages %}
 
+			{% if not htmx_admin_tabs %}
 			<form class="{% block form-class %}form-horizontal{% endblock %}" action="" method="post" enctype="multipart/form-data">
 			{% csrf_token %}
+			{% endif %}
 
 			<div id="tab-content" class="tab-content stacked-content">
 				{% block tab-panes %}
 					<div class="tab-pane active" id="{{ model|type|slugify }}-tab">
+						{% if htmx_admin_tabs %}
+						<form class="form-horizontal" action="" method="post" enctype="multipart/form-data">
+						{% csrf_token %}
+						{% endif %}
+
 							<div class="heading-block">
 								<h3>{{ model|type|capfirst }}</h3>
 							</div>
@@ -63,25 +85,43 @@
 									&nbsp;<a class="btn btn-default" href="{% block cancel-url %}{{ cancel_url }}{% endblock %}">{% trans "Cancel" %}</a>
 								</div> <!-- /.col -->
 							</div>
+
+						{% if htmx_admin_tabs %}
+						</form>
+						{% endif %}
 					</div>
 
 					{% if object.pk %}
 						{% for manager, name in object|related:related %}
-							<div class="tab-pane" id="{{ name }}-tab">
-								<!-- mvp_list manager.all -->
-								{% block mvp-list %}
-									{% with table=templates|default:None %}
-										{% mvp_list manager.all template=manager|mvp_list_template:table %}
-									{% endwith %}
-								{% endblock %}
-								<!-- /mvp_list manager.all -->
-							</div>
+							{% if htmx_admin_tabs %}
+								<div class="tab-pane" id="{{ name }}-tab"
+									 hx-get="?_htmx_tab={{ name }}"
+									 hx-trigger="load delay:100ms"
+									 hx-swap="innerHTML">
+									<div class="text-center text-muted">
+										<i class="fa fa-spinner fa-spin"></i>
+										&nbsp;{% trans "Loading..." %}
+									</div>
+								</div>
+							{% else %}
+								<div class="tab-pane" id="{{ name }}-tab">
+									<!-- mvp_list manager.all -->
+									{% block mvp-list %}
+										{% with table=templates|default:None %}
+											{% mvp_list manager.all template=manager|mvp_list_template:table %}
+										{% endwith %}
+									{% endblock %}
+									<!-- /mvp_list manager.all -->
+								</div>
+							{% endif %}
 						{% endfor %}
 					{% endif %}
 				{% endblock tab-panes %}
 			</div>
 
+			{% if not htmx_admin_tabs %}
 			</form>
+			{% endif %}
 		</div> <!-- /.col -->
 	</div>
 {% endblock %}
@@ -92,6 +132,14 @@
 		.heading-block .actions { float: right; }
 		.heading-block .actions a { padding-right: 0.5em; }
 	</style>
+
+	{% if htmx_admin_tabs %}
+		<style type="text/css">
+			.htmx-indicator { display: none; }
+			.htmx-request .htmx-indicator { display: inline-block; }
+			.htmx-request.htmx-indicator { display: inline-block; }
+		</style>
+	{% endif %}
 
 	<!-- form media -->
 	{{ form.media }}
@@ -131,6 +179,22 @@
 			$('.form-group.select select, .form-group.select_multiple select').select2({
 				allowClear: true
 			})
+
+			{% if htmx_admin_tabs %}
+			/* Re-initialize plugins after HTMX content swap */
+			document.body.addEventListener('htmx:afterSwap', function(evt) {
+				var target = $(evt.detail.target)
+				target.find('div.icheck input').iCheck({
+					checkboxClass: 'ui-icheck icheckbox_minimal-grey',
+					radioClass: 'ui-icheck iradio_minimal-grey'
+				}).on('ifChanged', function(e) {
+					$(e.currentTarget).trigger('change')
+				})
+				target.find('.form-group.select select, .form-group.select_multiple select').select2({
+					allowClear: true
+				})
+			})
+			{% endif %}
 		})
 	</script>
 {% endblock %}
