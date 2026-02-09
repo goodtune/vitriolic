@@ -181,6 +181,12 @@
 <!-- Framework JS -->
 <script src="{{ STATIC_URL }}touchtechnology/admin/js/modal_delete.js"></script>
 
+{% if htmx_admin_tabs %}
+<!-- HTMX -->
+{% load static %}
+<script src="{% static 'django_htmx/htmx.min.js' %}"></script>
+{% endif %}
+
 {% block extrajs %}{% endblock %}
 </body>
 </html>

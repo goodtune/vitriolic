@@ -35,6 +35,7 @@ from touchtechnology.common.decorators import (
     require_POST_m,
 )
 from touchtechnology.common.default_settings import (
+    HTMX_ADMIN_TABS,
     PAGINATE_BY,
     PROFILE_FORM_CLASS,
 )
@@ -393,6 +394,46 @@ class Application(object):
 
         return self.render(request, templates, context)
 
+    def _is_htmx_request(self, request):
+        """Check if the request is an HTMX request."""
+        return getattr(request, "htmx", False) or request.META.get(
+            "HTTP_HX_REQUEST"
+        ) == "true"
+
+    def _render_htmx_tab_content(
+        self, request, model, manager, tab_name, instance, related, extra_context
+    ):
+        """
+        Render partial HTML content for a specific tab pane via HTMX.
+        Returns a TemplateResponse with just the tab's content fragment.
+        """
+        from touchtechnology.admin.templatetags.mvp_tags import related as related_filter
+
+        context = {
+            "model": manager.none(),
+            "object": instance,
+            "related": related,
+            "htmx_admin_tabs": True,
+        }
+        context.update(extra_context or {})
+
+        if instance and instance.pk and related:
+            for mgr, name in related_filter(instance, related):
+                if name == tab_name:
+                    context.update(
+                        {
+                            "tab_manager": mgr,
+                            "tab_name": name,
+                        }
+                    )
+                    templates = [
+                        "touchtechnology/admin/_htmx_tab_related.html",
+                    ]
+                    return self.render(request, templates, context)
+
+        # Tab not found - return empty content
+        return TemplateResponse(request, "touchtechnology/admin/_htmx_tab_empty.html", context)
+
     def generic_edit(
         self,
         request,
@@ -469,6 +510,14 @@ class Application(object):
             # thrown an exception by now.
             if has_permission is not None:
                 return has_permission
+
+        # Handle HTMX tab content requests - return partial HTML for a
+        # specific tab pane when the _htmx_tab query parameter is present.
+        htmx_tab = request.GET.get("_htmx_tab")
+        if htmx_tab and HTMX_ADMIN_TABS and self._is_htmx_request(request):
+            return self._render_htmx_tab_content(
+                request, model, manager, htmx_tab, instance, related, extra_context
+            )
 
         # If the developer has not provided a custom form, then dynamically
         # construct a default ModelForm for them.
