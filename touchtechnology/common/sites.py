@@ -35,7 +35,6 @@ from touchtechnology.common.decorators import (
     require_POST_m,
 )
 from touchtechnology.common.default_settings import (
-    HTMX_ADMIN_TABS,
     PAGINATE_BY,
     PROFILE_FORM_CLASS,
 )
@@ -407,6 +406,8 @@ class Application(object):
         Render partial HTML content for a specific tab pane via HTMX.
         Returns a TemplateResponse with just the tab's content fragment.
         """
+        # Avoid circular import: touchtechnology.admin imports from
+        # touchtechnology.common.sites (Application base class).
         from touchtechnology.admin.templatetags.mvp_tags import related as related_filter
 
         context = {
@@ -514,7 +515,8 @@ class Application(object):
         # Handle HTMX tab content requests - return partial HTML for a
         # specific tab pane when the _htmx_tab query parameter is present.
         htmx_tab = request.GET.get("_htmx_tab")
-        if htmx_tab and HTMX_ADMIN_TABS and self._is_htmx_request(request):
+        htmx_admin_tabs = getattr(settings, "TOUCHTECHNOLOGY_HTMX_ADMIN_TABS", False)
+        if htmx_tab and htmx_admin_tabs and self._is_htmx_request(request):
             return self._render_htmx_tab_content(
                 request, model, manager, htmx_tab, instance, related, extra_context
             )

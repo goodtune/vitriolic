@@ -1,19 +1,59 @@
-from unittest.mock import patch
-
 from django.template import Context, Template
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
 from test_plus import TestCase
 
 from touchtechnology.common.context_processors import htmx_admin_tabs
+from touchtechnology.common.default_settings import HTMX_ADMIN_TABS, LazySetting, S
 from touchtechnology.common.tests import factories
+
+
+class LazySettingsHelperTests(TestCase):
+    """Tests for the S() lazy settings helper."""
+
+    def test_s_returns_lazy_object(self):
+        result = S("HTMX_ADMIN_TABS", False)
+        self.assertIsInstance(result, LazySetting)
+
+    def test_s_default_value(self):
+        result = S("NONEXISTENT_SETTING_FOR_TEST", "default_val")
+        self.assertEqual(result, "default_val")
+
+    def test_s_default_none(self):
+        result = S("NONEXISTENT_SETTING_FOR_TEST")
+        self.assertEqual(result, None)
+
+    @override_settings(TOUCHTECHNOLOGY_LAZY_TEST_SETTING="hello")
+    def test_s_reads_from_settings(self):
+        result = S("LAZY_TEST_SETTING", "fallback")
+        self.assertEqual(result, "hello")
+
+    def test_s_boolean_evaluation(self):
+        result = S("HTMX_ADMIN_TABS", False)
+        self.assertFalse(result)
+
+    @override_settings(TOUCHTECHNOLOGY_LAZY_TEST_BOOL=True)
+    def test_s_boolean_true_evaluation(self):
+        result = S("LAZY_TEST_BOOL", False)
+        self.assertTrue(result)
+
+    def test_s_int_coercion(self):
+        result = S("NONEXISTENT_INT", 5)
+        self.assertEqual(int(result), 5)
+
+    @override_settings(TOUCHTECHNOLOGY_LAZY_INT_TEST=25)
+    def test_s_int_coercion_from_settings(self):
+        result = S("LAZY_INT_TEST", 10)
+        self.assertEqual(int(result), 25)
+
+    def test_s_float_coercion(self):
+        result = S("NONEXISTENT_FLOAT", 3.14)
+        self.assertAlmostEqual(float(result), 3.14)
 
 
 class HtmxAdminTabsFeatureFlagTests(TestCase):
     """Tests for the HTMX admin tabs feature flag."""
 
     def test_default_flag_is_false(self):
-        from touchtechnology.common.default_settings import HTMX_ADMIN_TABS
-
         self.assertFalse(HTMX_ADMIN_TABS)
 
     def test_context_processor_returns_flag(self):
@@ -22,12 +62,18 @@ class HtmxAdminTabsFeatureFlagTests(TestCase):
         result = htmx_admin_tabs(request)
         self.assertIn("htmx_admin_tabs", result)
 
-    def test_context_processor_value_matches_setting(self):
+    def test_context_processor_default_value(self):
         rf = RequestFactory()
         request = rf.get("/")
         result = htmx_admin_tabs(request)
-        # By default, should be False
         self.assertFalse(result["htmx_admin_tabs"])
+
+    @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
+    def test_context_processor_respects_override(self):
+        rf = RequestFactory()
+        request = rf.get("/")
+        result = htmx_admin_tabs(request)
+        self.assertTrue(result["htmx_admin_tabs"])
 
 
 class HtmxTabTemplateRenderingTests(TestCase):
@@ -111,50 +157,52 @@ class HtmxTabViewTests(TestCase):
     def test_edit_view_without_htmx_flag(self):
         """Edit view returns full page when HTMX flag is disabled."""
         with self.login(self.superuser):
-            response = self.get("admin:auth:users:edit", pk=self.superuser.pk)
+            self.get("admin:auth:users:edit", pk=self.superuser.pk)
             self.response_200()
-            self.assertTemplateUsed(response, "touchtechnology/admin/edit.html")
+            self.assertTemplateUsed(
+                self.last_response, "touchtechnology/admin/edit.html"
+            )
 
-    @patch("touchtechnology.common.sites.HTMX_ADMIN_TABS", True)
+    @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
     def test_edit_view_with_htmx_flag_no_htmx_header(self):
         """Edit view returns full page even with flag on if not HTMX request."""
         with self.login(self.superuser):
-            response = self.client.get(
-                self.reverse("admin:auth:users:edit", pk=self.superuser.pk),
-                {"_htmx_tab": "groups"},
+            self.get(
+                "admin:auth:users:edit",
+                pk=self.superuser.pk,
+                data={"_htmx_tab": "groups"},
             )
-            self.assertEqual(response.status_code, 200)
-            # Without the HTMX header, it returns the full page
+            self.response_200()
             self.assertTemplateUsed(
-                response, "touchtechnology/admin/edit.html"
+                self.last_response, "touchtechnology/admin/edit.html"
             )
 
-    @patch("touchtechnology.common.sites.HTMX_ADMIN_TABS", True)
+    @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
     def test_edit_view_htmx_tab_request_no_related(self):
         """HTMX tab request on view with no related objects returns empty."""
         with self.login(self.superuser):
-            response = self.client.get(
-                self.reverse("admin:auth:users:edit", pk=self.superuser.pk),
-                {"_htmx_tab": "groups"},
-                HTTP_HX_REQUEST="true",
+            self.get(
+                "admin:auth:users:edit",
+                pk=self.superuser.pk,
+                data={"_htmx_tab": "groups"},
+                extra={"HTTP_HX_REQUEST": "true"},
             )
-            self.assertEqual(response.status_code, 200)
-            # The user edit view has no 'related' parameter, so the
-            # HTMX tab handler returns the empty tab template
-            template_names = [t.name for t in response.templates]
-            self.assertIn(
-                "touchtechnology/admin/_htmx_tab_empty.html", template_names
+            self.response_200()
+            self.assertTemplateUsed(
+                self.last_response,
+                "touchtechnology/admin/_htmx_tab_empty.html",
             )
 
     def test_edit_view_htmx_tab_ignored_when_flag_off(self):
         """HTMX tab parameter is ignored when feature flag is off."""
         with self.login(self.superuser):
-            response = self.client.get(
-                self.reverse("admin:auth:users:edit", pk=self.superuser.pk),
-                {"_htmx_tab": "groups"},
-                HTTP_HX_REQUEST="true",
+            self.get(
+                "admin:auth:users:edit",
+                pk=self.superuser.pk,
+                data={"_htmx_tab": "groups"},
+                extra={"HTTP_HX_REQUEST": "true"},
             )
-            self.assertEqual(response.status_code, 200)
+            self.response_200()
             self.assertTemplateUsed(
-                response, "touchtechnology/admin/edit.html"
+                self.last_response, "touchtechnology/admin/edit.html"
             )

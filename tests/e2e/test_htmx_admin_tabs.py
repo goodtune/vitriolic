@@ -4,7 +4,10 @@ Tests both the traditional (legacy) tab mode and the new HTMX-driven
 multi-step form system, ensuring functionality across both modes.
 """
 
+from urllib.parse import urljoin
+
 import pytest
+from django.urls import reverse
 from playwright.sync_api import Page, expect
 
 
@@ -30,6 +33,19 @@ def competition_data(db):
     }
 
 
+def competition_edit_url(live_server, competition):
+    path = reverse("admin:fixja:competition:edit", args=[competition.pk])
+    return urljoin(live_server.url, path)
+
+
+def season_edit_url(live_server, competition, season):
+    path = reverse(
+        "admin:fixja:competition:season:edit",
+        args=[competition.pk, season.pk],
+    )
+    return urljoin(live_server.url, path)
+
+
 class TestTraditionalTabMode:
     """Tests for the traditional (non-HTMX) tab-based admin interface."""
 
@@ -38,9 +54,7 @@ class TestTraditionalTabMode:
     ):
         """Competition edit page shows tab navigation in traditional mode."""
         competition = competition_data["competition"]
-        authenticated_page.goto(
-            f"{live_server.url}/admin/competition/{competition.pk}/"
-        )
+        authenticated_page.goto(competition_edit_url(live_server, competition))
 
         # Verify tab navigation sidebar is present
         tab_nav = authenticated_page.locator("#myTab")
@@ -57,9 +71,7 @@ class TestTraditionalTabMode:
     ):
         """Competition edit page has a working form with Save button."""
         competition = competition_data["competition"]
-        authenticated_page.goto(
-            f"{live_server.url}/admin/competition/{competition.pk}/"
-        )
+        authenticated_page.goto(competition_edit_url(live_server, competition))
 
         # Verify the form is present
         form = authenticated_page.locator("form.form-horizontal")
@@ -79,8 +91,7 @@ class TestTraditionalTabMode:
         season = competition_data["season"]
         competition = competition_data["competition"]
         authenticated_page.goto(
-            f"{live_server.url}/admin/competition/{competition.pk}"
-            f"/seasons/{season.pk}/"
+            season_edit_url(live_server, competition, season)
         )
 
         # Verify tab navigation exists
@@ -100,8 +111,7 @@ class TestTraditionalTabMode:
         season = competition_data["season"]
         competition = competition_data["competition"]
         authenticated_page.goto(
-            f"{live_server.url}/admin/competition/{competition.pk}"
-            f"/seasons/{season.pk}/"
+            season_edit_url(live_server, competition, season)
         )
 
         # Get the first related tab link (not the main edit tab)
@@ -126,9 +136,8 @@ class TestTraditionalTabMode:
     ):
         """Saving the primary form redirects to the upper-level page."""
         competition = competition_data["competition"]
-        authenticated_page.goto(
-            f"{live_server.url}/admin/competition/{competition.pk}/"
-        )
+        edit_url = competition_edit_url(live_server, competition)
+        authenticated_page.goto(edit_url)
 
         # Click Save without changing anything
         save_button = authenticated_page.locator(
@@ -141,8 +150,8 @@ class TestTraditionalTabMode:
 
         # Should not stay on the edit page (redirected to parent)
         current_url = authenticated_page.url
-        assert f"/admin/competition/{competition.pk}/" not in current_url or (
-            "?r=" in current_url or current_url.endswith("/competition/")
+        assert edit_url not in current_url or (
+            "?r=" in current_url
         )
 
     def test_no_htmx_attributes_in_traditional_mode(
@@ -152,8 +161,7 @@ class TestTraditionalTabMode:
         season = competition_data["season"]
         competition = competition_data["competition"]
         authenticated_page.goto(
-            f"{live_server.url}/admin/competition/{competition.pk}"
-            f"/seasons/{season.pk}/"
+            season_edit_url(live_server, competition, season)
         )
 
         # Check that no hx-get attributes exist on tab links
@@ -172,30 +180,13 @@ class TestHtmxTabMode:
     def enable_htmx_tabs(self, settings):
         """Enable HTMX admin tabs for all tests in this class."""
         settings.TOUCHTECHNOLOGY_HTMX_ADMIN_TABS = True
-        # Also patch the module-level variable
-        import touchtechnology.common.sites as sites_module
-        import touchtechnology.common.default_settings as ds_module
-        import touchtechnology.common.context_processors as cp_module
-
-        original_sites = sites_module.HTMX_ADMIN_TABS
-        original_ds = ds_module.HTMX_ADMIN_TABS
-        original_cp = cp_module.HTMX_ADMIN_TABS
-        sites_module.HTMX_ADMIN_TABS = True
-        ds_module.HTMX_ADMIN_TABS = True
-        cp_module.HTMX_ADMIN_TABS = True
-        yield
-        sites_module.HTMX_ADMIN_TABS = original_sites
-        ds_module.HTMX_ADMIN_TABS = original_ds
-        cp_module.HTMX_ADMIN_TABS = original_cp
 
     def test_htmx_script_loaded(
         self, authenticated_page: Page, live_server, competition_data
     ):
         """HTMX script is loaded when the feature flag is enabled."""
         competition = competition_data["competition"]
-        authenticated_page.goto(
-            f"{live_server.url}/admin/competition/{competition.pk}/"
-        )
+        authenticated_page.goto(competition_edit_url(live_server, competition))
 
         # Check that htmx.min.js script is present
         htmx_script = authenticated_page.locator(
@@ -210,8 +201,7 @@ class TestHtmxTabMode:
         season = competition_data["season"]
         competition = competition_data["competition"]
         authenticated_page.goto(
-            f"{live_server.url}/admin/competition/{competition.pk}"
-            f"/seasons/{season.pk}/"
+            season_edit_url(live_server, competition, season)
         )
 
         # Related tab links should have hx-get attributes
@@ -225,8 +215,7 @@ class TestHtmxTabMode:
         season = competition_data["season"]
         competition = competition_data["competition"]
         authenticated_page.goto(
-            f"{live_server.url}/admin/competition/{competition.pk}"
-            f"/seasons/{season.pk}/"
+            season_edit_url(live_server, competition, season)
         )
 
         # Tab panes should have hx-trigger="load delay:100ms"
@@ -242,8 +231,7 @@ class TestHtmxTabMode:
         season = competition_data["season"]
         competition = competition_data["competition"]
         authenticated_page.goto(
-            f"{live_server.url}/admin/competition/{competition.pk}"
-            f"/seasons/{season.pk}/"
+            season_edit_url(live_server, competition, season)
         )
 
         # In HTMX mode, form should be inside the active tab pane
@@ -258,10 +246,8 @@ class TestHtmxTabMode:
         """Saving primary form in HTMX mode redirects to parent page."""
         season = competition_data["season"]
         competition = competition_data["competition"]
-        authenticated_page.goto(
-            f"{live_server.url}/admin/competition/{competition.pk}"
-            f"/seasons/{season.pk}/"
-        )
+        url = season_edit_url(live_server, competition, season)
+        authenticated_page.goto(url)
 
         # Click Save
         save_button = authenticated_page.locator(
@@ -274,7 +260,11 @@ class TestHtmxTabMode:
         authenticated_page.wait_for_load_state("networkidle")
         current_url = authenticated_page.url
         # Should redirect to competition edit page
-        assert f"/seasons/{season.pk}/" not in current_url
+        season_path = reverse(
+            "admin:fixja:competition:season:edit",
+            args=[competition.pk, season.pk],
+        )
+        assert season_path not in current_url
 
     def test_htmx_tab_content_loads_dynamically(
         self, authenticated_page: Page, live_server, competition_data
@@ -283,8 +273,7 @@ class TestHtmxTabMode:
         season = competition_data["season"]
         competition = competition_data["competition"]
         authenticated_page.goto(
-            f"{live_server.url}/admin/competition/{competition.pk}"
-            f"/seasons/{season.pk}/"
+            season_edit_url(live_server, competition, season)
         )
 
         # Wait for HTMX to be ready
@@ -313,9 +302,7 @@ class TestHtmxTabMode:
     ):
         """Competition edit page loads correctly in HTMX mode."""
         competition = competition_data["competition"]
-        authenticated_page.goto(
-            f"{live_server.url}/admin/competition/{competition.pk}/"
-        )
+        authenticated_page.goto(competition_edit_url(live_server, competition))
 
         # Page should load without errors
         tab_nav = authenticated_page.locator("#myTab")
@@ -332,8 +319,7 @@ class TestHtmxTabMode:
         season = competition_data["season"]
         competition = competition_data["competition"]
         authenticated_page.goto(
-            f"{live_server.url}/admin/competition/{competition.pk}"
-            f"/seasons/{season.pk}/"
+            season_edit_url(live_server, competition, season)
         )
 
         # Wait for page to be fully loaded

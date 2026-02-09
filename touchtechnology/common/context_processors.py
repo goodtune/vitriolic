@@ -1,9 +1,9 @@
 import os
 import socket
 
+from django.conf import settings
 from django.utils import timezone
 
-from touchtechnology.common.default_settings import HTMX_ADMIN_TABS
 from touchtechnology.common.forms.tz import SelectTimezoneForm
 
 
@@ -27,4 +27,4 @@ def tz(request):
 
 
 def htmx_admin_tabs(request):
-    return {"htmx_admin_tabs": HTMX_ADMIN_TABS}
+    return {"htmx_admin_tabs": getattr(settings, "TOUCHTECHNOLOGY_HTMX_ADMIN_TABS", False)}

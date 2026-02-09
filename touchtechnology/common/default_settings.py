@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.utils.functional import SimpleLazyObject, empty
 
 __all__ = (
     "APP_ROUTING",
@@ -15,12 +16,26 @@ __all__ = (
 )
 
 
+class LazySetting(SimpleLazyObject):
+    """SimpleLazyObject extended with numeric coercion for settings values."""
+
+    def __int__(self):
+        if self._wrapped is empty:
+            self._setup()
+        return int(self._wrapped)
+
+    def __float__(self):
+        if self._wrapped is empty:
+            self._setup()
+        return float(self._wrapped)
+
+
 def A(n, d):
-    return getattr(settings, "AUTHENTICATION_" + n, d)
+    return LazySetting(lambda: getattr(settings, "AUTHENTICATION_" + n, d))
 
 
 def S(n, d=None):
-    return getattr(settings, "TOUCHTECHNOLOGY_" + n, d)
+    return LazySetting(lambda: getattr(settings, "TOUCHTECHNOLOGY_" + n, d))
 
 
 APP_ROUTING = S("APP_ROUTING", ())
