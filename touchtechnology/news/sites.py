@@ -4,7 +4,7 @@ from django.urls import path
 from django.utils.feedgenerator import Atom1Feed
 
 from touchtechnology.common.sites import Application
-from touchtechnology.news.app_settings import PAGINATE_BY
+from constance import config
 from touchtechnology.news.decorators import (
     date_view,
     last_modified_article,
@@ -70,7 +70,7 @@ class NewsSite(Application):
     def index(self, request, **extra_context):
         return self.generic_list(
             request,
-            Article.objects.live()[:PAGINATE_BY],
+            Article.objects.live()[:config.TOUCHTECHNOLOGY_NEWS_PAGINATE_BY],
             templates=self.template_path("index.html"),
             extra_context=extra_context,
         )
@@ -167,7 +167,7 @@ class NewsSite(Application):
         extra_context.update(
             {
                 "date_list": queryset.dates("published", "year"),
-                "latest": queryset.order_by("-published")[: (3 * PAGINATE_BY)],
+                "latest": queryset.order_by("-published")[: (3 * config.TOUCHTECHNOLOGY_NEWS_PAGINATE_BY)],
             }
         )
         return self.generic_list(

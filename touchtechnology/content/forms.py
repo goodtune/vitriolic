@@ -1,5 +1,6 @@
 import os.path
 
+from constance import config
 from django import forms
 from django.contrib.contenttypes.models import ContentType
 from django.core.files.storage import default_storage
@@ -8,17 +9,11 @@ from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
 from modelforms.forms import ModelForm
 
-from touchtechnology.common.default_settings import (
-    SITEMAP_EDIT_PARENT,
-    SITEMAP_HTTPS_OPTION,
-    SITEMAP_ROOT,
-)
 from touchtechnology.common.forms.mixins import (
     BootstrapFormControlMixin,
     SuperUserSlugMixin,
 )
 from touchtechnology.common.models import SitemapNode
-from touchtechnology.content.app_settings import PAGE_CONTENT_BLOCKS
 from touchtechnology.content.models import (
     Content,
     NodeContent,
@@ -114,12 +109,12 @@ class ParentChildModelForm(BootstrapFormControlMixin, ModelForm):
 class BaseSitemapNodeForm(SuperUserSlugMixin, ModelForm):
     def __init__(self, *args, **kwargs):
         super(BaseSitemapNodeForm, self).__init__(*args, **kwargs)
-        if not self.instance.level and self.instance.slug == SITEMAP_ROOT:
+        if not self.instance.level and self.instance.slug == config.TOUCHTECHNOLOGY_SITEMAP_ROOT:
             self.fields.pop("slug", None)
             self.fields.pop("slug_locked", None)
         if not self.fields["restrict_to_groups"].queryset.count():
             self.fields.pop("restrict_to_groups", None)
-        if not SITEMAP_HTTPS_OPTION:
+        if not config.TOUCHTECHNOLOGY_SITEMAP_HTTPS_OPTION:
             self.fields.pop("require_https", None)
 
     class Meta:
@@ -145,7 +140,7 @@ class NewSitemapNodeForm(BaseSitemapNodeForm):
 class SitemapNodeForm(BaseSitemapNodeForm):
     def __init__(self, *args, **kwargs):
         super(SitemapNodeForm, self).__init__(*args, **kwargs)
-        if not SITEMAP_EDIT_PARENT and self.instance.pk:
+        if not config.TOUCHTECHNOLOGY_SITEMAP_EDIT_PARENT and self.instance.pk:
             self.fields.pop("parent", None)
         elif self.instance.pk:
             # update the queryset to exclude the node itself, as well as any
@@ -230,11 +225,11 @@ class PageContentFormset(BasePageContentFormset):
         super(PageContentFormset, self).__init__(instance=instance, *args, **kwargs)
 
     def total_form_count(self):
-        if isinstance(PAGE_CONTENT_BLOCKS, str):
+        if isinstance(config.TOUCHTECHNOLOGY_PAGE_CONTENT_BLOCKS, str):
             # We may want to overload this by tenant.
-            callback = import_string(PAGE_CONTENT_BLOCKS)
+            callback = import_string(config.TOUCHTECHNOLOGY_PAGE_CONTENT_BLOCKS)
             return callback(self.node)
-        return PAGE_CONTENT_BLOCKS
+        return config.TOUCHTECHNOLOGY_PAGE_CONTENT_BLOCKS
 
     def _construct_form(self, i, **kwargs):
         return super(PageContentFormset, self)._construct_form(

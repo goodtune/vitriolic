@@ -3,6 +3,7 @@ import logging
 from os.path import join
 
 import mptt
+from constance import config
 from django.conf import settings
 from django.contrib.auth.models import Group
 from django.contrib.contenttypes.fields import GenericForeignKey
@@ -15,15 +16,13 @@ from django.utils.safestring import mark_safe
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
-from touchtechnology.common.db.models import BooleanField
-from touchtechnology.common.default_settings import SITEMAP_ROOT
+from touchtechnology.common.fields import BooleanField
 from touchtechnology.common.mixins import NodeRelationMixin
 
 logger = logging.getLogger(__name__)
 
 
 class SitemapNodeBase(models.Model):
-
     title = models.CharField(max_length=255, verbose_name=_("Title"))
 
     short_title = models.CharField(
@@ -46,7 +45,10 @@ class SitemapNodeBase(models.Model):
         return self.title
 
     def clean(self):
-        if SITEMAP_ROOT is None or self.slug != SITEMAP_ROOT:
+        if (
+            config.TOUCHTECHNOLOGY_SITEMAP_ROOT is None
+            or self.slug != config.TOUCHTECHNOLOGY_SITEMAP_ROOT
+        ):
             if not self.slug_locked or not self.slug:
                 self.slug = slugify(self.title)
 
@@ -166,7 +168,7 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
     disable.alters_data = True
 
     def is_home_page(self):
-        return self.level == 0 and self.slug == SITEMAP_ROOT
+        return self.level == 0 and self.slug == config.TOUCHTECHNOLOGY_SITEMAP_ROOT
 
     def is_accessible(self, user):
         groups = Group.objects.filter(sitemapnode=self)
@@ -177,7 +179,10 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         parts = [
             ancestor.slug
             for ancestor in self.get_ancestors(include_self=True)
-            if not (ancestor.is_root_node() and ancestor.slug == SITEMAP_ROOT)
+            if not (
+                ancestor.is_root_node()
+                and ancestor.slug == config.TOUCHTECHNOLOGY_SITEMAP_ROOT
+            )
         ]
 
         path = "/"

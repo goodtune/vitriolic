@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.sites",
     "django.contrib.staticfiles",
+    "constance",
     "mptt",
     "cloudinary",
     "guardian",
@@ -199,6 +200,64 @@ LOGGING = {
 # Touch Technology settings
 
 TOUCHTECHNOLOGY_SITEMAP_ROOT = "home"
+
+
+# Django Constance settings
+
+CONSTANCE_BACKEND = "constance.backends.database.DatabaseBackend"
+
+CONSTANCE_CONFIG = {
+    # Prince PDF Generation
+    "PRINCE_SERVER": (None, "Remote server for PDF generation", str),
+    "PRINCE_BINARY": ("/usr/local/bin/prince", "Local prince binary path", str),
+    "PRINCE_BASE_URL": (None, "Base URL for prince", str),
+    # Touch Technology Common
+    "TOUCHTECHNOLOGY_APP_ROUTING": ((), "Application routing configuration", tuple),
+    "TOUCHTECHNOLOGY_CURRENCY_ABBREVIATION": ("AUD", "Currency code", str),
+    "TOUCHTECHNOLOGY_CURRENCY_SYMBOL": ("$", "Currency symbol", str),
+    "TOUCHTECHNOLOGY_PAGINATE_BY": (5, "Pagination size", int),
+    "TOUCHTECHNOLOGY_PROFILE_FORM_CLASS": (
+        "touchtechnology.common.forms_lazy.ProfileForm",
+        "Profile form class path",
+        str,
+    ),
+    "TOUCHTECHNOLOGY_SITEMAP_CACHE_DURATION": (None, "Sitemap cache duration", int),
+    "TOUCHTECHNOLOGY_SITEMAP_EDIT_PARENT": (False, "Sitemap edit parent flag", bool),
+    "TOUCHTECHNOLOGY_SITEMAP_HTTPS_OPTION": (False, "Use HTTPS in sitemap", bool),
+    "TOUCHTECHNOLOGY_SITEMAP_ROOT": (None, "Sitemap root node", str),
+    "TOUCHTECHNOLOGY_STORAGE_FOLDER": (None, "Storage folder path", str),
+    "TOUCHTECHNOLOGY_STORAGE_URL": (None, "Storage URL", str),
+    # Touch Technology Content
+    "TOUCHTECHNOLOGY_NODE_CACHE": ("default", "Cache backend for nodes", str),
+    "TOUCHTECHNOLOGY_PAGE_CONTENT_BLOCKS": (1, "Number of content blocks", int),
+    "TOUCHTECHNOLOGY_PAGE_CONTENT_CLASSES": (
+        ("copy",),
+        "CSS classes for content",
+        tuple,
+    ),
+    "TOUCHTECHNOLOGY_PAGE_TEMPLATE_BASE": (None, "Base template path", str),
+    "TOUCHTECHNOLOGY_PAGE_TEMPLATE_FOLDER": (
+        "touchtechnology/content/pages/",
+        "Template folder path",
+        str,
+    ),
+    "TOUCHTECHNOLOGY_PAGE_TEMPLATE_REGEX": (r"\.html$", "Template regex pattern", str),
+    "TOUCHTECHNOLOGY_TENANT_MEDIA_PUBLIC": (True, "Media public flag", bool),
+    # Touch Technology News
+    "TOUCHTECHNOLOGY_NEWS_PAGINATE_BY": (5, "Pagination for news", int),
+    # Tournament Control Competition
+    "TOURNAMENTCONTROL_COMPETITION_VIDEOS_ARRAY_SIZE": (
+        5,
+        "Array size for videos",
+        int,
+    ),
+    "TOURNAMENTCONTROL_SCORECARD_PDF_WAIT": (5, "PDF wait time in seconds", int),
+    "TOURNAMENTCONTROL_ASYNC_PDF_GRID": (False, "Enable async PDF grid generation", bool),
+    # Other
+    "FROALA_EDITOR_OPTIONS": ({}, "Froala editor configuration", dict),
+    "GOOGLE_ANALYTICS": (None, "Google Analytics tracking code", str),
+    "ANONYMOUS_USER_ID": (None, "Anonymous user ID", int),
+}
 
 
 # Django MCP Server settings

@@ -2,14 +2,13 @@ import logging
 import os.path
 from urllib.parse import urljoin
 
+from constance import config
 from django.core.files.base import ContentFile
 from django.core.files.storage import (
     FileSystemStorage as FileSystemStorageBase,
 )
 from django.db.models.fields.files import ImageFieldFile
 from PIL import Image
-
-from touchtechnology.common.default_settings import STORAGE_FOLDER, STORAGE_URL
 
 try:
     from tenant_schemas.storage import TenantStorageMixin
@@ -86,10 +85,12 @@ class WalkMixin(object):
 class FileSystemStorage(
     MakeDirectoryMixin, WalkMixin, TenantStorageMixin, FileSystemStorageBase
 ):
-    def __init__(self, location=STORAGE_FOLDER, base_url=STORAGE_URL, *args, **kwargs):
-        super(FileSystemStorage, self).__init__(*args, **kwargs)
-        if location is not None:
-            self.location = os.path.join(self.location, location)
+    def __init__(self, location=None, base_url=None, *args, **kwargs):
+        if location is None:
+            location = config.TOUCHTECHNOLOGY_STORAGE_FOLDER
+        if base_url is None:
+            base_url = config.TOUCHTECHNOLOGY_STORAGE_URL
+        super(FileSystemStorage, self).__init__(location, base_url, *args, **kwargs)
         if base_url is not None:
             self.base_url = urljoin(self.base_url, base_url)
 
