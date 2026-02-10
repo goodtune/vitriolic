@@ -77,8 +77,8 @@ class LiveStreamAPITests(TestCase):
         self.get('v1:competition:livestream-list')
         self.response_403()
 
-    def test_list_matches_grouped_by_date(self):
-        """Test listing matches grouped by date."""
+    def test_list_matches_paginated(self):
+        """Test listing matches with pagination."""
         self.login(self.user)
         
         self.get('v1:competition:livestream-list')
@@ -86,22 +86,26 @@ class LiveStreamAPITests(TestCase):
         
         data = self.last_response.json()
         
-        # Should have two dates
-        self.assertEqual(len(data), 2)
-        self.assertIn('2023-06-15', data)
-        self.assertIn('2023-06-16', data)
+        # Should have paginated response structure
+        self.assertIn('count', data)
+        self.assertIn('results', data)
+        self.assertIn('next', data)
+        self.assertIn('previous', data)
         
-        # 2023-06-15 should have only one match (stream_match_1)
+        # Should have 2 matches total (stream_match_1 and stream_match_2)
         # non_stream_match and empty_id_match should be filtered out
-        self.assertEqual(len(data['2023-06-15']), 1)
-        match_1_data = data['2023-06-15'][0]
+        self.assertEqual(data['count'], 2)
+        self.assertEqual(len(data['results']), 2)
+        
+        # Verify first match
+        match_1_data = data['results'][0]
         self.assertEqual(match_1_data['id'], self.stream_match_1.id)
         self.assertEqual(match_1_data['uuid'], str(self.stream_match_1.uuid))
         self.assertEqual(match_1_data['external_identifier'], 'youtube_id_1')
+        self.assertIn('url', match_1_data)
         
-        # 2023-06-16 should have one match
-        self.assertEqual(len(data['2023-06-16']), 1)
-        match_2_data = data['2023-06-16'][0]
+        # Verify second match
+        match_2_data = data['results'][1]
         self.assertEqual(match_2_data['id'], self.stream_match_2.id)
         self.assertEqual(match_2_data['uuid'], str(self.stream_match_2.uuid))
         self.assertEqual(match_2_data['external_identifier'], 'youtube_id_2')
@@ -117,10 +121,10 @@ class LiveStreamAPITests(TestCase):
         
         data = self.last_response.json()
         
-        # Should only have 2023-06-15
-        self.assertEqual(len(data), 1)
-        self.assertIn('2023-06-15', data)
-        self.assertNotIn('2023-06-16', data)
+        # Should only have matches from 2023-06-15
+        self.assertEqual(data['count'], 1)
+        self.assertEqual(len(data['results']), 1)
+        self.assertEqual(data['results'][0]['date'], '2023-06-15')
 
     def test_season_filtering(self):
         """Test filtering matches by season ID."""
@@ -143,43 +147,49 @@ class LiveStreamAPITests(TestCase):
         data = self.last_response.json()
         
         # Should only contain matches from original season
-        all_external_ids = []
-        for date_matches in data.values():
-            for match in date_matches:
-                all_external_ids.append(match['external_identifier'])
+        all_external_ids = [match['external_identifier'] for match in data['results']]
         
         self.assertIn('youtube_id_1', all_external_ids)
         self.assertIn('youtube_id_2', all_external_ids)
         self.assertNotIn('other_youtube_id', all_external_ids)
 
-    def test_match_serialization_includes_nested_details(self):
-        """Test that match serialization includes nested Stage/Division/Season/Competition."""
+    def test_match_serialization_includes_minimal_nested_details(self):
+        """Test that match serialization includes minimal nested Stage/Division/Season/Competition."""
         self.login(self.user)
         
         self.get('v1:competition:livestream-list')
         self.response_200()
         
         data = self.last_response.json()
-        match_data = data['2023-06-15'][0]
+        match_data = data['results'][0]
         
-        # Check nested structure
+        # Check flat structure with minimal nested objects
         self.assertIn('stage', match_data)
+        self.assertIn('division', match_data)
+        self.assertIn('season', match_data)
+        self.assertIn('competition', match_data)
+        
+        # Verify minimal fields (id, title, slug only)
         stage_data = match_data['stage']
-        
-        self.assertIn('division', stage_data)
-        division_data = stage_data['division']
-        
-        self.assertIn('season', division_data)
-        season_data = division_data['season']
-        
-        self.assertIn('competition', season_data)
-        competition_data = season_data['competition']
-        
-        # Verify actual values
         self.assertEqual(stage_data['id'], self.stage.id)
+        self.assertEqual(stage_data['title'], self.stage.title)
+        self.assertEqual(stage_data['slug'], self.stage.slug)
+        self.assertEqual(len(stage_data), 3)  # Only id, title, slug
+        
+        # Division is at top level (not nested in stage)
+        division_data = match_data['division']
         self.assertEqual(division_data['id'], self.stage.division.id)
+        self.assertEqual(len(division_data), 3)
+        
+        # Season is at top level
+        season_data = match_data['season']
         self.assertEqual(season_data['id'], self.season.id)
+        self.assertEqual(len(season_data), 3)
+        
+        # Competition is at top level
+        competition_data = match_data['competition']
         self.assertEqual(competition_data['id'], self.season.competition.id)
+        self.assertEqual(len(competition_data), 3)
 
     def test_invalid_date_formats_ignored(self):
         """Test that invalid date formats in query params are ignored."""
@@ -193,9 +203,10 @@ class LiveStreamAPITests(TestCase):
         self.assertTrue(self.last_response.status_code in [200, 400])
         
         if self.last_response.status_code == 200:
-            # If successful, should return empty results or all matches
+            # If successful, should return paginated structure
             data = self.last_response.json()
-            self.assertIsInstance(data, dict)
+            self.assertIn('count', data)
+            self.assertIn('results', data)
 
     @mock.patch("tournamentcontrol.competition.models.build")
     def test_transition_endpoint_success(self, mock_build):
@@ -296,3 +307,49 @@ class LiveStreamAPITests(TestCase):
         data = self.last_response.json()
         self.assertEqual(data['uuid'], str(self.stream_match_1.uuid))
         self.assertEqual(data['external_identifier'], 'youtube_id_1')
+
+    def test_pagination_parameters(self):
+        """Test that pagination parameters work correctly."""
+        self.login(self.user)
+        
+        # Create more matches to test pagination
+        for i in range(25):
+            factories.MatchFactory.create(
+                stage=self.stage,
+                external_identifier=f"youtube_id_{i+10}",
+                live_stream=True,
+                date=date(2023, 6, 17),
+            )
+        
+        # Default page size should be 20
+        self.get('v1:competition:livestream-list')
+        self.response_200()
+        data = self.last_response.json()
+        self.assertEqual(len(data['results']), 20)
+        self.assertEqual(data['count'], 27)  # 2 original + 25 new
+        
+        # Test custom page size
+        self.get('v1:competition:livestream-list', data={'page_size': 10})
+        self.response_200()
+        data = self.last_response.json()
+        self.assertEqual(len(data['results']), 10)
+        
+        # Test page 2
+        self.get('v1:competition:livestream-list', data={'page': 2})
+        self.response_200()
+        data = self.last_response.json()
+        self.assertEqual(len(data['results']), 7)  # Remaining matches
+
+    def test_url_field_included(self):
+        """Test that each match includes a URL field."""
+        self.login(self.user)
+        
+        self.get('v1:competition:livestream-list')
+        self.response_200()
+        
+        data = self.last_response.json()
+        match_data = data['results'][0]
+        
+        self.assertIn('url', match_data)
+        self.assertIn('/api/v1/livestreams/', match_data['url'])
+        self.assertIn(str(self.stream_match_1.uuid), match_data['url'])
