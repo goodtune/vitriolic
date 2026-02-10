@@ -8,8 +8,8 @@ from tournamentcontrol.competition.signals.ladders import (  # noqa
 )
 from tournamentcontrol.competition.signals.matches import (  # noqa
     match_saved_handler,
-    notify_match_forfeit_email,
 )
+from tournamentcontrol.competition.signals.handlers import notify_match_forfeit_email  # noqa
 from tournamentcontrol.competition.signals.places import (  # noqa
     capture_timezone_before_save,
     set_ground_latlng,

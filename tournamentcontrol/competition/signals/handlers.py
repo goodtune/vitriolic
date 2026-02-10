@@ -1,8 +1,16 @@
+from email.utils import formataddr
+
+from django.conf import settings
+from django.core.mail import send_mail
+from django.template import Context, Template
 from django.dispatch import receiver
+
 from tournamentcontrol.competition.events import match_forfeit
+from tournamentcontrol.competition.utils import forfeit_notification_recipients
+
 
 @receiver(match_forfeit)
-def on_match_forfeit(sender, match, team, **kwargs):
+def notify_match_forfeit_email(sender, match, team, **kwargs):
     """
     When a match is notified as having been forfeit, send a notification email
     to players in the opposition team and the designated season administrators.

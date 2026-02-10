@@ -19,7 +19,6 @@ from timezone_field import TimeZoneFormField
 from timezone_field.backends import get_tz_backend
 from timezone_field.choices import with_gmt_offset
 
-
 logger = logging.getLogger(__name__)
 
 

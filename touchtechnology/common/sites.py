@@ -1100,7 +1100,9 @@ class Application(object):
 class AccountsSite(Application):
     def __init__(self, name="accounts", app_name="accounts", *args, **kwargs):
         super(AccountsSite, self).__init__(name=name, app_name=app_name)
-        self.profile_form_class = kwargs.pop("profile_form_class", config.TOUCHTECHNOLOGY_PROFILE_FORM_CLASS)
+        self.profile_form_class = kwargs.pop(
+            "profile_form_class", config.TOUCHTECHNOLOGY_PROFILE_FORM_CLASS
+        )
         self.user_model = get_user_model()
 
     @property

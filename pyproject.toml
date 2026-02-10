@@ -20,6 +20,8 @@ dependencies = [
     "django>=4.2",
     "first",
     "namedentities",
+    "pillow",
+    "redis",
     "psycopg",
 ]
 dynamic = ["version"]

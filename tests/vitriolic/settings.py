@@ -198,7 +198,9 @@ TOUCHTECHNOLOGY_SITEMAP_ROOT = "home"
 
 # Django Constance settings
 
-CONSTANCE_BACKEND = "constance.backends.database.DatabaseBackend"
+CONSTANCE_BACKEND = "constance.backends.redisd.RedisBackend"
+CONSTANCE_REDIS_CONNECTION_CLASS = "vitriolic.constance_backend.InMemoryRedis"
+CONSTANCE_REDIS_CONNECTION = {}
 
 CONSTANCE_CONFIG = {
     # Prince PDF Generation
@@ -218,7 +220,7 @@ CONSTANCE_CONFIG = {
     "TOUCHTECHNOLOGY_SITEMAP_CACHE_DURATION": (None, "Sitemap cache duration", int),
     "TOUCHTECHNOLOGY_SITEMAP_EDIT_PARENT": (False, "Sitemap edit parent flag", bool),
     "TOUCHTECHNOLOGY_SITEMAP_HTTPS_OPTION": (False, "Use HTTPS in sitemap", bool),
-    "TOUCHTECHNOLOGY_SITEMAP_ROOT": (None, "Sitemap root node", str),
+    "TOUCHTECHNOLOGY_SITEMAP_ROOT": ("home", "Sitemap root node", str),
     "TOUCHTECHNOLOGY_STORAGE_FOLDER": (None, "Storage folder path", str),
     "TOUCHTECHNOLOGY_STORAGE_URL": (None, "Storage URL", str),
     # Touch Technology Content
