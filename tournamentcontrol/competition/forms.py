@@ -938,7 +938,7 @@ class TeamBulkCreateFormSet(BaseModelFormSet):
         # Pre-populate order field with sequential values and set division
         if self.division:
             # Get the max existing order for teams in this division
-            max_order = self.division.teams.aggregate(models.Max("order"))["order__max"] or 0
+            max_order = self.division.teams.aggregate(Max("order"))["order__max"] or 0
             
             for i, form in enumerate(self.forms):
                 if not self.is_bound:

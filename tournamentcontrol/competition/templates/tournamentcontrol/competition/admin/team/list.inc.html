@@ -81,7 +81,7 @@
 			
 			// Allow Enter key to submit
 			$('#teamCount').keypress(function(e) {
-				if (e.which == 13) {
+				if (e.key === 'Enter') {
 					$('#bulkCreateSubmit').click();
 				}
 			});

@@ -1483,7 +1483,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         from django.forms.models import modelformset_factory
 
         # Get the count from GET parameter, default to 3
-        count = int(request.GET.get("count", 3))
+        try:
+            count = int(request.GET.get("count", 3))
+        except (ValueError, TypeError):
+            count = 3
         # Limit to reasonable maximum
         count = min(count, 50)
 
