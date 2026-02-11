@@ -13,8 +13,8 @@ from django.contrib import messages
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.forms import array as PGA
 from django.core.exceptions import ValidationError
-from django.db import transaction
-from django.db.models import Q
+from django.db import models, transaction
+from django.db.models import Max, Q
 from django.forms import BooleanField as BooleanChoiceField
 from django.forms.formsets import (
     DELETION_FIELD_NAME,
@@ -901,6 +901,88 @@ class TeamForm(SuperUserSlugMixin, ModelForm):
                 return club.title
             raise forms.ValidationError(_("You must specify a name for this team."))
         return title
+
+
+class TeamBulkCreateForm(BootstrapFormControlMixin, ModelForm):
+    """
+    Minimal form for bulk team creation with only title and order fields.
+    The division FK is set via the formset.
+    """
+
+    class Meta:
+        model = Team
+        fields = ("title", "order")
+        labels = {
+            "title": _("Name"),
+        }
+
+    def clean_title(self):
+        title = self.cleaned_data.get("title")
+        if not title:
+            # The field is required by default, so this clean method
+            # will only be called if the field has a value.
+            # We keep this for consistency with TeamForm.
+            raise forms.ValidationError(_("You must specify a name for this team."))
+        return title
+
+
+class TeamBulkCreateFormSet(BaseModelFormSet):
+    """
+    Custom formset for bulk team creation that assigns the division to each team.
+    """
+
+    def __init__(self, *args, division=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.division = division
+
+        # Pre-populate order field with sequential values and set division
+        if self.division:
+            # Get the max existing order for teams in this division
+            max_order = self.division.teams.aggregate(Max("order"))["order__max"] or 0
+            
+            for i, form in enumerate(self.forms):
+                if not self.is_bound:
+                    form.initial["order"] = max_order + i + 1
+                # Always set division on the instance to avoid validation errors
+                form.instance.division = self.division
+
+    def clean(self):
+        """Check for duplicate team titles within the formset."""
+        if any(self.errors):
+            return
+        
+        titles = []
+        for form in self.forms:
+            if form.cleaned_data and not form.cleaned_data.get("DELETE", False):
+                title = form.cleaned_data.get("title")
+                if title:
+                    # Check for duplicates within this formset
+                    if title.lower() in [t.lower() for t in titles]:
+                        raise forms.ValidationError(
+                            _("Team names must be unique. '%(title)s' appears more than once."),
+                            code="duplicate",
+                            params={"title": title},
+                        )
+                    titles.append(title)
+                    
+                    # Check for duplicates with existing teams in the division
+                    if self.division:
+                        existing = self.division.teams.filter(title__iexact=title).exists()
+                        if existing:
+                            raise forms.ValidationError(
+                                _("Team '%(title)s' already exists in this division."),
+                                code="duplicate",
+                                params={"title": title},
+                            )
+
+    def save_new(self, form, commit=True):
+        """Override to assign division to each new team before saving."""
+        instance = form.save(commit=False)
+        instance.division = self.division
+        if commit:
+            instance.save()
+            form.save_m2m()
+        return instance
 
 
 class DrawFormatForm(BootstrapFormControlMixin, ModelForm):
