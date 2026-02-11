@@ -1,0 +1,68 @@
+{% extends "touchtechnology/admin/edit.html" %}
+{% load i18n %}
+{% load common %}
+{% load bootstrap3 %}
+
+{% block form-fieldset %}
+	{{ formset.management_form }}
+
+	<table class="table table-striped">
+		<thead>
+			<tr>
+				<th>{% trans "Order" %}</th>
+				<th>{% trans "Team Name" %}</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for form in formset.forms %}
+				<tr>
+					<td>
+						{{ form.order }}
+						{% if form.order.errors %}
+							<div class="text-danger">{{ form.order.errors }}</div>
+						{% endif %}
+					</td>
+					<td>
+						{{ form.title }}
+						{% if form.title.errors %}
+							<div class="text-danger">{{ form.title.errors }}</div>
+						{% endif %}
+					</td>
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+
+	{% if formset.non_form_errors %}
+		<div class="alert alert-danger">
+			{{ formset.non_form_errors }}
+		</div>
+	{% endif %}
+{% endblock %}
+
+{% block tab-links %}
+	<li class="active">
+		<a href="#team-tab" data-toggle="tab">
+			<i class="fa fa-chevron-right fa-fw"></i>
+			&nbsp;{% trans "Bulk Create Teams" %}
+		</a>
+	</li>
+{% endblock %}
+
+{% block tab-panes %}
+	<div class="tab-pane active" id="team-tab">
+		<div class="heading-block">
+			<h3>{% trans "Bulk Create Teams" %}</h3>
+			<p class="text-muted">{% trans "Fill in the team names below. Order values are pre-populated sequentially." %}</p>
+		</div>
+
+		{% block form-fieldset %}{% endblock %}
+
+		<div class="form-group">
+			<div class="text-center">
+				<button type="submit" class="btn btn-primary">{% trans "Create All Teams" %}</button>
+				&nbsp;<a class="btn btn-default" href="{% block cancel-url %}{{ cancel_url }}{% endblock %}">{% trans "Cancel" %}</a>
+			</div>
+		</div>
+	</div>
+{% endblock %}

@@ -1,6 +1,45 @@
 {% extends "mvp/list.split.inc.html" %}
 {% load i18n %}
 
+{% block actions %}
+	{{ block.super }}
+	<a href="#" title="{% trans "Bulk Add Teams" %}" role="button" data-toggle="modal" data-target="#bulkCreateModal">
+		<i class="fa fa-plus-square-o"></i>
+	</a>
+{% endblock %}
+
+{% block modal %}
+	{{ block.super }}
+	
+	<!-- Bulk Create Modal -->
+	<div class="modal fade" id="bulkCreateModal" tabindex="-1" role="dialog" aria-labelledby="bulkCreateModalLabel">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close">
+						<span aria-hidden="true">&times;</span>
+					</button>
+					<h4 class="modal-title" id="bulkCreateModalLabel">{% trans "Bulk Create Teams" %}</h4>
+				</div>
+				<div class="modal-body">
+					<p>{% trans "How many teams do you want to create?" %}</p>
+					<div class="form-group">
+						<label for="teamCount">{% trans "Number of teams:" %}</label>
+						<input type="number" class="form-control" id="teamCount" min="1" max="50" value="5">
+					</div>
+					<p class="text-muted">
+						<small>{% trans "You currently have" %} <strong id="existingCount">{{ object_list|length }}</strong> {% trans "teams." %}</small>
+					</p>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-default" data-dismiss="modal">{% trans "Cancel" %}</button>
+					<button type="button" class="btn btn-primary" id="bulkCreateSubmit">{% trans "Continue" %}</button>
+				</div>
+			</div>
+		</div>
+	</div>
+{% endblock %}
+
 {% block table-headings %}
 	{{ block.super }}
 	<th>{% trans "Slug" %}</th>
@@ -22,4 +61,30 @@
 		<i class="fa fa-chevron-down"></i>
 		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Down" %}</span>
 	</a>
+{% endblock %}
+
+{% block pagination %}
+	{{ block.super }}
+	<script type="text/javascript">
+		$(document).ready(function() {
+			// Get the create URL and replace 'add' with 'bulk'
+			var createUrl = '{{ create }}';
+			var bulkUrl = createUrl.replace(/\/add\/$/, '/bulk/');
+			
+			$('#bulkCreateSubmit').click(function() {
+				var count = parseInt($('#teamCount').val());
+				if (count > 0 && count <= 50) {
+					// Redirect to bulk create page with count parameter
+					window.location.href = bulkUrl + '?count=' + count;
+				}
+			});
+			
+			// Allow Enter key to submit
+			$('#teamCount').keypress(function(e) {
+				if (e.which == 13) {
+					$('#bulkCreateSubmit').click();
+				}
+			});
+		});
+	</script>
 {% endblock %}

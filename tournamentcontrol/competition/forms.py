@@ -13,8 +13,8 @@ from django.contrib import messages
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.forms import array as PGA
 from django.core.exceptions import ValidationError
-from django.db import transaction
-from django.db.models import Q
+from django.db import models, transaction
+from django.db.models import Max, Q
 from django.forms import BooleanField as BooleanChoiceField
 from django.forms.formsets import (
     DELETION_FIELD_NAME,
@@ -901,6 +901,53 @@ class TeamForm(SuperUserSlugMixin, ModelForm):
                 return club.title
             raise forms.ValidationError(_("You must specify a name for this team."))
         return title
+
+
+class TeamBulkCreateForm(BootstrapFormControlMixin, ModelForm):
+    """
+    Minimal form for bulk team creation with only title and order fields.
+    The division FK is set via the formset.
+    """
+
+    class Meta:
+        model = Team
+        fields = ("title", "order")
+        labels = {
+            "title": _("Name"),
+        }
+
+    def clean_title(self):
+        title = self.cleaned_data.get("title")
+        if not title:
+            raise forms.ValidationError(_("You must specify a name for this team."))
+        return title
+
+
+class TeamBulkCreateFormSet(BaseModelFormSet):
+    """
+    Custom formset for bulk team creation that assigns the division to each team.
+    """
+
+    def __init__(self, division, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.division = division
+
+        # Pre-populate order field with sequential values
+        if not self.is_bound:
+            # Get the max existing order for teams in this division
+            max_order = self.division.teams.aggregate(models.Max("order"))["order__max"] or 0
+            
+            for i, form in enumerate(self.forms):
+                form.initial["order"] = max_order + i + 1
+
+    def save_new(self, form, commit=True):
+        """Override to assign division to each new team before saving."""
+        instance = form.save(commit=False)
+        instance.division = self.division
+        if commit:
+            instance.save()
+            form.save_m2m()
+        return instance
 
 
 class DrawFormatForm(BootstrapFormControlMixin, ModelForm):
