@@ -919,6 +919,9 @@ class TeamBulkCreateForm(BootstrapFormControlMixin, ModelForm):
     def clean_title(self):
         title = self.cleaned_data.get("title")
         if not title:
+            # The field is required by default, so this clean method
+            # will only be called if the field has a value.
+            # We keep this for consistency with TeamForm.
             raise forms.ValidationError(_("You must specify a name for this team."))
         return title
 
@@ -928,17 +931,49 @@ class TeamBulkCreateFormSet(BaseModelFormSet):
     Custom formset for bulk team creation that assigns the division to each team.
     """
 
-    def __init__(self, division, *args, **kwargs):
+    def __init__(self, *args, division=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.division = division
 
-        # Pre-populate order field with sequential values
-        if not self.is_bound:
+        # Pre-populate order field with sequential values and set division
+        if self.division:
             # Get the max existing order for teams in this division
             max_order = self.division.teams.aggregate(models.Max("order"))["order__max"] or 0
             
             for i, form in enumerate(self.forms):
-                form.initial["order"] = max_order + i + 1
+                if not self.is_bound:
+                    form.initial["order"] = max_order + i + 1
+                # Always set division on the instance to avoid validation errors
+                form.instance.division = self.division
+
+    def clean(self):
+        """Check for duplicate team titles within the formset."""
+        if any(self.errors):
+            return
+        
+        titles = []
+        for form in self.forms:
+            if form.cleaned_data and not form.cleaned_data.get("DELETE", False):
+                title = form.cleaned_data.get("title")
+                if title:
+                    # Check for duplicates within this formset
+                    if title.lower() in [t.lower() for t in titles]:
+                        raise forms.ValidationError(
+                            _("Team names must be unique. '%(title)s' appears more than once."),
+                            code="duplicate",
+                            params={"title": title},
+                        )
+                    titles.append(title)
+                    
+                    # Check for duplicates with existing teams in the division
+                    if self.division:
+                        existing = self.division.teams.filter(title__iexact=title).exists()
+                        if existing:
+                            raise forms.ValidationError(
+                                _("Team '%(title)s' already exists in this division."),
+                                code="duplicate",
+                                params={"title": title},
+                            )
 
     def save_new(self, form, commit=True):
         """Override to assign division to each new team before saving."""

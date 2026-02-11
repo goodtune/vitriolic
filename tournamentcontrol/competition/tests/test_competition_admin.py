@@ -764,11 +764,11 @@ class BulkCreateTeamTests(TestCase):
     def test_bulk_create_team_get(self):
         """GET request to bulk create with count parameter shows correct number of forms."""
         with self.login(self.superuser):
-            url = self.reverse(
+            self.get(
                 "admin:fixja:competition:season:division:team:bulk",
-                args=(self.competition.pk, self.season.pk, self.division.pk),
+                self.competition.pk, self.season.pk, self.division.pk,
+                data={"count": "5"}
             )
-            self.get(url, data={"count": "5"})
             self.response_200()
             
             # Check that we have 5 forms in the formset
@@ -782,11 +782,6 @@ class BulkCreateTeamTests(TestCase):
     def test_bulk_create_team_post(self):
         """POST request creates multiple teams with correct data."""
         with self.login(self.superuser):
-            url = self.reverse(
-                "admin:fixja:competition:season:division:team:bulk",
-                args=(self.competition.pk, self.season.pk, self.division.pk),
-            )
-            
             data = {
                 "form-TOTAL_FORMS": "3",
                 "form-INITIAL_FORMS": "0",
@@ -800,7 +795,11 @@ class BulkCreateTeamTests(TestCase):
                 "form-2-order": "3",
             }
             
-            self.post(url, data=data)
+            self.post(
+                "admin:fixja:competition:season:division:team:bulk",
+                self.competition.pk, self.season.pk, self.division.pk,
+                data=data
+            )
             self.response_302()
             
             # Verify teams were created
@@ -816,11 +815,6 @@ class BulkCreateTeamTests(TestCase):
     def test_bulk_create_team_duplicate_title(self):
         """POST with duplicate titles within same division shows validation error."""
         with self.login(self.superuser):
-            url = self.reverse(
-                "admin:fixja:competition:season:division:team:bulk",
-                args=(self.competition.pk, self.season.pk, self.division.pk),
-            )
-            
             data = {
                 "form-TOTAL_FORMS": "2",
                 "form-INITIAL_FORMS": "0",
@@ -832,7 +826,11 @@ class BulkCreateTeamTests(TestCase):
                 "form-1-order": "2",
             }
             
-            self.post(url, data=data)
+            self.post(
+                "admin:fixja:competition:season:division:team:bulk",
+                self.competition.pk, self.season.pk, self.division.pk,
+                data=data
+            )
             self.response_200()
             
             # Verify no teams were created
@@ -845,13 +843,12 @@ class BulkCreateTeamTests(TestCase):
         factories.TeamFactory.create(division=self.division, order=2)
         
         with self.login(self.superuser):
-            url = self.reverse(
-                "admin:fixja:competition:season:division:team:bulk",
-                args=(self.competition.pk, self.season.pk, self.division.pk),
-            )
-            
             # GET to check initial order values
-            self.get(url, data={"count": "3"})
+            self.get(
+                "admin:fixja:competition:season:division:team:bulk",
+                self.competition.pk, self.season.pk, self.division.pk,
+                data={"count": "3"}
+            )
             self.response_200()
             
             formset = self.get_context("formset")
@@ -872,7 +869,11 @@ class BulkCreateTeamTests(TestCase):
                 "form-1-order": "4",
             }
             
-            self.post(url, data=data)
+            self.post(
+                "admin:fixja:competition:season:division:team:bulk",
+                self.competition.pk, self.season.pk, self.division.pk,
+                data=data
+            )
             self.response_302()
             
             # Verify all teams exist with correct orders

@@ -191,15 +191,18 @@ class TeamBulkCreateFormTests(TestCase):
 
     def test_bulk_create_form_valid(self):
         """Valid title produces a valid form."""
-        form = TeamBulkCreateForm(data={"title": "Team Alpha", "order": 1})
+        # Create an instance with division set to avoid validation errors
+        instance = Team(division=self.division)
+        form = TeamBulkCreateForm(data={"title": "Team Alpha", "order": 1}, instance=instance)
         self.assertTrue(form.is_valid())
         self.assertEqual(form.cleaned_data["title"], "Team Alpha")
         self.assertEqual(form.cleaned_data["order"], 1)
 
     def test_bulk_create_form_empty_title(self):
         """Empty title is invalid."""
-        form = TeamBulkCreateForm(data={"title": "", "order": 1})
-        self.assertFormError(form, "title", ["You must specify a name for this team."])
+        instance = Team(division=self.division)
+        form = TeamBulkCreateForm(data={"title": "", "order": 1}, instance=instance)
+        self.assertFormError(form, "title", ["This field is required."])
 
     def test_bulk_create_formset_assigns_division(self):
         """Formset assigns division to each created team."""
