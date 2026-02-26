@@ -24,7 +24,7 @@ jobs:
         uvx tox -e e2e
 
     - name: Upload test results
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: e2e-test-results
@@ -34,7 +34,7 @@ jobs:
         retention-days: 5
 
     - name: Upload test screenshots
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: e2e-test-screenshots
