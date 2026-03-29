@@ -8,6 +8,31 @@ tr.group.first {
 	border-top-width: 1px !important;
 }
 
+/*** Color picker styles for inline division color updates ***/
+
+.color-picker-cell {
+	white-space: nowrap;
+}
+
+.color-picker-wrapper {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.color-picker-wrapper input[type="color"] {
+	width: 50px;
+	height: 30px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.color-status {
+	display: inline-block;
+	min-width: 20px;
+}
+
 /*** This element really should be in admin ***/
 
 

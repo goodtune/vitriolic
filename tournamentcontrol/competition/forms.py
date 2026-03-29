@@ -647,6 +647,17 @@ class DivisionForm(SuperUserSlugMixin, ModelForm):
         return self._clean_formula("bonus_points_formula", BonusPointCalculator)
 
 
+class DivisionColorForm(ModelForm):
+    """Form for updating Division color via HTMX inline editing."""
+    
+    class Meta:
+        model = Division
+        fields = ("color",)
+        widgets = {
+            "color": forms.TextInput(attrs={"type": "color"}),
+        }
+
+
 class StageForm(SuperUserSlugMixin, ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
