@@ -1462,7 +1462,8 @@ class Team(AdminUrlMixin, OrderedSitemapNode):
     def clean(self):
         errors = {}
 
-        # Ensure the UniqueConstraint is applied consistently (case-insensitive)
+        # The DB UniqueConstraint is case-sensitive; enforce case-insensitive
+        # uniqueness at the application level.
         other_teams = self.division.teams.exclude(pk=self.pk)
         if other_teams.filter(title__iexact=self.title):
             errors.setdefault("title", []).append(
