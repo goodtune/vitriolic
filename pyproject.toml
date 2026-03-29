@@ -13,7 +13,7 @@ dependencies = [
     "django-froala-editor>=2.9",
     "django-guardian>=2.4",
     "django-mcp-server>=0.5.5",
-    "django-modelforms",
+    "django-modelforms>=1.0",
     "django-mptt",
     "django-timezone-field",
     "django>=4.2",
