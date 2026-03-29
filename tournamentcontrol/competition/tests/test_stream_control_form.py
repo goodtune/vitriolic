@@ -1,12 +1,14 @@
 import unittest
 from unittest import mock
 
+from django.test import override_settings
 from test_plus import TestCase
 
 from tournamentcontrol.competition.forms import StreamControlForm
 from tournamentcontrol.competition.tests import factories
 
 
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
 class StreamControlFormTests(TestCase):
     """
     Test StreamControlForm functionality with YouTube token refresh.
