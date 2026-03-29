@@ -12,6 +12,7 @@ from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.template import RequestContext, TemplateDoesNotExist
 from django.urls import include, path, reverse_lazy
+from django.urls.resolvers import _get_cached_resolver
 from django.utils.deprecation import MiddlewareMixin
 from guardian.conf import settings as guardian_settings
 from mptt.utils import tree_item_iterator
@@ -242,6 +243,16 @@ class SitemapNodeMiddleware(MiddlewareMixin):
             path = request.META.get("PATH_INFO")
             redirect_to = urlunparse(("https", host, path, "", "", ""))
             return redirect(redirect_to)
+
+
+    def process_response(self, request, response):
+        # Each request creates a unique dynamic module for request.urlconf.
+        # Django's _get_cached_resolver uses @functools.cache (unbounded) keyed
+        # by the module object, so every request adds an entry that is never
+        # evicted — causing unbounded memory growth. Clear the cache after each
+        # request to prevent the leak.
+        _get_cached_resolver.cache_clear()
+        return response
 
 
 def redirect_middleware(get_response):
