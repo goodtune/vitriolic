@@ -21,7 +21,15 @@ from django.core import validators
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.http import Http404, HttpResponse
-from django.db.models import Count, DateField, DateTimeField, Q, Sum, TimeField, UniqueConstraint
+from django.db.models import (
+    Count,
+    DateField,
+    DateTimeField,
+    Q,
+    Sum,
+    TimeField,
+    UniqueConstraint,
+)
 from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
 from django.template import Template
 from django.template.loader import get_template
@@ -103,7 +111,7 @@ win_lose_team_tpl = lazy_get_template(
 def generate_random_color():
     """
     Generate a random hex color code.
-    
+
     Returns a string in the format #RRGGBB with bright, vibrant colors
     suitable for visual differentiation.
     """
@@ -117,7 +125,6 @@ def generate_random_color():
 class AdminUrlMixin(BaseAdminUrlMixin):
     def _get_url_args(self):
         return (self.pk,)
-
 
 
 class LadderPointsField(models.TextField):
@@ -318,8 +325,6 @@ class Club(AdminUrlMixin, SitemapNodeBase):
             "home_team", "away_team"
         )
         return home | away
-
-
 
 
 class Person(AdminUrlMixin, models.Model):
@@ -806,8 +811,8 @@ class Division(
         ),
         validators=[
             validators.RegexValidator(
-                regex=r'^#[0-9a-fA-F]{6}$',
-                message=_('Enter a valid hex color code (e.g., #ff5733)'),
+                regex=r"^#[0-9a-fA-F]{6}$",
+                message=_("Enter a valid hex color code (e.g., #ff5733)"),
             )
         ],
     )
@@ -842,7 +847,7 @@ class Division(
     def get_color(self):
         """
         Get the division color.
-        
+
         Since color is now a required field, this simply returns the stored color.
         """
         return self.color
@@ -1177,8 +1182,8 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
         ),
         validators=[
             validators.RegexValidator(
-                regex=r'^#[0-9a-fA-F]{6}$',
-                message=_('Enter a valid hex color code (e.g., #ff5733)'),
+                regex=r"^#[0-9a-fA-F]{6}$",
+                message=_("Enter a valid hex color code (e.g., #ff5733)"),
             )
         ],
     )
@@ -1218,7 +1223,7 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
     def get_color(self):
         """
         Get the stage background color.
-        
+
         Since color has a database default, this simply returns the stored color.
         """
         return self.color
