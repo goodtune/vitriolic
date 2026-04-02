@@ -350,6 +350,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         team_urls = (
             [
                 path("add/", self.edit_team, name="add"),
+                path("bulk/", self.bulk_create_team, name="bulk"),
                 path("<int:team_id>/", self.edit_team, name="edit"),
                 path("<int:team_id>/delete/", self.delete_team, name="delete"),
                 path("<int:team_id>/permissions/", self.perms_team, name="perms"),
@@ -1457,6 +1458,56 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             pk=team.pk,
             post_delete_redirect=self.redirect(post_delete_redirect_url),
             permission_required=False,
+            extra_context=extra_context,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def bulk_create_team(
+        self,
+        request,
+        competition,
+        season,
+        division,
+        extra_context,
+        **kwargs,
+    ):
+        """
+        Bulk create multiple teams in a division.
+        Accepts a 'count' GET parameter to determine how many forms to show.
+        """
+        from tournamentcontrol.competition.forms import (
+            TeamBulkCreateForm,
+            TeamBulkCreateFormSet,
+        )
+        from django.forms.models import modelformset_factory
+
+        # Get the count from GET parameter, default to 3
+        try:
+            count = int(request.GET.get("count", 3))
+        except (ValueError, TypeError):
+            count = 3
+        # Limit to reasonable maximum
+        count = min(count, 50)
+
+        # Create formset class with the specified number of extra forms
+        formset_class = modelformset_factory(
+            Team,
+            form=TeamBulkCreateForm,
+            formset=TeamBulkCreateFormSet,
+            extra=count,
+            can_delete=False,
+        )
+
+        return self.generic_bulk_create(
+            request,
+            Team,
+            form_class=TeamBulkCreateForm,
+            formset_class=formset_class,
+            formset_kwargs={"division": division},
+            extra=count,
+            post_save_redirect=self.redirect(division.urls["edit"]),
+            permission_required=True,
             extra_context=extra_context,
         )
 
