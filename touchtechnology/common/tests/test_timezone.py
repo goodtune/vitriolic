@@ -152,12 +152,17 @@ class TimeZoneTests(TestCase):
     @freeze_time("2013-03-24 14:30:00")
     @override_settings(TIME_ZONE="Australia/Sydney")
     def test_select_date_time_field_initial_tz(self):
+        # Define form inside frozen time context so widget timezone
+        # choices use the frozen date for DST-aware offset labels.
+        class TestForm(forms.Form):
+            timestamp = SelectDateTimeField()
+
         timestamp = timezone.make_aware(
             datetime(2013, 3, 24, 14, 30),
             ZoneInfo("Australia/Sydney"),
         )
 
-        form = TestForm1(initial={"timestamp": timestamp})
+        form = TestForm(initial={"timestamp": timestamp})
         haystack = smart_str(form)
         for needle in [
             '<input type="text" name="timestamp_0" value="2013-03-24" required id="id_timestamp_0">',
