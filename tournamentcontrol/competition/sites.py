@@ -942,100 +942,53 @@ class CompetitionSite(CompetitionAdminMixin, Application):
     @competition_by_slug_m
     def calendar(self, request, season, club=None, division=None, team=None, **kwargs):
         if season.disable_calendar:
-            # The GONE response informs client that they should remove this resource
-            # from their cache. When a calendar has been added to user's mobile device
-            # they may never look at it again, but we continue to process the requests
-            # which can have poor performance. Try to influence a cleanup of clients.
+            # The GONE response informs client that they should remove this
+            # resource from their cache. When a calendar has been added to
+            # user's mobile device they may never look at it again, but we
+            # continue to process the requests which can have poor performance.
+            # Try to influence a cleanup of clients.
             return HttpResponseGone()
 
         if team is not None:
-            matches = team.matches
+            matches = Match.objects.filter(
+                Q(home_team=team) | Q(away_team=team)
+            )
         elif division is not None:
-            matches = division.matches
+            matches = Match.objects.filter(stage__division=division)
         elif club is not None:
-            matches = club.matches.filter(stage__division__season=season)
+            matches = Match.objects.filter(
+                Q(home_team__club=club) | Q(away_team__club=club),
+                stage__division__season=season,
+            )
         else:
-            matches = season.matches
+            matches = Match.objects.filter(stage__division__season=season)
 
         # Do not include matches which have not had the time scheduled
         matches = matches.exclude(datetime__isnull=True)
 
-        # Perform select_related to reduce extra queries
-        matches = matches.select_related("stage__division__season__competition")
-
-        # Reduce the size of the data set to return from the database
-        matches = matches.defer(
-            "date",
-            "time",
-            "home_team__copy",
-            "home_team__names_locked",
-            "home_team__order",
-            "home_team__short_title",
-            "home_team__timeslots_after",
-            "home_team__timeslots_before",
-            "home_team_score",
-            "away_team__copy",
-            "away_team__names_locked",
-            "away_team__order",
-            "away_team__short_title",
-            "away_team__timeslots_after",
-            "away_team__timeslots_before",
-            "away_team_score",
-            "bye_processed",
-            "evaluated",
-            "external_identifier",
-            "forfeit_winner",
-            "include_in_ladder",
-            "is_bye",
-            "is_forfeit",
-            "is_washout",
-            "videos",
-            "stage__division__season__competition__copy",
-            "stage__division__season__competition__enabled",
-            "stage__division__season__competition__order",
-            "stage__division__season__competition__short_title",
-            "stage__division__season__competition__short_title",
-            "stage__division__season__competition__slug_locked",
-            "stage__division__season__competition__slug_locked",
-            "stage__division__season__competition__title",
-            "stage__division__season__complete",
-            "stage__division__season__copy",
-            "stage__division__season__disable_calendar",
-            "stage__division__season__enabled",
-            "stage__division__season__hashtag",
-            "stage__division__season__mode",
-            "stage__division__season__mvp_results_public",
-            "stage__division__season__order",
-            "stage__division__season__short_title",
-            "stage__division__season__slug_locked",
-            "stage__division__season__start_date",
-            "stage__division__season__statistics",
-            "stage__division__season__timezone",
-            "stage__division__bonus_points_formula",
-            "stage__division__copy",
+        # Fetch only the fields needed for calendar event generation
+        matches = matches.select_related(
+            "home_team",
+            "away_team",
+            "stage__division__season__competition",
+        ).only(
+            "uuid",
+            "datetime",
+            "play_at",
+            "home_team_undecided",
+            "away_team_undecided",
+            "home_team__title",
+            "away_team__title",
+            "stage__title",
+            "stage__division__title",
+            "stage__division__slug",
             "stage__division__draft",
-            "stage__division__forfeit_against_score",
-            "stage__division__forfeit_for_score",
-            "stage__division__games_per_day",
-            "stage__division__include_forfeits_in_played",
-            "stage__division__order",
-            "stage__division__points_formula",
-            "stage__division__short_title",
-            "stage__division__slug_locked",
-            "stage__division__sportingpulse_url",
-            "stage__carry_ladder",
-            "stage__copy",
-            "stage__follows",
-            "stage__keep_ladder",
-            "stage__keep_mvp",
-            "stage__order",
-            "stage__scale_group_points",
-            "stage__short_title",
-            "stage__slug_locked",
+            "stage__division__season__slug",
+            "stage__division__season__competition__slug",
         )
 
-        # Remove any matches that are part of a draft division unless being viewed
-        # by a superuser.
+        # Remove any matches that are part of a draft division unless being
+        # viewed by a superuser.
         if not request.user.is_superuser:
             matches = matches.exclude(stage__division__draft=True)
 

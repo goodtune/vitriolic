@@ -1,9 +1,10 @@
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from django.test.utils import override_settings
+from django.test import override_settings
 from freezegun import freeze_time
+from icalendar import Calendar
 from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
@@ -352,4 +353,273 @@ class FrontEndTests(TestCase):
             "competition:calendar",
             team.division.season.competition.slug,
             team.division.season.slug,
+        )
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class CalendarQueryTests(TestCase):
+    """Test that calendar views use an efficient number of database queries."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.stage = factories.StageFactory.create()
+        cls.division = cls.stage.division
+        cls.season = cls.division.season
+        cls.competition = cls.season.competition
+
+        cls.team_a = factories.TeamFactory.create(division=cls.division)
+        cls.team_b = factories.TeamFactory.create(division=cls.division)
+
+        factories.MatchFactory.create_batch(
+            stage=cls.stage,
+            home_team=cls.team_a,
+            away_team=cls.team_b,
+            size=10,
+        )
+
+    def test_team_calendar_query_count(self):
+        # Middleware redirect check (1) + slug resolution (1) + match query (1)
+        with self.assertNumQueries(3):
+            response = self.get(
+                "competition:calendar",
+                competition=self.competition.slug,
+                season=self.season.slug,
+                division=self.division.slug,
+                team=self.team_a.slug,
+            )
+        self.response_200(response)
+
+    def test_division_calendar_query_count(self):
+        # Middleware redirect check (1) + slug resolution (1) + match query (1)
+        with self.assertNumQueries(3):
+            response = self.get(
+                "competition:calendar",
+                competition=self.competition.slug,
+                season=self.season.slug,
+                division=self.division.slug,
+            )
+        self.response_200(response)
+
+    def test_season_calendar_query_count(self):
+        # Middleware redirect check (1) + slug resolution (1) + match query (1)
+        with self.assertNumQueries(3):
+            response = self.get(
+                "competition:calendar",
+                competition=self.competition.slug,
+                season=self.season.slug,
+            )
+        self.response_200(response)
+
+    def test_club_calendar_query_count(self):
+        club = factories.ClubFactory.create()
+        self.team_a.club = club
+        self.team_a.save()
+        # Middleware (3) + season resolution (1) + club resolution (1)
+        # + match query (1)
+        with self.assertNumQueries(6):
+            response = self.get(
+                "competition:calendar",
+                competition=self.competition.slug,
+                season=self.season.slug,
+                club=club.slug,
+            )
+        self.response_200(response)
+
+    def _parse_events(self, response):
+        cal = Calendar.from_ical(response.content)
+        return cal, [c for c in cal.walk() if c.name == "VEVENT"]
+
+    @freeze_time("2025-06-01 10:00:00")
+    def test_team_calendar_event_properties(self):
+        match_dt = datetime(2025, 7, 5, 14, 30, tzinfo=ZoneInfo("UTC"))
+        match = factories.MatchFactory.create(
+            stage=self.stage,
+            home_team=self.team_a,
+            away_team=self.team_b,
+            datetime=match_dt,
+            date=match_dt.date(),
+            time=match_dt.time(),
+        )
+
+        response = self.get(
+            "competition:calendar",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            division=self.division.slug,
+            team=self.team_a.slug,
+        )
+        self.response_200(response)
+
+        cal, events = self._parse_events(response)
+
+        # VCALENDAR properties
+        self.assertEqual(
+            str(cal["prodid"]),
+            "-//Tournament Control//testserver//",
+        )
+        self.assertEqual(str(cal["version"]), "2.0")
+
+        # 10 from setUpTestData + 1 created above
+        self.assertEqual(len(events), 11)
+
+        # Find the specific match by UID
+        event = next(e for e in events if e["uid"] == match.uuid.hex)
+
+        self.assertEqual(
+            str(event["summary"]),
+            "{} vs {}".format(self.team_a.title, self.team_b.title),
+        )
+        self.assertEqual(
+            str(event["location"]),
+            "{} ({})".format(self.division.title, self.stage.title),
+        )
+        self.assertEqual(event["dtstart"].dt, match_dt)
+        self.assertEqual(
+            event["dtend"].dt, match_dt + timedelta(minutes=45)
+        )
+        self.assertEqual(
+            event["dtstamp"].dt,
+            datetime(2025, 6, 1, 10, 0, 0, tzinfo=ZoneInfo("UTC")),
+        )
+
+        expected_path = self.reverse(
+            "competition:match",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            division=self.division.slug,
+            match=match.pk,
+        )
+        self.assertEqual(
+            str(event["description"]),
+            "http://testserver{}".format(expected_path),
+        )
+
+    def test_division_calendar_contains_all_division_matches(self):
+        response = self.get(
+            "competition:calendar",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            division=self.division.slug,
+        )
+        self.response_200(response)
+
+        cal, events = self._parse_events(response)
+        self.assertEqual(len(events), 10)
+
+        uids = {e["uid"] for e in events}
+        expected_uids = set(
+            self.division.matches.values_list("uuid", flat=True)
+        )
+        self.assertCountEqual(
+            uids, {u.hex for u in expected_uids}
+        )
+
+    def test_disabled_calendar_returns_410(self):
+        season = factories.SeasonFactory.create(disable_calendar=True)
+        division = factories.DivisionFactory.create(season=season)
+        team = factories.TeamFactory.create(division=division)
+        stage = factories.StageFactory.create(division=division)
+        factories.MatchFactory.create_batch(
+            stage=stage, home_team=team, size=3
+        )
+        self.get(
+            "competition:calendar",
+            competition=season.competition.slug,
+            season=season.slug,
+            division=division.slug,
+            team=team.slug,
+        )
+        self.response_410()
+
+    def test_draft_division_excluded_for_anonymous(self):
+        draft_division = factories.DivisionFactory.create(
+            season=self.season, draft=True
+        )
+        draft_stage = factories.StageFactory.create(division=draft_division)
+        factories.MatchFactory.create_batch(
+            stage=draft_stage, size=3
+        )
+        response = self.get(
+            "competition:calendar",
+            competition=self.competition.slug,
+            season=self.season.slug,
+        )
+        self.response_200(response)
+
+        cal, events = self._parse_events(response)
+        # Only the 10 non-draft matches, not the 3 draft matches
+        self.assertEqual(len(events), 10)
+
+    def test_draft_division_included_for_superuser(self):
+        superuser = factories.SuperUserFactory.create()
+        draft_division = factories.DivisionFactory.create(
+            season=self.season, draft=True
+        )
+        draft_stage = factories.StageFactory.create(division=draft_division)
+        factories.MatchFactory.create_batch(
+            stage=draft_stage, size=3
+        )
+        with self.login(superuser):
+            response = self.get(
+                "competition:calendar",
+                competition=self.competition.slug,
+                season=self.season.slug,
+            )
+        self.response_200(response)
+
+        cal, events = self._parse_events(response)
+        # Superuser sees all matches: 10 regular + 3 draft
+        self.assertEqual(len(events), 13)
+
+    def test_calendar_excludes_unscheduled_matches(self):
+        unscheduled = factories.MatchFactory.create(
+            stage=self.stage,
+            home_team=self.team_a,
+            away_team=self.team_b,
+            datetime=None,
+            date=None,
+            time=None,
+        )
+        response = self.get(
+            "competition:calendar",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            division=self.division.slug,
+            team=self.team_a.slug,
+        )
+        self.response_200(response)
+
+        cal, events = self._parse_events(response)
+        # Only the 10 scheduled matches, not the unscheduled one
+        self.assertEqual(len(events), 10)
+        uids = {e["uid"] for e in events}
+        self.assertNotIn(unscheduled.uuid.hex, uids)
+
+    def test_nonexistent_team_returns_404(self):
+        self.get(
+            "competition:calendar",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            division=self.division.slug,
+            team="nonexistent-team",
+        )
+        self.response_404()
+
+    def test_season_calendar_contains_all_season_matches(self):
+        response = self.get(
+            "competition:calendar",
+            competition=self.competition.slug,
+            season=self.season.slug,
+        )
+        self.response_200(response)
+
+        cal, events = self._parse_events(response)
+        self.assertEqual(len(events), 10)
+
+        uids = {e["uid"] for e in events}
+        expected_uids = set(
+            self.season.matches.values_list("uuid", flat=True)
+        )
+        self.assertCountEqual(
+            uids, {u.hex for u in expected_uids}
         )
