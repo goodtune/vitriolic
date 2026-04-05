@@ -41,15 +41,11 @@ from tournamentcontrol.competition.forms import (
     StreamControlForm,
 )
 from tournamentcontrol.competition.models import (
-    Club,
     Competition,
-    Division,
     Match,
     Person,
-    Season,
     SimpleScoreMatchStatistic,
     Stage,
-    Team,
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
@@ -943,63 +939,8 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             extra_context=extra_context,
         )
 
-    def calendar(self, request, **kwargs):
-        competition_slug = kwargs.get("competition")
-        season_slug = kwargs.get("season")
-        division_slug = kwargs.get("division")
-        team_slug = kwargs.get("team")
-        club_slug = kwargs.get("club")
-
-        # self._competitions is pre-filtered to enabled competitions and
-        # optionally to a specific competition slug from the site config.
-        allowed_competitions = self._competitions
-        if competition_slug:
-            allowed_competitions = allowed_competitions.filter(
-                slug=competition_slug
-            )
-
-        # Resolve objects with targeted queries instead of loading the entire
-        # competition hierarchy via prefetch_related.
-        if team_slug:
-            team = get_object_or_404(
-                Team.objects.select_related("division__season"),
-                slug=team_slug,
-                division__slug=division_slug,
-                division__season__slug=season_slug,
-                division__season__competition__in=allowed_competitions,
-            )
-            season = team.division.season
-            matches = Match.objects.filter(
-                Q(home_team=team) | Q(away_team=team)
-            )
-        elif division_slug:
-            division = get_object_or_404(
-                Division.objects.select_related("season"),
-                slug=division_slug,
-                season__slug=season_slug,
-                season__competition__in=allowed_competitions,
-            )
-            season = division.season
-            matches = Match.objects.filter(stage__division=division)
-        elif club_slug:
-            season = get_object_or_404(
-                Season.objects.select_related("competition"),
-                slug=season_slug,
-                competition__in=allowed_competitions,
-            )
-            club = get_object_or_404(Club, slug=club_slug)
-            matches = Match.objects.filter(
-                Q(home_team__club=club) | Q(away_team__club=club),
-                stage__division__season=season,
-            )
-        else:
-            season = get_object_or_404(
-                Season.objects.select_related("competition"),
-                slug=season_slug,
-                competition__in=allowed_competitions,
-            )
-            matches = Match.objects.filter(stage__division__season=season)
-
+    @competition_by_slug_m
+    def calendar(self, request, season, club=None, division=None, team=None, **kwargs):
         if season.disable_calendar:
             # The GONE response informs client that they should remove this
             # resource from their cache. When a calendar has been added to
@@ -1007,6 +948,20 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             # continue to process the requests which can have poor performance.
             # Try to influence a cleanup of clients.
             return HttpResponseGone()
+
+        if team is not None:
+            matches = Match.objects.filter(
+                Q(home_team=team) | Q(away_team=team)
+            )
+        elif division is not None:
+            matches = Match.objects.filter(stage__division=division)
+        elif club is not None:
+            matches = Match.objects.filter(
+                Q(home_team__club=club) | Q(away_team__club=club),
+                stage__division__season=season,
+            )
+        else:
+            matches = Match.objects.filter(stage__division__season=season)
 
         # Do not include matches which have not had the time scheduled
         matches = matches.exclude(datetime__isnull=True)

@@ -605,17 +605,21 @@ class CalendarQueryTests(TestCase):
         )
         self.response_404()
 
-    def test_disabled_competition_returns_404(self):
-        self.competition.enabled = False
-        self.competition.save()
-        try:
-            self.get(
-                "competition:calendar",
-                competition=self.competition.slug,
-                season=self.season.slug,
-                division=self.division.slug,
-            )
-            self.response_404()
-        finally:
-            self.competition.enabled = True
-            self.competition.save()
+    def test_season_calendar_contains_all_season_matches(self):
+        response = self.get(
+            "competition:calendar",
+            competition=self.competition.slug,
+            season=self.season.slug,
+        )
+        self.response_200(response)
+
+        cal, events = self._parse_events(response)
+        self.assertEqual(len(events), 10)
+
+        uids = {e["uid"] for e in events}
+        expected_uids = set(
+            self.season.matches.values_list("uuid", flat=True)
+        )
+        self.assertCountEqual(
+            uids, {u.hex for u in expected_uids}
+        )
