@@ -623,3 +623,97 @@ class CalendarQueryTests(TestCase):
         self.assertCountEqual(
             uids, {u.hex for u in expected_uids}
         )
+
+    def test_calendar_with_bye_match(self):
+        """Bye matches with a datetime should appear in the calendar."""
+        match = factories.MatchFactory.create(
+            stage=self.stage,
+            home_team=self.team_a,
+            away_team=None,
+            is_bye=True,
+        )
+        response = self.get(
+            "competition:calendar",
+            competition=self.competition.slug,
+            season=self.season.slug,
+        )
+        self.response_200(response)
+
+        cal, events = self._parse_events(response)
+        event = next(e for e in events if e["uid"] == match.uuid.hex)
+        summary = str(event["summary"])
+        self.assertIn(self.team_a.title, summary)
+        self.assertIn("Bye", summary)
+
+    def test_calendar_with_undecided_team(self):
+        """Matches with undecided teams should appear in the calendar."""
+        undecided = factories.UndecidedTeamFactory.create(
+            stage=self.stage,
+            label="Winner Pool A",
+        )
+        match = factories.MatchFactory.create(
+            stage=self.stage,
+            home_team=self.team_a,
+            away_team=None,
+            away_team_undecided=undecided,
+        )
+        response = self.get(
+            "competition:calendar",
+            competition=self.competition.slug,
+            season=self.season.slug,
+        )
+        self.response_200(response)
+
+        cal, events = self._parse_events(response)
+        event = next(e for e in events if e["uid"] == match.uuid.hex)
+        summary = str(event["summary"])
+        self.assertIn(self.team_a.title, summary)
+        self.assertIn("Winner Pool A", summary)
+
+    def test_calendar_with_both_teams_undecided(self):
+        """Matches where both teams are undecided should appear."""
+        home_undecided = factories.UndecidedTeamFactory.create(
+            stage=self.stage,
+            label="1st Pool A",
+        )
+        away_undecided = factories.UndecidedTeamFactory.create(
+            stage=self.stage,
+            label="2nd Pool B",
+        )
+        match = factories.MatchFactory.create(
+            stage=self.stage,
+            home_team=None,
+            away_team=None,
+            home_team_undecided=home_undecided,
+            away_team_undecided=away_undecided,
+        )
+        response = self.get(
+            "competition:calendar",
+            competition=self.competition.slug,
+            season=self.season.slug,
+        )
+        self.response_200(response)
+
+        cal, events = self._parse_events(response)
+        event = next(e for e in events if e["uid"] == match.uuid.hex)
+        summary = str(event["summary"])
+        self.assertIn("1st Pool A", summary)
+        self.assertIn("2nd Pool B", summary)
+
+    def test_calendar_with_no_teams(self):
+        """Matches with no teams assigned should not crash."""
+        match = factories.MatchFactory.create(
+            stage=self.stage,
+            home_team=None,
+            away_team=None,
+        )
+        response = self.get(
+            "competition:calendar",
+            competition=self.competition.slug,
+            season=self.season.slug,
+        )
+        self.response_200(response)
+
+        cal, events = self._parse_events(response)
+        event = next(e for e in events if e["uid"] == match.uuid.hex)
+        self.assertEqual(str(event["summary"]), "TBD")
