@@ -16,6 +16,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import include, path, re_path, reverse
 from django.urls.exceptions import NoReverseMatch
 from django.utils import timezone
+from django.utils.html import strip_tags
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext, gettext_lazy as _
 from django.views.decorators.cache import cache_page
@@ -966,23 +967,19 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         # Do not include matches which have not had the time scheduled
         matches = matches.exclude(datetime__isnull=True)
 
-        # Fetch only the fields needed for calendar event generation
+        # Fetch only the fields needed for calendar event generation.
+        # Team titles are provided by MatchManager's _team_titles() SQL
+        # annotations (home_team_title, away_team_title), so we don't need
+        # to select_related the team objects or use match.title (which
+        # triggers per-match template rendering and potential N+1 queries).
         matches = matches.select_related(
-            "home_team",
-            "away_team",
             "stage__division__season__competition",
         ).only(
             "uuid",
             "datetime",
-            "play_at",
-            "home_team_undecided",
-            "away_team_undecided",
-            "home_team__title",
-            "away_team__title",
             "stage__title",
             "stage__division__title",
             "stage__division__slug",
-            "stage__division__draft",
             "stage__division__season__slug",
             "stage__division__season__competition__slug",
         )
@@ -1004,10 +1001,29 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         cal.add("prodid", "-//Tournament Control//%s//" % request.get_host())
         cal.add("version", "2.0")
 
+        # Cache reverse() URL templates per division to avoid calling it for
+        # every match. All matches in the same division produce URLs that
+        # differ only in the match pk.
+        _url_templates = {}
+
         for match in matches.order_by("datetime", "play_at"):
             event = Event()
             event["uid"] = match.uuid.hex
-            event.add("summary", match.title)
+
+            # Use SQL-computed title annotations instead of match.title to
+            # avoid per-match template rendering and N+1 queries for
+            # undecided teams. strip_tags handles bye matches which include
+            # HTML in the annotation.
+            home = strip_tags(match.home_team_title or "")
+            away = strip_tags(match.away_team_title or "")
+            if home and away:
+                summary = f"{home} vs {away}"
+            elif home or away:
+                summary = home or away
+            else:
+                summary = "TBD"
+            event.add("summary", summary)
+
             event.add("location", f"{match.stage.division.title} ({match.stage.title})")
             event.add("dtstart", match.datetime)
 
@@ -1016,21 +1032,30 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             # FIXME should be the last modified time of the match
             event.add("dtstamp", timezone.now())
 
-            try:
-                # Determine the resource uri to the detailed match view
-                uri = reverse(
-                    "competition:match",
-                    kwargs={
-                        "match": match.pk,
-                        "division": match.stage.division.slug,
-                        "season": match.stage.division.season.slug,
-                        "competition": match.stage.division.season.competition.slug,
-                    },
-                )
-            except NoReverseMatch:
-                LOG.exception("Unable to resolve url for %r", match)
-            else:
-                # Combine the resource uri with our current request context
+            # Determine the resource uri to the detailed match view.
+            # Cache the URL pattern per division to avoid repeated reverse().
+            div_id = match.stage.division_id
+            if div_id not in _url_templates:
+                try:
+                    uri = reverse(
+                        "competition:match",
+                        kwargs={
+                            "match": match.pk,
+                            "division": match.stage.division.slug,
+                            "season": match.stage.division.season.slug,
+                            "competition": match.stage.division.season.competition.slug,
+                        },
+                    )
+                    _url_templates[div_id] = uri.replace(
+                        f"match:{match.pk}/", "match:{}/"
+                    )
+                except NoReverseMatch:
+                    LOG.exception("Unable to resolve url for %r", match)
+                    _url_templates[div_id] = None
+
+            url_template = _url_templates[div_id]
+            if url_template is not None:
+                uri = url_template.format(match.pk)
                 event.add("description", request.build_absolute_uri(uri))
 
             cal.add_component(event)
