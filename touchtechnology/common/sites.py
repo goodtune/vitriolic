@@ -280,7 +280,7 @@ class Application(object):
 
             # If permission is denied, return the response. May already have
             # thrown an exception by now.
-            if not queryset and has_permission is not None:
+            if has_permission is not None and not queryset.exists():
                 return has_permission
 
         if extra_context is None:
@@ -613,7 +613,7 @@ class Application(object):
 
             # If permission is denied, return the response. May already have
             # thrown an exception by now.
-            if not queryset and has_permission is not None:
+            if has_permission is not None and not queryset.exists():
                 return has_permission
 
             queryset = get_objects_for_user(
