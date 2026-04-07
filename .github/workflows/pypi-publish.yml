@@ -3,6 +3,12 @@ name: Publish Python Package
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Git tag to publish (e.g. 1.2.3)"
+        required: true
+        type: string
 
 jobs:
   pypi-publish:
@@ -19,6 +25,8 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
