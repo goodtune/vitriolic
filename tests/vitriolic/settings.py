@@ -72,6 +72,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "django_htmx.middleware.HtmxMiddleware",
     "touchtechnology.common.middleware.served_by_middleware",
     "touchtechnology.content.middleware.SitemapNodeMiddleware",
     "touchtechnology.content.middleware.redirect_middleware",
@@ -97,6 +98,7 @@ TEMPLATES = [
                 "touchtechnology.common.context_processors.query_string",
                 "touchtechnology.common.context_processors.site",
                 "touchtechnology.common.context_processors.tz",
+                "touchtechnology.common.context_processors.htmx_admin_tabs",
                 # Static files context processor
                 "django.template.context_processors.static",
             ],
