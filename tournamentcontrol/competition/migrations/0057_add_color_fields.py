@@ -5,9 +5,9 @@ from django.core import validators
 from django.db import migrations, models
 import tournamentcontrol.competition.models
 
-# Django 6.0 removed the `check` kwarg in favor of `condition`.
-# Django 4.2 only supports `check`.
-_check_constraint_kwarg = "condition" if django.VERSION >= (5, 0) else "check"
+# Django 6.0 removed the `check` kwarg; Django 4.2 only supports `check`.
+# Django 5.x supports both, so use `check` until 6.0.
+_check_constraint_kwarg = "condition" if django.VERSION >= (6, 0) else "check"
 
 
 class Migration(migrations.Migration):
