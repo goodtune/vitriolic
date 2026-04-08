@@ -4,10 +4,16 @@ import os
 import platform
 import re
 import socket
+from contextlib import contextmanager
 from decimal import Decimal
 from importlib import metadata
 from itertools import islice, zip_longest
 from urllib.parse import parse_qsl
+
+try:
+    import sentry_sdk
+except ImportError:
+    sentry_sdk = None
 
 from django.conf import settings
 from django.db.models import Model, Q
@@ -217,6 +223,32 @@ def do_navigation(
     template_name=None,
     **kwargs,
 ):
+    if sentry_sdk is not None:
+        span_ctx = sentry_sdk.start_span(op="template.tag", name="do_navigation")
+    else:
+        span_ctx = contextmanager(lambda: (yield))()
+
+    with span_ctx:
+        return _do_navigation(
+            root=root,
+            start_at=start_at,
+            stop_at=stop_at,
+            current_node=current_node,
+            expand_all_nodes=expand_all_nodes,
+            template_name=template_name,
+            **kwargs,
+        )
+
+
+def _do_navigation(
+    root=None,
+    start_at=None,
+    stop_at=None,
+    current_node=None,
+    expand_all_nodes=None,
+    template_name=None,
+    **kwargs,
+):
     nodes = SitemapNode._tree_manager.select_related("content_type", "parent")
 
     if template_name is None:
@@ -287,8 +319,6 @@ def do_navigation(
             parents.append(n.parent)
             n = n.parent
 
-        fmt = "[{rel}] {url} {node}"
-
         def func(node):
             """
             Filter function to determine if a node should appear in the
@@ -296,7 +326,7 @@ def do_navigation(
             """
             rel = current_node.rel(node)
             url = node.get_absolute_url()
-            logger.debug(fmt.format(node=node, rel=rel, url=url))
+            logger.debug("[%s] %s %s", rel, url, node)
             return rel in {
                 "ROOT",
                 "ANCESTOR",
@@ -307,12 +337,7 @@ def do_navigation(
                 "DESCENDANT",
             }
 
-        log = {
-            "rel": "NODE",
-            "node": repr(current_node),
-            "url": current_node.get_absolute_url(),
-        }
-        logger.debug(fmt.format(**log))
+        logger.debug("[NODE] %s %r", current_node.get_absolute_url(), current_node)
         tree = [t for t in tree if func(t)]
 
     # re-sort the queryset to get our correct tree structure back
@@ -332,9 +357,7 @@ def do_navigation(
 @register.simple_tag
 def field(bf, label=None):
     if not isinstance(bf, BoundField):
-        raise TypeError(
-            "{{% field %}} tag can only be used with " "BoundFields ({0})".format(bf)
-        )
+        raise TypeError(f"{{% field %}} tag can only be used with BoundFields ({bf})")
 
     if bf.is_hidden:
         return smart_str(bf)
@@ -418,7 +441,7 @@ def get_type_plural(obj):
         return obj._meta.verbose_name_plural
     else:
         # extremely naive
-        return obj.__class__.__name__ + "s"
+        return f"{obj.__class__.__name__}s"
 
 
 @register.filter
