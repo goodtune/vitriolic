@@ -10,7 +10,6 @@ authors = [
 classifiers = []
 requires-python = ">=3.11,<3.15"
 dependencies = [
-    "django-froala-editor>=2.9",
     "django-guardian>=2.4",
     "django-mcp-server>=0.5.5",
     "django-modelforms>=1.0",

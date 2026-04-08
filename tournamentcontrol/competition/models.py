@@ -1174,7 +1174,7 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
 
     color = models.CharField(
         max_length=7,
-        db_default="#e8f5e8",
+        default="#e8f5e8",
         verbose_name=_("Background Color"),
         help_text=_(
             "Background color for matches in the visual scheduler. "
