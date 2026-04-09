@@ -174,6 +174,11 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         return set(groups).difference(user.groups.all())
 
     def get_absolute_url(self):
+        try:
+            return self._cached_absolute_url
+        except AttributeError:
+            pass
+
         parts = [
             ancestor.slug
             for ancestor in self.get_ancestors(include_self=True)

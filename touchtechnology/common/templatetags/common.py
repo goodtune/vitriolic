@@ -41,7 +41,7 @@ from django.utils.text import slugify
 from guardian.core import ObjectPermissionChecker
 from namedentities import named_entities
 
-from touchtechnology.common.default_settings import CURRENCY_SYMBOL
+from touchtechnology.common.default_settings import CURRENCY_SYMBOL, SITEMAP_ROOT
 from touchtechnology.common.exceptions import NotModelManager
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.utils import (
@@ -303,6 +303,24 @@ def _do_navigation(
     # flatten the list of nodes to a list
     tree = list(nodes)
 
+    # Precompute URLs using the in-memory tree to avoid per-node
+    # get_ancestors() queries. Nodes are sorted by (tree_id, lft) so
+    # parents always appear before their children.
+    _url_cache = {}
+    for node in tree:
+        if node.parent_id is None:
+            if node.is_root_node() and node.slug == SITEMAP_ROOT:
+                url = "/"
+            else:
+                url = "/%s/" % node.slug
+        elif node.parent_id in _url_cache:
+            parent_url = _url_cache[node.parent_id]
+            url = "%s%s/" % (parent_url, node.slug)
+        else:
+            url = node.get_absolute_url()
+        _url_cache[node.pk] = url
+        node._cached_absolute_url = url
+
     if current_node is None and not expand_all_nodes:
         stop_at = max(start_at or 0, stop_at or 0, 0)
 
@@ -313,11 +331,6 @@ def _do_navigation(
         tree = [n for n in tree if n.level <= stop_at]
 
     if not expand_all_nodes and current_node is not None:
-        parents = []
-        n = current_node
-        while n.parent is not None:
-            parents.append(n.parent)
-            n = n.parent
 
         def func(node):
             """
@@ -325,8 +338,7 @@ def _do_navigation(
             navigation tree or not.
             """
             rel = current_node.rel(node)
-            url = node.get_absolute_url()
-            logger.debug("[%s] %s %s", rel, url, node)
+            logger.debug("[%s] %s %s", rel, node.get_absolute_url(), node)
             return rel in {
                 "ROOT",
                 "ANCESTOR",
