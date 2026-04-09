@@ -25,7 +25,6 @@ from django.db.models import (
     Count,
     DateField,
     DateTimeField,
-    Prefetch,
     Q,
     Sum,
     TimeField,
@@ -863,28 +862,15 @@ class Division(
         """
         Build the ladder structure used by ``division.html``.
 
-        This loads every stage, stage group (pool) and ladder summary for
-        the division in a bounded number of queries — regardless of how
-        many stages or pools the division has — so the division view
-        scales independently of division size.
+        The prefetch configuration lives on ``StageQuerySet.with_ladder_data``
+        so it can be reused by anything else that needs the same shape;
+        this method just walks the prefetched data and assembles the
+        nested ``{stage: {pool: [summary...]}}`` dict the template
+        expects.
         """
-        ladder_summary_qs = LadderSummary.objects.select_related(
-            "team__club"
-        )
         stages = (
             self.stages.exclude(keep_ladder=False)
-            .annotate(pool_count=Count("pools"))
-            .prefetch_related(
-                Prefetch("ladder_summary", queryset=ladder_summary_qs),
-                Prefetch(
-                    "pools",
-                    queryset=StageGroup.objects.prefetch_related(
-                        Prefetch(
-                            "ladder_summary", queryset=ladder_summary_qs
-                        ),
-                    ),
-                ),
-            )
+            .with_ladder_data()
             .order_by("order")
         )
         res = collections.OrderedDict()

@@ -1,5 +1,15 @@
+from django.apps import apps
 from django.conf import settings
-from django.db.models import Case, ExpressionWrapper, F, FloatField, Func, When
+from django.db.models import (
+    Case,
+    Count,
+    ExpressionWrapper,
+    F,
+    FloatField,
+    Func,
+    Prefetch,
+    When,
+)
 from django.db.models.query import QuerySet
 from django.utils import timezone
 
@@ -18,6 +28,34 @@ class DivisionQuerySet(QuerySet):
 class StageQuerySet(QuerySet):
     def with_ladder(self):
         return self.filter(keep_ladder=True, ladder_summary__isnull=False).distinct()
+
+    def with_ladder_data(self):
+        """
+        Annotate ``pool_count`` and prefetch everything required to
+        render the ladder structure used by ``Division.ladders`` — each
+        stage's ``ladder_summary`` and each of its pools' ``ladder_summary``
+        — with ``team__club`` joined in a single SQL statement per
+        relation.
+
+        Keeps the N+1-safe prefetch construction co-located with the
+        ``StageQuerySet`` so any view that needs the same shape can reuse
+        it without duplicating ``Prefetch`` boilerplate.
+        """
+        LadderSummary = apps.get_model("competition", "LadderSummary")
+        StageGroup = apps.get_model("competition", "StageGroup")
+        ladder_summary_qs = LadderSummary.objects.select_related("team__club")
+        return (
+            self.annotate(pool_count=Count("pools"))
+            .prefetch_related(
+                Prefetch("ladder_summary", queryset=ladder_summary_qs),
+                Prefetch(
+                    "pools",
+                    queryset=StageGroup.objects.prefetch_related(
+                        Prefetch("ladder_summary", queryset=ladder_summary_qs),
+                    ),
+                ),
+            )
+        )
 
 
 class MatchQuerySet(QuerySet):
