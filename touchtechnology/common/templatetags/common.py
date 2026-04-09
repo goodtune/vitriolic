@@ -300,27 +300,26 @@ def _do_navigation(
 
     logger.debug("nodes[cleaned]: %r", nodes)
 
-    # flatten the list of nodes to a list
-    tree = list(nodes)
+    # flatten the list of nodes to a list, sorted so that parents
+    # always appear before their children in the URL precompute loop.
+    tree = sorted(nodes, key=operator.attrgetter("tree_id", "lft"))
 
     # Precompute URLs using the in-memory tree to avoid per-node
-    # get_ancestors() queries. Nodes are sorted by (tree_id, lft) so
-    # parents always appear before their children.
+    # get_ancestors() queries.
     _url_cache = {}
-    _slash = "/" if settings.APPEND_SLASH else ""
     for node in tree:
         if node.parent_id is None:
             if node.is_root_node() and node.slug == SITEMAP_ROOT:
                 url = "/"
             else:
-                url = "/%s%s" % (node.slug, _slash)
+                url = "/" + os.path.join(node.slug, "")
         elif node.parent_id in _url_cache:
             parent_url = _url_cache[node.parent_id]
-            if not parent_url.endswith("/"):
-                parent_url += "/"
-            url = "%s%s%s" % (parent_url, node.slug, _slash)
+            url = "/" + os.path.join(parent_url.strip("/"), node.slug, "")
         else:
             url = node.get_absolute_url()
+        if settings.APPEND_SLASH and not url.endswith("/"):
+            url += "/"
         _url_cache[node.pk] = url
         node._cached_absolute_url = url
 
