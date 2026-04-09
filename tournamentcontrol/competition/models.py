@@ -25,6 +25,7 @@ from django.db.models import (
     Count,
     DateField,
     DateTimeField,
+    Prefetch,
     Q,
     Sum,
     TimeField,
@@ -859,17 +860,79 @@ class Division(
         )
 
     def ladders(self):
+        """
+        Build the ladder structure used by ``division.html``.
+
+        This loads every stage, stage group (pool) and ladder summary for
+        the division in a bounded number of queries — regardless of how
+        many stages or pools the division has — so the division view
+        scales independently of division size.
+        """
+        ladder_summary_qs = LadderSummary.objects.select_related(
+            "team__club"
+        )
+        stages = (
+            self.stages.exclude(keep_ladder=False)
+            .annotate(pool_count=Count("pools"))
+            .prefetch_related(
+                Prefetch("ladder_summary", queryset=ladder_summary_qs),
+                Prefetch(
+                    "pools",
+                    queryset=StageGroup.objects.prefetch_related(
+                        Prefetch(
+                            "ladder_summary", queryset=ladder_summary_qs
+                        ),
+                    ),
+                ),
+            )
+            .order_by("order")
+        )
         res = collections.OrderedDict()
-        for stage in self.stages.exclude(keep_ladder=False).annotate(
-            pool_count=Count("pools")
-        ):
-            res.update(stage.ladders())
+        for stage in stages:
+            if stage.pool_count:
+                pools = collections.OrderedDict()
+                for pool in stage.pools.all():
+                    pools[pool] = list(pool.ladder_summary.all())
+                res[stage] = pools
+            else:
+                res[stage] = list(stage.ladder_summary.all())
         return res
 
     def matches_by_date(self):
+        """
+        Build the match-by-date structure used by ``division.html``.
+
+        Fetches every match for the division in a single query (with the
+        same ``select_related`` set as ``Stage.matches_by_date``), and
+        groups the results by stage and date in Python. This keeps the
+        query count bounded regardless of the number of stages or
+        matches in the division.
+        """
+        tzinfo = timezone.get_current_timezone()
+        matches = (
+            Match.objects.filter(stage__division=self)
+            .select_related(
+                "play_at",
+                "stage__division",
+                "home_team__club",
+                "home_team__division",
+                "away_team__club",
+                "away_team__division",
+            )
+            .annotate(
+                statistics_count=Count("statistics"),
+                videos_count=Count("videos"),
+                referee_count=Count("referees"),
+            )
+            .order_by(
+                "stage__order", "datetime", "date", "time", "round"
+            )
+        )
         res = collections.OrderedDict()
-        for stage in self.stages.all():
-            res.update(stage.matches_by_date())
+        for match in matches:
+            res.setdefault(
+                match.stage, collections.OrderedDict()
+            ).setdefault(match.get_date(tzinfo), []).append(match)
         return res
 
     def to_division_structure(self):
