@@ -26,15 +26,26 @@ class NodeRelationMixin(object):
          * FAUX
 
         Relationships are determined using MPTT tree fields (tree_id,
-        lft, rght, level) to avoid database queries.
+        lft, rght, level) to avoid database queries. Uses ``parent_id``
+        (the raw FK column) to avoid triggering lazy loads; falls back
+        to ``getattr(node, "parent_id", None)`` so that ``FauxNode``
+        (which only carries ``parent``) works too.
         """
         from .models import SitemapNode
         from .utils import FauxNode
 
+        def _parent_id(node):
+            pid = getattr(node, "parent_id", None)
+            if pid is None:
+                parent = getattr(node, "parent", None)
+                if parent is not None:
+                    pid = getattr(parent, "pk", None)
+            return pid
+
         if other == self:
             return "ME"
 
-        if other.parent_id is None:
+        if _parent_id(other) is None:
             return "ROOT"
 
         if other.tree_id != self.tree_id:
@@ -56,15 +67,14 @@ class NodeRelationMixin(object):
         if other.lft > self.lft and other.rght < self.rght:
             return "DESCENDANT"
 
-        if self.parent_id == other.parent_id:
+        self_pid = _parent_id(self)
+        other_pid = _parent_id(other)
+
+        if self_pid == other_pid:
             return "SIBLING"
 
-        if self.parent_id is not None and other.parent_id is not None:
-            # Check if other is a sibling of self's direct parent. Use
-            # MPTT fields to identify the parent's boundaries: the parent
-            # is the ancestor at level - 1 whose lft/rght enclose self.
-            # If other shares that same parent_id, it's an uncle.
-            if other.level == self.level - 1 and other.parent_id != self.parent_id:
+        if self_pid is not None and other_pid is not None:
+            if other.level == self.level - 1 and other_pid != self_pid:
                 return "UNCLE"
 
         if other.level < self.level:
