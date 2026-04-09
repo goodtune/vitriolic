@@ -307,15 +307,18 @@ def _do_navigation(
     # get_ancestors() queries. Nodes are sorted by (tree_id, lft) so
     # parents always appear before their children.
     _url_cache = {}
+    _slash = "/" if settings.APPEND_SLASH else ""
     for node in tree:
         if node.parent_id is None:
             if node.is_root_node() and node.slug == SITEMAP_ROOT:
                 url = "/"
             else:
-                url = "/%s/" % node.slug
+                url = "/%s%s" % (node.slug, _slash)
         elif node.parent_id in _url_cache:
             parent_url = _url_cache[node.parent_id]
-            url = "%s%s/" % (parent_url, node.slug)
+            if not parent_url.endswith("/"):
+                parent_url += "/"
+            url = "%s%s%s" % (parent_url, node.slug, _slash)
         else:
             url = node.get_absolute_url()
         _url_cache[node.pk] = url
