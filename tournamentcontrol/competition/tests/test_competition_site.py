@@ -2,15 +2,16 @@ import unittest
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from django.db import connection
 from django.test import override_settings
-from django.test.utils import CaptureQueriesContext
 from freezegun import freeze_time
 from icalendar import Calendar
 from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
+from tournamentcontrol.competition.draw import schemas
+from tournamentcontrol.competition.draw.builders import build
 from tournamentcontrol.competition.tests import factories
+from tournamentcontrol.competition.utils import round_robin_format
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
@@ -724,101 +725,93 @@ class CalendarQueryTests(TestCase):
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
 class DivisionViewQueryTests(TestCase):
     """
-    The division view renders a whole division's draw and ladder,
-    following FKs such as ``match.home_team.club``. Its query count must
-    be bounded — it must NOT grow with the number of teams, matches or
-    stages — otherwise we re-introduce the N+1 explosion seen in Sentry
-    (600+ model instantiations on a single request).
+    The division view follows ``parent.ladders`` and
+    ``parent.matches_by_date``, both of which used to issue at least
+    one extra query per stage. Pin the view's query count so the
+    Sentry N+1 explosion (600+ model instantiations on a single
+    request) cannot silently regress: the same ``test_query_count``
+    upper bound is used for a small and a large division, so any
+    per-stage scaling trips the large case.
     """
 
-    @staticmethod
-    def _populate_division(team_count, stage_count=2, match_count=10):
+    @classmethod
+    def _build_scored_division(cls, spec):
         """
-        Create a division with ``stage_count`` stages, ``team_count`` teams
-        (each in their own club) and ``match_count`` matches spread across
-        the stages. Returns the division.
+        Build a division from a ``DivisionStructure`` spec and score
+        every match so the ladder signals populate ``LadderEntry`` and
+        ``LadderSummary`` rows — matching the shape of production data
+        the division view has to render.
         """
-        division = factories.DivisionFactory.create()
-        for _ in range(stage_count):
-            factories.StageFactory.create(division=division)
-        teams = []
-        for _ in range(team_count):
-            club = factories.ClubFactory.create()
-            division.season.competition.clubs.add(club)
-            team = factories.TeamFactory.create(club=club, division=division)
-            teams.append(team)
-        stages = list(division.stages.order_by("order"))
-        for i in range(match_count):
-            home = teams[(2 * i) % team_count]
-            away = teams[(2 * i + 1) % team_count]
-            factories.MatchFactory.create(
-                stage=stages[i % stage_count],
-                home_team=home,
-                away_team=away,
-            )
+        division = build(cls.season, spec)
+        # DivisionStructure does not carry a points formula, so set one
+        # here to match what ``DivisionFactory`` would normally give us
+        # and let the ladder signals produce ladder rows.
+        division.points_formula = "3*win + 2*draw + 1*loss"
+        division.save()
+        # ``build`` uses a no-date generator, so matches come back with
+        # ``datetime=None``. Scheduling them here both gives the scoring
+        # signals realistic data and avoids ``Match.get_datetime``
+        # issuing a per-match sibling lookup during template render.
+        match_dt = datetime(2025, 8, 22, 9, 0, tzinfo=ZoneInfo("UTC"))
+        for i, match in enumerate(division.matches.all()):
+            match.date = match_dt.date()
+            match.time = match_dt.time()
+            match.datetime = match_dt
+            match.home_team_score = 10 + (i % 4)
+            match.away_team_score = 5 + (i % 3)
+            match.save()
         return division
 
-    def _get_division(self, division):
-        return self.get(
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create()
+        cls.competition = cls.season.competition
+
+        # Small: one stage, four teams, six round-robin matches.
+        cls.small_division = cls._build_scored_division(
+            schemas.DivisionStructure(
+                title="Small Division",
+                teams=["Alpha", "Beta", "Gamma", "Delta"],
+                draw_formats={"rr4": round_robin_format(4)},
+                stages=[
+                    schemas.StageFixture(
+                        title="Round Robin", draw_format_ref="rr4"
+                    ),
+                ],
+            )
+        )
+
+        # Large: three stages, eight teams, 28 round-robin matches per
+        # stage. Enough to make any per-stage N+1 visible against the
+        # same query-count bound used by the small case.
+        cls.large_division = cls._build_scored_division(
+            schemas.DivisionStructure(
+                title="Large Division",
+                teams=[f"Team {i}" for i in range(1, 9)],
+                draw_formats={"rr8": round_robin_format(8)},
+                stages=[
+                    schemas.StageFixture(
+                        title=f"Stage {i}", draw_format_ref="rr8"
+                    )
+                    for i in range(1, 4)
+                ],
+            )
+        )
+
+    def test_small_division_query_count(self):
+        self.assertGoodView(
             "competition:division",
-            competition=division.season.competition.slug,
-            season=division.season.slug,
-            division=division.slug,
+            self.competition.slug,
+            self.season.slug,
+            self.small_division.slug,
+            test_query_count=14,
         )
 
-    def _assert_bounded_by_division_size(self, small, large):
-        # Warm any lazy import/template caches so the measurement is
-        # stable.
-        self._get_division(small)
-
-        with CaptureQueriesContext(connection) as small_ctx:
-            self.response_200(self._get_division(small))
-        with CaptureQueriesContext(connection) as large_ctx:
-            self.response_200(self._get_division(large))
-
-        small_count = len(small_ctx.captured_queries)
-        large_count = len(large_ctx.captured_queries)
-        self.assertEqual(
-            small_count,
-            large_count,
-            msg=(
-                f"Division view query count scales with division size: "
-                f"{small_count} queries for the small division vs "
-                f"{large_count} for the large one. Executed queries on "
-                f"the large division were:\n"
-                + "\n".join(
-                    f"  {i}. {q['sql'][:240]}"
-                    for i, q in enumerate(large_ctx.captured_queries, 1)
-                )
-            ),
+    def test_large_division_query_count(self):
+        self.assertGoodView(
+            "competition:division",
+            self.competition.slug,
+            self.season.slug,
+            self.large_division.slug,
+            test_query_count=14,
         )
-
-    def test_division_view_query_count_does_not_scale(self):
-        """Doubling the number of teams, clubs, stages and matches in
-        the division must not increase the number of DB queries."""
-        small = self._populate_division(
-            team_count=4, stage_count=2, match_count=6
-        )
-        large = self._populate_division(
-            team_count=20, stage_count=4, match_count=40
-        )
-        self._assert_bounded_by_division_size(small, large)
-
-    def test_division_view_query_count_does_not_scale_with_pools(self):
-        """
-        The division view must also be bounded when stages have pools
-        (``StageGroup``). This exercises the pools branch of
-        ``Division.ladders``, which has to prefetch both the pools and
-        each pool's ladder summary.
-        """
-        def build(stage_pools):
-            division = factories.DivisionFactory.create()
-            for n_pools in stage_pools:
-                stage = factories.StageFactory.create(division=division)
-                for _ in range(n_pools):
-                    factories.StageGroupFactory.create(stage=stage)
-            return division
-
-        small = build([2, 2])
-        large = build([4, 4, 4, 4])
-        self._assert_bounded_by_division_size(small, large)
