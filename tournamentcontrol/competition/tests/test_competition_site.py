@@ -8,7 +8,10 @@ from icalendar import Calendar
 from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
+from tournamentcontrol.competition.draw import schemas
+from tournamentcontrol.competition.draw.builders import build
 from tournamentcontrol.competition.tests import factories
+from tournamentcontrol.competition.utils import round_robin_format
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
@@ -717,3 +720,98 @@ class CalendarQueryTests(TestCase):
         cal, events = self._parse_events(response)
         event = next(e for e in events if e["uid"] == match.uuid.hex)
         self.assertEqual(str(event["summary"]), "TBD")
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class DivisionViewQueryTests(TestCase):
+    """
+    The division view follows ``parent.ladders`` and
+    ``parent.matches_by_date``, both of which used to issue at least
+    one extra query per stage. Pin the view's query count so the
+    Sentry N+1 explosion (600+ model instantiations on a single
+    request) cannot silently regress: the same ``test_query_count``
+    upper bound is used for a small and a large division, so any
+    per-stage scaling trips the large case.
+    """
+
+    @classmethod
+    def _build_scored_division(cls, spec):
+        """
+        Build a division from a ``DivisionStructure`` spec and score
+        every match so the ladder signals populate ``LadderEntry`` and
+        ``LadderSummary`` rows — matching the shape of production data
+        the division view has to render.
+        """
+        division = build(cls.season, spec)
+        # DivisionStructure does not carry a points formula, so set one
+        # here to match what ``DivisionFactory`` would normally give us
+        # and let the ladder signals produce ladder rows.
+        division.points_formula = "3*win + 2*draw + 1*loss"
+        division.save()
+        # ``build`` uses a no-date generator, so matches come back with
+        # ``datetime=None``. Scheduling them here both gives the scoring
+        # signals realistic data and avoids ``Match.get_datetime``
+        # issuing a per-match sibling lookup during template render.
+        match_dt = datetime(2025, 8, 22, 9, 0, tzinfo=ZoneInfo("UTC"))
+        for i, match in enumerate(division.matches.all()):
+            match.date = match_dt.date()
+            match.time = match_dt.time()
+            match.datetime = match_dt
+            match.home_team_score = 10 + (i % 4)
+            match.away_team_score = 5 + (i % 3)
+            match.save()
+        return division
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create()
+        cls.competition = cls.season.competition
+
+        # Small: one stage, four teams, six round-robin matches.
+        cls.small_division = cls._build_scored_division(
+            schemas.DivisionStructure(
+                title="Small Division",
+                teams=["Alpha", "Beta", "Gamma", "Delta"],
+                draw_formats={"rr4": round_robin_format(4)},
+                stages=[
+                    schemas.StageFixture(
+                        title="Round Robin", draw_format_ref="rr4"
+                    ),
+                ],
+            )
+        )
+
+        # Large: three stages, eight teams, 28 round-robin matches per
+        # stage. Enough to make any per-stage N+1 visible against the
+        # same query-count bound used by the small case.
+        cls.large_division = cls._build_scored_division(
+            schemas.DivisionStructure(
+                title="Large Division",
+                teams=[f"Team {i}" for i in range(1, 9)],
+                draw_formats={"rr8": round_robin_format(8)},
+                stages=[
+                    schemas.StageFixture(
+                        title=f"Stage {i}", draw_format_ref="rr8"
+                    )
+                    for i in range(1, 4)
+                ],
+            )
+        )
+
+    def test_small_division_query_count(self):
+        self.assertGoodView(
+            "competition:division",
+            self.competition.slug,
+            self.season.slug,
+            self.small_division.slug,
+            test_query_count=14,
+        )
+
+    def test_large_division_query_count(self):
+        self.assertGoodView(
+            "competition:division",
+            self.competition.slug,
+            self.season.slug,
+            self.large_division.slug,
+            test_query_count=14,
+        )
