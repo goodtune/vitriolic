@@ -351,7 +351,7 @@ class Application(object):
         if paginate_by > 0:
             try:
                 page_num = int(request.GET.get("page", 1))
-            except TypeError:
+            except (TypeError, ValueError):
                 page_num = 1
 
             paginator = Paginator(queryset, paginate_by)
