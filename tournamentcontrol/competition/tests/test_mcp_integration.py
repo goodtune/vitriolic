@@ -173,6 +173,21 @@ class MCPServerIntegrationTests(TestCase):
             )
             self.assertIn("id", response_data, "Response must include id field")
 
+    def test_person_querytool_has_id_annotation(self):
+        """PersonQueryTool adds an 'id' annotation for uuid-pk compatibility.
+
+        The upstream django-mcp-server uses Count("id") in $group handlers
+        which fails on models with custom primary keys. PersonQueryTool
+        works around this by annotating 'id' as an alias for 'uuid'.
+        See: https://github.com/gts360/django-mcp-server/issues/65
+        """
+        tool = mcp.PersonQueryTool()
+        qs = tool.get_queryset()
+        # The annotation should exist and be usable in aggregation
+        from django.db.models import Count
+        result = qs.aggregate(total=Count("id"))
+        self.assertIn("total", result)
+
     def test_mcp_tools_model_access(self):
         """Test that MCP tools can access Django models correctly."""
         # Test instantiating MCP tools and verify they have model access

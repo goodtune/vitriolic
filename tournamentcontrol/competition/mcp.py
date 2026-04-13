@@ -79,6 +79,8 @@ Links
 - MCP Specification: https://modelcontextprotocol.io/
 """
 
+from django.db.models import F
+
 from mcp_server import ModelQueryToolset
 
 from tournamentcontrol.competition.models import (
@@ -139,3 +141,10 @@ class PersonQueryTool(ModelQueryToolset):
     """Query tool for Person model - allows MCP clients to query persons/players."""
 
     model = Person
+
+    def get_queryset(self):
+        # Person uses uuid as primary key, not id. The upstream django-mcp-server
+        # hardcodes Count("id") in $group/$sum/$count handlers which fails with
+        # FieldError. Add an "id" annotation so those queries resolve correctly.
+        # See: https://github.com/gts360/django-mcp-server/issues/65
+        return super().get_queryset().annotate(id=F("uuid"))
