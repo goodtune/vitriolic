@@ -396,7 +396,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path(
                     "<int:season_id>/authorize", self.oauth_authorize, name="authorize"
                 ),
-                path("<int:season_id>/callback", self.oauth_callback, name="callback"),
                 path("<int:season_id>/delete/", self.delete_season, name="delete"),
                 path(
                     "<int:season_id>/json-builder/",
@@ -610,6 +609,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             ),
             path("club/", include(club_urls, namespace="club")),
             path("scorecards/", self.scorecard_report, name="scorecard-report"),
+            path(
+                "youtube/callback",
+                self.oauth_callback,
+                name="youtube-callback",
+            ),
             path("draw-format/", include(drawformat_urls, namespace="format")),
             re_path(
                 r"^reorder/(?P<model>[^/:]+)(?::(?P<parent>[^/]+))?/(?P<pk>\d+)/(?P<direction>\w+)/$",  # noqa: E501
@@ -874,9 +878,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             return self.redirect(season.urls["edit"])
         flow = season.flow()
         flow.redirect_uri = request.build_absolute_uri(
-            self.reverse(
-                "competition:season:callback", args=(competition.pk, season.pk)
-            )
+            self.reverse("youtube-callback")
         )
         authorization_url, state = flow.authorization_url(
             # Enable offline access so that you can refresh an access token without
@@ -889,17 +891,17 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             prompt="consent",  # Needs to be consent to get refresh token?
         )
         request.session["oauth_state"] = state
+        request.session["oauth_season_id"] = season.pk
         return self.redirect(authorization_url)
 
-    @competition_by_pk_m
     @staff_login_required_m
-    def oauth_callback(self, request, competition, season, **kwargs):
-        state = request.session["oauth_state"]
+    def oauth_callback(self, request, **kwargs):
+        state = request.session.pop("oauth_state")
+        season_id = request.session.pop("oauth_season_id")
+        season = get_object_or_404(Season, pk=season_id)
         flow = season.flow(state=state)
         flow.redirect_uri = request.build_absolute_uri(
-            self.reverse(
-                "competition:season:callback", args=(competition.pk, season.pk)
-            )
+            self.reverse("youtube-callback")
         )
         authorization_response = (
             f"{request.build_absolute_uri(request.path)}?{request.META['QUERY_STRING']}"
