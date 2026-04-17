@@ -156,6 +156,49 @@ class LiveStreamTemplateTest(TestCase):
         )
         self.assertEqual(title, expected_title)
 
+    def test_apostrophes_are_not_html_escaped(self):
+        """YouTube API expects plain text; apostrophes must not be escaped to &#x27;."""
+        division = factories.DivisionFactory.create(title="Men's Open")
+        stage = factories.StageFactory.create(division=division)
+        ground = factories.GroundFactory.create(venue__season=division.season)
+        home = factories.TeamFactory.create(title="St George's", division=division)
+        away = factories.TeamFactory.create(title="O'Connor", division=division)
+        match = factories.MatchFactory.create(
+            stage=stage,
+            play_at=ground,
+            label="",
+            home_team=home,
+            away_team=away,
+        )
+
+        context = {
+            "match": match,
+            "competition": division.season.competition,
+            "season": division.season,
+            "division": division,
+            "stage": stage,
+            "match_url": "http://example.com/match/123/",
+        }
+
+        title = render_to_string(
+            "tournamentcontrol/competition/match/live_stream/title.txt", context
+        ).strip()
+        description = render_to_string(
+            "tournamentcontrol/competition/match/live_stream/description.txt", context
+        ).strip()
+
+        self.assertIn("Men's Open", title)
+        self.assertIn("St George's", title)
+        self.assertIn("O'Connor", title)
+        self.assertNotIn("&#x27;", title)
+        self.assertNotIn("&#39;", title)
+        self.assertNotIn("&amp;", title)
+
+        self.assertIn("Men's Open", description)
+        self.assertNotIn("&#x27;", description)
+        self.assertNotIn("&#39;", description)
+        self.assertNotIn("&amp;", description)
+
     def test_template_context_variables(self):
         """Test that all expected context variables are available to templates."""
         context = self._get_template_context(self.match_with_label)

@@ -21,7 +21,7 @@ from django.http import (
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.template.response import TemplateResponse
-from django.urls import include, path, re_path, reverse
+from django.urls import NoReverseMatch, include, path, re_path, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _, ngettext
 from googleapiclient.errors import HttpError
@@ -199,6 +199,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path("<int:match_id>/", self.edit_match, name="edit"),
                 path("<int:match_id>/delete/", self.delete_match, name="delete"),
                 path("<int:match_id>/detail/", self.edit_match_detail, name="detail"),
+                path(
+                    "<int:match_id>/resync-live-stream/",
+                    self.resync_match_live_stream,
+                    name="resync-live-stream",
+                ),
                 path(
                     "<int:match_id>/referee/",
                     self.referee_appointments,
@@ -1599,6 +1604,91 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         messages.success(request, _("Your draw has been undone."))
         return self.redirect(division.urls["edit"])
 
+    @staticmethod
+    def _build_live_stream_body(request, match):
+        """Render title/description templates and build the YouTube broadcast body.
+
+        Returns the body dict, or ``None`` if the match lacks a scheduled start time.
+        """
+        stage = match.stage
+        division = stage.division
+        season = division.season
+        competition = season.competition
+
+        match_url = None
+        if match.pk is not None:
+            try:
+                match_url = request.build_absolute_uri(
+                    reverse(
+                        "competition:match-video",
+                        kwargs={
+                            "competition": competition.slug,
+                            "season": season.slug,
+                            "division": division.slug,
+                            "match": match.pk,
+                        },
+                    )
+                )
+            except NoReverseMatch:
+                # Public competition site not mounted in this project; omit the URL.
+                match_url = None
+
+        template_context = {
+            "match": match,
+            "competition": competition,
+            "season": season,
+            "division": division,
+            "stage": stage,
+            "match_url": match_url,
+        }
+
+        title_templates = [
+            f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/{competition.slug}/match/live_stream/title.txt",
+            f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/match/live_stream/title.txt",
+            f"tournamentcontrol/competition/{stage.slug}/{division.slug}/match/live_stream/title.txt",
+            f"tournamentcontrol/competition/{stage.slug}/match/live_stream/title.txt",
+            "tournamentcontrol/competition/match/live_stream/title.txt",
+        ]
+        title = render_to_string(title_templates, template_context, request).strip()
+
+        description_templates = [
+            f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/{competition.slug}/match/live_stream/description.txt",
+            f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/match/live_stream/description.txt",
+            f"tournamentcontrol/competition/{stage.slug}/{division.slug}/match/live_stream/description.txt",
+            f"tournamentcontrol/competition/{stage.slug}/match/live_stream/description.txt",
+            "tournamentcontrol/competition/match/live_stream/description.txt",
+        ]
+        description = render_to_string(
+            description_templates, template_context, request
+        ).strip()
+
+        start_time = match.get_datetime(ZoneInfo("UTC"))
+        if start_time is None:
+            return None
+
+        stop_time = start_time + relativedelta(minutes=50)  # FIXME: hard coded
+
+        return {
+            "snippet": {
+                "title": title,
+                "description": description,
+                "scheduledStartTime": start_time.isoformat(),
+                "scheduledEndTime": stop_time.isoformat(),
+            },
+            "status": {
+                "privacyStatus": season.live_stream_privacy,
+                "selfDeclaredMadeForKids": False,
+            },
+            "contentDetails": {
+                "enableAutoStart": False,
+                "enableAutoStop": False,
+                "monitorStream": {
+                    "broadcastStreamDelayMs": 0,
+                    "enableMonitorStream": True,
+                },
+            },
+        }
+
     @competition_by_pk_m
     @staff_login_required_m
     def edit_match(
@@ -1621,83 +1711,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             if not (season.live_stream_client_id and season.live_stream_client_secret):
                 return obj
 
-            # Build match video URL for description
-            # Only build the URL if the match has been saved and has a primary key
-            match_url = None
-            if obj.pk is not None:
-                match_url = request.build_absolute_uri(
-                    reverse(
-                        "competition:match-video",
-                        kwargs={
-                            "competition": competition.slug,
-                            "season": season.slug,
-                            "division": division.slug,
-                            "match": obj.pk,
-                        },
-                    )
-                )
-
-            # Create context for template rendering
-            template_context = {
-                "match": obj,
-                "competition": competition,
-                "season": season,
-                "division": division,
-                "stage": stage,
-                "match_url": match_url,
-            }
-
-            # Render title from template with hierarchical fallback
-            title_templates = [
-                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/{competition.slug}/match/live_stream/title.txt",
-                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/match/live_stream/title.txt",
-                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/match/live_stream/title.txt",
-                f"tournamentcontrol/competition/{stage.slug}/match/live_stream/title.txt",
-                "tournamentcontrol/competition/match/live_stream/title.txt",
-            ]
-            title = render_to_string(title_templates, template_context, request).strip()
-
-            # Render description from template with hierarchical fallback
-            description_templates = [
-                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/{competition.slug}/match/live_stream/description.txt",
-                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/match/live_stream/description.txt",
-                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/match/live_stream/description.txt",
-                f"tournamentcontrol/competition/{stage.slug}/match/live_stream/description.txt",
-                "tournamentcontrol/competition/match/live_stream/description.txt",
-            ]
-            description = render_to_string(
-                description_templates, template_context, request
-            ).strip()
-
-            start_time = obj.get_datetime(ZoneInfo("UTC"))
-
-            # Skip YouTube API interaction if we don't have valid start time
-            # This can happen for new matches that don't have complete date/time data
-            if start_time is None:
+            body = self._build_live_stream_body(request, obj)
+            # New matches without a scheduled date/time cannot be synced yet.
+            if body is None:
                 return
-
-            stop_time = start_time + relativedelta(minutes=50)  # FIXME: hard coded
-
-            body = {
-                "snippet": {
-                    "title": title,
-                    "description": description,
-                    "scheduledStartTime": start_time.isoformat(),
-                    "scheduledEndTime": stop_time.isoformat(),
-                },
-                "status": {
-                    "privacyStatus": season.live_stream_privacy,
-                    "selfDeclaredMadeForKids": False,
-                },
-                "contentDetails": {
-                    "enableAutoStart": False,
-                    "enableAutoStop": False,
-                    "monitorStream": {
-                        "broadcastStreamDelayMs": 0,
-                        "enableMonitorStream": True,
-                    },
-                },
-            }
 
             try:
                 if obj.external_identifier:
@@ -1779,6 +1796,98 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             permission_required=True,
             extra_context=extra_context,
         )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def resync_match_live_stream(
+        self,
+        request,
+        competition,
+        season,
+        division,
+        stage,
+        match,
+        extra_context,
+        **kwargs,
+    ):
+        """Re-push the current match title/description/schedule to its existing YouTube broadcast.
+
+        Useful when a match's title, teams, or timing have changed since the broadcast
+        was created and the public YouTube URL must be kept stable.
+        """
+        redirect_url = request.GET.get("next") or stage.urls["edit"]
+
+        if request.method == "GET":
+            context = dict(
+                extra_context or {},
+                match=match,
+                competition=competition,
+                season=season,
+                division=division,
+                stage=stage,
+                cancel_url=redirect_url,
+            )
+            return self.render(
+                request,
+                self.template_path("match/resync_live_stream.html"),
+                context,
+            )
+
+        if not (season.live_stream_client_id and season.live_stream_client_secret):
+            messages.error(
+                request, _("Live streaming is not configured for this season.")
+            )
+            return self.redirect(redirect_url)
+
+        if not match.live_stream or not match.external_identifier:
+            messages.error(
+                request,
+                _("This match is not currently streaming; nothing to resync."),
+            )
+            return self.redirect(redirect_url)
+
+        body = self._build_live_stream_body(request, match)
+        if body is None:
+            messages.error(
+                request,
+                _("Cannot resync a match without a scheduled date and time."),
+            )
+            return self.redirect(redirect_url)
+
+        body["id"] = match.external_identifier
+        try:
+            broadcast = (
+                season.youtube.liveBroadcasts()
+                .update(part="snippet,status,contentDetails", body=body)
+                .execute()
+            )
+            log.info("YouTube video %(id)r resynced", broadcast)
+
+            if match.play_at and match.play_at.ground and match.play_at.ground.external_identifier:
+                bind = (
+                    season.youtube.liveBroadcasts()
+                    .bind(
+                        part="id,snippet,contentDetails,status",
+                        id=match.external_identifier,
+                        streamId=match.play_at.ground.external_identifier,
+                    )
+                    .execute()
+                )
+                bound_stream = bind["contentDetails"].get("boundStreamId")
+                if match.live_stream_bind != bound_stream:
+                    match.live_stream_bind = bound_stream
+                    match.save(update_fields=["live_stream_bind"])
+
+            set_youtube_thumbnail.s(match.pk).apply_async(countdown=10)
+        except HttpError as exc:
+            messages.error(request, exc.reason)
+            return self.redirect(redirect_url)
+
+        messages.success(
+            request,
+            _("YouTube live stream details resynced from current match data."),
+        )
+        return self.redirect(redirect_url)
 
     @competition_by_pk_m
     @staff_login_required_m
