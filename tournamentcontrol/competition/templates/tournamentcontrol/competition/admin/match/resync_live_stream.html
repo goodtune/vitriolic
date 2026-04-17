@@ -1,0 +1,37 @@
+{% extends "touchtechnology/admin/edit.html" %}
+{% load i18n %}
+
+{% block content %}
+	<form class="form-horizontal" action="" method="post">
+		<div class="heading-block">
+			<h3>{% trans "Resync YouTube live stream" %}</h3>
+		</div>
+
+		{% csrf_token %}
+
+		<p>
+			{% blocktrans %}Push the current match title, description, and schedule to the existing YouTube broadcast without creating a new stream URL.{% endblocktrans %}
+		</p>
+		<p>
+			{% blocktrans with match=match %}Match: <strong>{{ match }}</strong>{% endblocktrans %}
+		</p>
+		{% if match.external_identifier %}
+			<p>
+				{% trans "Broadcast ID" %}: <code>{{ match.external_identifier }}</code>
+			</p>
+		{% else %}
+			<p class="text-warning">
+				{% trans "This match has no existing broadcast; nothing to resync." %}
+			</p>
+		{% endif %}
+
+		<div class="form-group">
+			<div class="text-center">
+				<button type="submit" class="btn btn-primary"{% if not match.external_identifier or not match.live_stream %} disabled{% endif %}>
+					{% trans "Resync now" %}
+				</button>
+				&nbsp;<a class="btn btn-default" href="{{ cancel_url }}">{% trans "Cancel" %}</a>
+			</div>
+		</div>
+	</form>
+{% endblock %}

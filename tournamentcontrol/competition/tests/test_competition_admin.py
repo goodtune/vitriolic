@@ -1,6 +1,6 @@
 import unittest
 from datetime import date, datetime, time
-from unittest.mock import patch
+from unittest.mock import MagicMock, PropertyMock, patch
 from zoneinfo import ZoneInfo
 
 from dateutil.rrule import DAILY
@@ -2197,3 +2197,100 @@ class BackendTests(MessagesTestMixin, TestCase):
         data["live_stream_thumbnail_image"] = ""
         self.post(add_match.url_name, *add_match.args, data=data)
         self.response_302()
+
+    @patch("tournamentcontrol.competition.admin.set_youtube_thumbnail")
+    @patch("tournamentcontrol.competition.models.Season.youtube", new_callable=PropertyMock)
+    def test_resync_live_stream_sends_unescaped_apostrophes(
+        self, mock_youtube_prop, mock_thumbnail
+    ):
+        """Resync must push raw apostrophes to YouTube, not ``&#x27;``.
+
+        Refs: apostrophe regression introduced in PR #206.
+        """
+        stage = factories.StageFactory.create(
+            division__title="Men's Open",
+            division__season__live_stream=True,
+            division__season__live_stream_project_id="test-project-123",
+            division__season__live_stream_client_id="test-client-id",
+            division__season__live_stream_client_secret="test-client-secret",
+        )
+        ground = factories.GroundFactory.create(
+            venue__season=stage.division.season,
+            external_identifier="yt-stream-abc",
+        )
+        home = factories.TeamFactory.create(
+            title="St George's", division=stage.division
+        )
+        away = factories.TeamFactory.create(
+            title="O'Connor", division=stage.division
+        )
+        match = factories.MatchFactory.create(
+            stage=stage,
+            play_at=ground,
+            home_team=home,
+            away_team=away,
+            label="Semi's",
+            live_stream=True,
+            external_identifier="yt-broadcast-xyz",
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+
+        mock_youtube = MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+        mock_youtube.liveBroadcasts.return_value.update.return_value.execute.return_value = {
+            "id": match.external_identifier,
+        }
+        mock_youtube.liveBroadcasts.return_value.bind.return_value.execute.return_value = {
+            "contentDetails": {"boundStreamId": ground.external_identifier},
+        }
+
+        resync = match.url_names["resync-live-stream"]
+        with self.login(self.superuser):
+            self.post(resync.url_name, *resync.args)
+        self.response_302()
+
+        update_call = mock_youtube.liveBroadcasts.return_value.update.call_args
+        body = update_call.kwargs["body"]
+        title = body["snippet"]["title"]
+        description = body["snippet"]["description"]
+
+        self.assertEqual(body["id"], "yt-broadcast-xyz")
+        self.assertIn("Men's Open", title)
+        self.assertIn("St George's", title)
+        self.assertIn("O'Connor", title)
+        self.assertNotIn("&#x27;", title)
+        self.assertNotIn("&#39;", title)
+        self.assertNotIn("&#x27;", description)
+        self.assertNotIn("&#39;", description)
+
+    @patch("tournamentcontrol.competition.models.Season.youtube", new_callable=PropertyMock)
+    def test_resync_live_stream_refuses_when_not_streaming(self, mock_youtube_prop):
+        """Resync refuses and flashes an error when the match has no broadcast."""
+        stage = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_project_id="test-project-123",
+            division__season__live_stream_client_id="test-client-id",
+            division__season__live_stream_client_secret="test-client-secret",
+        )
+        ground = factories.GroundFactory.create(venue__season=stage.division.season)
+        match = factories.MatchFactory.create(
+            stage=stage,
+            play_at=ground,
+            live_stream=False,
+            external_identifier=None,
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+
+        mock_youtube = MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+
+        resync = match.url_names["resync-live-stream"]
+        with self.login(self.superuser):
+            self.post(resync.url_name, *resync.args)
+        self.response_302()
+
+        mock_youtube.liveBroadcasts.return_value.update.assert_not_called()
