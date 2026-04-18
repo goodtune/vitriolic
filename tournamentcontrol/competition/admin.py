@@ -3,9 +3,7 @@ import collections
 import functools
 import logging
 import operator
-from zoneinfo import ZoneInfo
 
-from dateutil.relativedelta import relativedelta
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
@@ -19,9 +17,8 @@ from django.http import (
     HttpResponseRedirect,
 )
 from django.shortcuts import get_object_or_404
-from django.template.loader import render_to_string
 from django.template.response import TemplateResponse
-from django.urls import NoReverseMatch, include, path, re_path, reverse
+from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _, ngettext
 from googleapiclient.errors import HttpError
@@ -106,7 +103,7 @@ from tournamentcontrol.competition.sites import CompetitionAdminMixin
 from tournamentcontrol.competition.tasks import (
     generate_pdf_grid,
     generate_pdf_scorecards,
-    set_youtube_thumbnail,
+    sync_live_stream,
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
@@ -1604,91 +1601,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         messages.success(request, _("Your draw has been undone."))
         return self.redirect(division.urls["edit"])
 
-    @staticmethod
-    def _build_live_stream_body(request, match):
-        """Render title/description templates and build the YouTube broadcast body.
-
-        Returns the body dict, or ``None`` if the match lacks a scheduled start time.
-        """
-        stage = match.stage
-        division = stage.division
-        season = division.season
-        competition = season.competition
-
-        match_url = None
-        if match.pk is not None:
-            try:
-                match_url = request.build_absolute_uri(
-                    reverse(
-                        "competition:match-video",
-                        kwargs={
-                            "competition": competition.slug,
-                            "season": season.slug,
-                            "division": division.slug,
-                            "match": match.pk,
-                        },
-                    )
-                )
-            except NoReverseMatch:
-                # Public competition site not mounted in this project; omit the URL.
-                match_url = None
-
-        template_context = {
-            "match": match,
-            "competition": competition,
-            "season": season,
-            "division": division,
-            "stage": stage,
-            "match_url": match_url,
-        }
-
-        title_templates = [
-            f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/{competition.slug}/match/live_stream/title.txt",
-            f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/match/live_stream/title.txt",
-            f"tournamentcontrol/competition/{stage.slug}/{division.slug}/match/live_stream/title.txt",
-            f"tournamentcontrol/competition/{stage.slug}/match/live_stream/title.txt",
-            "tournamentcontrol/competition/match/live_stream/title.txt",
-        ]
-        title = render_to_string(title_templates, template_context, request).strip()
-
-        description_templates = [
-            f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/{competition.slug}/match/live_stream/description.txt",
-            f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/match/live_stream/description.txt",
-            f"tournamentcontrol/competition/{stage.slug}/{division.slug}/match/live_stream/description.txt",
-            f"tournamentcontrol/competition/{stage.slug}/match/live_stream/description.txt",
-            "tournamentcontrol/competition/match/live_stream/description.txt",
-        ]
-        description = render_to_string(
-            description_templates, template_context, request
-        ).strip()
-
-        start_time = match.get_datetime(ZoneInfo("UTC"))
-        if start_time is None:
-            return None
-
-        stop_time = start_time + relativedelta(minutes=50)  # FIXME: hard coded
-
-        return {
-            "snippet": {
-                "title": title,
-                "description": description,
-                "scheduledStartTime": start_time.isoformat(),
-                "scheduledEndTime": stop_time.isoformat(),
-            },
-            "status": {
-                "privacyStatus": season.live_stream_privacy,
-                "selfDeclaredMadeForKids": False,
-            },
-            "contentDetails": {
-                "enableAutoStart": False,
-                "enableAutoStop": False,
-                "monitorStream": {
-                    "broadcastStreamDelayMs": 0,
-                    "enableMonitorStream": True,
-                },
-            },
-        }
-
     @competition_by_pk_m
     @staff_login_required_m
     def edit_match(
@@ -1705,83 +1617,15 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         if match is None:
             match = Match(stage=stage, include_in_ladder=stage.keep_ladder)
 
-        def pre_save_callback(obj: Match):
-            # Check if YouTube credentials are configured before attempting anything else,
+        base_url = request.build_absolute_uri("/").rstrip("/")
+
+        def post_save_callback(obj: Match):
+            # Check if YouTube credentials are configured before queuing anything,
             # we can't interact with the YouTube API without them.
             if not (season.live_stream_client_id and season.live_stream_client_secret):
-                return obj
-
-            body = self._build_live_stream_body(request, obj)
-            # New matches without a scheduled date/time cannot be synced yet.
-            if body is None:
-                return
-
-            try:
-                if obj.external_identifier:
-                    # If we have disabled live-streaming where it was previously
-                    # enabled, we need to remove it using the YouTube API.
-                    if not obj.live_stream:
-                        video_id = obj.external_identifier
-                        season.youtube.liveBroadcasts().delete(id=video_id).execute()
-                        if obj.videos is not None:
-                            obj.videos.remove(f"https://youtu.be/{video_id}")
-                        if not obj.videos:
-                            obj.videos = None
-                        obj.external_identifier = None
-                        log.info("YouTube video %(id)r deleted", video_id)
-                        return
-
-                    # Alternatively we're making sure the representation on the backend
-                    # is consistent with the current status.
-                    else:
-                        body["id"] = obj.external_identifier
-                        broadcast = (
-                            season.youtube.liveBroadcasts()
-                            .update(part="snippet,status,contentDetails", body=body)
-                            .execute()
-                        )
-                        set_youtube_thumbnail.s(obj.pk).apply_async(countdown=10)
-                        log.info("YouTube video %(id)r updated", broadcast)
-
-                # If we have enabled live-streaming, but don't have an external id, we
-                # need to create an event with the YouTube API and store the external
-                # id.
-                elif obj.live_stream:
-                    broadcast = (
-                        season.youtube.liveBroadcasts()
-                        .insert(
-                            part="id,snippet,status,contentDetails",
-                            body=body,
-                        )
-                        .execute()
-                    )
-                    obj.external_identifier = broadcast["id"]
-                    set_youtube_thumbnail.s(obj.pk).apply_async(countdown=10)
-                    video_link = f"https://youtu.be/{obj.external_identifier}"
-                    obj.videos = (
-                        [video_link]
-                        if obj.videos is None
-                        else obj.videos.append(video_link)
-                    )
-                    log.info("YouTube video %(id)r inserted", broadcast)
-
-                # We need to bind to a liveStream resource. This is only supported on
-                # a Ground, not a Venue. Only attempt binding if external_identifier exists.
-                if obj.external_identifier and obj.play_at.ground.external_identifier:
-                    bind = (
-                        season.youtube.liveBroadcasts()
-                        .bind(
-                            part="id,snippet,contentDetails,status",
-                            id=obj.external_identifier,
-                            streamId=obj.play_at.ground.external_identifier,
-                        )
-                        .execute()
-                    )
-                    obj.live_stream_bind = bind["contentDetails"].get("boundStreamId")
-
-            except HttpError as exc:
-                messages.error(request, exc.reason)
-                return self.redirect(".")
+                return None
+            sync_live_stream.s(obj.pk, base_url=base_url).apply_async()
+            return None
 
         return self.generic_edit(
             request,
@@ -1792,7 +1636,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_save_redirect=self.redirect(
                 request.GET.get("next") or stage.urls["edit"]
             ),
-            pre_save_callback=pre_save_callback if season.live_stream else lambda o: o,
+            post_save_callback=post_save_callback if season.live_stream else lambda o: None,
             permission_required=True,
             extra_context=extra_context,
         )
@@ -1846,42 +1690,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             )
             return self.redirect(redirect_url)
 
-        body = self._build_live_stream_body(request, match)
-        if body is None:
-            messages.error(
-                request,
-                _("Cannot resync a match without a scheduled date and time."),
-            )
-            return self.redirect(redirect_url)
-
-        body["id"] = match.external_identifier
-        try:
-            broadcast = (
-                season.youtube.liveBroadcasts()
-                .update(part="snippet,status,contentDetails", body=body)
-                .execute()
-            )
-            log.info("YouTube video %(id)r resynced", broadcast)
-
-            if match.play_at and match.play_at.ground and match.play_at.ground.external_identifier:
-                bind = (
-                    season.youtube.liveBroadcasts()
-                    .bind(
-                        part="id,snippet,contentDetails,status",
-                        id=match.external_identifier,
-                        streamId=match.play_at.ground.external_identifier,
-                    )
-                    .execute()
-                )
-                bound_stream = bind["contentDetails"].get("boundStreamId")
-                if match.live_stream_bind != bound_stream:
-                    match.live_stream_bind = bound_stream
-                    match.save(update_fields=["live_stream_bind"])
-
-            set_youtube_thumbnail.s(match.pk).apply_async(countdown=10)
-        except HttpError as exc:
-            messages.error(request, exc.reason)
-            return self.redirect(redirect_url)
+        sync_live_stream.s(
+            match.pk, base_url=request.build_absolute_uri("/").rstrip("/")
+        ).apply_async()
 
         messages.success(
             request,

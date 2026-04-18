@@ -2198,7 +2198,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.post(add_match.url_name, *add_match.args, data=data)
         self.response_302()
 
-    @patch("tournamentcontrol.competition.admin.set_youtube_thumbnail")
+    @patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
     @patch("tournamentcontrol.competition.models.Season.youtube", new_callable=PropertyMock)
     def test_resync_live_stream_sends_unescaped_apostrophes(
         self, mock_youtube_prop, mock_thumbnail

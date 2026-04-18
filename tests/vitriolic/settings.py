@@ -182,6 +182,12 @@ GOOGLE_OAUTH2_CLIENT_ID = ""
 GOOGLE_OAUTH2_CLIENT_SECRET = ""
 
 
+# Run Celery tasks inline during the test suite so they execute synchronously
+# against the same database/transactional context as the calling code.
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
+
+
 # Logging setup. Adjust handlers as required.
 
 LOGGING = {
