@@ -842,8 +842,18 @@ class MatchDetailViewQueryTests(TestCase):
         # Large: a match where each team has 12 associated players.
         cls.large_match = factories.MatchFactory.create(stage=cls.stage)
         for _ in range(12):
-            factories.TeamAssociationFactory.create(team=cls.large_match.home_team)
-            factories.TeamAssociationFactory.create(team=cls.large_match.away_team)
+            factories.TeamAssociationFactory.create(
+                team=cls.large_match.home_team,
+                person=factories.PersonFactory.create(
+                    club=cls.large_match.home_team.club,
+                ),
+            )
+            factories.TeamAssociationFactory.create(
+                team=cls.large_match.away_team,
+                person=factories.PersonFactory.create(
+                    club=cls.large_match.away_team.club,
+                ),
+            )
 
     def test_small_match_query_count(self):
         self.assertGoodView(

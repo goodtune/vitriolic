@@ -2312,7 +2312,10 @@ class TeamEditViewQueryTests(TestCase):
         cls.empty_team = factories.TeamFactory.create()
         cls.full_team = factories.TeamFactory.create()
         for _ in range(20):
-            factories.TeamAssociationFactory.create(team=cls.full_team)
+            factories.TeamAssociationFactory.create(
+                team=cls.full_team,
+                person=factories.PersonFactory.create(club=cls.full_team.club),
+            )
 
     def test_empty_team_query_count(self):
         edit_team = self.empty_team.url_names["edit"]
