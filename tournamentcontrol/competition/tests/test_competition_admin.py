@@ -2294,3 +2294,43 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.response_302()
 
         mock_youtube.liveBroadcasts.return_value.update.assert_not_called()
+
+
+class TeamEditViewQueryTests(TestCase):
+    """
+    The team edit page in the competition admin renders the team's
+    ``people`` (``TeamAssociation``) list using the ``mvp_list``
+    template tag. Without prefetching, that produces one
+    ``competition_person`` query and one ``competition_teamrole`` query
+    per association. Pin the view's query count so the same upper bound
+    holds whether the team is empty or fully squadded - any per-player
+    scaling trips the large case.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.empty_team = factories.TeamFactory.create()
+        cls.full_team = factories.TeamFactory.create()
+        for _ in range(20):
+            factories.TeamAssociationFactory.create(
+                team=cls.full_team,
+                person=factories.PersonFactory.create(club=cls.full_team.club),
+            )
+
+    def test_empty_team_query_count(self):
+        edit_team = self.empty_team.url_names["edit"]
+        with self.login(self.superuser):
+            self.assertGoodView(
+                edit_team.url_name,
+                *edit_team.args,
+                test_query_count=25,
+            )
+
+    def test_full_team_query_count(self):
+        edit_team = self.full_team.url_names["edit"]
+        with self.login(self.superuser):
+            self.assertGoodView(
+                edit_team.url_name,
+                *edit_team.args,
+                test_query_count=25,
+            )

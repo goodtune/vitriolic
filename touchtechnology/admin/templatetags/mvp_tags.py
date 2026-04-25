@@ -118,6 +118,7 @@ def related(instance, whitelist=None):
     related = getattr(instance, "_mvp_related", {})
     annotate = getattr(instance, "_mvp_annotate", {})
     select_related = getattr(instance, "_mvp_select_related", {})
+    prefetch_related = getattr(instance, "_mvp_prefetch_related", {})
     only = getattr(instance, "_mvp_only", {})
 
     for name, manager in rel.items():
@@ -129,6 +130,8 @@ def related(instance, whitelist=None):
         else:
             if name in select_related:
                 manager = manager.select_related(*select_related[name])
+            if name in prefetch_related:
+                manager = manager.prefetch_related(*prefetch_related[name])
             if name in annotate:
                 manager = manager.annotate(**annotate[name])
             if name in only:
