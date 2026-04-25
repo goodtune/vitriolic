@@ -900,6 +900,7 @@ class Division(
             .select_related(
                 "play_at",
                 "stage__division",
+                "stage_group",
                 "home_team__club",
                 "home_team__division",
                 "away_team__club",
@@ -1321,6 +1322,7 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
             self.matches.select_related(
                 "play_at",
                 "stage__division",
+                "stage_group",
                 "home_team__club",
                 "home_team__division",
                 "away_team__club",
@@ -1399,6 +1401,7 @@ class StageGroup(AdminUrlMixin, OrderedSitemapNode):
         matches = self.matches.select_related(
             "play_at",
             "stage__division",
+            "stage_group",
             "home_team__club",
             "home_team__division",
             "away_team__club",
@@ -1528,6 +1531,14 @@ class Team(AdminUrlMixin, OrderedSitemapNode):
             raise ValidationError(errors)
 
         return super(Team, self).clean()
+
+    @cached_property
+    def _mvp_select_related(self):
+        return {"people": ["person"]}
+
+    @cached_property
+    def _mvp_prefetch_related(self):
+        return {"people": ["roles"]}
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:division:team"

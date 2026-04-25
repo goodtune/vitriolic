@@ -815,3 +815,62 @@ class DivisionViewQueryTests(TestCase):
             self.large_division.slug,
             test_query_count=14,
         )
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class MatchDetailViewQueryTests(TestCase):
+    """
+    The public match detail page renders the ``preview`` template tag,
+    which iterates ``TeamAssociation`` rows for both teams and
+    dereferences ``person`` on each one. Without prefetching, that
+    produces one ``competition_person`` query per associated player.
+    Pin the view's query count so the same upper bound holds whether
+    the teams are empty or fully squadded - any per-player scaling
+    trips the large case.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create()
+        cls.competition = cls.season.competition
+        cls.division = factories.DivisionFactory.create(season=cls.season)
+        cls.stage = factories.StageFactory.create(division=cls.division)
+
+        # Small: a match with no team associations.
+        cls.small_match = factories.MatchFactory.create(stage=cls.stage)
+
+        # Large: a match where each team has 12 associated players.
+        cls.large_match = factories.MatchFactory.create(stage=cls.stage)
+        for _ in range(12):
+            factories.TeamAssociationFactory.create(
+                team=cls.large_match.home_team,
+                person=factories.PersonFactory.create(
+                    club=cls.large_match.home_team.club,
+                ),
+            )
+            factories.TeamAssociationFactory.create(
+                team=cls.large_match.away_team,
+                person=factories.PersonFactory.create(
+                    club=cls.large_match.away_team.club,
+                ),
+            )
+
+    def test_small_match_query_count(self):
+        self.assertGoodView(
+            "competition:match",
+            self.competition.slug,
+            self.season.slug,
+            self.division.slug,
+            self.small_match.pk,
+            test_query_count=18,
+        )
+
+    def test_large_match_query_count(self):
+        self.assertGoodView(
+            "competition:match",
+            self.competition.slug,
+            self.season.slug,
+            self.division.slug,
+            self.large_match.pk,
+            test_query_count=18,
+        )
