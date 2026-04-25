@@ -243,8 +243,16 @@ def preview(match):
         ),
     }
 
-    home_team = match.home_team.people.filter(is_player=True).annotate(**annotate)
-    away_team = match.away_team.people.filter(is_player=True).annotate(**annotate)
+    home_team = (
+        match.home_team.people.filter(is_player=True)
+        .annotate(**annotate)
+        .prefetch_related("person")
+    )
+    away_team = (
+        match.away_team.people.filter(is_player=True)
+        .annotate(**annotate)
+        .prefetch_related("person")
+    )
 
     context = {
         "match": match,
