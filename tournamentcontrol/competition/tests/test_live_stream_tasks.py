@@ -280,6 +280,60 @@ class SyncLiveStreamTaskTests(TestCase):
         "tournamentcontrol.competition.models.Season.youtube",
         new_callable=mock.PropertyMock,
     )
+    def test_delete_runs_when_schedule_was_cleared(
+        self, mock_youtube_prop, mock_thumbnail
+    ):
+        """Disabling live_stream still deletes even if the schedule was cleared."""
+        mock_youtube = mock.MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+        mock_youtube.liveBroadcasts.return_value.delete.return_value.execute.return_value = {}
+
+        self.match.external_identifier = "yt-orphan"
+        self.match.live_stream = False
+        self.match.videos = ["https://youtu.be/yt-orphan"]
+        self.match.datetime = None
+        self.match.date = None
+        self.match.time = None
+        self.match.save()
+
+        sync_live_stream(self.match.pk)
+
+        self.match.refresh_from_db()
+        self.assertEqual(None, self.match.external_identifier)
+        mock_youtube.liveBroadcasts.return_value.delete.assert_called_once_with(
+            id="yt-orphan"
+        )
+
+    @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_youtube_client_is_cached_within_apply_sync(
+        self, mock_youtube_prop, mock_thumbnail
+    ):
+        """``season.youtube`` should be resolved once per sync, not per call."""
+        mock_youtube = mock.MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+        mock_youtube.liveBroadcasts.return_value.insert.return_value.execute.return_value = {
+            "id": "yt-broadcast-cached",
+        }
+        mock_youtube.liveBroadcasts.return_value.bind.return_value.execute.return_value = {
+            "contentDetails": {"boundStreamId": "stream-resource-cached"},
+        }
+
+        self.ground.external_identifier = "stream-resource-cached"
+        self.ground.save()
+
+        sync_live_stream(self.match.pk)
+
+        self.assertEqual(1, mock_youtube_prop.call_count)
+
+    @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
     def test_update_calls_youtube_and_schedules_thumbnail(
         self, mock_youtube_prop, mock_thumbnail
     ):

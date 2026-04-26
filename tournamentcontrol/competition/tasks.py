@@ -173,11 +173,16 @@ def _get_ground(place):
 
 
 def _apply_sync(match, season, body):
-    """Apply a single insert/update/delete + bind cycle against YouTube."""
+    """Apply a single insert/update/delete + bind cycle against YouTube.
+
+    ``body`` may be ``None`` for the delete path, which doesn't need a rendered
+    broadcast body.
+    """
+    youtube = season.youtube
     if match.external_identifier:
         if not match.live_stream:
             video_id = match.external_identifier
-            season.youtube.liveBroadcasts().delete(id=video_id).execute()
+            youtube.liveBroadcasts().delete(id=video_id).execute()
             videos = list(match.videos or [])
             link = f"https://youtu.be/{video_id}"
             if link in videos:
@@ -192,14 +197,14 @@ def _apply_sync(match, season, body):
             return
 
         body["id"] = match.external_identifier
-        season.youtube.liveBroadcasts().update(
+        youtube.liveBroadcasts().update(
             part="snippet,status,contentDetails", body=body
         ).execute()
         logger.info("YouTube video %r updated", match.external_identifier)
         set_youtube_thumbnail.s(match.pk).apply_async(countdown=10)
     elif match.live_stream:
         broadcast = (
-            season.youtube.liveBroadcasts()
+            youtube.liveBroadcasts()
             .insert(part="id,snippet,status,contentDetails", body=body)
             .execute()
         )
@@ -215,7 +220,7 @@ def _apply_sync(match, season, body):
     ground = _get_ground(match.play_at)
     if match.external_identifier and ground and ground.external_identifier:
         bind = (
-            season.youtube.liveBroadcasts()
+            youtube.liveBroadcasts()
             .bind(
                 part="id,snippet,contentDetails,status",
                 id=match.external_identifier,
@@ -245,6 +250,14 @@ def sync_live_stream(match_pk, base_url=None):
     season = match.stage.division.season
 
     if not (season.live_stream_client_id and season.live_stream_client_secret):
+        return
+
+    if match.external_identifier and not match.live_stream:
+        try:
+            _apply_sync(match, season, None)
+        except HttpError as exc:
+            logger.error("YouTube API error syncing match %s: %s", match_pk, exc)
+            raise
         return
 
     for short in (False, True):
