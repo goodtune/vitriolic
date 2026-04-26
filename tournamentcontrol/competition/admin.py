@@ -1625,9 +1625,14 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             # we can't interact with the YouTube API without them.
             if not (season.live_stream_client_id and season.live_stream_client_secret):
                 return None
-            # Only enqueue when there's something to insert/update/delete.
-            if not obj.live_stream and not obj.external_identifier:
-                return None
+            # An existing broadcast always needs syncing (update or delete). For
+            # insert/update we additionally need a scheduled datetime, otherwise
+            # the task would just no-op after rendering templates.
+            if not obj.external_identifier:
+                if not obj.live_stream:
+                    return None
+                if obj.get_datetime(ZoneInfo("UTC")) is None:
+                    return None
             sync_live_stream.s(obj.pk, base_url=base_url).apply_async()
             return None
 

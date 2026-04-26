@@ -175,6 +175,10 @@ class SyncLiveStreamTaskTests(TestCase):
         self.assertEqual("yt-broadcast-new", self.match.external_identifier)
         self.assertEqual(["https://youtu.be/yt-broadcast-new"], self.match.videos)
         mock_youtube.liveBroadcasts.return_value.insert.assert_called_once()
+        mock_thumbnail.s.assert_called_once_with(self.match.pk)
+        mock_thumbnail.s.return_value.apply_async.assert_called_once_with(
+            countdown=10
+        )
 
     @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
     @mock.patch(
@@ -206,6 +210,10 @@ class SyncLiveStreamTaskTests(TestCase):
         self.assertIn("LS25", retry_title)
         self.assertNotIn(
             "Mens Premier Open Division Top Tier Premier", retry_title
+        )
+        mock_thumbnail.s.assert_called_once_with(self.match.pk)
+        mock_thumbnail.s.return_value.apply_async.assert_called_once_with(
+            countdown=10
         )
 
     @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")

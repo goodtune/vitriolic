@@ -149,10 +149,7 @@ def _is_title_too_long(exc):
     """Return True when an HttpError indicates an exceeded title length."""
     content = getattr(exc, "content", b"") or b""
     if isinstance(content, (bytes, bytearray)):
-        try:
-            content = content.decode("utf-8", errors="replace")
-        except Exception:
-            content = ""
+        content = bytes(content).decode("utf-8", errors="replace")
     needle = str(content).lower()
     if "title" not in needle:
         return False
