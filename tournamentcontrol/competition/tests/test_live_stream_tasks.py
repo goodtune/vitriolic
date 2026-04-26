@@ -103,6 +103,21 @@ class BuildLiveStreamBodyShortTitleTests(TestCase):
         title = body["snippet"]["title"]
         self.assertIn("Mens Open Division Premier Tier", title)
 
+    def test_short_form_substitutes_in_title_attribute_access(self):
+        """``{{ division.title }}`` should also receive the short form."""
+        from django.template import Context, Template
+
+        from tournamentcontrol.competition.tasks import _ShortTitle
+
+        wrapped = _ShortTitle(self.division)
+        rendered = Template("{{ d }}|{{ d.title }}|{{ d.slug }}").render(
+            Context({"d": wrapped})
+        )
+        self.assertEqual(
+            "MOD|MOD|" + self.division.slug,
+            rendered,
+        )
+
 
 class SyncLiveStreamTaskTests(TestCase):
     """Exercise the celery task that synchronises a match with YouTube."""
@@ -247,6 +262,7 @@ class SyncLiveStreamTaskTests(TestCase):
         self.match.external_identifier = "yt-existing"
         self.match.live_stream = False
         self.match.videos = ["https://youtu.be/yt-existing"]
+        self.match.live_stream_bind = "stale-bound-stream"
         self.match.save()
 
         sync_live_stream(self.match.pk)
@@ -254,8 +270,43 @@ class SyncLiveStreamTaskTests(TestCase):
         self.match.refresh_from_db()
         self.assertEqual(None, self.match.external_identifier)
         self.assertEqual(None, self.match.videos)
+        self.assertEqual(None, self.match.live_stream_bind)
         mock_youtube.liveBroadcasts.return_value.delete.assert_called_once_with(
             id="yt-existing"
+        )
+
+    @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_update_calls_youtube_and_schedules_thumbnail(
+        self, mock_youtube_prop, mock_thumbnail
+    ):
+        """An existing broadcast is updated and the thumbnail task is scheduled."""
+        mock_youtube = mock.MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+        mock_youtube.liveBroadcasts.return_value.update.return_value.execute.return_value = {
+            "id": "yt-existing-update",
+        }
+
+        self.match.external_identifier = "yt-existing-update"
+        self.match.live_stream = True
+        self.match.save()
+
+        sync_live_stream(self.match.pk)
+
+        update_call = mock_youtube.liveBroadcasts.return_value.update.call_args
+        self.assertEqual(
+            "snippet,status,contentDetails", update_call.kwargs["part"]
+        )
+        self.assertEqual(
+            "yt-existing-update", update_call.kwargs["body"]["id"]
+        )
+        mock_youtube.liveBroadcasts.return_value.insert.assert_not_called()
+        mock_thumbnail.s.assert_called_once_with(self.match.pk)
+        mock_thumbnail.s.return_value.apply_async.assert_called_once_with(
+            countdown=10
         )
 
     @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")

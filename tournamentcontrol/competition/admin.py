@@ -3,6 +3,7 @@ import collections
 import functools
 import logging
 import operator
+from zoneinfo import ZoneInfo
 
 from django.apps import apps
 from django.conf import settings
@@ -1690,13 +1691,20 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             )
             return self.redirect(redirect_url)
 
+        if match.get_datetime(ZoneInfo("UTC")) is None:
+            messages.error(
+                request,
+                _("Cannot resync a match without a scheduled date and time."),
+            )
+            return self.redirect(redirect_url)
+
         sync_live_stream.s(
             match.pk, base_url=request.build_absolute_uri("/").rstrip("/")
         ).apply_async()
 
         messages.success(
             request,
-            _("YouTube live stream details resynced from current match data."),
+            _("YouTube live stream resync has been queued."),
         )
         return self.redirect(redirect_url)
 

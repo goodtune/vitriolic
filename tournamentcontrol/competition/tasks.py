@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 
 from celery import shared_task
 from dateutil.relativedelta import relativedelta
+from django.core.exceptions import ObjectDoesNotExist
 from django.template.loader import render_to_string
 from django.urls import NoReverseMatch, reverse
 from googleapiclient.errors import HttpError
@@ -17,16 +18,25 @@ from tournamentcontrol.competition.utils import (
 logger = logging.getLogger(__name__)
 
 
-YOUTUBE_TITLE_MAX_LENGTH = 100
-
-
 class _ShortTitle:
-    """Wrap a SitemapNodeBase so ``str()`` returns ``short_title`` (or ``title``)."""
+    """Substitute ``short_title`` for the rendered name of a SitemapNodeBase.
+
+    Both ``str(obj)`` and attribute access via ``obj.title`` return the short
+    form when set, falling back to ``title``. All other attributes are
+    forwarded to the wrapped object so templates can still resolve fields
+    like ``slug`` or ``short_title`` directly.
+    """
 
     def __init__(self, obj):
         self.__dict__["_obj"] = obj
 
     def __str__(self):
+        if self._obj is None:
+            return ""
+        return self._obj.short_title or self._obj.title
+
+    @property
+    def title(self):
         if self._obj is None:
             return ""
         return self._obj.short_title or self._obj.title
@@ -148,12 +158,17 @@ def _is_title_too_long(exc):
 
 
 def _get_ground(place):
-    """Return the Ground subclass instance for ``place``, or ``None``."""
+    """Return the Ground subclass instance for ``place``, or ``None``.
+
+    ``Place`` is the parent of ``Ground`` via multi-table inheritance, so
+    accessing ``place.ground`` raises ``Ground.DoesNotExist`` (a subclass of
+    ``ObjectDoesNotExist``) when the ``Place`` isn't actually a ``Ground``.
+    """
     if place is None:
         return None
     try:
         return place.ground
-    except Exception:
+    except (AttributeError, ObjectDoesNotExist):
         return None
 
 
@@ -169,7 +184,10 @@ def _apply_sync(match, season, body):
                 videos.remove(link)
             match.external_identifier = None
             match.videos = videos or None
-            match.save(update_fields=["external_identifier", "videos"])
+            match.live_stream_bind = None
+            match.save(
+                update_fields=["external_identifier", "videos", "live_stream_bind"]
+            )
             logger.info("YouTube video %r deleted", video_id)
             return
 
