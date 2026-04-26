@@ -126,9 +126,19 @@ class BuildLiveStreamBodyShortTitleTests(TestCase):
         body = build_live_stream_body(
             self.match, base_url="https://example.com/"
         )
-        # Description still rendered, just without an absolute URL.
-        self.assertIsNotNone(body)
-        self.assertNotIn("https://example.com/", body["snippet"]["description"])
+        description = body["snippet"]["description"]
+        # No absolute URL leaks through, and the literal "None" never lands in
+        # the description because ``match_url`` defaults to "".
+        self.assertNotIn("https://example.com/", description)
+        self.assertNotIn("None", description)
+        self.assertIn("Full match details are available at", description)
+
+    def test_match_url_defaults_to_empty_string_when_no_base_url(self):
+        """Without ``base_url`` the description renders cleanly (no "None")."""
+        body = build_live_stream_body(self.match)
+        description = body["snippet"]["description"]
+        self.assertNotIn("None", description)
+        self.assertIn("Full match details are available at", description)
 
     def test_short_form_substitutes_in_title_attribute_access(self):
         """``{{ division.title }}`` should also receive the short form."""

@@ -74,7 +74,9 @@ def build_live_stream_body(match, base_url=None, short=False):
         ctx_competition = competition
         ctx_stage = stage
 
-    match_url = None
+    # Default to an empty string rather than ``None`` so a missing URL doesn't
+    # render as the literal "None" in the YouTube description template.
+    match_url = ""
     if base_url and match.pk is not None:
         try:
             relative = reverse(
@@ -88,7 +90,7 @@ def build_live_stream_body(match, base_url=None, short=False):
             )
             match_url = base_url.rstrip("/") + relative
         except NoReverseMatch:
-            match_url = None
+            match_url = ""
 
     template_context = {
         "match": match,
