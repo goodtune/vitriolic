@@ -7,6 +7,8 @@ from unittest import mock
 from zoneinfo import ZoneInfo
 
 from django.template import Context, Template
+from django.test import override_settings
+from django.urls import NoReverseMatch
 from googleapiclient.errors import HttpError
 from test_plus import TestCase
 
@@ -49,6 +51,7 @@ class IsTitleTooLongTests(TestCase):
         self.assertEqual(False, _is_title_too_long(exc))
 
 
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
 class BuildLiveStreamBodyShortTitleTests(TestCase):
     """Verify ``short=True`` swaps in ``short_title`` for the templated names."""
 
@@ -104,6 +107,28 @@ class BuildLiveStreamBodyShortTitleTests(TestCase):
         body = build_live_stream_body(self.match, short=True)
         title = body["snippet"]["title"]
         self.assertIn("Mens Open Division Premier Tier", title)
+
+    def test_base_url_renders_absolute_match_url_in_description(self):
+        """``base_url`` should be combined with the reversed match-video URL."""
+        body = build_live_stream_body(
+            self.match, base_url="https://example.com/"
+        )
+        description = body["snippet"]["description"]
+        self.assertIn("https://example.com/", description)
+        self.assertIn(f"match:{self.match.pk}/video/", description)
+
+    @mock.patch("tournamentcontrol.competition.tasks.reverse")
+    def test_no_reverse_match_renders_description_without_match_url(
+        self, mock_reverse
+    ):
+        """A NoReverseMatch should leave ``match_url`` empty, not crash."""
+        mock_reverse.side_effect = NoReverseMatch("no match")
+        body = build_live_stream_body(
+            self.match, base_url="https://example.com/"
+        )
+        # Description still rendered, just without an absolute URL.
+        self.assertIsNotNone(body)
+        self.assertNotIn("https://example.com/", body["snippet"]["description"])
 
     def test_short_form_substitutes_in_title_attribute_access(self):
         """``{{ division.title }}`` should also receive the short form."""
