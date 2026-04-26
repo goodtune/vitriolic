@@ -6,10 +6,12 @@ from datetime import date, datetime, time
 from unittest import mock
 from zoneinfo import ZoneInfo
 
+from django.template import Context, Template
 from googleapiclient.errors import HttpError
 from test_plus import TestCase
 
 from tournamentcontrol.competition.tasks import (
+    _ShortTitle,
     _is_title_too_long,
     build_live_stream_body,
     sync_live_stream,
@@ -105,10 +107,6 @@ class BuildLiveStreamBodyShortTitleTests(TestCase):
 
     def test_short_form_substitutes_in_title_attribute_access(self):
         """``{{ division.title }}`` should also receive the short form."""
-        from django.template import Context, Template
-
-        from tournamentcontrol.competition.tasks import _ShortTitle
-
         wrapped = _ShortTitle(self.division)
         rendered = Template("{{ d }}|{{ d.title }}|{{ d.slug }}").render(
             Context({"d": wrapped})
@@ -274,6 +272,24 @@ class SyncLiveStreamTaskTests(TestCase):
         mock_youtube.liveBroadcasts.return_value.delete.assert_called_once_with(
             id="yt-existing"
         )
+
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_no_op_returns_without_calling_api(self, mock_youtube_prop):
+        """No external broadcast and live_stream=False should be a fast no-op."""
+        mock_youtube = mock.MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+        self.match.live_stream = False
+        self.match.external_identifier = None
+        self.match.save()
+
+        sync_live_stream(self.match.pk)
+
+        mock_youtube.liveBroadcasts.assert_not_called()
+        # The youtube property shouldn't be resolved at all in the no-op path.
+        self.assertEqual(0, mock_youtube_prop.call_count)
 
     @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
     @mock.patch(

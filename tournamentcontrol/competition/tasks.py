@@ -17,6 +17,11 @@ from tournamentcontrol.competition.utils import (
 
 logger = logging.getLogger(__name__)
 
+# YouTube broadcast duration. A match window covers warm-up, play, and a
+# trailing buffer; tighten or widen here if competitions need a different
+# default. Per-season overrides would belong on the Season model.
+LIVE_STREAM_DURATION_MINUTES = 50
+
 
 class _ShortTitle:
     """Substitute ``short_title`` for the rendered name of a SitemapNodeBase.
@@ -116,7 +121,7 @@ def build_live_stream_body(match, base_url=None, short=False):
     if start_time is None:
         return None
 
-    stop_time = start_time + relativedelta(minutes=50)  # FIXME: hard coded
+    stop_time = start_time + relativedelta(minutes=LIVE_STREAM_DURATION_MINUTES)
 
     return {
         "snippet": {
@@ -251,6 +256,9 @@ def sync_live_stream(match_pk, base_url=None):
 
     if not (season.live_stream_client_id and season.live_stream_client_secret):
         return
+
+    if not match.live_stream and not match.external_identifier:
+        return  # Nothing to insert, update, or delete.
 
     if match.external_identifier and not match.live_stream:
         try:

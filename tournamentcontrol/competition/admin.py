@@ -1625,6 +1625,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             # we can't interact with the YouTube API without them.
             if not (season.live_stream_client_id and season.live_stream_client_secret):
                 return None
+            # Only enqueue when there's something to insert/update/delete.
+            if not obj.live_stream and not obj.external_identifier:
+                return None
             sync_live_stream.s(obj.pk, base_url=base_url).apply_async()
             return None
 
