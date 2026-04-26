@@ -249,9 +249,14 @@ def sync_live_stream(match_pk, base_url=None):
     Competition, and Stage where set) so a recoverable failure remains
     non-fatal and the broadcast can still be created.
     """
-    match = Match.objects.select_related(
-        "stage__division__season__competition",
-    ).get(pk=match_pk)
+    try:
+        match = Match.objects.select_related(
+            "stage__division__season__competition",
+        ).get(pk=match_pk)
+    except Match.DoesNotExist:
+        # Match was deleted between enqueuing and execution; nothing to sync.
+        logger.info("sync_live_stream skipped: match %s no longer exists", match_pk)
+        return
     season = match.stage.division.season
 
     if not (season.live_stream_client_id and season.live_stream_client_secret):

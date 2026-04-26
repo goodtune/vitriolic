@@ -245,6 +245,22 @@ class SyncLiveStreamTaskTests(TestCase):
 
         mock_youtube.liveBroadcasts.assert_not_called()
 
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_returns_quietly_when_match_was_deleted(self, mock_youtube_prop):
+        """A worker picking up a task for a deleted match must not raise."""
+        mock_youtube = mock.MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+        match_pk = self.match.pk
+        self.match.delete()
+
+        sync_live_stream(match_pk)
+
+        mock_youtube_prop.assert_not_called()
+        mock_youtube.liveBroadcasts.assert_not_called()
+
     @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
     @mock.patch(
         "tournamentcontrol.competition.models.Season.youtube",
