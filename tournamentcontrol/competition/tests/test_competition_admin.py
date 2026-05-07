@@ -752,6 +752,139 @@ class GoodViewTests(TestCase):
             )
 
 
+class BulkCreateTeamTests(TestCase):
+    """Test cases for bulk team creation functionality."""
+
+    def setUp(self):
+        super().setUp()
+        self.division = factories.DivisionFactory.create()
+        self.competition = self.division.season.competition
+        self.season = self.division.season
+
+    def test_bulk_create_team_get(self):
+        """GET request to bulk create with count parameter shows correct number of forms."""
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:competition:season:division:team:bulk",
+                self.competition.pk, self.season.pk, self.division.pk,
+                data={"count": "5"}
+            )
+            self.response_200()
+            
+            # Check that we have 5 forms in the formset
+            formset = self.get_context("formset")
+            self.assertEqual(len(formset.forms), 5)
+            
+            # Check that order fields are pre-populated sequentially
+            for i, form in enumerate(formset.forms):
+                self.assertEqual(form.initial.get("order"), i + 1)
+
+    def test_bulk_create_team_post(self):
+        """POST request creates multiple teams with correct data."""
+        with self.login(self.superuser):
+            data = {
+                "form-TOTAL_FORMS": "3",
+                "form-INITIAL_FORMS": "0",
+                "form-MIN_NUM_FORMS": "0",
+                "form-MAX_NUM_FORMS": "1000",
+                "form-0-title": "Team Alpha",
+                "form-0-order": "1",
+                "form-1-title": "Team Beta",
+                "form-1-order": "2",
+                "form-2-title": "Team Gamma",
+                "form-2-order": "3",
+            }
+            
+            self.post(
+                "admin:fixja:competition:season:division:team:bulk",
+                self.competition.pk, self.season.pk, self.division.pk,
+                data=data
+            )
+            self.response_302()
+            
+            # Verify teams were created
+            teams = Team.objects.filter(division=self.division).order_by("order")
+            self.assertEqual(teams.count(), 3)
+            self.assertEqual(teams[0].title, "Team Alpha")
+            self.assertEqual(teams[0].order, 1)
+            self.assertEqual(teams[1].title, "Team Beta")
+            self.assertEqual(teams[1].order, 2)
+            self.assertEqual(teams[2].title, "Team Gamma")
+            self.assertEqual(teams[2].order, 3)
+
+    def test_bulk_create_team_duplicate_title(self):
+        """POST with duplicate titles within same division shows validation error."""
+        with self.login(self.superuser):
+            data = {
+                "form-TOTAL_FORMS": "2",
+                "form-INITIAL_FORMS": "0",
+                "form-MIN_NUM_FORMS": "0",
+                "form-MAX_NUM_FORMS": "1000",
+                "form-0-title": "Duplicate Team",
+                "form-0-order": "1",
+                "form-1-title": "Duplicate Team",
+                "form-1-order": "2",
+            }
+            
+            self.post(
+                "admin:fixja:competition:season:division:team:bulk",
+                self.competition.pk, self.season.pk, self.division.pk,
+                data=data
+            )
+            self.response_200()
+            
+            # Verify no teams were created
+            self.assertEqual(Team.objects.filter(division=self.division).count(), 0)
+
+    def test_bulk_create_team_order_continues(self):
+        """New teams get order values continuing from max existing order."""
+        # Create some existing teams
+        factories.TeamFactory.create(division=self.division, order=1)
+        factories.TeamFactory.create(division=self.division, order=2)
+        
+        with self.login(self.superuser):
+            # GET to check initial order values
+            self.get(
+                "admin:fixja:competition:season:division:team:bulk",
+                self.competition.pk, self.season.pk, self.division.pk,
+                data={"count": "3"}
+            )
+            self.response_200()
+            
+            formset = self.get_context("formset")
+            # Order should start from 3 (max existing order + 1)
+            self.assertEqual(formset.forms[0].initial.get("order"), 3)
+            self.assertEqual(formset.forms[1].initial.get("order"), 4)
+            self.assertEqual(formset.forms[2].initial.get("order"), 5)
+            
+            # POST to create new teams
+            data = {
+                "form-TOTAL_FORMS": "2",
+                "form-INITIAL_FORMS": "0",
+                "form-MIN_NUM_FORMS": "0",
+                "form-MAX_NUM_FORMS": "1000",
+                "form-0-title": "Team Charlie",
+                "form-0-order": "3",
+                "form-1-title": "Team Delta",
+                "form-1-order": "4",
+            }
+            
+            self.post(
+                "admin:fixja:competition:season:division:team:bulk",
+                self.competition.pk, self.season.pk, self.division.pk,
+                data=data
+            )
+            self.response_302()
+            
+            # Verify all teams exist with correct orders
+            teams = Team.objects.filter(division=self.division).order_by("order")
+            self.assertEqual(teams.count(), 4)
+            self.assertEqual(teams[2].title, "Team Charlie")
+            self.assertEqual(teams[2].order, 3)
+            self.assertEqual(teams[3].title, "Team Delta")
+            self.assertEqual(teams[3].order, 4)
+
+
 class BackendTests(MessagesTestMixin, TestCase):
     def setUp(self):
         super().setUp()
