@@ -2127,6 +2127,46 @@ SeasonMatchTimeFormSet = inlineformset_factory(
 )
 
 
+class DivisionBulkCreateForm(DivisionForm):
+    """
+    Form for bulk creation of divisions based on DivisionForm.
+    """
+    class Meta:
+        model = Division
+        fields = (
+            "title",
+            "short_title",
+            "games_per_day",
+            "forfeit_for_score", 
+            "forfeit_against_score",
+            "draft",
+        )
+        labels = {
+            "forfeit_for_score": _("Forfeit win score"),
+            "forfeit_against_score": _("Forfeit loss score"),
+        }
+
+
+class BaseDivisionBulkCreateFormSet(UserMixin, BaseInlineFormSet):
+    def _construct_form(self, i, **kwargs):
+        if i >= self.initial_form_count():
+            # Calculate the next order value based on existing divisions
+            existing_count = self.instance.divisions.count()
+            kwargs["instance"] = self.model(season=self.instance, order=existing_count + i + 1)
+        return super()._construct_form(i, **kwargs)
+
+
+DivisionBulkCreateFormSet = inlineformset_factory(
+    Season,
+    Division,
+    form=DivisionBulkCreateForm,
+    fk_name="season",
+    formset=BaseDivisionBulkCreateFormSet,
+    extra=0,
+    can_delete=False,
+)
+
+
 class TournamentScheduleForm(BootstrapFormControlMixin, forms.Form):
     team_hook = forms.CharField(
         widget=forms.Textarea,
