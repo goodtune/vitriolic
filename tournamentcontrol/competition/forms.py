@@ -501,6 +501,7 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
             "complete",
             "statistics",
             "mvp_results_public",
+            "enable_experimental_views",
             "slug",
             "slug_locked",
         )
