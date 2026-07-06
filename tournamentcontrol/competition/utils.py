@@ -916,11 +916,15 @@ def matches_timeline(matches_by_date):
                 "gap_display": timedelta_display(gap),
                 "is_next": False,
             }
+            # consistent with the match_unplayed predicate above: a match
+            # with only one score entered is not complete yet
             if (
                 not next_found
                 and not match.is_bye
-                and match.home_team_score is None
-                and match.away_team_score is None
+                and (
+                    match.home_team_score is None
+                    or match.away_team_score is None
+                )
             ):
                 item["is_next"] = True
                 next_found = True

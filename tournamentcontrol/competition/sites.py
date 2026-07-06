@@ -971,6 +971,10 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                 "home_team__division",
                 "away_team__club",
                 "away_team__division",
+                "home_team_undecided",
+                "away_team_undecided",
+                "home_team_eval_related",
+                "away_team_eval_related",
             )
             .order_by("date", "time", "play_at__ground__order", "pk")
         )
@@ -1007,7 +1011,9 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         selected_place = None
         place_pk = request.GET.get("place")
         if place_pk:
-            if not place_pk.isdigit():
+            try:
+                place_pk = int(place_pk)
+            except ValueError:
                 raise Http404("Invalid place.")
             try:
                 selected_place = season.venues.get(pk=place_pk)
@@ -1075,7 +1081,15 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         undecided = (
             division.matches.filter(team_needs_progressing)
             .exclude(is_bye=True)
-            .select_related("play_at", "stage__division", "stage_group")
+            .select_related(
+                "play_at",
+                "stage__division",
+                "stage_group",
+                "home_team_undecided",
+                "away_team_undecided",
+                "home_team_eval_related",
+                "away_team_eval_related",
+            )
             .order_by("date", "time", "play_at__ground__order", "pk")
         )
         tzinfo = timezone.get_current_timezone()
