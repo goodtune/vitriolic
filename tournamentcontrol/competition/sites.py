@@ -10,7 +10,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.sitemaps import views as sitemaps_views
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Case, Count, F, Q, Sum, When
+from django.db.models import Case, Count, F, Prefetch, Q, Sum, When
 from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
 from django.urls import include, path, re_path, reverse
@@ -961,17 +961,21 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         if not season.enable_experimental_views:
             raise Http404("Experimental views are not enabled for this season.")
 
+        # Keep the base query narrow — matches plus the joins needed for
+        # filtering and ordering only. Wide select_related chains (teams,
+        # clubs, and especially the *_eval_related self-joins back onto
+        # the match table) produced pathological query plans on large
+        # production datasets; the related objects are fetched with a
+        # handful of flat prefetch queries instead.
+        team_qs = Team.objects.select_related("club", "division")
         matches = (
             season.matches.exclude(is_bye=True)
             .filter(stage__division__draft=False)
-            .select_related(
-                "play_at",
-                "stage__division",
-                "stage_group",
-                "home_team__club",
-                "home_team__division",
-                "away_team__club",
-                "away_team__division",
+            .select_related(None)
+            .select_related("play_at", "stage__division", "stage_group")
+            .prefetch_related(
+                Prefetch("home_team", queryset=team_qs),
+                Prefetch("away_team", queryset=team_qs),
                 "home_team_undecided",
                 "away_team_undecided",
                 "home_team_eval_related",
@@ -1081,13 +1085,15 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             draw=Sum("draw"),
         )
 
+        team_qs = Team.objects.select_related("club", "division")
         undecided = (
             division.matches.filter(team_needs_progressing)
             .exclude(is_bye=True)
-            .select_related(
-                "play_at",
-                "stage__division",
-                "stage_group",
+            .select_related(None)
+            .select_related("play_at", "stage__division", "stage_group")
+            .prefetch_related(
+                Prefetch("home_team", queryset=team_qs),
+                Prefetch("away_team", queryset=team_qs),
                 "home_team_undecided",
                 "away_team_undecided",
                 "home_team_eval_related",
