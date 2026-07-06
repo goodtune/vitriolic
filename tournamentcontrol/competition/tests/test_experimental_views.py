@@ -101,6 +101,60 @@ class SeasonFixturesTests(TestCase):
         )
         self.assertEqual(self.last_response.context["match_count"], 1)
 
+    def test_season_fixtures_place_filter(self):
+        stage = factories.StageFactory.create(division__season=self.season)
+        venue = factories.VenueFactory.create(season=self.season)
+        ground1 = factories.GroundFactory.create(venue=venue)
+        ground2 = factories.GroundFactory.create(venue=venue)
+        factories.MatchFactory.create(
+            stage=stage,
+            play_at=ground1,
+            date="2022-07-02",
+            time="09:00",
+            datetime="2022-07-02 09:00",
+        )
+        factories.MatchFactory.create(
+            stage=stage,
+            play_at=ground2,
+            date="2022-07-02",
+            time="10:00",
+            datetime="2022-07-02 10:00",
+        )
+
+        # a single ground only shows matches on that ground
+        self.assertGoodView(
+            "competition:season-fixtures",
+            self.season.competition.slug,
+            self.season.slug,
+            data={"place": ground1.pk},
+        )
+        self.assertEqual(self.last_response.context["match_count"], 1)
+
+        # the venue includes matches on all of its grounds
+        self.assertGoodView(
+            "competition:season-fixtures",
+            self.season.competition.slug,
+            self.season.slug,
+            data={"place": venue.pk},
+        )
+        self.assertEqual(self.last_response.context["match_count"], 2)
+
+    def test_season_fixtures_place_filter_unknown(self):
+        self.get(
+            "competition:season-fixtures",
+            self.season.competition.slug,
+            self.season.slug,
+            data={"place": "0"},
+        )
+        self.response_404()
+        self.get(
+            "competition:season-fixtures",
+            self.season.competition.slug,
+            self.season.slug,
+            data={"place": "not-a-pk"},
+        )
+        self.response_404()
+
     def test_season_fixtures_excludes_byes(self):
         stage = factories.StageFactory.create(division__season=self.season)
         factories.MatchFactory.create(

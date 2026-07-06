@@ -43,11 +43,13 @@ from tournamentcontrol.competition.forms import (
 )
 from tournamentcontrol.competition.models import (
     Competition,
+    Ground,
     Match,
     Person,
     SimpleScoreMatchStatistic,
     Stage,
     Team,
+    Venue,
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
@@ -995,6 +997,27 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                 Q(home_team__in=selected) | Q(away_team__in=selected)
             )
 
+        venues = season.venues.prefetch_related("grounds")
+
+        selected_place = None
+        place_pk = request.GET.get("place")
+        if place_pk:
+            if not place_pk.isdigit():
+                raise Http404("Invalid place.")
+            try:
+                selected_place = season.venues.get(pk=place_pk)
+                # a venue selection includes matches scheduled directly at
+                # the venue and on any of its grounds
+                matches = matches.filter(
+                    Q(play_at=selected_place)
+                    | Q(play_at__ground__venue=selected_place)
+                )
+            except Venue.DoesNotExist:
+                selected_place = get_object_or_404(
+                    Ground.objects.filter(venue__season=season), pk=place_pk
+                )
+                matches = matches.filter(play_at=selected_place)
+
         tzinfo = timezone.get_current_timezone()
         matches_by_date = collections.OrderedDict()
         team_ids = set()
@@ -1006,8 +1029,10 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         context = {
             "divisions": divisions,
             "team_choices": team_choices,
+            "venues": venues,
             "selected_division": division,
             "selected_team": team_slug,
+            "selected_place": selected_place,
             "matches_by_date": matches_by_date,
             "match_count": sum(len(each) for each in matches_by_date.values()),
             "team_count": len(team_ids),

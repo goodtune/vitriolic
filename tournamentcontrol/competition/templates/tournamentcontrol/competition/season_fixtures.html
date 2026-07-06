@@ -30,6 +30,23 @@
 				{% endfor %}
 			</select>
 
+			<label for="filter-place">{% trans "Field" %}</label>
+			<select name="place" id="filter-place">
+				<option value="">{% trans "All fields" %}</option>
+				{% for venue in venues %}
+					{% if venue.grounds.all %}
+						<optgroup label="{% trans venue.title %}">
+							<option value="{{ venue.pk }}"{% if selected_place and selected_place.pk == venue.pk %} selected{% endif %}>{% blocktrans with venue=venue.title %}{{ venue }} — all fields{% endblocktrans %}</option>
+							{% for ground in venue.grounds.all %}
+								<option value="{{ ground.pk }}"{% if selected_place and selected_place.pk == ground.pk %} selected{% endif %}>{% trans ground.title %}</option>
+							{% endfor %}
+						</optgroup>
+					{% else %}
+						<option value="{{ venue.pk }}"{% if selected_place and selected_place.pk == venue.pk %} selected{% endif %}>{% trans venue.title %}</option>
+					{% endif %}
+				{% endfor %}
+			</select>
+
 			<button type="submit">{% trans "Apply" %}</button>
 			<a class="reset" href="?">{% trans "Reset to all" %}</a>
 		</form>
