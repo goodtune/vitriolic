@@ -963,6 +963,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
         matches = (
             season.matches.exclude(is_bye=True)
+            .filter(stage__division__draft=False)
             .select_related(
                 "play_at",
                 "stage__division",
@@ -979,15 +980,15 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             .order_by("date", "time", "play_at__ground__order", "pk")
         )
 
-        divisions = season.divisions.all()
+        divisions = season.divisions.public()
 
         division = None
         division_slug = request.GET.get("division")
         if division_slug:
-            division = get_object_or_404(season.divisions, slug=division_slug)
+            division = get_object_or_404(divisions, slug=division_slug)
             matches = matches.filter(stage__division=division)
 
-        teams = Team.objects.filter(division__season=season)
+        teams = Team.objects.filter(division__season=season, division__draft=False)
         if division is not None:
             teams = teams.filter(division=division)
         team_choices = (
@@ -1068,6 +1069,8 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         """
         if not season.enable_experimental_views:
             raise Http404("Experimental views are not enabled for this season.")
+        if division.draft:
+            raise Http404("Division is not visible in the front-end.")
 
         timeline = matches_timeline(team.matches_by_date())
 

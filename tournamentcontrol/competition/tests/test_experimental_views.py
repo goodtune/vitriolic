@@ -169,6 +169,42 @@ class SeasonFixturesTests(TestCase):
         )
         self.response_404()
 
+    def test_season_fixtures_excludes_draft_divisions(self):
+        stage = factories.StageFactory.create(division__season=self.season)
+        draft_stage = factories.StageFactory.create(
+            division__season=self.season, division__draft=True
+        )
+        factories.MatchFactory.create(
+            stage=stage,
+            date="2022-07-02",
+            time="09:00",
+            datetime="2022-07-02 09:00",
+        )
+        factories.MatchFactory.create(
+            stage=draft_stage,
+            date="2022-07-02",
+            time="10:00",
+            datetime="2022-07-02 10:00",
+        )
+        self.assertGoodView(
+            "competition:season-fixtures",
+            self.season.competition.slug,
+            self.season.slug,
+        )
+        self.assertEqual(self.last_response.context["match_count"], 1)
+        self.assertCountEqual(
+            self.last_response.context["divisions"], [stage.division]
+        )
+
+        # a draft division is not a valid filter value either
+        self.get(
+            "competition:season-fixtures",
+            self.season.competition.slug,
+            self.season.slug,
+            data={"division": draft_stage.division.slug},
+        )
+        self.response_404()
+
     def test_season_fixtures_excludes_byes(self):
         stage = factories.StageFactory.create(division__season=self.season)
         factories.MatchFactory.create(
@@ -278,6 +314,19 @@ class TeamTimelineTests(TestCase):
     def test_team_timeline_no_matches(self):
         self.assertGoodTimeline()
         self.assertEqual(self.last_response.context["timeline"], [])
+
+    def test_team_timeline_draft_division(self):
+        team = factories.TeamFactory.create(
+            division__season=self.season, division__draft=True
+        )
+        self.get(
+            "competition:team-timeline",
+            self.season.competition.slug,
+            self.season.slug,
+            team.division.slug,
+            team.slug,
+        )
+        self.response_404()
 
 
 class MatchesTimelineTests(TestCase):
