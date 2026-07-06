@@ -1085,20 +1085,15 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             draw=Sum("draw"),
         )
 
+        team_qs = Team.objects.select_related("club", "division")
         undecided = (
             division.matches.filter(team_needs_progressing)
             .exclude(is_bye=True)
             .select_related(None)
             .select_related("play_at", "stage__division", "stage_group")
             .prefetch_related(
-                Prefetch(
-                    "home_team",
-                    queryset=Team.objects.select_related("club", "division"),
-                ),
-                Prefetch(
-                    "away_team",
-                    queryset=Team.objects.select_related("club", "division"),
-                ),
+                Prefetch("home_team", queryset=team_qs),
+                Prefetch("away_team", queryset=team_qs),
                 "home_team_undecided",
                 "away_team_undecided",
                 "home_team_eval_related",
