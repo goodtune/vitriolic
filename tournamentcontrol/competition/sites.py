@@ -992,7 +992,12 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
         team_slug = request.GET.get("team")
         if team_slug:
+            # a slug may legitimately match several teams (the same nation
+            # entered in multiple divisions), but zero matches is a bad
+            # filter value — treat it like the place filter and 404
             selected = teams.filter(slug=team_slug)
+            if not selected:
+                raise Http404("No team matches the given filter.")
             matches = matches.filter(
                 Q(home_team__in=selected) | Q(away_team__in=selected)
             )

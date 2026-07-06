@@ -1,7 +1,12 @@
+import collections
+from datetime import datetime, timezone
+
 from django.test import override_settings
 from test_plus import TestCase
 
+from tournamentcontrol.competition.models import Match
 from tournamentcontrol.competition.tests import factories
+from tournamentcontrol.competition.utils import matches_timeline
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
@@ -100,6 +105,15 @@ class SeasonFixturesTests(TestCase):
             data={"team": team.slug},
         )
         self.assertEqual(self.last_response.context["match_count"], 1)
+
+    def test_season_fixtures_team_filter_unknown(self):
+        self.get(
+            "competition:season-fixtures",
+            self.season.competition.slug,
+            self.season.slug,
+            data={"team": "no-such-team"},
+        )
+        self.response_404()
 
     def test_season_fixtures_place_filter(self):
         stage = factories.StageFactory.create(division__season=self.season)
@@ -223,8 +237,8 @@ class TeamTimelineTests(TestCase):
         self.assertEqual(str(items[1]["gap_display"]), "3h")
 
         # the played match is not "next", the unplayed one is
-        self.assertFalse(items[0]["is_next"])
-        self.assertTrue(items[1]["is_next"])
+        self.assertEqual(items[0]["is_next"], False)
+        self.assertEqual(items[1]["is_next"], True)
 
     def test_team_timeline_record(self):
         factories.MatchFactory.create(
@@ -264,3 +278,42 @@ class TeamTimelineTests(TestCase):
     def test_team_timeline_no_matches(self):
         self.assertGoodTimeline()
         self.assertEqual(self.last_response.context["timeline"], [])
+
+
+class MatchesTimelineTests(TestCase):
+    """
+    Unit coverage for the matches_timeline helper — the incoming mapping
+    is ordered by stage and round, not by time, so the helper must
+    re-sort each day chronologically.
+    """
+
+    def test_out_of_order_matches_are_sorted_chronologically(self):
+        early = Match(datetime=datetime(2022, 7, 2, 9, 0, tzinfo=timezone.utc))
+        late = Match(datetime=datetime(2022, 7, 2, 12, 0, tzinfo=timezone.utc))
+        by_date = collections.OrderedDict([(early.datetime.date(), [late, early])])
+
+        timeline = matches_timeline(by_date)
+
+        items = timeline[0]["items"]
+        self.assertEqual(items[0]["match"], early)
+        self.assertEqual(items[1]["match"], late)
+        self.assertIsNone(items[0]["gap"])
+        self.assertEqual(items[1]["gap"].total_seconds(), 3 * 60 * 60)
+        self.assertEqual(str(items[1]["gap_display"]), "3h")
+
+    def test_bye_sorts_last_and_does_not_interrupt_gap(self):
+        early = Match(datetime=datetime(2022, 7, 2, 9, 0, tzinfo=timezone.utc))
+        late = Match(datetime=datetime(2022, 7, 2, 12, 0, tzinfo=timezone.utc))
+        bye = Match(is_bye=True)
+        by_date = collections.OrderedDict(
+            [(early.datetime.date(), [bye, late, early])]
+        )
+
+        timeline = matches_timeline(by_date)
+
+        items = timeline[0]["items"]
+        self.assertEqual(items[0]["match"], early)
+        self.assertEqual(items[1]["match"], late)
+        self.assertEqual(items[2]["match"], bye)
+        self.assertEqual(str(items[1]["gap_display"]), "3h")
+        self.assertIsNone(items[2]["gap"])

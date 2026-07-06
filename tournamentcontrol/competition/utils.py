@@ -879,9 +879,13 @@ def matches_timeline(matches_by_date):
 
     Returns a list of ``{"date": date, "items": [...]}`` dicts, where each
     item is ``{"match": match, "gap": timedelta, "gap_display": str,
-    "is_next": bool}``. The gap is measured between the start times of
-    consecutive matches on the same day; it is ``None`` for the first
-    match of a day and around byes or matches without a scheduled time.
+    "is_next": bool}``. Each day's matches are re-sorted by start time —
+    the incoming mapping may be ordered by stage and round instead — with
+    byes and matches without a scheduled time sorted to the end of the day.
+
+    The gap is measured between the start times of consecutive scheduled
+    matches on the same day. It is ``None`` for the first scheduled match
+    of a day, and byes never carry a gap of their own.
 
     The first match that is yet to have a result recorded is flagged
     ``is_next`` so templates can highlight it.
@@ -891,7 +895,14 @@ def matches_timeline(matches_by_date):
     for date, matches in matches_by_date.items():
         items = []
         previous = None
-        for match in matches:
+        ordered = sorted(
+            matches,
+            key=lambda m: (
+                m.datetime is None or m.is_bye,
+                m.datetime.timestamp() if m.datetime else 0,
+            ),
+        )
+        for match in ordered:
             gap = None
             if (
                 previous is not None
