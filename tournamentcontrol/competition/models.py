@@ -916,6 +916,9 @@ class Division(
                 "away_team__club",
                 "away_team__division",
             )
+            # live-stream thumbnail blobs are only needed by the thumbnail
+            # endpoints and YouTube sync — never in a match listing
+            .defer("live_stream_thumbnail_image")
             .annotate(
                 statistics_count=Count("statistics"),
                 videos_count=Count("videos"),
@@ -1408,22 +1411,28 @@ class StageGroup(AdminUrlMixin, OrderedSitemapNode):
     def matches_by_date(self):
         tzinfo = timezone.get_current_timezone()
         res = collections.OrderedDict()
-        matches = self.matches.select_related(
-            "play_at",
-            "stage__division",
-            "stage_group",
-            "home_team__club",
-            "home_team__division",
-            "away_team__club",
-            "away_team__division",
-        ).order_by(
-            "date",
-            "stage",
-            "round",
-            "is_bye",
-            "time",
-            "play_at__ground__order",
-            "pk",
+        matches = (
+            self.matches.select_related(
+                "play_at",
+                "stage__division",
+                "stage_group",
+                "home_team__club",
+                "home_team__division",
+                "away_team__club",
+                "away_team__division",
+            )
+            # live-stream thumbnail blobs are only needed by the thumbnail
+            # endpoints and YouTube sync — never in a match listing
+            .defer("live_stream_thumbnail_image")
+            .order_by(
+                "date",
+                "stage",
+                "round",
+                "is_bye",
+                "time",
+                "play_at__ground__order",
+                "pk",
+            )
         )
         for match in matches.annotate(
             statistics_count=Count("statistics"),
@@ -1637,22 +1646,28 @@ class Team(AdminUrlMixin, OrderedSitemapNode):
     def matches_by_date(self):
         tzinfo = timezone.get_current_timezone()
         res = collections.OrderedDict()
-        matches = self.matches.select_related(
-            "play_at",
-            "stage__division",
-            "stage_group",
-            "home_team__club",
-            "home_team__division",
-            "away_team__club",
-            "away_team__division",
-        ).order_by(
-            "date",
-            "stage",
-            "round",
-            "is_bye",
-            "time",
-            "play_at__ground__order",
-            "pk",
+        matches = (
+            self.matches.select_related(
+                "play_at",
+                "stage__division",
+                "stage_group",
+                "home_team__club",
+                "home_team__division",
+                "away_team__club",
+                "away_team__division",
+            )
+            # live-stream thumbnail blobs are only needed by the thumbnail
+            # endpoints and YouTube sync — never in a match listing
+            .defer("live_stream_thumbnail_image")
+            .order_by(
+                "date",
+                "stage",
+                "round",
+                "is_bye",
+                "time",
+                "play_at__ground__order",
+                "pk",
+            )
         )
         for m in matches.annotate(
             statistics_count=Count("statistics"), videos_count=Count("videos")
