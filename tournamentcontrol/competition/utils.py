@@ -870,3 +870,69 @@ def create_thumbnail_preview(
         return ThumbnailPreview()
 
     return ThumbnailPreview(output_buffer.getvalue(), original_mime)
+
+
+def matches_timeline(matches_by_date):
+    """
+    Reshape a ``matches_by_date`` mapping (as produced by
+    ``Team.matches_by_date``) for chronological timeline rendering.
+
+    Returns a list of ``{"date": date, "items": [...]}`` dicts, where each
+    item is ``{"match": match, "gap": timedelta, "gap_display": str,
+    "is_next": bool}``. The gap is measured between the start times of
+    consecutive matches on the same day; it is ``None`` for the first
+    match of a day and around byes or matches without a scheduled time.
+
+    The first match that is yet to have a result recorded is flagged
+    ``is_next`` so templates can highlight it.
+    """
+    timeline = []
+    next_found = False
+    for date, matches in matches_by_date.items():
+        items = []
+        previous = None
+        for match in matches:
+            gap = None
+            if (
+                previous is not None
+                and match.datetime is not None
+                and not match.is_bye
+            ):
+                gap = match.datetime - previous.datetime
+            item = {
+                "match": match,
+                "gap": gap,
+                "gap_display": timedelta_display(gap),
+                "is_next": False,
+            }
+            if (
+                not next_found
+                and not match.is_bye
+                and match.home_team_score is None
+                and match.away_team_score is None
+            ):
+                item["is_next"] = True
+                next_found = True
+            items.append(item)
+            if match.datetime is not None and not match.is_bye:
+                previous = match
+        timeline.append({"date": date, "items": items})
+    return timeline
+
+
+def timedelta_display(delta):
+    """
+    Render a timedelta as a compact "3h 20m" style string, or ``None``
+    when there is nothing sensible to show.
+    """
+    if delta is None:
+        return None
+    total_minutes = int(delta.total_seconds() // 60)
+    if total_minutes <= 0:
+        return _("back to back")
+    hours, minutes = divmod(total_minutes, 60)
+    if hours and minutes:
+        return _("%(hours)dh %(minutes)dm") % {"hours": hours, "minutes": minutes}
+    if hours:
+        return _("%(hours)dh") % {"hours": hours}
+    return _("%(minutes)dm") % {"minutes": minutes}

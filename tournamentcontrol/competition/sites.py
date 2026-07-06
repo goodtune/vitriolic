@@ -47,10 +47,12 @@ from tournamentcontrol.competition.models import (
     Person,
     SimpleScoreMatchStatistic,
     Stage,
+    Team,
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
     legitimate_bye_match,
+    matches_timeline,
     team_needs_progressing,
 )
 
@@ -440,6 +442,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             path("", self.season, name="season"),
             path("forfeit/", self.forfeit_list, name="forfeit-list"),
             path("forfeit/<int:match>/", self.forfeit, name="forfeit"),
+            path("fixtures/", self.season_fixtures, name="season-fixtures"),
             path("videos/", self.season_videos, name="season-videos"),
             path(
                 "thumbnail/",
@@ -478,6 +481,11 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             ),
             path("<slug:division>/<slug:team>.ics", self.calendar, name="calendar"),
             path("<slug:division>/<slug:team>/", self.team, name="team"),
+            path(
+                "<slug:division>/<slug:team>/timeline/",
+                self.team_timeline,
+                name="team-timeline",
+            ),
         ]
 
     def competition_urls(self):
@@ -939,6 +947,127 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             templates=templates,
             extra_context=extra_context,
         )
+
+    @competition_by_slug_m
+    def season_fixtures(self, request, competition, season, extra_context, **kwargs):
+        """
+        Experimental season-wide fixture navigator: every match in the
+        season grouped by day, filterable by division and team. Only
+        available when the season has opted in via
+        ``enable_experimental_views``.
+        """
+        if not season.enable_experimental_views:
+            raise Http404("Experimental views are not enabled for this season.")
+
+        matches = (
+            season.matches.exclude(is_bye=True)
+            .select_related(
+                "play_at",
+                "stage__division",
+                "stage_group",
+                "home_team__club",
+                "home_team__division",
+                "away_team__club",
+                "away_team__division",
+            )
+            .order_by("date", "time", "play_at__ground__order", "pk")
+        )
+
+        divisions = season.divisions.all()
+
+        division = None
+        division_slug = request.GET.get("division")
+        if division_slug:
+            division = get_object_or_404(season.divisions, slug=division_slug)
+            matches = matches.filter(stage__division=division)
+
+        teams = Team.objects.filter(division__season=season)
+        if division is not None:
+            teams = teams.filter(division=division)
+        team_choices = (
+            teams.order_by("title", "slug").values_list("slug", "title").distinct()
+        )
+
+        team_slug = request.GET.get("team")
+        if team_slug:
+            selected = teams.filter(slug=team_slug)
+            matches = matches.filter(
+                Q(home_team__in=selected) | Q(away_team__in=selected)
+            )
+
+        tzinfo = timezone.get_current_timezone()
+        matches_by_date = collections.OrderedDict()
+        team_ids = set()
+        for match in matches:
+            matches_by_date.setdefault(match.get_date(tzinfo), []).append(match)
+            team_ids.update((match.home_team_id, match.away_team_id))
+        team_ids.discard(None)
+
+        context = {
+            "divisions": divisions,
+            "team_choices": team_choices,
+            "selected_division": division,
+            "selected_team": team_slug,
+            "matches_by_date": matches_by_date,
+            "match_count": sum(len(each) for each in matches_by_date.values()),
+            "team_count": len(team_ids),
+        }
+        context.update(extra_context)
+
+        templates = self.template_path(
+            "season_fixtures.html", competition.slug, season.slug
+        )
+        return self.render(request, templates, context)
+
+    @competition_by_slug_m
+    def team_timeline(
+        self, request, competition, season, division, team, extra_context, **kwargs
+    ):
+        """
+        Experimental team-centric timeline: the season from one team's
+        point of view — results so far, the gap between games, what is
+        next, and the progression matches that are still to resolve.
+        Only available when the season has opted in via
+        ``enable_experimental_views``.
+        """
+        if not season.enable_experimental_views:
+            raise Http404("Experimental views are not enabled for this season.")
+
+        timeline = matches_timeline(team.matches_by_date())
+
+        record = team.ladder_summary.aggregate(
+            played=Sum("played"),
+            win=Sum("win"),
+            loss=Sum("loss"),
+            draw=Sum("draw"),
+        )
+
+        undecided = (
+            division.matches.filter(team_needs_progressing)
+            .exclude(is_bye=True)
+            .select_related("play_at", "stage__division", "stage_group")
+            .order_by("date", "time", "play_at__ground__order", "pk")
+        )
+        tzinfo = timezone.get_current_timezone()
+        undecided_by_date = collections.OrderedDict()
+        for match in undecided:
+            undecided_by_date.setdefault(match.get_date(tzinfo), []).append(match)
+
+        context = {
+            "timeline": timeline,
+            "record": record,
+            "undecided_by_date": undecided_by_date,
+        }
+        context.update(extra_context)
+
+        templates = self.template_path(
+            "team_timeline.html",
+            competition.slug,
+            season.slug,
+            division.slug,
+            team.slug,
+        )
+        return self.render(request, templates, context)
 
     @competition_by_slug_m
     def calendar(self, request, season, club=None, division=None, team=None, **kwargs):

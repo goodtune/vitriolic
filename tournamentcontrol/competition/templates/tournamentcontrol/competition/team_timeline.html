@@ -1,0 +1,83 @@
+{% extends "tournamentcontrol/competition/base.html" %}
+{% load i18n %}
+{% load common competition %}
+
+{% block body_class %}{{ block.super }} team-timeline{% endblock %}
+
+{% block page_title %}{% trans competition.title %} - {% trans season.title %} - {% trans division.title %} - {% trans team.title %}{% endblock %}
+
+{% block content %}
+	{% trans "TBA" as tba context "abbreviation: to be advised" %}
+
+	{% block heading %}
+		<h1>{% trans competition.title %} - {% trans season.title %}</h1>
+		<h2>{% trans division.title %}</h2>
+		<h3>{% trans team.title %}</h3>
+	{% endblock %}
+
+	{% block record %}
+		{% if record.played %}
+			<p class="team-record">
+				{% blocktrans with win=record.win|default:0 loss=record.loss|default:0 draw=record.draw|default:0 played=record.played %}Played {{ played }}: {{ win }} wins, {{ loss }} losses, {{ draw }} draws.{% endblocktrans %}
+			</p>
+		{% endif %}
+	{% endblock %}
+
+	{% block timeline %}
+		{% for day in timeline %}
+			<div class="timeline-day">
+				<h4>{{ day.date|date:"l, jS F Y" }}</h4>
+				<ol class="timeline">
+					{% for item in day.items %}
+						{% with match=item.match %}
+							{% if item.gap_display %}
+								<li class="gap">{{ item.gap_display }} {% trans "between the start of your games" %}</li>
+							{% endif %}
+							<li class="match{% if item.is_next %} next{% endif %}{% if match.is_bye %} bye{% endif %}">
+								<span class="time">{{ match.datetime|time|default:tba }}</span>
+								{% if item.is_next %}<span class="flag next">{% trans "Up next" %}</span>{% endif %}
+								{% if match.is_bye %}
+									<span class="opponent">{% trans "Bye" %}</span>
+								{% else %}
+									<span class="opponent">
+										{% trans "v" context "abbreviation: versus" %}
+										{% with match|opponent:team as opponent %}{{ opponent.title|default:tba }}{% endwith %}
+									</span>
+									<span class="result">{% score match team %}</span>
+									<span class="venue">{{ match.play_at.title|default:tba }}</span>
+									{% url application.name|add:":match" competition=competition.slug season=season.slug division=division.slug match=match.pk as url1 %}
+									{% url application.name|add:":match" season=season.slug division=division.slug match=match.pk as url2 %}
+									{% url application.name|add:":match" division=division.slug match=match.pk as url3 %}
+									<a class="detail" href="{{ url1|default:url2|default:url3 }}">{% trans "Detail" %}</a>
+								{% endif %}
+							</li>
+						{% endwith %}
+					{% endfor %}
+				</ol>
+			</div>
+		{% empty %}
+			<p class="empty">{% trans "No matches have been scheduled yet." %}</p>
+		{% endfor %}
+	{% endblock %}
+
+	{% block undecided %}
+		{% if undecided_by_date %}
+			<div class="timeline-undecided">
+				<h4>{% trans "Finals &amp; progression matches" %}</h4>
+				<p class="note">{% trans "These matches depend on results still to come — each side is shown by its formula until the standings decide it." %}</p>
+				{% for date, matches in undecided_by_date.items %}
+					<h5>{{ date|date:"l, jS F Y" }}</h5>
+					<ul class="undecided">
+						{% for match in matches %}
+							<li>
+								<span class="time">{{ match.datetime|time|default:tba }}</span>
+								<span class="teams">{{ match.get_home_team.title }} {% trans "v" context "abbreviation: versus" %} {{ match.get_away_team.title }}</span>
+								<span class="venue">{{ match.play_at.title|default:tba }}</span>
+							</li>
+						{% endfor %}
+					</ul>
+				{% endfor %}
+			</div>
+		{% endif %}
+	{% endblock %}
+{% endblock %}

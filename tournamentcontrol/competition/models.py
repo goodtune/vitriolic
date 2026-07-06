@@ -504,6 +504,16 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
             "match of tournament has taken place."
         ),
     )
+    enable_experimental_views = BooleanField(
+        default=False,
+        verbose_name=_("Enable experimental views"),
+        help_text=_(
+            "Set to expose experimental spectator views "
+            "(fixtures navigator, team timeline) for this "
+            "season. When unset those views return Not Found, "
+            "so existing seasons are unaffected."
+        ),
+    )
     timezone = TimeZoneField(max_length=50, blank=True, null=True, use_pytz=False)
 
     forfeit_notifications = ManyToManyField(
