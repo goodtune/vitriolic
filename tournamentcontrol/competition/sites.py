@@ -1091,6 +1091,14 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             .select_related(None)
             .select_related("play_at", "stage__division", "stage_group")
             .prefetch_related(
+                Prefetch(
+                    "home_team",
+                    queryset=Team.objects.select_related("club", "division"),
+                ),
+                Prefetch(
+                    "away_team",
+                    queryset=Team.objects.select_related("club", "division"),
+                ),
                 "home_team_undecided",
                 "away_team_undecided",
                 "home_team_eval_related",

@@ -17,11 +17,11 @@
 
 	{% block record %}
 		{% if record.played %}
+			{% blocktrans count counter=record.win|default:0 asvar wins %}{{ counter }} win{% plural %}{{ counter }} wins{% endblocktrans %}
+			{% blocktrans count counter=record.loss|default:0 asvar losses %}{{ counter }} loss{% plural %}{{ counter }} losses{% endblocktrans %}
+			{% blocktrans count counter=record.draw|default:0 asvar draws %}{{ counter }} draw{% plural %}{{ counter }} draws{% endblocktrans %}
 			<p class="team-record">
-				{% blocktrans with played=record.played %}Played {{ played }}:{% endblocktrans %}
-				{% blocktrans count counter=record.win|default:0 %}{{ counter }} win{% plural %}{{ counter }} wins{% endblocktrans %},
-				{% blocktrans count counter=record.loss|default:0 %}{{ counter }} loss{% plural %}{{ counter }} losses{% endblocktrans %},
-				{% blocktrans count counter=record.draw|default:0 %}{{ counter }} draw{% plural %}{{ counter }} draws{% endblocktrans %}.
+				{% blocktrans with played=record.played %}Played {{ played }}: {{ wins }}, {{ losses }}, {{ draws }}.{% endblocktrans %}
 			</p>
 		{% endif %}
 	{% endblock %}

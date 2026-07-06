@@ -290,6 +290,9 @@ class TeamTimelineTests(TestCase):
         record = self.last_response.context["record"]
         self.assertEqual(record["played"], 1)
         self.assertEqual(record["win"], 1)
+        self.assertResponseContains(
+            "Played 1: 1 win, 0 losses, 0 draws.", html=False
+        )
 
     def test_team_timeline_undecided_matches(self):
         finals = factories.StageFactory.create(
