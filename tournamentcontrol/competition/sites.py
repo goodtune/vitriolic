@@ -1085,7 +1085,10 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         }
         context.update(extra_context)
 
-        if request.headers.get("HX-Request") and selected_day is not None:
+        # request.htmx is set by django_htmx.middleware.HtmxMiddleware —
+        # django-htmx is a dependency of the competition extra, but fall
+        # back gracefully for projects that don't install the middleware
+        if getattr(request, "htmx", False) and selected_day is not None:
             # htmx fragment: just the one day's fixture table
             templates = self.template_path(
                 "_season_fixtures_day.html", competition.slug, season.slug

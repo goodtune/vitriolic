@@ -72,6 +72,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "django_htmx.middleware.HtmxMiddleware",
     "touchtechnology.common.middleware.served_by_middleware",
     "touchtechnology.content.middleware.SitemapNodeMiddleware",
     "touchtechnology.content.middleware.redirect_middleware",

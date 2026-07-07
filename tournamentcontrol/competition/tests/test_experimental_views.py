@@ -1,5 +1,5 @@
 import collections
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from django.test import override_settings
 from test_plus import TestCase
@@ -55,19 +55,22 @@ class SeasonFixturesTests(TestCase):
             self.season.competition.slug,
             self.season.slug,
         )
-        self.assertEqual(self.last_response.context["match_count"], 5)
+        self.assertEqual(self.get_context("match_count"), 5)
 
         # the page shell carries a day index without materialising any
         # match rows — each day's table is fetched separately
-        day_index = self.last_response.context["day_index"]
-        self.assertEqual(len(day_index), 1)
-        self.assertEqual(day_index[0]["count"], 5)
-        self.assertIsNone(self.last_response.context["day_matches"])
-        self.assertResponseContains("Show 5 matches", html=False)
+        self.assertEqual(
+            self.get_context("day_index"),
+            [{"date": date(2022, 7, 2), "count": 5}],
+        )
+        self.assertIsNone(self.get_context("day_matches"))
+        self.assertResponseContains(
+            '<a href="?day=2022-07-02">Show 5 matches</a>'
+        )
 
     def test_season_fixtures_day(self):
         stage = factories.StageFactory.create(division__season=self.season)
-        factories.MatchFactory.create_batch(
+        matches = factories.MatchFactory.create_batch(
             5,
             stage=stage,
             date="2022-07-02",
@@ -86,8 +89,8 @@ class SeasonFixturesTests(TestCase):
             self.season.slug,
             data={"day": "2022-07-02"},
         )
-        day_matches = self.last_response.context["day_matches"]
-        self.assertEqual(len(day_matches), 5)
+        day_matches = self.get_context("day_matches")
+        self.assertCountEqual(day_matches, matches)
 
         # the live-stream thumbnail blob must never be dragged out of the
         # database for a listing — hundreds of matches each carrying an
@@ -112,9 +115,13 @@ class SeasonFixturesTests(TestCase):
             extra={"HTTP_HX_REQUEST": "true"},
         )
         self.response_200()
-        self.assertEqual(
-            self.last_response.templates[0].name,
+        self.assertTemplateUsed(
+            self.last_response,
             "tournamentcontrol/competition/_season_fixtures_day.html",
+        )
+        self.assertTemplateNotUsed(
+            self.last_response,
+            "tournamentcontrol/competition/season_fixtures.html",
         )
 
     def test_season_fixtures_day_invalid(self):
@@ -149,7 +156,7 @@ class SeasonFixturesTests(TestCase):
             self.season.slug,
             data={"division": stage1.division.slug},
         )
-        self.assertEqual(self.last_response.context["match_count"], 3)
+        self.assertEqual(self.get_context("match_count"), 3)
 
     def test_season_fixtures_team_filter(self):
         stage = factories.StageFactory.create(division__season=self.season)
@@ -173,7 +180,7 @@ class SeasonFixturesTests(TestCase):
             self.season.slug,
             data={"team": team.slug},
         )
-        self.assertEqual(self.last_response.context["match_count"], 1)
+        self.assertEqual(self.get_context("match_count"), 1)
 
     def test_season_fixtures_team_filter_unknown(self):
         self.get(
@@ -211,7 +218,7 @@ class SeasonFixturesTests(TestCase):
             self.season.slug,
             data={"place": ground1.pk},
         )
-        self.assertEqual(self.last_response.context["match_count"], 1)
+        self.assertEqual(self.get_context("match_count"), 1)
 
         # the venue includes matches on all of its grounds
         self.assertGoodView(
@@ -220,7 +227,7 @@ class SeasonFixturesTests(TestCase):
             self.season.slug,
             data={"place": venue.pk},
         )
-        self.assertEqual(self.last_response.context["match_count"], 2)
+        self.assertEqual(self.get_context("match_count"), 2)
 
     def test_season_fixtures_place_filter_unknown(self):
         self.get(
@@ -260,9 +267,9 @@ class SeasonFixturesTests(TestCase):
             self.season.competition.slug,
             self.season.slug,
         )
-        self.assertEqual(self.last_response.context["match_count"], 1)
+        self.assertEqual(self.get_context("match_count"), 1)
         self.assertCountEqual(
-            self.last_response.context["divisions"], [stage.division]
+            self.get_context("divisions"), [stage.division]
         )
 
         # a draft division is not a valid filter value either
@@ -293,7 +300,7 @@ class SeasonFixturesTests(TestCase):
             self.season.competition.slug,
             self.season.slug,
         )
-        self.assertEqual(self.last_response.context["match_count"], 1)
+        self.assertEqual(self.get_context("match_count"), 1)
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
@@ -331,7 +338,7 @@ class TeamTimelineTests(TestCase):
         )
         self.assertGoodTimeline()
 
-        timeline = self.last_response.context["timeline"]
+        timeline = self.get_context("timeline")
         self.assertEqual(len(timeline), 1)
         items = timeline[0]["items"]
         self.assertEqual(len(items), 2)
@@ -362,7 +369,7 @@ class TeamTimelineTests(TestCase):
             away_team_score=3,
         )
         self.assertGoodTimeline()
-        record = self.last_response.context["record"]
+        record = self.get_context("record")
         self.assertEqual(record["played"], 1)
         self.assertEqual(record["win"], 1)
         self.assertResponseContains(
@@ -386,12 +393,12 @@ class TeamTimelineTests(TestCase):
             datetime="2022-07-03 09:00",
         )
         self.assertGoodTimeline()
-        undecided = self.last_response.context["undecided_by_date"]
+        undecided = self.get_context("undecided_by_date")
         self.assertEqual(sum(len(each) for each in undecided.values()), 1)
 
     def test_team_timeline_no_matches(self):
         self.assertGoodTimeline()
-        self.assertEqual(self.last_response.context["timeline"], [])
+        self.assertEqual(self.get_context("timeline"), [])
 
     def test_team_timeline_draft_division(self):
         team = factories.TeamFactory.create(
