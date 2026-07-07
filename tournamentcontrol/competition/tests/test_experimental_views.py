@@ -156,6 +156,26 @@ class SeasonFixturesTests(TestCase):
         )
         self.response_404()
 
+    def test_season_fixtures_excludes_unscheduled_matches(self):
+        stage = factories.StageFactory.create(division__season=self.season)
+        factories.MatchFactory.create(
+            stage=stage,
+            date="2022-07-02",
+            time="09:00",
+            datetime="2022-07-02 09:00",
+        )
+        factories.MatchFactory.create(stage=stage, date=None)
+        self.assertGoodView(
+            "competition:season-fixtures",
+            self.season.competition.slug,
+            self.season.slug,
+        )
+        self.assertEqual(self.get_context("match_count"), 1)
+        self.assertEqual(
+            self.get_context("day_index"),
+            [{"date": date(2022, 7, 2), "count": 1}],
+        )
+
     def test_season_fixtures_day_outside_selection(self):
         stage = factories.StageFactory.create(division__season=self.season)
         factories.MatchFactory.create(

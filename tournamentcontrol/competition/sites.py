@@ -980,7 +980,9 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         team_qs = Team.objects.select_related("club", "division")
         matches = (
             season.matches.exclude(is_bye=True)
-            .filter(stage__division__draft=False)
+            # matches without a scheduled date cannot appear in a
+            # day-by-day navigator
+            .filter(date__isnull=False, stage__division__draft=False)
             .select_related(None)
             .select_related("play_at", "stage__division", "stage_group")
             # never drag live-stream thumbnail blobs out of the database
@@ -1083,9 +1085,17 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         if filter_query:
             filter_query += "&"
 
+        # the same candidate chain serves the htmx fragment response and
+        # the {% include %} for the selected day on the full page, so
+        # per-competition/season template overrides apply to both
+        day_template_names = self.template_path(
+            "_season_fixtures_day.html", competition.slug, season.slug
+        )
+
         context = {
             "selected_day": selected_day,
             "day_matches": day_matches,
+            "day_template_names": day_template_names,
         }
         context.update(extra_context)
 
@@ -1093,14 +1103,13 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         # which is required — see tournamentcontrol.competition.E001
         if request.htmx and selected_day is not None:
             # htmx fragment: just the one day's fixture table
-            templates = self.template_path(
-                "_season_fixtures_day.html", competition.slug, season.slug
-            )
-            return self.render(request, templates, context)
+            return self.render(request, day_template_names, context)
 
         team_ids = set()
-        for home_team_id, away_team_id in matches.values_list(
-            "home_team", "away_team"
+        for home_team_id, away_team_id in (
+            matches.prefetch_related(None)
+            .values_list("home_team", "away_team")
+            .iterator()
         ):
             team_ids.update((home_team_id, away_team_id))
         team_ids.discard(None)

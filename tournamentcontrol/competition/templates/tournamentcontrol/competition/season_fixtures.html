@@ -64,7 +64,7 @@
 			<div class="fixtures-day" id="day-{{ day.date|date:"Ymd" }}">
 				<h3>{{ day.date|date:"l, jS F Y" }} <span class="count">{{ day.count }}</span></h3>
 				{% if selected_day == day.date %}
-					{% include "tournamentcontrol/competition/_season_fixtures_day.html" %}
+					{% include day_template_names %}
 				{% else %}
 					{# each day's table loads separately — htmx swaps it in as the day scrolls into view; the link works without JavaScript #}
 					<div class="fixtures-day-body"
