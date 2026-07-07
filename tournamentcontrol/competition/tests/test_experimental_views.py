@@ -57,12 +57,74 @@ class SeasonFixturesTests(TestCase):
         )
         self.assertEqual(self.last_response.context["match_count"], 5)
 
+        # the page shell carries a day index without materialising any
+        # match rows — each day's table is fetched separately
+        day_index = self.last_response.context["day_index"]
+        self.assertEqual(len(day_index), 1)
+        self.assertEqual(day_index[0]["count"], 5)
+        self.assertIsNone(self.last_response.context["day_matches"])
+        self.assertResponseContains("Show 5 matches", html=False)
+
+    def test_season_fixtures_day(self):
+        stage = factories.StageFactory.create(division__season=self.season)
+        factories.MatchFactory.create_batch(
+            5,
+            stage=stage,
+            date="2022-07-02",
+            time="09:00",
+            datetime="2022-07-02 09:00",
+        )
+        factories.MatchFactory.create(
+            stage=stage,
+            date="2022-07-03",
+            time="09:00",
+            datetime="2022-07-03 09:00",
+        )
+        self.assertGoodView(
+            "competition:season-fixtures",
+            self.season.competition.slug,
+            self.season.slug,
+            data={"day": "2022-07-02"},
+        )
+        day_matches = self.last_response.context["day_matches"]
+        self.assertEqual(len(day_matches), 5)
+
         # the live-stream thumbnail blob must never be dragged out of the
         # database for a listing — hundreds of matches each carrying an
         # image is hundreds of megabytes per request at tournament scale
-        matches_by_date = self.last_response.context["matches_by_date"]
-        match = next(iter(matches_by_date.values()))[0]
-        self.assertIn("live_stream_thumbnail_image", match.get_deferred_fields())
+        self.assertIn(
+            "live_stream_thumbnail_image", day_matches[0].get_deferred_fields()
+        )
+
+    def test_season_fixtures_day_htmx_fragment(self):
+        stage = factories.StageFactory.create(division__season=self.season)
+        factories.MatchFactory.create(
+            stage=stage,
+            date="2022-07-02",
+            time="09:00",
+            datetime="2022-07-02 09:00",
+        )
+        self.get(
+            "competition:season-fixtures",
+            self.season.competition.slug,
+            self.season.slug,
+            data={"day": "2022-07-02"},
+            extra={"HTTP_HX_REQUEST": "true"},
+        )
+        self.response_200()
+        self.assertEqual(
+            self.last_response.templates[0].name,
+            "tournamentcontrol/competition/_season_fixtures_day.html",
+        )
+
+    def test_season_fixtures_day_invalid(self):
+        self.get(
+            "competition:season-fixtures",
+            self.season.competition.slug,
+            self.season.slug,
+            data={"day": "not-a-day"},
+        )
+        self.response_404()
 
     def test_season_fixtures_division_filter(self):
         stage1 = factories.StageFactory.create(division__season=self.season)
