@@ -57,6 +57,13 @@ class SeasonFixturesTests(TestCase):
         )
         self.assertEqual(self.last_response.context["match_count"], 5)
 
+        # the live-stream thumbnail blob must never be dragged out of the
+        # database for a listing — hundreds of matches each carrying an
+        # image is hundreds of megabytes per request at tournament scale
+        matches_by_date = self.last_response.context["matches_by_date"]
+        match = next(iter(matches_by_date.values()))[0]
+        self.assertIn("live_stream_thumbnail_image", match.get_deferred_fields())
+
     def test_season_fixtures_division_filter(self):
         stage1 = factories.StageFactory.create(division__season=self.season)
         stage2 = factories.StageFactory.create(division__season=self.season)
@@ -271,6 +278,12 @@ class TeamTimelineTests(TestCase):
         # the time since the earlier start
         self.assertIsNone(items[0]["gap"])
         self.assertEqual(str(items[1]["gap_display"]), "3h")
+
+        # thumbnail blobs stay in the database for timeline listings too
+        self.assertIn(
+            "live_stream_thumbnail_image",
+            items[0]["match"].get_deferred_fields(),
+        )
 
         # the played match is not "next", the unplayed one is
         self.assertEqual(items[0]["is_next"], False)
