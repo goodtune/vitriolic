@@ -156,6 +156,22 @@ class SeasonFixturesTests(TestCase):
         )
         self.response_404()
 
+    def test_season_fixtures_day_outside_selection(self):
+        stage = factories.StageFactory.create(division__season=self.season)
+        factories.MatchFactory.create(
+            stage=stage,
+            date="2022-07-02",
+            time="09:00",
+            datetime="2022-07-02 09:00",
+        )
+        self.get(
+            "competition:season-fixtures",
+            self.season.competition.slug,
+            self.season.slug,
+            data={"day": "2022-07-09"},
+        )
+        self.response_404()
+
     def test_season_fixtures_division_filter(self):
         stage1 = factories.StageFactory.create(division__season=self.season)
         stage2 = factories.StageFactory.create(division__season=self.season)

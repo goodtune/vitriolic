@@ -1065,6 +1065,10 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                 selected_day = date.fromisoformat(day_param)
             except ValueError:
                 raise Http404("Invalid day.")
+            # a well-formed day outside the current selection is a bad
+            # filter value — treat it like the other filters and 404
+            if not any(each["date"] == selected_day for each in day_index):
+                raise Http404("No matches on this day.")
             day_matches = list(matches.filter(date=selected_day))
 
         # echo the active filters into the per-day fragment URLs
