@@ -15,9 +15,10 @@ class CompetitionConfig(AppConfig):
     name = "tournamentcontrol.competition"
 
     def ready(self):
-        """Wire up signal handlers and admin registration."""
+        """Wire up signal handlers, system checks and admin registration."""
         from touchtechnology.admin.sites import site
         from touchtechnology.content import utils
+        from tournamentcontrol.competition import checks  # noqa
         from tournamentcontrol.competition.admin import (
             CompetitionAdminComponent,
         )

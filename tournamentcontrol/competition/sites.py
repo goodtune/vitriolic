@@ -2,7 +2,7 @@ import collections
 import functools
 import logging
 import operator
-from datetime import timedelta
+from datetime import date, timedelta
 from operator import or_
 
 from dateutil.relativedelta import relativedelta
@@ -17,6 +17,7 @@ from django.urls import include, path, re_path, reverse
 from django.urls.exceptions import NoReverseMatch
 from django.utils import timezone
 from django.utils.html import strip_tags
+from django.utils.http import urlencode
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext, gettext_lazy as _
 from django.views.decorators.cache import cache_page
@@ -954,9 +955,18 @@ class CompetitionSite(CompetitionAdminMixin, Application):
     def season_fixtures(self, request, competition, season, extra_context, **kwargs):
         """
         Experimental season-wide fixture navigator: every match in the
-        season grouped by day, filterable by division and team. Only
-        available when the season has opted in via
+        season grouped by day, filterable by division, team, and place.
+        Only available when the season has opted in via
         ``enable_experimental_views``.
+
+        The full page renders only a light shell — filter controls,
+        selection counts, and one heading per day (built from a single
+        aggregate query, without materialising any match rows). Each
+        day's fixture table is fetched separately via the ``day`` GET
+        parameter: htmx swaps it in lazily as the day scrolls into view,
+        and the same URLs work as plain links without JavaScript. This
+        keeps every request small — a tournament season can hold close
+        to a thousand matches, far too many to render in one response.
         """
         if not season.enable_experimental_views:
             raise Http404("Experimental views are not enabled for this season.")
@@ -970,7 +980,9 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         team_qs = Team.objects.select_related("club", "division")
         matches = (
             season.matches.exclude(is_bye=True)
-            .filter(stage__division__draft=False)
+            # matches without a scheduled date cannot appear in a
+            # day-by-day navigator
+            .filter(date__isnull=False, stage__division__draft=False)
             .select_related(None)
             .select_related("play_at", "stage__division", "stage_group")
             # never drag live-stream thumbnail blobs out of the database
@@ -1038,26 +1050,84 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                 )
                 matches = matches.filter(play_at=selected_place)
 
-        tzinfo = timezone.get_current_timezone()
-        matches_by_date = collections.OrderedDict()
-        team_ids = set()
-        for match in matches:
-            matches_by_date.setdefault(match.get_date(tzinfo), []).append(match)
-            team_ids.update((match.home_team_id, match.away_team_id))
-        team_ids.discard(None)
+        # one cheap aggregate builds the day index — no match rows are
+        # materialised for the page shell
+        day_index = list(
+            matches.order_by()
+            .values("date")
+            .annotate(count=Count("pk"))
+            .order_by("date")
+        )
+
+        selected_day = None
+        day_matches = None
+        day_param = request.GET.get("day")
+        if day_param:
+            try:
+                selected_day = date.fromisoformat(day_param)
+            except ValueError:
+                raise Http404("Invalid day.")
+            # a well-formed day outside the current selection is a bad
+            # filter value — treat it like the other filters and 404
+            if not any(each["date"] == selected_day for each in day_index):
+                raise Http404("No matches on this day.")
+            day_matches = list(matches.filter(date=selected_day))
+
+        # echo the active filters into the per-day fragment URLs
+        filter_params = {}
+        if division is not None:
+            filter_params["division"] = division.slug
+        if team_slug:
+            filter_params["team"] = team_slug
+        if selected_place is not None:
+            filter_params["place"] = selected_place.pk
+        filter_query = urlencode(filter_params)
+        if filter_query:
+            filter_query += "&"
+
+        # the same candidate chain serves the htmx fragment response and
+        # the {% include %} for the selected day on the full page, so
+        # per-competition/season template overrides apply to both
+        day_template_names = self.template_path(
+            "_season_fixtures_day.html", competition.slug, season.slug
+        )
 
         context = {
-            "divisions": divisions,
-            "team_choices": team_choices,
-            "venues": venues,
-            "selected_division": division,
-            "selected_team": team_slug,
-            "selected_place": selected_place,
-            "matches_by_date": matches_by_date,
-            "match_count": sum(len(each) for each in matches_by_date.values()),
-            "team_count": len(team_ids),
+            "selected_day": selected_day,
+            "day_matches": day_matches,
+            "day_template_names": day_template_names,
         }
         context.update(extra_context)
+
+        # request.htmx is set by django_htmx.middleware.HtmxMiddleware,
+        # which is required — see tournamentcontrol.competition.E001
+        if request.htmx and selected_day is not None:
+            # htmx fragment: just the one day's fixture table
+            return self.render(request, day_template_names, context)
+
+        team_ids = set()
+        for home_team_id, away_team_id in (
+            matches.prefetch_related(None)
+            .values_list("home_team", "away_team")
+            .iterator()
+        ):
+            team_ids.update((home_team_id, away_team_id))
+        team_ids.discard(None)
+
+        context.update(
+            {
+                "divisions": divisions,
+                "team_choices": team_choices,
+                "venues": venues,
+                "selected_division": division,
+                "selected_team": team_slug,
+                "selected_place": selected_place,
+                "day_index": day_index,
+                "filter_query": filter_query,
+                "match_count": sum(each["count"] for each in day_index),
+                "team_count": len(team_ids),
+            }
+        )
 
         templates = self.template_path(
             "season_fixtures.html", competition.slug, season.slug

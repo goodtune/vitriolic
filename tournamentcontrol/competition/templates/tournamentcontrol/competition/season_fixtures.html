@@ -60,46 +60,22 @@
 	{% endblock %}
 
 	{% block fixtures %}
-		{% for date, matches in matches_by_date.items %}
-			<div class="fixtures-day">
-				<h3>{{ date|date:"l, jS F Y" }} <span class="count">{{ matches|length }}</span></h3>
-				<table class="fixtures">
-					<thead>
-						<tr>
-							<th class="time">{% trans "Time" %}</th>
-							<th class="division">{% trans "Division" %}</th>
-							<th class="team home">{% trans "Home" %}</th>
-							<th class="score">{% trans "Score" %}</th>
-							<th class="team away">{% trans "Away" %}</th>
-							<th class="venue">{% trans "Venue" %}</th>
-							<th></th>
-						</tr>
-					</thead>
-					<tbody>
-						{% for match in matches %}
-							<tr class="{% cycle "odd" "even" %}{% if match.live_stream %} live{% endif %}">
-								<td class="time">{{ match.datetime|time|default:tba }}</td>
-								<td class="division {{ match.stage.division.slug }}">{{ match.stage.division.short_title|default:match.stage.division.title }}</td>
-								<td class="team home">{{ match.get_home_team.title }}</td>
-								<td class="score">
-									{% if match.home_team_score is not None or match.away_team_score is not None %}
-										{{ match.home_team_score|default_if_none:"" }} &ndash; {{ match.away_team_score|default_if_none:"" }}
-									{% else %}
-										{% trans "v" context "abbreviation: versus" %}
-									{% endif %}
-								</td>
-								<td class="team away">{{ match.get_away_team.title }}</td>
-								<td class="venue">{{ match.play_at.title|default:tba }}</td>
-								<td class="detail">
-									{% url application.name|add:":match" competition=competition.slug season=season.slug division=match.stage.division.slug match=match.pk as url1 %}
-									{% url application.name|add:":match" season=season.slug division=match.stage.division.slug match=match.pk as url2 %}
-									{% url application.name|add:":match" division=match.stage.division.slug match=match.pk as url3 %}
-									<a href="{{ url1|default:url2|default:url3 }}">{% trans "Detail" %}</a>
-								</td>
-							</tr>
-						{% endfor %}
-					</tbody>
-				</table>
+		{% for day in day_index %}
+			<div class="fixtures-day" id="day-{{ day.date|date:"Ymd" }}">
+				<h3>{{ day.date|date:"l, jS F Y" }} <span class="count">{{ day.count }}</span></h3>
+				{% if selected_day == day.date %}
+					{% include day_template_names %}
+				{% else %}
+					{# each day's table loads separately — htmx swaps it in as the day scrolls into view; the link works without JavaScript #}
+					<div class="fixtures-day-body"
+						hx-get="?{{ filter_query }}day={{ day.date|date:"Y-m-d" }}"
+						hx-trigger="revealed once"
+						hx-swap="outerHTML">
+						<a href="?{{ filter_query }}day={{ day.date|date:"Y-m-d" }}">
+							{% blocktrans count counter=day.count %}Show {{ counter }} match{% plural %}Show {{ counter }} matches{% endblocktrans %}
+						</a>
+					</div>
+				{% endif %}
 			</div>
 		{% empty %}
 			<p class="empty">{% trans "No matches for this selection." %}</p>
