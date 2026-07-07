@@ -1341,6 +1341,9 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
                 "away_team__club",
                 "away_team__division",
             )
+            # live-stream thumbnail blobs are only needed by the thumbnail
+            # endpoints and YouTube sync — never in a match listing
+            .defer("live_stream_thumbnail_image")
             .annotate(
                 statistics_count=Count("statistics"),
                 videos_count=Count("videos"),

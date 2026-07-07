@@ -59,7 +59,7 @@ class SeasonFixturesTests(TestCase):
 
         # the live-stream thumbnail blob must never be dragged out of the
         # database for a listing — hundreds of matches each carrying an
-        # image is tens of megabytes per request
+        # image is hundreds of megabytes per request at tournament scale
         matches_by_date = self.last_response.context["matches_by_date"]
         match = next(iter(matches_by_date.values()))[0]
         self.assertIn("live_stream_thumbnail_image", match.get_deferred_fields())

@@ -975,7 +975,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             .select_related("play_at", "stage__division", "stage_group")
             # never drag live-stream thumbnail blobs out of the database
             # for a list view — hundreds of matches each carrying an image
-            # is tens of megabytes per request
+            # is hundreds of megabytes per request at tournament scale
             .defer("live_stream_thumbnail_image")
             .prefetch_related(
                 Prefetch("home_team", queryset=team_qs),
