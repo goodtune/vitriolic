@@ -1,12 +1,35 @@
 import collections
 from datetime import date, datetime, timezone
 
+from django.conf import settings
 from django.test import override_settings
 from test_plus import TestCase
 
+from tournamentcontrol.competition.checks import (
+    HTMX_MIDDLEWARE,
+    check_htmx_middleware,
+)
 from tournamentcontrol.competition.models import Match
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import matches_timeline
+
+
+class HtmxMiddlewareCheckTests(TestCase):
+    """
+    The competition views rely on request.htmx, so the django-htmx
+    middleware is a hard requirement enforced by a system check.
+    """
+
+    def test_check_passes_with_middleware(self):
+        self.assertEqual(check_htmx_middleware(None), [])
+
+    def test_check_fails_without_middleware(self):
+        MIDDLEWARE = [m for m in settings.MIDDLEWARE if m != HTMX_MIDDLEWARE]
+        with override_settings(MIDDLEWARE=MIDDLEWARE):
+            self.assertEqual(
+                [error.id for error in check_htmx_middleware(None)],
+                ["tournamentcontrol.competition.E001"],
+            )
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
