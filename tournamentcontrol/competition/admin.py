@@ -2220,7 +2220,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             stage__division__season__competition__id=competition.pk,
             date=date,
             play_at__ground__live_stream=True,
-        ).order_by("stage__division__order", "is_bye", "datetime", "play_at")
+        ).order_by("datetime", "play_at", "pk")
 
         return self.generic_edit_multiple(
             request,
