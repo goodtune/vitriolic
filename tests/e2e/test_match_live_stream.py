@@ -49,9 +49,11 @@ class TestMatchLiveStream:
         match_day = date(2024, 6, 15)
         # MatchFactory's `datetime` attribute defaults to a random FuzzyDateTime
         # unless given explicitly -- date=/time= alone do not derive it, so it
-        # must be set directly here for deterministic ordering.
-        early = datetime(2024, 6, 15, 0, 0, tzinfo=ZoneInfo("UTC"))
-        late = datetime(2024, 6, 15, 2, 0, tzinfo=ZoneInfo("UTC"))
+        # must be set directly here for deterministic ordering. Chosen to land
+        # on 09:00/11:00 Australia/Sydney (UTC+10 in June), avoiding exact
+        # midnight/noon, which Django's time filter renders as literal words.
+        early = datetime(2024, 6, 14, 23, 0, tzinfo=ZoneInfo("UTC"))
+        late = datetime(2024, 6, 15, 1, 0, tzinfo=ZoneInfo("UTC"))
 
         # Same instant as match_early_court2 on a lower-pk field -- should
         # render FIRST (field breaks the time tie).

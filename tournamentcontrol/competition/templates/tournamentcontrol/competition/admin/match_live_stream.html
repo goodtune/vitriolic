@@ -1,5 +1,5 @@
 {% extends "touchtechnology/admin/edit.html" %}
-{% load i18n common %}
+{% load i18n common tz %}
 
 {% block content %}
 	<form class="form-horizontal" action="" method="post">
@@ -25,28 +25,30 @@
 			<div class="col-sm-2"></div>
 		</div>
 
-		<div class="list-group live-stream-list">
-			{% for form in formset.forms %}
-				{% with match=form.instance %}
-					<div class="list-group-item live-stream-row">
-						{{ form.id }}
-						<div class="row">
-							<div class="col-xs-9 col-sm-10">
-								<div class="row">
-									<div class="col-sm-2">{{ match.datetime|time }}</div>
-									<div class="col-sm-3">{{ match.stage.division.short_title|default:match.stage.division.title|htmlentities }}</div>
-									<div class="col-sm-2">{{ match.play_at.title|htmlentities }}</div>
-									<div class="col-sm-5">{{ match|safe }}</div>
+		{% timezone season.timezone %}
+			<div class="list-group live-stream-list">
+				{% for form in formset.forms %}
+					{% with match=form.instance %}
+						<div class="list-group-item live-stream-row">
+							{{ form.id }}
+							<div class="row">
+								<div class="col-xs-9 col-sm-10">
+									<div class="row">
+										<div class="col-sm-2">{{ match.datetime|time }}</div>
+										<div class="col-sm-3">{{ match.stage.division.short_title|default:match.stage.division.title|htmlentities }}</div>
+										<div class="col-sm-2">{{ match.play_at.title|htmlentities }}</div>
+										<div class="col-sm-5">{{ match|safe }}</div>
+									</div>
+								</div>
+								<div class="col-xs-3 col-sm-2 text-right">
+									{{ form.live_stream }}
 								</div>
 							</div>
-							<div class="col-xs-3 col-sm-2 text-right">
-								{{ form.live_stream }}
-							</div>
 						</div>
-					</div>
-				{% endwith %}
-			{% endfor %}
-		</div>
+					{% endwith %}
+				{% endfor %}
+			</div>
+		{% endtimezone %}
 
 		<div class="form-group">
 			<div class="text-center">
