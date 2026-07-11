@@ -575,6 +575,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             ),
             path("washout/", self.match_washout, name="match-washout"),
             path("live-stream/", self.match_live_stream, name="match-live-stream"),
+            path(
+                "live-stream/resync/",
+                self.match_live_stream_resync,
+                name="match-live-stream-resync",
+            ),
             path("schedule/", self.match_schedule, name="match-schedule"),
             path(
                 "schedule/<int:division_id>/",
@@ -2222,14 +2227,82 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             play_at__ground__live_stream=True,
         ).order_by("datetime", "play_at", "pk")
 
+        base_url = request.build_absolute_uri("/").rstrip("/")
+
+        def post_save_callback(obj: Match):
+            # Check if YouTube credentials are configured before queuing anything,
+            # we can't interact with the YouTube API without them.
+            if not (season.live_stream_client_id and season.live_stream_client_secret):
+                return None
+            # An existing broadcast always needs syncing (update or delete). For
+            # insert/update we additionally need a scheduled datetime, otherwise
+            # the task would just no-op after rendering templates.
+            if not obj.external_identifier:
+                if not obj.live_stream:
+                    return None
+                if obj.get_datetime(ZoneInfo("UTC")) is None:
+                    return None
+            sync_live_stream.s(obj.pk, base_url=base_url).apply_async()
+            return None
+
         return self.generic_edit_multiple(
             request,
             matches,
             formset_class=MatchLiveStreamFormSet,
             templates=self.template_path("match_live_stream.html"),
+            post_save_callback=post_save_callback,
             post_save_redirect=self.redirect(season.urls["edit"]),
             extra_context=extra_context,
         )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def match_live_stream_resync(
+        self, request, competition, season, date, extra_context, **kwargs
+    ):
+        """Re-push every already-streaming match on camera-equipped fields for the day.
+
+        A quick bulk equivalent of the per-match "Resync live stream" action --
+        useful after changing the season's thumbnail, or to pick up any match
+        whose broadcast fell out of sync with its current title/schedule.
+        """
+        redirect_url = season.urls["edit"]
+
+        if request.method != "POST":
+            return self.redirect(redirect_url)
+
+        if not (season.live_stream_client_id and season.live_stream_client_secret):
+            messages.error(
+                request, _("Live streaming is not configured for this season.")
+            )
+            return self.redirect(redirect_url)
+
+        matches = Match.objects.filter(
+            stage__division__season__id=season.pk,
+            stage__division__season__competition__id=competition.pk,
+            date=date,
+            play_at__ground__live_stream=True,
+            live_stream=True,
+        ).exclude(external_identifier__isnull=True).exclude(external_identifier="")
+
+        base_url = request.build_absolute_uri("/").rstrip("/")
+        count = 0
+        for match in matches:
+            sync_live_stream.s(match.pk, base_url=base_url).apply_async()
+            count += 1
+
+        if count:
+            message = ngettext(
+                "YouTube live stream resync has been queued for %(count)d match.",
+                "YouTube live stream resync has been queued for %(count)d matches.",
+                count,
+            ) % {"count": count}
+            messages.success(request, message)
+        else:
+            messages.info(
+                request, _("No currently-streaming matches to resync for this day.")
+            )
+        return self.redirect(redirect_url)
 
     @staff_login_required_m
     def scorecard_report(self, request, **extra_context):

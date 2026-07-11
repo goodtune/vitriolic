@@ -57,4 +57,17 @@
 			</div> <!-- /.col -->
 		</div>
 	</form>
+
+	<form class="form-horizontal" action="{% url 'admin:fixja:match-live-stream-resync' season.competition.pk season.pk date|date:"Ymd" %}" method="post">
+		{% csrf_token %}
+		<div class="form-group">
+			<div class="text-center">
+				<button type="submit" class="btn btn-default">
+					<i class="fa fa-refresh fa-fw"></i>
+					{% trans "Resync All" %}
+				</button>
+				<p class="help-block">{% blocktrans %}Re-push title, thumbnail, and schedule to YouTube for every match above that is already streaming.{% endblocktrans %}</p>
+			</div>
+		</div>
+	</form>
 {% endblock %}
