@@ -98,6 +98,11 @@
 											<span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
 									</a>
 							{% endif %}
+							{% if match.live_stream and match.external_identifier %}
+									<a href="{% url 'admin:fixja:competition:season:division:stage:match:resync-live-stream' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">
+											<span class="glyphicon glyphicon-refresh" aria-hidden="true"></span>
+									</a>
+							{% endif %}
 						</td>
 					</tr>
 				{% endfor %}

@@ -2451,6 +2451,64 @@ class BackendTests(MessagesTestMixin, TestCase):
             season_edit_response = self.client.get(str(season.urls["edit"]))
             self.assertContains(season_edit_response, expected_url)
 
+    def test_runsheet_shows_resync_icon_only_when_broadcast_exists(self):
+        stage = factories.StageFactory.create()
+        camera_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=True
+        )
+        streaming_match = factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=True,
+            live_stream_bind="yt-bound-abc",
+            external_identifier="yt-broadcast-abc",
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        not_yet_streaming = factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=False,
+            external_identifier=None,
+            date=date(2025, 5, 1),
+            time=time(15, 0),
+            datetime=datetime(2025, 5, 1, 5, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        season = stage.division.season
+
+        streaming_resync_url = reverse(
+            "admin:fixja:competition:season:division:stage:match:resync-live-stream",
+            args=[
+                season.competition.pk,
+                season.pk,
+                stage.division.pk,
+                stage.pk,
+                streaming_match.pk,
+            ],
+        )
+        not_yet_streaming_resync_url = reverse(
+            "admin:fixja:competition:season:division:stage:match:resync-live-stream",
+            args=[
+                season.competition.pk,
+                season.pk,
+                stage.division.pk,
+                stage.pk,
+                not_yet_streaming.pk,
+            ],
+        )
+
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:match-runsheet",
+                season.competition.pk,
+                season.pk,
+                "20250501",
+            )
+        self.response_200()
+        self.assertContains(self.last_response, streaming_resync_url)
+        self.assertNotContains(self.last_response, not_yet_streaming_resync_url)
+
 
 class TeamEditViewQueryTests(TestCase):
     """
