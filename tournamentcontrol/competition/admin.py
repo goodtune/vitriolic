@@ -2260,11 +2260,15 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def match_live_stream_resync(
         self, request, competition, season, date, extra_context, **kwargs
     ):
-        """Re-push every already-streaming match on camera-equipped fields for the day.
+        """Re-push every match marked to stream on camera-equipped fields for the day.
 
-        A quick bulk equivalent of the per-match "Resync live stream" action --
-        useful after changing the season's thumbnail, or to pick up any match
-        whose broadcast fell out of sync with its current title/schedule.
+        A quick bulk equivalent of the per-match "Resync live stream" action, but
+        create-or-update rather than update-only: it also creates the broadcast for
+        matches that were marked to stream but never got one synced (e.g. toggled
+        via the bulk view before sync_live_stream was wired up to it), in addition
+        to updating already-created broadcasts (e.g. after changing the season
+        thumbnail). Relies on sync_live_stream/_apply_sync's existing
+        create-or-update semantics, keyed on external_identifier.
         """
         redirect_url = season.urls["edit"]
 
@@ -2283,11 +2287,15 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             date=date,
             play_at__ground__live_stream=True,
             live_stream=True,
-        ).exclude(external_identifier__isnull=True).exclude(external_identifier="")
+        )
 
         base_url = request.build_absolute_uri("/").rstrip("/")
         count = 0
         for match in matches:
+            # A new broadcast needs a scheduled datetime to insert; an existing
+            # one always needs syncing, to push updated title/thumbnail/schedule.
+            if not match.external_identifier and match.get_datetime(ZoneInfo("UTC")) is None:
+                continue
             sync_live_stream.s(match.pk, base_url=base_url).apply_async()
             count += 1
 
