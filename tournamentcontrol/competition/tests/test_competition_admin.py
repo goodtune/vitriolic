@@ -2370,6 +2370,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             "form-0-id": str(match_to_turn_on.pk),
             "form-0-live_stream": "1",
             "form-1-id": str(match_to_turn_off.pk),
+            "form-1-live_stream": "0",
         }
 
         with self.login(self.superuser):
@@ -2401,22 +2402,11 @@ class BackendTests(MessagesTestMixin, TestCase):
         )
         season = stage.division.season
 
-        url = reverse(
-            "admin:fixja:match-live-stream",
-            args=[season.competition.pk, season.pk, "20250501"],
-        )
-
-        self.get(
+        self.assertLoginRequired(
             "admin:fixja:match-live-stream",
             season.competition.pk,
             season.pk,
             "20250501",
-        )
-        self.response_302()
-        self.assertRedirects(
-            self.last_response,
-            f"{reverse('accounts:login')}?next={url}",
-            fetch_redirect_response=False,
         )
 
     def test_runsheet_and_season_schedule_link_to_bulk_live_stream_view(self):
