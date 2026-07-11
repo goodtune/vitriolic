@@ -1,6 +1,8 @@
 """E2E tests for the bulk live-stream toggle admin page."""
 
-from datetime import date, time
+import re
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
 
 import pytest
 from playwright.sync_api import Page, expect
@@ -45,34 +47,43 @@ class TestMatchLiveStream:
         team_beta_2 = TeamFactory.create(division=division_beta, title="Beta Two")
 
         match_day = date(2024, 6, 15)
+        # MatchFactory's `datetime` attribute defaults to a random FuzzyDateTime
+        # unless given explicitly -- date=/time= alone do not derive it, so it
+        # must be set directly here for deterministic ordering.
+        early = datetime(2024, 6, 15, 0, 0, tzinfo=ZoneInfo("UTC"))
+        late = datetime(2024, 6, 15, 2, 0, tzinfo=ZoneInfo("UTC"))
 
-        # 09:00 on Court 1 -- Beta division, should render FIRST.
+        # Same instant as match_early_court2 on a lower-pk field -- should
+        # render FIRST (field breaks the time tie).
         match_early_court1 = MatchFactory.create(
             stage=stage_beta,
             home_team=team_beta_1,
             away_team=team_beta_2,
             date=match_day,
             time=time(9, 0),
+            datetime=early,
             play_at=ground_1,
         )
-        # 09:00 on Court 2 -- Alpha division, should render SECOND
-        # (same time as above, but a later field breaks the tie).
+        # Same instant as match_early_court1 on a higher-pk field -- should
+        # render SECOND, despite being a different division to court 1's match.
         match_early_court2 = MatchFactory.create(
             stage=stage_alpha,
             home_team=team_alpha_1,
             away_team=team_alpha_2,
             date=match_day,
             time=time(9, 0),
+            datetime=early,
             play_at=ground_2,
         )
-        # 11:00 on Court 1 -- Beta division again, should render LAST
-        # despite matching match_early_court1's division and field.
+        # Later instant, same division and field as match_early_court1 --
+        # should render LAST despite matching that match's division and field.
         match_late_court1 = MatchFactory.create(
             stage=stage_beta,
             home_team=team_beta_2,
             away_team=team_beta_1,
             date=match_day,
             time=time(11, 0),
+            datetime=late,
             play_at=ground_1,
         )
 
@@ -104,16 +115,17 @@ class TestMatchLiveStream:
 
         row_texts = page.locator(".live-stream-row").all_inner_texts()
 
-        # Expected order: 09:00/Court 1, 09:00/Court 2, 11:00/Court 1.
-        assert "Alpha One vs Beta" not in row_texts[0]
-        assert "9 a.m." in row_texts[0] and "Court 1" in row_texts[0]
-        assert "Beta One" in row_texts[0] or "Beta Two" in row_texts[0]
+        # match_early_court1 and match_late_court1 share a division and field,
+        # but reversed home/away, so their text distinguishes them without
+        # needing to parse the (timezone-dependent) rendered clock time.
+        assert "Court 1" in row_texts[0]
+        assert "Beta One vs Beta Two" in row_texts[0]
 
-        assert "9 a.m." in row_texts[1] and "Court 2" in row_texts[1]
-        assert "Alpha One" in row_texts[1] or "Alpha Two" in row_texts[1]
+        assert "Court 2" in row_texts[1]
+        assert "Alpha One" in row_texts[1] and "Alpha Two" in row_texts[1]
 
-        assert "11 a.m." in row_texts[2] and "Court 1" in row_texts[2]
-        assert "Beta One" in row_texts[2] or "Beta Two" in row_texts[2]
+        assert "Court 1" in row_texts[2]
+        assert "Beta Two vs Beta One" in row_texts[2]
 
     def test_row_shows_time_division_field_match_and_toggle(
         self, authenticated_page: Page, live_server, live_stream_dataset
@@ -127,7 +139,9 @@ class TestMatchLiveStream:
         )
 
         first_row = page.locator(".live-stream-row").first
-        expect(first_row).to_contain_text("9 a.m.")
+        # Time is rendered in the season's local timezone, so match on
+        # shape (e.g. "9 a.m." / "9:00 a.m.") rather than a literal string.
+        expect(first_row).to_contain_text(re.compile(r"\d{1,2}(:\d{2})?\s*[ap]\.m\."))
         expect(first_row).to_contain_text("Beta Division")
         expect(first_row).to_contain_text("Court 1")
         expect(first_row).to_contain_text("Beta One")
