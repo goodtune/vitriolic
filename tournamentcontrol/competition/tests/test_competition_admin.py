@@ -463,6 +463,27 @@ class GoodViewTests(TestCase):
             )
             self.response_302()
 
+    def test_match_live_stream_requires_staff_login(self):
+        stage = factories.StageFactory.create()
+        camera_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=True
+        )
+        factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        season = stage.division.season
+
+        self.assertLoginRequired(
+            "admin:fixja:match-live-stream",
+            season.competition.pk,
+            season.pk,
+            "20250501",
+        )
+
     def test_match_schedule_division(self):
         division = factories.DivisionFactory.create()
         self.assertLoginRequired(
@@ -2387,27 +2408,6 @@ class BackendTests(MessagesTestMixin, TestCase):
         match_to_turn_off.refresh_from_db()
         self.assertTrue(match_to_turn_on.live_stream)
         self.assertFalse(match_to_turn_off.live_stream)
-
-    def test_match_live_stream_requires_staff_login(self):
-        stage = factories.StageFactory.create()
-        camera_ground = factories.GroundFactory.create(
-            venue__season=stage.division.season, live_stream=True
-        )
-        factories.MatchFactory.create(
-            stage=stage,
-            play_at=camera_ground,
-            date=date(2025, 5, 1),
-            time=time(14, 0),
-            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
-        )
-        season = stage.division.season
-
-        self.assertLoginRequired(
-            "admin:fixja:match-live-stream",
-            season.competition.pk,
-            season.pk,
-            "20250501",
-        )
 
     def test_runsheet_and_season_schedule_link_to_bulk_live_stream_view(self):
         stage = factories.StageFactory.create()
