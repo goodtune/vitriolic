@@ -2419,6 +2419,38 @@ class BackendTests(MessagesTestMixin, TestCase):
             fetch_redirect_response=False,
         )
 
+    def test_runsheet_and_season_schedule_link_to_bulk_live_stream_view(self):
+        stage = factories.StageFactory.create()
+        camera_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=True
+        )
+        factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        season = stage.division.season
+
+        expected_url = reverse(
+            "admin:fixja:match-live-stream",
+            args=[season.competition.pk, season.pk, "20250501"],
+        )
+
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:match-runsheet",
+                season.competition.pk,
+                season.pk,
+                "20250501",
+            )
+            self.response_200()
+            self.assertContains(self.last_response, expected_url)
+
+            season_edit_response = self.client.get(str(season.urls["edit"]))
+            self.assertContains(season_edit_response, expected_url)
+
 
 class TeamEditViewQueryTests(TestCase):
     """

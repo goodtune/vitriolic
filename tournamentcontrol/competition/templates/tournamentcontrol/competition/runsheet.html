@@ -24,7 +24,13 @@
 
 	<div class="panel panel-default">
 		<div class="panel-heading">
-			<h3 class="panel-title">{{ date|date:"l, jS F Y" }}</h3>
+			<h3 class="panel-title">
+				{{ date|date:"l, jS F Y" }}
+				<a href="{% url 'admin:fixja:match-live-stream' season.competition.pk season.pk date|date:"Ymd" %}" class="btn btn-default btn-xs pull-right">
+					<i class="fa fa-video-camera fa-fw"></i>
+					{% trans "Live Stream" %}
+				</a>
+			</h3>
 		</div>
 
 		<table class="table table-condensed table-striped" id="match_list">
