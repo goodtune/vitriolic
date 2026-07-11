@@ -1397,14 +1397,6 @@ class MatchLiveStreamForm(BootstrapFormControlMixin, ModelForm):
         model = Match
         fields = ("live_stream",)
 
-    def clean(self):
-        cleaned_data = super().clean()
-        # If live_stream is not in the form's POST data, set it to False
-        # This handles unchecked checkboxes which don't submit any value
-        if self.is_bound and "live_stream" not in self.data:
-            cleaned_data["live_stream"] = False
-        return cleaned_data
-
 
 MatchLiveStreamFormSet = modelformset_factory(Match, extra=0, form=MatchLiveStreamForm)
 
