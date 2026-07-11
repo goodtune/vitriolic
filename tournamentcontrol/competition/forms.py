@@ -1392,6 +1392,15 @@ class MatchWashoutForm(BootstrapFormControlMixin, ModelForm):
 MatchWashoutFormSet = modelformset_factory(Match, extra=0, form=MatchWashoutForm)
 
 
+class MatchLiveStreamForm(BootstrapFormControlMixin, ModelForm):
+    class Meta:
+        model = Match
+        fields = ("live_stream",)
+
+
+MatchLiveStreamFormSet = modelformset_factory(Match, extra=0, form=MatchLiveStreamForm)
+
+
 class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
     def __init__(self, ignore_clashes=False, places=None, *args, **kwargs):
         super().__init__(*args, **kwargs)

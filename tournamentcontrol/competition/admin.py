@@ -52,6 +52,7 @@ from tournamentcontrol.competition.forms import (
     DrawGenerationMatchFormSet,
     GroundForm,
     MatchEditForm,
+    MatchLiveStreamFormSet,
     MatchRefereeForm,
     MatchScheduleFormSet,
     MatchStreamForm,
@@ -573,6 +574,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 "results:<int:division_id>/", self.match_results, name="match-results"
             ),
             path("washout/", self.match_washout, name="match-washout"),
+            path("live-stream/", self.match_live_stream, name="match-live-stream"),
             path("schedule/", self.match_schedule, name="match-schedule"),
             path(
                 "schedule/<int:division_id>/",
@@ -2204,6 +2206,27 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             matches,
             formset_class=MatchWashoutFormSet,
             templates=self.template_path("match_washout.html"),
+            post_save_redirect=self.redirect(season.urls["edit"]),
+            extra_context=extra_context,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def match_live_stream(
+        self, request, competition, season, date, extra_context, **kwargs
+    ):
+        matches = Match.objects.filter(
+            stage__division__season__id=season.pk,
+            stage__division__season__competition__id=competition.pk,
+            date=date,
+            play_at__ground__live_stream=True,
+        ).order_by("stage__division__order", "is_bye", "datetime", "play_at")
+
+        return self.generic_edit_multiple(
+            request,
+            matches,
+            formset_class=MatchLiveStreamFormSet,
+            templates=self.template_path("match_live_stream.html"),
             post_save_redirect=self.redirect(season.urls["edit"]),
             extra_context=extra_context,
         )

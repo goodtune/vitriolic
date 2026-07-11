@@ -24,7 +24,13 @@
 
 	<div class="panel panel-default">
 		<div class="panel-heading">
-			<h3 class="panel-title">{{ date|date:"l, jS F Y" }}</h3>
+			<h3 class="panel-title">
+				{{ date|date:"l, jS F Y" }}
+				<a href="{% url 'admin:fixja:match-live-stream' season.competition.pk season.pk date|date:"Ymd" %}" class="btn btn-default btn-xs pull-right">
+					<i class="fa fa-video-camera fa-fw"></i>
+					{% trans "Live Stream" %}
+				</a>
+			</h3>
 		</div>
 
 		<table class="table table-condensed table-striped" id="match_list">
@@ -90,6 +96,11 @@
 							{% elif match.play_at.ground.live_stream and not match.live_stream %}
 									<a href="{{ match.urls.edit }}?next={{ request.path }}">
 											<span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+									</a>
+							{% endif %}
+							{% if match.live_stream and match.external_identifier %}
+									<a href="{% url 'admin:fixja:competition:season:division:stage:match:resync-live-stream' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">
+											<span class="glyphicon glyphicon-refresh" aria-hidden="true"></span>
 									</a>
 							{% endif %}
 						</td>
