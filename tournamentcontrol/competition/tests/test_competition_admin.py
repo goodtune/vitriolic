@@ -2295,6 +2295,130 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         mock_youtube.liveBroadcasts.return_value.update.assert_not_called()
 
+    def test_match_live_stream_lists_only_camera_equipped_matches_for_the_day(self):
+        stage = factories.StageFactory.create()
+        camera_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=True
+        )
+        plain_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=False
+        )
+        on_camera = factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        factories.MatchFactory.create(
+            stage=stage,
+            play_at=plain_ground,
+            date=date(2025, 5, 1),
+            time=time(15, 0),
+            datetime=datetime(2025, 5, 1, 5, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            date=date(2025, 5, 2),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 2, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        season = stage.division.season
+
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:match-live-stream",
+                season.competition.pk,
+                season.pk,
+                "20250501",
+            )
+        self.response_200()
+
+        formset = self.last_response.context["formset"]
+        listed_pks = {form.instance.pk for form in formset.forms}
+        self.assertEqual(listed_pks, {on_camera.pk})
+
+    def test_match_live_stream_post_toggles_only_selected_matches(self):
+        stage = factories.StageFactory.create()
+        camera_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=True
+        )
+        match_to_turn_on = factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=False,
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        match_to_turn_off = factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=True,
+            date=date(2025, 5, 1),
+            time=time(15, 0),
+            datetime=datetime(2025, 5, 1, 5, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        season = stage.division.season
+
+        data = {
+            "form-TOTAL_FORMS": "2",
+            "form-INITIAL_FORMS": "2",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "1000",
+            "form-0-id": str(match_to_turn_on.pk),
+            "form-0-live_stream": "1",
+            "form-1-id": str(match_to_turn_off.pk),
+        }
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:match-live-stream",
+                season.competition.pk,
+                season.pk,
+                "20250501",
+                data=data,
+            )
+        self.response_302()
+
+        match_to_turn_on.refresh_from_db()
+        match_to_turn_off.refresh_from_db()
+        self.assertTrue(match_to_turn_on.live_stream)
+        self.assertFalse(match_to_turn_off.live_stream)
+
+    def test_match_live_stream_requires_staff_login(self):
+        stage = factories.StageFactory.create()
+        camera_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=True
+        )
+        factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        season = stage.division.season
+
+        url = reverse(
+            "admin:fixja:match-live-stream",
+            args=[season.competition.pk, season.pk, "20250501"],
+        )
+
+        self.get(
+            "admin:fixja:match-live-stream",
+            season.competition.pk,
+            season.pk,
+            "20250501",
+        )
+        self.response_302()
+        self.assertRedirects(
+            self.last_response,
+            f"{reverse('accounts:login')}?next={url}",
+            fetch_redirect_response=False,
+        )
+
 
 class TeamEditViewQueryTests(TestCase):
     """
