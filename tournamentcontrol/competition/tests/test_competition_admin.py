@@ -2638,6 +2638,18 @@ class BackendTests(MessagesTestMixin, TestCase):
             time=time(15, 0),
             datetime=datetime(2025, 5, 1, 5, 0, tzinfo=ZoneInfo("UTC")),
         )
+        # Marked live_stream but never actually broadcast (e.g. toggled via the
+        # bulk view before sync_live_stream was wired up to it) -- this is the
+        # create half of create-or-update, so it must still be queued.
+        never_broadcast = factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=True,
+            external_identifier=None,
+            date=date(2025, 5, 1),
+            time=time(16, 0),
+            datetime=datetime(2025, 5, 1, 6, 0, tzinfo=ZoneInfo("UTC")),
+        )
         # Not streaming -- must be skipped.
         factories.MatchFactory.create(
             stage=stage,
@@ -2645,18 +2657,22 @@ class BackendTests(MessagesTestMixin, TestCase):
             live_stream=False,
             external_identifier=None,
             date=date(2025, 5, 1),
-            time=time(16, 0),
-            datetime=datetime(2025, 5, 1, 6, 0, tzinfo=ZoneInfo("UTC")),
+            time=time(17, 0),
+            datetime=datetime(2025, 5, 1, 7, 0, tzinfo=ZoneInfo("UTC")),
         )
-        # Marked live_stream but never actually broadcast -- must be skipped.
+        # Marked live_stream, never broadcast, AND no scheduled datetime --
+        # there's nothing to insert yet, so this must still be skipped. A
+        # distinct round keeps get_datetime() from borrowing a sibling
+        # match's datetime in the same stage/round.
         factories.MatchFactory.create(
             stage=stage,
             play_at=camera_ground,
             live_stream=True,
             external_identifier=None,
             date=date(2025, 5, 1),
-            time=time(17, 0),
-            datetime=datetime(2025, 5, 1, 7, 0, tzinfo=ZoneInfo("UTC")),
+            time=None,
+            datetime=None,
+            round=99,
         )
         season = stage.division.season
 
@@ -2670,9 +2686,12 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.response_302()
 
         queued_pks = {call.args[0] for call in mock_sync_live_stream.s.call_args_list}
-        self.assertEqual(queued_pks, {streaming_match_1.pk, streaming_match_2.pk})
         self.assertEqual(
-            mock_sync_live_stream.s.return_value.apply_async.call_count, 2
+            queued_pks,
+            {streaming_match_1.pk, streaming_match_2.pk, never_broadcast.pk},
+        )
+        self.assertEqual(
+            mock_sync_live_stream.s.return_value.apply_async.call_count, 3
         )
 
     @patch("tournamentcontrol.competition.admin.sync_live_stream")
