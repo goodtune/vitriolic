@@ -473,6 +473,11 @@ def delete_youtube_broadcast(season_pk, external_identifier):
         season.youtube.liveBroadcasts().delete(id=external_identifier).execute()
         logger.info("YouTube video %r deleted", external_identifier)
     except HttpError as exc:
+        # The admin delete view destroys the broadcast before removing the
+        # record, so this cleanup will usually find it already gone.
+        if _is_not_found(exc):
+            logger.info("YouTube video %r already deleted", external_identifier)
+            return
         logger.error(
             "YouTube API error deleting broadcast %r: %s", external_identifier, exc
         )
@@ -501,6 +506,11 @@ def delete_youtube_stream(season_pk, external_identifier):
         season.youtube.liveStreams().delete(id=external_identifier).execute()
         logger.info("YouTube stream %r deleted", external_identifier)
     except HttpError as exc:
+        # The admin delete view destroys the stream before removing the
+        # record, so this cleanup will usually find it already gone.
+        if _is_not_found(exc):
+            logger.info("YouTube stream %r already deleted", external_identifier)
+            return
         logger.error(
             "YouTube API error deleting stream %r: %s", external_identifier, exc
         )

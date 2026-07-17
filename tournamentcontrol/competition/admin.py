@@ -23,12 +23,14 @@ from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _, ngettext
 from googleapiclient.errors import HttpError
+from guardian.utils import get_40x_or_None
 
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.common.decorators import (
     csrf_exempt_m,
     staff_login_required_m,
 )
+from touchtechnology.common.utils import get_perms_for_model
 from touchtechnology.common.prince import prince
 from tournamentcontrol.competition.dashboard import (
     BasicResultWidget,
@@ -1646,14 +1648,74 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
+    def _confirm_youtube_destroyed(
+        self, request, season, instance, collection_name, redirect_response
+    ):
+        """
+        Guard local deletion of a record backed by a YouTube resource.
+
+        The record must not be removed from the database while its resource
+        may still exist on the platform — that would leave clutter we have
+        no way of removing. Destroy the resource first; a 404 means it is
+        already gone, which is equally confirmation.
+
+        Returns None when destruction is confirmed, otherwise the
+        HttpResponse to return instead of deleting.
+        """
+        # Mirror the permission check performed by generic_delete so the
+        # platform is never touched on behalf of a user who is not entitled
+        # to delete the record locally.
+        has_permission = get_40x_or_None(
+            request,
+            get_perms_for_model(type(instance), delete=True),
+            obj=instance,
+            return_403=not request.user.is_anonymous,
+            accept_global_perms=True,
+        )
+        if has_permission is not None:
+            return has_permission
+
+        verbose_name = instance._meta.verbose_name
+
+        if not (season.live_stream_client_id and season.live_stream_client_secret):
+            messages.error(
+                request,
+                _(
+                    "YouTube credentials are not configured for this season; "
+                    "unable to confirm the %s has been removed from the "
+                    "platform."
+                )
+                % verbose_name,
+            )
+            return redirect_response
+
+        try:
+            getattr(season.youtube, collection_name)().delete(
+                id=instance.pk
+            ).execute()
+            log.info("YouTube resource %r deleted", instance.pk)
+        except HttpError as exc:
+            if getattr(exc.resp, "status", None) != 404:
+                messages.error(request, exc.reason)
+                return redirect_response
+            # Already absent from the platform — confirmed destroyed.
+            log.info("YouTube resource %r already deleted", instance.pk)
+
+        return None
+
     @competition_by_pk_m
     @staff_login_required_m
     def delete_livestreamevent(self, request, season, pk, **kwargs):
-        # Removal of the broadcast from the YouTube platform is handled by
-        # the post_delete signal on the model.
         post_delete_redirect = self.redirect(
             season.urls["edit"] + "#live_stream_events-tab"
         )
+        if request.method == "POST":
+            event = get_object_or_404(season.live_stream_events, pk=pk)
+            blocked = self._confirm_youtube_destroyed(
+                request, season, event, "liveBroadcasts", post_delete_redirect
+            )
+            if blocked is not None:
+                return blocked
         return self.generic_delete(
             request,
             season.live_stream_events,
@@ -1750,11 +1812,19 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_livestreamkey(self, request, season, pk, **kwargs):
-        # Removal of the liveStream from the YouTube platform is handled by
-        # the post_delete signal on the model.
         post_delete_redirect = self.redirect(
             season.urls["edit"] + "#live_stream_keys-tab"
         )
+        if request.method == "POST":
+            stream_key = get_object_or_404(season.live_stream_keys, pk=pk)
+            # A key still referenced by events is protected — let
+            # generic_delete refuse it without touching the platform.
+            if not stream_key.live_stream_events.exists():
+                blocked = self._confirm_youtube_destroyed(
+                    request, season, stream_key, "liveStreams", post_delete_redirect
+                )
+                if blocked is not None:
+                    return blocked
         return self.generic_delete(
             request,
             season.live_stream_keys,
