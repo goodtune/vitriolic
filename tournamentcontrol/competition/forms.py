@@ -72,6 +72,7 @@ from tournamentcontrol.competition.models import (
     DrawFormat,
     Ground,
     LadderEntry,
+    LiveStreamEvent,
     Match,
     Person,
     Place,
@@ -1399,6 +1400,42 @@ class MatchLiveStreamForm(BootstrapFormControlMixin, ModelForm):
 
 
 MatchLiveStreamFormSet = modelformset_factory(Match, extra=0, form=MatchLiveStreamForm)
+
+
+class LiveStreamEventForm(BootstrapFormControlMixin, ModelForm):
+    class Meta:
+        model = LiveStreamEvent
+        fields = (
+            "title",
+            "description",
+            "start",
+            "stop",
+            "ground",
+            "live_stream",
+            "live_stream_thumbnail_image",
+        )
+        labels = {
+            "ground": _("Stream"),
+            "live_stream_thumbnail_image": _("Video Thumbnail"),
+        }
+        help_texts = {
+            "live_stream_thumbnail_image": _(
+                "Upload a custom thumbnail for this event. "
+                "If not set, the season's default thumbnail will be used."
+            ),
+        }
+        field_classes = {
+            "live_stream_thumbnail_image": ThumbnailImageField,
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Only offer streams (cameras) that belong to this season.
+        self.fields["ground"].queryset = (
+            Ground.objects.filter(venue__season=self.instance.season)
+            .select_related("venue")
+            .order_by("venue__order", "order")
+        )
 
 
 class MatchScheduleForm(BaseMatchFormMixin, ModelForm):

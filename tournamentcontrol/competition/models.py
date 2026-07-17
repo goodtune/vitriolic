@@ -48,6 +48,7 @@ from timezone_field.fields import TimeZoneField
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
 from touchtechnology.common.db.models import (
     BooleanField,
+    DateTimeField as SelectDateTimeField,
     ForeignKey,
     HTMLField,
     LocationField,
@@ -543,6 +544,16 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
 
     def _get_url_args(self):
         return (self.competition_id, self.pk)
+
+    @cached_property
+    def _mvp_related(self):
+        return {
+            # live-stream thumbnail blobs are only needed by the thumbnail
+            # views, never drag them out of the database for list views.
+            "live_stream_events": self.live_stream_events.select_related(
+                "ground"
+            ).defer("live_stream_thumbnail_image"),
+        }
 
     def __repr__(self):
         return "<Season: {} - {}>".format(self.competition, self)
@@ -1953,7 +1964,98 @@ class SeasonAssociation(AdminUrlMixin, models.Model):
         ]
 
 
-class Match(AdminUrlMixin, models.Model):
+class LiveStreamTransitionMixin:
+    """
+    Shared YouTube ``liveBroadcasts.transition`` behaviour for models that
+    represent a broadcast (``Match`` and ``LiveStreamEvent``).
+
+    Concrete models must provide an ``external_identifier`` field holding the
+    YouTube broadcast identifier, and a ``_live_stream_season`` method
+    returning the ``Season`` whose OAuth2 credentials operate the channel.
+    """
+
+    def _live_stream_season(self):
+        raise NotImplementedError
+
+    def transition_live_stream(self, status, youtube_service=None):
+        """
+        Transition the live stream status of this broadcast.
+
+        Args:
+            status (str): The target broadcast status ('testing', 'live', 'complete')
+            youtube_service: Optional YouTube API service instance. If None, will use
+                           season's YouTube service.
+
+        Returns:
+            dict: Response from YouTube API
+
+        Raises:
+            LiveStreamIdentifierMissing: If there is no external_identifier
+            InvalidLiveStreamTransition: If the transition is invalid
+            LiveStreamTransitionWarning: Warning for potentially invalid transitions
+        """
+        verbose_name = self._meta.verbose_name
+
+        # Check for a live stream identifier
+        if not self.external_identifier:
+            raise LiveStreamIdentifierMissing(
+                f"{verbose_name.capitalize()} {self} does not have a live stream identifier"
+            )
+
+        # Define valid transitions
+        valid_transitions = {"testing": ["live"], "live": ["complete"], "complete": []}
+
+        # Get current broadcast status from YouTube if available
+        current_status = None
+        if youtube_service:
+            try:
+                response = (
+                    youtube_service.liveBroadcasts()
+                    .list(part="status", id=self.external_identifier)
+                    .execute()
+                )
+                if response.get("items"):
+                    current_status = response["items"][0]["status"]["lifeCycleStatus"]
+            except Exception:
+                # If we can't get current status, proceed anyway
+                pass
+
+        # Check for invalid transitions based on known current status
+        if current_status:
+            valid_next_states = valid_transitions.get(current_status, [])
+            if status not in valid_next_states and status != current_status:
+                if current_status == "complete":
+                    # Can't transition from complete to anything
+                    raise InvalidLiveStreamTransition(
+                        f"Cannot transition from '{current_status}' to '{status}' "
+                        f"for {verbose_name} {self}"
+                    )
+                else:
+                    # Issue warning for potentially invalid transitions
+                    warnings.warn(
+                        f"Potentially invalid transition from '{current_status}' to '{status}' "
+                        f"for {verbose_name} {self}",
+                        LiveStreamTransitionWarning,
+                    )
+
+        # Use provided service or get from season
+        service = youtube_service or self._live_stream_season().youtube
+
+        # Make the API call to transition the broadcast
+        response = (
+            service.liveBroadcasts()
+            .transition(
+                broadcastStatus=status,
+                id=self.external_identifier,
+                part="snippet,status",
+            )
+            .execute()
+        )
+
+        return response
+
+
+class Match(LiveStreamTransitionMixin, AdminUrlMixin, models.Model):
     uuid = models.UUIDField(
         primary_key=False,
         default=uuid.uuid4,
@@ -2433,80 +2535,8 @@ class Match(AdminUrlMixin, models.Model):
             res[index] = team
         return tuple(res)
 
-    def transition_live_stream(self, status, youtube_service=None):
-        """
-        Transition the live stream status of this match.
-
-        Args:
-            status (str): The target broadcast status ('testing', 'live', 'complete')
-            youtube_service: Optional YouTube API service instance. If None, will use
-                           season's YouTube service.
-
-        Returns:
-            dict: Response from YouTube API
-
-        Raises:
-            LiveStreamIdentifierMissing: If the match has no external_identifier
-            InvalidLiveStreamTransition: If the transition is invalid
-            LiveStreamTransitionWarning: Warning for potentially invalid transitions
-        """
-        # Check if match has live stream identifier
-        if not self.external_identifier:
-            raise LiveStreamIdentifierMissing(
-                f"Match {self} does not have a live stream identifier"
-            )
-
-        # Define valid transitions
-        valid_transitions = {"testing": ["live"], "live": ["complete"], "complete": []}
-
-        # Get current broadcast status from YouTube if available
-        current_status = None
-        if youtube_service:
-            try:
-                response = (
-                    youtube_service.liveBroadcasts()
-                    .list(part="status", id=self.external_identifier)
-                    .execute()
-                )
-                if response.get("items"):
-                    current_status = response["items"][0]["status"]["lifeCycleStatus"]
-            except Exception:
-                # If we can't get current status, proceed anyway
-                pass
-
-        # Check for invalid transitions based on known current status
-        if current_status:
-            valid_next_states = valid_transitions.get(current_status, [])
-            if status not in valid_next_states and status != current_status:
-                if current_status == "complete":
-                    # Can't transition from complete to anything
-                    raise InvalidLiveStreamTransition(
-                        f"Cannot transition from '{current_status}' to '{status}' "
-                        f"for match {self}"
-                    )
-                else:
-                    # Issue warning for potentially invalid transitions
-                    warnings.warn(
-                        f"Potentially invalid transition from '{current_status}' to '{status}' "
-                        f"for match {self}",
-                        LiveStreamTransitionWarning,
-                    )
-
-        # Use provided service or get from season
-        service = youtube_service or self.stage.division.season.youtube
-
-        # Make the API call to transition the broadcast
-        response = (
-            service.liveBroadcasts()
-            .transition(
-                broadcastStatus=status,
-                id=self.external_identifier,
-                part="snippet,status",
-            )
-            .execute()
-        )
-
-        return response
+    def _live_stream_season(self):
+        return self.stage.division.season
 
     def __str__(self):
         return self.title
@@ -2740,6 +2770,146 @@ class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
 
     def __str__(self):
         return "#{}".format(self.pk)
+
+
+class LiveStreamEvent(LiveStreamTransitionMixin, AdminUrlMixin, models.Model):
+    """
+    An adhoc live stream event associated with a Season.
+
+    Unlike a Match, which derives its broadcast window from the fixture, an
+    adhoc event captures an explicit scheduled start and stop time — for
+    example an opening ceremony, an awards presentation, or a commentary
+    desk between fixtures.
+    """
+
+    season = ForeignKey(
+        Season, related_name="live_stream_events", on_delete=CASCADE
+    )
+
+    title = models.CharField(
+        max_length=100,
+        help_text=_("Title of the broadcast on the YouTube platform."),
+    )
+    description = models.TextField(
+        blank=True,
+        help_text=_("Description of the broadcast on the YouTube platform."),
+    )
+
+    start = SelectDateTimeField(
+        verbose_name=_("Scheduled start"),
+        help_text=_("When the live stream is scheduled to commence."),
+    )
+    stop = SelectDateTimeField(
+        verbose_name=_("Scheduled finish"),
+        help_text=_("When the live stream is scheduled to conclude."),
+    )
+
+    ground = ForeignKey(
+        Ground,
+        blank=True,
+        null=True,
+        related_name="live_stream_events",
+        label_from_instance="title",
+        on_delete=SET_NULL,
+        help_text=_(
+            "The stream (camera) that will broadcast this event — the "
+            "broadcast will be bound to this ground's stream key."
+        ),
+    )
+
+    live_stream = BooleanField(
+        default=True,
+        help_text=_(
+            "Set to No to remove the scheduled broadcast from the YouTube "
+            "platform while keeping this event for your records."
+        ),
+    )
+    external_identifier = models.CharField(
+        max_length=20, blank=True, null=True, unique=True, db_index=True
+    )
+    live_stream_bind = models.CharField(
+        max_length=50, blank=True, null=True, db_index=True
+    )
+    live_stream_thumbnail_image = models.BinaryField(
+        blank=True,
+        null=True,
+        editable=True,
+        help_text="Image to be used as thumbnail image on the YouTube platform",
+    )
+
+    class Meta:
+        ordering = ("start", "title")
+        verbose_name = "live stream event"
+
+    def __str__(self):
+        return self.title
+
+    def _get_admin_namespace(self):
+        return "admin:fixja:competition:season:livestreamevent"
+
+    def _get_url_args(self):
+        return (self.season.competition_id, self.season_id, self.pk)
+
+    def _get_url_names(self):
+        # No per-object permissions view is routed for this model.
+        return ["add", "edit", "delete"]
+
+    def _live_stream_season(self):
+        return self.season
+
+    def clean(self):
+        errors = {}
+        if self.start and self.stop and self.stop <= self.start:
+            errors.setdefault("stop", []).append(
+                _("The scheduled finish must be after the scheduled start.")
+            )
+        if self.ground_id and self.season_id:
+            if self.ground.venue.season_id != self.season_id:
+                errors.setdefault("ground", []).append(
+                    _("This ground is not part of this season.")
+                )
+        if errors:
+            raise ValidationError(errors)
+
+    def get_thumbnail_media_upload(self) -> MediaUpload | None:
+        """
+        Get a MediaMemoryUpload instance for this event's thumbnail.
+        Falls back to season thumbnail if the event has no specific thumbnail.
+
+        Returns:
+            MediaMemoryUpload or None if no thumbnail is available
+        """
+        if self.live_stream_thumbnail_image:
+            return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
+
+        if self.season.live_stream_thumbnail_image:
+            return MediaMemoryUpload(
+                self.season.live_stream_thumbnail_image, resumable=True
+            )
+
+        return None
+
+    def live_stream_thumbnail_response(self, width=None, height=None) -> HttpResponse:
+        """
+        Get HttpResponse for this event's thumbnail image.
+        Falls back to season thumbnail if the event has no specific thumbnail.
+
+        Args:
+            width (int, optional): Maximum width for resizing
+            height (int, optional): Maximum height for resizing
+
+        Returns:
+            HttpResponse: Image response with appropriate headers
+
+        Raises:
+            Http404: If no thumbnail is available or processing fails
+        """
+        return create_thumbnail_response(
+            self.live_stream_thumbnail_image
+            or self.season.live_stream_thumbnail_image,
+            width,
+            height,
+        )
 
 
 class MatchScoreSheet(AdminUrlMixin, models.Model):

@@ -1,0 +1,31 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	<th>{% trans "Title" %}</th>
+	<th class="hidden-sm hidden-xs">{% trans "Start" %}</th>
+	<th class="hidden-sm hidden-xs">{% trans "Finish" %}</th>
+	<th>{% trans "Streaming" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td>
+		{% if change_perm in object_perms %}
+			<a href="{{ obj.urls.edit }}">{{ obj.title }}</a>&nbsp;
+		{% else %}
+			<span>{{ obj.title }}</span>
+		{% endif %}
+	</td>
+	<td class="hidden-sm hidden-xs">{{ obj.start }}</td>
+	<td class="hidden-sm hidden-xs">{{ obj.stop }}</td>
+	<td>
+		{% if obj.external_identifier %}
+			<em class="fa fa-youtube"></em>
+		{% endif %}
+		{% if obj.ground %}
+			{{ obj.ground.title }}{% if obj.ground.stream_key %} ({{ obj.ground.stream_key }}){% endif %}
+		{% endif %}
+	</td>
+{% endblock %}
+
+{% block empty-row-colspan %}5{% endblock %}

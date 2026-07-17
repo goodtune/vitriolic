@@ -111,6 +111,19 @@ class GroundFactory(OrderedSitemapNodeFactory):
     venue = factory.SubFactory(VenueFactory)
 
 
+class LiveStreamEventFactory(DjangoModelFactory):
+    class Meta:
+        model = models.LiveStreamEvent
+
+    season = factory.SubFactory(SeasonFactory)
+
+    title = factory.Sequence(lambda n: "Live Stream Event %d" % (n + 1))
+    start = factory.fuzzy.FuzzyDateTime(
+        datetime.datetime(2020, 1, 1, tzinfo=ZoneInfo("UTC"))
+    )
+    stop = factory.LazyAttribute(lambda o: o.start + datetime.timedelta(hours=1))
+
+
 class DivisionFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Division

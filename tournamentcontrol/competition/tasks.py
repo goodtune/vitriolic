@@ -9,7 +9,12 @@ from django.template.loader import render_to_string
 from django.urls import NoReverseMatch, reverse
 from googleapiclient.errors import HttpError
 
-from tournamentcontrol.competition.models import Match, Stage
+from tournamentcontrol.competition.models import (
+    LiveStreamEvent,
+    Match,
+    Season,
+    Stage,
+)
 from tournamentcontrol.competition.utils import (
     generate_fixture_grid,
     generate_scorecards,
@@ -288,6 +293,175 @@ def sync_live_stream(match_pk, base_url=None):
                 continue
             logger.error("YouTube API error syncing match %s: %s", match_pk, exc)
             raise
+
+
+def build_live_stream_event_body(event):
+    """Build the YouTube broadcast body for an adhoc live stream event.
+
+    Unlike matches, adhoc events carry their own author-supplied title and
+    description, and an explicit scheduled start and stop time.
+    """
+    return {
+        "snippet": {
+            "title": event.title,
+            "description": event.description,
+            "scheduledStartTime": event.start.astimezone(ZoneInfo("UTC")).isoformat(),
+            "scheduledEndTime": event.stop.astimezone(ZoneInfo("UTC")).isoformat(),
+        },
+        "status": {
+            "privacyStatus": event.season.live_stream_privacy,
+            "selfDeclaredMadeForKids": False,
+        },
+        "contentDetails": {
+            "enableAutoStart": False,
+            "enableAutoStop": False,
+            "monitorStream": {
+                "broadcastStreamDelayMs": 0,
+                "enableMonitorStream": True,
+            },
+        },
+    }
+
+
+def _apply_event_sync(event, season):
+    """Apply a single insert/update/delete + bind cycle against YouTube."""
+    youtube = season.youtube
+
+    if event.external_identifier and not event.live_stream:
+        video_id = event.external_identifier
+        youtube.liveBroadcasts().delete(id=video_id).execute()
+        event.external_identifier = None
+        event.live_stream_bind = None
+        event.save(update_fields=["external_identifier", "live_stream_bind"])
+        logger.info("YouTube video %r deleted", video_id)
+        return
+
+    body = build_live_stream_event_body(event)
+    if event.external_identifier:
+        body["id"] = event.external_identifier
+        youtube.liveBroadcasts().update(
+            part="snippet,status,contentDetails", body=body
+        ).execute()
+        logger.info("YouTube video %r updated", event.external_identifier)
+    else:
+        broadcast = (
+            youtube.liveBroadcasts()
+            .insert(part="id,snippet,status,contentDetails", body=body)
+            .execute()
+        )
+        event.external_identifier = broadcast["id"]
+        event.save(update_fields=["external_identifier"])
+        logger.info("YouTube video %r inserted", event.external_identifier)
+
+    if event.get_thumbnail_media_upload() is not None:
+        set_live_stream_event_thumbnail.s(event.pk).apply_async(countdown=10)
+
+    ground = event.ground
+    if ground is not None and ground.external_identifier:
+        bind = (
+            youtube.liveBroadcasts()
+            .bind(
+                part="id,snippet,contentDetails,status",
+                id=event.external_identifier,
+                streamId=ground.external_identifier,
+            )
+            .execute()
+        )
+        bound = bind["contentDetails"].get("boundStreamId")
+        if bound != event.live_stream_bind:
+            event.live_stream_bind = bound
+            event.save(update_fields=["live_stream_bind"])
+    elif event.live_stream_bind:
+        # The stream has been unset since the broadcast was bound; calling
+        # bind without a streamId removes the existing binding.
+        youtube.liveBroadcasts().bind(
+            part="id,snippet,contentDetails,status",
+            id=event.external_identifier,
+        ).execute()
+        event.live_stream_bind = None
+        event.save(update_fields=["live_stream_bind"])
+
+
+@shared_task
+def sync_live_stream_event(event_pk):
+    """Synchronize an adhoc live stream event with its YouTube broadcast.
+
+    Creates, updates, deletes, and binds the live broadcast as required by
+    the current state of the event.
+    """
+    try:
+        event = LiveStreamEvent.objects.select_related(
+            "season__competition", "ground"
+        ).get(pk=event_pk)
+    except LiveStreamEvent.DoesNotExist:
+        # Event was deleted between enqueuing and execution; nothing to sync.
+        logger.info(
+            "sync_live_stream_event skipped: event %s no longer exists", event_pk
+        )
+        return
+    season = event.season
+
+    if not (season.live_stream_client_id and season.live_stream_client_secret):
+        return
+
+    if not event.live_stream and not event.external_identifier:
+        return  # Nothing to insert, update, or delete.
+
+    try:
+        _apply_event_sync(event, season)
+    except HttpError as exc:
+        logger.error("YouTube API error syncing event %s: %s", event_pk, exc)
+        raise
+
+
+@shared_task
+def set_live_stream_event_thumbnail(event_pk):
+    """
+    Asynchronously use the Google YouTube Data API to set the thumbnail for
+    the adhoc live stream event specified.
+
+    This function uses the database-stored thumbnail images via the
+    MediaMemoryUpload class, with season fallback handled by the model.
+    """
+    obj = LiveStreamEvent.objects.get(pk=event_pk)
+
+    media_body = obj.get_thumbnail_media_upload()
+
+    if media_body is None:
+        raise ValueError(f"No thumbnail available for live stream event {event_pk}")
+
+    obj.season.youtube.thumbnails().set(
+        videoId=obj.external_identifier,
+        media_body=media_body,
+    ).execute()
+
+
+@shared_task
+def delete_youtube_broadcast(season_pk, external_identifier):
+    """Delete a YouTube broadcast that no longer has a local record.
+
+    Used when an adhoc live stream event is deleted from the database while
+    its broadcast is still scheduled on the YouTube platform.
+    """
+    try:
+        season = Season.objects.get(pk=season_pk)
+    except Season.DoesNotExist:
+        logger.info(
+            "delete_youtube_broadcast skipped: season %s no longer exists", season_pk
+        )
+        return
+
+    if not (season.live_stream_client_id and season.live_stream_client_secret):
+        return
+
+    try:
+        season.youtube.liveBroadcasts().delete(id=external_identifier).execute()
+        logger.info("YouTube video %r deleted", external_identifier)
+    except HttpError as exc:
+        logger.error(
+            "YouTube API error deleting broadcast %r: %s", external_identifier, exc
+        )
+        raise
 
 
 @shared_task
