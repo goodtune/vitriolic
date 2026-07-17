@@ -324,15 +324,14 @@ def build_live_stream_event_body(event):
 
 
 def _apply_event_sync(event, season):
-    """Apply a single insert/update/delete + bind cycle against YouTube."""
+    """Apply a single insert/update/delete cycle against YouTube."""
     youtube = season.youtube
 
     if event.external_identifier and not event.live_stream:
         video_id = event.external_identifier
         youtube.liveBroadcasts().delete(id=video_id).execute()
         event.external_identifier = None
-        event.live_stream_bind = None
-        event.save(update_fields=["external_identifier", "live_stream_bind"])
+        event.save(update_fields=["external_identifier"])
         logger.info("YouTube video %r deleted", video_id)
         return
 
@@ -356,42 +355,19 @@ def _apply_event_sync(event, season):
     if event.get_thumbnail_media_upload() is not None:
         set_live_stream_event_thumbnail.s(event.pk).apply_async(countdown=10)
 
-    ground = event.ground
-    if ground is not None and ground.external_identifier:
-        bind = (
-            youtube.liveBroadcasts()
-            .bind(
-                part="id,snippet,contentDetails,status",
-                id=event.external_identifier,
-                streamId=ground.external_identifier,
-            )
-            .execute()
-        )
-        bound = bind["contentDetails"].get("boundStreamId")
-        if bound != event.live_stream_bind:
-            event.live_stream_bind = bound
-            event.save(update_fields=["live_stream_bind"])
-    elif event.live_stream_bind:
-        # The stream has been unset since the broadcast was bound; calling
-        # bind without a streamId removes the existing binding.
-        youtube.liveBroadcasts().bind(
-            part="id,snippet,contentDetails,status",
-            id=event.external_identifier,
-        ).execute()
-        event.live_stream_bind = None
-        event.save(update_fields=["live_stream_bind"])
-
 
 @shared_task
 def sync_live_stream_event(event_pk):
     """Synchronize an adhoc live stream event with its YouTube broadcast.
 
-    Creates, updates, deletes, and binds the live broadcast as required by
-    the current state of the event.
+    Deliberately low touch: creates, updates, or deletes the scheduled
+    broadcast (and pushes the thumbnail) as required by the current state of
+    the event. Stream keys are managed by the operator on the event record;
+    connecting an encoder to the broadcast is done on the YouTube platform.
     """
     try:
         event = LiveStreamEvent.objects.select_related(
-            "season__competition", "ground"
+            "season__competition"
         ).get(pk=event_pk)
     except LiveStreamEvent.DoesNotExist:
         # Event was deleted between enqueuing and execution; nothing to sync.

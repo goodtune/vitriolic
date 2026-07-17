@@ -1,4 +1,7 @@
 # Add adhoc live stream events associated with a competition Season.
+#
+# Standalone feature: this migration only creates the new table, it does not
+# alter any existing schema.
 
 import django.db.models.deletion
 from django.db import migrations, models
@@ -65,6 +68,18 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 (
+                    "stream_key",
+                    models.CharField(
+                        blank=True,
+                        help_text=(
+                            "The stream key the camera or encoder operator should "
+                            "use to deliver video for this event."
+                        ),
+                        max_length=50,
+                        null=True,
+                    ),
+                ),
+                (
                     "external_identifier",
                     models.CharField(
                         blank=True,
@@ -72,12 +87,6 @@ class Migration(migrations.Migration):
                         max_length=20,
                         null=True,
                         unique=True,
-                    ),
-                ),
-                (
-                    "live_stream_bind",
-                    models.CharField(
-                        blank=True, db_index=True, max_length=50, null=True
                     ),
                 ),
                 (
@@ -90,21 +99,6 @@ class Migration(migrations.Migration):
                             "platform"
                         ),
                         null=True,
-                    ),
-                ),
-                (
-                    "ground",
-                    touchtechnology.common.db.models.ForeignKey(
-                        blank=True,
-                        help_text=(
-                            "The stream (camera) that will broadcast this event — "
-                            "the broadcast will be bound to this ground's stream "
-                            "key."
-                        ),
-                        null=True,
-                        on_delete=django.db.models.deletion.SET_NULL,
-                        related_name="live_stream_events",
-                        to="competition.ground",
                     ),
                 ),
                 (

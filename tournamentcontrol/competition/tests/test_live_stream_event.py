@@ -41,19 +41,10 @@ class LiveStreamEventModelTests(TestCase):
             event.clean()
         self.assertIn("stop", cm.exception.message_dict)
 
-    def test_clean_rejects_ground_from_another_season(self):
-        event = factories.LiveStreamEventFactory.create()
-        other_ground = factories.GroundFactory.create()
-        event.ground = other_ground
-        with self.assertRaises(ValidationError) as cm:
-            event.clean()
-        self.assertIn("ground", cm.exception.message_dict)
-
-    def test_clean_accepts_ground_from_same_season(self):
-        event = factories.LiveStreamEventFactory.create()
-        ground = factories.GroundFactory.create(venue__season=event.season)
-        event.ground = ground
-        self.assertEqual(event.clean(), None)
+    def test_stream_key_round_trip(self):
+        event = factories.LiveStreamEventFactory.create(stream_key="abcd-1234")
+        event.refresh_from_db()
+        self.assertEqual(event.stream_key, "abcd-1234")
 
     def test_thumbnail_prefers_event_image(self):
         event = factories.LiveStreamEventFactory.create(
@@ -93,13 +84,6 @@ class LiveStreamEventModelTests(TestCase):
 
 
 class LiveStreamEventFormTests(TestCase):
-    def test_ground_queryset_limited_to_season(self):
-        event = factories.LiveStreamEventFactory.create()
-        ground = factories.GroundFactory.create(venue__season=event.season)
-        factories.GroundFactory.create()  # another season entirely
-        form = LiveStreamEventForm(instance=event)
-        self.assertCountEqual(form.fields["ground"].queryset, [ground])
-
     def test_stop_before_start_is_invalid(self):
         season = factories.SeasonFactory.create()
         form = LiveStreamEventForm(
@@ -132,6 +116,7 @@ class LiveStreamEventFormTests(TestCase):
                 "stop_0": "2025-05-01",
                 "stop_1": "20:30:00",
                 "stop_2": "UTC",
+                "stream_key": "abcd-1234",
                 "live_stream": "1",
             },
         )
@@ -144,6 +129,7 @@ class LiveStreamEventFormTests(TestCase):
         self.assertEqual(
             event.stop, datetime.datetime(2025, 5, 1, 20, 30, tzinfo=UTC)
         )
+        self.assertEqual(event.stream_key, "abcd-1234")
 
 
 class BuildLiveStreamEventBodyTests(TestCase):
@@ -212,39 +198,6 @@ class SyncLiveStreamEventTests(TestCase):
         "tournamentcontrol.competition.models.Season.youtube",
         new_callable=mock.PropertyMock,
     )
-    def test_insert_binds_to_ground_stream(self, mock_youtube_prop):
-        mock_youtube = mock.MagicMock()
-        mock_youtube_prop.return_value = mock_youtube
-        mock_youtube.liveBroadcasts.return_value.insert.return_value.execute.return_value = {
-            "id": "adhoc123"
-        }
-        mock_youtube.liveBroadcasts.return_value.bind.return_value.execute.return_value = {
-            "contentDetails": {"boundStreamId": "stream456"}
-        }
-
-        event = self._event()
-        event.ground = factories.GroundFactory.create(
-            venue__season=event.season,
-            live_stream=True,
-            external_identifier="stream456",
-            stream_key="abcd-1234",
-        )
-        event.save()
-
-        sync_live_stream_event(event.pk)
-
-        mock_youtube.liveBroadcasts.return_value.bind.assert_called_once_with(
-            part="id,snippet,contentDetails,status",
-            id="adhoc123",
-            streamId="stream456",
-        )
-        event.refresh_from_db()
-        self.assertEqual(event.live_stream_bind, "stream456")
-
-    @mock.patch(
-        "tournamentcontrol.competition.models.Season.youtube",
-        new_callable=mock.PropertyMock,
-    )
     def test_update_existing_broadcast(self, mock_youtube_prop):
         mock_youtube = mock.MagicMock()
         mock_youtube_prop.return_value = mock_youtube
@@ -270,7 +223,6 @@ class SyncLiveStreamEventTests(TestCase):
         event = self._event(
             external_identifier="adhoc123",
             live_stream=False,
-            live_stream_bind="stream456",
         )
         sync_live_stream_event(event.pk)
 
@@ -279,27 +231,6 @@ class SyncLiveStreamEventTests(TestCase):
         )
         event.refresh_from_db()
         self.assertEqual(event.external_identifier, None)
-        self.assertEqual(event.live_stream_bind, None)
-
-    @mock.patch(
-        "tournamentcontrol.competition.models.Season.youtube",
-        new_callable=mock.PropertyMock,
-    )
-    def test_unbinds_when_ground_removed(self, mock_youtube_prop):
-        mock_youtube = mock.MagicMock()
-        mock_youtube_prop.return_value = mock_youtube
-
-        event = self._event(
-            external_identifier="adhoc123", live_stream_bind="stream456"
-        )
-        sync_live_stream_event(event.pk)
-
-        mock_youtube.liveBroadcasts.return_value.bind.assert_called_once_with(
-            part="id,snippet,contentDetails,status",
-            id="adhoc123",
-        )
-        event.refresh_from_db()
-        self.assertEqual(event.live_stream_bind, None)
 
     @mock.patch(
         "tournamentcontrol.competition.models.Season.youtube",

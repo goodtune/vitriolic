@@ -1410,12 +1410,11 @@ class LiveStreamEventForm(BootstrapFormControlMixin, ModelForm):
             "description",
             "start",
             "stop",
-            "ground",
+            "stream_key",
             "live_stream",
             "live_stream_thumbnail_image",
         )
         labels = {
-            "ground": _("Stream"),
             "live_stream_thumbnail_image": _("Video Thumbnail"),
         }
         help_texts = {
@@ -1427,15 +1426,6 @@ class LiveStreamEventForm(BootstrapFormControlMixin, ModelForm):
         field_classes = {
             "live_stream_thumbnail_image": ThumbnailImageField,
         }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Only offer streams (cameras) that belong to this season.
-        self.fields["ground"].queryset = (
-            Ground.objects.filter(venue__season=self.instance.season)
-            .select_related("venue")
-            .order_by("venue__order", "order")
-        )
 
 
 class MatchScheduleForm(BaseMatchFormMixin, ModelForm):

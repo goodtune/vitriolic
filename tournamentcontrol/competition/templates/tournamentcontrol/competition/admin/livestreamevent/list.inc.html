@@ -22,8 +22,8 @@
 		{% if obj.external_identifier %}
 			<em class="fa fa-youtube"></em>
 		{% endif %}
-		{% if obj.ground %}
-			{{ obj.ground.title }}{% if obj.ground.stream_key %} ({{ obj.ground.stream_key }}){% endif %}
+		{% if obj.stream_key %}
+			{{ obj.stream_key }}
 		{% endif %}
 	</td>
 {% endblock %}
