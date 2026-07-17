@@ -1,6 +1,7 @@
-# Add adhoc live stream events associated with a competition Season.
+# Add adhoc live stream events and managed stream keys associated with a
+# competition Season.
 #
-# Standalone feature: this migration only creates the new table, it does not
+# Standalone feature: this migration only creates new tables, it does not
 # alter any existing schema.
 
 import django.db.models.deletion
@@ -16,6 +17,62 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.CreateModel(
+            name="LiveStreamKey",
+            fields=[
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "title",
+                    models.CharField(
+                        help_text=(
+                            "Identify this stream key — for example the camera or "
+                            "production position that will use it."
+                        ),
+                        max_length=100,
+                    ),
+                ),
+                (
+                    "external_identifier",
+                    models.CharField(
+                        blank=True,
+                        db_index=True,
+                        max_length=50,
+                        null=True,
+                        unique=True,
+                    ),
+                ),
+                (
+                    "stream_key",
+                    models.CharField(
+                        blank=True,
+                        db_index=True,
+                        max_length=50,
+                        null=True,
+                        unique=True,
+                    ),
+                ),
+                (
+                    "season",
+                    touchtechnology.common.db.models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="live_stream_keys",
+                        to="competition.season",
+                    ),
+                ),
+            ],
+            options={
+                "ordering": ("title", "pk"),
+                "verbose_name": "stream key",
+            },
+        ),
         migrations.CreateModel(
             name="LiveStreamEvent",
             fields=[
@@ -68,18 +125,6 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 (
-                    "stream_key",
-                    models.CharField(
-                        blank=True,
-                        help_text=(
-                            "The stream key the camera or encoder operator should "
-                            "use to deliver video for this event."
-                        ),
-                        max_length=50,
-                        null=True,
-                    ),
-                ),
-                (
                     "external_identifier",
                     models.CharField(
                         blank=True,
@@ -87,6 +132,12 @@ class Migration(migrations.Migration):
                         max_length=20,
                         null=True,
                         unique=True,
+                    ),
+                ),
+                (
+                    "live_stream_bind",
+                    models.CharField(
+                        blank=True, db_index=True, max_length=50, null=True
                     ),
                 ),
                 (
@@ -107,6 +158,20 @@ class Migration(migrations.Migration):
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="live_stream_events",
                         to="competition.season",
+                    ),
+                ),
+                (
+                    "stream_key",
+                    touchtechnology.common.db.models.ForeignKey(
+                        blank=True,
+                        help_text=(
+                            "The stream key the camera or encoder operator should "
+                            "use to deliver video for this event."
+                        ),
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="live_stream_events",
+                        to="competition.livestreamkey",
                     ),
                 ),
             ],

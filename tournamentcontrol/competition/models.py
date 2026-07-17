@@ -550,9 +550,9 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
         return {
             # live-stream thumbnail blobs are only needed by the thumbnail
             # views, never drag them out of the database for list views.
-            "live_stream_events": self.live_stream_events.defer(
-                "live_stream_thumbnail_image"
-            ),
+            "live_stream_events": self.live_stream_events.select_related(
+                "stream_key"
+            ).defer("live_stream_thumbnail_image"),
         }
 
     def __repr__(self):
@@ -2753,6 +2753,60 @@ class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
         return "#{}".format(self.pk)
 
 
+class LiveStreamKey(AdminUrlMixin, models.Model):
+    """
+    A managed stream key associated with a Season, for use by adhoc live
+    stream events.
+
+    Each record is backed by a liveStream resource on the YouTube platform —
+    the generated stream key is what the camera or encoder operator uses to
+    deliver video. This pool is a unique domain associated to the season and
+    is entirely separate from the stream keys managed against grounds for
+    match streaming.
+    """
+
+    season = ForeignKey(
+        Season, related_name="live_stream_keys", on_delete=CASCADE
+    )
+
+    title = models.CharField(
+        max_length=100,
+        help_text=_(
+            "Identify this stream key — for example the camera or "
+            "production position that will use it."
+        ),
+    )
+    external_identifier = models.CharField(
+        max_length=50, blank=True, null=True, unique=True, db_index=True
+    )
+    stream_key = models.CharField(
+        max_length=50, blank=True, null=True, unique=True, db_index=True
+    )
+
+    class Meta:
+        ordering = ("title", "pk")
+        verbose_name = "stream key"
+
+    def __str__(self):
+        return self.label
+
+    @property
+    def label(self):
+        if self.stream_key:
+            return f"{self.title} ({self.stream_key})"
+        return self.title
+
+    def _get_admin_namespace(self):
+        return "admin:fixja:competition:season:livestreamkey"
+
+    def _get_url_args(self):
+        return (self.season.competition_id, self.season_id, self.pk)
+
+    def _get_url_names(self):
+        # No per-object permissions view is routed for this model.
+        return ["add", "edit", "delete"]
+
+
 class LiveStreamEvent(AdminUrlMixin, models.Model):
     """
     An adhoc live stream event associated with a Season.
@@ -2793,10 +2847,13 @@ class LiveStreamEvent(AdminUrlMixin, models.Model):
             "platform while keeping this event for your records."
         ),
     )
-    stream_key = models.CharField(
-        max_length=50,
+    stream_key = ForeignKey(
+        LiveStreamKey,
         blank=True,
         null=True,
+        related_name="live_stream_events",
+        label_from_instance="label",
+        on_delete=PROTECT,
         help_text=_(
             "The stream key the camera or encoder operator should use to "
             "deliver video for this event."
@@ -2804,6 +2861,9 @@ class LiveStreamEvent(AdminUrlMixin, models.Model):
     )
     external_identifier = models.CharField(
         max_length=20, blank=True, null=True, unique=True, db_index=True
+    )
+    live_stream_bind = models.CharField(
+        max_length=50, blank=True, null=True, db_index=True
     )
     live_stream_thumbnail_image = models.BinaryField(
         blank=True,
@@ -2830,14 +2890,18 @@ class LiveStreamEvent(AdminUrlMixin, models.Model):
         return ["add", "edit", "delete"]
 
     def clean(self):
+        errors = {}
         if self.start and self.stop and self.stop <= self.start:
-            raise ValidationError(
-                {
-                    "stop": [
-                        _("The scheduled finish must be after the scheduled start.")
-                    ]
-                }
+            errors.setdefault("stop", []).append(
+                _("The scheduled finish must be after the scheduled start.")
             )
+        if self.stream_key_id and self.season_id:
+            if self.stream_key.season_id != self.season_id:
+                errors.setdefault("stream_key", []).append(
+                    _("This stream key does not belong to this season.")
+                )
+        if errors:
+            raise ValidationError(errors)
 
     def get_thumbnail_media_upload(self) -> MediaUpload | None:
         """

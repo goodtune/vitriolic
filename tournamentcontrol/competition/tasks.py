@@ -324,14 +324,15 @@ def build_live_stream_event_body(event):
 
 
 def _apply_event_sync(event, season):
-    """Apply a single insert/update/delete cycle against YouTube."""
+    """Apply a single insert/update/delete + bind cycle against YouTube."""
     youtube = season.youtube
 
     if event.external_identifier and not event.live_stream:
         video_id = event.external_identifier
         youtube.liveBroadcasts().delete(id=video_id).execute()
         event.external_identifier = None
-        event.save(update_fields=["external_identifier"])
+        event.live_stream_bind = None
+        event.save(update_fields=["external_identifier", "live_stream_bind"])
         logger.info("YouTube video %r deleted", video_id)
         return
 
@@ -355,19 +356,43 @@ def _apply_event_sync(event, season):
     if event.get_thumbnail_media_upload() is not None:
         set_live_stream_event_thumbnail.s(event.pk).apply_async(countdown=10)
 
+    stream_key = event.stream_key
+    if stream_key is not None and stream_key.external_identifier:
+        bind = (
+            youtube.liveBroadcasts()
+            .bind(
+                part="id,snippet,contentDetails,status",
+                id=event.external_identifier,
+                streamId=stream_key.external_identifier,
+            )
+            .execute()
+        )
+        bound = bind["contentDetails"].get("boundStreamId")
+        if bound != event.live_stream_bind:
+            event.live_stream_bind = bound
+            event.save(update_fields=["live_stream_bind"])
+    elif event.live_stream_bind:
+        # The stream key has been unset since the broadcast was bound;
+        # calling bind without a streamId removes the existing binding.
+        youtube.liveBroadcasts().bind(
+            part="id,snippet,contentDetails,status",
+            id=event.external_identifier,
+        ).execute()
+        event.live_stream_bind = None
+        event.save(update_fields=["live_stream_bind"])
+
 
 @shared_task
 def sync_live_stream_event(event_pk):
     """Synchronize an adhoc live stream event with its YouTube broadcast.
 
-    Deliberately low touch: creates, updates, or deletes the scheduled
-    broadcast (and pushes the thumbnail) as required by the current state of
-    the event. Stream keys are managed by the operator on the event record;
-    connecting an encoder to the broadcast is done on the YouTube platform.
+    Creates, updates, or deletes the scheduled broadcast, pushes the
+    thumbnail, and binds the broadcast to the selected stream key from the
+    season's managed pool, as required by the current state of the event.
     """
     try:
         event = LiveStreamEvent.objects.select_related(
-            "season__competition"
+            "season__competition", "stream_key"
         ).get(pk=event_pk)
     except LiveStreamEvent.DoesNotExist:
         # Event was deleted between enqueuing and execution; nothing to sync.
@@ -436,6 +461,34 @@ def delete_youtube_broadcast(season_pk, external_identifier):
     except HttpError as exc:
         logger.error(
             "YouTube API error deleting broadcast %r: %s", external_identifier, exc
+        )
+        raise
+
+
+@shared_task
+def delete_youtube_stream(season_pk, external_identifier):
+    """Delete a YouTube liveStream that no longer has a local record.
+
+    Used when a managed stream key is deleted from the database while its
+    liveStream resource still exists on the YouTube platform.
+    """
+    try:
+        season = Season.objects.get(pk=season_pk)
+    except Season.DoesNotExist:
+        logger.info(
+            "delete_youtube_stream skipped: season %s no longer exists", season_pk
+        )
+        return
+
+    if not (season.live_stream_client_id and season.live_stream_client_secret):
+        return
+
+    try:
+        season.youtube.liveStreams().delete(id=external_identifier).execute()
+        logger.info("YouTube stream %r deleted", external_identifier)
+    except HttpError as exc:
+        logger.error(
+            "YouTube API error deleting stream %r: %s", external_identifier, exc
         )
         raise
 

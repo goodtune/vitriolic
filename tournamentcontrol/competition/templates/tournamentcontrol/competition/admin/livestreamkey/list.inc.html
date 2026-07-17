@@ -3,9 +3,7 @@
 
 {% block table-headings %}
 	<th>{% trans "Title" %}</th>
-	<th class="hidden-sm hidden-xs">{% trans "Start" %}</th>
-	<th class="hidden-sm hidden-xs">{% trans "Finish" %}</th>
-	<th>{% trans "Streaming" %}</th>
+	<th>{% trans "Stream key" %}</th>
 {% endblock %}
 
 {% block table-columns %}
@@ -16,16 +14,14 @@
 			<span>{{ obj.title }}</span>
 		{% endif %}
 	</td>
-	<td class="hidden-sm hidden-xs">{{ obj.start }}</td>
-	<td class="hidden-sm hidden-xs">{{ obj.stop }}</td>
 	<td>
 		{% if obj.external_identifier %}
 			<em class="fa fa-youtube"></em>
 		{% endif %}
 		{% if obj.stream_key %}
-			{{ obj.stream_key.label }}
+			{{ obj.stream_key }}
 		{% endif %}
 	</td>
 {% endblock %}
 
-{% block empty-row-colspan %}5{% endblock %}
+{% block empty-row-colspan %}3{% endblock %}

@@ -111,6 +111,15 @@ class GroundFactory(OrderedSitemapNodeFactory):
     venue = factory.SubFactory(VenueFactory)
 
 
+class LiveStreamKeyFactory(DjangoModelFactory):
+    class Meta:
+        model = models.LiveStreamKey
+
+    season = factory.SubFactory(SeasonFactory)
+
+    title = factory.Sequence(lambda n: "Stream Key %d" % (n + 1))
+
+
 class LiveStreamEventFactory(DjangoModelFactory):
     class Meta:
         model = models.LiveStreamEvent

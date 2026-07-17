@@ -73,6 +73,7 @@ from tournamentcontrol.competition.models import (
     Ground,
     LadderEntry,
     LiveStreamEvent,
+    LiveStreamKey,
     Match,
     Person,
     Place,
@@ -1402,6 +1403,12 @@ class MatchLiveStreamForm(BootstrapFormControlMixin, ModelForm):
 MatchLiveStreamFormSet = modelformset_factory(Match, extra=0, form=MatchLiveStreamForm)
 
 
+class LiveStreamKeyForm(BootstrapFormControlMixin, ModelForm):
+    class Meta:
+        model = LiveStreamKey
+        fields = ("title",)
+
+
 class LiveStreamEventForm(BootstrapFormControlMixin, ModelForm):
     class Meta:
         model = LiveStreamEvent
@@ -1426,6 +1433,13 @@ class LiveStreamEventForm(BootstrapFormControlMixin, ModelForm):
         field_classes = {
             "live_stream_thumbnail_image": ThumbnailImageField,
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Stream keys are a unique domain associated to the season — only
+        # offer the season's own managed pool, never the ground keys used
+        # for match streaming.
+        self.fields["stream_key"].queryset = self.instance.season.live_stream_keys
 
 
 class MatchScheduleForm(BaseMatchFormMixin, ModelForm):

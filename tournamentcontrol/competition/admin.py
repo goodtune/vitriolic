@@ -52,6 +52,7 @@ from tournamentcontrol.competition.forms import (
     DrawGenerationMatchFormSet,
     GroundForm,
     LiveStreamEventForm,
+    LiveStreamKeyForm,
     MatchEditForm,
     MatchLiveStreamFormSet,
     MatchRefereeForm,
@@ -85,6 +86,7 @@ from tournamentcontrol.competition.models import (
     LadderEntry,
     LadderSummary,
     LiveStreamEvent,
+    LiveStreamKey,
     Match,
     MatchScoreSheet,
     Person,
@@ -106,6 +108,7 @@ from tournamentcontrol.competition.models import (
 from tournamentcontrol.competition.sites import CompetitionAdminMixin
 from tournamentcontrol.competition.tasks import (
     delete_youtube_broadcast,
+    delete_youtube_stream,
     generate_pdf_grid,
     generate_pdf_scorecards,
     sync_live_stream,
@@ -261,6 +264,15 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path("add/", self.edit_livestreamevent, name="add"),
                 path("<int:pk>/", self.edit_livestreamevent, name="edit"),
                 path("<int:pk>/delete/", self.delete_livestreamevent, name="delete"),
+            ],
+            self.app_name,
+        )
+
+        livestreamkey_urls = (
+            [
+                path("add/", self.edit_livestreamkey, name="add"),
+                path("<int:pk>/", self.edit_livestreamkey, name="edit"),
+                path("<int:pk>/delete/", self.delete_livestreamkey, name="delete"),
             ],
             self.app_name,
         )
@@ -435,6 +447,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path(
                     "<int:season_id>/live-stream-event/",
                     include(livestreamevent_urls, namespace="livestreamevent"),
+                ),
+                path(
+                    "<int:season_id>/stream-key/",
+                    include(livestreamkey_urls, namespace="livestreamkey"),
                 ),
                 path("<int:season_id>/permission/", self.perms_season, name="perms"),
                 path("<int:season_id>/venue/", include(venue_urls, namespace="venue")),
@@ -882,10 +898,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             "timeslots",
             "referees",
         )
-        # Adhoc live stream events are only relevant when the season is
-        # being live streamed, keep the tab hidden otherwise.
+        # Adhoc live stream events and their managed stream keys are only
+        # relevant when the season is being live streamed, keep the tabs
+        # hidden otherwise.
         if season.live_stream:
-            related += ("live_stream_events",)
+            related += ("live_stream_events", "live_stream_keys")
 
         return self.generic_edit(
             request,
@@ -1586,6 +1603,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             request,
             season.live_stream_events,
             instance=instance,
+            related=(),
             form_class=LiveStreamEventForm,
             always_save=season.live_stream,
             post_save_callback=post_save_callback,
@@ -1614,12 +1632,113 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         # If the event was deleted while its broadcast was still scheduled,
         # clean up the orphaned broadcast on the YouTube platform too.
         if (
-            response.status_code == 302
-            and external_identifier
+            external_identifier
             and season.live_stream_client_id
             and season.live_stream_client_secret
+            and not season.live_stream_events.filter(pk=pk).exists()
         ):
             delete_youtube_broadcast.s(season.pk, external_identifier).apply_async()
+        return response
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def edit_livestreamkey(self, request, season, extra_context, pk=None, **kwargs):
+        if pk is None:
+            instance = LiveStreamKey(season=season)
+        else:
+            instance = get_object_or_404(season.live_stream_keys, pk=pk)
+
+        def pre_save_callback(obj: LiveStreamKey):
+            # We can't interact with the YouTube API without credentials;
+            # keep the record but let the user know no key was generated.
+            if not (season.live_stream_client_id and season.live_stream_client_secret):
+                messages.warning(
+                    request,
+                    _(
+                        "YouTube credentials are not configured for this "
+                        "season; no stream key has been generated."
+                    ),
+                )
+                return
+
+            body = {
+                "snippet": {
+                    "title": f"{season.competition} {season} ({obj.title})",
+                },
+                "cdn": {
+                    "ingestionType": "rtmp",
+                    "frameRate": "variable",
+                    "resolution": "variable",
+                },
+            }
+
+            try:
+                if obj.external_identifier:
+                    body["id"] = obj.external_identifier
+                    stream = (
+                        season.youtube.liveStreams()
+                        .update(part="snippet,cdn", body=body)
+                        .execute()
+                    )
+                    log.info("YouTube stream %(id)r updated", stream)
+                else:
+                    stream = (
+                        season.youtube.liveStreams()
+                        .insert(part="snippet,cdn", body=body)
+                        .execute()
+                    )
+                    obj.external_identifier = stream["id"]
+                    log.info("YouTube stream %(id)r inserted", stream)
+
+                obj.stream_key = stream["cdn"]["ingestionInfo"]["streamName"]
+
+            except HttpError as exc:
+                messages.error(request, exc.reason)
+                return self.redirect(".")
+
+        return self.generic_edit(
+            request,
+            season.live_stream_keys,
+            instance=instance,
+            # The reverse relation to events must not be enumerated as
+            # related tabs — there is no nested namespace routed for it.
+            related=(),
+            form_class=LiveStreamKeyForm,
+            always_save=season.live_stream,
+            pre_save_callback=pre_save_callback,
+            post_save_redirect=self.redirect(
+                season.urls["edit"] + "#live_stream_keys-tab"
+            ),
+            permission_required=True,
+            extra_context=extra_context,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def delete_livestreamkey(self, request, season, pk, **kwargs):
+        stream = get_object_or_404(season.live_stream_keys, pk=pk)
+        external_identifier = stream.external_identifier
+        post_delete_redirect = self.redirect(
+            season.urls["edit"] + "#live_stream_keys-tab"
+        )
+        response = self.generic_delete(
+            request,
+            season.live_stream_keys,
+            pk=pk,
+            permission_required=True,
+            post_delete_redirect=post_delete_redirect,
+        )
+        # If the record was deleted while its liveStream still existed on
+        # the YouTube platform, clean that up too. Deletion can be refused
+        # (ProtectedError when events still use this key) so check the row
+        # really has gone before queueing.
+        if (
+            external_identifier
+            and season.live_stream_client_id
+            and season.live_stream_client_secret
+            and not season.live_stream_keys.filter(pk=pk).exists()
+        ):
+            delete_youtube_stream.s(season.pk, external_identifier).apply_async()
         return response
 
     @competition_by_pk_m
