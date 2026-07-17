@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
+from googleapiclient.errors import HttpError
 from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
@@ -22,6 +23,11 @@ from tournamentcontrol.competition.tasks import (
 from tournamentcontrol.competition.tests import factories
 
 UTC = ZoneInfo("UTC")
+
+
+def _http_error(status, message):
+    resp = mock.Mock(status=status, reason=message)
+    return HttpError(resp=resp, content=message.encode())
 
 
 class LiveStreamEventModelTests(TestCase):
@@ -95,7 +101,7 @@ class LiveStreamEventModelTests(TestCase):
 
 class LiveStreamKeyModelTests(TestCase):
     def test_str_without_generated_key_is_title(self):
-        stream_key = factories.LiveStreamKeyFactory.create(title="Roaming Camera")
+        stream_key = LiveStreamKey(title="Roaming Camera")
         self.assertEqual(str(stream_key), "Roaming Camera")
 
     def test_str_with_generated_key_includes_key(self):
@@ -157,11 +163,22 @@ class LiveStreamEventFormTests(TestCase):
         self.assertEqual(form.is_valid(), False)
         self.assertIn("stop", form.errors)
 
+    def test_live_stream_toggle_only_offered_after_creation(self):
+        season = factories.SeasonFactory.create()
+        add_form = LiveStreamEventForm(instance=LiveStreamEvent(season=season))
+        self.assertNotIn("live_stream", add_form.fields)
+        edit_form = LiveStreamEventForm(
+            instance=factories.LiveStreamEventFactory.create(season=season)
+        )
+        self.assertIn("live_stream", edit_form.fields)
+
     def test_valid_form_saves_event(self):
         season = factories.SeasonFactory.create()
         stream_key = factories.LiveStreamKeyFactory.create(season=season)
+        # The admin assigns the broadcast identifier issued by the YouTube
+        # platform before the form is saved; simulate that here.
         form = LiveStreamEventForm(
-            instance=LiveStreamEvent(season=season),
+            instance=LiveStreamEvent(season=season, external_identifier="adhoc999"),
             data={
                 "title": "Opening Ceremony",
                 "description": "Live from the main field.",
@@ -172,11 +189,11 @@ class LiveStreamEventFormTests(TestCase):
                 "stop_1": "20:30:00",
                 "stop_2": "UTC",
                 "stream_key": str(stream_key.pk),
-                "live_stream": "1",
             },
         )
         self.assertEqual(form.is_valid(), True, form.errors)
         event = form.save()
+        self.assertEqual(event.pk, "adhoc999")
         self.assertEqual(event.season, season)
         self.assertEqual(
             event.start, datetime.datetime(2025, 5, 1, 19, 0, tzinfo=UTC)
@@ -235,35 +252,14 @@ class SyncLiveStreamEventTests(TestCase):
         "tournamentcontrol.competition.models.Season.youtube",
         new_callable=mock.PropertyMock,
     )
-    def test_insert_sets_external_identifier(self, mock_youtube_prop):
+    def test_update_binds_to_selected_stream_key(self, mock_youtube_prop):
         mock_youtube = mock.MagicMock()
         mock_youtube_prop.return_value = mock_youtube
-        mock_youtube.liveBroadcasts.return_value.insert.return_value.execute.return_value = {
-            "id": "adhoc123"
-        }
-
-        event = self._event()
-        sync_live_stream_event(event.pk)
-
-        mock_youtube.liveBroadcasts.return_value.insert.assert_called_once()
-        event.refresh_from_db()
-        self.assertEqual(event.external_identifier, "adhoc123")
-
-    @mock.patch(
-        "tournamentcontrol.competition.models.Season.youtube",
-        new_callable=mock.PropertyMock,
-    )
-    def test_insert_binds_to_selected_stream_key(self, mock_youtube_prop):
-        mock_youtube = mock.MagicMock()
-        mock_youtube_prop.return_value = mock_youtube
-        mock_youtube.liveBroadcasts.return_value.insert.return_value.execute.return_value = {
-            "id": "adhoc123"
-        }
         mock_youtube.liveBroadcasts.return_value.bind.return_value.execute.return_value = {
             "contentDetails": {"boundStreamId": "stream456"}
         }
 
-        event = self._event()
+        event = self._event(external_identifier="adhoc123")
         event.stream_key = factories.LiveStreamKeyFactory.create(
             season=event.season,
             external_identifier="stream456",
@@ -337,9 +333,52 @@ class SyncLiveStreamEventTests(TestCase):
         mock_youtube.liveBroadcasts.return_value.delete.assert_called_once_with(
             id="adhoc123"
         )
+        # The record keeps its (never reused) primary key after the
+        # broadcast has been removed from the platform.
         event.refresh_from_db()
-        self.assertEqual(event.external_identifier, None)
+        self.assertEqual(event.external_identifier, "adhoc123")
         self.assertEqual(event.live_stream_bind, None)
+
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_disable_live_stream_tolerates_missing_broadcast(
+        self, mock_youtube_prop
+    ):
+        mock_youtube = mock.MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+        mock_youtube.liveBroadcasts.return_value.delete.return_value.execute.side_effect = _http_error(
+            404, "not found"
+        )
+
+        event = self._event(
+            external_identifier="adhoc123",
+            live_stream=False,
+            live_stream_bind="stream456",
+        )
+        sync_live_stream_event(event.pk)
+
+        event.refresh_from_db()
+        self.assertEqual(event.live_stream_bind, None)
+
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_update_skips_when_broadcast_removed(self, mock_youtube_prop):
+        mock_youtube = mock.MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+        mock_youtube.liveBroadcasts.return_value.update.return_value.execute.side_effect = _http_error(
+            404, "not found"
+        )
+
+        event = self._event(external_identifier="adhoc123")
+        sync_live_stream_event(event.pk)
+
+        # A broadcast that has been removed from the platform cannot be
+        # reinstated under the same identifier; nothing further is synced.
+        mock_youtube.liveBroadcasts.return_value.bind.assert_not_called()
 
     @mock.patch(
         "tournamentcontrol.competition.models.Season.youtube",
@@ -374,14 +413,11 @@ class SyncLiveStreamEventTests(TestCase):
         "tournamentcontrol.competition.models.Season.youtube",
         new_callable=mock.PropertyMock,
     )
-    def test_insert_queues_thumbnail_when_available(
+    def test_update_queues_thumbnail_when_available(
         self, mock_youtube_prop, mock_thumbnail
     ):
         mock_youtube = mock.MagicMock()
         mock_youtube_prop.return_value = mock_youtube
-        mock_youtube.liveBroadcasts.return_value.insert.return_value.execute.return_value = {
-            "id": "adhoc123"
-        }
 
         event = self._event(live_stream_thumbnail_image=b"event-bytes")
         sync_live_stream_event(event.pk)
@@ -460,7 +496,19 @@ class LiveStreamEventAdminTests(TestCase):
         )
 
     @mock.patch("tournamentcontrol.competition.admin.sync_live_stream_event")
-    def test_add_event_queues_sync_when_configured(self, mock_task):
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_add_event_creates_broadcast_and_queues_sync(
+        self, mock_youtube_prop, mock_task
+    ):
+        mock_youtube = mock.MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+        mock_youtube.liveBroadcasts.return_value.insert.return_value.execute.return_value = {
+            "id": "adhoc123"
+        }
+
         season = factories.SeasonFactory.create(
             live_stream=True,
             live_stream_client_id="client-id",
@@ -480,17 +528,28 @@ class LiveStreamEventAdminTests(TestCase):
                     "stop_0": "2025-05-01",
                     "stop_1": "20:30:00",
                     "stop_2": "UTC",
-                    "live_stream": "1",
                 },
             )
             self.response_302()
 
+        # The broadcast identifier issued by the platform is the primary key
         event = season.live_stream_events.get()
+        self.assertEqual(event.pk, "adhoc123")
         self.assertEqual(event.title, "Opening Ceremony")
-        mock_task.s.assert_called_once_with(event.pk)
+        mock_youtube.liveBroadcasts.return_value.insert.assert_called_once()
+        mock_task.s.assert_called_once_with("adhoc123")
 
     @mock.patch("tournamentcontrol.competition.admin.sync_live_stream_event")
-    def test_add_event_does_not_queue_sync_without_credentials(self, mock_task):
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_add_event_without_credentials_is_refused(
+        self, mock_youtube_prop, mock_task
+    ):
+        mock_youtube = mock.MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+
         season = factories.SeasonFactory.create(live_stream=True)
         with self.login(self.superuser):
             self.post(
@@ -506,15 +565,17 @@ class LiveStreamEventAdminTests(TestCase):
                     "stop_0": "2025-05-01",
                     "stop_1": "20:30:00",
                     "stop_2": "UTC",
-                    "live_stream": "1",
                 },
             )
             self.response_302()
 
-        self.assertEqual(season.live_stream_events.count(), 1)
+        self.assertEqual(season.live_stream_events.count(), 0)
+        mock_youtube.liveBroadcasts.assert_not_called()
         mock_task.s.assert_not_called()
 
-    @mock.patch("tournamentcontrol.competition.admin.delete_youtube_broadcast")
+    @mock.patch(
+        "tournamentcontrol.competition.signals.live_streams.delete_youtube_broadcast"
+    )
     def test_delete_event_queues_broadcast_cleanup(self, mock_task):
         event = factories.LiveStreamEventFactory.create(
             season__live_stream=True,
@@ -523,27 +584,31 @@ class LiveStreamEventAdminTests(TestCase):
             external_identifier="adhoc123",
         )
         with self.login(self.superuser):
-            self.post(
-                "admin:fixja:competition:season:livestreamevent:delete",
-                event.season.competition_id,
-                event.season_id,
-                event.pk,
-            )
+            with self.captureOnCommitCallbacks(execute=True):
+                self.post(
+                    "admin:fixja:competition:season:livestreamevent:delete",
+                    event.season.competition_id,
+                    event.season_id,
+                    event.pk,
+                )
             self.response_302()
 
         self.assertEqual(LiveStreamEvent.objects.count(), 0)
         mock_task.s.assert_called_once_with(event.season.pk, "adhoc123")
 
-    @mock.patch("tournamentcontrol.competition.admin.delete_youtube_broadcast")
-    def test_delete_event_without_broadcast_skips_cleanup(self, mock_task):
+    @mock.patch(
+        "tournamentcontrol.competition.signals.live_streams.delete_youtube_broadcast"
+    )
+    def test_delete_event_without_credentials_skips_cleanup(self, mock_task):
         event = factories.LiveStreamEventFactory.create(season__live_stream=True)
         with self.login(self.superuser):
-            self.post(
-                "admin:fixja:competition:season:livestreamevent:delete",
-                event.season.competition_id,
-                event.season_id,
-                event.pk,
-            )
+            with self.captureOnCommitCallbacks(execute=True):
+                self.post(
+                    "admin:fixja:competition:season:livestreamevent:delete",
+                    event.season.competition_id,
+                    event.season_id,
+                    event.pk,
+                )
             self.response_302()
 
         self.assertEqual(LiveStreamEvent.objects.count(), 0)
@@ -639,16 +704,17 @@ class LiveStreamKeyAdminTests(TestCase):
             )
             self.response_302()
 
+        # The liveStream identifier issued by the platform is the primary key
         stream_key = season.live_stream_keys.get()
         self.assertEqual(stream_key.title, "Roaming Camera")
-        self.assertEqual(stream_key.external_identifier, "stream456")
+        self.assertEqual(stream_key.pk, "stream456")
         self.assertEqual(stream_key.stream_key, "abcd-1234")
 
     @mock.patch(
         "tournamentcontrol.competition.models.Season.youtube",
         new_callable=mock.PropertyMock,
     )
-    def test_add_stream_key_without_credentials_skips_youtube(
+    def test_add_stream_key_without_credentials_is_refused(
         self, mock_youtube_prop
     ):
         mock_youtube = mock.MagicMock()
@@ -665,11 +731,11 @@ class LiveStreamKeyAdminTests(TestCase):
             self.response_302()
 
         mock_youtube.liveStreams.assert_not_called()
-        stream_key = season.live_stream_keys.get()
-        self.assertEqual(stream_key.stream_key, None)
-        self.assertEqual(stream_key.external_identifier, None)
+        self.assertEqual(season.live_stream_keys.count(), 0)
 
-    @mock.patch("tournamentcontrol.competition.admin.delete_youtube_stream")
+    @mock.patch(
+        "tournamentcontrol.competition.signals.live_streams.delete_youtube_stream"
+    )
     def test_delete_stream_key_queues_stream_cleanup(self, mock_task):
         stream_key = factories.LiveStreamKeyFactory.create(
             season__live_stream=True,
@@ -679,18 +745,21 @@ class LiveStreamKeyAdminTests(TestCase):
             stream_key="abcd-1234",
         )
         with self.login(self.superuser):
-            self.post(
-                "admin:fixja:competition:season:livestreamkey:delete",
-                stream_key.season.competition_id,
-                stream_key.season_id,
-                stream_key.pk,
-            )
+            with self.captureOnCommitCallbacks(execute=True):
+                self.post(
+                    "admin:fixja:competition:season:livestreamkey:delete",
+                    stream_key.season.competition_id,
+                    stream_key.season_id,
+                    stream_key.pk,
+                )
             self.response_302()
 
         self.assertEqual(LiveStreamKey.objects.count(), 0)
         mock_task.s.assert_called_once_with(stream_key.season.pk, "stream456")
 
-    @mock.patch("tournamentcontrol.competition.admin.delete_youtube_stream")
+    @mock.patch(
+        "tournamentcontrol.competition.signals.live_streams.delete_youtube_stream"
+    )
     def test_delete_stream_key_in_use_is_refused(self, mock_task):
         stream_key = factories.LiveStreamKeyFactory.create(
             season__live_stream=True,
@@ -703,12 +772,13 @@ class LiveStreamKeyAdminTests(TestCase):
             season=stream_key.season, stream_key=stream_key
         )
         with self.login(self.superuser):
-            self.post(
-                "admin:fixja:competition:season:livestreamkey:delete",
-                stream_key.season.competition_id,
-                stream_key.season_id,
-                stream_key.pk,
-            )
+            with self.captureOnCommitCallbacks(execute=True):
+                self.post(
+                    "admin:fixja:competition:season:livestreamkey:delete",
+                    stream_key.season.competition_id,
+                    stream_key.season_id,
+                    stream_key.pk,
+                )
             self.response_302()
 
         # The record is protected while an event references it, so it must

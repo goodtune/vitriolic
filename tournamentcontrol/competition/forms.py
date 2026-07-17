@@ -1440,6 +1440,11 @@ class LiveStreamEventForm(BootstrapFormControlMixin, ModelForm):
         # offer the season's own managed pool, never the ground keys used
         # for match streaming.
         self.fields["stream_key"].queryset = self.instance.season.live_stream_keys
+        # A new event always creates its broadcast — the platform identifier
+        # is the primary key — so the removal toggle only applies once the
+        # event exists.
+        if not self.instance.pk:
+            self.fields.pop("live_stream")
 
 
 class MatchScheduleForm(BaseMatchFormMixin, ModelForm):

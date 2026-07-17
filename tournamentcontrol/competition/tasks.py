@@ -323,41 +323,58 @@ def build_live_stream_event_body(event):
     }
 
 
+def _is_not_found(exc):
+    """Return True when an HttpError indicates the resource no longer exists."""
+    return getattr(getattr(exc, "resp", None), "status", None) == 404
+
+
 def _apply_event_sync(event, season):
-    """Apply a single insert/update/delete + bind cycle against YouTube."""
+    """Apply a single update/delete + bind cycle against YouTube.
+
+    The broadcast identifier is the event's primary key — the broadcast is
+    created with the event, so there is no insert path here. A broadcast
+    which has already been removed from the platform (404) is tolerated.
+    """
     youtube = season.youtube
 
-    if event.external_identifier and not event.live_stream:
-        video_id = event.external_identifier
-        youtube.liveBroadcasts().delete(id=video_id).execute()
-        event.external_identifier = None
-        event.live_stream_bind = None
-        event.save(update_fields=["external_identifier", "live_stream_bind"])
-        logger.info("YouTube video %r deleted", video_id)
+    if not event.live_stream:
+        try:
+            youtube.liveBroadcasts().delete(id=event.external_identifier).execute()
+            logger.info("YouTube video %r deleted", event.external_identifier)
+        except HttpError as exc:
+            if not _is_not_found(exc):
+                raise
+            logger.info(
+                "YouTube video %r already deleted", event.external_identifier
+            )
+        if event.live_stream_bind:
+            event.live_stream_bind = None
+            event.save(update_fields=["live_stream_bind"])
         return
 
     body = build_live_stream_event_body(event)
-    if event.external_identifier:
-        body["id"] = event.external_identifier
+    body["id"] = event.external_identifier
+    try:
         youtube.liveBroadcasts().update(
             part="snippet,status,contentDetails", body=body
         ).execute()
         logger.info("YouTube video %r updated", event.external_identifier)
-    else:
-        broadcast = (
-            youtube.liveBroadcasts()
-            .insert(part="id,snippet,status,contentDetails", body=body)
-            .execute()
+    except HttpError as exc:
+        if not _is_not_found(exc):
+            raise
+        # The broadcast was previously removed from the platform and cannot
+        # be reinstated under the same identifier.
+        logger.warning(
+            "YouTube video %r no longer exists, skipping sync",
+            event.external_identifier,
         )
-        event.external_identifier = broadcast["id"]
-        event.save(update_fields=["external_identifier"])
-        logger.info("YouTube video %r inserted", event.external_identifier)
+        return
 
     if event.get_thumbnail_media_upload() is not None:
         set_live_stream_event_thumbnail.s(event.pk).apply_async(countdown=10)
 
     stream_key = event.stream_key
-    if stream_key is not None and stream_key.external_identifier:
+    if stream_key is not None:
         bind = (
             youtube.liveBroadcasts()
             .bind(
@@ -386,9 +403,9 @@ def _apply_event_sync(event, season):
 def sync_live_stream_event(event_pk):
     """Synchronize an adhoc live stream event with its YouTube broadcast.
 
-    Creates, updates, or deletes the scheduled broadcast, pushes the
-    thumbnail, and binds the broadcast to the selected stream key from the
-    season's managed pool, as required by the current state of the event.
+    Updates or deletes the scheduled broadcast, pushes the thumbnail, and
+    binds the broadcast to the selected stream key from the season's managed
+    pool, as required by the current state of the event.
     """
     try:
         event = LiveStreamEvent.objects.select_related(
@@ -404,9 +421,6 @@ def sync_live_stream_event(event_pk):
 
     if not (season.live_stream_client_id and season.live_stream_client_secret):
         return
-
-    if not event.live_stream and not event.external_identifier:
-        return  # Nothing to insert, update, or delete.
 
     try:
         _apply_event_sync(event, season)

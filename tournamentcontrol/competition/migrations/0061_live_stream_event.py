@@ -2,7 +2,9 @@
 # competition Season.
 #
 # Standalone feature: this migration only creates new tables, it does not
-# alter any existing schema.
+# alter any existing schema. Both models use the identifier issued by the
+# YouTube platform as their primary key — those identifiers are globally
+# unique and never reused.
 
 import django.db.models.deletion
 from django.db import migrations, models
@@ -21,15 +23,6 @@ class Migration(migrations.Migration):
             name="LiveStreamKey",
             fields=[
                 (
-                    "id",
-                    models.AutoField(
-                        auto_created=True,
-                        primary_key=True,
-                        serialize=False,
-                        verbose_name="ID",
-                    ),
-                ),
-                (
                     "title",
                     models.CharField(
                         help_text=(
@@ -42,22 +35,12 @@ class Migration(migrations.Migration):
                 (
                     "external_identifier",
                     models.CharField(
-                        blank=True,
-                        db_index=True,
-                        max_length=50,
-                        null=True,
-                        unique=True,
+                        max_length=50, primary_key=True, serialize=False
                     ),
                 ),
                 (
                     "stream_key",
-                    models.CharField(
-                        blank=True,
-                        db_index=True,
-                        max_length=50,
-                        null=True,
-                        unique=True,
-                    ),
+                    models.CharField(db_index=True, max_length=50, unique=True),
                 ),
                 (
                     "season",
@@ -76,15 +59,6 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="LiveStreamEvent",
             fields=[
-                (
-                    "id",
-                    models.AutoField(
-                        auto_created=True,
-                        primary_key=True,
-                        serialize=False,
-                        verbose_name="ID",
-                    ),
-                ),
                 (
                     "title",
                     models.CharField(
@@ -120,18 +94,15 @@ class Migration(migrations.Migration):
                         help_text=(
                             "Set to No to remove the scheduled broadcast from the "
                             "YouTube platform while keeping this event for your "
-                            "records."
+                            "records. The broadcast cannot be reinstated once "
+                            "removed."
                         ),
                     ),
                 ),
                 (
                     "external_identifier",
                     models.CharField(
-                        blank=True,
-                        db_index=True,
-                        max_length=20,
-                        null=True,
-                        unique=True,
+                        max_length=20, primary_key=True, serialize=False
                     ),
                 ),
                 (

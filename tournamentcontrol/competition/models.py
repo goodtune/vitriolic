@@ -2776,12 +2776,10 @@ class LiveStreamKey(AdminUrlMixin, models.Model):
             "production position that will use it."
         ),
     )
-    external_identifier = models.CharField(
-        max_length=50, blank=True, null=True, unique=True, db_index=True
-    )
-    stream_key = models.CharField(
-        max_length=50, blank=True, null=True, unique=True, db_index=True
-    )
+    # The liveStream identifier issued by the YouTube platform is globally
+    # unique and never reused, so it serves as the primary key.
+    external_identifier = models.CharField(max_length=50, primary_key=True)
+    stream_key = models.CharField(max_length=50, unique=True, db_index=True)
 
     class Meta:
         ordering = ("title", "pk")
@@ -2844,7 +2842,8 @@ class LiveStreamEvent(AdminUrlMixin, models.Model):
         default=True,
         help_text=_(
             "Set to No to remove the scheduled broadcast from the YouTube "
-            "platform while keeping this event for your records."
+            "platform while keeping this event for your records. The "
+            "broadcast cannot be reinstated once removed."
         ),
     )
     stream_key = ForeignKey(
@@ -2859,9 +2858,11 @@ class LiveStreamEvent(AdminUrlMixin, models.Model):
             "deliver video for this event."
         ),
     )
-    external_identifier = models.CharField(
-        max_length=20, blank=True, null=True, unique=True, db_index=True
-    )
+    # The broadcast identifier issued by the YouTube platform is globally
+    # unique and never reused, so it serves as the primary key. The
+    # broadcast is created when the event is, and the record retains its
+    # identifier even after the broadcast is removed from the platform.
+    external_identifier = models.CharField(max_length=20, primary_key=True)
     live_stream_bind = models.CharField(
         max_length=50, blank=True, null=True, db_index=True
     )

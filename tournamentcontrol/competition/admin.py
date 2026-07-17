@@ -107,8 +107,7 @@ from tournamentcontrol.competition.models import (
 )
 from tournamentcontrol.competition.sites import CompetitionAdminMixin
 from tournamentcontrol.competition.tasks import (
-    delete_youtube_broadcast,
-    delete_youtube_stream,
+    build_live_stream_event_body,
     generate_pdf_grid,
     generate_pdf_scorecards,
     sync_live_stream,
@@ -261,18 +260,22 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
         livestreamevent_urls = (
             [
+                # The primary key is the YouTube broadcast identifier, so
+                # these routes match strings rather than integers.
                 path("add/", self.edit_livestreamevent, name="add"),
-                path("<int:pk>/", self.edit_livestreamevent, name="edit"),
-                path("<int:pk>/delete/", self.delete_livestreamevent, name="delete"),
+                path("<str:pk>/", self.edit_livestreamevent, name="edit"),
+                path("<str:pk>/delete/", self.delete_livestreamevent, name="delete"),
             ],
             self.app_name,
         )
 
         livestreamkey_urls = (
             [
+                # The primary key is the YouTube liveStream identifier, so
+                # these routes match strings rather than integers.
                 path("add/", self.edit_livestreamkey, name="add"),
-                path("<int:pk>/", self.edit_livestreamkey, name="edit"),
-                path("<int:pk>/delete/", self.delete_livestreamkey, name="delete"),
+                path("<str:pk>/", self.edit_livestreamkey, name="edit"),
+                path("<str:pk>/delete/", self.delete_livestreamkey, name="delete"),
             ],
             self.app_name,
         )
@@ -1587,14 +1590,42 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         else:
             instance = get_object_or_404(season.live_stream_events, pk=pk)
 
+        def pre_save_callback(obj: LiveStreamEvent):
+            # The broadcast identifier is the primary key, so a new event
+            # must create its broadcast on the YouTube platform up front.
+            if obj.pk:
+                return
+
+            if not (season.live_stream_client_id and season.live_stream_client_secret):
+                messages.error(
+                    request,
+                    _(
+                        "YouTube credentials must be configured for this "
+                        "season before live stream events can be created."
+                    ),
+                )
+                return self.redirect(".")
+
+            try:
+                broadcast = (
+                    season.youtube.liveBroadcasts()
+                    .insert(
+                        part="id,snippet,status,contentDetails",
+                        body=build_live_stream_event_body(obj),
+                    )
+                    .execute()
+                )
+            except HttpError as exc:
+                messages.error(request, exc.reason)
+                return self.redirect(".")
+
+            obj.external_identifier = broadcast["id"]
+            log.info("YouTube video %(id)r inserted", broadcast)
+
         def post_save_callback(obj: LiveStreamEvent):
             # Check if YouTube credentials are configured before queuing
             # anything, we can't interact with the YouTube API without them.
             if not (season.live_stream_client_id and season.live_stream_client_secret):
-                return None
-            # A brand new event which is not to be streamed requires no sync;
-            # an existing broadcast always does (update or delete).
-            if not obj.external_identifier and not obj.live_stream:
                 return None
             sync_live_stream_event.s(obj.pk).apply_async()
             return None
@@ -1606,6 +1637,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             related=(),
             form_class=LiveStreamEventForm,
             always_save=season.live_stream,
+            pre_save_callback=pre_save_callback,
             post_save_callback=post_save_callback,
             post_save_redirect=self.redirect(
                 season.urls["edit"] + "#live_stream_events-tab"
@@ -1617,28 +1649,18 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_livestreamevent(self, request, season, pk, **kwargs):
-        event = get_object_or_404(season.live_stream_events, pk=pk)
-        external_identifier = event.external_identifier
+        # Removal of the broadcast from the YouTube platform is handled by
+        # the post_delete signal on the model.
         post_delete_redirect = self.redirect(
             season.urls["edit"] + "#live_stream_events-tab"
         )
-        response = self.generic_delete(
+        return self.generic_delete(
             request,
             season.live_stream_events,
             pk=pk,
             permission_required=True,
             post_delete_redirect=post_delete_redirect,
         )
-        # If the event was deleted while its broadcast was still scheduled,
-        # clean up the orphaned broadcast on the YouTube platform too.
-        if (
-            external_identifier
-            and season.live_stream_client_id
-            and season.live_stream_client_secret
-            and not season.live_stream_events.filter(pk=pk).exists()
-        ):
-            delete_youtube_broadcast.s(season.pk, external_identifier).apply_async()
-        return response
 
     @competition_by_pk_m
     @staff_login_required_m
@@ -1649,14 +1671,26 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             instance = get_object_or_404(season.live_stream_keys, pk=pk)
 
         def pre_save_callback(obj: LiveStreamKey):
-            # We can't interact with the YouTube API without credentials;
-            # keep the record but let the user know no key was generated.
+            # The liveStream identifier is the primary key, so a new record
+            # must generate its stream on the YouTube platform up front. For
+            # an existing record the platform update is cosmetic, so missing
+            # credentials only warrant a warning.
             if not (season.live_stream_client_id and season.live_stream_client_secret):
+                if not obj.pk:
+                    messages.error(
+                        request,
+                        _(
+                            "YouTube credentials must be configured for this "
+                            "season before stream keys can be generated."
+                        ),
+                    )
+                    return self.redirect(".")
                 messages.warning(
                     request,
                     _(
                         "YouTube credentials are not configured for this "
-                        "season; no stream key has been generated."
+                        "season; the stream title was not updated on the "
+                        "platform."
                     ),
                 )
                 return
@@ -1716,30 +1750,18 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_livestreamkey(self, request, season, pk, **kwargs):
-        stream = get_object_or_404(season.live_stream_keys, pk=pk)
-        external_identifier = stream.external_identifier
+        # Removal of the liveStream from the YouTube platform is handled by
+        # the post_delete signal on the model.
         post_delete_redirect = self.redirect(
             season.urls["edit"] + "#live_stream_keys-tab"
         )
-        response = self.generic_delete(
+        return self.generic_delete(
             request,
             season.live_stream_keys,
             pk=pk,
             permission_required=True,
             post_delete_redirect=post_delete_redirect,
         )
-        # If the record was deleted while its liveStream still existed on
-        # the YouTube platform, clean that up too. Deletion can be refused
-        # (ProtectedError when events still use this key) so check the row
-        # really has gone before queueing.
-        if (
-            external_identifier
-            and season.live_stream_client_id
-            and season.live_stream_client_secret
-            and not season.live_stream_keys.filter(pk=pk).exists()
-        ):
-            delete_youtube_stream.s(season.pk, external_identifier).apply_async()
-        return response
 
     @competition_by_pk_m
     @staff_login_required_m
