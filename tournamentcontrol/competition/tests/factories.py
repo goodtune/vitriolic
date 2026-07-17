@@ -111,6 +111,33 @@ class GroundFactory(OrderedSitemapNodeFactory):
     venue = factory.SubFactory(VenueFactory)
 
 
+class LiveStreamKeyFactory(DjangoModelFactory):
+    class Meta:
+        model = models.LiveStreamKey
+
+    season = factory.SubFactory(SeasonFactory)
+
+    title = factory.Sequence(lambda n: "Stream Key %d" % (n + 1))
+    # The YouTube liveStream identifier is the primary key.
+    external_identifier = factory.Sequence(lambda n: "stream%d" % (n + 1))
+    stream_key = factory.Sequence(lambda n: "abcd-%04d" % (n + 1))
+
+
+class LiveStreamEventFactory(DjangoModelFactory):
+    class Meta:
+        model = models.LiveStreamEvent
+
+    season = factory.SubFactory(SeasonFactory)
+
+    title = factory.Sequence(lambda n: "Live Stream Event %d" % (n + 1))
+    start = factory.fuzzy.FuzzyDateTime(
+        datetime.datetime(2020, 1, 1, tzinfo=ZoneInfo("UTC"))
+    )
+    stop = factory.LazyAttribute(lambda o: o.start + datetime.timedelta(hours=1))
+    # The YouTube broadcast identifier is the primary key.
+    external_identifier = factory.Sequence(lambda n: "adhoc%d" % (n + 1))
+
+
 class DivisionFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Division

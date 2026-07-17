@@ -29,6 +29,8 @@ class CompetitionConfig(AppConfig):
             Ground,
             LadderEntry,
             LadderSummary,
+            LiveStreamEvent,
+            LiveStreamKey,
             Match,
             Season,
             Stage,
@@ -51,6 +53,14 @@ class CompetitionConfig(AppConfig):
             update_match_datetimes_on_place_timezone_change,
         )
 
+        # Imported from the submodule rather than the signals package to
+        # avoid a circular import: models imports the signals package, and
+        # these handlers import tasks which imports models.
+        from tournamentcontrol.competition.signals.live_streams import (
+            cleanup_youtube_broadcast,
+            cleanup_youtube_stream,
+        )
+
         site.register(CompetitionAdminComponent)
 
         post_save.connect(match_saved_handler, sender=Match)
@@ -61,6 +71,10 @@ class CompetitionConfig(AppConfig):
 
         post_save.connect(set_ground_latlng, sender=Ground)
         post_save.connect(set_ground_timezone, sender=Ground)
+
+        # Remove YouTube platform resources when their local records go away
+        post_delete.connect(cleanup_youtube_broadcast, sender=LiveStreamEvent)
+        post_delete.connect(cleanup_youtube_stream, sender=LiveStreamKey)
 
         # Capture timezone before save to detect changes
         pre_save.connect(capture_timezone_before_save, sender=Venue)

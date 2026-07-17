@@ -9,7 +9,12 @@ from django.template.loader import render_to_string
 from django.urls import NoReverseMatch, reverse
 from googleapiclient.errors import HttpError
 
-from tournamentcontrol.competition.models import Match, Stage
+from tournamentcontrol.competition.models import (
+    LiveStreamEvent,
+    Match,
+    Season,
+    Stage,
+)
 from tournamentcontrol.competition.utils import (
     generate_fixture_grid,
     generate_scorecards,
@@ -288,6 +293,228 @@ def sync_live_stream(match_pk, base_url=None):
                 continue
             logger.error("YouTube API error syncing match %s: %s", match_pk, exc)
             raise
+
+
+def build_live_stream_event_body(event):
+    """Build the YouTube broadcast body for an adhoc live stream event.
+
+    Unlike matches, adhoc events carry their own author-supplied title and
+    description, and an explicit scheduled start and stop time.
+    """
+    return {
+        "snippet": {
+            "title": event.title,
+            "description": event.description,
+            "scheduledStartTime": event.start.astimezone(ZoneInfo("UTC")).isoformat(),
+            "scheduledEndTime": event.stop.astimezone(ZoneInfo("UTC")).isoformat(),
+        },
+        "status": {
+            "privacyStatus": event.season.live_stream_privacy,
+            "selfDeclaredMadeForKids": False,
+        },
+        "contentDetails": {
+            "enableAutoStart": False,
+            "enableAutoStop": False,
+            "monitorStream": {
+                "broadcastStreamDelayMs": 0,
+                "enableMonitorStream": True,
+            },
+        },
+    }
+
+
+def _is_not_found(exc):
+    """Return True when an HttpError indicates the resource no longer exists."""
+    return getattr(getattr(exc, "resp", None), "status", None) == 404
+
+
+def _apply_event_sync(event, season):
+    """Apply a single update/delete + bind cycle against YouTube.
+
+    The broadcast identifier is the event's primary key — the broadcast is
+    created with the event, so there is no insert path here. A broadcast
+    which has already been removed from the platform (404) is tolerated.
+    """
+    youtube = season.youtube
+
+    if not event.live_stream:
+        try:
+            youtube.liveBroadcasts().delete(id=event.external_identifier).execute()
+            logger.info("YouTube video %r deleted", event.external_identifier)
+        except HttpError as exc:
+            if not _is_not_found(exc):
+                raise
+            logger.info(
+                "YouTube video %r already deleted", event.external_identifier
+            )
+        if event.live_stream_bind:
+            event.live_stream_bind = None
+            event.save(update_fields=["live_stream_bind"])
+        return
+
+    body = build_live_stream_event_body(event)
+    body["id"] = event.external_identifier
+    try:
+        youtube.liveBroadcasts().update(
+            part="snippet,status,contentDetails", body=body
+        ).execute()
+        logger.info("YouTube video %r updated", event.external_identifier)
+    except HttpError as exc:
+        if not _is_not_found(exc):
+            raise
+        # The broadcast was previously removed from the platform and cannot
+        # be reinstated under the same identifier.
+        logger.warning(
+            "YouTube video %r no longer exists, skipping sync",
+            event.external_identifier,
+        )
+        return
+
+    if event.get_thumbnail_media_upload() is not None:
+        set_live_stream_event_thumbnail.s(event.pk).apply_async(countdown=10)
+
+    stream_key = event.stream_key
+    if stream_key is not None:
+        bind = (
+            youtube.liveBroadcasts()
+            .bind(
+                part="id,snippet,contentDetails,status",
+                id=event.external_identifier,
+                streamId=stream_key.external_identifier,
+            )
+            .execute()
+        )
+        bound = bind["contentDetails"].get("boundStreamId")
+        if bound != event.live_stream_bind:
+            event.live_stream_bind = bound
+            event.save(update_fields=["live_stream_bind"])
+    elif event.live_stream_bind:
+        # The stream key has been unset since the broadcast was bound;
+        # calling bind without a streamId removes the existing binding.
+        youtube.liveBroadcasts().bind(
+            part="id,snippet,contentDetails,status",
+            id=event.external_identifier,
+        ).execute()
+        event.live_stream_bind = None
+        event.save(update_fields=["live_stream_bind"])
+
+
+@shared_task
+def sync_live_stream_event(event_pk):
+    """Synchronize an adhoc live stream event with its YouTube broadcast.
+
+    Updates or deletes the scheduled broadcast, pushes the thumbnail, and
+    binds the broadcast to the selected stream key from the season's managed
+    pool, as required by the current state of the event.
+    """
+    try:
+        event = LiveStreamEvent.objects.select_related(
+            "season__competition", "stream_key"
+        ).get(pk=event_pk)
+    except LiveStreamEvent.DoesNotExist:
+        # Event was deleted between enqueuing and execution; nothing to sync.
+        logger.info(
+            "sync_live_stream_event skipped: event %s no longer exists", event_pk
+        )
+        return
+    season = event.season
+
+    if not (season.live_stream_client_id and season.live_stream_client_secret):
+        return
+
+    try:
+        _apply_event_sync(event, season)
+    except HttpError as exc:
+        logger.error("YouTube API error syncing event %s: %s", event_pk, exc)
+        raise
+
+
+@shared_task
+def set_live_stream_event_thumbnail(event_pk):
+    """
+    Asynchronously use the Google YouTube Data API to set the thumbnail for
+    the adhoc live stream event specified.
+
+    This function uses the database-stored thumbnail images via the
+    MediaMemoryUpload class, with season fallback handled by the model.
+    """
+    obj = LiveStreamEvent.objects.get(pk=event_pk)
+
+    media_body = obj.get_thumbnail_media_upload()
+
+    if media_body is None:
+        raise ValueError(f"No thumbnail available for live stream event {event_pk}")
+
+    obj.season.youtube.thumbnails().set(
+        videoId=obj.external_identifier,
+        media_body=media_body,
+    ).execute()
+
+
+@shared_task
+def delete_youtube_broadcast(season_pk, external_identifier):
+    """Delete a YouTube broadcast that no longer has a local record.
+
+    Used when an adhoc live stream event is deleted from the database while
+    its broadcast is still scheduled on the YouTube platform.
+    """
+    try:
+        season = Season.objects.get(pk=season_pk)
+    except Season.DoesNotExist:
+        logger.info(
+            "delete_youtube_broadcast skipped: season %s no longer exists", season_pk
+        )
+        return
+
+    if not (season.live_stream_client_id and season.live_stream_client_secret):
+        return
+
+    try:
+        season.youtube.liveBroadcasts().delete(id=external_identifier).execute()
+        logger.info("YouTube video %r deleted", external_identifier)
+    except HttpError as exc:
+        # The admin delete view destroys the broadcast before removing the
+        # record, so this cleanup will usually find it already gone.
+        if _is_not_found(exc):
+            logger.info("YouTube video %r already deleted", external_identifier)
+            return
+        logger.error(
+            "YouTube API error deleting broadcast %r: %s", external_identifier, exc
+        )
+        raise
+
+
+@shared_task
+def delete_youtube_stream(season_pk, external_identifier):
+    """Delete a YouTube liveStream that no longer has a local record.
+
+    Used when a managed stream key is deleted from the database while its
+    liveStream resource still exists on the YouTube platform.
+    """
+    try:
+        season = Season.objects.get(pk=season_pk)
+    except Season.DoesNotExist:
+        logger.info(
+            "delete_youtube_stream skipped: season %s no longer exists", season_pk
+        )
+        return
+
+    if not (season.live_stream_client_id and season.live_stream_client_secret):
+        return
+
+    try:
+        season.youtube.liveStreams().delete(id=external_identifier).execute()
+        logger.info("YouTube stream %r deleted", external_identifier)
+    except HttpError as exc:
+        # The admin delete view destroys the stream before removing the
+        # record, so this cleanup will usually find it already gone.
+        if _is_not_found(exc):
+            logger.info("YouTube stream %r already deleted", external_identifier)
+            return
+        logger.error(
+            "YouTube API error deleting stream %r: %s", external_identifier, exc
+        )
+        raise
 
 
 @shared_task

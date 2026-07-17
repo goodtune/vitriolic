@@ -23,12 +23,14 @@ from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _, ngettext
 from googleapiclient.errors import HttpError
+from guardian.utils import get_40x_or_None
 
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.common.decorators import (
     csrf_exempt_m,
     staff_login_required_m,
 )
+from touchtechnology.common.utils import get_perms_for_model
 from touchtechnology.common.prince import prince
 from tournamentcontrol.competition.dashboard import (
     BasicResultWidget,
@@ -51,6 +53,8 @@ from tournamentcontrol.competition.forms import (
     DrawGenerationFormSet,
     DrawGenerationMatchFormSet,
     GroundForm,
+    LiveStreamEventForm,
+    LiveStreamKeyForm,
     MatchEditForm,
     MatchLiveStreamFormSet,
     MatchRefereeForm,
@@ -83,6 +87,8 @@ from tournamentcontrol.competition.models import (
     Ground,
     LadderEntry,
     LadderSummary,
+    LiveStreamEvent,
+    LiveStreamKey,
     Match,
     MatchScoreSheet,
     Person,
@@ -103,9 +109,11 @@ from tournamentcontrol.competition.models import (
 )
 from tournamentcontrol.competition.sites import CompetitionAdminMixin
 from tournamentcontrol.competition.tasks import (
+    build_live_stream_event_body,
     generate_pdf_grid,
     generate_pdf_scorecards,
     sync_live_stream,
+    sync_live_stream_event,
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
@@ -248,6 +256,28 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path("add/", self.edit_seasonreferee, name="add"),
                 path("<int:pk>/", self.edit_seasonreferee, name="edit"),
                 path("<int:pk>/delete/", self.delete_seasonreferee, name="delete"),
+            ],
+            self.app_name,
+        )
+
+        livestreamevent_urls = (
+            [
+                # The primary key is the YouTube broadcast identifier, so
+                # these routes match strings rather than integers.
+                path("add/", self.edit_livestreamevent, name="add"),
+                path("<str:pk>/", self.edit_livestreamevent, name="edit"),
+                path("<str:pk>/delete/", self.delete_livestreamevent, name="delete"),
+            ],
+            self.app_name,
+        )
+
+        livestreamkey_urls = (
+            [
+                # The primary key is the YouTube liveStream identifier, so
+                # these routes match strings rather than integers.
+                path("add/", self.edit_livestreamkey, name="add"),
+                path("<str:pk>/", self.edit_livestreamkey, name="edit"),
+                path("<str:pk>/delete/", self.delete_livestreamkey, name="delete"),
             ],
             self.app_name,
         )
@@ -418,6 +448,14 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path(
                     "<int:season_id>/referees/",
                     include(referees_urls, namespace="seasonreferee"),
+                ),
+                path(
+                    "<int:season_id>/live-stream-event/",
+                    include(livestreamevent_urls, namespace="livestreamevent"),
+                ),
+                path(
+                    "<int:season_id>/stream-key/",
+                    include(livestreamkey_urls, namespace="livestreamkey"),
                 ),
                 path("<int:season_id>/permission/", self.perms_season, name="perms"),
                 path("<int:season_id>/venue/", include(venue_urls, namespace="venue")),
@@ -858,17 +896,24 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
         extra_context.setdefault("dates", dates)
 
+        related = (
+            "exclusions",
+            "divisions",
+            "venues",
+            "timeslots",
+            "referees",
+        )
+        # Adhoc live stream events and their managed stream keys are only
+        # relevant when the season is being live streamed, keep the tabs
+        # hidden otherwise.
+        if season.live_stream:
+            related += ("live_stream_events", "live_stream_keys")
+
         return self.generic_edit(
             request,
             Season,
             instance=season,
-            related=(
-                "exclusions",
-                "divisions",
-                "venues",
-                "timeslots",
-                "referees",
-            ),
+            related=related,
             form_class=SeasonForm,
             form_kwargs={"user": request.user},
             post_save_redirect=self.redirect(competition.urls["edit"]),
@@ -1534,6 +1579,255 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         return self.generic_delete(
             request,
             season.referees,
+            pk=pk,
+            permission_required=True,
+            post_delete_redirect=post_delete_redirect,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def edit_livestreamevent(self, request, season, extra_context, pk=None, **kwargs):
+        if pk is None:
+            instance = LiveStreamEvent(season=season)
+        else:
+            instance = get_object_or_404(season.live_stream_events, pk=pk)
+
+        def pre_save_callback(obj: LiveStreamEvent):
+            # The broadcast identifier is the primary key, so a new event
+            # must create its broadcast on the YouTube platform up front.
+            if obj.pk:
+                return
+
+            if not (season.live_stream_client_id and season.live_stream_client_secret):
+                messages.error(
+                    request,
+                    _(
+                        "YouTube credentials must be configured for this "
+                        "season before live stream events can be created."
+                    ),
+                )
+                return self.redirect(".")
+
+            try:
+                broadcast = (
+                    season.youtube.liveBroadcasts()
+                    .insert(
+                        part="id,snippet,status,contentDetails",
+                        body=build_live_stream_event_body(obj),
+                    )
+                    .execute()
+                )
+            except HttpError as exc:
+                messages.error(request, exc.reason)
+                return self.redirect(".")
+
+            obj.external_identifier = broadcast["id"]
+            log.info("YouTube video %(id)r inserted", broadcast)
+
+        def post_save_callback(obj: LiveStreamEvent):
+            # Check if YouTube credentials are configured before queuing
+            # anything, we can't interact with the YouTube API without them.
+            if not (season.live_stream_client_id and season.live_stream_client_secret):
+                return None
+            sync_live_stream_event.s(obj.pk).apply_async()
+            return None
+
+        return self.generic_edit(
+            request,
+            season.live_stream_events,
+            instance=instance,
+            related=(),
+            form_class=LiveStreamEventForm,
+            always_save=season.live_stream,
+            pre_save_callback=pre_save_callback,
+            post_save_callback=post_save_callback,
+            post_save_redirect=self.redirect(
+                season.urls["edit"] + "#live_stream_events-tab"
+            ),
+            permission_required=True,
+            extra_context=extra_context,
+        )
+
+    def _confirm_youtube_destroyed(
+        self, request, season, instance, collection_name, redirect_response
+    ):
+        """
+        Guard local deletion of a record backed by a YouTube resource.
+
+        The record must not be removed from the database while its resource
+        may still exist on the platform — that would leave clutter we have
+        no way of removing. Destroy the resource first; a 404 means it is
+        already gone, which is equally confirmation.
+
+        Returns None when destruction is confirmed, otherwise the
+        HttpResponse to return instead of deleting.
+        """
+        # Mirror the permission check performed by generic_delete so the
+        # platform is never touched on behalf of a user who is not entitled
+        # to delete the record locally.
+        has_permission = get_40x_or_None(
+            request,
+            get_perms_for_model(type(instance), delete=True),
+            obj=instance,
+            return_403=not request.user.is_anonymous,
+            accept_global_perms=True,
+        )
+        if has_permission is not None:
+            return has_permission
+
+        verbose_name = instance._meta.verbose_name
+
+        if not (season.live_stream_client_id and season.live_stream_client_secret):
+            messages.error(
+                request,
+                _(
+                    "YouTube credentials are not configured for this season; "
+                    "unable to confirm the %s has been removed from the "
+                    "platform."
+                )
+                % verbose_name,
+            )
+            return redirect_response
+
+        try:
+            getattr(season.youtube, collection_name)().delete(
+                id=instance.pk
+            ).execute()
+            log.info("YouTube resource %r deleted", instance.pk)
+        except HttpError as exc:
+            if getattr(exc.resp, "status", None) != 404:
+                messages.error(request, exc.reason)
+                return redirect_response
+            # Already absent from the platform — confirmed destroyed.
+            log.info("YouTube resource %r already deleted", instance.pk)
+
+        return None
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def delete_livestreamevent(self, request, season, pk, **kwargs):
+        post_delete_redirect = self.redirect(
+            season.urls["edit"] + "#live_stream_events-tab"
+        )
+        if request.method == "POST":
+            event = get_object_or_404(season.live_stream_events, pk=pk)
+            blocked = self._confirm_youtube_destroyed(
+                request, season, event, "liveBroadcasts", post_delete_redirect
+            )
+            if blocked is not None:
+                return blocked
+        return self.generic_delete(
+            request,
+            season.live_stream_events,
+            pk=pk,
+            permission_required=True,
+            post_delete_redirect=post_delete_redirect,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def edit_livestreamkey(self, request, season, extra_context, pk=None, **kwargs):
+        if pk is None:
+            instance = LiveStreamKey(season=season)
+        else:
+            instance = get_object_or_404(season.live_stream_keys, pk=pk)
+
+        def pre_save_callback(obj: LiveStreamKey):
+            # The liveStream identifier is the primary key, so a new record
+            # must generate its stream on the YouTube platform up front. For
+            # an existing record the platform update is cosmetic, so missing
+            # credentials only warrant a warning.
+            if not (season.live_stream_client_id and season.live_stream_client_secret):
+                if not obj.pk:
+                    messages.error(
+                        request,
+                        _(
+                            "YouTube credentials must be configured for this "
+                            "season before stream keys can be generated."
+                        ),
+                    )
+                    return self.redirect(".")
+                messages.warning(
+                    request,
+                    _(
+                        "YouTube credentials are not configured for this "
+                        "season; the stream title was not updated on the "
+                        "platform."
+                    ),
+                )
+                return
+
+            body = {
+                "snippet": {
+                    "title": f"{season.competition} {season} ({obj.title})",
+                },
+                "cdn": {
+                    "ingestionType": "rtmp",
+                    "frameRate": "variable",
+                    "resolution": "variable",
+                },
+            }
+
+            try:
+                if obj.external_identifier:
+                    body["id"] = obj.external_identifier
+                    stream = (
+                        season.youtube.liveStreams()
+                        .update(part="snippet,cdn", body=body)
+                        .execute()
+                    )
+                    log.info("YouTube stream %(id)r updated", stream)
+                else:
+                    stream = (
+                        season.youtube.liveStreams()
+                        .insert(part="snippet,cdn", body=body)
+                        .execute()
+                    )
+                    obj.external_identifier = stream["id"]
+                    log.info("YouTube stream %(id)r inserted", stream)
+
+                obj.stream_key = stream["cdn"]["ingestionInfo"]["streamName"]
+
+            except HttpError as exc:
+                messages.error(request, exc.reason)
+                return self.redirect(".")
+
+        return self.generic_edit(
+            request,
+            season.live_stream_keys,
+            instance=instance,
+            # The reverse relation to events must not be enumerated as
+            # related tabs — there is no nested namespace routed for it.
+            related=(),
+            form_class=LiveStreamKeyForm,
+            always_save=season.live_stream,
+            pre_save_callback=pre_save_callback,
+            post_save_redirect=self.redirect(
+                season.urls["edit"] + "#live_stream_keys-tab"
+            ),
+            permission_required=True,
+            extra_context=extra_context,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def delete_livestreamkey(self, request, season, pk, **kwargs):
+        post_delete_redirect = self.redirect(
+            season.urls["edit"] + "#live_stream_keys-tab"
+        )
+        if request.method == "POST":
+            stream_key = get_object_or_404(season.live_stream_keys, pk=pk)
+            # A key still referenced by events is protected — let
+            # generic_delete refuse it without touching the platform.
+            if not stream_key.live_stream_events.exists():
+                blocked = self._confirm_youtube_destroyed(
+                    request, season, stream_key, "liveStreams", post_delete_redirect
+                )
+                if blocked is not None:
+                    return blocked
+        return self.generic_delete(
+            request,
+            season.live_stream_keys,
             pk=pk,
             permission_required=True,
             post_delete_redirect=post_delete_redirect,

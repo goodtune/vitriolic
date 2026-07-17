@@ -72,6 +72,8 @@ from tournamentcontrol.competition.models import (
     DrawFormat,
     Ground,
     LadderEntry,
+    LiveStreamEvent,
+    LiveStreamKey,
     Match,
     Person,
     Place,
@@ -1399,6 +1401,50 @@ class MatchLiveStreamForm(BootstrapFormControlMixin, ModelForm):
 
 
 MatchLiveStreamFormSet = modelformset_factory(Match, extra=0, form=MatchLiveStreamForm)
+
+
+class LiveStreamKeyForm(BootstrapFormControlMixin, ModelForm):
+    class Meta:
+        model = LiveStreamKey
+        fields = ("title",)
+
+
+class LiveStreamEventForm(BootstrapFormControlMixin, ModelForm):
+    class Meta:
+        model = LiveStreamEvent
+        fields = (
+            "title",
+            "description",
+            "start",
+            "stop",
+            "stream_key",
+            "live_stream",
+            "live_stream_thumbnail_image",
+        )
+        labels = {
+            "live_stream_thumbnail_image": _("Video Thumbnail"),
+        }
+        help_texts = {
+            "live_stream_thumbnail_image": _(
+                "Upload a custom thumbnail for this event. "
+                "If not set, the season's default thumbnail will be used."
+            ),
+        }
+        field_classes = {
+            "live_stream_thumbnail_image": ThumbnailImageField,
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Stream keys are a unique domain associated to the season — only
+        # offer the season's own managed pool, never the ground keys used
+        # for match streaming.
+        self.fields["stream_key"].queryset = self.instance.season.live_stream_keys
+        # A new event always creates its broadcast — the platform identifier
+        # is the primary key — so the removal toggle only applies once the
+        # event exists.
+        if not self.instance.pk:
+            self.fields.pop("live_stream")
 
 
 class MatchScheduleForm(BaseMatchFormMixin, ModelForm):

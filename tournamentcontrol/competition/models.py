@@ -48,6 +48,7 @@ from timezone_field.fields import TimeZoneField
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
 from touchtechnology.common.db.models import (
     BooleanField,
+    DateTimeField as SelectDateTimeField,
     ForeignKey,
     HTMLField,
     LocationField,
@@ -543,6 +544,16 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
 
     def _get_url_args(self):
         return (self.competition_id, self.pk)
+
+    @cached_property
+    def _mvp_related(self):
+        return {
+            # live-stream thumbnail blobs are only needed by the thumbnail
+            # views, never drag them out of the database for list views.
+            "live_stream_events": self.live_stream_events.select_related(
+                "stream_key"
+            ).defer("live_stream_thumbnail_image"),
+        }
 
     def __repr__(self):
         return "<Season: {} - {}>".format(self.competition, self)
@@ -2740,6 +2751,198 @@ class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
 
     def __str__(self):
         return "#{}".format(self.pk)
+
+
+class LiveStreamKey(AdminUrlMixin, models.Model):
+    """
+    A managed stream key associated with a Season, for use by adhoc live
+    stream events.
+
+    Each record is backed by a liveStream resource on the YouTube platform —
+    the generated stream key is what the camera or encoder operator uses to
+    deliver video. This pool is a unique domain associated to the season and
+    is entirely separate from the stream keys managed against grounds for
+    match streaming.
+    """
+
+    season = ForeignKey(
+        Season, related_name="live_stream_keys", on_delete=CASCADE
+    )
+
+    title = models.CharField(
+        max_length=100,
+        help_text=_(
+            "Identify this stream key — for example the camera or "
+            "production position that will use it."
+        ),
+    )
+    # The liveStream identifier issued by the YouTube platform is globally
+    # unique and never reused, so it serves as the primary key.
+    external_identifier = models.CharField(max_length=50, primary_key=True)
+    stream_key = models.CharField(max_length=50, unique=True, db_index=True)
+
+    class Meta:
+        ordering = ("title", "pk")
+        verbose_name = "stream key"
+
+    def __str__(self):
+        return self.label
+
+    @property
+    def label(self):
+        if self.stream_key:
+            return f"{self.title} ({self.stream_key})"
+        return self.title
+
+    def _get_admin_namespace(self):
+        return "admin:fixja:competition:season:livestreamkey"
+
+    def _get_url_args(self):
+        return (self.season.competition_id, self.season_id, self.pk)
+
+    def _get_url_names(self):
+        # No per-object permissions view is routed for this model.
+        return ["add", "edit", "delete"]
+
+
+class LiveStreamEvent(AdminUrlMixin, models.Model):
+    """
+    An adhoc live stream event associated with a Season.
+
+    This is a standalone feature — it has no crossover with match streaming.
+    Unlike a Match, which derives its broadcast window from the fixture, an
+    adhoc event captures an explicit scheduled start and stop time — for
+    example an opening ceremony, an awards presentation, or a commentary
+    desk between fixtures.
+    """
+
+    season = ForeignKey(
+        Season, related_name="live_stream_events", on_delete=CASCADE
+    )
+
+    title = models.CharField(
+        max_length=100,
+        help_text=_("Title of the broadcast on the YouTube platform."),
+    )
+    description = models.TextField(
+        blank=True,
+        help_text=_("Description of the broadcast on the YouTube platform."),
+    )
+
+    start = SelectDateTimeField(
+        verbose_name=_("Scheduled start"),
+        help_text=_("When the live stream is scheduled to commence."),
+    )
+    stop = SelectDateTimeField(
+        verbose_name=_("Scheduled finish"),
+        help_text=_("When the live stream is scheduled to conclude."),
+    )
+
+    live_stream = BooleanField(
+        default=True,
+        help_text=_(
+            "Set to No to remove the scheduled broadcast from the YouTube "
+            "platform while keeping this event for your records. The "
+            "broadcast cannot be reinstated once removed."
+        ),
+    )
+    stream_key = ForeignKey(
+        LiveStreamKey,
+        blank=True,
+        null=True,
+        related_name="live_stream_events",
+        label_from_instance="label",
+        on_delete=PROTECT,
+        help_text=_(
+            "The stream key the camera or encoder operator should use to "
+            "deliver video for this event."
+        ),
+    )
+    # The broadcast identifier issued by the YouTube platform is globally
+    # unique and never reused, so it serves as the primary key. The
+    # broadcast is created when the event is, and the record retains its
+    # identifier even after the broadcast is removed from the platform.
+    external_identifier = models.CharField(max_length=20, primary_key=True)
+    live_stream_bind = models.CharField(
+        max_length=50, blank=True, null=True, db_index=True
+    )
+    live_stream_thumbnail_image = models.BinaryField(
+        blank=True,
+        null=True,
+        editable=True,
+        help_text="Image to be used as thumbnail image on the YouTube platform",
+    )
+
+    class Meta:
+        ordering = ("start", "title")
+        verbose_name = "live stream event"
+
+    def __str__(self):
+        return self.title
+
+    def _get_admin_namespace(self):
+        return "admin:fixja:competition:season:livestreamevent"
+
+    def _get_url_args(self):
+        return (self.season.competition_id, self.season_id, self.pk)
+
+    def _get_url_names(self):
+        # No per-object permissions view is routed for this model.
+        return ["add", "edit", "delete"]
+
+    def clean(self):
+        errors = {}
+        if self.start and self.stop and self.stop <= self.start:
+            errors.setdefault("stop", []).append(
+                _("The scheduled finish must be after the scheduled start.")
+            )
+        if self.stream_key_id and self.season_id:
+            if self.stream_key.season_id != self.season_id:
+                errors.setdefault("stream_key", []).append(
+                    _("This stream key does not belong to this season.")
+                )
+        if errors:
+            raise ValidationError(errors)
+
+    def get_thumbnail_media_upload(self) -> MediaUpload | None:
+        """
+        Get a MediaMemoryUpload instance for this event's thumbnail.
+        Falls back to season thumbnail if the event has no specific thumbnail.
+
+        Returns:
+            MediaMemoryUpload or None if no thumbnail is available
+        """
+        if self.live_stream_thumbnail_image:
+            return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
+
+        if self.season.live_stream_thumbnail_image:
+            return MediaMemoryUpload(
+                self.season.live_stream_thumbnail_image, resumable=True
+            )
+
+        return None
+
+    def live_stream_thumbnail_response(self, width=None, height=None) -> HttpResponse:
+        """
+        Get HttpResponse for this event's thumbnail image.
+        Falls back to season thumbnail if the event has no specific thumbnail.
+
+        Args:
+            width (int, optional): Maximum width for resizing
+            height (int, optional): Maximum height for resizing
+
+        Returns:
+            HttpResponse: Image response with appropriate headers
+
+        Raises:
+            Http404: If no thumbnail is available or processing fails
+        """
+        return create_thumbnail_response(
+            self.live_stream_thumbnail_image
+            or self.season.live_stream_thumbnail_image,
+            width,
+            height,
+        )
 
 
 class MatchScoreSheet(AdminUrlMixin, models.Model):

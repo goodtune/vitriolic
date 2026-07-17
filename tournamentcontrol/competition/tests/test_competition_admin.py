@@ -339,6 +339,14 @@ class GoodViewTests(TestCase):
         matchtime = factories.SeasonMatchTimeFactory.create()
         self.assertGoodNamespace(matchtime)
 
+    def test_livestreamevent(self):
+        event = factories.LiveStreamEventFactory.create(season__live_stream=True)
+        self.assertGoodNamespace(event)
+
+    def test_livestreamkey(self):
+        stream_key = factories.LiveStreamKeyFactory.create(season__live_stream=True)
+        self.assertGoodNamespace(stream_key)
+
     def test_venue(self):
         venue = factories.VenueFactory.create()
         self.assertGoodNamespace(venue)
