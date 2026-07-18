@@ -22,6 +22,7 @@ from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _, ngettext
+from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from guardian.utils import get_40x_or_None
 
@@ -125,6 +126,13 @@ from tournamentcontrol.competition.utils import (
 from tournamentcontrol.competition.wizards import DrawGenerationWizard
 
 SCORECARD_PDF_WAIT = getattr(settings, "TOURNAMENTCONTROL_SCORECARD_PDF_WAIT", 5)
+
+# Shown when the season's stored OAuth2 refresh token is expired or revoked
+# and the YouTube platform can no longer be reached on its behalf.
+YOUTUBE_AUTH_EXPIRED_MESSAGE = _(
+    "YouTube authorisation for this season has expired or been revoked. "
+    "Re-authorise from the YouTube button on the seasons list and try again."
+)
 
 log = logging.getLogger(__name__)
 
@@ -1617,6 +1625,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     )
                     .execute()
                 )
+            except RefreshError:
+                messages.error(request, YOUTUBE_AUTH_EXPIRED_MESSAGE)
+                return self.redirect(".")
             except HttpError as exc:
                 messages.error(request, exc.reason)
                 return self.redirect(".")
@@ -1694,6 +1705,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 id=instance.pk
             ).execute()
             log.info("YouTube resource %r deleted", instance.pk)
+        except RefreshError:
+            # Destruction cannot be confirmed without authorisation, so the
+            # record must be retained.
+            messages.error(request, YOUTUBE_AUTH_EXPIRED_MESSAGE)
+            return redirect_response
         except HttpError as exc:
             if getattr(exc.resp, "status", None) != 404:
                 messages.error(request, exc.reason)
@@ -1788,6 +1804,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
                 obj.stream_key = stream["cdn"]["ingestionInfo"]["streamName"]
 
+            except RefreshError:
+                messages.error(request, YOUTUBE_AUTH_EXPIRED_MESSAGE)
+                return self.redirect(".")
             except HttpError as exc:
                 messages.error(request, exc.reason)
                 return self.redirect(".")
