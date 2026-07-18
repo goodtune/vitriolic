@@ -1,5 +1,7 @@
 """E2E tests for the adhoc live stream event admin forms."""
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from playwright.sync_api import Page, expect
 
@@ -29,10 +31,19 @@ class TestLiveStreamEventForm:
         stream_key = LiveStreamKeyFactory.create(
             season=season, title="Roaming Camera"
         )
+        # The factory would otherwise draw a random start as far back as
+        # 2020, which can fall outside the year select's range (current
+        # year +/- 5). Anchor the schedule near today so the components
+        # always have matching options.
+        start = datetime.now(timezone.utc).replace(
+            minute=30, second=0, microsecond=0
+        ) + timedelta(days=7)
         event = LiveStreamEventFactory.create(
             season=season,
             title="Opening Ceremony",
             stream_key=stream_key,
+            start=start,
+            stop=start + timedelta(hours=2),
         )
         return {"season": season, "stream_key": stream_key, "event": event}
 
