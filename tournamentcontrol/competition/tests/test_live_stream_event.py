@@ -145,19 +145,22 @@ class LiveStreamEventFormTests(TestCase):
         self.assertCountEqual(form.fields["stream_key"].queryset, [stream_key])
 
     def test_stop_before_start_is_invalid(self):
-        season = factories.SeasonFactory.create()
+        season = factories.SeasonFactory.create(timezone="UTC")
         form = LiveStreamEventForm(
             instance=LiveStreamEvent(season=season),
             data={
                 "title": "Opening Ceremony",
                 "description": "",
-                "start_0": "2025-05-01",
-                "start_1": "19:00:00",
-                "start_2": "UTC",
-                "stop_0": "2025-05-01",
-                "stop_1": "18:00:00",
-                "stop_2": "UTC",
-                "live_stream": "1",
+                "start_0_year": "2025",
+                "start_0_month": "5",
+                "start_0_day": "1",
+                "start_1": "19",
+                "start_2": "0",
+                "stop_0_year": "2025",
+                "stop_0_month": "5",
+                "stop_0_day": "1",
+                "stop_1": "18",
+                "stop_2": "0",
             },
         )
         self.assertEqual(form.is_valid(), False)
@@ -173,7 +176,7 @@ class LiveStreamEventFormTests(TestCase):
         self.assertIn("live_stream", edit_form.fields)
 
     def test_valid_form_saves_event(self):
-        season = factories.SeasonFactory.create()
+        season = factories.SeasonFactory.create(timezone="UTC")
         stream_key = factories.LiveStreamKeyFactory.create(season=season)
         # The admin assigns the broadcast identifier issued by the YouTube
         # platform before the form is saved; simulate that here.
@@ -182,12 +185,16 @@ class LiveStreamEventFormTests(TestCase):
             data={
                 "title": "Opening Ceremony",
                 "description": "Live from the main field.",
-                "start_0": "2025-05-01",
-                "start_1": "19:00:00",
-                "start_2": "UTC",
-                "stop_0": "2025-05-01",
-                "stop_1": "20:30:00",
-                "stop_2": "UTC",
+                "start_0_year": "2025",
+                "start_0_month": "5",
+                "start_0_day": "1",
+                "start_1": "19",
+                "start_2": "0",
+                "stop_0_year": "2025",
+                "stop_0_month": "5",
+                "stop_0_day": "1",
+                "stop_1": "20",
+                "stop_2": "30",
                 "stream_key": str(stream_key.pk),
             },
         )
@@ -202,6 +209,62 @@ class LiveStreamEventFormTests(TestCase):
             event.stop, datetime.datetime(2025, 5, 1, 20, 30, tzinfo=UTC)
         )
         self.assertEqual(event.stream_key, stream_key)
+
+    def test_times_are_implied_in_season_timezone(self):
+        sydney = ZoneInfo("Australia/Sydney")
+        season = factories.SeasonFactory.create(timezone="Australia/Sydney")
+        form = LiveStreamEventForm(
+            instance=LiveStreamEvent(season=season, external_identifier="adhoc998"),
+            data={
+                "title": "Opening Ceremony",
+                "description": "",
+                "start_0_year": "2025",
+                "start_0_month": "5",
+                "start_0_day": "1",
+                "start_1": "19",
+                "start_2": "0",
+                "stop_0_year": "2025",
+                "stop_0_month": "5",
+                "stop_0_day": "1",
+                "stop_1": "20",
+                "stop_2": "30",
+            },
+        )
+        self.assertEqual(form.is_valid(), True, form.errors)
+        event = form.save()
+        # Entered as 19:00 with no timezone component — implied Sydney time.
+        self.assertEqual(
+            event.start,
+            datetime.datetime(2025, 5, 1, 19, 0, tzinfo=sydney),
+        )
+        self.assertEqual(
+            event.start.astimezone(UTC),
+            datetime.datetime(2025, 5, 1, 9, 0, tzinfo=UTC),
+        )
+
+    def test_initial_values_render_in_season_timezone(self):
+        season = factories.SeasonFactory.create(timezone="Australia/Sydney")
+        event = factories.LiveStreamEventFactory.create(
+            season=season,
+            start=datetime.datetime(2025, 5, 1, 6, 0, tzinfo=UTC),
+            stop=datetime.datetime(2025, 5, 1, 7, 30, tzinfo=UTC),
+        )
+        form = LiveStreamEventForm(instance=event)
+        # 06:00 UTC is 16:00 in Sydney — components display season-local.
+        self.assertEqual(
+            form.fields["start"].widget.decompress(event.start),
+            [datetime.date(2025, 5, 1), 16, 0],
+        )
+        self.assertEqual(
+            form.fields["stop"].widget.decompress(event.stop),
+            [datetime.date(2025, 5, 1), 17, 30],
+        )
+
+    def test_help_text_names_the_season_timezone(self):
+        season = factories.SeasonFactory.create(timezone="Australia/Sydney")
+        form = LiveStreamEventForm(instance=LiveStreamEvent(season=season))
+        self.assertIn("Australia/Sydney", form.fields["start"].help_text)
+        self.assertIn("Australia/Sydney", form.fields["stop"].help_text)
 
 
 class BuildLiveStreamEventBodyTests(TestCase):
@@ -540,12 +603,16 @@ class LiveStreamEventAdminTests(TestCase):
                 data={
                     "title": "Opening Ceremony",
                     "description": "",
-                    "start_0": "2025-05-01",
-                    "start_1": "19:00:00",
-                    "start_2": "UTC",
-                    "stop_0": "2025-05-01",
-                    "stop_1": "20:30:00",
-                    "stop_2": "UTC",
+                    "start_0_year": "2025",
+                    "start_0_month": "5",
+                    "start_0_day": "1",
+                    "start_1": "19",
+                    "start_2": "0",
+                    "stop_0_year": "2025",
+                    "stop_0_month": "5",
+                    "stop_0_day": "1",
+                    "stop_1": "20",
+                    "stop_2": "30",
                 },
             )
             self.response_302()
@@ -577,12 +644,16 @@ class LiveStreamEventAdminTests(TestCase):
                 data={
                     "title": "Opening Ceremony",
                     "description": "",
-                    "start_0": "2025-05-01",
-                    "start_1": "19:00:00",
-                    "start_2": "UTC",
-                    "stop_0": "2025-05-01",
-                    "stop_1": "20:30:00",
-                    "stop_2": "UTC",
+                    "start_0_year": "2025",
+                    "start_0_month": "5",
+                    "start_0_day": "1",
+                    "start_1": "19",
+                    "start_2": "0",
+                    "stop_0_year": "2025",
+                    "stop_0_month": "5",
+                    "stop_0_day": "1",
+                    "stop_1": "20",
+                    "stop_2": "30",
                 },
             )
             self.response_302()

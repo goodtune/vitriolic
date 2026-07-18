@@ -31,6 +31,7 @@ from django.forms.models import (
     modelformset_factory,
 )
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _, ngettext
 from first import first
@@ -336,6 +337,86 @@ class ThumbnailImageField(forms.FileField):
         if hasattr(data, "read"):  # New file uploaded
             return True
         return False
+
+
+class SeasonTimezoneDateTimeWidget(forms.MultiWidget):
+    """
+    Date and time entry using individual component selects.
+
+    The date components render on one line and the time components on the
+    next. There is deliberately no timezone component — values are
+    interpreted in the timezone assigned to the widget (the season's
+    timezone).
+    """
+
+    template_name = (
+        "tournamentcontrol/competition/widgets/season_timezone_datetime_widget.html"
+    )
+
+    def __init__(self, attrs=None):
+        this_year = datetime.date.today().year
+        widgets = (
+            forms.SelectDateWidget(
+                attrs=attrs, years=range(this_year - 5, this_year + 5)
+            ),
+            forms.Select(
+                attrs=attrs, choices=[(h, "%02d" % h) for h in range(24)]
+            ),
+            forms.Select(
+                attrs=attrs, choices=[(m, "%02d" % m) for m in range(60)]
+            ),
+        )
+        super().__init__(widgets, attrs)
+        self.timezone = None
+
+    def decompress(self, value):
+        if value:
+            if self.timezone is not None:
+                value = value.astimezone(self.timezone)
+            return [value.date(), value.hour, value.minute]
+        return [None, None, None]
+
+
+class SeasonTimezoneDateTimeField(forms.MultiValueField):
+    """
+    Date and time entry in the timezone of the season.
+
+    The timezone select is deliberately omitted — for practical purposes an
+    adhoc live stream event is always expressed in the timezone of the
+    season it belongs to, so it is implied rather than asked for.
+    """
+
+    widget = SeasonTimezoneDateTimeWidget
+
+    def __init__(self, **kwargs):
+        fields = (
+            forms.DateField(),
+            forms.TypedChoiceField(
+                coerce=int, choices=[(h, "%02d" % h) for h in range(24)]
+            ),
+            forms.TypedChoiceField(
+                coerce=int, choices=[(m, "%02d" % m) for m in range(60)]
+            ),
+        )
+        super().__init__(fields, **kwargs)
+        self._timezone = None
+
+    @property
+    def timezone(self):
+        return self._timezone
+
+    @timezone.setter
+    def timezone(self, value):
+        self._timezone = value
+        self.widget.timezone = value
+
+    def compress(self, data_list):
+        if data_list:
+            value = datetime.datetime.combine(
+                data_list[0], datetime.time(data_list[1], data_list[2])
+            )
+            return timezone.make_aware(value, self.timezone)
+        return None
 
 
 class ConstructFormMixin(object):
@@ -1431,6 +1512,8 @@ class LiveStreamEventForm(BootstrapFormControlMixin, ModelForm):
             ),
         }
         field_classes = {
+            "start": SeasonTimezoneDateTimeField,
+            "stop": SeasonTimezoneDateTimeField,
             "live_stream_thumbnail_image": ThumbnailImageField,
         }
 
@@ -1445,6 +1528,15 @@ class LiveStreamEventForm(BootstrapFormControlMixin, ModelForm):
         # event exists.
         if not self.instance.pk:
             self.fields.pop("live_stream")
+        # Times are always expressed in the season's timezone; it is implied
+        # rather than asked for.
+        tz = self.instance.season.timezone or timezone.get_current_timezone()
+        for name in ("start", "stop"):
+            self.fields[name].timezone = tz
+            self.fields[name].help_text = "{} {}".format(
+                self.fields[name].help_text,
+                _("Local time in %s.") % tz,
+            )
 
 
 class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
