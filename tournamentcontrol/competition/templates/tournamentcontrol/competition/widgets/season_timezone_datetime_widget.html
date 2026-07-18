@@ -1,9 +1,26 @@
 {% with date=widget.subwidgets.0 hour=widget.subwidgets.1 minute=widget.subwidgets.2 %}
+<style>
+	/* Bootstrap's .form-inline only applies at desktop widths; the
+	   date-line/time-line grouping must hold on every viewport. */
+	.season-timezone-datetime .form-control {
+		display: inline-block;
+		width: auto;
+		vertical-align: middle;
+	}
+	.season-timezone-datetime-date,
+	.season-timezone-datetime-time {
+		margin-bottom: 5px;
+		white-space: nowrap;
+	}
+	.season-timezone-datetime-separator {
+		margin: 0 4px;
+	}
+</style>
 <div class="season-timezone-datetime">
-	<div class="form-inline season-timezone-datetime-date">
+	<div class="season-timezone-datetime-date">
 		{% include date.template_name with widget=date only %}
 	</div>
-	<div class="form-inline season-timezone-datetime-time">
+	<div class="season-timezone-datetime-time">
 		{% include hour.template_name with widget=hour only %}<span class="season-timezone-datetime-separator">:</span>{% include minute.template_name with widget=minute only %}
 	</div>
 </div>

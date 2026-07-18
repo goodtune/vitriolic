@@ -100,7 +100,22 @@ class TestLiveStreamEventForm:
         )
 
         # Layout: the date components share one line, the time components
-        # the next, rather than each select stacking full width.
+        # the next, rather than each select stacking full width. This must
+        # hold on every viewport, not just desktop.
+        self._assert_date_line_time_line(page)
+        page.screenshot(
+            path=str(screenshot_dir / "live_stream_event_form.png"), full_page=True
+        )
+
+        # Mobile viewport.
+        page.set_viewport_size({"width": 375, "height": 812})
+        self._assert_date_line_time_line(page)
+        page.screenshot(
+            path=str(screenshot_dir / "live_stream_event_form_mobile.png"),
+            full_page=True,
+        )
+
+    def _assert_date_line_time_line(self, page: Page):
         day = page.locator('select[name="start_0_day"]').bounding_box()
         month = page.locator('select[name="start_0_month"]').bounding_box()
         year = page.locator('select[name="start_0_year"]').bounding_box()
@@ -111,10 +126,6 @@ class TestLiveStreamEventForm:
         assert abs(month["y"] - year["y"]) < 5
         assert abs(hour["y"] - minute["y"]) < 5
         assert hour["y"] > day["y"]
-
-        page.screenshot(
-            path=str(screenshot_dir / "live_stream_event_form.png"), full_page=True
-        )
 
     def test_edit_form_renders_times_in_season_timezone(
         self, authenticated_page: Page, live_server, live_stream_season, screenshot_dir
