@@ -98,6 +98,7 @@ TEMPLATES = [
                 "touchtechnology.common.context_processors.query_string",
                 "touchtechnology.common.context_processors.site",
                 "touchtechnology.common.context_processors.tz",
+                "touchtechnology.common.context_processors.htmx_admin_tabs",
                 # Static files context processor
                 "django.template.context_processors.static",
             ],
