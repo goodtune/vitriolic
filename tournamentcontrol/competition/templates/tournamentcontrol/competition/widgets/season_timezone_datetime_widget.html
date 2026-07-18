@@ -1,0 +1,10 @@
+{% with date=widget.subwidgets.0 hour=widget.subwidgets.1 minute=widget.subwidgets.2 %}
+<div class="season-timezone-datetime">
+	<div class="form-inline season-timezone-datetime-date">
+		{% include date.template_name with widget=date only %}
+	</div>
+	<div class="form-inline season-timezone-datetime-time">
+		{% include hour.template_name with widget=hour only %}<span class="season-timezone-datetime-separator">:</span>{% include minute.template_name with widget=minute only %}
+	</div>
+</div>
+{% endwith %}

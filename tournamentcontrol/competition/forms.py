@@ -343,9 +343,15 @@ class SeasonTimezoneDateTimeWidget(forms.MultiWidget):
     """
     Date and time entry using individual component selects.
 
-    There is deliberately no timezone component — values are interpreted in
-    the timezone assigned to the widget (the season's timezone).
+    The date components render on one line and the time components on the
+    next. There is deliberately no timezone component — values are
+    interpreted in the timezone assigned to the widget (the season's
+    timezone).
     """
+
+    template_name = (
+        "tournamentcontrol/competition/widgets/season_timezone_datetime_widget.html"
+    )
 
     def __init__(self, attrs=None):
         this_year = datetime.date.today().year

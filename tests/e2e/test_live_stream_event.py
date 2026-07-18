@@ -99,6 +99,19 @@ class TestLiveStreamEventForm:
             "Roaming Camera"
         )
 
+        # Layout: the date components share one line, the time components
+        # the next, rather than each select stacking full width.
+        day = page.locator('select[name="start_0_day"]').bounding_box()
+        month = page.locator('select[name="start_0_month"]').bounding_box()
+        year = page.locator('select[name="start_0_year"]').bounding_box()
+        hour = page.locator('select[name="start_1"]').bounding_box()
+        minute = page.locator('select[name="start_2"]').bounding_box()
+
+        assert abs(day["y"] - month["y"]) < 5
+        assert abs(month["y"] - year["y"]) < 5
+        assert abs(hour["y"] - minute["y"]) < 5
+        assert hour["y"] > day["y"]
+
         page.screenshot(
             path=str(screenshot_dir / "live_stream_event_form.png"), full_page=True
         )
