@@ -6,8 +6,10 @@ import datetime
 from unittest import mock
 from zoneinfo import ZoneInfo
 
+from django.contrib.messages import get_messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
+from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from test_plus import TestCase
 
@@ -783,6 +785,83 @@ class LiveStreamEventAdminTests(TestCase):
         self.assertEqual(LiveStreamEvent.objects.count(), 1)
 
     @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_add_event_with_expired_authorisation_is_graceful(
+        self, mock_youtube_prop
+    ):
+        mock_youtube_prop.side_effect = RefreshError(
+            "invalid_grant: Token has been expired or revoked."
+        )
+
+        season = factories.SeasonFactory.create(
+            timezone="UTC",
+            live_stream=True,
+            live_stream_client_id="client-id",
+            live_stream_client_secret="client-secret",
+        )
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:livestreamevent:add",
+                season.competition_id,
+                season.pk,
+                data={
+                    "title": "Opening Ceremony",
+                    "description": "",
+                    "start_0_year": "2025",
+                    "start_0_month": "5",
+                    "start_0_day": "1",
+                    "start_1": "19",
+                    "start_2": "0",
+                    "stop_0_year": "2025",
+                    "stop_0_month": "5",
+                    "stop_0_day": "1",
+                    "stop_1": "20",
+                    "stop_2": "30",
+                },
+            )
+            self.response_302()
+
+        self.assertEqual(season.live_stream_events.count(), 0)
+        self.assertIn(
+            "YouTube authorisation for this season has expired or been revoked.",
+            " ".join(
+                str(message)
+                for message in get_messages(self.last_response.wsgi_request)
+            ),
+        )
+
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_delete_event_with_expired_authorisation_is_blocked(
+        self, mock_youtube_prop
+    ):
+        mock_youtube_prop.side_effect = RefreshError(
+            "invalid_grant: Token has been expired or revoked."
+        )
+
+        event = factories.LiveStreamEventFactory.create(
+            season__live_stream=True,
+            season__live_stream_client_id="client-id",
+            season__live_stream_client_secret="client-secret",
+            external_identifier="adhoc123",
+        )
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:livestreamevent:delete",
+                event.season.competition_id,
+                event.season_id,
+                event.pk,
+            )
+            self.response_302()
+
+        # Destruction on the platform cannot be confirmed, the record stays.
+        self.assertEqual(LiveStreamEvent.objects.count(), 1)
+
+    @mock.patch(
         "tournamentcontrol.competition.signals.live_streams.delete_youtube_broadcast"
     )
     def test_model_delete_queues_platform_cleanup(self, mock_broadcast_task):
@@ -914,6 +993,33 @@ class LiveStreamKeyAdminTests(TestCase):
         self.assertEqual(stream_key.title, "Roaming Camera")
         self.assertEqual(stream_key.pk, "stream456")
         self.assertEqual(stream_key.stream_key, "abcd-1234")
+
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_add_stream_key_with_expired_authorisation_is_graceful(
+        self, mock_youtube_prop
+    ):
+        mock_youtube_prop.side_effect = RefreshError(
+            "invalid_grant: Token has been expired or revoked."
+        )
+
+        season = factories.SeasonFactory.create(
+            live_stream=True,
+            live_stream_client_id="client-id",
+            live_stream_client_secret="client-secret",
+        )
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:livestreamkey:add",
+                season.competition_id,
+                season.pk,
+                data={"title": "Roaming Camera"},
+            )
+            self.response_302()
+
+        self.assertEqual(season.live_stream_keys.count(), 0)
 
     @mock.patch(
         "tournamentcontrol.competition.models.Season.youtube",
