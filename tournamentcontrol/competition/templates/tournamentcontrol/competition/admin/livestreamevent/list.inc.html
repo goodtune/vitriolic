@@ -28,4 +28,46 @@
 	</td>
 {% endblock %}
 
+{% block row-buttons %}
+	{% if obj.live_stream %}
+		{# The rows render inside the season edit <form>, so the button #}
+		{# must never act as a submit. #}
+		<button type="button"
+				class="btn btn-default btn-sm js-copy-video-link"
+				data-video-url="{{ obj.video_url }}"
+				title="{% trans "Copy video link" %}">
+			<i class="fa fa-clipboard"></i>
+			<span class="hidden-sm hidden-xs">&nbsp;{% trans "Copy video link" %}</span>
+		</button>
+	{% endif %}
+	{{ block.super }}
+{% endblock %}
+
 {% block empty-row-colspan %}5{% endblock %}
+
+{% block pagination %}
+	{{ block.super }}
+	<style>
+		.js-copy-video-link {
+			vertical-align: middle;
+		}
+		.js-copy-video-link + .dropdown {
+			display: inline-block;
+			vertical-align: middle;
+			margin-left: 4px;
+		}
+	</style>
+	<script>
+		document.addEventListener("click", function (e) {
+			var button = e.target.closest(".js-copy-video-link");
+			if (!button) return;
+			navigator.clipboard.writeText(button.dataset.videoUrl).then(function () {
+				var icon = button.querySelector("i");
+				icon.className = "fa fa-check";
+				setTimeout(function () {
+					icon.className = "fa fa-clipboard";
+				}, 2000);
+			});
+		});
+	</script>
+{% endblock %}

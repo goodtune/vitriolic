@@ -2890,6 +2890,11 @@ class LiveStreamEvent(AdminUrlMixin, models.Model):
         # No per-object permissions view is routed for this model.
         return ["add", "edit", "delete"]
 
+    @property
+    def video_url(self):
+        """Shareable link to the broadcast on the YouTube platform."""
+        return f"https://youtu.be/{self.external_identifier}"
+
     def clean(self):
         errors = {}
         if self.start and self.stop and self.stop <= self.start:
