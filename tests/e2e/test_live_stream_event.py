@@ -53,6 +53,40 @@ class TestLiveStreamEventForm:
             f"{season.competition.pk}/seasons/{season.pk}/"
         )
 
+    def test_copy_video_link_button(
+        self, authenticated_page: Page, live_server, live_stream_season, screenshot_dir
+    ):
+        """
+        The events tab offers a per-row button that copies the youtu.be
+        link for the broadcast to the clipboard, without submitting the
+        surrounding season form.
+        """
+        page = authenticated_page
+        season = live_stream_season["season"]
+        event = live_stream_season["event"]
+
+        page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+        page.goto(self._season_url(live_server, season))
+        page.locator('a[href="#live_stream_events-tab"]').click()
+
+        button = page.locator(".js-copy-video-link")
+        expect(button).to_be_visible()
+        button.click()
+
+        # The youtu.be form of the link is now on the clipboard.
+        clipboard = page.evaluate("navigator.clipboard.readText()")
+        assert clipboard == f"https://youtu.be/{event.pk}"
+
+        # Visual feedback, and the click must not have navigated away by
+        # submitting the season form.
+        expect(button.locator("i")).to_have_class("fa fa-check")
+        expect(page.locator("#live_stream_events-tab")).to_be_visible()
+
+        page.screenshot(
+            path=str(screenshot_dir / "live_stream_event_copy_link.png"),
+            full_page=True,
+        )
+
     def test_season_edit_shows_live_stream_tabs(
         self, authenticated_page: Page, live_server, live_stream_season, screenshot_dir
     ):

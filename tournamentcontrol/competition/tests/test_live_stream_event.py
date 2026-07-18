@@ -100,6 +100,12 @@ class LiveStreamEventModelTests(TestCase):
         event = factories.LiveStreamEventFactory.create()
         self.assertCountEqual(event.season.live_stream_events.all(), [event])
 
+    def test_video_url(self):
+        event = factories.LiveStreamEventFactory.create(
+            external_identifier="adhoc123"
+        )
+        self.assertEqual(event.video_url, "https://youtu.be/adhoc123")
+
 
 class LiveStreamKeyModelTests(TestCase):
     def test_str_without_generated_key_is_title(self):
@@ -559,6 +565,36 @@ class LiveStreamEventAdminTests(TestCase):
             )
             self.assertResponseContains("Opening Ceremony", html=False)
             self.assertResponseContains("live_stream_events-tab", html=False)
+
+    def test_season_edit_offers_copy_video_link(self):
+        event = factories.LiveStreamEventFactory.create(
+            season__live_stream=True, external_identifier="adhoc123"
+        )
+        with self.login(self.superuser):
+            self.assertGoodView(
+                "admin:fixja:competition:season:edit",
+                event.season.competition_id,
+                event.season_id,
+            )
+            self.assertResponseContains(
+                'data-video-url="https://youtu.be/adhoc123"', html=False
+            )
+
+    def test_season_edit_hides_copy_video_link_for_removed_broadcast(self):
+        event = factories.LiveStreamEventFactory.create(
+            season__live_stream=True,
+            external_identifier="adhoc123",
+            live_stream=False,
+        )
+        with self.login(self.superuser):
+            self.assertGoodView(
+                "admin:fixja:competition:season:edit",
+                event.season.competition_id,
+                event.season_id,
+            )
+            self.assertResponseNotContains(
+                'data-video-url="https://youtu.be/adhoc123"', html=False
+            )
 
     def test_season_edit_hides_events_tab_when_not_live_streamed(self):
         season = factories.SeasonFactory.create(live_stream=False)
