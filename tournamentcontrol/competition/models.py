@@ -479,7 +479,6 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
     live_stream_refresh_token = models.CharField(max_length=200, null=True)
     live_stream_token_uri = models.URLField(null=True)
     live_stream_scopes = PG.ArrayField(models.CharField(max_length=200), null=True)
-    live_stream_thumbnail = models.URLField(blank=True, null=True)
     live_stream_thumbnail_image = models.BinaryField(
         blank=True,
         null=True,
@@ -2093,7 +2092,6 @@ class Match(AdminUrlMixin, models.Model):
     live_stream_bind = models.CharField(
         max_length=50, blank=True, null=True, db_index=True
     )
-    live_stream_thumbnail = models.URLField(blank=True, null=True)
     live_stream_thumbnail_image = models.BinaryField(
         blank=True,
         null=True,
