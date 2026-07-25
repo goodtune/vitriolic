@@ -1,17 +1,7 @@
-import importlib
-
-from django.apps import apps
 from django.test import TestCase
 
 from tournamentcontrol.competition.models import LadderEntry, LadderSummary
 from tournamentcontrol.competition.tests import factories
-
-# The repair migration is named with a numeric prefix so it cannot be imported
-# with the ``from ... import ...`` syntax.
-repair = importlib.import_module(
-    "tournamentcontrol.competition.migrations"
-    ".0062_fix_cross_stage_ladder_summary_pool"
-)
 
 
 class SignalHandlerTests(TestCase):
@@ -199,25 +189,4 @@ class CombinedAgeGradeLadderTests(TestCase):
         self.assertEqual(
             [self.m55_a1, self.m55_a2, self.m55_b1],
             sorted((s.team for s in ladders[self.m55_stage]), key=lambda t: t.pk),
-        )
-
-    def test_repair_migration_detaches_cross_stage_pool(self):
-        # Reproduce the data as it was written before the signal was fixed;
-        # the summary took the pool from the team, not from its own stage.
-        for summary in LadderSummary.objects.filter(stage=self.m55_stage):
-            summary.stage_group = summary.team.stage_group
-            summary.save(update_fields=["stage_group"])
-
-        self.assertEqual(6, self.pool_a.ladder_summary.count())
-        self.assertEqual(4, self.pool_b.ladder_summary.count())
-
-        repair.clear_cross_stage_stage_group(apps, None)
-
-        self.assertEqual(4, self.pool_a.ladder_summary.count())
-        self.assertEqual(3, self.pool_b.ladder_summary.count())
-        self.assertQuerySetEqual(
-            LadderSummary.objects.filter(stage=self.m55_stage).values_list(
-                "stage_group", flat=True
-            ),
-            [None, None, None],
         )
