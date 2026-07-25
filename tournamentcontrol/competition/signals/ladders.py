@@ -184,8 +184,22 @@ def team_ladder_entry_aggregation(sender, instance, created=None, *args, **kwarg
     aggregate.update({"difference": difference})
     aggregate.update({"percentage": percentage})
 
+    # A team keeps a reference to the pool it was drawn into, which belongs to
+    # a single stage. When a later stage reuses some of those teams -- for
+    # example a combined age group where the second stage is a round robin of
+    # the teams from one grade -- the pool must not be carried onto the summary
+    # or it will be reported as part of the earlier stage's pool ladder.
+    stage_group = instance.team.stage_group
+    if stage_group is not None and stage_group.stage_id != instance.match.stage_id:
+        logger.debug(
+            "%r belongs to %r from another stage, not attributing summary to it.",
+            instance.team,
+            stage_group,
+        )
+        stage_group = None
+
     instance.team.ladder_summary.create(
         stage=instance.match.stage,
-        stage_group=instance.team.stage_group,
+        stage_group=stage_group,
         **aggregate,
     )
