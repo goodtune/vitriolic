@@ -26,7 +26,6 @@
 	<table class="team draw">
 		<thead>
 			<tr>
-				<th>{% trans "Date" %}</th>
 				<th>{% trans "Time" %}</th>
 				<th>{% trans "Venue" %}</th>
 				<th>{% trans "Opponent" %}</th>
@@ -35,11 +34,15 @@
 			</tr>
 		</thead>
 		<tbody>
+			{# The date heads each group rather than repeating on every row, so #}
+			{# the number of games in a day can be seen at a glance. #}
 			{% for date, matches in team.matches_by_date.items %}
+			<tr class="day">
+				<th colspan="5">{{ date|default:tba }}</th>
+			</tr>
 			{% for match in matches %}
 				{% with home=match.get_home_team away=match.get_away_team %}
 					<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
-						<td class="date">{{ date }}</td>
 						<td class="time">{{ match.datetime|time|default:tba }}</td>
 						<td class="venue">{{ match.play_at.title|default:tba }}</td>
 						{% with match|opponent:team as opponent %}

@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from django.test import override_settings
+from django.utils.formats import date_format
 from freezegun import freeze_time
 from icalendar import Calendar
 from test_plus import TestCase
@@ -141,6 +142,23 @@ class GoodViewTests(TestCase):
             pool.slug,
         )
 
+    def test_team(self):
+        stage = factories.StageFactory.create()
+        team = factories.TeamFactory.create(division=stage.division)
+        factories.MatchFactory.create_batch(
+            stage=stage,
+            home_team=team,
+            size=5,
+            datetime=datetime(2022, 7, 2, 9, tzinfo=ZoneInfo("UTC")),
+        )
+        self.assertGoodView(
+            "competition:team",
+            stage.division.season.competition.slug,
+            stage.division.season.slug,
+            stage.division.slug,
+            team.slug,
+        )
+
     def test_match(self):
         match = factories.MatchFactory.create()
         self.assertGoodView(
@@ -270,6 +288,34 @@ class FrontEndTests(TestCase):
             self.assertResponseContains(
                 '<a href="{0}">{1}</a>'.format(href, team.title)
             )
+
+    def test_team_schedule_groups_matches_by_date(self):
+        """
+        Each day of a team's schedule is headed by its date once instead
+        of the date repeating against every match, so how many games are
+        played on a day can be seen at a glance.
+        """
+        stage = factories.StageFactory.create()
+        team = factories.TeamFactory.create(division=stage.division)
+        days = (
+            datetime(2022, 7, 2, 9, tzinfo=ZoneInfo("UTC")),
+            datetime(2022, 7, 3, 9, tzinfo=ZoneInfo("UTC")),
+        )
+        for size, when in enumerate(days, start=1):
+            factories.MatchFactory.create_batch(
+                stage=stage, home_team=team, size=size, datetime=when
+            )
+        self.assertGoodView(
+            "competition:team",
+            stage.division.season.competition.slug,
+            stage.division.season.slug,
+            stage.division.slug,
+            team.slug,
+        )
+        content = self.last_response.content.decode()
+        self.assertEqual(len(days), content.count('<tr class="day">'))
+        for when in days:
+            self.assertEqual(1, content.count(date_format(when.date())))
 
     def test_team_calendar(self):
         team = factories.TeamFactory.create()
