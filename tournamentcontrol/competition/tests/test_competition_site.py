@@ -289,11 +289,11 @@ class FrontEndTests(TestCase):
                 '<a href="{0}">{1}</a>'.format(href, team.title)
             )
 
-    def test_team_schedule_groups_matches_by_date(self):
+    def test_team_schedule_dates_the_first_game_of_each_day(self):
         """
-        Each day of a team's schedule is headed by its date once instead
-        of the date repeating against every match, so how many games are
-        played on a day can be seen at a glance.
+        The date is written against the first game of a day and left out
+        of the rest, instead of repeating on every match, so how many
+        games are played on a day can be seen at a glance.
         """
         stage = factories.StageFactory.create()
         team = factories.TeamFactory.create(division=stage.division)
@@ -313,7 +313,9 @@ class FrontEndTests(TestCase):
             team.slug,
         )
         content = self.last_response.content.decode()
-        self.assertEqual(len(days), content.count('<tr class="day">'))
+        # Three matches, so three date cells, but only two carry a date.
+        self.assertEqual(3, content.count('<td class="date">'))
+        self.assertEqual(1, content.count('<td class="date"></td>'))
         for when in days:
             self.assertEqual(1, content.count(date_format(when.date())))
 
