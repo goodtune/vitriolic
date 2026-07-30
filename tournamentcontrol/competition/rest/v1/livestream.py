@@ -103,11 +103,10 @@ class LiveStreamMatchSerializer(serializers.ModelSerializer):
             "away_team",
             "away_team_score",
             "stage",
-            "play_at",
+            "play_at",  
             "external_identifier",
             "live_stream",
             "live_stream_bind",
-            "live_stream_thumbnail",
         )
 
     def get_round(self, obj):
