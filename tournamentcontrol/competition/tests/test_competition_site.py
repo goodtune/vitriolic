@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from django.test import override_settings
-from django.utils.formats import date_format
 from freezegun import freeze_time
 from icalendar import Calendar
 from test_plus import TestCase
@@ -297,13 +296,20 @@ class FrontEndTests(TestCase):
         """
         stage = factories.StageFactory.create()
         team = factories.TeamFactory.create(division=stage.division)
-        days = (
-            datetime(2022, 7, 2, 9, tzinfo=ZoneInfo("UTC")),
-            datetime(2022, 7, 3, 9, tzinfo=ZoneInfo("UTC")),
+        # One game on the 2nd, two on the 3rd.
+        fixtures = (
+            ("Ireland", datetime(2022, 7, 2, 9, tzinfo=ZoneInfo("UTC"))),
+            ("Wales", datetime(2022, 7, 3, 9, tzinfo=ZoneInfo("UTC"))),
+            ("England", datetime(2022, 7, 3, 9, tzinfo=ZoneInfo("UTC"))),
         )
-        for size, when in enumerate(days, start=1):
-            factories.MatchFactory.create_batch(
-                stage=stage, home_team=team, size=size, datetime=when
+        for title, when in fixtures:
+            factories.MatchFactory.create(
+                stage=stage,
+                home_team=team,
+                away_team=factories.TeamFactory.create(
+                    division=stage.division, title=title, club__title=title
+                ),
+                datetime=when,
             )
         self.assertGoodView(
             "competition:team",
@@ -312,12 +318,65 @@ class FrontEndTests(TestCase):
             stage.division.slug,
             team.slug,
         )
+
+        def opponent(title):
+            href = self.reverse(
+                "competition:team",
+                stage.division.season.competition.slug,
+                stage.division.season.slug,
+                stage.division.slug,
+                title.lower(),
+            )
+            return '<td class="team {0}"><a href="{1}">{2}</a></td>'.format(
+                title.lower(), href, title
+            )
+
         content = self.last_response.content.decode()
-        # Three matches, so three date cells, but only two carry a date.
-        self.assertEqual(3, content.count('<td class="date">'))
-        self.assertEqual(1, content.count('<td class="date"></td>'))
-        for when in days:
-            self.assertEqual(1, content.count(date_format(when.date())))
+        self.assertHTMLEqual(
+            content.split('<table class="team draw">')[1].split("</table>")[0],
+            """
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Venue</th>
+                    <th>Opponent</th>
+                    <th>Result</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="first odd last">
+                    <td class="date">July 2, 2022</td>
+                    <td class="time">9 a.m.</td>
+                    <td class="venue">TBA</td>
+                    {ireland}
+                    <td>-</td>
+                    <td></td>
+                </tr>
+                <tr class="first even">
+                    <td class="date">July 3, 2022</td>
+                    <td class="time">9 a.m.</td>
+                    <td class="venue">TBA</td>
+                    {wales}
+                    <td>-</td>
+                    <td></td>
+                </tr>
+                <tr class="odd last">
+                    <td class="date"></td>
+                    <td class="time">9 a.m.</td>
+                    <td class="venue">TBA</td>
+                    {england}
+                    <td>-</td>
+                    <td></td>
+                </tr>
+            </tbody>
+            """.format(
+                ireland=opponent("Ireland"),
+                wales=opponent("Wales"),
+                england=opponent("England"),
+            ),
+        )
 
     def test_team_calendar(self):
         team = factories.TeamFactory.create()
