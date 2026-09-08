@@ -17,6 +17,12 @@ dependencies = [
     "django-timezone-field",
     "django>=4.2",
     "first",
+    # django-mcp-server imports `FastMCP` from `mcp.server`, which mcp 2.0
+    # removed, but it only requires `mcp>=1.8.0` -- so a fresh install
+    # resolves mcp 2.x and `django.setup()` fails before anything runs.
+    # Drop this once django-mcp-server releases a version that supports
+    # mcp 2.x; 0.5.7 is the latest and does not.
+    "mcp<2",
     "namedentities",
     "psycopg",
 ]
