@@ -22,7 +22,7 @@ dependencies = [
     # resolves mcp 2.x and `django.setup()` fails before anything runs.
     # Drop this once django-mcp-server releases a version that supports
     # mcp 2.x; 0.5.7 is the latest and does not.
-    "mcp<2",
+    "mcp<3",
     "namedentities",
     "psycopg",
 ]
