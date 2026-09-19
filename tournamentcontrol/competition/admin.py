@@ -107,6 +107,7 @@ from tournamentcontrol.competition.models import (
     TeamRole,
     UndecidedTeam,
     Venue,
+    mysideline_renamed,
 )
 from tournamentcontrol.competition.sites import CompetitionAdminMixin
 from tournamentcontrol.competition.tasks import (
@@ -953,11 +954,18 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         redirect_url = request.GET.get("next") or season.urls["edit"]
 
         if request.method == "GET":
+            # Divisions and teams whose names have been changed locally are
+            # not overwritten, so an upstream rename of one needs a human to
+            # decide between the two names; show them the outstanding ones.
             context = dict(
                 extra_context or {},
                 competition=competition,
                 season=season,
                 cancel_url=redirect_url,
+                renamed_divisions=mysideline_renamed(season.divisions),
+                renamed_teams=mysideline_renamed(
+                    Team.objects.filter(division__season=season)
+                ).select_related("division"),
             )
             return self.render(
                 request,
