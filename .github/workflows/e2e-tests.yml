@@ -31,8 +31,14 @@ jobs:
     # evidence. `gh pr comment --attach` (GitHub CLI 2.99+) uploads each
     # image and rewrites the local paths referenced in the body; the same
     # comment is edited on every run so that revisions do not pile up.
+    #
+    # The upload endpoint rejects GitHub App installation tokens, which
+    # includes the workflow's own GITHUB_TOKEN (cli/cli#14309), so the
+    # attachments are posted with a personal access token held in the
+    # E2E_COMMENT_TOKEN secret. When that secret is unavailable (forks,
+    # Dependabot) a text-only comment linking to the run is posted instead.
     - name: Ensure GitHub CLI supports attachments
-      if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+      if: always() && github.event_name == 'pull_request'
       run: |
         required="2.99.0"
         current="$(gh --version | head -n1 | awk '{print $3}')"
@@ -49,31 +55,36 @@ jobs:
         gh --version
 
     - name: Post screenshots on the pull request
-      if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+      if: always() && github.event_name == 'pull_request'
       env:
-        GH_TOKEN: ${{ github.token }}
+        COMMENT_TOKEN: ${{ secrets.E2E_COMMENT_TOKEN }}
+        GITHUB_TOKEN: ${{ github.token }}
         OUTCOME: ${{ job.status }}
       run: |
         shopt -s nullglob
+        shots=(tests/screenshots/*.png)
         body=.github/e2e-comment.md
+        attach=()
         {
           echo "## E2E screenshots"
           echo
           echo "Run [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for ${{ github.event.pull_request.head.sha }}: **${OUTCOME}**"
           echo
-          for shot in tests/screenshots/*.png; do
-            name="$(basename "${shot%.png}")"
-            echo "<details><summary>${name}</summary>"
-            echo
-            echo "![${name}](${shot})"
-            echo
-            echo "</details>"
-          done
+          if [ -n "$COMMENT_TOKEN" ]; then
+            for shot in "${shots[@]}"; do
+              name="$(basename "${shot%.png}")"
+              echo "<details><summary>${name}</summary>"
+              echo
+              echo "![${name}](${shot})"
+              echo
+              echo "</details>"
+              attach+=(--attach "$shot")
+            done
+          else
+            echo "_${#shots[@]} screenshot(s) taken; attachments need the E2E_COMMENT_TOKEN secret, which is not available to this run._"
+          fi
         } > "$body"
-        attach=()
-        for shot in tests/screenshots/*.png; do
-          attach+=(--attach "$shot")
-        done
+        export GH_TOKEN="${COMMENT_TOKEN:-$GITHUB_TOKEN}"
         gh pr comment "${{ github.event.pull_request.number }}" \
           --edit-last --create-if-none \
           --body-file "$body" "${attach[@]}"
