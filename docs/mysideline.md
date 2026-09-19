@@ -246,5 +246,14 @@ above, plus smaller captures of a club association. The unit tests and the
 end-to-end test `tests/e2e/test_mysideline.py` import it through the real
 client and reconciler with the HTTP layer replaced by
 `tournamentcontrol.competition.tests.mysideline.state_cup_session`. Running
-the end-to-end test with `MYSIDELINE_LIVE=1` imports from the live site
+the end-to-end tests with `MYSIDELINE_LIVE=1` imports from the live site
 instead, which confirms the remote interface still matches this document.
+
+`state_cup_session(renames={...})` serves the same capture with names
+substituted, which plays back an upstream rename without a second capture.
+The end-to-end test uses it to walk the whole naming workflow through the
+admin in a browser -- publishing local names for a division and a team,
+having MySideline rename both underneath them, reviewing what the season's
+*Synchronise with MySideline* page lists, then handing one name back and
+keeping the other -- and screenshots each page as evidence
+(`mysideline_admin_*.png`).

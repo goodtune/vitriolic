@@ -64,14 +64,25 @@ def rsc_line(payload) -> str:
     return '1:"$Sreact.fragment"\n7:%s\n' % json.dumps(["$", "$L13", None, payload])
 
 
-def state_cup_session():
+def state_cup_session(renames=None):
     """
     A :class:`FakeSession` serving the captured NSW State Cup 2025 data.
+
+    ``renames`` maps a name as captured to the name MySideline should
+    publish instead, so that a test can play back an upstream rename of a
+    competition or a team without needing a second capture. Names are
+    replaced in their JSON-quoted form, so a name which happens to be a
+    substring of another value is not touched.
     """
     from tournamentcontrol.competition.mysideline.client import GRAPHQL_ENDPOINT
 
+    def rename(text):
+        for before, after in (renames or {}).items():
+            text = text.replace(json.dumps(before), json.dumps(after))
+        return text
+
     session = FakeSession()
-    listing = fixture("state_cup_2025", "association.rsc")
+    listing = rename(fixture("state_cup_2025", "association.rsc"))
     session.handlers[STATE_CUP_URL] = lambda method, url, kwargs: FakeResponse(
         text=listing, content_type="text/x-component"
     )
@@ -99,8 +110,10 @@ def state_cup_session():
         competition_id = body["variables"]["competitionId"]
         kind = "matches" if "competitionMatches" in body["query"] else "teams"
         return FakeResponse(
-            text=fixture(
-                "state_cup_2025", "competition_%d_%s.json" % (competition_id, kind)
+            text=rename(
+                fixture(
+                    "state_cup_2025", "competition_%d_%s.json" % (competition_id, kind)
+                )
             )
         )
 

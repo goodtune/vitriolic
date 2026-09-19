@@ -1108,6 +1108,17 @@ class TitleAdminTests(SyncTestCase):
         division = factories.DivisionFactory.create(season=self.season)
         form = DivisionForm(instance=division, user=self.superuser)
         self.assertNotIn("mysideline_title_reset", form.fields)
+        self.assertFalse(form.mysideline_unacknowledged)
+
+    def test_unchanged_form_still_saves_the_acknowledgement(self):
+        # A form which edits no field must still report a change while an
+        # upstream rename is unacknowledged, or the admin skips the save.
+        form = self.division_form()
+        self.assertTrue(form.mysideline_unacknowledged)
+        self.assertTrue(form.has_changed())
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+        self.assertFalse(self.division_form().mysideline_unacknowledged)
 
     def test_saving_keeps_the_local_name_and_acknowledges_the_change(self):
         form = self.division_form()
@@ -1159,6 +1170,32 @@ class TitleAdminTests(SyncTestCase):
         team.refresh_from_db()
         self.assertEqual(team.title, "Terrigal Sharks")
         self.assertEqual(team.mysideline_title_synced, "Terrigal Sharks")
+
+    def test_team_form_keeps_local_name_and_acknowledges(self):
+        team = Team.objects.get(mysideline_id=1)
+        team.title = "Terrigal"
+        team.save()
+        self.remote.team(100, 1)["name"] = "Terrigal Sharks"
+        self.sync()
+        team.refresh_from_db()
+        self.assertTrue(team.mysideline_title_changed)
+
+        form = TeamForm(
+            team.division,
+            data={"title": team.title, "slug": team.slug},
+            instance=team,
+            user=self.superuser,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        # No field was edited, but the acknowledgement must still be saved:
+        # the admin skips the save entirely for an unchanged form.
+        self.assertTrue(form.mysideline_unacknowledged)
+        self.assertTrue(form.has_changed())
+        form.save()
+        team.refresh_from_db()
+        self.assertEqual(team.title, "Terrigal")
+        self.assertEqual(team.mysideline_title_synced, "Terrigal Sharks")
+        self.assertFalse(team.mysideline_title_changed)
 
     def test_sync_page_lists_remote_renames(self):
         with self.login(self.superuser):

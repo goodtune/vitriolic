@@ -568,6 +568,9 @@ class MySidelineTitleMixin:
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Whether MySideline has renamed the record since it was last
+        # reconciled, noted before ``_post_clean`` acknowledges it.
+        self.mysideline_unacknowledged = self.instance.mysideline_title_changed
         if not self.instance.mysideline_reconciled:
             return
         remote = self.instance.mysideline_title
@@ -589,6 +592,18 @@ class MySidelineTitleMixin:
                 )
                 % {"now": remote},
             )
+            # Beside the name it replaces, rather than at the end of a long
+            # form where it reads as unrelated.
+            order = list(self.fields)
+            order.remove("mysideline_title_reset")
+            order.insert(order.index("title") + 1, "mysideline_title_reset")
+            self.order_fields(order)
+
+    def has_changed(self):
+        # Acknowledging an upstream rename is itself a change worth saving,
+        # even when no field on the form was edited -- the admin skips the
+        # save entirely for a form which reports no change.
+        return super().has_changed() or self.mysideline_unacknowledged
 
     def clean(self):
         # Not every form in the chain returns the cleaned data.
