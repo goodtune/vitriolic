@@ -550,8 +550,8 @@ class InitialImportTests(SyncTestCase):
             mens.points_formula, "3*win + 2*draw + 1*loss + 3*bye + 3*forfeit_for"
         )
         self.assertEqual(
-            list(mens.stages.values_list("title", "order")),
-            [(REGULAR_STAGE_TITLE, 1), (FINALS_STAGE_TITLE, 2)],
+            list(mens.stages.values_list("title", "order", "keep_ladder")),
+            [(REGULAR_STAGE_TITLE, 1, True), (FINALS_STAGE_TITLE, 2, False)],
         )
         self.assertEqual(
             list(mens.teams.values_list("mysideline_id", "title", "order")),
@@ -1352,6 +1352,8 @@ class StateCupTests(TestCase):
         )
         finals = mens_open_b.stages.get(title=FINALS_STAGE_TITLE)
         self.assertEqual(finals.matches.count(), 21)
+        self.assertEqual(finals.keep_ladder, False)
+        self.assertEqual(finals.ladder_summary.count(), 0)
         self.assertEqual(finals.matches.filter(label="Bowl Grand Final").count(), 1)
 
         # Byes reported with a capitalised status are still processed.

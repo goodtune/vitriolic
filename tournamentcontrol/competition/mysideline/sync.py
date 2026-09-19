@@ -426,7 +426,7 @@ class _DivisionReconciler:
 
     # -- stages & pools ----------------------------------------------------
 
-    def _stage(self, title: str, order: int) -> Stage:
+    def _stage(self, title: str, order: int, keep_ladder: bool = True) -> Stage:
         stage = self.division.stages.filter(title=title).first()
         if stage is None:
             stage = Stage(
@@ -434,6 +434,7 @@ class _DivisionReconciler:
                 title=title,
                 slug=slugify(title),
                 order=max(order, _next_order(self.division.stages)),
+                keep_ladder=keep_ladder,
             )
             stage.save()
             self.result.add_created(stage)
@@ -546,7 +547,10 @@ class _DivisionReconciler:
 
     def _reconcile_matches(self) -> None:
         if any(match.is_final_round for match in self.snapshot.matches):
-            self.finals_stage = self._stage(FINALS_STAGE_TITLE, 2)
+            # MySideline's ladder only counts "Regular" rounds -- finals are
+            # an elimination series -- so the finals stage keeps no ladder.
+            # Like the points formula this only applies on creation.
+            self.finals_stage = self._stage(FINALS_STAGE_TITLE, 2, keep_ladder=False)
 
         local = {
             match.mysideline_id: match

@@ -110,7 +110,15 @@ Pools have no identifier, only a name; they are matched by title.
 * Distinct competition or team names can slugify identically ("Men's 55s"
   and "Mens 55s"); slugs are suffixed (`-2`, ...) to keep them unique.
 * A bye is a match with `meta.isBye` and one side empty. Finals whose
-  participants are not yet known have `meta.isTba` and both sides empty.
+  participants are not yet known have `meta.isTba` and both sides empty;
+  neither `competitionMatches` nor the full `match` query carries a
+  placeholder such as "Winner QF1", so they are represented locally with a
+  "TBA" undecided team until MySideline fills the teams in.
+* `competitionLadder` only counts `Regular` rounds (a team with 5 pool
+  matches and 3 finals shows `matchesPlayed: 5`), so the finals stage is
+  created without a ladder. There is no per-competition flag for this; the
+  competition-level `display.ladder` only controls whether the ladder is
+  shown publicly.
 * Matches do not say which pool they belong to; a match is attributed to a
   pool when both teams are in the same pool.
 * The listing on the association page is not paginated. The GraphQL
@@ -128,7 +136,7 @@ Pools have no identifier, only a name; they are matched by title.
 | year / period | `Season` (`mysideline_season`, `mysideline_season_tag`) |
 | competition | `Division` (`mysideline_id`); title and slug follow the remote name |
 | `Regular` rounds | `Stage` "Regular Season" |
-| `Final` rounds | `Stage` "Finals" (created only when finals fixtures exist; `Match.label` carries the round's display name, eg. "Grand Final") |
+| `Final` rounds | `Stage` "Finals" with `keep_ladder` off (created only when finals fixtures exist; `Match.label` carries the round's display name, eg. "Grand Final") |
 | pool | `StageGroup` on the regular stage; `Team.stage_group` and, for intra-pool matches, `Match.stage_group` |
 | team | `Team` (`mysideline_id`); title and slug follow the remote name |
 | match | `Match` (`mysideline_id`): round number, date/time in the venue's timezone, `play_at`, teams, scores, bye, forfeit |

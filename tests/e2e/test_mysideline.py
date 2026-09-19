@@ -118,8 +118,10 @@ class TestMySidelineImportRenders:
         assert names[:2] == ["2025 SC Doyalson MOA", "2025 SC Parramatta MOA"]
         page.screenshot(path=screenshot_dir / "mysideline_pool.png", full_page=True)
 
-        # Finals: fixtures carry the MySideline round names.
+        # Finals: fixtures carry the MySideline round names and, being an
+        # elimination series, there is no ladder.
         page.goto(f"{base}/{division.slug}:finals/")
         expect(page.get_by_text("Grand Final").first).to_be_visible()
         expect(page.get_by_text("Quarter Final 1").first).to_be_visible()
+        expect(page.locator("table.ladder")).to_have_count(0)
         page.screenshot(path=screenshot_dir / "mysideline_finals.png", full_page=True)
