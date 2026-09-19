@@ -1,0 +1,29 @@
+{% extends "touchtechnology/admin/edit.html" %}
+{% load i18n %}
+
+{% block content %}
+	<form class="form-horizontal" action="" method="post">
+		<div class="heading-block">
+			<h3>{% trans "Synchronise with MySideline" %}</h3>
+		</div>
+
+		{% csrf_token %}
+
+		<p>
+			{% blocktrans %}Fetch the current competitions, teams, fixtures and results from MySideline and update this season to match. MySideline is authoritative: divisions, teams and matches that it manages will be created, updated or removed to reflect what it publishes.{% endblocktrans %}
+		</p>
+		<p>
+			{% trans "Source" %}: <a href="{{ season.mysideline_url }}" target="_blank" rel="noopener">{{ season.mysideline_url }}</a><br>
+			{% trans "MySideline season" %}: {{ season.mysideline_season }}{% if season.mysideline_season_tag %} ({{ season.get_mysideline_season_tag_display }}){% endif %}
+		</p>
+
+		<div class="form-group">
+			<div class="text-center">
+				<button type="submit" class="btn btn-primary">
+					{% trans "Synchronise now" %}
+				</button>
+				&nbsp;<a class="btn btn-default" href="{{ cancel_url }}">{% trans "Cancel" %}</a>
+			</div>
+		</div>
+	</form>
+{% endblock %}

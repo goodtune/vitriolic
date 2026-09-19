@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   e2e-tests:
     runs-on: ubuntu-latest
@@ -23,20 +27,91 @@ jobs:
       run: |
         uvx tox -e e2e
 
-    - name: Upload test results
+    # Screenshots taken by the E2E tests are posted on the pull request as
+    # evidence. `gh pr comment --attach` (GitHub CLI 2.99+) uploads each
+    # image and rewrites the local paths referenced in the body. Every
+    # comment carries a hidden marker; before a new one is posted, earlier
+    # marked comments are minimised as outdated so that only the latest
+    # run's evidence is visible in the conversation.
+    #
+    # The upload endpoint rejects GitHub App installation tokens, which
+    # includes the workflow's own GITHUB_TOKEN (cli/cli#14309), so the
+    # comment is posted with a personal access token held in the
+    # E2E_COMMENT_TOKEN secret. When that secret is unavailable (forks,
+    # Dependabot) a text-only comment linking to the run is posted instead.
+    - name: Ensure GitHub CLI supports attachments
+      if: always() && github.event_name == 'pull_request'
+      run: |
+        required="2.99.0"
+        current="$(gh --version | head -n1 | awk '{print $3}')"
+        if [ "$(printf '%s\n%s\n' "$required" "$current" | sort -V | head -n1)" != "$required" ]; then
+          echo "Upgrading gh $current -> latest"
+          sudo mkdir -p -m 755 /etc/apt/keyrings
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+            | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gh
+        fi
+        gh --version
+
+    - name: Post screenshots on the pull request
+      if: always() && github.event_name == 'pull_request'
+      env:
+        COMMENT_TOKEN: ${{ secrets.E2E_COMMENT_TOKEN }}
+        GITHUB_TOKEN: ${{ github.token }}
+        OUTCOME: ${{ job.status }}
+        MARKER: "<!-- e2e-screenshots -->"
+        PR: ${{ github.event.pull_request.number }}
+      run: |
+        shopt -s nullglob
+        shots=(tests/screenshots/*.png)
+        body=.github/e2e-comment.md
+        attach=()
+        {
+          echo "$MARKER"
+          echo "## E2E screenshots"
+          echo
+          echo "Run [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for ${{ github.event.pull_request.head.sha }}: **${OUTCOME}**"
+          echo
+          if [ -n "$COMMENT_TOKEN" ]; then
+            for shot in "${shots[@]}"; do
+              name="$(basename "${shot%.png}")"
+              echo "<details><summary>${name}</summary>"
+              echo
+              echo "![${name}](${shot})"
+              echo
+              echo "</details>"
+              attach+=(--attach "$shot")
+            done
+          else
+            echo "_${#shots[@]} screenshot(s) taken; attachments need the E2E_COMMENT_TOKEN secret, which is not available to this run._"
+          fi
+        } > "$body"
+
+        # Minimise earlier evidence comments (any author) as outdated.
+        gh api --paginate "repos/${{ github.repository }}/issues/${PR}/comments" \
+          --jq ".[] | select(.body | startswith(\"${MARKER}\")) | .node_id" \
+        | while read -r node_id; do
+            gh api graphql -f id="$node_id" -f query='
+              mutation($id: ID!) {
+                minimizeComment(input: {subjectId: $id, classifier: OUTDATED}) {
+                  minimizedComment { isMinimized }
+                }
+              }' > /dev/null
+            echo "Minimised ${node_id}"
+          done
+
+        GH_TOKEN="${COMMENT_TOKEN:-$GITHUB_TOKEN}" gh pr comment "$PR" \
+          --body-file "$body" "${attach[@]}"
+
+    - name: Upload traces on failure
       uses: actions/upload-artifact@v7
-      if: always()
+      if: failure()
       with:
         name: e2e-test-results
         path: |
           .tox/e2e/log/
           tests/test-results/
         retention-days: 5
-
-    - name: Upload test screenshots
-      uses: actions/upload-artifact@v7
-      if: always()
-      with:
-        name: e2e-test-screenshots
-        path: tests/screenshots/
-        retention-days: 7

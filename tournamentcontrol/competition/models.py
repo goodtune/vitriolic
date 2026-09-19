@@ -8,6 +8,7 @@ import uuid
 import warnings
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlencode
 
 import requests
 from cloudinary.models import CloudinaryField
@@ -58,6 +59,7 @@ from touchtechnology.common.models import SitemapNodeBase
 from tournamentcontrol.competition._mediaupload import MediaMemoryUpload
 from tournamentcontrol.competition.constants import (
     GENDER_CHOICES,
+    MYSIDELINE_SEASON_TAG_CHOICES,
     SEASON_MODE_CHOICES,
     WIN_LOSE,
     ClubStatus,
@@ -165,6 +167,24 @@ class OrderedSitemapNode(SitemapNodeBase):
 class Competition(AdminUrlMixin, OrderedSitemapNode):
     enabled = BooleanField(default=True)
     clubs = ManyToManyField("Club", blank=True, related_name="competitions")
+
+    # MySideline synchronisation. A MySideline association corresponds to a
+    # Competition; each of its "years" corresponds to a Season (see
+    # ``Season.mysideline_season``). See
+    # ``tournamentcontrol.competition.mysideline``.
+    mysideline_url = models.URLField(
+        max_length=1024,
+        blank=True,
+        null=True,
+        verbose_name=_("MySideline URL"),
+        help_text=_(
+            "Association URL on MySideline, for example "
+            "https://tfa.mysideline.com.au/competitions/association/6338. "
+            "Seasons that name a MySideline season are then synchronised "
+            "from MySideline, which is authoritative for their divisions, "
+            "teams, fixtures and results."
+        ),
+    )
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition"
@@ -517,6 +537,31 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
     )
     timezone = TimeZoneField(max_length=50, blank=True, null=True, use_pytz=False)
 
+    # MySideline synchronisation. The association URL lives on the
+    # Competition; a season selects the MySideline "year" (and optionally
+    # the half-year period) whose competitions it mirrors. See
+    # ``tournamentcontrol.competition.mysideline``.
+    mysideline_season = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("MySideline season"),
+        help_text=_(
+            "The MySideline season (a year, for example 2026) whose "
+            "competitions this season mirrors. Required for synchronisation "
+            "when the competition has a MySideline URL."
+        ),
+    )
+    mysideline_season_tag = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        choices=MYSIDELINE_SEASON_TAG_CHOICES,
+        verbose_name=_("MySideline season period"),
+        help_text=_(
+            "Only synchronise MySideline competitions from this period of "
+            "the season. Leave blank for the whole season."
+        ),
+    )
+
     forfeit_notifications = ManyToManyField(
         settings.AUTH_USER_MODEL,
         blank=True,
@@ -557,6 +602,29 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
 
     def __repr__(self):
         return "<Season: {} - {}>".format(self.competition, self)
+
+    @property
+    def mysideline_url(self):
+        """
+        The MySideline association page filtered to this season, or ``None``
+        when the competition is not linked to MySideline. This is the same
+        URL the MySideline site produces from its year/period drop-downs.
+        """
+        url = self.competition.mysideline_url
+        if not url:
+            return None
+        params = {}
+        if self.mysideline_season is not None:
+            params["season"] = self.mysideline_season
+        if self.mysideline_season_tag is not None:
+            params["seasonTag"] = self.mysideline_season_tag
+        if params:
+            return "%s?%s" % (url, urlencode(params))
+        return url
+
+    @property
+    def mysideline_enabled(self):
+        return bool(self.competition.mysideline_url and self.mysideline_season)
 
     def flow(self, **kwargs):
         "Generate an authorization Flow"
@@ -838,11 +906,11 @@ class Division(
         ],
     )
 
-    # This is an advanced feature, we would not wish to surface it under
-    # normal circumstances, but the theory is that we can use the report URL
-    # to construct the minimum data for a division.
-    sportingpulse_url = models.URLField(
-        max_length=1024, blank=True, null=True, editable=False
+    # Identifier of the MySideline competition this division mirrors. Set by
+    # the MySideline synchronisation, never by hand; a division with this
+    # set is owned by MySideline and will be updated on every sync.
+    mysideline_id = models.BigIntegerField(
+        blank=True, null=True, unique=True, editable=False
     )
 
     objects = DivisionQuerySet.as_manager()
@@ -1535,6 +1603,11 @@ class Team(AdminUrlMixin, OrderedSitemapNode):
         help_text=_("Select any teams that must not play at the same time."),
     )
 
+    # Identifier of the MySideline team this team mirrors, see Division.
+    mysideline_id = models.BigIntegerField(
+        blank=True, null=True, unique=True, editable=False
+    )
+
     class Meta:
         ordering = (
             "-division__season__start_date",
@@ -2083,6 +2156,11 @@ class Match(AdminUrlMixin, models.Model):
 
     external_identifier = models.CharField(
         max_length=20, blank=True, null=True, unique=True, db_index=True
+    )
+
+    # Identifier of the MySideline match this fixture mirrors, see Division.
+    mysideline_id = models.BigIntegerField(
+        blank=True, null=True, unique=True, editable=False
     )
 
     videos = PG.ArrayField(
