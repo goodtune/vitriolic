@@ -599,7 +599,8 @@ def synchronise_mysideline_season(season_pk):
 @shared_task
 def synchronise_mysideline():
     """
-    Synchronise every enabled, incomplete season that has a MySideline URL.
+    Synchronise every enabled, incomplete season that names a MySideline
+    season within a competition that has a MySideline URL.
 
     Intended to be scheduled periodically (for example with Celery beat)
     by the deploying project; each season is isolated so that one failing

@@ -13,7 +13,8 @@
 			{% blocktrans %}Fetch the current competitions, teams, fixtures and results from MySideline and update this season to match. MySideline is authoritative: divisions, teams and matches that it manages will be created, updated or removed to reflect what it publishes.{% endblocktrans %}
 		</p>
 		<p>
-			{% trans "Source" %}: <a href="{{ season.mysideline_url }}" target="_blank" rel="noopener">{{ season.mysideline_url }}</a>
+			{% trans "Source" %}: <a href="{{ season.mysideline_url }}" target="_blank" rel="noopener">{{ season.mysideline_url }}</a><br>
+			{% trans "MySideline season" %}: {{ season.mysideline_season }}{% if season.mysideline_season_tag %} ({{ season.get_mysideline_season_tag_display }}){% endif %}
 		</p>
 
 		<div class="form-group">

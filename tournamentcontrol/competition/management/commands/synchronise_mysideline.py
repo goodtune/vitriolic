@@ -16,7 +16,7 @@ from tournamentcontrol.competition.mysideline.sync import (
 class Command(BaseCommand):
     help = (
         "Synchronise seasons with MySideline. Without arguments every enabled, "
-        "incomplete season with a MySideline URL is synchronised."
+        "incomplete season linked to MySideline is synchronised."
     )
 
     def add_arguments(self, parser: ArgumentParser):
@@ -43,8 +43,11 @@ class Command(BaseCommand):
                 season = Season.objects.get(pk=pk)
             except Season.DoesNotExist:
                 raise CommandError("Season %d does not exist" % pk)
-            if not season.mysideline_url:
-                raise CommandError("Season %d has no MySideline URL" % pk)
+            if not season.mysideline_enabled:
+                raise CommandError(
+                    "Season %d is not linked to MySideline (the competition needs "
+                    "a MySideline URL and the season a MySideline season)" % pk
+                )
             try:
                 result = synchronise_season(season, client)
             except MySidelineError as exc:

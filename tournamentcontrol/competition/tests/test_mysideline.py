@@ -8,7 +8,6 @@ reconciliation tests), so that nothing here depends on the live site.
 """
 
 import json
-import os
 from datetime import datetime
 from io import StringIO
 from unittest import mock
@@ -48,48 +47,18 @@ from tournamentcontrol.competition.mysideline.sync import (
 )
 from tournamentcontrol.competition.mysideline.types import RemoteCompetition
 from tournamentcontrol.competition.tests import factories
+from tournamentcontrol.competition.tests.mysideline import (
+    STATE_CUP_SEASON,
+    STATE_CUP_URL,
+    FakeResponse,
+    FakeSession,
+    fixture,
+    rsc_line,
+    state_cup_session,
+)
 
-FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures", "mysideline")
 ASSOCIATION_URL = "https://tfa.mysideline.com.au/competitions/association/6338"
 SYDNEY = ZoneInfo("Australia/Sydney")
-
-
-def fixture(name, mode="r"):
-    with open(os.path.join(FIXTURES, name), mode) as fp:
-        return fp.read()
-
-
-class FakeResponse:
-    def __init__(self, status_code=200, text="", content_type="application/json"):
-        self.status_code = status_code
-        self.text = text
-        self.headers = {"Content-Type": content_type}
-
-    def json(self):
-        return json.loads(self.text)
-
-
-class FakeSession:
-    """
-    Minimal stand-in for ``requests.Session``: routes requests to handlers
-    keyed by URL, records every call and can be told to fail.
-    """
-
-    def __init__(self):
-        self.headers = {}
-        self.handlers = {}
-        self.calls = []
-        self.exception = None
-
-    def mount(self, prefix, adapter):
-        pass
-
-    def request(self, method, url, **kwargs):
-        self.calls.append((method, url, kwargs))
-        if self.exception is not None:
-            raise self.exception
-        handler = self.handlers[url]
-        return handler(method, url, kwargs)
 
 
 class RemoteWorld:
@@ -105,10 +74,23 @@ class RemoteWorld:
     }
     ADDRESS = {"lat": -33.42895924, "lng": 151.3261477}
 
+    LADDER_TEMPLATE = {
+        "name": "TFA Standard Ladder",
+        "pointsWin": 3,
+        "pointsDraw": 2,
+        "pointsLoss": 1,
+        "pointsBye": 3,
+        "pointsFF": 3,
+        "defaultScoreFFReceived": 5,
+        "ffCountAsPlayed": True,
+    }
+
     def __init__(self):
         self.competitions = []
 
-    def add_competition(self, id, name, season=2026, season_tag=2, is_active=True):
+    def add_competition(
+        self, id, name, season=2026, season_tag=2, is_active=True, ladder=None
+    ):
         competition = {
             "_id": id,
             "name": name,
@@ -117,6 +99,7 @@ class RemoteWorld:
             "isActive": is_active,
             "teams": [],
             "matches": [],
+            "laddertemplate": dict(self.LADDER_TEMPLATE, **(ladder or {})),
         }
         self.competitions.append(competition)
         return competition
@@ -226,12 +209,28 @@ class RemoteWorld:
             }
         }
 
+    def competition_rsc(self, url):
+        competition = self.competition(int(url.rsplit("/", 1)[1]))
+        return rsc_line(
+            {
+                "data": {
+                    "competition": {
+                        "_id": competition["_id"],
+                        "laddertemplate": competition["laddertemplate"],
+                    }
+                }
+            }
+        )
+
     def install(self, session):
         session.handlers[ASSOCIATION_URL] = lambda method, url, kwargs: FakeResponse(
             text=self.association_rsc(), content_type="text/x-component"
         )
         session.handlers[GRAPHQL_ENDPOINT] = lambda method, url, kwargs: FakeResponse(
             text=json.dumps(self.graphql(kwargs["json"]))
+        )
+        session.default = lambda method, url, kwargs: FakeResponse(
+            text=self.competition_rsc(url), content_type="text/x-component"
         )
 
 
@@ -404,6 +403,33 @@ class ClientTests(TestCase):
         self.assertEqual({m.forfeiting_team_id for m in forfeits}, {67727471})
         self.assertEqual({m.has_result for m in forfeits}, {False})
 
+    def test_ladder_template_from_competition_page(self):
+        text = fixture("competition_65396575.rsc")
+        self.session.handlers["https://tfa.mysideline.com.au/competitions/65396575"] = (
+            lambda m, u, k: FakeResponse(text=text, content_type="text/x-component")
+        )
+        template = self.client.get_ladder_template(self.url, 65396575)
+        self.assertEqual(template.name, "Events Ladder - NSWTA")
+        self.assertEqual(
+            (template.points_win, template.points_draw, template.points_loss),
+            (4, 2, 0),
+        )
+        self.assertEqual(template.points_bye, 0)
+        self.assertEqual(template.points_forfeit_for, 4)
+        self.assertEqual(template.forfeit_score, 5)
+        self.assertEqual(template.forfeit_counts_as_played, True)
+        self.assertEqual(template.points_formula, "4*win + 2*draw + 4*forfeit_for")
+
+    def test_ladder_template_missing_is_a_response_error(self):
+        self.session.handlers["https://tfa.mysideline.com.au/competitions/1"] = (
+            lambda m, u, k: FakeResponse(
+                text='0:{"data":{"competition":{"_id":1}}}\n',
+                content_type="text/x-component",
+            )
+        )
+        with self.assertRaises(MySidelineResponseError):
+            self.client.get_ladder_template(self.url, 1)
+
     def test_graphql_errors_are_response_errors(self):
         self.session.handlers[GRAPHQL_ENDPOINT] = lambda m, u, k: FakeResponse(
             text=json.dumps({"errors": [{"message": "Cannot query field"}]})
@@ -438,7 +464,10 @@ class SyncTestCase(TestCase):
     def setUp(self):
         super().setUp()
         self.season = factories.SeasonFactory.create(
-            title="2026", timezone=SYDNEY, mysideline_url=ASSOCIATION_URL
+            title="2026",
+            timezone=SYDNEY,
+            competition__mysideline_url=ASSOCIATION_URL,
+            mysideline_season=2026,
         )
         self.remote = RemoteWorld()
         self.session = FakeSession()
@@ -642,6 +671,34 @@ class InitialImportTests(SyncTestCase):
         self.assertEqual(Match.objects.count(), 8)
         self.assertEqual(Venue.objects.count(), 1)
         self.assertEqual(Ground.objects.count(), 2)
+
+    def test_ladder_template_seeds_new_division(self):
+        self.remote.add_competition(
+            300, "Cup", ladder={"pointsWin": 4, "pointsLoss": 0, "pointsBye": 0}
+        )
+        self.populate()
+        self.sync()
+        cup = self.season.divisions.get(mysideline_id=300)
+        self.assertEqual(cup.points_formula, "4*win + 2*draw + 3*forfeit_for")
+        self.assertEqual(cup.forfeit_for_score, 5)
+
+        # Later changes to the template do not overwrite local configuration.
+        self.remote.competition(300)["laddertemplate"]["pointsWin"] = 10
+        self.sync()
+        cup.refresh_from_db()
+        self.assertEqual(cup.points_formula, "4*win + 2*draw + 3*forfeit_for")
+
+    def test_unreadable_ladder_template_falls_back_to_default(self):
+        self.populate()
+        self.session.default = lambda m, u, k: FakeResponse(
+            text="0:{}\n", content_type="text/x-component"
+        )
+        result = self.sync()
+        self.assertEqual(result.created["division"], 2)
+        self.assertEqual(
+            self.season.divisions.get(mysideline_id=100).points_formula,
+            "3*win + 2*draw + 1*loss + 3*bye + 3*forfeit_for",
+        )
 
     def test_adopts_existing_division_and_teams_by_title(self):
         division = factories.DivisionFactory.create(
@@ -1125,14 +1182,6 @@ class SelectionTests(SyncTestCase):
         self.sync()
         self.assertEqual(
             set(self.season.divisions.values_list("mysideline_id", flat=True)),
-            {100, 200, 300},
-        )
-
-        self.season.mysideline_season = 2026
-        self.season.save()
-        self.sync()
-        self.assertEqual(
-            set(self.season.divisions.values_list("mysideline_id", flat=True)),
             {100, 200},
         )
 
@@ -1140,8 +1189,42 @@ class SelectionTests(SyncTestCase):
         self.season.save()
         self.sync()
         self.assertEqual(
-            set(self.season.divisions.values_list("mysideline_id", flat=True)), {100}
+            set(self.season.divisions.values_list("mysideline_id", flat=True)),
+            {100},
         )
+
+        self.season.mysideline_season = 2025
+        self.season.save()
+        self.sync()
+        self.assertEqual(
+            set(self.season.divisions.values_list("mysideline_id", flat=True)),
+            {300},
+        )
+
+    def test_sibling_seasons_share_the_association(self):
+        # Two seasons of the same competition mirror different MySideline
+        # years without interfering with each other.
+        self.remote.add_competition(100, "Open 2026", season=2026)
+        self.remote.add_competition(300, "Open 2025", season=2025)
+        earlier = factories.SeasonFactory.create(
+            title="2025",
+            competition=self.season.competition,
+            timezone=SYDNEY,
+            mysideline_season=2025,
+        )
+        self.sync()
+        synchronise_season(earlier, self.client)
+        self.assertEqual(
+            list(self.season.divisions.values_list("mysideline_id", flat=True)), [100]
+        )
+        self.assertEqual(
+            list(earlier.divisions.values_list("mysideline_id", flat=True)), [300]
+        )
+        self.assertEqual(
+            self.season.mysideline_url,
+            "https://tfa.mysideline.com.au/competitions/association/6338?season=2026",
+        )
+        self.assertEqual(self.season.mysideline_enabled, True)
 
     def test_apply_snapshot_directly(self):
         result = apply_snapshot(
@@ -1151,8 +1234,16 @@ class SelectionTests(SyncTestCase):
         self.assertEqual(result.created, {"division": 1, "stage": 1})
         self.assertEqual(self.season.divisions.get(mysideline_id=1).title, "Direct")
 
-    def test_season_without_url(self):
-        self.season.mysideline_url = None
+    def test_season_without_year(self):
+        self.season.mysideline_season = None
+        with self.assertRaises(ValueError):
+            self.sync()
+        self.assertEqual(self.season.mysideline_enabled, False)
+
+    def test_competition_without_url(self):
+        self.season.competition.mysideline_url = None
+        self.season.competition.save()
+        self.assertEqual(self.season.mysideline_url, None)
         with self.assertRaises(ValueError):
             self.sync()
 
@@ -1161,14 +1252,24 @@ class InvocationTests(SyncTestCase):
     def test_synchronise_all_isolates_failures(self):
         self.remote.add_competition(100, "Mens Div 1")
         other = factories.SeasonFactory.create(
-            mysideline_url="https://tfa.mysideline.com.au/competitions/association/999",
+            competition__mysideline_url="https://tfa.mysideline.com.au/competitions/association/999",
+            mysideline_season=2026,
             timezone=SYDNEY,
         )
-        factories.SeasonFactory.create(mysideline_url=ASSOCIATION_URL, enabled=False)
-        factories.SeasonFactory.create(mysideline_url=ASSOCIATION_URL, complete=True)
-        factories.SeasonFactory.create(mysideline_url=None)
-        self.session.handlers[other.mysideline_url] = lambda m, u, k: FakeResponse(
-            status_code=404, text="", content_type="text/html"
+        factories.SeasonFactory.create(
+            competition=self.season.competition, mysideline_season=2026, enabled=False
+        )
+        factories.SeasonFactory.create(
+            competition=self.season.competition, mysideline_season=2026, complete=True
+        )
+        factories.SeasonFactory.create(
+            competition=self.season.competition, mysideline_season=None
+        )
+        factories.SeasonFactory.create(mysideline_season=2026)
+        self.session.handlers[other.competition.mysideline_url] = (
+            lambda m, u, k: FakeResponse(
+                status_code=404, text="", content_type="text/html"
+            )
         )
 
         results = synchronise_all(self.client)
@@ -1217,11 +1318,103 @@ class InvocationTests(SyncTestCase):
             call_command("synchronise_mysideline", self.season.pk, stderr=StringIO())
 
 
+class StateCupTests(TestCase):
+    """
+    Import the captured NSW State Cup 2025 -- a complete, pooled tournament
+    with finals -- and check the hierarchy against what MySideline shows.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.season = factories.SeasonFactory.create(
+            title="2025",
+            timezone=SYDNEY,
+            competition__title="NSW State Cup",
+            competition__mysideline_url=STATE_CUP_URL,
+            mysideline_season=STATE_CUP_SEASON,
+        )
+        self.client = MySidelineClient(session=state_cup_session())
+
+    def test_import(self):
+        result = synchronise_season(self.season, self.client)
+        self.assertEqual(result.warnings, [])
+        self.assertEqual(result.created["division"], 21)
+        self.assertEqual(Team.objects.count(), 242)
+        self.assertEqual(Match.objects.count(), 959)
+
+        mens_open_b = self.season.divisions.get(mysideline_id=65396604)
+        self.assertEqual(mens_open_b.title, "2025 SC Men's Open B")
+        self.assertEqual(mens_open_b.teams.count(), 31)
+        regular = mens_open_b.stages.get(title=REGULAR_STAGE_TITLE)
+        self.assertEqual(
+            list(regular.pools.values_list("title", flat=True)),
+            ["Pool C", "Pool A", "Pool D", "Pool B"],
+        )
+        finals = mens_open_b.stages.get(title=FINALS_STAGE_TITLE)
+        self.assertEqual(finals.matches.count(), 21)
+        self.assertEqual(finals.matches.filter(label="Bowl Grand Final").count(), 1)
+
+        # Byes reported with a capitalised status are still processed.
+        self.assertEqual(
+            Match.objects.filter(is_bye=True, bye_processed=True).count(),
+            Match.objects.filter(is_bye=True).count(),
+        )
+        self.assertEqual(Match.objects.filter(is_forfeit=True).count(), 3)
+
+        # Ladder for Men's Open A pool A matches MySideline's own ladder
+        # (Events Ladder - NSWTA: 4 for a win, 2 for a draw, 0 for a loss).
+        mens_open_a = self.season.divisions.get(mysideline_id=65396575)
+        self.assertEqual(mens_open_a.points_formula, "4*win + 2*draw + 4*forfeit_for")
+        ladder = LadderSummary.objects.filter(
+            stage__division=mens_open_a, stage_group__title="Pool A"
+        ).order_by("-points", "-difference")
+        self.assertEqual(
+            [
+                (
+                    row.team.title,
+                    row.played,
+                    row.win,
+                    int(row.points),
+                    int(row.difference),
+                )
+                for row in ladder
+            ],
+            [
+                ("2025 SC Doyalson MOA", 5, 5, 20, 13),
+                ("2025 SC Parramatta MOA", 5, 4, 16, 10),
+                ("2025 SC Central Coast MOA", 5, 3, 12, 6),
+                ("2025 SC Wests MOA", 5, 2, 8, 1),
+                ("2025 SC Penrith MOA", 5, 1, 4, -16),
+                ("2025 SC Hills MOA", 5, 0, 0, -14),
+            ],
+        )
+
+        # "Men's 55s" and "Mens 55s" slugify identically.
+        self.assertEqual(
+            list(
+                self.season.divisions.filter(title__contains="55s")
+                .order_by("order")
+                .values_list("title", "slug")
+            ),
+            [
+                ("2025 SC Men's 55s", "2025-sc-mens-55s"),
+                ("2025 SC Mens 55s", "2025-sc-mens-55s-2"),
+            ],
+        )
+
+        result = synchronise_season(self.season, self.client)
+        self.assertEqual(result.created, {})
+        self.assertEqual(result.updated, {})
+        self.assertEqual(result.deleted, {})
+
+
 class AdminTests(TestCase):
     def setUp(self):
         super().setUp()
         self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
-        self.season = factories.SeasonFactory.create(mysideline_url=ASSOCIATION_URL)
+        self.season = factories.SeasonFactory.create(
+            competition__mysideline_url=ASSOCIATION_URL, mysideline_season=2025
+        )
         self.args = (self.season.competition_id, self.season.pk)
 
     def test_login_required(self):
@@ -1229,12 +1422,17 @@ class AdminTests(TestCase):
             "admin:fixja:competition:season:mysideline-sync", *self.args
         )
 
-    def test_season_form_shows_mysideline_fields(self):
+    def test_forms_show_mysideline_fields(self):
         with self.login(self.superuser):
+            self.assertGoodView(
+                "admin:fixja:competition:edit",
+                self.season.competition_id,
+                test_query_count=60,
+            )
+            self.assertResponseContains('name="mysideline_url"', html=False)
             self.assertGoodView(
                 "admin:fixja:competition:season:edit", *self.args, test_query_count=60
             )
-            self.assertResponseContains('name="mysideline_url"', html=False)
             self.assertResponseContains('name="mysideline_season"', html=False)
             self.assertResponseContains('name="mysideline_season_tag"', html=False)
 
@@ -1263,33 +1461,36 @@ class AdminTests(TestCase):
             self.response_302()
         task.delay.assert_called_once_with(self.season.pk)
 
-    def test_sync_view_requires_url(self):
-        self.season.mysideline_url = None
+    def test_sync_view_requires_link(self):
+        self.season.mysideline_season = None
         self.season.save()
         with self.login(self.superuser):
             self.get("admin:fixja:competition:season:mysideline-sync", *self.args)
             self.response_404()
 
-    def test_form_validation(self):
-        from tournamentcontrol.competition.forms import SeasonForm
+    def test_competition_form_validation(self):
+        from tournamentcontrol.competition.forms import CompetitionForm
 
+        competition = self.season.competition
         data = {
-            "title": self.season.title,
-            "slug": self.season.slug,
-            "mode": self.season.mode,
-            "mysideline_url": "https://tfa.mysideline.com.au/competitions/association/6338/",
-            "live_stream_privacy": "public",
+            "title": competition.title,
+            "slug": competition.slug,
+            "enabled": True,
+            "mysideline_url": (
+                "https://tfa.mysideline.com.au/competitions/association/6338/"
+                "?season=2025&seasonTag=2"
+            ),
         }
-        form = SeasonForm(data=data, instance=self.season, user=self.superuser)
+        form = CompetitionForm(data=data, instance=competition, user=self.superuser)
         self.assertEqual(form.errors.get("mysideline_url"), None)
         self.assertEqual(form.cleaned_data["mysideline_url"], ASSOCIATION_URL)
 
-        form = SeasonForm(
+        form = CompetitionForm(
             data=dict(
                 data,
                 mysideline_url="https://tfa.mysideline.com.au/competitions/69295321",
             ),
-            instance=self.season,
+            instance=competition,
             user=self.superuser,
         )
         self.assertEqual(
@@ -1300,11 +1501,39 @@ class AdminTests(TestCase):
             ],
         )
 
-        form = SeasonForm(
+        form = CompetitionForm(
             data=dict(
                 data, mysideline_url="https://example.com/competitions/association/6338"
             ),
-            instance=self.season,
+            instance=competition,
             user=self.superuser,
         )
         self.assertEqual(len(form.errors["mysideline_url"]), 1)
+
+    def test_season_form_validation(self):
+        from tournamentcontrol.competition.forms import SeasonForm
+
+        data = {
+            "title": self.season.title,
+            "slug": self.season.slug,
+            "mode": self.season.mode,
+            "live_stream_privacy": "public",
+            "mysideline_season": 2025,
+            "mysideline_season_tag": 2,
+        }
+        form = SeasonForm(data=data, instance=self.season, user=self.superuser)
+        self.assertEqual(form.errors, {})
+
+        self.season.competition.mysideline_url = None
+        self.season.competition.save()
+        form = SeasonForm(data=data, instance=self.season, user=self.superuser)
+        self.assertEqual(
+            form.errors["mysideline_season"],
+            ["Set the MySideline URL on the competition first."],
+        )
+        form = SeasonForm(
+            data=dict(data, mysideline_season="", mysideline_season_tag=""),
+            instance=self.season,
+            user=self.superuser,
+        )
+        self.assertEqual(form.errors, {})

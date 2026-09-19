@@ -945,8 +945,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         remote does not tie up the request; the outcome is written to the
         task log.
         """
-        if not season.mysideline_url:
-            raise Http404("Season.mysideline_url must be set.")
+        if not season.mysideline_enabled:
+            raise Http404(
+                "Competition.mysideline_url and Season.mysideline_season must be set."
+            )
 
         redirect_url = request.GET.get("next") or season.urls["edit"]
 

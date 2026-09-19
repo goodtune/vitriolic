@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   e2e-tests:
     runs-on: ubuntu-latest
@@ -23,20 +27,63 @@ jobs:
       run: |
         uvx tox -e e2e
 
-    - name: Upload test results
+    # Screenshots taken by the E2E tests are posted on the pull request as
+    # evidence. `gh pr comment --attach` (GitHub CLI 2.99+) uploads each
+    # image and rewrites the local paths referenced in the body; the same
+    # comment is edited on every run so that revisions do not pile up.
+    - name: Ensure GitHub CLI supports attachments
+      if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+      run: |
+        required="2.99.0"
+        current="$(gh --version | head -n1 | awk '{print $3}')"
+        if [ "$(printf '%s\n%s\n' "$required" "$current" | sort -V | head -n1)" != "$required" ]; then
+          echo "Upgrading gh $current -> latest"
+          sudo mkdir -p -m 755 /etc/apt/keyrings
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+            | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gh
+        fi
+        gh --version
+
+    - name: Post screenshots on the pull request
+      if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+      env:
+        GH_TOKEN: ${{ github.token }}
+        OUTCOME: ${{ job.status }}
+      run: |
+        shopt -s nullglob
+        body=.github/e2e-comment.md
+        {
+          echo "## E2E screenshots"
+          echo
+          echo "Run [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for ${{ github.event.pull_request.head.sha }}: **${OUTCOME}**"
+          echo
+          for shot in tests/screenshots/*.png; do
+            name="$(basename "${shot%.png}")"
+            echo "<details><summary>${name}</summary>"
+            echo
+            echo "![${name}](${shot})"
+            echo
+            echo "</details>"
+          done
+        } > "$body"
+        attach=()
+        for shot in tests/screenshots/*.png; do
+          attach+=(--attach "$shot")
+        done
+        gh pr comment "${{ github.event.pull_request.number }}" \
+          --edit-last --create-if-none \
+          --body-file "$body" "${attach[@]}"
+
+    - name: Upload traces on failure
       uses: actions/upload-artifact@v7
-      if: always()
+      if: failure()
       with:
         name: e2e-test-results
         path: |
           .tox/e2e/log/
           tests/test-results/
         retention-days: 5
-
-    - name: Upload test screenshots
-      uses: actions/upload-artifact@v7
-      if: always()
-      with:
-        name: e2e-test-screenshots
-        path: tests/screenshots/
-        retention-days: 7

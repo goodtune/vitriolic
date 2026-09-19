@@ -12,27 +12,32 @@ This replaces the SportingPulse scraper that was removed in 2017 (the
 
 ## Configuration
 
-On the season edit form set **MySideline URL** to the association page, for
-example `https://tfa.mysideline.com.au/competitions/association/6338`. The
-URL is validated and normalised; only the association id is used internally.
+A MySideline *association* corresponds to a Vitriolic `Competition`, and each
+"year" the association page lets you pick corresponds to a `Season`:
 
-An association page lists every competition it has ever published, across
-years. Two optional filters narrow the selection:
+1. On the competition edit form set **MySideline URL** to the association
+   page, for example
+   `https://tfa.mysideline.com.au/competitions/association/299999` (NSW
+   State Cup). The URL is validated and normalised; only the association id
+   is used internally. Query parameters such as `?season=2025&seasonTag=2`
+   copied from the site's filter link are accepted and dropped.
+2. On each season set **MySideline season** to the year shown in the
+   association page's *Year* drop-down (`season` in the remote data), eg.
+   `2025`. Optionally set **MySideline season period** -- MySideline's
+   `seasonTag`: `1` for the first half of the year (winter competitions),
+   `2` for the second half (summer/spring) -- when one Vitriolic season
+   should cover only part of a year.
 
-* **MySideline season** -- the year MySideline files the competition under
-  (`season` in the remote data), eg. `2026`.
-* **MySideline season period** -- MySideline's `seasonTag`: `1` for the
-  first half of the year (winter competitions), `2` for the second half
-  (summer/spring competitions).
-
-Leave both blank to mirror every competition listed for the association.
+A season without a MySideline season is never synchronised. `Season.mysideline_url`
+gives the association page filtered to the season, which is what the site
+itself produces from its drop-downs.
 
 ## Invocation
 
-* **Admin**: seasons with a MySideline URL show a *MySideline* button in the
-  season list which queues a synchronisation.
+* **Admin**: linked seasons show a *MySideline* button in the season list
+  which queues a synchronisation.
 * **Celery**: `tournamentcontrol.competition.tasks.synchronise_mysideline`
-  synchronises every enabled, incomplete season with a URL, isolating
+  synchronises every enabled, incomplete linked season, isolating
   failures per season; `synchronise_mysideline_season(season_pk)` does one.
   Schedule the former with Celery beat in the deploying project, eg. every
   15 minutes on match days.
@@ -54,6 +59,14 @@ is enabled. The queries used are:
 | `competitionMatches(competitionId)` | every fixture in a competition with round, date/time (epoch milliseconds, UTC), status, teams, scores, venue, field and forfeit/bye/TBA flags |
 | `competitionLadder(competitionId)` | the team list with each team's `pool` name (the only place pool membership is exposed) |
 | `teams(seasonId, nationalId, competitionId)` | the canonical team list for the competition |
+
+The ladder points scheme of a competition (`laddertemplate`: points for a
+win, draw, loss, bye and forfeit, and the default forfeit score) is likewise
+not available per competition through GraphQL; it is read from the
+competition page (`/competitions/<id>`) payload the same way. It only seeds
+newly created divisions, so if that payload cannot be understood the sync
+logs a warning and falls back to the TFA standard ladder rather than
+failing.
 
 There is no GraphQL query that lists competitions *by association*
 (`competitions` is a text search over the whole national body). The
@@ -85,10 +98,17 @@ Pools have no identifier, only a name; they are matched by title.
 
 ### Observed behaviour and limitations
 
-* Match `status` values seen: `pre-game`, `final`, `forfeit`. Scores for a
-  `pre-game` match are `0/0` and are ignored; only `final` supplies a
-  result. `forfeit` carries `meta.forfeitingTeam`. Any other status is
-  treated as unplayed so an unknown value never fabricates a result.
+* The association page lists every competition the association has ever
+  published; its *Year* / *Age* / period drop-downs are client-side filters
+  mirrored into `?season=`, `?age=` and `?seasonTag=` query parameters, not
+  separate requests.
+* Match `status` values seen: `pre-game`, `final` (occasionally `Final` on
+  byes; statuses are lower-cased), `forfeit`. Scores for a `pre-game` match
+  are `0/0` and are ignored; only `final` supplies a result. `forfeit`
+  carries `meta.forfeitingTeam`. Any other status is treated as unplayed so
+  an unknown value never fabricates a result.
+* Distinct competition or team names can slugify identically ("Men's 55s"
+  and "Mens 55s"); slugs are suffixed (`-2`, ...) to keep them unique.
 * A bye is a match with `meta.isBye` and one side empty. Finals whose
   participants are not yet known have `meta.isTba` and both sides empty.
 * Matches do not say which pool they belong to; a match is attributed to a
@@ -104,7 +124,8 @@ Pools have no identifier, only a name; they are matched by title.
 
 | MySideline | Vitriolic |
 | --- | --- |
-| association | `Season` (`mysideline_url`) |
+| association | `Competition` (`mysideline_url`) |
+| year / period | `Season` (`mysideline_season`, `mysideline_season_tag`) |
 | competition | `Division` (`mysideline_id`); title and slug follow the remote name |
 | `Regular` rounds | `Stage` "Regular Season" |
 | `Final` rounds | `Stage` "Finals" (created only when finals fixtures exist; `Match.label` carries the round's display name, eg. "Grand Final") |
@@ -114,10 +135,12 @@ Pools have no identifier, only a name; they are matched by title.
 | venue / field | `Venue` (matched by title within the season, created with the venue's coordinates and timezone when absent) and `Ground` "Field *n*" (created when absent) |
 | TBA participant | `UndecidedTeam` labelled "TBA" on the stage |
 
-A division is created with the TFA standard ladder as its points formula
-(`3*win + 2*draw + 1*loss + 3*bye + 3*forfeit_for`, forfeit scores 5/0).
-Ladder configuration is not managed by MySideline and may be changed freely
-afterwards. A division or team created by hand with the same title as a
+A division is created with a points formula derived from the competition's
+MySideline ladder template (for example the NSW State Cup's "Events Ladder"
+gives `4*win + 2*draw + 4*forfeit_for`), or the TFA standard ladder
+(`3*win + 2*draw + 1*loss + 3*bye + 3*forfeit_for`) when the template cannot
+be read; the forfeit score defaults from the template too. Ladder
+configuration is not overwritten by later syncs and may be changed freely. A division or team created by hand with the same title as a
 remote one is *adopted* (linked) on the first synchronisation rather than
 duplicated, so ladder settings can be prepared before linking a season.
 
@@ -151,3 +174,15 @@ A transport failure, HTTP error, GraphQL error or a response that does not
 have the expected shape raises before the transaction starts, so a
 temporary outage never empties a competition. A database error during the
 apply rolls back the whole snapshot.
+
+## Test data
+
+`tournamentcontrol/competition/tests/fixtures/mysideline/state_cup_2025/`
+holds the complete NSW State Cup 2025 (association 299999: 21 competitions,
+242 teams, 959 matches, pools and finals) as captured from the interfaces
+above, plus smaller captures of a club association. The unit tests and the
+end-to-end test `tests/e2e/test_mysideline.py` import it through the real
+client and reconciler with the HTTP layer replaced by
+`tournamentcontrol.competition.tests.mysideline.state_cup_session`. Running
+the end-to-end test with `MYSIDELINE_LIVE=1` imports from the live site
+instead, which confirms the remote interface still matches this document.

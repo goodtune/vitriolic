@@ -560,10 +560,28 @@ class CompetitionForm(SuperUserSlugMixin, ModelForm):
             "slug",
             "slug_locked",
             "clubs",
+            "mysideline_url",
         )
         labels = {
             "copy": _("Description"),
         }
+
+    def clean_mysideline_url(self):
+        url = self.cleaned_data.get("mysideline_url")
+        if not url:
+            return url
+        try:
+            parsed = MySidelineURL(url)
+        except MySidelineURLError as exc:
+            raise forms.ValidationError(str(exc))
+        if parsed.association_id is None:
+            raise forms.ValidationError(
+                _(
+                    "Enter the MySideline association URL, for example "
+                    "https://tfa.mysideline.com.au/competitions/association/6338"
+                )
+            )
+        return parsed.canonical
 
 
 class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
@@ -589,7 +607,6 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
             "statistics",
             "mvp_results_public",
             "enable_experimental_views",
-            "mysideline_url",
             "mysideline_season",
             "mysideline_season_tag",
             "slug",
@@ -619,22 +636,13 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
         self.fields["live_stream_client_secret"].widget.attrs["class"] = "form-control"
         self.fields["live_stream_client_secret"].widget.attrs["placeholder"] = "*" * 10
 
-    def clean_mysideline_url(self):
-        url = self.cleaned_data.get("mysideline_url")
-        if not url:
-            return url
-        try:
-            parsed = MySidelineURL(url)
-        except MySidelineURLError as exc:
-            raise forms.ValidationError(str(exc))
-        if parsed.association_id is None:
+    def clean_mysideline_season(self):
+        year = self.cleaned_data.get("mysideline_season")
+        if year and not self.instance.competition.mysideline_url:
             raise forms.ValidationError(
-                _(
-                    "Enter the MySideline association URL, for example "
-                    "https://tfa.mysideline.com.au/competitions/association/6338"
-                )
+                _("Set the MySideline URL on the competition first.")
             )
-        return parsed.canonical
+        return year
 
     def clean_live_stream_client_secret(self):
         project_id = self.cleaned_data.get("live_stream_project_id")

@@ -23,7 +23,10 @@ Mapping of MySideline concepts onto Vitriolic models:
 =================  ======================================================
 MySideline         Vitriolic
 =================  ======================================================
-association        ``Season`` (configured via ``Season.mysideline_url``)
+association        ``Competition`` (``Competition.mysideline_url``)
+"year" / period    ``Season`` (``Season.mysideline_season`` and the optional
+                   ``Season.mysideline_season_tag`` select which of the
+                   association's competitions belong to the season)
 competition        ``Division`` (``Division.mysideline_id``)
 round type         ``Stage`` -- "Regular" rounds and "Final" rounds each
                    map onto a stage of the division
@@ -58,12 +61,14 @@ from tournamentcontrol.competition.models import (
 )
 from tournamentcontrol.competition.mysideline.client import (
     MySidelineClient,
+    MySidelineResponseError,
     MySidelineURL,
 )
 from tournamentcontrol.competition.mysideline.types import (
     STATUS_FINAL,
     RemoteCompetition,
     RemoteCompetitionSummary,
+    RemoteLadderTemplate,
     RemoteMatch,
 )
 
@@ -73,13 +78,11 @@ REGULAR_STAGE_TITLE = "Regular Season"
 FINALS_STAGE_TITLE = "Finals"
 TBA_LABEL = "TBA"
 
-# Applied when a division is *created* by the synchronisation. Ladder
-# configuration is not managed by MySideline, so administrators may change
-# it afterwards without it being overwritten. Mirrors the "TFA Standard
-# Ladder" template: 3 for a win, 2 for a draw, 1 for a loss, 3 for a bye
-# and 3 for a forfeit received.
-DEFAULT_POINTS_FORMULA = "3*win + 2*draw + 1*loss + 3*bye + 3*forfeit_for"
-DEFAULT_FORFEIT_FOR_SCORE = 5
+# Applied when a division is *created* by the synchronisation, from the
+# competition's MySideline ladder template when it could be read and
+# otherwise from the "TFA Standard Ladder" defaults. Ladder configuration
+# is not overwritten on later syncs, so administrators may change it.
+DEFAULT_LADDER_TEMPLATE = RemoteLadderTemplate()
 DEFAULT_FORFEIT_AGAINST_SCORE = 0
 
 
@@ -129,13 +132,14 @@ def select_competitions(season: Season, competitions) -> list[RemoteCompetitionS
     """
     Apply the season's ``mysideline_season`` / ``mysideline_season_tag``
     filters to an association's competition listing.
+
+    The association page lists every competition the association has ever
+    published; its "Year" and period drop-downs are client-side filters on
+    the same ``season`` and ``seasonTag`` values used here.
     """
     selected = []
     for competition in competitions:
-        if (
-            season.mysideline_season is not None
-            and competition.season != season.mysideline_season
-        ):
+        if competition.season != season.mysideline_season:
             continue
         if (
             season.mysideline_season_tag is not None
@@ -156,13 +160,29 @@ def fetch_snapshot(
     """
     if client is None:
         client = MySidelineClient()
-    url = MySidelineURL(season.mysideline_url)
+    url = MySidelineURL(season.competition.mysideline_url)
     association = client.get_association(url)
     snapshots = []
     for summary in select_competitions(season, association.competitions):
+        # The ladder template only seeds newly created divisions, so a
+        # change in the (less stable) page payload must not block the sync
+        # of draws and results; transport failures still abort.
+        try:
+            ladder_template = client.get_ladder_template(url, summary.id)
+        except MySidelineResponseError as exc:
+            logger.warning(
+                "Ladder template for MySideline competition %d unavailable: %s",
+                summary.id,
+                exc,
+            )
+            ladder_template = None
         snapshots.append(
             client.get_competition(
-                summary.id, summary.name, summary.season, url.national_id
+                summary.id,
+                summary.name,
+                summary.season,
+                url.national_id,
+                ladder_template=ladder_template,
             )
         )
     return snapshots
@@ -178,8 +198,10 @@ def synchronise_season(
     (or a subclass) if the remote data cannot be obtained; in that case the
     local data is left untouched.
     """
-    if not season.mysideline_url:
-        raise ValueError("Season %r has no mysideline_url" % season)
+    if not season.competition.mysideline_url:
+        raise ValueError("Competition %r has no mysideline_url" % season.competition)
+    if not season.mysideline_season:
+        raise ValueError("Season %r has no mysideline_season" % season)
     snapshots = fetch_snapshot(season, client)
     result = apply_snapshot(season, snapshots)
     logger.info("MySideline sync of %r: %s", season, result.summary())
@@ -202,6 +224,22 @@ def apply_snapshot(season: Season, snapshots: list[RemoteCompetition]) -> SyncRe
 
 def _next_order(queryset) -> int:
     return (queryset.aggregate(order=Max("order"))["order"] or 0) + 1
+
+
+def _unique_slug(queryset, title: str, exclude_pk=None) -> str:
+    """
+    Slugify ``title`` and, when another object in ``queryset`` already uses
+    that slug, suffix it ("-2", "-3", ...). Distinct remote names such as
+    "Men's 55s" and "Mens 55s" otherwise collide.
+    """
+    base = slugify(title) or "untitled"
+    if exclude_pk is not None:
+        queryset = queryset.exclude(pk=exclude_pk)
+    slug, suffix = base, 2
+    while queryset.filter(slug=slug).exists():
+        slug = "%s-%d" % (base, suffix)
+        suffix += 1
+    return slug
 
 
 def _set_attrs(obj, result: SyncResult, **attrs) -> bool:
@@ -297,15 +335,17 @@ class _SeasonReconciler:
             self.result.add_updated(division)
             logger.info("Adopted division %r as MySideline %d", division, snapshot.id)
             return division
+        template = snapshot.ladder_template or DEFAULT_LADDER_TEMPLATE
         division = Division(
             season=self.season,
             title=snapshot.name,
-            slug=slugify(snapshot.name),
+            slug=_unique_slug(self.season.divisions, snapshot.name),
             order=_next_order(self.season.divisions),
             mysideline_id=snapshot.id,
-            points_formula=DEFAULT_POINTS_FORMULA,
-            forfeit_for_score=DEFAULT_FORFEIT_FOR_SCORE,
+            points_formula=template.points_formula,
+            forfeit_for_score=template.forfeit_score,
             forfeit_against_score=DEFAULT_FORFEIT_AGAINST_SCORE,
+            include_forfeits_in_played=template.forfeit_counts_as_played,
         )
         division.save()
         self.result.add_created(division)
@@ -366,7 +406,9 @@ class _DivisionReconciler:
             self.division,
             self.result,
             title=self.snapshot.name,
-            **self._slug_attrs(self.division, self.snapshot.name),
+            **self._slug_attrs(
+                self.division, self.snapshot.name, self.season.divisions
+            ),
         )
         self.regular_stage = self._stage(REGULAR_STAGE_TITLE, 1)
         self._reconcile_pools()
@@ -374,10 +416,13 @@ class _DivisionReconciler:
         self._reconcile_matches()
 
     @staticmethod
-    def _slug_attrs(obj, title: str) -> dict:
+    def _slug_attrs(obj, title: str, siblings) -> dict:
         if obj.slug_locked and obj.slug:
             return {}
-        return {"slug": slugify(title)}
+        if obj.slug and obj.slug.startswith(slugify(title)):
+            # Keep an existing (possibly suffixed) slug for an unchanged title.
+            return {}
+        return {"slug": _unique_slug(siblings, title, exclude_pk=obj.pk)}
 
     # -- stages & pools ----------------------------------------------------
 
@@ -443,7 +488,7 @@ class _DivisionReconciler:
                 title=remote.name,
                 division_id=self.division.pk,
                 stage_group_id=pool.pk if pool else None,
-                **self._slug_attrs(team, remote.name),
+                **self._slug_attrs(team, remote.name, self.division.teams),
             )
             self.teams[remote.id] = team
         for team in local.values():
@@ -469,7 +514,7 @@ class _DivisionReconciler:
         team = Team(
             division=self.division,
             title=name,
-            slug=slugify(name),
+            slug=_unique_slug(self.division.teams, name),
             order=_next_order(self.division.teams),
             stage_group=pool,
             mysideline_id=remote_id,
@@ -696,7 +741,8 @@ class _DivisionReconciler:
 
 def synchronise_all(client: Optional[MySidelineClient] = None) -> dict[int, SyncResult]:
     """
-    Synchronise every enabled, incomplete season that has a MySideline URL.
+    Synchronise every enabled, incomplete season that names a MySideline
+    season within a competition that has a MySideline URL.
 
     Failures are isolated per season: a season whose remote data cannot be
     fetched is logged and skipped, the others still synchronise.
@@ -704,9 +750,16 @@ def synchronise_all(client: Optional[MySidelineClient] = None) -> dict[int, Sync
     if client is None:
         client = MySidelineClient()
     results = {}
-    seasons = Season.objects.filter(
-        enabled=True, complete=False, mysideline_url__isnull=False
-    ).exclude(mysideline_url="")
+    seasons = (
+        Season.objects.filter(
+            enabled=True,
+            complete=False,
+            mysideline_season__isnull=False,
+            competition__mysideline_url__isnull=False,
+        )
+        .exclude(competition__mysideline_url="")
+        .select_related("competition")
+    )
     for season in seasons:
         try:
             results[season.pk] = synchronise_season(season, client)

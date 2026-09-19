@@ -85,6 +85,36 @@ class RemoteMatch(BaseModel):
         return self.status == STATUS_FORFEIT
 
 
+class RemoteLadderTemplate(BaseModel):
+    """
+    The ladder points scheme MySideline applies to a competition. Only used
+    to seed a division's ladder configuration when it is created; the
+    administrator remains free to change it afterwards.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: Optional[str] = None
+    points_win: int = 3
+    points_draw: int = 2
+    points_loss: int = 1
+    points_bye: int = 3
+    points_forfeit_for: int = 3
+    forfeit_score: int = 5
+    forfeit_counts_as_played: bool = True
+
+    @property
+    def points_formula(self) -> str:
+        terms = [
+            (self.points_win, "win"),
+            (self.points_draw, "draw"),
+            (self.points_loss, "loss"),
+            (self.points_bye, "bye"),
+            (self.points_forfeit_for, "forfeit_for"),
+        ]
+        return " + ".join("%d*%s" % term for term in terms if term[0]) or "0*win"
+
+
 class RemoteCompetition(BaseModel):
     """
     The complete snapshot of a single competition: its teams (with pool
@@ -97,6 +127,7 @@ class RemoteCompetition(BaseModel):
     name: str
     teams: tuple[RemoteTeam, ...] = Field(default_factory=tuple)
     matches: tuple[RemoteMatch, ...] = Field(default_factory=tuple)
+    ladder_template: Optional[RemoteLadderTemplate] = None
 
     @property
     def pools(self) -> tuple[str, ...]:

@@ -32,10 +32,12 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from tournamentcontrol.competition.mysideline.types import (
+    STATUS_PRE_GAME,
     NationalId,
     RemoteAssociation,
     RemoteCompetition,
     RemoteCompetitionSummary,
+    RemoteLadderTemplate,
     RemoteMatch,
     RemoteTeam,
     RemoteVenue,
@@ -298,6 +300,52 @@ class MySidelineClient:
             id=url.association_id, competitions=tuple(competitions)
         )
 
+    # -- competition settings --------------------------------------------
+
+    def get_ladder_template(
+        self, url: MySidelineURL, competition_id: int
+    ) -> RemoteLadderTemplate:
+        """
+        The ladder points scheme of a competition.
+
+        Not exposed by GraphQL for a single competition, so it is read from
+        the competition page's server component payload in the same way as
+        the association listing.
+        """
+        response = self._request(
+            "GET",
+            url.competition_url(competition_id),
+            headers={"RSC": "1", "Accept": "text/x-component, text/html"},
+        )
+        content_type = response.headers.get("Content-Type", "")
+        if "text/x-component" in content_type:
+            lines = response.text.splitlines()
+        else:
+            lines = _flight_lines_from_html(response.text)
+        data = _find_flight_object(lines, "laddertemplate")
+        if data is None:
+            raise MySidelineResponseError(
+                "Competition page did not contain a ladder template"
+            )
+        raw = data["laddertemplate"]
+        if not isinstance(raw, dict):
+            raise MySidelineResponseError("laddertemplate is not an object")
+        defaults = RemoteLadderTemplate()
+        return RemoteLadderTemplate(
+            name=_str(raw.get("name")),
+            points_win=_int_or(raw.get("pointsWin"), defaults.points_win),
+            points_draw=_int_or(raw.get("pointsDraw"), defaults.points_draw),
+            points_loss=_int_or(raw.get("pointsLoss"), defaults.points_loss),
+            points_bye=_int_or(raw.get("pointsBye"), defaults.points_bye),
+            points_forfeit_for=_int_or(
+                raw.get("pointsFF"), defaults.points_forfeit_for
+            ),
+            forfeit_score=_int_or(
+                raw.get("defaultScoreFFReceived"), defaults.forfeit_score
+            ),
+            forfeit_counts_as_played=bool(raw.get("ffCountAsPlayed", True)),
+        )
+
     # -- competition detail ----------------------------------------------
 
     def get_competition(
@@ -306,6 +354,7 @@ class MySidelineClient:
         name: str,
         season: int,
         national_id: NationalId,
+        ladder_template: Optional[RemoteLadderTemplate] = None,
     ) -> RemoteCompetition:
         variables = {
             "competitionId": competition_id,
@@ -372,6 +421,7 @@ class MySidelineClient:
             name=name,
             teams=tuple(RemoteTeam(**team) for team in teams.values()),
             matches=tuple(matches),
+            ladder_template=ladder_template,
         )
 
 
@@ -395,7 +445,9 @@ def _parse_match(raw: Any) -> RemoteMatch:
     home = raw.get("homeTeam") or {}
     away = raw.get("awayTeam") or {}
     forfeiting = meta.get("forfeitingTeam") or {}
-    status = _str(raw.get("status")) or "pre-game"
+    # Status is usually lower case but "Final" has been observed on byes;
+    # normalise so the reconciler only ever sees one spelling.
+    status = (_str(raw.get("status")) or STATUS_PRE_GAME).lower()
 
     venue = None
     raw_venue = raw.get("venue") or {}
@@ -429,6 +481,11 @@ def _parse_match(raw: Any) -> RemoteMatch:
     )
 
 
+def _int_or(value: Any, default: int) -> int:
+    parsed = _int(value)
+    return default if parsed is None else parsed
+
+
 def _float(value: Any) -> Optional[float]:
     if value is None:
         return None
@@ -457,6 +514,15 @@ def _find_flight_data(lines, key: str) -> Optional[dict]:
     Search each ``<id>:<json>`` line of a flight payload for the first JSON
     object containing ``key`` mapped to a list, and return that object.
     """
+    return _find_flight(lines, key, list)
+
+
+def _find_flight_object(lines, key: str) -> Optional[dict]:
+    """As :func:`_find_flight_data` but ``key`` must map to an object."""
+    return _find_flight(lines, key, dict)
+
+
+def _find_flight(lines, key: str, kind) -> Optional[dict]:
     for line in lines:
         _, sep, body = line.partition(":")
         if not sep:
@@ -465,23 +531,23 @@ def _find_flight_data(lines, key: str) -> Optional[dict]:
             value = json.loads(body)
         except ValueError:
             continue
-        found = _walk(value, key)
+        found = _walk(value, key, kind)
         if found is not None:
             return found
     return None
 
 
-def _walk(value, key: str) -> Optional[dict]:
+def _walk(value, key: str, kind) -> Optional[dict]:
     if isinstance(value, dict):
-        if isinstance(value.get(key), list):
+        if isinstance(value.get(key), kind):
             return value
         for child in value.values():
-            found = _walk(child, key)
+            found = _walk(child, key, kind)
             if found is not None:
                 return found
     elif isinstance(value, list):
         for child in value:
-            found = _walk(child, key)
+            found = _walk(child, key, kind)
             if found is not None:
                 return found
     return None

@@ -1,5 +1,5 @@
 # Replace the long-dead SportingPulse hook on Division with MySideline
-# synchronisation configuration on Season and stable MySideline identifiers
+# synchronisation configuration on Competition/Season and stable MySideline identifiers
 # on the entities the synchronisation manages.
 
 from django.db import migrations, models
@@ -17,15 +17,16 @@ class Migration(migrations.Migration):
             name="sportingpulse_url",
         ),
         migrations.AddField(
-            model_name="season",
+            model_name="competition",
             name="mysideline_url",
             field=models.URLField(
                 blank=True,
                 help_text=(
                     "Association URL on MySideline, for example "
                     "https://tfa.mysideline.com.au/competitions/association/6338. "
-                    "When set, divisions, teams, fixtures and results are "
-                    "synchronised from MySideline and MySideline is authoritative."
+                    "Seasons that name a MySideline season are then synchronised "
+                    "from MySideline, which is authoritative for their divisions, "
+                    "teams, fixtures and results."
                 ),
                 max_length=1024,
                 null=True,
@@ -38,9 +39,9 @@ class Migration(migrations.Migration):
             field=models.PositiveIntegerField(
                 blank=True,
                 help_text=(
-                    "Only synchronise MySideline competitions from this season "
-                    "(a year, for example 2026). Leave blank for all seasons "
-                    "listed for the association."
+                    "The MySideline season (a year, for example 2026) whose "
+                    "competitions this season mirrors. Required for synchronisation "
+                    "when the competition has a MySideline URL."
                 ),
                 null=True,
                 verbose_name="MySideline season",
