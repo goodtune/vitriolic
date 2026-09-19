@@ -26,6 +26,7 @@ from django.db.models import (
     Count,
     DateField,
     DateTimeField,
+    F,
     Q,
     Sum,
     TimeField,
@@ -852,9 +853,90 @@ class Ground(Place):
         )
 
 
+class MySidelineMixin(models.Model):
+    """
+    Link a record to the MySideline entity it mirrors.
+
+    ``mysideline_id`` is set by the synchronisation, never by hand; a record
+    which has one is managed by MySideline and is updated on every sync. See
+    :mod:`tournamentcontrol.competition.mysideline`.
+
+    The name is the exception to "MySideline is authoritative". Upstream
+    naming is frequently unwieldy -- "Born 2014 & 2013 u14 Boys" for what we
+    would rather publish as "14 Boys" -- so the local ``title`` may be
+    changed and the synchronisation will then leave it alone. To tell our
+    variation from theirs, two copies of the remote name are kept beside our
+    own:
+
+    ``mysideline_title``
+        what MySideline calls the record right now, refreshed on every sync
+        whether or not we use it;
+
+    ``mysideline_title_synced``
+        what MySideline called it when our ``title`` was last reconciled
+        with it: when the record was linked, when a remote rename was last
+        applied, or when an administrator last saved the record.
+
+    ``title != mysideline_title_synced`` is therefore our variation and
+    ``mysideline_title != mysideline_title_synced`` is theirs, so an upstream
+    rename of a record we have renamed ourselves can be reported instead of
+    being silently discarded or silently applied.
+
+    Classes using this mixin must provide a ``title``; in practice they are
+    all :class:`~touchtechnology.common.models.SitemapNodeBase` subclasses.
+    """
+
+    mysideline_id = models.BigIntegerField(
+        blank=True, null=True, unique=True, editable=False
+    )
+
+    mysideline_title = models.CharField(
+        max_length=255, blank=True, null=True, editable=False
+    )
+
+    mysideline_title_synced = models.CharField(
+        max_length=255, blank=True, null=True, editable=False
+    )
+
+    class Meta:
+        abstract = True
+
+    @property
+    def mysideline_reconciled(self):
+        """The record has been reconciled with MySideline at least once."""
+        return bool(self.mysideline_id) and self.mysideline_title_synced is not None
+
+    @property
+    def mysideline_title_overridden(self):
+        """Our ``title`` differs from the remote name it was reconciled with."""
+        return self.mysideline_reconciled and self.title != self.mysideline_title_synced
+
+    @property
+    def mysideline_title_changed(self):
+        """MySideline has renamed the record since we last reconciled it."""
+        return (
+            self.mysideline_reconciled
+            and self.mysideline_title != self.mysideline_title_synced
+        )
+
+
+def mysideline_renamed(queryset):
+    """
+    Filter ``queryset`` to the records MySideline has renamed since they were
+    last reconciled -- the local name of each is one an administrator chose
+    and the synchronisation will keep, so the change needs a human decision.
+    """
+    return queryset.filter(
+        mysideline_id__isnull=False,
+        mysideline_title__isnull=False,
+        mysideline_title_synced__isnull=False,
+    ).exclude(mysideline_title=F("mysideline_title_synced"))
+
+
 class Division(
     AdminUrlMixin,
     ModelDiffMixin,
+    MySidelineMixin,
     OrderedSitemapNode,
 ):
     """
@@ -904,13 +986,6 @@ class Division(
                 message=_("Enter a valid hex color code (e.g., #ff5733)"),
             )
         ],
-    )
-
-    # Identifier of the MySideline competition this division mirrors. Set by
-    # the MySideline synchronisation, never by hand; a division with this
-    # set is owned by MySideline and will be updated on every sync.
-    mysideline_id = models.BigIntegerField(
-        blank=True, null=True, unique=True, editable=False
     )
 
     objects = DivisionQuerySet.as_manager()
@@ -1527,7 +1602,7 @@ class StageGroup(AdminUrlMixin, OrderedSitemapNode):
         return res
 
 
-class Team(AdminUrlMixin, OrderedSitemapNode):
+class Team(AdminUrlMixin, MySidelineMixin, OrderedSitemapNode):
     """
     A model which represents a team in a competition. A team may not yet be
     placed into a division, as it might only be at the nomination stage.
@@ -1601,11 +1676,6 @@ class Team(AdminUrlMixin, OrderedSitemapNode):
         label_from_instance=team_and_division,
         symmetrical=True,
         help_text=_("Select any teams that must not play at the same time."),
-    )
-
-    # Identifier of the MySideline team this team mirrors, see Division.
-    mysideline_id = models.BigIntegerField(
-        blank=True, null=True, unique=True, editable=False
     )
 
     class Meta:
@@ -2158,7 +2228,8 @@ class Match(AdminUrlMixin, models.Model):
         max_length=20, blank=True, null=True, unique=True, db_index=True
     )
 
-    # Identifier of the MySideline match this fixture mirrors, see Division.
+    # Identifier of the MySideline match this fixture mirrors. A match has
+    # no name of its own, so it does not need MySidelineMixin.
     mysideline_id = models.BigIntegerField(
         blank=True, null=True, unique=True, editable=False
     )

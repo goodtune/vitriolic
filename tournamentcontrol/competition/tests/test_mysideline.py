@@ -20,6 +20,7 @@ from django.db import IntegrityError
 from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
+from tournamentcontrol.competition.forms import DivisionForm, TeamForm
 from tournamentcontrol.competition.models import (
     Division,
     Ground,
@@ -29,6 +30,7 @@ from tournamentcontrol.competition.models import (
     StageGroup,
     Team,
     Venue,
+    mysideline_renamed,
 )
 from tournamentcontrol.competition.mysideline.client import (
     GRAPHQL_ENDPOINT,
@@ -472,10 +474,12 @@ class SyncTestCase(TestCase):
         self.remote = RemoteWorld()
         self.session = FakeSession()
         self.remote.install(self.session)
-        self.client = MySidelineClient(session=self.session)
+        # Not ``self.client``, which is the Django test client used by the
+        # tests which exercise the admin.
+        self.mysideline = MySidelineClient(session=self.session)
 
     def sync(self):
-        return synchronise_season(self.season, self.client)
+        return synchronise_season(self.season, self.mysideline)
 
     def populate(self):
         """One un-pooled division with two rounds and one pooled division."""
@@ -936,6 +940,283 @@ class IncrementalSyncTests(SyncTestCase):
         self.assertEqual(mens.stages.get(title=REGULAR_STAGE_TITLE).pools.count(), 2)
 
 
+class TitleTests(SyncTestCase):
+    """
+    MySideline is not authoritative for the *name* of a division or team;
+    a name chosen locally is kept and an upstream rename is reported.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.populate()
+        self.sync()
+        self.division = self.season.divisions.get(mysideline_id=100)
+        self.team = Team.objects.get(mysideline_id=1)
+
+    def rename_division(self, title="14 Boys"):
+        self.division.title = title
+        self.division.save()
+        self.division.refresh_from_db()
+        return self.division
+
+    def test_remote_name_is_recorded(self):
+        for obj, name in ((self.division, "Mens Div 1"), (self.team, "Sharks")):
+            self.assertEqual(obj.title, name)
+            self.assertEqual(obj.mysideline_title, name)
+            self.assertEqual(obj.mysideline_title_synced, name)
+            self.assertFalse(obj.mysideline_title_overridden)
+            self.assertFalse(obj.mysideline_title_changed)
+
+    def test_local_division_name_is_kept(self):
+        self.rename_division()
+        result = self.sync()
+        self.division.refresh_from_db()
+        self.assertEqual(self.division.title, "14 Boys")
+        self.assertEqual(self.division.mysideline_title, "Mens Div 1")
+        self.assertEqual(self.division.mysideline_title_synced, "Mens Div 1")
+        self.assertTrue(self.division.mysideline_title_overridden)
+        self.assertFalse(self.division.mysideline_title_changed)
+        self.assertEqual(result.warnings, [])
+
+    def test_local_team_name_is_kept(self):
+        self.team.title = "Terrigal"
+        self.team.save()
+        result = self.sync()
+        self.team.refresh_from_db()
+        self.assertEqual(self.team.title, "Terrigal")
+        self.assertEqual(self.team.mysideline_title, "Sharks")
+        self.assertTrue(self.team.mysideline_title_overridden)
+        self.assertEqual(result.warnings, [])
+
+    def test_local_name_does_not_affect_the_rest_of_the_sync(self):
+        self.rename_division()
+        self.remote.match(100, 1003).update(
+            status="final", scores={"homeTeam": 4, "awayTeam": 2}
+        )
+        self.sync()
+        match = Match.objects.get(mysideline_id=1003)
+        self.assertEqual((match.home_team_score, match.away_team_score), (4, 2))
+        self.division.refresh_from_db()
+        self.assertEqual(self.division.title, "14 Boys")
+
+    def test_remote_rename_of_a_local_name_is_reported(self):
+        self.rename_division()
+        self.remote.competition(100)["name"] = "Mens Premier"
+        result = self.sync()
+        self.division.refresh_from_db()
+        self.assertEqual(self.division.title, "14 Boys")
+        self.assertEqual(self.division.mysideline_title, "Mens Premier")
+        self.assertEqual(self.division.mysideline_title_synced, "Mens Div 1")
+        self.assertTrue(self.division.mysideline_title_changed)
+        self.assertEqual(len(result.warnings), 1)
+        self.assertIn("renamed remotely", result.warnings[0])
+        self.assertIn("'Mens Div 1' to 'Mens Premier'", result.warnings[0])
+
+    def test_remote_rename_is_applied_while_the_name_is_not_local(self):
+        self.remote.competition(100)["name"] = "Mens Premier"
+        result = self.sync()
+        self.division.refresh_from_db()
+        self.assertEqual(self.division.title, "Mens Premier")
+        self.assertEqual(self.division.mysideline_title, "Mens Premier")
+        self.assertEqual(self.division.mysideline_title_synced, "Mens Premier")
+        self.assertEqual(result.warnings, [])
+
+    def test_clashing_remote_rename_is_reported_and_retried(self):
+        self.remote.competition(200)["name"] = "Mens Div 1"
+        result = self.sync()
+        womens = self.season.divisions.get(mysideline_id=200)
+        self.assertEqual(womens.title, "Womens Div 1")
+        self.assertEqual(womens.mysideline_title, "Mens Div 1")
+        self.assertEqual(womens.mysideline_title_synced, "Womens Div 1")
+        self.assertEqual(len(result.warnings), 1)
+        self.assertIn("cannot be renamed", result.warnings[0])
+
+        # Once the name is free the rename is applied by the next sync.
+        self.remote.competition(100)["name"] = "Mens Premier"
+        result = self.sync()
+        womens.refresh_from_db()
+        self.assertEqual(womens.title, "Mens Div 1")
+        self.assertEqual(womens.mysideline_title_synced, "Mens Div 1")
+        self.assertEqual(result.warnings, [])
+
+    def test_adopted_records_follow_the_remote_name(self):
+        division = factories.DivisionFactory.create(season=self.season, title="tba")
+        self.remote.add_competition(300, "TBA")
+        self.sync()
+        division.refresh_from_db()
+        self.assertEqual(division.mysideline_id, 300)
+        self.assertEqual(division.title, "TBA")
+        self.assertEqual(division.mysideline_title_synced, "TBA")
+        self.assertFalse(division.mysideline_title_overridden)
+
+    def test_renamed_queryset(self):
+        self.rename_division()
+        self.remote.competition(100)["name"] = "Mens Premier"
+        self.remote.team(100, 1)["name"] = "Terrigal Sharks"
+        self.team.title = "Terrigal"
+        self.team.save()
+        self.sync()
+        self.assertEqual(
+            [d.pk for d in mysideline_renamed(self.season.divisions)],
+            [self.division.pk],
+        )
+        self.assertEqual(
+            [t.pk for t in mysideline_renamed(Team.objects.all())], [self.team.pk]
+        )
+
+
+class TitleAdminTests(SyncTestCase):
+    """Choosing between the local and the MySideline name in the admin."""
+
+    def setUp(self):
+        super().setUp()
+        self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
+        self.populate()
+        self.sync()
+        self.division = self.season.divisions.get(mysideline_id=100)
+        self.division.title = "14 Boys"
+        self.division.save()
+        self.remote.competition(100)["name"] = "Mens Premier"
+        self.sync()
+        self.division.refresh_from_db()
+        self.args = (self.season.competition_id, self.season.pk)
+
+    def division_form(self, **kwargs):
+        data = {
+            "title": self.division.title,
+            "slug": self.division.slug,
+            "color": self.division.color,
+            "points_formula_0": "3",
+            "points_formula_1": "2",
+            "points_formula_2": "1",
+            "points_formula_3": "3",
+            "points_formula_4": "3",
+            "points_formula_5": "",
+            "forfeit_for_score": self.division.forfeit_for_score,
+            "forfeit_against_score": self.division.forfeit_against_score,
+        }
+        data.update(kwargs)
+        return DivisionForm(data=data, instance=self.division, user=self.superuser)
+
+    def test_form_shows_the_remote_name(self):
+        form = self.division_form()
+        self.assertIn("Mens Premier", form.fields["title"].help_text)
+        self.assertIn("Mens Div 1", form.fields["title"].help_text)
+        self.assertIn("mysideline_title_reset", form.fields)
+
+    def test_form_without_a_link_is_unchanged(self):
+        division = factories.DivisionFactory.create(season=self.season)
+        form = DivisionForm(instance=division, user=self.superuser)
+        self.assertNotIn("mysideline_title_reset", form.fields)
+        self.assertFalse(form.mysideline_unacknowledged)
+
+    def test_unchanged_form_still_saves_the_acknowledgement(self):
+        # A form which edits no field must still report a change while an
+        # upstream rename is unacknowledged, or the admin skips the save.
+        form = self.division_form()
+        self.assertTrue(form.mysideline_unacknowledged)
+        self.assertTrue(form.has_changed())
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+        self.assertFalse(self.division_form().mysideline_unacknowledged)
+
+    def test_saving_keeps_the_local_name_and_acknowledges_the_change(self):
+        form = self.division_form()
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+        self.division.refresh_from_db()
+        self.assertEqual(self.division.title, "14 Boys")
+        self.assertEqual(self.division.mysideline_title_synced, "Mens Premier")
+        self.assertTrue(self.division.mysideline_title_overridden)
+        self.assertFalse(self.division.mysideline_title_changed)
+        # ... and the synchronisation stops reporting it.
+        self.assertEqual(self.sync().warnings, [])
+
+    def test_saving_with_reset_adopts_the_remote_name(self):
+        form = self.division_form(mysideline_title_reset="1")
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+        self.division.refresh_from_db()
+        self.assertEqual(self.division.title, "Mens Premier")
+        self.assertEqual(self.division.slug, "mens-premier")
+        self.assertEqual(self.division.mysideline_title_synced, "Mens Premier")
+        self.assertFalse(self.division.mysideline_title_overridden)
+        # ... and later renames are applied again without intervention.
+        self.remote.competition(100)["name"] = "Mens Division One"
+        self.sync()
+        self.division.refresh_from_db()
+        self.assertEqual(self.division.title, "Mens Division One")
+
+    def test_team_form_offers_the_remote_name(self):
+        team = Team.objects.get(mysideline_id=1)
+        team.title = "Terrigal"
+        team.save()
+        self.remote.team(100, 1)["name"] = "Terrigal Sharks"
+        self.sync()
+        team.refresh_from_db()
+        form = TeamForm(
+            team.division,
+            data={
+                "title": team.title,
+                "slug": team.slug,
+                "mysideline_title_reset": "1",
+            },
+            instance=team,
+            user=self.superuser,
+        )
+        self.assertIn("Terrigal Sharks", form.fields["title"].help_text)
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+        team.refresh_from_db()
+        self.assertEqual(team.title, "Terrigal Sharks")
+        self.assertEqual(team.mysideline_title_synced, "Terrigal Sharks")
+
+    def test_team_form_keeps_local_name_and_acknowledges(self):
+        team = Team.objects.get(mysideline_id=1)
+        team.title = "Terrigal"
+        team.save()
+        self.remote.team(100, 1)["name"] = "Terrigal Sharks"
+        self.sync()
+        team.refresh_from_db()
+        self.assertTrue(team.mysideline_title_changed)
+
+        form = TeamForm(
+            team.division,
+            data={"title": team.title, "slug": team.slug},
+            instance=team,
+            user=self.superuser,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        # No field was edited, but the acknowledgement must still be saved:
+        # the admin skips the save entirely for an unchanged form.
+        self.assertTrue(form.mysideline_unacknowledged)
+        self.assertTrue(form.has_changed())
+        form.save()
+        team.refresh_from_db()
+        self.assertEqual(team.title, "Terrigal")
+        self.assertEqual(team.mysideline_title_synced, "Terrigal Sharks")
+        self.assertFalse(team.mysideline_title_changed)
+
+    def test_sync_page_lists_remote_renames(self):
+        with self.login(self.superuser):
+            self.assertGoodView(
+                "admin:fixja:competition:season:mysideline-sync",
+                *self.args,
+                test_query_count=60,
+            )
+            self.assertResponseContains("14 Boys", html=False)
+            self.assertResponseContains("Mens Premier", html=False)
+            self.assertResponseContains(
+                self.reverse(
+                    "admin:fixja:competition:season:division:edit",
+                    self.season.competition_id,
+                    self.season.pk,
+                    self.division.pk,
+                ),
+                html=False,
+            )
+
+
 class RemovalTests(SyncTestCase):
     def setUp(self):
         super().setUp()
@@ -1161,15 +1442,21 @@ class FailureTests(SyncTestCase):
         self.assertUnchanged()
 
     def test_database_error_rolls_back_whole_snapshot(self):
-        # Renaming the second division onto a title that a native division
-        # already uses violates the unique constraint; the rename of the
-        # first division, applied earlier in the same transaction, must be
-        # rolled back too.
-        factories.DivisionFactory.create(season=self.season, title="Taken")
+        # A write which fails part way through the snapshot must roll back
+        # the rename of the first division, applied earlier in the same
+        # transaction.
         self.remote.competition(100)["name"] = "Renamed"
         self.remote.competition(200)["name"] = "Taken"
-        with self.assertRaises(IntegrityError):
-            self.sync()
+        original = Division.save
+
+        def save(division, *args, **kwargs):
+            if division.mysideline_id == 200:
+                raise IntegrityError("duplicate key value violates unique constraint")
+            return original(division, *args, **kwargs)
+
+        with mock.patch.object(Division, "save", save):
+            with self.assertRaises(IntegrityError):
+                self.sync()
         self.assertEqual(Division.objects.get(mysideline_id=100).title, "Mens Div 1")
 
 
@@ -1213,7 +1500,7 @@ class SelectionTests(SyncTestCase):
             mysideline_season=2025,
         )
         self.sync()
-        synchronise_season(earlier, self.client)
+        synchronise_season(earlier, self.mysideline)
         self.assertEqual(
             list(self.season.divisions.values_list("mysideline_id", flat=True)), [100]
         )
@@ -1272,7 +1559,7 @@ class InvocationTests(SyncTestCase):
             )
         )
 
-        results = synchronise_all(self.client)
+        results = synchronise_all(self.mysideline)
         self.assertEqual(list(results), [self.season.pk])
         self.assertEqual(results[self.season.pk].created, {"division": 1, "stage": 1})
 
@@ -1297,7 +1584,7 @@ class InvocationTests(SyncTestCase):
         "tournamentcontrol.competition.management.commands.synchronise_mysideline.MySidelineClient"
     )
     def test_command(self, client_class):
-        client_class.return_value = self.client
+        client_class.return_value = self.mysideline
         self.remote.add_competition(100, "Mens Div 1")
         stdout = StringIO()
         call_command("synchronise_mysideline", self.season.pk, stdout=stdout)

@@ -8,7 +8,8 @@ divisions, pools, teams, fixtures and results onto it.
 
 This replaces the SportingPulse scraper that was removed in 2017 (the
 `Division.sportingpulse_url` field it left behind is dropped by migration
-`0063_mysideline`).
+`0063_mysideline`). Division and team names are the one thing MySideline is
+not authoritative for; see [Naming](#naming).
 
 ## Configuration
 
@@ -134,11 +135,11 @@ Pools have no identifier, only a name; they are matched by title.
 | --- | --- |
 | association | `Competition` (`mysideline_url`) |
 | year / period | `Season` (`mysideline_season`, `mysideline_season_tag`) |
-| competition | `Division` (`mysideline_id`); title and slug follow the remote name |
+| competition | `Division` (`mysideline_id`); title and slug follow the remote name unless it has been changed locally (see [Naming](#naming)) |
 | `Regular` rounds | `Stage` "Regular Season" |
 | `Final` rounds | `Stage` "Finals" with `keep_ladder` off (created only when finals fixtures exist; `Match.label` carries the round's display name, eg. "Grand Final") |
 | pool | `StageGroup` on the regular stage; `Team.stage_group` and, for intra-pool matches, `Match.stage_group` |
-| team | `Team` (`mysideline_id`); title and slug follow the remote name |
+| team | `Team` (`mysideline_id`); title and slug follow the remote name unless it has been changed locally (see [Naming](#naming)) |
 | match | `Match` (`mysideline_id`): round number, date/time in the venue's timezone, `play_at`, teams, scores, bye, forfeit |
 | venue / field | `Venue` (matched by title within the season, created with the venue's coordinates and timezone when absent) and `Ground` "Field *n*" (created when absent) |
 | TBA participant | `UndecidedTeam` labelled "TBA" on the stage |
@@ -152,6 +153,56 @@ configuration is not overwritten by later syncs and may be changed freely. A div
 remote one is *adopted* (linked) on the first synchronisation rather than
 duplicated, so ladder settings can be prepared before linking a season.
 
+## Naming
+
+MySideline is authoritative for everything *except* the names of divisions
+and teams. Upstream naming is frequently unwieldy -- Central Coast Touch
+publishes a division as "Born 2014 & 2013 u14 Boys" where "14 Boys" is what
+should appear on the website -- so the `title` of a linked `Division` or
+`Team` may be edited in the admin and the synchronisation will keep it.
+
+Because the local name may be ours or theirs, and either side can change it
+without telling the other, two copies of the remote name are kept beside our
+own (both non-editable, set only by the synchronisation and the admin form):
+
+| Field | Meaning |
+| --- | --- |
+| `title` | the name we publish |
+| `mysideline_title` | what MySideline calls the record right now, refreshed on every synchronisation whether or not we use it |
+| `mysideline_title_synced` | what MySideline called it when `title` was last reconciled with it: when the record was linked, when a remote rename was last applied, or when an administrator last saved it |
+
+From these, `Division.mysideline_title_overridden` /
+`Team.mysideline_title_overridden` (`title != mysideline_title_synced`) is
+*our* variation and `mysideline_title_changed`
+(`mysideline_title != mysideline_title_synced`) is *theirs*. The
+synchronisation then:
+
+* applies the remote name while the record has no local variation -- the
+  behaviour before this feature and still the default, so nothing needs
+  configuring for divisions whose upstream names are fine;
+* keeps the local name when there is one, and **reports** an upstream rename
+  of such a record (in `SyncResult.warnings`, the task log, the management
+  command output and the *Synchronise with MySideline* admin page) so that
+  somebody can decide which name is right. The record is never silently
+  renamed and the upstream change is never silently discarded.
+
+An administrator resolves a reported rename by editing the division or team:
+the form shows what MySideline calls it and offers **Use the MySideline
+name**, which discards the local name (and reverts the slug) so that later
+renames are applied automatically again. Saving the form without ticking it
+keeps the local name and acknowledges the remote change, so it is not
+reported again until MySideline renames the record once more. Records
+awaiting that decision are listed on the *Synchronise with MySideline* page
+for the season.
+
+`mysideline_renamed(queryset)` filters divisions or teams to those awaiting
+a decision. The fields are added by migration `0064_mysideline_titles`,
+which backfills existing links from their current titles so that nothing
+already synchronised is reported as a variation.
+
+Pools have no remote identifier -- they are matched by name -- so a pool
+cannot be renamed locally; a local rename is treated as a new pool.
+
 ## Synchronisation semantics
 
 The whole snapshot (association listing plus every selected competition) is
@@ -161,9 +212,12 @@ fetched before anything is written, then applied inside one transaction:
   venue, ground as needed);
 * **modified** remotely (date/time, field, teams, pool membership, bye):
   the corresponding fields are updated in place;
-* **renamed** remotely: the local title and slug are updated; identity is the
+* **renamed** remotely: the local title and slug are updated unless the name
+  has been changed locally (see [Naming](#naming)); identity is the
   MySideline id so relations (matches, registrations, ladders) are kept.
-  Slugs marked as locked are left alone;
+  Slugs marked as locked are left alone. A rename which would collide with
+  another division in the season, or another team in the division, is
+  reported and retried on the next synchronisation rather than failing;
 * **scored** remotely: the scores are applied and the ladder is recalculated
   through the normal `Match` save signals. A result that is later changed or
   withdrawn is changed or cleared. A forfeit sets `is_forfeit`,
@@ -192,5 +246,14 @@ above, plus smaller captures of a club association. The unit tests and the
 end-to-end test `tests/e2e/test_mysideline.py` import it through the real
 client and reconciler with the HTTP layer replaced by
 `tournamentcontrol.competition.tests.mysideline.state_cup_session`. Running
-the end-to-end test with `MYSIDELINE_LIVE=1` imports from the live site
+the end-to-end tests with `MYSIDELINE_LIVE=1` imports from the live site
 instead, which confirms the remote interface still matches this document.
+
+`state_cup_session(renames={...})` serves the same capture with names
+substituted, which plays back an upstream rename without a second capture.
+The end-to-end test uses it to walk the whole naming workflow through the
+admin in a browser -- publishing local names for a division and a team,
+having MySideline rename both underneath them, reviewing what the season's
+*Synchronise with MySideline* page lists, then handing one name back and
+keeping the other -- and screenshots each page as evidence
+(`mysideline_admin_*.png`).

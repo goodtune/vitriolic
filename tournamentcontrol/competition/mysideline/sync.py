@@ -18,6 +18,13 @@ the local models onto that snapshot inside a single transaction:
 Anything that does not carry a MySideline identifier is never touched, so
 native divisions, teams and matches can coexist with synchronised ones.
 
+The one thing MySideline is *not* authoritative for is the name of a
+division or team. Upstream naming is often unwieldy -- "Born 2014 & 2013 u14
+Boys" for what is better published as "14 Boys" -- so a title changed by an
+administrator is kept, while the remote name continues to be recorded so
+that a later upstream rename is reported rather than silently discarded. See
+:class:`~tournamentcontrol.competition.models.MySidelineMixin`.
+
 Mapping of MySideline concepts onto Vitriolic models:
 
 =================  ======================================================
@@ -255,6 +262,66 @@ def _set_attrs(obj, result: SyncResult, **attrs) -> bool:
     return bool(changed)
 
 
+def _slug_attrs(obj, title: str, siblings) -> dict:
+    if obj.slug_locked and obj.slug:
+        return {}
+    if obj.slug and obj.slug.startswith(slugify(title)):
+        # Keep an existing (possibly suffixed) slug for an unchanged title.
+        return {}
+    return {"slug": _unique_slug(siblings, title, exclude_pk=obj.pk)}
+
+
+def _title_attrs(obj, remote_name: str, siblings, result: SyncResult) -> dict:
+    """
+    Reconcile ``obj.title`` with the name MySideline currently publishes.
+
+    The remote name is always recorded in ``mysideline_title``, whether or
+    not we use it. It is *applied* only while our title still matches the
+    remote name it was last reconciled with: a title an administrator has
+    changed is kept, and a remote rename of such a record is reported
+    instead of being silently discarded. Saving the record in the admin
+    reconciles it again, either accepting the remote name or acknowledging
+    the remote change while keeping ours.
+    """
+    attrs = {"mysideline_title": remote_name}
+    label = obj._meta.verbose_name
+
+    if obj.mysideline_title_overridden:
+        if obj.mysideline_title_synced != remote_name:
+            result.warn(
+                "%s %r (MySideline %d) was renamed remotely from %r to %r; "
+                "the local name is kept.",
+                label.capitalize(),
+                obj.title,
+                obj.mysideline_id,
+                obj.mysideline_title_synced,
+                remote_name,
+            )
+        return attrs
+
+    if (
+        obj.title != remote_name
+        and siblings.exclude(pk=obj.pk).filter(title__iexact=remote_name).exists()
+    ):
+        # Two records cannot share a name; leave this one alone and try
+        # again next time, by which point the other may have moved on.
+        result.warn(
+            "%s %r (MySideline %d) cannot be renamed to %r because another "
+            "%s of the same name exists; left in place.",
+            label.capitalize(),
+            obj.title,
+            obj.mysideline_id,
+            remote_name,
+            label,
+        )
+        return attrs
+
+    attrs["title"] = remote_name
+    attrs["mysideline_title_synced"] = remote_name
+    attrs.update(_slug_attrs(obj, remote_name, siblings))
+    return attrs
+
+
 def _remove(obj, result: SyncResult) -> bool:
     """
     Delete ``obj`` if nothing protects it. Returns ``True`` on deletion.
@@ -331,7 +398,18 @@ class _SeasonReconciler:
         ).first()
         if division is not None:
             division.mysideline_id = snapshot.id
-            division.save(update_fields=["mysideline_id"])
+            division.mysideline_title = snapshot.name
+            # Adoption asserts that this division *is* the remote one, so its
+            # title counts as reconciled; any difference in case is applied
+            # by the normal title reconciliation.
+            division.mysideline_title_synced = division.title
+            division.save(
+                update_fields=[
+                    "mysideline_id",
+                    "mysideline_title",
+                    "mysideline_title_synced",
+                ]
+            )
             self.result.add_updated(division)
             logger.info("Adopted division %r as MySideline %d", division, snapshot.id)
             return division
@@ -342,6 +420,8 @@ class _SeasonReconciler:
             slug=_unique_slug(self.season.divisions, snapshot.name),
             order=_next_order(self.season.divisions),
             mysideline_id=snapshot.id,
+            mysideline_title=snapshot.name,
+            mysideline_title_synced=snapshot.name,
             points_formula=template.points_formula,
             forfeit_for_score=template.forfeit_score,
             forfeit_against_score=DEFAULT_FORFEIT_AGAINST_SCORE,
@@ -405,24 +485,17 @@ class _DivisionReconciler:
         _set_attrs(
             self.division,
             self.result,
-            title=self.snapshot.name,
-            **self._slug_attrs(
-                self.division, self.snapshot.name, self.season.divisions
+            **_title_attrs(
+                self.division,
+                self.snapshot.name,
+                self.season.divisions,
+                self.result,
             ),
         )
         self.regular_stage = self._stage(REGULAR_STAGE_TITLE, 1)
         self._reconcile_pools()
         self._reconcile_teams()
         self._reconcile_matches()
-
-    @staticmethod
-    def _slug_attrs(obj, title: str, siblings) -> dict:
-        if obj.slug_locked and obj.slug:
-            return {}
-        if obj.slug and obj.slug.startswith(slugify(title)):
-            # Keep an existing (possibly suffixed) slug for an unchanged title.
-            return {}
-        return {"slug": _unique_slug(siblings, title, exclude_pk=obj.pk)}
 
     # -- stages & pools ----------------------------------------------------
 
@@ -486,10 +559,9 @@ class _DivisionReconciler:
             _set_attrs(
                 team,
                 self.result,
-                title=remote.name,
                 division_id=self.division.pk,
                 stage_group_id=pool.pk if pool else None,
-                **self._slug_attrs(team, remote.name, self.division.teams),
+                **_title_attrs(team, remote.name, self.division.teams, self.result),
             )
             self.teams[remote.id] = team
         for team in local.values():
@@ -508,7 +580,16 @@ class _DivisionReconciler:
         ).first()
         if team is not None:
             team.mysideline_id = remote_id
-            team.save(update_fields=["mysideline_id"])
+            team.mysideline_title = name
+            # See _adopt_or_create_division.
+            team.mysideline_title_synced = team.title
+            team.save(
+                update_fields=[
+                    "mysideline_id",
+                    "mysideline_title",
+                    "mysideline_title_synced",
+                ]
+            )
             self.result.add_updated(team)
             logger.info("Adopted team %r as MySideline %d", team, remote_id)
             return team
@@ -519,6 +600,8 @@ class _DivisionReconciler:
             order=_next_order(self.division.teams),
             stage_group=pool,
             mysideline_id=remote_id,
+            mysideline_title=name,
+            mysideline_title_synced=name,
         )
         team.save()
         self.result.add_created(team)

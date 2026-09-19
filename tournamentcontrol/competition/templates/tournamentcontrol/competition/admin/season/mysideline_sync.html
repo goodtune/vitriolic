@@ -17,6 +17,28 @@
 			{% trans "MySideline season" %}: {{ season.mysideline_season }}{% if season.mysideline_season_tag %} ({{ season.get_mysideline_season_tag_display }}){% endif %}
 		</p>
 
+		{% if renamed_divisions or renamed_teams %}
+			<div class="alert alert-warning mysideline-renamed">
+				<p>
+					{% blocktrans %}MySideline has renamed the following records since their names were last reconciled. Their local names are kept by the synchronisation; edit each one to accept the new name or to acknowledge the change and keep yours.{% endblocktrans %}
+				</p>
+				<ul>
+					{% for division in renamed_divisions %}
+						<li>
+							<a href="{{ division.urls.edit }}">{{ division.title }}</a>
+							&mdash; {% blocktrans with was=division.mysideline_title_synced now=division.mysideline_title %}was &ldquo;{{ was }}&rdquo;, now &ldquo;{{ now }}&rdquo; on MySideline{% endblocktrans %}
+						</li>
+					{% endfor %}
+					{% for team in renamed_teams %}
+						<li>
+							<a href="{{ team.urls.edit }}">{{ team.title }}</a> ({{ team.division.title }})
+							&mdash; {% blocktrans with was=team.mysideline_title_synced now=team.mysideline_title %}was &ldquo;{{ was }}&rdquo;, now &ldquo;{{ now }}&rdquo; on MySideline{% endblocktrans %}
+						</li>
+					{% endfor %}
+				</ul>
+			</div>
+		{% endif %}
+
 		<div class="form-group">
 			<div class="text-center">
 				<button type="submit" class="btn btn-primary">

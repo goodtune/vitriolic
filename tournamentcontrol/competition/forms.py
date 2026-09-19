@@ -549,6 +549,78 @@ class PersonMergeForm(PersonEditForm):
         )
 
 
+class MySidelineTitleMixin:
+    """
+    Surface the MySideline name of a record which mirrors one, and let an
+    administrator choose between it and a local name.
+
+    MySideline is authoritative for the draw and results but its naming is
+    often unwieldy, so the ``title`` of a linked division or team may be
+    changed here; the synchronisation will then leave it alone. See
+    :class:`~tournamentcontrol.competition.models.MySidelineMixin`.
+
+    Saving the form reconciles the record with the name MySideline currently
+    publishes, which is shown on the form: an upstream rename is reported by
+    each synchronisation until then, and is not reported again afterwards.
+    Ticking *Use the MySideline name* discards the local name, after which
+    upstream renames are applied automatically again.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Whether MySideline has renamed the record since it was last
+        # reconciled, noted before ``_post_clean`` acknowledges it.
+        self.mysideline_unacknowledged = self.instance.mysideline_title_changed
+        if not self.instance.mysideline_reconciled:
+            return
+        remote = self.instance.mysideline_title
+        if self.instance.mysideline_title_changed:
+            self.fields["title"].help_text = _(
+                "MySideline has renamed this from “%(was)s” to “%(now)s”."
+            ) % {"was": self.instance.mysideline_title_synced, "now": remote}
+        else:
+            self.fields["title"].help_text = _("MySideline calls this “%(now)s”.") % {
+                "now": remote
+            }
+        if self.instance.title != remote:
+            self.fields["mysideline_title_reset"] = forms.BooleanField(
+                required=False,
+                label=_("Use the MySideline name"),
+                help_text=_(
+                    "Replace the name above with “%(now)s” and follow any "
+                    "future MySideline renames."
+                )
+                % {"now": remote},
+            )
+            # Beside the name it replaces, rather than at the end of a long
+            # form where it reads as unrelated.
+            order = list(self.fields)
+            order.remove("mysideline_title_reset")
+            order.insert(order.index("title") + 1, "mysideline_title_reset")
+            self.order_fields(order)
+
+    def has_changed(self):
+        # Acknowledging an upstream rename is itself a change worth saving,
+        # even when no field on the form was edited -- the admin skips the
+        # save entirely for a form which reports no change.
+        return super().has_changed() or self.mysideline_unacknowledged
+
+    def clean(self):
+        # Not every form in the chain returns the cleaned data.
+        cleaned_data = super().clean() or self.cleaned_data
+        if cleaned_data.get("mysideline_title_reset"):
+            cleaned_data["title"] = self.instance.mysideline_title
+        return cleaned_data
+
+    def _post_clean(self):
+        super()._post_clean()
+        # Whatever name was chosen, it was chosen against the remote name
+        # the form displayed; record that so the synchronisation does not
+        # keep reporting a rename which has been seen and dealt with.
+        if self.instance.mysideline_id:
+            self.instance.mysideline_title_synced = self.instance.mysideline_title
+
+
 class CompetitionForm(SuperUserSlugMixin, ModelForm):
     class Meta:
         model = Competition
@@ -706,7 +778,7 @@ class GroundFormSet(BaseGroundFormSet):
         return super(GroundFormSet, self)._construct_form(i, **kwargs)
 
 
-class DivisionForm(SuperUserSlugMixin, ModelForm):
+class DivisionForm(MySidelineTitleMixin, SuperUserSlugMixin, ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance.season.mode != DAILY:
@@ -923,7 +995,7 @@ class UndecidedTeamForm(UserMixin, ModelForm):
         return label
 
 
-class TeamForm(SuperUserSlugMixin, ModelForm):
+class TeamForm(MySidelineTitleMixin, SuperUserSlugMixin, ModelForm):
     def __init__(self, division, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not division.season.competition.clubs.count():
