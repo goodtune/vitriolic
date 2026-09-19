@@ -29,12 +29,14 @@ jobs:
 
     # Screenshots taken by the E2E tests are posted on the pull request as
     # evidence. `gh pr comment --attach` (GitHub CLI 2.99+) uploads each
-    # image and rewrites the local paths referenced in the body; the same
-    # comment is edited on every run so that revisions do not pile up.
+    # image and rewrites the local paths referenced in the body. Every
+    # comment carries a hidden marker; before a new one is posted, earlier
+    # marked comments are minimised as outdated so that only the latest
+    # run's evidence is visible in the conversation.
     #
     # The upload endpoint rejects GitHub App installation tokens, which
     # includes the workflow's own GITHUB_TOKEN (cli/cli#14309), so the
-    # attachments are posted with a personal access token held in the
+    # comment is posted with a personal access token held in the
     # E2E_COMMENT_TOKEN secret. When that secret is unavailable (forks,
     # Dependabot) a text-only comment linking to the run is posted instead.
     - name: Ensure GitHub CLI supports attachments
@@ -60,12 +62,15 @@ jobs:
         COMMENT_TOKEN: ${{ secrets.E2E_COMMENT_TOKEN }}
         GITHUB_TOKEN: ${{ github.token }}
         OUTCOME: ${{ job.status }}
+        MARKER: "<!-- e2e-screenshots -->"
+        PR: ${{ github.event.pull_request.number }}
       run: |
         shopt -s nullglob
         shots=(tests/screenshots/*.png)
         body=.github/e2e-comment.md
         attach=()
         {
+          echo "$MARKER"
           echo "## E2E screenshots"
           echo
           echo "Run [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for ${{ github.event.pull_request.head.sha }}: **${OUTCOME}**"
@@ -84,9 +89,21 @@ jobs:
             echo "_${#shots[@]} screenshot(s) taken; attachments need the E2E_COMMENT_TOKEN secret, which is not available to this run._"
           fi
         } > "$body"
-        export GH_TOKEN="${COMMENT_TOKEN:-$GITHUB_TOKEN}"
-        gh pr comment "${{ github.event.pull_request.number }}" \
-          --edit-last --create-if-none \
+
+        # Minimise earlier evidence comments (any author) as outdated.
+        gh api --paginate "repos/${{ github.repository }}/issues/${PR}/comments" \
+          --jq ".[] | select(.body | startswith(\"${MARKER}\")) | .node_id" \
+        | while read -r node_id; do
+            gh api graphql -f id="$node_id" -f query='
+              mutation($id: ID!) {
+                minimizeComment(input: {subjectId: $id, classifier: OUTDATED}) {
+                  minimizedComment { isMinimized }
+                }
+              }' > /dev/null
+            echo "Minimised ${node_id}"
+          done
+
+        GH_TOKEN="${COMMENT_TOKEN:-$GITHUB_TOKEN}" gh pr comment "$PR" \
           --body-file "$body" "${attach[@]}"
 
     - name: Upload traces on failure
