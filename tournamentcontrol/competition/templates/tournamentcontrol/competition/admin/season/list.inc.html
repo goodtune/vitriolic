@@ -16,6 +16,12 @@
 {% block empty-row-colspan %}4{% endblock %}
 
 {% block row-buttons-extra %}
+{% if obj.mysideline_url %}
+<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:competition:season:mysideline-sync' obj.competition.pk obj.pk %}" role="button">
+    <i class="fa fa-refresh"></i>
+    <span class="hidden-xs hidden-sm">&nbsp;{% trans "MySideline" %}</span>
+</a>
+{% endif %}
 {% if obj.live_stream %}
 <a class="btn btn-default btn-sm" href="{% url 'admin:fixja:competition:season:authorize' obj.competition.pk obj.pk %}" role="button">
     <i class="fa fa-youtube"></i>

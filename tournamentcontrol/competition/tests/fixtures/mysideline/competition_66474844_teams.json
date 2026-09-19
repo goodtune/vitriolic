@@ -1,0 +1,82 @@
+{
+ "data": {
+  "competitionLadder": {
+   "teams": [
+    {
+     "_id": 68697946,
+     "name": "St Peters Tuggerah 9/10 Girls",
+     "pool": "Pool A"
+    },
+    {
+     "_id": 68698548,
+     "name": "St Joseph's 9/10 Girls",
+     "pool": "Pool A"
+    },
+    {
+     "_id": 68698460,
+     "name": "Green Point 9/10 Girls",
+     "pool": "Pool B"
+    },
+    {
+     "_id": 68697896,
+     "name": "TLSC Berkley 9/10 Girls",
+     "pool": "Pool B"
+    },
+    {
+     "_id": 68698241,
+     "name": "Terrigal High 9/10 Girls",
+     "pool": "Pool B"
+    },
+    {
+     "_id": 68698153,
+     "name": "Central Coast Adventist 9/10 Girls",
+     "pool": "Pool B"
+    },
+    {
+     "_id": 68698042,
+     "name": "SCEGGS 9/10 Girls",
+     "pool": "Pool A"
+    },
+    {
+     "_id": 68698613,
+     "name": "Brisbane Water, Umina 9/10 Girls",
+     "pool": "Pool A"
+    }
+   ]
+  },
+  "teams": [
+   {
+    "_id": 68698613,
+    "name": "Brisbane Water, Umina 9/10 Girls"
+   },
+   {
+    "_id": 68698153,
+    "name": "Central Coast Adventist 9/10 Girls"
+   },
+   {
+    "_id": 68698460,
+    "name": "Green Point 9/10 Girls"
+   },
+   {
+    "_id": 68698042,
+    "name": "SCEGGS 9/10 Girls"
+   },
+   {
+    "_id": 68698548,
+    "name": "St Joseph's 9/10 Girls"
+   },
+   {
+    "_id": 68697946,
+    "name": "St Peters Tuggerah 9/10 Girls"
+   },
+   {
+    "_id": 68697896,
+    "name": "TLSC Berkley 9/10 Girls"
+   },
+   {
+    "_id": 68698241,
+    "name": "Terrigal High 9/10 Girls"
+   }
+  ]
+ }
+}

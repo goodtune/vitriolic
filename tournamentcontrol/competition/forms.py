@@ -92,6 +92,10 @@ from tournamentcontrol.competition.models import (
     Venue,
     stage_group_position_re,
 )
+from tournamentcontrol.competition.mysideline.client import (
+    MySidelineURL,
+    MySidelineURLError,
+)
 from tournamentcontrol.competition.signals.custom import score_updated
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
@@ -585,6 +589,9 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
             "statistics",
             "mvp_results_public",
             "enable_experimental_views",
+            "mysideline_url",
+            "mysideline_season",
+            "mysideline_season_tag",
             "slug",
             "slug_locked",
         )
@@ -611,6 +618,23 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
         )
         self.fields["live_stream_client_secret"].widget.attrs["class"] = "form-control"
         self.fields["live_stream_client_secret"].widget.attrs["placeholder"] = "*" * 10
+
+    def clean_mysideline_url(self):
+        url = self.cleaned_data.get("mysideline_url")
+        if not url:
+            return url
+        try:
+            parsed = MySidelineURL(url)
+        except MySidelineURLError as exc:
+            raise forms.ValidationError(str(exc))
+        if parsed.association_id is None:
+            raise forms.ValidationError(
+                _(
+                    "Enter the MySideline association URL, for example "
+                    "https://tfa.mysideline.com.au/competitions/association/6338"
+                )
+            )
+        return parsed.canonical
 
     def clean_live_stream_client_secret(self):
         project_id = self.cleaned_data.get("live_stream_project_id")
