@@ -472,9 +472,10 @@ class CalendarQueryTests(TestCase):
             str(event["summary"]),
             "{} vs {}".format(self.team_a.title, self.team_b.title),
         )
+        self.assertNotIn("location", event)
         self.assertEqual(
-            str(event["location"]),
-            "{} ({})".format(self.division.title, self.stage.title),
+            [str(c) for c in event["categories"].cats],
+            [self.division.title, self.stage.title],
         )
         self.assertEqual(event["dtstart"].dt, match_dt)
         self.assertEqual(
@@ -493,9 +494,118 @@ class CalendarQueryTests(TestCase):
             match=match.pk,
         )
         self.assertEqual(
-            str(event["description"]),
+            str(event["url"]),
             "http://testserver{}".format(expected_path),
         )
+        self.assertEqual(
+            str(event["description"]),
+            "{} ({})\n\nhttp://testserver{}".format(
+                self.division.title, self.stage.title, expected_path
+            ),
+        )
+
+    def _event_for_match_at(self, play_at):
+        match = factories.MatchFactory.create(
+            stage=self.stage,
+            home_team=self.team_a,
+            away_team=self.team_b,
+            play_at=play_at,
+        )
+        response = self.get(
+            "competition:calendar",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            division=self.division.slug,
+            team=self.team_a.slug,
+        )
+        self.response_200(response)
+        _, events = self._parse_events(response)
+        return next(e for e in events if e["uid"] == match.uuid.hex)
+
+    def test_match_at_ground_location_names_ground_and_venue(self):
+        ground = factories.GroundFactory.create(
+            title="Field 3",
+            venue__title="Sydney Olympic Park",
+            venue__season=self.season,
+            latlng="-33.8471,151.0685,15",
+        )
+        event = self._event_for_match_at(ground)
+
+        self.assertEqual(str(event["location"]), "Field 3, Sydney Olympic Park")
+        self.assertEqual(event["geo"].latitude, -33.8471)
+        self.assertEqual(event["geo"].longitude, 151.0685)
+
+    def test_match_at_ground_structured_location_for_apple_devices(self):
+        ground = factories.GroundFactory.create(
+            title="Field 3",
+            venue__title="Sydney Olympic Park",
+            venue__season=self.season,
+            latlng="-33.8471,151.0685,15",
+        )
+        event = self._event_for_match_at(ground)
+
+        prop = event["x-apple-structured-location"]
+        self.assertEqual(str(prop), "geo:-33.8471,151.0685")
+        self.assertEqual(prop.params["VALUE"], "URI")
+        self.assertEqual(
+            prop.params["X-TITLE"], "Field 3, Sydney Olympic Park"
+        )
+
+    def test_match_at_venue_location_names_venue(self):
+        venue = factories.VenueFactory.create(
+            title="Sydney Olympic Park",
+            season=self.season,
+            latlng="-33.8471,151.0685,15",
+        )
+        event = self._event_for_match_at(venue)
+
+        self.assertEqual(str(event["location"]), "Sydney Olympic Park")
+        self.assertEqual(event["geo"].latitude, -33.8471)
+
+    def test_ground_without_coordinates_falls_back_to_venue(self):
+        ground = factories.GroundFactory.create(
+            title="Field 3",
+            venue__title="Sydney Olympic Park",
+            venue__season=self.season,
+            venue__latlng="-33.8471,151.0685,15",
+            latlng="",
+        )
+        event = self._event_for_match_at(ground)
+
+        self.assertEqual(str(event["location"]), "Field 3, Sydney Olympic Park")
+        self.assertEqual(event["geo"].latitude, -33.8471)
+        self.assertEqual(event["geo"].longitude, 151.0685)
+
+    def test_place_without_coordinates_omits_geo(self):
+        ground = factories.GroundFactory.create(
+            title="Field 3",
+            venue__title="Sydney Olympic Park",
+            venue__season=self.season,
+            venue__latlng="",
+            latlng="",
+        )
+        event = self._event_for_match_at(ground)
+
+        self.assertEqual(str(event["location"]), "Field 3, Sydney Olympic Park")
+        self.assertNotIn("geo", event)
+        self.assertNotIn("x-apple-structured-location", event)
+
+    def test_place_with_incomplete_coordinates_omits_geo(self):
+        # LocationField stores "latitude,longitude,zoom"; a half-entered value
+        # must not take the calendar down.
+        venue = factories.VenueFactory.create(
+            title="Sydney Olympic Park", season=self.season, latlng="-33.8471"
+        )
+        event = self._event_for_match_at(venue)
+
+        self.assertEqual(str(event["location"]), "Sydney Olympic Park")
+        self.assertNotIn("geo", event)
+
+    def test_match_without_place_omits_location(self):
+        event = self._event_for_match_at(None)
+
+        self.assertNotIn("location", event)
+        self.assertNotIn("geo", event)
 
     def test_division_calendar_contains_all_division_matches(self):
         response = self.get(
