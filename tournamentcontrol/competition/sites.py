@@ -22,7 +22,7 @@ from django.utils.module_loading import import_string
 from django.utils.translation import gettext, gettext_lazy as _
 from django.views.decorators.cache import cache_page
 from guardian.utils import get_40x_or_None
-from icalendar import Calendar, Event
+from icalendar import Calendar, Event, vUri
 
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
@@ -60,6 +60,42 @@ from tournamentcontrol.competition.utils import (
 )
 
 LOG = logging.getLogger(__name__)
+
+
+def match_location(place):
+    """
+    Describe a ``Place`` for the iCalendar ``LOCATION`` and ``GEO`` properties.
+
+    ``Match.play_at`` points at a ``Place``, which will be either a ``Venue``
+    or one of the ``Ground`` records beneath it. Grounds are named for the
+    playing surface alone ("Field 3"), so we qualify them with their venue to
+    give the calendar client something it can resolve to a point on a map.
+
+    Returns a ``(label, coordinates)`` tuple; either element may be ``None``.
+    """
+    if place is None:
+        return None, None
+
+    def coordinates(place):
+        # A half-entered latlng yields fewer pieces than we need; treat it as
+        # having no coordinates rather than raising.
+        pieces = place.location
+        if pieces and len(pieces) >= 2:
+            return pieces[0], pieces[1]
+        return None
+
+    # The reverse accessor for a multi-table inheritance child raises
+    # RelatedObjectDoesNotExist, a subclass of AttributeError, so getattr with
+    # a default tells us whether this Place is really a Ground.
+    ground = getattr(place, "ground", None)
+
+    if ground is None:
+        return place.title, coordinates(place)
+
+    # Individual playing surfaces are often mapped only at the venue.
+    label = "%s, %s" % (ground.title, ground.venue.title)
+    return label, coordinates(ground) or coordinates(ground.venue)
+
 
 THUMBNAIL_CACHE_TTL = 300  # 5 minutes
 
@@ -1231,9 +1267,14 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         # triggers per-match template rendering and potential N+1 queries).
         matches = matches.select_related(
             "stage__division__season__competition",
+            "play_at__ground__venue",
         ).only(
             "uuid",
             "datetime",
+            "play_at__title",
+            "play_at__latlng",
+            "play_at__ground__venue__title",
+            "play_at__ground__venue__latlng",
             "stage__title",
             "stage__division__title",
             "stage__division__slug",
@@ -1281,7 +1322,30 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                 summary = "TBD"
             event.add("summary", summary)
 
-            event.add("location", f"{match.stage.division.title} ({match.stage.title})")
+            # The division and stage are not a location; they belong in
+            # CATEGORIES (machine readable) and DESCRIPTION (human readable,
+            # because most clients do not surface CATEGORIES at all).
+            division = f"{match.stage.division.title} ({match.stage.title})"
+            event.add("categories", [match.stage.division.title, match.stage.title])
+
+            location, coordinates = match_location(match.play_at)
+            if location:
+                event.add("location", location)
+            if coordinates:
+                event.add("geo", coordinates)
+                # Apple devices ignore GEO; this proprietary property is what
+                # drops the pin on the map in their calendar applications.
+                event.add(
+                    "x-apple-structured-location",
+                    vUri("geo:%s,%s" % coordinates),
+                    parameters={
+                        "VALUE": "URI",
+                        "X-ADDRESS": location,
+                        "X-APPLE-RADIUS": "100",
+                        "X-TITLE": location,
+                    },
+                )
+
             event.add("dtstart", match.datetime)
 
             # FIXME match duration should not be hardcoded
@@ -1312,8 +1376,11 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
             url_template = _url_templates[div_id]
             if url_template is not None:
-                uri = url_template.format(match.pk)
-                event.add("description", request.build_absolute_uri(uri))
+                uri = request.build_absolute_uri(url_template.format(match.pk))
+                event.add("url", uri)
+                event.add("description", f"{division}\n\n{uri}")
+            else:
+                event.add("description", division)
 
             cal.add_component(event)
 
