@@ -7,7 +7,7 @@ are normalised into these types by :mod:`.client` so that the reconciler in
 :mod:`.sync` never has to reason about the shape of the remote payload.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 STATUS_PRE_GAME = "pre-game"
 STATUS_FINAL = "final"
 STATUS_FORFEIT = "forfeit"
+STATUS_IN_PROGRESS = "in-progress"
 
 # Round types observed on MySideline.
 ROUND_REGULAR = "Regular"
@@ -78,7 +79,30 @@ class RemoteMatch(BaseModel):
 
     @property
     def has_result(self) -> bool:
-        return self.status == STATUS_FINAL and not self.is_bye
+        """
+        Whether this match has been played and its score can be trusted.
+
+        MySideline does not reliably promote a match to ``final`` once it has
+        been played: most played matches keep the ``pre-game`` status they
+        were created with while their score is published anyway. Trusting the
+        status alone therefore discards real results, and because the
+        reconciler writes ``None`` for a match without a result it also erases
+        scores it imported earlier.
+
+        A match that has started and carries a non-zero score has been played,
+        so its score is taken regardless of status. An unplayed match always
+        reports 0-0, and a match still being played is excluded so that a
+        partial score is never mistaken for a final one.
+        """
+        if self.is_bye:
+            return False
+        if self.status == STATUS_FINAL:
+            return True
+        if self.status == STATUS_IN_PROGRESS:
+            return False
+        if self.start is None or self.start > datetime.now(timezone.utc):
+            return False
+        return bool(self.home_score or self.away_score)
 
     @property
     def is_forfeit(self) -> bool:

@@ -17,6 +17,7 @@ import requests
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import IntegrityError
+from freezegun import freeze_time
 from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
@@ -938,6 +939,109 @@ class IncrementalSyncTests(SyncTestCase):
         )
         self.assertEqual(Match.objects.get(mysideline_id=1003).stage_group, None)
         self.assertEqual(mens.stages.get(title=REGULAR_STAGE_TITLE).pools.count(), 2)
+
+
+class ResultDetectionTests(SyncTestCase):
+    """
+    MySideline rarely promotes a played match to ``final``; it publishes the
+    score and leaves the status at ``pre-game``. A match is therefore taken to
+    have been played once it has started and carries a non-zero score, and the
+    status is only consulted to rule a match out.
+
+    Time is frozen because whether a match has started is now relative to the
+    present, and the fixtures use fixed dates.
+    """
+
+    # After rounds 1 and 2 of ``populate``, before round 3.
+    NOW = sydney(2026, 9, 15, 9, 0)
+
+    def setUp(self):
+        super().setUp()
+        self.populate()
+        with freeze_time(self.NOW):
+            self.sync()
+
+    def sync_now(self):
+        with freeze_time(self.NOW):
+            return self.sync()
+
+    def test_final_is_still_imported(self):
+        """The unambiguous case keeps working."""
+        match = Match.objects.get(mysideline_id=1001)
+        self.assertEqual((match.home_team_score, match.away_team_score), (7, 3))
+
+    def test_score_published_while_status_stays_pre_game(self):
+        """
+        The bug this class exists for: a played match keeps the ``pre-game``
+        status it was created with, and only the score changes.
+        """
+        self.remote.match(100, 1003)["scores"] = {"homeTeam": 6, "awayTeam": 4}
+        self.assertEqual(self.remote.match(100, 1003)["status"], "pre-game")
+        result = self.sync_now()
+        self.assertEqual(result.updated, {"match": 1})
+        match = Match.objects.get(mysideline_id=1003)
+        self.assertEqual((match.home_team_score, match.away_team_score), (6, 4))
+        self.assertEqual(
+            LadderSummary.objects.get(
+                stage__division__mysideline_id=100, team__title="Dolphins"
+            ).win,
+            1,
+        )
+
+    def test_imported_score_is_not_erased_by_a_pre_game_status(self):
+        """
+        A match reverting to ``pre-game`` while keeping its score must keep the
+        score. Previously the reconciler wrote ``None`` over it, so a result
+        imported while the status happened to read ``final`` was lost again on
+        the next synchronisation.
+        """
+        self.remote.match(100, 1001)["status"] = "pre-game"
+        self.sync_now()
+        match = Match.objects.get(mysideline_id=1001)
+        self.assertEqual((match.home_team_score, match.away_team_score), (7, 3))
+
+    def test_future_match_is_never_given_a_result(self):
+        """
+        A score on a match that has not started is not a result, however it
+        got there.
+        """
+        self.remote.add_match(
+            100, 1007, 3, 1, 3, sydney(2026, 9, 26, 18, 0), scores=(5, 2)
+        )
+        self.sync_now()
+        match = Match.objects.get(mysideline_id=1007)
+        self.assertEqual((match.home_team_score, match.away_team_score), (None, None))
+
+    def test_match_in_progress_is_never_given_a_result(self):
+        """A match still being played publishes a partial score."""
+        self.remote.match(100, 1003).update(
+            status="in-progress", scores={"homeTeam": 3, "awayTeam": 1}
+        )
+        self.sync_now()
+        match = Match.objects.get(mysideline_id=1003)
+        self.assertEqual((match.home_team_score, match.away_team_score), (None, None))
+
+    def test_bye_is_never_given_a_result(self):
+        """A bye carries no score even once MySideline marks it ``final``."""
+        match = Match.objects.get(mysideline_id=1002)
+        self.assertEqual(match.is_bye, True)
+        self.assertEqual((match.home_team_score, match.away_team_score), (None, None))
+
+    def test_nil_all_draw_is_indistinguishable_from_unplayed(self):
+        """
+        The known limitation. A genuine 0-0 draw left at ``pre-game`` cannot be
+        told apart from a fixture that has not been played, because an unplayed
+        match also reports 0-0. Such a match is treated as unplayed; the
+        alternative would fabricate a 0-0 result for every past fixture
+        MySideline has not got around to scoring.
+        """
+        self.assertEqual(self.remote.match(100, 1003)["status"], "pre-game")
+        self.assertEqual(
+            self.remote.match(100, 1003)["scores"], {"homeTeam": 0, "awayTeam": 0}
+        )
+        self.sync_now()
+        match = Match.objects.get(mysideline_id=1003)
+        self.assertEqual((match.home_team_score, match.away_team_score), (None, None))
 
 
 class TitleTests(SyncTestCase):
