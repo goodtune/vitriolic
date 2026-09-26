@@ -1,0 +1,11 @@
+{% load common mvp_tags %}
+{% comment %}
+HTMX partial template for rendering a related objects tab pane.
+This is loaded dynamically when HTMX admin tabs mode is enabled.
+{% endcomment %}
+<div class="heading-block">
+	<h3>{{ tab_manager.all|types|capfirst }}</h3>
+</div>
+{% with table=templates|default:None %}
+	{% mvp_list tab_manager.all template=tab_manager|mvp_list_template:table %}
+{% endwith %}
