@@ -141,6 +141,23 @@ class GoodViewTests(TestCase):
             pool.slug,
         )
 
+    def test_team(self):
+        stage = factories.StageFactory.create()
+        team = factories.TeamFactory.create(division=stage.division)
+        factories.MatchFactory.create_batch(
+            stage=stage,
+            home_team=team,
+            size=5,
+            datetime=datetime(2022, 7, 2, 9, tzinfo=ZoneInfo("UTC")),
+        )
+        self.assertGoodView(
+            "competition:team",
+            stage.division.season.competition.slug,
+            stage.division.season.slug,
+            stage.division.slug,
+            team.slug,
+        )
+
     def test_match(self):
         match = factories.MatchFactory.create()
         self.assertGoodView(
@@ -270,6 +287,96 @@ class FrontEndTests(TestCase):
             self.assertResponseContains(
                 '<a href="{0}">{1}</a>'.format(href, team.title)
             )
+
+    def test_team_schedule_dates_the_first_game_of_each_day(self):
+        """
+        The date is written against the first game of a day and left out
+        of the rest, instead of repeating on every match, so how many
+        games are played on a day can be seen at a glance.
+        """
+        stage = factories.StageFactory.create()
+        team = factories.TeamFactory.create(division=stage.division)
+        # One game on the 2nd, two on the 3rd.
+        fixtures = (
+            ("Ireland", datetime(2022, 7, 2, 9, tzinfo=ZoneInfo("UTC"))),
+            ("Wales", datetime(2022, 7, 3, 9, tzinfo=ZoneInfo("UTC"))),
+            ("England", datetime(2022, 7, 3, 9, tzinfo=ZoneInfo("UTC"))),
+        )
+        for title, when in fixtures:
+            factories.MatchFactory.create(
+                stage=stage,
+                home_team=team,
+                away_team=factories.TeamFactory.create(
+                    division=stage.division, title=title, club__title=title
+                ),
+                datetime=when,
+            )
+        self.assertGoodView(
+            "competition:team",
+            stage.division.season.competition.slug,
+            stage.division.season.slug,
+            stage.division.slug,
+            team.slug,
+        )
+
+        def opponent(title):
+            href = self.reverse(
+                "competition:team",
+                stage.division.season.competition.slug,
+                stage.division.season.slug,
+                stage.division.slug,
+                title.lower(),
+            )
+            return '<td class="team {0}"><a href="{1}">{2}</a></td>'.format(
+                title.lower(), href, title
+            )
+
+        content = self.last_response.content.decode()
+        self.assertHTMLEqual(
+            content.split('<table class="team draw">')[1].split("</table>")[0],
+            """
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Venue</th>
+                    <th>Opponent</th>
+                    <th>Result</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="first odd last">
+                    <td class="date">July 2, 2022</td>
+                    <td class="time">9 a.m.</td>
+                    <td class="venue">TBA</td>
+                    {ireland}
+                    <td>-</td>
+                    <td></td>
+                </tr>
+                <tr class="first even">
+                    <td class="date">July 3, 2022</td>
+                    <td class="time">9 a.m.</td>
+                    <td class="venue">TBA</td>
+                    {wales}
+                    <td>-</td>
+                    <td></td>
+                </tr>
+                <tr class="odd last">
+                    <td class="date"></td>
+                    <td class="time">9 a.m.</td>
+                    <td class="venue">TBA</td>
+                    {england}
+                    <td>-</td>
+                    <td></td>
+                </tr>
+            </tbody>
+            """.format(
+                ireland=opponent("Ireland"),
+                wales=opponent("Wales"),
+                england=opponent("England"),
+            ),
+        )
 
     def test_team_calendar(self):
         team = factories.TeamFactory.create()
