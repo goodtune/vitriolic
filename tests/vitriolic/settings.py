@@ -212,7 +212,9 @@ TOUCHTECHNOLOGY_SITEMAP_ROOT = "home"
 
 DJANGO_MCP_GLOBAL_SERVER_CONFIG = {
     "name": "vitriolic-mcp-server",
-    "instructions": "MCP Server for Tournament Control Competition Management System. Provides access to clubs, competitions, seasons, divisions, stages, teams, matches, and players data.",
+    "instructions": "MCP server for the Tournament Control competition management system.",
+    # Each MCP request stands alone; tools do not rely on a Django session.
+    "stateless": True,
 }
 
 # Optional: Configure authentication for MCP endpoints
