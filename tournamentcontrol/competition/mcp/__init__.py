@@ -12,12 +12,15 @@ reason over, and the narrowing tools (``upcoming_events``, ``recent_events``
 and ``search``) give the agent the identifiers it needs for the detail tools
 without having to guess.
 
-Registration
-------------
-``django-mcp-server`` autodiscovers this module (``mcp.py``) from every
-installed app and publishes each public method of an ``MCPToolset`` subclass
-as an MCP tool, named after the method and described by its docstring. The
-Django request that carried the MCP call is available as ``self.request``.
+Hosting
+-------
+``build_server`` turns the toolset into an ``mcp.server.mcpserver.MCPServer``
+(the official MCP Python SDK, 2.x): each public method of
+``CompetitionToolset`` becomes a tool named after the method and described
+by its docstring, with its input schema derived from the type hints. The
+Django request that carried the MCP call is made available to the toolset
+through a context variable that ``views.MCPView`` sets, so ``whoami`` can
+identify the caller and superusers can see draft divisions.
 
 Visibility
 ----------
@@ -27,18 +30,25 @@ hidden unless the calling user is a superuser.
 
 Deployment
 ----------
-See ``docs/mcp.md`` for the settings and URL configuration a project needs.
+Route ``tournamentcontrol.competition.mcp.urls`` and, optionally, set
+``TOURNAMENTCONTROL_MCP_NAME`` and ``TOURNAMENTCONTROL_MCP_INSTRUCTIONS``.
+See ``docs/mcp.md``.
 """
 
+import contextvars
 import datetime
+import functools
+import inspect
 from typing import Any, Literal
 
+from asgiref.sync import sync_to_async
+from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Count, F, Max, Min, Q
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.utils.html import strip_tags
-from mcp_server import MCPToolset, mcp_server
+from mcp.server.mcpserver import MCPServer
 
 from tournamentcontrol.competition.constants import ClubStatus
 from tournamentcontrol.competition.models import (
@@ -56,6 +66,10 @@ from tournamentcontrol.competition.models import (
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
 MAX_DAYS = 366
+
+#: The Django request carrying the MCP call currently being served, set by
+#: ``views.MCPView`` for the duration of the request.
+current_request = contextvars.ContextVar("tournamentcontrol_mcp_request")
 
 MatchStatus = Literal["any", "upcoming", "past", "completed"]
 MatchGroupBy = Literal[
@@ -282,10 +296,17 @@ def _words_query(query, fields):
     return q
 
 
-class CompetitionToolset(MCPToolset):
+class CompetitionToolset:
     """
     Schedule and results tools for the competition management system.
+
+    Every public method is published as an MCP tool by ``build_server``.
+    ``request`` is the Django request that carried the MCP call (or ``None``
+    when called outside one); its ``user`` decides what is visible.
     """
+
+    def __init__(self, request=None):
+        self.request = request
 
     # -- helpers ---------------------------------------------------------
 
@@ -1248,5 +1269,64 @@ class CompetitionToolset(MCPToolset):
         return res
 
 
-if INSTRUCTIONS not in (mcp_server.instructions or ""):
-    mcp_server.append_instructions(INSTRUCTIONS)
+def _tool(toolset_class, name):
+    """
+    Publish ``toolset_class.<name>`` as an async tool.
+
+    Tools run on the event loop the view drives, so the synchronous ORM code
+    is pushed back to the request thread with ``sync_to_async``; that keeps
+    database connections (and test transactions) on the thread Django
+    expects. The wrapper borrows the method's signature and docstring so the
+    SDK derives the tool's schema and description from them.
+    """
+    method = getattr(toolset_class, name)
+
+    @functools.wraps(method)
+    async def tool(**kwargs):
+        toolset = toolset_class(request=current_request.get(None))
+        return await sync_to_async(getattr(toolset, name))(**kwargs)
+
+    # Drop ``self`` from the published signature.
+    parameters = list(inspect.signature(method).parameters.values())[1:]
+    tool.__signature__ = inspect.Signature(
+        parameters, return_annotation=inspect.signature(method).return_annotation
+    )
+    return tool
+
+
+def build_server(name=None, instructions=None, toolset_class=CompetitionToolset):
+    """
+    Build an ``MCPServer`` publishing every public method of ``toolset_class``.
+
+    ``instructions`` (typically the project's description of itself and its
+    competitions) are placed ahead of the competition tool instructions so
+    an agent reads the project context first.
+    """
+    combined = INSTRUCTIONS
+    if instructions:
+        combined = instructions.strip() + "\n\n" + INSTRUCTIONS
+    server = MCPServer(name=name or "tournamentcontrol", instructions=combined)
+    for method_name, __ in inspect.getmembers(
+        toolset_class, predicate=inspect.isfunction
+    ):
+        if method_name.startswith("_"):
+            continue
+        server.add_tool(_tool(toolset_class, method_name), name=method_name)
+    return server
+
+
+_server = None
+
+
+def get_server():
+    """
+    The process-wide server configured from ``TOURNAMENTCONTROL_MCP_NAME``
+    and ``TOURNAMENTCONTROL_MCP_INSTRUCTIONS``.
+    """
+    global _server
+    if _server is None:
+        _server = build_server(
+            name=getattr(settings, "TOURNAMENTCONTROL_MCP_NAME", None),
+            instructions=getattr(settings, "TOURNAMENTCONTROL_MCP_INSTRUCTIONS", None),
+        )
+    return _server

@@ -1,283 +1,144 @@
 """
-End-to-End tests for MCP client operations with the tournament control system.
-
-These tests verify that MCP clients can successfully connect to and interact
-with the MCP server endpoints, testing the complete MCP protocol flow.
+End-to-end tests driving the competition MCP server with the official MCP
+client over Streamable HTTP, exactly as an agent would.
 """
 
-from contextlib import asynccontextmanager
+import datetime
+from zoneinfo import ZoneInfo
 
 import pytest
-import requests
+from django.utils import timezone
+from mcp.client import Client
 
 from tournamentcontrol.competition.tests import factories
 
+pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.asyncio]
 
-class TestMCPClientE2E:
-    """End-to-End tests for MCP client operations."""
 
-    @pytest.fixture(autouse=True)
-    def setup_test_data(self, db):
-        """Create test data for MCP client tests."""
-        # Create a club
-        self.club = factories.ClubFactory.create()
-
-        # Create a competition
-        self.competition = factories.CompetitionFactory.create()
-
-        # Create a season
-        self.season = factories.SeasonFactory.create(competition=self.competition)
-
-        # Create a division
-        self.division = factories.DivisionFactory.create(season=self.season)
-
-        # Create teams
-        self.team1 = factories.TeamFactory.create(
-            club=self.club, division=self.division
-        )
-        self.team2 = factories.TeamFactory.create(division=self.division)
-
-        # Create a person
-        self.person = factories.PersonFactory.create(club=self.club)
-
-    @asynccontextmanager
-    async def mcp_client_session(self, live_server):
-        """Create an MCP client session for testing."""
-        # Note: This is a simplified example. In practice, you might need to
-        # configure the MCP client to connect to your Django server over HTTP
-        # rather than using stdio. The actual implementation depends on how
-        # django-mcp-server exposes its functionality.
-
-        # For now, we'll create a mock session to demonstrate the test structure
-        # In a real implementation, you would connect to live_server.url + "/mcp/mcp"
-        try:
-            # This would be replaced with actual MCP client connection
-            # Example: HttpMCPClient(base_url=f"{live_server.url}/mcp/")
-            session = None  # Placeholder for actual MCP client session
-            yield session
-        finally:
-            # Cleanup session
-            pass
-
-    @pytest.mark.skip(
-        reason="Full MCP client integration requires complex async setup - HTTP tests cover basic functionality"
+@pytest.fixture
+def fixture(db):
+    """A season with one completed and one upcoming match."""
+    club = factories.ClubFactory.create(title="Australia")
+    opponent = factories.ClubFactory.create(title="New Zealand")
+    competition = factories.CompetitionFactory.create(title="World Cup")
+    season = factories.SeasonFactory.create(
+        competition=competition, title="2027", timezone=ZoneInfo("UTC")
     )
-    @pytest.mark.django_db(transaction=True)
-    @pytest.mark.asyncio
-    async def test_mcp_client_initialize(self, live_server):
-        """Test MCP client initialization with the server."""
-        async with self.mcp_client_session(live_server) as session:
-            if session is None:
-                # Skip test if we can't establish MCP connection
-                # This would be implemented once we have proper MCP client setup
-                pytest.skip("MCP client session not available")
-
-            # Test initialization
-            result = await session.initialize()
-            assert result is not None
-
-    @pytest.mark.skip(
-        reason="Full MCP client integration requires complex async setup - HTTP tests cover basic functionality"
+    division = factories.DivisionFactory.create(season=season, title="Men's Open")
+    stage = factories.StageFactory.create(division=division)
+    home = factories.TeamFactory.create(club=club, division=division, title="Australia")
+    away = factories.TeamFactory.create(
+        club=opponent, division=division, title="New Zealand"
     )
-    @pytest.mark.django_db(transaction=True)
-    @pytest.mark.asyncio
-    async def test_mcp_client_list_tools(self, live_server):
-        """Test listing available MCP tools."""
-        async with self.mcp_client_session(live_server) as session:
-            if session is None:
-                pytest.skip("MCP client session not available")
-
-            # List available tools
-            tools = await session.list_tools()
-
-            # Should include our tournament management tools
-            tool_names = [tool.name for tool in tools.tools]
-            expected_tools = [
-                "clubquerytool_query",
-                "competitionquerytool_query",
-                "seasonquerytool_query",
-                "divisionquerytool_query",
-                "teamquerytool_query",
-                "personquerytool_query",
-            ]
-
-            for expected_tool in expected_tools:
-                assert expected_tool in tool_names
-
-    @pytest.mark.skip(
-        reason="Full MCP client integration requires complex async setup - HTTP tests cover basic functionality"
+    today = timezone.now().date()
+    last_week = datetime.datetime.combine(
+        today - datetime.timedelta(days=7), datetime.time(10, 0), ZoneInfo("UTC")
     )
-    @pytest.mark.django_db(transaction=True)
-    @pytest.mark.asyncio
-    async def test_mcp_client_query_clubs(self, live_server):
-        """Test querying clubs through MCP client."""
-        async with self.mcp_client_session(live_server) as session:
-            if session is None:
-                pytest.skip("MCP client session not available")
-
-            # Query clubs
-            result = await session.call_tool(
-                "clubquerytool_query",
-                arguments={"query": {"title__icontains": self.club.title[:5]}},
-            )
-
-            # Should return results
-            assert result is not None
-            # Verify we get our test club back
-            # (Actual assertion would depend on response format)
-
-    @pytest.mark.skip(
-        reason="Full MCP client integration requires complex async setup - HTTP tests cover basic functionality"
+    next_week = datetime.datetime.combine(
+        today + datetime.timedelta(days=7), datetime.time(10, 0), ZoneInfo("UTC")
     )
-    @pytest.mark.django_db(transaction=True)
-    @pytest.mark.asyncio
-    async def test_mcp_client_query_competitions(self, live_server):
-        """Test querying competitions through MCP client."""
-        async with self.mcp_client_session(live_server) as session:
-            if session is None:
-                pytest.skip("MCP client session not available")
-
-            # Query competitions
-            result = await session.call_tool(
-                "competitionquerytool_query", arguments={"query": {}}
-            )
-
-            assert result is not None
-
-    @pytest.mark.skip(
-        reason="Full MCP client integration requires complex async setup - HTTP tests cover basic functionality"
+    played = factories.MatchFactory.create(
+        stage=stage,
+        home_team=home,
+        away_team=away,
+        datetime=last_week,
+        home_team_score=8,
+        away_team_score=6,
     )
-    @pytest.mark.django_db(transaction=True)
-    @pytest.mark.asyncio
-    async def test_mcp_client_query_teams(self, live_server):
-        """Test querying teams through MCP client."""
-        async with self.mcp_client_session(live_server) as session:
-            if session is None:
-                pytest.skip("MCP client session not available")
-
-            # Query teams by division
-            result = await session.call_tool(
-                "teamquerytool_query",
-                arguments={"query": {"division": self.division.id}},
-            )
-
-            assert result is not None
-
-    @pytest.mark.skip(
-        reason="Full MCP client integration requires complex async setup - HTTP tests cover basic functionality"
+    upcoming = factories.MatchFactory.create(
+        stage=stage,
+        home_team=away,
+        away_team=home,
+        datetime=next_week,
     )
-    @pytest.mark.django_db(transaction=True)
-    @pytest.mark.asyncio
-    async def test_mcp_client_error_handling(self, live_server):
-        """Test MCP client error handling for invalid queries."""
-        async with self.mcp_client_session(live_server) as session:
-            if session is None:
-                pytest.skip("MCP client session not available")
+    return {
+        "season": season,
+        "club": club,
+        "opponent": opponent,
+        "home": home,
+        "played": played,
+        "upcoming": upcoming,
+    }
 
-            # Try to call a non-existent tool
-            with pytest.raises(Exception):  # Would be specific MCP exception
-                await session.call_tool("nonexistent_tool", arguments={})
 
-    @pytest.mark.django_db(transaction=True)
-    def test_http_mcp_endpoint_accessibility(self, live_server, client):
-        """Test that MCP endpoint is accessible via HTTP."""
-        # Test basic endpoint accessibility with GET request first
-        response = requests.get(f"{live_server.url}/mcp/mcp")
+async def test_list_tools(live_server, fixture):
+    """The server advertises the competition tools with their schemas."""
+    async with Client(f"{live_server.url}/mcp/") as client:
+        result = await client.list_tools()
+    tools = {tool.name: tool for tool in result.tools}
+    assert {
+        "upcoming_events",
+        "recent_events",
+        "search",
+        "get_season",
+        "list_teams",
+        "get_team",
+        "list_matches",
+        "count_matches",
+        "get_match",
+        "get_ladder",
+        "whoami",
+    } <= set(tools)
+    assert tools["list_matches"].input_schema["properties"]["status"]["enum"] == [
+        "any",
+        "upcoming",
+        "past",
+        "completed",
+    ]
 
-        # MCP endpoint should respond (even if it doesn't support GET)
-        # 400 Bad Request, 405 Method Not Allowed, 406 Not Acceptable are expected responses
-        assert response.status_code in [
-            200,
-            400,
-            405,
-            406,
-        ], f"Expected endpoint to respond, got {response.status_code}"
 
-        # Test POST request to MCP endpoint
-        mcp_init_data = {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {"tools": {}},
-                "clientInfo": {"name": "test-client", "version": "1.0.0"},
+async def test_instructions(live_server, fixture):
+    """The server instructions teach the agent how to use the tools."""
+    async with Client(f"{live_server.url}/mcp/") as client:
+        assert "Narrow the surface area first" in client.instructions
+
+
+async def test_schedule_and_results(live_server, fixture):
+    """Answer "when are Australia playing New Zealand?" the way an agent would."""
+    async with Client(f"{live_server.url}/mcp/") as client:
+        events = await client.call_tool("upcoming_events", {"days": 30})
+        assert events.is_error is False
+        assert [e["title"] for e in events.structured_content["events"]] == [
+            "World Cup 2027"
+        ]
+
+        found = await client.call_tool("search", {"query": "Australia"})
+        assert [c["club"]["id"] for c in found.structured_content["clubs"]] == [
+            fixture["club"].pk
+        ]
+
+        matches = await client.call_tool(
+            "list_matches",
+            {
+                "season_id": fixture["season"].pk,
+                "club_id": fixture["club"].pk,
+                "opponent_club_id": fixture["opponent"].pk,
             },
-        }
-
-        response = requests.post(
-            f"{live_server.url}/mcp/mcp",
-            json=mcp_init_data,
-            headers={"Content-Type": "application/json"},
         )
-
-        # django-mcp-server may require specific setup or different protocol
-        # Accept various responses that indicate the endpoint exists and processes requests
-        expected_statuses = [
-            200,
-            201,
-            202,
-            400,
-            406,
-            422,
-        ]  # Valid processing or expected errors
-        assert response.status_code in expected_statuses, (
-            f"Expected MCP endpoint to process request, got {response.status_code}"
+        assert [m["id"] for m in matches.structured_content["matches"]] == [
+            fixture["played"].pk,
+            fixture["upcoming"].pk,
+        ]
+        assert matches.structured_content["matches"][0]["status"] == "completed"
+        assert matches.structured_content["matches"][0]["winner"]["id"] == (
+            fixture["home"].pk
         )
+        assert matches.structured_content["matches"][1]["status"] == "upcoming"
 
-    @pytest.mark.django_db(transaction=True)
-    def test_http_mcp_tools_list(self, live_server):
-        """Test that MCP endpoint processes tools/list requests appropriately."""
-        mcp_list_tools = {
-            "jsonrpc": "2.0",
-            "id": 2,
-            "method": "tools/list",
-            "params": {},
-        }
+        team = await client.call_tool("get_team", {"team_id": fixture["home"].pk})
+        assert team.structured_content["next_match"]["id"] == fixture["upcoming"].pk
+        assert team.structured_content["last_match"]["id"] == fixture["played"].pk
 
-        response = requests.post(
-            f"{live_server.url}/mcp/mcp",
-            json=mcp_list_tools,
-            headers={"Content-Type": "application/json"},
-        )
 
-        # MCP server should process the request (success or expected error)
-        expected_statuses = [
-            200,
-            201,
-            202,
-            400,
-            406,
-            422,
-        ]  # Valid processing or expected protocol errors
-        assert response.status_code in expected_statuses, (
-            f"Expected MCP endpoint to process tools/list request, got {response.status_code}"
-        )
+async def test_anonymous_whoami(live_server, fixture):
+    """Without authentication the agent is told to ask which team to follow."""
+    async with Client(f"{live_server.url}/mcp/") as client:
+        result = await client.call_tool("whoami", {})
+    assert result.structured_content["authenticated"] is False
 
-        # If successful (2xx), should return valid JSON
-        if 200 <= response.status_code < 300:
-            data = response.json()
-            assert "jsonrpc" in data, "Successful response must include jsonrpc field"
-            assert data["jsonrpc"] == "2.0", "Response must use JSON-RPC 2.0"
-            assert "id" in data, "Response must include id field"
-            assert data["id"] == 2, "Response id must match request id"
 
-            # If result field exists, should contain tools info
-            if "result" in data:
-                result = data["result"]
-                if "tools" in result:
-                    # Verify our tournament tools are included
-                    tool_names = [tool["name"] for tool in result["tools"]]
-                    expected_tools = [
-                        "clubquerytool_query",
-                        "competitionquerytool_query",
-                        "seasonquerytool_query",
-                        "divisionquerytool_query",
-                        "teamquerytool_query",
-                        "personquerytool_query",
-                    ]
-
-                    for expected_tool in expected_tools:
-                        assert expected_tool in tool_names, (
-                            f"Expected tool '{expected_tool}' not found in {tool_names}"
-                        )
+async def test_unknown_tool(live_server, fixture):
+    """Calling a tool that does not exist is reported as an error."""
+    async with Client(f"{live_server.url}/mcp/") as client:
+        result = await client.call_tool("nonexistent_tool", {})
+    assert result.is_error is True

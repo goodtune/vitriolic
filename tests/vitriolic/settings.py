@@ -53,7 +53,6 @@ INSTALLED_APPS = [
     "embed_video",
     "django_htmx",
     "rest_framework",
-    "mcp_server",
     "touchtechnology.common",
     "touchtechnology.admin",
     "touchtechnology.content",
@@ -208,14 +207,9 @@ LOGGING = {
 TOUCHTECHNOLOGY_SITEMAP_ROOT = "home"
 
 
-# Django MCP Server settings
+# MCP server settings
 
-DJANGO_MCP_GLOBAL_SERVER_CONFIG = {
-    "name": "vitriolic-mcp-server",
-    "instructions": "MCP server for the Tournament Control competition management system.",
-    # Each MCP request stands alone; tools do not rely on a Django session.
-    "stateless": True,
-}
-
-# Optional: Configure authentication for MCP endpoints
-# DJANGO_MCP_AUTHENTICATION_CLASSES = ["rest_framework.authentication.SessionAuthentication"]
+TOURNAMENTCONTROL_MCP_NAME = "vitriolic"
+TOURNAMENTCONTROL_MCP_INSTRUCTIONS = (
+    "MCP server for the Tournament Control competition management system."
+)

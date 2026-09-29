@@ -2,9 +2,9 @@
 Tests for the competition management MCP tools.
 
 The tools are exercised two ways: directly on the toolset with a fake
-request (which is how ``django-mcp-server`` invokes them, passing the
-Django request that carried the MCP call) and end-to-end over the
-Streamable HTTP endpoint using JSON-RPC.
+request (the toolset only needs the request's ``user``) and end-to-end over
+the Streamable HTTP endpoint using JSON-RPC, which is how an MCP client
+talks to the server.
 """
 
 import datetime
@@ -16,7 +16,6 @@ from django.contrib.auth.models import AnonymousUser
 from django.test.utils import override_settings
 from django.utils import timezone
 from freezegun import freeze_time
-from mcp_server import mcp_server
 from test_plus import TestCase
 
 from tournamentcontrol.competition import mcp
@@ -24,6 +23,11 @@ from tournamentcontrol.competition.tests import factories
 
 TZ = ZoneInfo("Europe/Amsterdam")
 NOW = "2026-07-15 12:00:00"
+
+# The server derives each tool's schema from its type hints with pydantic,
+# which recognises ``datetime.date`` by identity, and freezegun replaces
+# that class while time is frozen. Build the server before any test does.
+mcp.get_server()
 
 TOOL_NAMES = {
     "upcoming_events",
@@ -1179,7 +1183,7 @@ class MCPServerHTTPTests(MCPFixtureMixin, TestCase):
     def rpc(self, method, params=None, id=1):
         payload = {"jsonrpc": "2.0", "id": id, "method": method, "params": params or {}}
         response = self.client.post(
-            "/mcp/mcp",
+            self.reverse("mcp"),
             data=json.dumps(payload),
             content_type="application/json",
             HTTP_ACCEPT="application/json, text/event-stream",
@@ -1191,11 +1195,34 @@ class MCPServerHTTPTests(MCPFixtureMixin, TestCase):
         return data["result"]
 
     def test_server_instructions(self):
-        self.assertIn(mcp.INSTRUCTIONS, mcp_server.instructions)
+        self.assertIn(mcp.INSTRUCTIONS, mcp.get_server().instructions)
         result = self.rpc(
-            "tools/call", {"name": "get_server_instructions", "arguments": {}}
+            "initialize",
+            {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "1"},
+            },
         )
-        self.assertIn("Competition management tools", result["content"][0]["text"])
+        self.assertEqual(result["serverInfo"]["name"], "vitriolic")
+        self.assertEqual(
+            result["instructions"],
+            "MCP server for the Tournament Control competition management system."
+            "\n\n" + mcp.INSTRUCTIONS,
+        )
+
+    def test_endpoint_only_speaks_mcp(self):
+        # A browser (no MCP Accept header) is told the endpoint is not for it.
+        response = self.client.get(self.reverse("mcp"))
+        self.assertEqual(response.status_code, 406)
+        response = self.client.post(
+            self.reverse("mcp"),
+            data="{}",
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 406)
+        response = self.client.put(self.reverse("mcp"))
+        self.assertEqual(response.status_code, 405)
 
     def test_tools_list(self):
         result = self.rpc("tools/list")
