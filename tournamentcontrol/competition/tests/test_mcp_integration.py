@@ -1248,6 +1248,15 @@ class MCPServerHTTPTests(MCPFixtureMixin, TestCase):
             [{"format": "date", "type": "string"}, {"type": "null"}],
         )
         self.assertIn("when is my next game", by_name["whoami"]["description"])
+        # The connector directories require a title and read-only annotation
+        # on every tool, and clients use them to skip per-call approval.
+        for tool in result["tools"]:
+            with self.subTest(tool=tool["name"]):
+                self.assertTrue(tool["title"])
+                self.assertEqual(tool["annotations"]["readOnlyHint"], True)
+                self.assertEqual(tool["annotations"]["destructiveHint"], False)
+        self.assertEqual(by_name["upcoming_events"]["title"], "Upcoming events")
+        self.assertEqual(by_name["whoami"]["title"], "Who am I")
 
     def test_tools_call_upcoming_events(self):
         result = self.rpc(

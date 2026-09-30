@@ -56,6 +56,12 @@ season) as ISO 8601 with a UTC offset, alongside the time zone name.
 | `get_ladder(division_id or stage_id)` | Standings for every stage of a division that keeps a ladder, split into pools. |
 | `whoami()` | The connected user's person, club and teams, each with next and last match. |
 
+Every tool is published with a human readable `title` and the annotations
+`readOnlyHint: true` and `destructiveHint: false`. Clients such as Claude
+use these to run the tools without asking the user to approve each call,
+and the Claude and ChatGPT connector directories require them on every tool
+before a server can be listed.
+
 Every tool follows the visibility rules of the public web site: only enabled
 competitions and seasons are returned, and divisions marked as draft are
 hidden unless the calling user is a superuser.
