@@ -10,7 +10,7 @@ accounts = AccountsSite()
 urlpatterns = [
     path("admin/", site.urls),
     path("accounts/", accounts.urls),
-    path("mcp/", include("mcp_server.urls")),
+    path("mcp/", include("tournamentcontrol.competition.mcp.urls")),
     path("api/", include("touchtechnology.common.rest.urls")),
     path("sitemap.xml", sitemap, {"sitemaps": {"nodes": NodeSitemap}}, name="sitemap"),
 ]
