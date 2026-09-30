@@ -1212,17 +1212,26 @@ class MCPServerHTTPTests(MCPFixtureMixin, TestCase):
         )
 
     def test_endpoint_only_speaks_mcp(self):
-        # A browser (no MCP Accept header) is told the endpoint is not for it.
-        response = self.client.get(self.reverse("mcp"))
-        self.assertEqual(response.status_code, 406)
+        # GET is the transport's server-to-client stream and DELETE ends a
+        # session; a stateless server offers neither, and answering them
+        # promptly matters because a synchronous worker would otherwise hold
+        # the connection open until it is killed.
+        for method in ("get", "delete", "put"):
+            response = getattr(self.client, method)(
+                self.reverse("mcp"), HTTP_ACCEPT="application/json, text/event-stream"
+            )
+            self.assertEqual(response.status_code, 405, method)
+            self.assertEqual(response["Allow"], "POST, OPTIONS", method)
+        response = self.client.options(self.reverse("mcp"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Allow"], "POST, OPTIONS")
+        # A POST without the MCP Accept header is not for the SDK either.
         response = self.client.post(
             self.reverse("mcp"),
             data="{}",
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 406)
-        response = self.client.put(self.reverse("mcp"))
-        self.assertEqual(response.status_code, 405)
 
     def test_tools_list(self):
         result = self.rpc("tools/list")
