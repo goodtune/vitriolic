@@ -49,6 +49,7 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.utils.html import strip_tags
 from mcp.server.mcpserver import MCPServer
+from mcp.types import ToolAnnotations
 
 from tournamentcontrol.competition.constants import ClubStatus
 from tournamentcontrol.competition.models import (
@@ -1294,6 +1295,23 @@ def _tool(toolset_class, name):
     return tool
 
 
+# Human readable titles where the one derived from the method name reads
+# poorly; everything else becomes "Upcoming events", "Get ladder" and so on.
+TOOL_TITLES = {
+    "whoami": "Who am I",
+}
+
+# Every tool only reads the database. Saying so lets clients such as Claude
+# and ChatGPT run them without asking the user to approve each call, and the
+# connector directories refuse listings whose tools carry no annotations.
+TOOL_ANNOTATIONS = ToolAnnotations(
+    readOnlyHint=True,
+    destructiveHint=False,
+    idempotentHint=True,
+    openWorldHint=False,
+)
+
+
 def build_server(name=None, instructions=None, toolset_class=CompetitionToolset):
     """
     Build an ``MCPServer`` publishing every public method of ``toolset_class``.
@@ -1311,7 +1329,14 @@ def build_server(name=None, instructions=None, toolset_class=CompetitionToolset)
     ):
         if method_name.startswith("_"):
             continue
-        server.add_tool(_tool(toolset_class, method_name), name=method_name)
+        server.add_tool(
+            _tool(toolset_class, method_name),
+            name=method_name,
+            title=TOOL_TITLES.get(
+                method_name, method_name.replace("_", " ").capitalize()
+            ),
+            annotations=TOOL_ANNOTATIONS,
+        )
     return server
 
 
