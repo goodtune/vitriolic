@@ -26,13 +26,20 @@ class MCPView(View):
     """
     The Streamable HTTP endpoint of the competition MCP server.
 
+    Only ``POST`` reaches the SDK. In the Streamable HTTP transport ``GET``
+    opens the server-to-client event stream and ``DELETE`` ends a session;
+    a stateless server has no use for either, and a synchronous WSGI worker
+    cannot hold a stream open (it would hang until the worker is killed).
+    The specification lets a server answer both with 405, which Django's
+    ``View`` does for any method left out of ``http_method_names``.
+
     ``server`` may be given to ``as_view`` to serve a specific ``MCPServer``;
     by default the one built from the project settings is used. Django's
     ``ALLOWED_HOSTS`` already guards against DNS rebinding, so the SDK's own
     host check is disabled.
     """
 
-    http_method_names = ["get", "post", "delete", "options"]
+    http_method_names = ["post", "options"]
     server = None
     transport_security = TransportSecuritySettings(
         enable_dns_rebinding_protection=False
@@ -41,9 +48,7 @@ class MCPView(View):
     def get_server(self):
         return self.server or get_server()
 
-    def dispatch(self, request, *args, **kwargs):
-        if request.method.lower() not in self.http_method_names:
-            return self.http_method_not_allowed(request, *args, **kwargs)
+    def post(self, request, *args, **kwargs):
         token = current_request.set(request)
         try:
             return async_to_sync(self.handle)(request, request.body)

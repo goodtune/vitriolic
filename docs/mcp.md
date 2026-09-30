@@ -103,7 +103,18 @@ A project needs the following to serve the tools.
     ```
 
 Every request is served statelessly, so no MCP session state is kept
-between calls and the endpoint can sit behind any number of workers.
+between calls and the endpoint can sit behind any number of workers or
+instances with no session affinity. Only `POST` is served: in the
+Streamable HTTP transport `GET` opens a server-to-client event stream and
+`DELETE` ends a session, neither of which a stateless server uses, and a
+synchronous WSGI worker (gunicorn's default) could not hold a stream open
+anyway. Both answer `405 Method Not Allowed`, as the specification allows,
+so a stray browser or link checker cannot tie up a worker.
+
+MCP clients should be given the site's canonical `https` URL directly. A
+`POST` that is redirected (for example from `http` to `https`, or to add
+`www`) is not replayed by clients, and the MCP Python client only follows
+redirects within the endpoint's own origin.
 
 The tools see the Django request that carried the MCP call. `whoami`
 identifies the caller from `request.user`, so a client that presents a
