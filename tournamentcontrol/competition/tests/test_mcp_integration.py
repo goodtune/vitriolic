@@ -1253,6 +1253,8 @@ class MCPServerHTTPTests(MCPFixtureMixin, TestCase):
         for tool in result["tools"]:
             with self.subTest(tool=tool["name"]):
                 self.assertTrue(tool["title"])
+                # The Claude directory reads the title from the annotations.
+                self.assertEqual(tool["annotations"]["title"], tool["title"])
                 self.assertEqual(tool["annotations"]["readOnlyHint"], True)
                 self.assertEqual(tool["annotations"]["destructiveHint"], False)
         self.assertEqual(by_name["upcoming_events"]["title"], "Upcoming events")

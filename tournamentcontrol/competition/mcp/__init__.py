@@ -1301,15 +1301,26 @@ TOOL_TITLES = {
     "whoami": "Who am I",
 }
 
-# Every tool only reads the database. Saying so lets clients such as Claude
-# and ChatGPT run them without asking the user to approve each call, and the
-# connector directories refuse listings whose tools carry no annotations.
-TOOL_ANNOTATIONS = ToolAnnotations(
-    readOnlyHint=True,
-    destructiveHint=False,
-    idempotentHint=True,
-    openWorldHint=False,
-)
+
+def _title(method_name):
+    return TOOL_TITLES.get(method_name, method_name.replace("_", " ").capitalize())
+
+
+def _annotations(method_name):
+    """
+    Every tool only reads the database. Saying so lets clients such as
+    Claude and ChatGPT run them without asking the user to approve each
+    call. The title is repeated inside the annotations because the Claude
+    connector directory reads ``annotations.title`` rather than the tool's
+    top-level ``title``.
+    """
+    return ToolAnnotations(
+        title=_title(method_name),
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
 
 
 def build_server(name=None, instructions=None, toolset_class=CompetitionToolset):
@@ -1332,10 +1343,8 @@ def build_server(name=None, instructions=None, toolset_class=CompetitionToolset)
         server.add_tool(
             _tool(toolset_class, method_name),
             name=method_name,
-            title=TOOL_TITLES.get(
-                method_name, method_name.replace("_", " ").capitalize()
-            ),
-            annotations=TOOL_ANNOTATIONS,
+            title=_title(method_name),
+            annotations=_annotations(method_name),
         )
     return server
 
