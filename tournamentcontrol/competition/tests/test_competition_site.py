@@ -1162,6 +1162,30 @@ class VenueViewTests(TestCase):
             [(date(2025, 3, 13), [visible])],
         )
 
+    def test_kick_off_in_local_time_of_ground(self):
+        """
+        A ground may keep its own timezone; its matches show local kick-off
+        times even on the venue page, while other matches use the venue's.
+        """
+        self.venue.timezone = ZoneInfo("Europe/London")
+        self.venue.save()
+        self.ground_1.timezone = ZoneInfo("Asia/Tokyo")
+        self.ground_1.save()
+        self.ground_2.timezone = None
+        self.ground_2.save()
+        # 18:00 in Tokyo and 15:00 in London on the same day
+        self._match(self.ground_1, datetime(2024, 1, 15, 9, tzinfo=ZoneInfo("UTC")))
+        self._match(self.ground_2, datetime(2024, 1, 15, 15, tzinfo=ZoneInfo("UTC")))
+
+        self.assertGoodView("competition:venue", *self._venue_args())
+        self.assertResponseContains('<td class="time">6 p.m.</td>', html=False)
+        self.assertResponseContains('<td class="time">3 p.m.</td>', html=False)
+
+        self.assertGoodView(
+            "competition:ground", *self._venue_args(self.ground_1.slug)
+        )
+        self.assertResponseContains('<td class="time">6 p.m.</td>', html=False)
+
     def test_season_links_to_venues(self):
         self.assertGoodView(
             "competition:season", self.season.competition.slug, self.season.slug

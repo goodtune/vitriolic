@@ -1,4 +1,6 @@
-{% load i18n %}
+{% load i18n tz %}
+{# the enclosing page activates the place's timezone; a ground may still keep its own #}
+{% get_current_timezone as place_tz %}
 {% trans "TBA" as tba context "abbreviation: to be advised" %}
 {% for day, matches in matches_by_date.items %}
 	<h3 class="date">{{ day|date:"l, jS F Y" }}</h3>
@@ -17,7 +19,7 @@
 		<tbody>
 			{% for match in matches %}
 				<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}{% if match.live_stream %} live{% endif %}">
-					<td class="time">{{ match.datetime|time|default:tba }}</td>
+					<td class="time">{% timezone match.play_at.timezone|default:place_tz %}{{ match.datetime|time|default:tba }}{% endtimezone %}</td>
 					{% if show_ground %}<td class="ground">{{ match.play_at.title|default:tba }}</td>{% endif %}
 					<td class="division {{ match.stage.division.slug }}">
 						{% url application.name|add:":division" competition=competition.slug season=season.slug division=match.stage.division.slug as url1 %}
