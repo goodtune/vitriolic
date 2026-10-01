@@ -29,6 +29,60 @@ def _teams_in(node):
     return max(node.teams.count(), node.undecided_teams.count())
 
 
+def position_eval_error(stage, team_eval):
+    """
+    Why the positional eval ``team_eval`` (``P1``, ``G2P3``, ``S1G1P2``) on
+    a match of ``stage`` cannot be evaluated, or ``None`` when it can: it
+    must name an earlier stage (by default the one ``stage`` follows), a
+    pool that exists in it, and a position within its number of teams.
+    """
+    syntax = stage_group_position_re.fullmatch(team_eval)
+    if syntax is None:
+        return (
+            f"{team_eval} is not an eval: use P1 (position on the ladder of "
+            "the previous stage), G2P3 (position 3 in its pool 2), S1G1P2 "
+            "(stage 1, pool 1, position 2), W or L."
+        )
+    stage_number, group_number, position = syntax.groups()
+    if "0" in (stage_number, group_number, position):
+        return f"{team_eval}: stage, pool and position numbers start at 1."
+    # Resolved as ``utils.stage_group_position`` resolves it when the
+    # match is evaluated.
+    if stage_number is None:
+        try:
+            ref_stage = stage.comes_after
+        except Stage.DoesNotExist:
+            return (
+                f"{team_eval} refers to the stage before this one, but "
+                f"{stage.title} is the first stage of the division."
+            )
+    else:
+        stages = list(stage.division.stages.all())
+        if int(stage_number) > len(stages):
+            return f"{team_eval}: the division has no stage {stage_number}."
+        ref_stage = stages[int(stage_number) - 1]
+    group = None
+    if group_number is not None:
+        pools = list(ref_stage.pools.order_by("order"))
+        if int(group_number) > len(pools):
+            return (
+                f"{team_eval}: {ref_stage.title} has no pool {group_number} "
+                f"(it has {len(pools)})."
+            )
+        group = pools[int(group_number) - 1]
+    position = int(position)
+    if ref_stage.order >= stage.order:
+        return f"{team_eval} must refer to an earlier stage than {stage.title}."
+    node = group if group is not None else ref_stage
+    size = _teams_in(node)
+    if position > size:
+        return (
+            f"{team_eval} refers to position {position}, but {node.title} "
+            f"has {size} team{'' if size == 1 else 's'}."
+        )
+    return None
+
+
 class AgentMatchEvalMixin:
     """
     Offer and validate the eval fields of a match:
@@ -149,52 +203,7 @@ class AgentMatchEvalMixin:
         return None
 
     def _position_error(self, team_eval):
-        syntax = stage_group_position_re.fullmatch(team_eval)
-        if syntax is None:
-            return (
-                f"{team_eval} is not an eval: use P1 (position on the ladder of "
-                "the previous stage), G2P3 (position 3 in its pool 2), S1G1P2 "
-                "(stage 1, pool 1, position 2), W or L."
-            )
-        stage_number, group_number, position = syntax.groups()
-        if "0" in (stage_number, group_number, position):
-            return f"{team_eval}: stage, pool and position numbers start at 1."
-        stage = self.instance.stage
-        # Resolved as ``utils.stage_group_position`` resolves it when the
-        # match is evaluated.
-        if stage_number is None:
-            try:
-                ref_stage = stage.comes_after
-            except Stage.DoesNotExist:
-                return (
-                    f"{team_eval} refers to the stage before this one, but "
-                    f"{stage.title} is the first stage of the division."
-                )
-        else:
-            stages = list(stage.division.stages.all())
-            if int(stage_number) > len(stages):
-                return f"{team_eval}: the division has no stage {stage_number}."
-            ref_stage = stages[int(stage_number) - 1]
-        group = None
-        if group_number is not None:
-            pools = list(ref_stage.pools.order_by("order"))
-            if int(group_number) > len(pools):
-                return (
-                    f"{team_eval}: {ref_stage.title} has no pool {group_number} "
-                    f"(it has {len(pools)})."
-                )
-            group = pools[int(group_number) - 1]
-        position = int(position)
-        if ref_stage.order >= stage.order:
-            return f"{team_eval} must refer to an earlier stage than {stage.title}."
-        node = group if group is not None else ref_stage
-        size = _teams_in(node)
-        if position > size:
-            return (
-                f"{team_eval} refers to position {position}, but {node.title} "
-                f"has {size} team{'' if size == 1 else 's'}."
-            )
-        return None
+        return position_eval_error(self.instance.stage, team_eval)
 
 
 class AgentMatchEditForm(AgentMatchEvalMixin, MatchEditForm):

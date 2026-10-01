@@ -106,6 +106,7 @@ from tournamentcontrol.competition.mcp.admin.forms import (
     AgentMatchEditForm,
     AgentMatchStreamForm,
     SeasonMatchTimeForm,
+    position_eval_error,
 )
 from tournamentcontrol.competition.mcp.admin.scheduling import (
     ScheduleValidator,
@@ -2804,9 +2805,10 @@ class AdminToolset(CompetitionToolset):
         self._require("change", SeasonMatchTime, timeslot)
         with transaction.atomic():
             self._lock_seasons([timeslot.season_id])
+            # Another call may have changed the rule while this one waited.
             timeslot = self._save(
                 SeasonMatchTimeForm,
-                timeslot,
+                self._timeslot(timeslot.pk),
                 {
                     "start": start,
                     "interval": interval,
@@ -3018,6 +3020,20 @@ class AdminToolset(CompetitionToolset):
         )
         validator = ScheduleValidator()
         errors = []
+        # Ladder and pool positions must resolve as Match.eval will resolve
+        # them, before anything is saved or described.
+        checked = {}
+        for match in matches:
+            for side in ("home", "away"):
+                team_eval = getattr(match, f"{side}_team_eval")
+                if not team_eval or team_eval in ("W", "L"):
+                    continue
+                if team_eval not in checked:
+                    checked[team_eval] = position_eval_error(plan["stage"], team_eval)
+                if checked[team_eval]:
+                    errors.append(f"round {match.round}: {checked[team_eval]}")
+        if errors:
+            raise ToolError(f"build {index}: " + " ".join(dict.fromkeys(errors)))
         for match in matches:
             # Weekly dates come from the recurrence rule as midnight in the
             # current time zone; the match is played on that day.

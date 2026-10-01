@@ -1157,6 +1157,38 @@ class BuildDrawTests(DemoMixin, TestCase):
                 self.assertToolError(message, self.admin_tools.build_draw, builds)
         self.assertEqual(Match.objects.count(), 0)
 
+        # Positions must resolve: the first stage has no ladder before it.
+        for text, message in (
+            (
+                "ROUND\n1: P1 vs P2",
+                "build 0: round 1: P1 refers to the stage before this one, but "
+                "Regular Season is the first stage of the division. round 1: P2 "
+                "refers to the stage before this one, but Regular Season is the "
+                "first stage of the division.",
+            ),
+        ):
+            with self.subTest(text=text):
+                for dry_run in (False, True):
+                    self.assertToolError(
+                        message,
+                        self.admin_tools.build_draw,
+                        [{"stage_id": stage, "draw_format_text": text}],
+                        dry_run=dry_run,
+                    )
+        self.assertToolError(
+            "build 0: round 1: P9 refers to position 9, but Regular Season has "
+            "6 teams.",
+            self.admin_tools.build_draw,
+            [
+                {
+                    "stage_id": division.finals.pk,
+                    "draw_format_text": "ROUND\n1: P1 vs P9",
+                    "start_date": datetime.date(2027, 1, 20),
+                }
+            ],
+        )
+        self.assertEqual(Match.objects.count(), 0)
+
         self.season.start_date = None
         self.season.save()
         self.assertToolError(
