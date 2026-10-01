@@ -343,4 +343,7 @@ complete OAuth flow (registration, authorization with PKCE, token exchange,
 refresh) against django-oauth-toolkit before calling the tools with the
 bearer token. `tests/e2e/test_mcp_admin_client.py` rebuilds a demo
 competition (three divisions, 153 matches including finals) with the MCP
-client in about two dozen tool calls.
+client: 40 calls create its records one at a time (competition, season,
+venue, grounds, divisions, stages and teams), then 11 calls set up the time
+slots, exclusions and draw formats, build the draw and schedule it, where
+building and scheduling the matches one at a time took about 150.

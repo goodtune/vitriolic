@@ -2027,6 +2027,16 @@ class AdminToolset(CompetitionToolset):
     # -- scheduling ----------------------------------------------------------
 
     @staticmethod
+    def _lock(instance):
+        """Lock ``instance``'s row for the rest of the caller's transaction."""
+        list(
+            type(instance)
+            .objects.select_for_update()
+            .filter(pk=instance.pk)
+            .values_list("pk", flat=True)
+        )
+
+    @staticmethod
     def _lock_seasons(season_ids):
         """
         Serialise scheduling within the seasons: a match has no database
@@ -2075,8 +2085,10 @@ class AdminToolset(CompetitionToolset):
         if save:
             with transaction.atomic():
                 self._lock_seasons([match.stage.division.season_id])
+                # Another call may have moved the match while this one waited
+                # for the lock: start from what is saved now.
                 return self._reschedule(
-                    match,
+                    self._match(match.pk),
                     date=date,
                     time=time,
                     place_id=place_id,
@@ -2201,23 +2213,28 @@ class AdminToolset(CompetitionToolset):
         self._require("change", Match, second)
         if first.stage.division.season_id != second.stage.division.season_id:
             raise ToolError("Both matches must belong to the same season.")
-        for match in (first, second):
-            if match.live_stream:
-                raise ToolError(
-                    "Match %d is live streamed; remove its live stream before "
-                    "swapping its allocation." % match.pk
-                )
-        first_slot = (first.date, first.time, first.play_at)
-        second_slot = (second.date, second.time, second.play_at)
-        first.date, first.time, first.play_at = second_slot
-        second.date, second.time, second.play_at = first_slot
-        # Both matches leave their current slots; each is checked in the slot
-        # it takes over, against the rest of the season and the other match.
-        validator = ScheduleValidator(
-            ignore_clashes=ignore_clashes, moving={first.pk, second.pk}
-        )
         with transaction.atomic():
+            # Read the slots under the lock, so a concurrent change to either
+            # match is swapped from rather than overwritten.
             self._lock_seasons([first.stage.division.season_id])
+            first = self._match(first.pk)
+            second = self._match(second.pk)
+            for match in (first, second):
+                if match.live_stream:
+                    raise ToolError(
+                        "Match %d is live streamed; remove its live stream "
+                        "before swapping its allocation." % match.pk
+                    )
+            first_slot = (first.date, first.time, first.play_at)
+            second_slot = (second.date, second.time, second.play_at)
+            first.date, first.time, first.play_at = second_slot
+            second.date, second.time, second.play_at = first_slot
+            # Both matches leave their current slots; each is checked in the
+            # slot it takes over, against the rest of the season and the
+            # other match.
+            validator = ScheduleValidator(
+                ignore_clashes=ignore_clashes, moving={first.pk, second.pk}
+            )
             for match in (first, second):
                 errors = validator.errors(match)
                 validator.claim(match, f"match {match.pk}")
@@ -2554,9 +2571,14 @@ class AdminToolset(CompetitionToolset):
         if not dates:
             raise ToolError("Give one or more dates to exclude.")
         self._require("add", model)
-        existing = set(manager.filter(date__in=dates).values_list("date", flat=True))
-        added = [date for date in dates if date not in existing]
         with transaction.atomic():
+            # Locking the season or division makes "already excluded" exact:
+            # a concurrent call adding the same date waits, then sees it.
+            self._lock(owner)
+            existing = set(
+                manager.filter(date__in=dates).values_list("date", flat=True)
+            )
+            added = [date for date in dates if date not in existing]
             for date in added:
                 manager.create(date=date)
         return {

@@ -380,6 +380,28 @@ class ExclusionDateToolTests(DemoMixin, TestCase):
             ["2026-12-23", "2026-12-30", "2027-01-06"],
         )
 
+    def test_adding_dates_locks_the_owner(self):
+        """
+        The existing dates are read under a lock on the season (or division),
+        so concurrent calls adding the same date cannot both insert it.
+        """
+        division = self.season.divisions_by_title["Mixed"]
+        for tool, owner, table in (
+            (self.admin().add_season_exclusion_dates, self.season, "season"),
+            (self.admin().add_division_exclusion_dates, division, "division"),
+        ):
+            with self.subTest(owner=table):
+                with CaptureQueriesContext(connection) as queries:
+                    tool(owner.pk, [CHRISTMAS[0]])
+                self.assertEqual(
+                    [
+                        q["sql"].startswith(f'SELECT "competition_{table}"."id"')
+                        for q in queries.captured_queries
+                        if q["sql"].endswith("FOR UPDATE")
+                    ],
+                    [True],
+                )
+
     def test_division_exclusions(self):
         admin = self.admin()
         division = self.season.divisions_by_title["Mixed"]
@@ -1640,6 +1662,22 @@ class ScheduleMatchesTests(DemoMixin, TestCase):
         self.assertEqual(
             [(m["id"], m["time"]) for m in res["matches"]],
             [(first.pk, "19:30"), (second.pk, "18:40")],
+        )
+
+    def test_rescheduling_starts_from_the_saved_match(self):
+        """
+        A match read before another call moved it is re-read under the lock,
+        so changing only its time keeps the other call's new date.
+        """
+        stale = Match.objects.get(pk=self.night[0].pk)
+        Match.objects.filter(pk=stale.pk).update(date=WEDNESDAYS[1])
+        match = self.admin_tools._reschedule(stale, time=datetime.time(19, 30))
+        self.assertEqual(
+            (match.date, match.time), (WEDNESDAYS[1], datetime.time(19, 30))
+        )
+        self.assertEqual(
+            Match.objects.filter(pk=stale.pk).values_list("date", "time").get(),
+            (WEDNESDAYS[1], datetime.time(19, 30)),
         )
 
     def test_scheduling_locks_the_season(self):
