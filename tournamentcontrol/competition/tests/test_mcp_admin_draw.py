@@ -1993,6 +1993,58 @@ class TitleTests(DemoMixin, TestCase):
         team = admin.create_team(division.pk, title="Smash &amp; Grab")["team"]
         self.assertEqual((team["title"], team["slug"]), ("Smash & Grab", "smash-grab"))
 
+    def test_titles_are_escaped_when_rendered(self):
+        """
+        Titles are stored as plain text, so markup in one (sent raw, or
+        HTML-escaped and decoded) is escaped wherever a match title is
+        rendered as HTML, and returned as written in plain text.
+        """
+        admin = self.admin()
+        division = self.season.divisions_by_title["Women's"]
+        evil = admin.create_team(
+            division.pk, title="&lt;script&gt;alert(1)&lt;/script&gt;"
+        )["team"]
+        self.assertEqual(evil["title"], "<script>alert(1)</script>")
+        home = division.team_list[0]
+        home.title = "Hit & Run"
+        home.save()
+        match = factories.MatchFactory.create(
+            stage=division.regular,
+            home_team=home,
+            away_team_id=evil["id"],
+            date=WEDNESDAYS[0],
+            time=None,
+            datetime=None,
+        )
+        match = Match.objects.get(pk=match.pk)
+        self.assertEqual(
+            str(match),
+            "Hit &amp; Run vs &lt;script&gt;alert(1)&lt;/script&gt;",
+        )
+        self.assertEqual(
+            admin.get_match(match.pk)["away_team"]["title"],
+            "<script>alert(1)</script>",
+        )
+        # Pool titles in placeholder names are escaped too; plain text is not.
+        pool = factories.StageGroupFactory.create(
+            stage=division.regular, title="A & <b>B</b>", order=1
+        )
+        final = factories.MatchFactory.create(
+            stage=division.finals,
+            home_team=None,
+            away_team=None,
+            home_team_eval="G1P1",
+            away_team_eval="G1P2",
+            date=None,
+            time=None,
+            datetime=None,
+        )
+        self.assertEqual(
+            final.get_home_team(), {"title": "1st A &amp; &lt;b&gt;B&lt;/b&gt;"}
+        )
+        self.assertEqual(final.get_home_team_plain(), "1st A & <b>B</b>")
+        self.assertEqual(pool.title, "A & <b>B</b>")
+
     def test_placeholder_titles(self):
         division = self.season.divisions_by_title["Women's"]
         match = factories.MatchFactory.create(

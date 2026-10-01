@@ -318,6 +318,10 @@ as its identifiers and scheduling fields only:
   `true` (the full match, as before) for this release; the next release
   will default it to `false`. Clients that read the full match from these
   tools should pass `verbose=true` explicitly.
+- **Escaped titles.** Match titles rendered as HTML escape team and pool
+  titles (they were inserted with `|safe`, so markup in a title reached the
+  page); the plain-text forms (`get_home_team_plain`, the REST API and the
+  MCP tools) return titles as written.
 - **Placeholder titles.** A side of a match with no team, undecided team or
   eval is titled "TBA" (it was the string "None") in the MCP tools, the REST
   API and the web pages; an eval that cannot be read is shown as written.

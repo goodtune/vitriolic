@@ -2,6 +2,7 @@
 
 
 import collections
+import html
 import logging
 import random
 import uuid
@@ -2484,7 +2485,8 @@ class Match(AdminUrlMixin, models.Model):
 
         try:
             if plain:
-                return template.render(context).strip()
+                # The templates render HTML (titles escaped); plain is text.
+                return html.unescape(template.render(context).strip())
             return {"title": template.render(context).strip()}
         except Exception:
             # If there are ANY issues in evaluating a formula, return the formula itself
