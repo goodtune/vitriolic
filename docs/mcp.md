@@ -126,12 +126,19 @@ redirects within the endpoint's own origin.
 
 The tools see the Django request that carried the MCP call. `whoami`
 identifies the caller from `request.user`, so a client that presents a
-Django session cookie (or any other credential a middleware in the project
-turns into `request.user`) is recognised; anonymous clients still get the
-public schedules and results. To serve a different `MCPServer` (for
-example one that adds project-specific tools with
+Django session cookie is recognised, as is one presenting an OAuth 2.0
+bearer token when the project runs an authorization server (see
+[MCP tools for competition administration](mcp-admin.md), which describes
+the django-oauth-toolkit setup; a token is only accepted by the endpoint it
+was issued for); anonymous clients still get the public schedules and
+results. To serve a different `MCPServer` (for example one that adds
+project-specific tools with
 `tournamentcontrol.competition.mcp.build_server`) pass it to the view:
 `MCPView.as_view(server=my_server)`.
+
+A second server for competition *administrators*, with tools that create
+and change competitions, schedule matches, enter results and manage live
+streams, is described in [mcp-admin.md](mcp-admin.md).
 
 ## Testing
 

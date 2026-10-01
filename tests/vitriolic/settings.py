@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "embed_video",
     "django_htmx",
     "rest_framework",
+    "oauth2_provider",
     "touchtechnology.common",
     "touchtechnology.admin",
     "touchtechnology.content",
@@ -149,6 +150,8 @@ PASSWORD_HASHERS = [
 AUTHENTICATION_BACKENDS = (
     "django.contrib.auth.backends.ModelBackend",  # this is default
     "guardian.backends.ObjectPermissionBackend",
+    # Bearer tokens issued by the OAuth 2.0 provider identify MCP clients.
+    "oauth2_provider.backends.OAuth2Backend",
 )
 
 LOGIN_URL = reverse_lazy("accounts:login")
@@ -213,3 +216,32 @@ TOURNAMENTCONTROL_MCP_NAME = "vitriolic"
 TOURNAMENTCONTROL_MCP_INSTRUCTIONS = (
     "MCP server for the Tournament Control competition management system."
 )
+TOURNAMENTCONTROL_MCP_ADMIN_NAME = "vitriolic-admin"
+
+
+# OAuth 2.1 authorization server for MCP clients (django-oauth-toolkit).
+# See docs/mcp-admin.md.
+
+OAUTH2_PROVIDER = {
+    "PKCE_REQUIRED": True,
+    "COMPLIANT_BCP_RFC9700_PKCE_METHOD": True,
+    "ALLOWED_REDIRECT_URI_SCHEMES": ["https", "http"],
+    "SCOPES": {
+        "competition": "Read and administer competitions on your behalf",
+    },
+    "DEFAULT_SCOPES": ["competition"],
+    "ACCESS_TOKEN_EXPIRE_SECONDS": 3600,
+    "REFRESH_TOKEN_EXPIRE_SECONDS": 60 * 60 * 24 * 30,
+    "ROTATE_REFRESH_TOKEN": True,
+    # Public clients (Claude Code, Claude.ai) authenticate with PKCE alone.
+    "OAUTH2_TOKEN_ENDPOINT_AUTH_METHODS_SUPPORTED": [
+        "none",
+        "client_secret_post",
+        "client_secret_basic",
+    ],
+    "DCR_ENABLED": True,
+    "DCR_REGISTRATION_PERMISSION_CLASSES": (
+        "oauth2_provider.dcr.AllowAllDCRPermission",
+    ),
+    "OAUTH2_PROTECTED_RESOURCE_NAME": "Tournament Control",
+}

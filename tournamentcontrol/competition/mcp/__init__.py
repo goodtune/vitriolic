@@ -321,10 +321,18 @@ class CompetitionToolset:
         now = timezone.now()
         return now, timezone.localdate(now)
 
+    def _visible_competitions(self):
+        return Competition.objects.filter(enabled=True)
+
     def _visible_seasons(self):
         return Season.objects.filter(
             enabled=True, competition__enabled=True
         ).select_related("competition")
+
+    def _visible_venues(self):
+        return Venue.objects.filter(
+            season__enabled=True, season__competition__enabled=True
+        ).select_related("season__competition")
 
     def _visible_divisions(self):
         divisions = Division.objects.filter(
@@ -615,7 +623,7 @@ class CompetitionToolset:
         if not query:
             return {"error": "Provide one or more words to search for."}
 
-        competitions = Competition.objects.filter(enabled=True).filter(
+        competitions = self._visible_competitions().filter(
             _words_query(query, ["title", "short_title", "slug"])
         )
         seasons = self._visible_seasons().filter(
@@ -656,12 +664,8 @@ class CompetitionToolset:
         clubs = Club.objects.exclude(status=ClubStatus.HIDDEN).filter(
             _words_query(query, ["title", "short_title", "abbreviation"])
         )
-        venues = (
-            Venue.objects.filter(
-                season__enabled=True, season__competition__enabled=True
-            )
-            .select_related("season__competition")
-            .filter(_words_query(query, ["title", "abbreviation"]))
+        venues = self._visible_venues().filter(
+            _words_query(query, ["title", "abbreviation"])
         )
 
         return {
@@ -1306,21 +1310,51 @@ def _title(method_name):
     return TOOL_TITLES.get(method_name, method_name.replace("_", " ").capitalize())
 
 
-def _annotations(method_name):
+READ_ONLY_ANNOTATIONS = {
+    "readOnlyHint": True,
+    "destructiveHint": False,
+    "idempotentHint": True,
+    "openWorldHint": False,
+}
+
+
+def tool_annotations(
+    *, read_only=False, destructive=False, idempotent=False, open_world=False
+):
     """
-    Every tool only reads the database. Saying so lets clients such as
-    Claude and ChatGPT run them without asking the user to approve each
-    call. The title is repeated inside the annotations because the Claude
-    connector directory reads ``annotations.title`` rather than the tool's
-    top-level ``title``.
+    Declare the annotations of a tool that is not read-only.
+
+    Decorate a toolset method with it; ``build_server`` publishes the
+    annotations with the tool. ``destructive`` marks a tool that deletes or
+    otherwise irreversibly changes data (clients ask the user before running
+    it), ``idempotent`` a tool that can be repeated with the same arguments
+    without further effect, and ``open_world`` a tool that also acts on an
+    external system (the YouTube platform, for live streams).
     """
-    return ToolAnnotations(
-        title=_title(method_name),
-        readOnlyHint=True,
-        destructiveHint=False,
-        idempotentHint=True,
-        openWorldHint=False,
-    )
+
+    def decorator(method):
+        method.mcp_annotations = {
+            "readOnlyHint": read_only,
+            "destructiveHint": destructive,
+            "idempotentHint": idempotent,
+            "openWorldHint": open_world,
+        }
+        return method
+
+    return decorator
+
+
+def _annotations(method_name, method=None):
+    """
+    The annotations of a tool. A method that is not decorated with
+    ``tool_annotations`` only reads the database; saying so lets clients
+    such as Claude and ChatGPT run it without asking the user to approve
+    each call. The title is repeated inside the annotations because the
+    Claude connector directory reads ``annotations.title`` rather than the
+    tool's top-level ``title``.
+    """
+    hints = getattr(method, "mcp_annotations", READ_ONLY_ANNOTATIONS)
+    return ToolAnnotations(title=_title(method_name), **hints)
 
 
 def build_server(name=None, instructions=None, toolset_class=CompetitionToolset):
@@ -1335,7 +1369,7 @@ def build_server(name=None, instructions=None, toolset_class=CompetitionToolset)
     if instructions:
         combined = instructions.strip() + "\n\n" + INSTRUCTIONS
     server = MCPServer(name=name or "tournamentcontrol", instructions=combined)
-    for method_name, __ in inspect.getmembers(
+    for method_name, method in inspect.getmembers(
         toolset_class, predicate=inspect.isfunction
     ):
         if method_name.startswith("_"):
@@ -1344,7 +1378,7 @@ def build_server(name=None, instructions=None, toolset_class=CompetitionToolset)
             _tool(toolset_class, method_name),
             name=method_name,
             title=_title(method_name),
-            annotations=_annotations(method_name),
+            annotations=_annotations(method_name, method),
         )
     return server
 
