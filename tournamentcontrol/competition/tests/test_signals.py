@@ -190,3 +190,87 @@ class CombinedAgeGradeLadderTests(TestCase):
             [self.m55_a1, self.m55_a2, self.m55_b1],
             sorted((s.team for s in ladders[self.m55_stage]), key=lambda t: t.pk),
         )
+
+
+class ChangedLadderFormulaTests(TestCase):
+    """
+    Editing the fields of a Division that feed into the ladder calculation
+    must trigger a rebuild of the LadderEntry records for every match in the
+    division that already has a result.
+    """
+
+    def setUp(self):
+        self.division = factories.DivisionFactory.create(
+            points_formula="3*win + 2*draw + 1*loss",
+            bonus_points_formula="[loss=1: 1]",
+        )
+        self.stage = factories.StageFactory.create(division=self.division)
+        self.match = factories.MatchFactory.create(
+            stage=self.stage, home_team_score=5, away_team_score=2
+        )
+        self.home = self.match.home_team
+        self.away = self.match.away_team
+
+    def _entry(self, team):
+        return LadderEntry.objects.get(match=self.match, team=team)
+
+    def test_initial_bonus_points(self):
+        self.assertEqual(self._entry(self.home).bonus_points, 0)
+        self.assertEqual(self._entry(self.home).points, 3)
+        self.assertEqual(self._entry(self.away).bonus_points, 1)
+        self.assertEqual(self._entry(self.away).points, 2)
+
+    def test_changed_bonus_points_formula_recalculates_ladder(self):
+        self.division.bonus_points_formula = "[win=1: 2]"
+        self.division.save()
+
+        self.assertEqual(self._entry(self.home).bonus_points, 2)
+        self.assertEqual(self._entry(self.home).points, 5)
+        self.assertEqual(self._entry(self.away).bonus_points, 0)
+        self.assertEqual(self._entry(self.away).points, 1)
+
+    def test_cleared_bonus_points_formula_recalculates_ladder(self):
+        self.division.bonus_points_formula = ""
+        self.division.save()
+
+        self.assertEqual(self._entry(self.home).bonus_points, 0)
+        self.assertEqual(self._entry(self.home).points, 3)
+        self.assertEqual(self._entry(self.away).bonus_points, 0)
+        self.assertEqual(self._entry(self.away).points, 1)
+
+    def test_changed_points_formula_recalculates_ladder(self):
+        self.division.points_formula = "4*win + 2*draw"
+        self.division.save()
+
+        self.assertEqual(self._entry(self.home).points, 4)
+        self.assertEqual(self._entry(self.away).points, 1)
+
+    def test_changed_include_forfeits_in_played_recalculates_ladder(self):
+        forfeit = factories.MatchFactory.create(
+            stage=self.stage,
+            home_team=self.home,
+            away_team=self.away,
+            is_forfeit=True,
+            forfeit_winner=self.home,
+            home_team_score=self.division.forfeit_for_score,
+            away_team_score=self.division.forfeit_against_score,
+        )
+        forfeit_entries = LadderEntry.objects.filter(match=forfeit)
+        self.assertEqual(forfeit_entries.get(team=self.away).played, 1)
+        self.assertEqual(forfeit_entries.get(team=self.home).played, 1)
+
+        self.division.include_forfeits_in_played = False
+        self.division.save()
+
+        self.assertEqual(forfeit_entries.get(team=self.away).played, 0)
+        self.assertEqual(forfeit_entries.get(team=self.home).played, 0)
+        # the match with a regular result is unaffected
+        self.assertEqual(self._entry(self.home).played, 1)
+
+    def test_unrelated_change_does_not_rebuild_ladder(self):
+        before = set(LadderEntry.objects.values_list("pk", flat=True))
+
+        self.division.title = "Renamed"
+        self.division.save()
+
+        self.assertEqual(before, set(LadderEntry.objects.values_list("pk", flat=True)))

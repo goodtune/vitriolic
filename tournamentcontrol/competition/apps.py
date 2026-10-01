@@ -40,7 +40,7 @@ class CompetitionConfig(AppConfig):
         )
         from tournamentcontrol.competition.signals import (
             capture_timezone_before_save,
-            changed_points_formula,
+            changed_ladder_formula,
             delete_related,
             delete_team,
             match_forfeit,
@@ -86,7 +86,7 @@ class CompetitionConfig(AppConfig):
             update_match_datetimes_on_place_timezone_change, sender=Ground
         )
 
-        post_save.connect(changed_points_formula, sender=Division)
+        post_save.connect(changed_ladder_formula, sender=Division)
 
         pre_delete.connect(delete_team, sender=Team)
 
