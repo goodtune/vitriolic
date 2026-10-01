@@ -2520,7 +2520,14 @@ class Match(AdminUrlMixin, models.Model):
         Attempt to populate the `home_team` and `away_team` fields as
         appropriate.
 
-        When lazy=False we should always evaluate the teams, if possible.
+        Teams which have already been assigned are returned as-is. Otherwise
+        the positional (P1, G1P2) or winner/loser reference is resolved against
+        the ladder of the preceding stage or the result of the related match.
+        When a reference cannot be resolved the descriptive result of
+        ``_get_team`` is returned instead of a ``Team``.
+
+        The ``lazy`` argument is retained for backwards compatibility; teams
+        which are already assigned are never re-evaluated.
         """
         try:
             stage = self.stage.comes_after
@@ -2535,10 +2542,8 @@ class Match(AdminUrlMixin, models.Model):
                 return (self.home_team, self.away_team)
 
         positions = {
-            index + 1: team
-            for index, team in enumerate(
-                stage.ladder_summary.values_list("team", flat=True)
-            )
+            index + 1: each.team
+            for index, each in enumerate(stage.ladder_summary.select_related("team"))
         }
         group_positions = {
             index + 1: [each.team for each in group.ladder]
@@ -2550,46 +2555,40 @@ class Match(AdminUrlMixin, models.Model):
             is_team_model = isinstance(team, Team)
             if not is_team_model:
                 logger.warning("%r is not a Team instance.", team)
-            if not lazy:
-                # For lazy=False, use the result from _get_team() as-is
-                # (either Team instances or dictionaries with titles for invalid formulas)
-                pass
-            else:
-                # Only do additional processing when lazy=True
-                if not is_team_model:
-                    team_undecided = getattr(self, f"{field}_undecided")
-                    if team_undecided:
-                        team_eval = team_undecided.formula
-                        team_eval_related = None
-                    else:
-                        team_eval = getattr(self, f"{field}_eval")
-                        team_eval_related = getattr(self, f"{field}_eval_related")
-                    if team_eval in WIN_LOSE:
-                        team = team_eval_related._winner_loser(team_eval)
+            if not is_team_model:
+                team_undecided = getattr(self, f"{field}_undecided")
+                if team_undecided:
+                    team_eval = team_undecided.formula
+                    team_eval_related = None
+                else:
+                    team_eval = getattr(self, f"{field}_eval")
+                    team_eval_related = getattr(self, f"{field}_eval_related")
+                if team_eval in WIN_LOSE:
+                    team = team_eval_related._winner_loser(team_eval)
+                else:
+                    try:
+                        match = stage_group_position_re.match(team_eval)
+                        if not match:
+                            raise AttributeError("Invalid stage_group_position pattern")
+                        __, group, position = match.groups()
+                    except (AttributeError, TypeError):
+                        logger.debug(
+                            "Failed evaluating `stage_group_position` %s for %s",
+                            team_eval,
+                            self,
+                        )
                     else:
                         try:
-                            match = stage_group_position_re.match(team_eval)
-                            if not match:
-                                raise AttributeError(
-                                    "Invalid stage_group_position pattern"
-                                )
-                            stage, group, position = match.groups()
-                        except (AttributeError, TypeError):
-                            logger.exception(
-                                "Failed evaluating `stage_group_position` %s for %s",
-                                team_eval,
-                                self,
-                            )
-                        else:
                             try:
-                                try:
-                                    g = int(group)
-                                    p = int(position)
-                                    team = group_positions[g][p - 1]
-                                except TypeError:
-                                    team = positions[int(position)]
-                            except (IndexError, KeyError):
-                                pass
+                                g = int(group)
+                                p = int(position)
+                                team = group_positions[g][p - 1]
+                            except TypeError:
+                                team = positions[int(position)]
+                        except (IndexError, KeyError):
+                            # Unable to resolve the reference (yet), fall back
+                            # to the descriptive result from _get_team().
+                            pass
             res[index] = team
         return tuple(res)
 
