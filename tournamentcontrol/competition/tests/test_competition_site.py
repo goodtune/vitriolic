@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from django.test import override_settings
@@ -200,6 +200,64 @@ class GoodViewTests(TestCase):
                 match.pk,
             )
             self.response_410()
+
+    def test_venue(self):
+        venue = factories.VenueFactory.create()
+        factories.MatchFactory.create(
+            play_at=venue, stage__division__season=venue.season
+        )
+        self.assertGoodView(
+            "competition:venue",
+            venue.season.competition.slug,
+            venue.season.slug,
+            venue.slug,
+        )
+
+    def test_venue_date(self):
+        venue = factories.VenueFactory.create()
+        factories.MatchFactory.create(
+            play_at=venue,
+            stage__division__season=venue.season,
+            datetime=datetime(2025, 3, 13, 10, tzinfo=ZoneInfo("UTC")),
+        )
+        self.assertGoodView(
+            "competition:venue",
+            venue.season.competition.slug,
+            venue.season.slug,
+            venue.slug,
+            "20250313",
+        )
+
+    def test_ground(self):
+        ground = factories.GroundFactory.create()
+        factories.MatchFactory.create(
+            play_at=ground, stage__division__season=ground.venue.season
+        )
+        self.assertGoodView(
+            "competition:ground",
+            ground.venue.season.competition.slug,
+            ground.venue.season.slug,
+            ground.venue.slug,
+            ground.slug,
+        )
+
+    def test_ground_date(self):
+        ground = factories.GroundFactory.create()
+        factories.MatchFactory.create(
+            play_at=ground,
+            stage__division__season=ground.venue.season,
+            date=date(2025, 3, 13),
+            time=time(10, 0),
+            datetime=datetime(2025, 3, 13, 10, tzinfo=ZoneInfo("UTC")),
+        )
+        self.assertGoodView(
+            "competition:ground",
+            ground.venue.season.competition.slug,
+            ground.venue.season.slug,
+            ground.venue.slug,
+            ground.slug,
+            "20250313",
+        )
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
@@ -984,3 +1042,187 @@ class MatchDetailViewQueryTests(TestCase):
             self.large_match.pk,
             test_query_count=18,
         )
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class VenueViewTests(TestCase):
+    """
+    Public match listings for a venue and for each of its grounds.
+    """
+
+    def setUp(self):
+        self.season = factories.SeasonFactory.create(timezone=ZoneInfo("UTC"))
+        self.venue = factories.VenueFactory.create(
+            season=self.season, title="Bill Hartley Fields"
+        )
+        self.ground_1 = factories.GroundFactory.create(
+            venue=self.venue, title="Field 1"
+        )
+        self.ground_2 = factories.GroundFactory.create(
+            venue=self.venue, title="Field 2"
+        )
+        self.division = factories.DivisionFactory.create(season=self.season)
+        self.stage = factories.StageFactory.create(division=self.division)
+
+    def _match(self, play_at, when, **kwargs):
+        return factories.MatchFactory.create(
+            stage=self.stage,
+            play_at=play_at,
+            datetime=when,
+            **kwargs,
+        )
+
+    def _venue_args(self, *args):
+        return (self.season.competition.slug, self.season.slug, self.venue.slug) + args
+
+    def test_venue_lists_matches_on_every_ground(self):
+        day_1 = datetime(2025, 3, 13, 10, tzinfo=ZoneInfo("UTC"))
+        day_2 = datetime(2025, 3, 14, 11, tzinfo=ZoneInfo("UTC"))
+        m1 = self._match(self.ground_1, day_1)
+        m2 = self._match(self.ground_2, day_2)
+        m3 = self._match(self.venue, day_2)
+        self.assertGoodView("competition:venue", *self._venue_args())
+
+        self.assertEqual(
+            list(self.context["matches_by_date"].items()),
+            [(date(2025, 3, 13), [m1]), (date(2025, 3, 14), [m2, m3])],
+        )
+        self.assertEqual(
+            self.context["dates"], [date(2025, 3, 13), date(2025, 3, 14)]
+        )
+        self.assertIsNone(self.context["selected_date"])
+
+        # grounds and days are linked from the venue page
+        for ground in (self.ground_1, self.ground_2):
+            self.assertResponseContains(
+                'href="%s"'
+                % self.reverse("competition:ground", *self._venue_args(ground.slug)),
+                html=False,
+            )
+        day_url = self.reverse("competition:venue", *self._venue_args("20250314"))
+        self.assertResponseContains('href="%s"' % day_url, html=False)
+        # each match links to its detail page
+        self.assertResponseContains(
+            'href="%s"'
+            % self.reverse(
+                "competition:match",
+                self.season.competition.slug,
+                self.season.slug,
+                self.division.slug,
+                m1.pk,
+            ),
+            html=False,
+        )
+
+    def test_venue_single_day(self):
+        m1 = self._match(
+            self.ground_1, datetime(2025, 3, 13, 10, tzinfo=ZoneInfo("UTC"))
+        )
+        self._match(self.ground_2, datetime(2025, 3, 14, 10, tzinfo=ZoneInfo("UTC")))
+        self.assertGoodView("competition:venue", *self._venue_args("20250313"))
+        self.assertEqual(
+            list(self.context["matches_by_date"].items()),
+            [(date(2025, 3, 13), [m1])],
+        )
+        # the day navigation still offers every day at the venue
+        self.assertEqual(
+            self.context["dates"], [date(2025, 3, 13), date(2025, 3, 14)]
+        )
+        self.assertEqual(self.context["selected_date"], date(2025, 3, 13))
+
+    def test_ground_lists_only_its_own_matches(self):
+        when = datetime(2025, 3, 13, 10, tzinfo=ZoneInfo("UTC"))
+        m1 = self._match(self.ground_1, when)
+        self._match(self.ground_2, when)
+        self._match(self.venue, when)
+        self.assertGoodView(
+            "competition:ground", *self._venue_args(self.ground_1.slug)
+        )
+        self.assertEqual(
+            list(self.context["matches_by_date"].items()),
+            [(date(2025, 3, 13), [m1])],
+        )
+        self.assertEqual(self.context["ground"], self.ground_1)
+        self.assertResponseContains(
+            'href="%s"' % self.reverse("competition:venue", *self._venue_args()),
+            html=False,
+        )
+
+    def test_hidden_matches_excluded(self):
+        when = datetime(2025, 3, 13, 10, tzinfo=ZoneInfo("UTC"))
+        visible = self._match(self.ground_1, when)
+        self._match(self.ground_1, when, is_bye=True)
+        draft = factories.DivisionFactory.create(season=self.season, draft=True)
+        factories.MatchFactory.create(
+            stage__division=draft, play_at=self.ground_1, datetime=when
+        )
+        self.assertGoodView("competition:venue", *self._venue_args())
+        self.assertEqual(
+            list(self.context["matches_by_date"].items()),
+            [(date(2025, 3, 13), [visible])],
+        )
+
+    def test_kick_off_in_local_time_of_ground(self):
+        """
+        A ground may keep its own timezone; its matches show local kick-off
+        times even on the venue page, while other matches use the venue's.
+        """
+        self.venue.timezone = ZoneInfo("Europe/London")
+        self.venue.save()
+        self.ground_1.timezone = ZoneInfo("Asia/Tokyo")
+        self.ground_1.save()
+        self.ground_2.timezone = None
+        self.ground_2.save()
+        # 18:00 in Tokyo and 15:00 in London on the same day
+        self._match(self.ground_1, datetime(2024, 1, 15, 9, tzinfo=ZoneInfo("UTC")))
+        self._match(self.ground_2, datetime(2024, 1, 15, 15, tzinfo=ZoneInfo("UTC")))
+
+        self.assertGoodView("competition:venue", *self._venue_args())
+        self.assertResponseContains('<td class="time">6 p.m.</td>', html=False)
+        self.assertResponseContains('<td class="time">3 p.m.</td>', html=False)
+
+        self.assertGoodView(
+            "competition:ground", *self._venue_args(self.ground_1.slug)
+        )
+        self.assertResponseContains('<td class="time">6 p.m.</td>', html=False)
+
+    def test_season_links_to_venues(self):
+        self.assertGoodView(
+            "competition:season", self.season.competition.slug, self.season.slug
+        )
+        self.assertResponseContains(
+            'href="%s"' % self.reverse("competition:venue", *self._venue_args()),
+            html=False,
+        )
+
+    def test_empty_venue(self):
+        self.assertGoodView("competition:venue", *self._venue_args())
+        self.assertResponseContains("No matches have been scheduled here yet.")
+
+    def test_day_without_matches_404(self):
+        self._match(self.ground_1, datetime(2025, 3, 13, 10, tzinfo=ZoneInfo("UTC")))
+        self.get("competition:venue", *self._venue_args("20250314"))
+        self.response_404()
+        self.get(
+            "competition:ground", *self._venue_args(self.ground_2.slug, "20250313")
+        )
+        self.response_404()
+
+    def test_invalid_date_404(self):
+        self.get("competition:venue", *self._venue_args("20251399"))
+        self.response_404()
+
+    def test_venue_from_another_season_404(self):
+        other = factories.VenueFactory.create()
+        self.get(
+            "competition:venue",
+            self.season.competition.slug,
+            self.season.slug,
+            other.slug,
+        )
+        self.response_404()
+
+    def test_ground_from_another_venue_404(self):
+        other = factories.GroundFactory.create(venue__season=self.season)
+        self.get("competition:ground", *self._venue_args(other.slug))
+        self.response_404()

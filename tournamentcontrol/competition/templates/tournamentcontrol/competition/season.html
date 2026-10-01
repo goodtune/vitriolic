@@ -64,4 +64,19 @@
 			</ul>
 		{% endif %}
 	{% endblock %}
+
+	{% block venues %}
+		{% if venues %}
+			<h2>{% block venues-label %}{% trans "Venues" %}{% endblock %}</h2>
+
+			<ul id="venues">
+				{% for venue in venues %}
+					{% url application.name|add:":venue" competition=competition.slug season=season.slug venue=venue.slug as url1 %}
+					{% url application.name|add:":venue" season=season.slug venue=venue.slug as url2 %}
+					{% url application.name|add:":venue" venue=venue.slug as url3 %}
+					<li class="{{ venue.slug }}"><a href="{{ url1|default:url2|default:url3 }}">{% trans venue.title %}</a></li>
+				{% endfor %}
+			</ul>
+		{% endif %}
+	{% endblock %}
 {% endblock %}

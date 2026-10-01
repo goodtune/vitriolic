@@ -6,6 +6,7 @@ from urllib.parse import ParseResult
 
 from dateutil.parser import parse
 from django.db.models import Count
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.utils.functional import wraps
@@ -212,6 +213,10 @@ def competition_by_slug(f, *a, **kw):
         division_slug = kwargs.pop("division", None)
         pool_slug = kwargs.pop("pool", None)
         season_slug = kwargs.pop("season", None)
+
+        venue_slug = kwargs.pop("venue", None)
+        ground_slug = kwargs.pop("ground", None)
+
         stage_slug = kwargs.pop("stage", None)
         team_slug = kwargs.pop("team", None)
         match_pk = kwargs.pop("match", None)
@@ -393,6 +398,17 @@ def competition_by_slug(f, *a, **kw):
                 # List of venues setup for this season.
                 kwargs["venues"] = season.venues.all()
 
+                if venue_slug:
+                    venue = get_object_or_404(season.venues, slug=venue_slug)
+                    kwargs["venue"] = venue
+
+                    # List of grounds for this venue.
+                    kwargs["grounds"] = venue.grounds.all()
+
+                    if ground_slug:
+                        ground = get_object_or_404(venue.grounds, slug=ground_slug)
+                        kwargs["ground"] = ground
+
         if club_slug:
             club = get_object_or_404(Club, slug=club_slug)
             kwargs["club"] = club
@@ -403,7 +419,11 @@ def competition_by_slug(f, *a, **kw):
                 ).prefetch_related("division", "stage_group")
 
         if datestr:
-            kwargs["date"] = parse(datestr).date()
+            # the url patterns only promise eight digits, not a real date
+            try:
+                kwargs["date"] = parse(datestr).date()
+            except ValueError:
+                raise Http404("Invalid date.")
             if timestr:
                 kwargs["time"] = datetime.time(*time.strptime(timestr, "%H%M")[3:5])
 
