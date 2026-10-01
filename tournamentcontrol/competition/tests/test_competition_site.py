@@ -742,6 +742,31 @@ class CalendarQueryTests(TestCase):
         # Superuser sees all matches: 10 regular + 3 draft
         self.assertEqual(len(events), 13)
 
+    def test_calendar_cacheable_for_anonymous(self):
+        response = self.get(
+            "competition:calendar",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            division=self.division.slug,
+        )
+        self.response_200(response)
+        cache_control = {
+            directive.strip() for directive in response["Cache-Control"].split(",")
+        }
+        self.assertEqual(cache_control, {"public", "max-age=600"})
+
+    def test_calendar_private_for_superuser(self):
+        superuser = factories.SuperUserFactory.create()
+        with self.login(superuser):
+            response = self.get(
+                "competition:calendar",
+                competition=self.competition.slug,
+                season=self.season.slug,
+                division=self.division.slug,
+            )
+        self.response_200(response)
+        self.assertEqual(response["Cache-Control"], "private")
+
     def test_calendar_excludes_unscheduled_matches(self):
         unscheduled = factories.MatchFactory.create(
             stage=self.stage,

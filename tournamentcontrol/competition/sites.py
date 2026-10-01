@@ -20,7 +20,7 @@ from django.utils.html import strip_tags
 from django.utils.http import urlencode
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext, gettext_lazy as _
-from django.views.decorators.cache import cache_page
+from django.views.decorators.cache import cache_page, patch_cache_control
 from guardian.utils import get_40x_or_None
 from icalendar import Calendar, Event, vUri
 
@@ -98,6 +98,12 @@ def match_location(place):
 
 
 THUMBNAIL_CACHE_TTL = 300  # 5 minutes
+
+# Calendar subscribers (iOS, Google Calendar) poll their feeds constantly and
+# every refresh would otherwise render the whole feed from scratch. Letting
+# shared caches (a CDN, or Django's cache middleware) hold the feed for a few
+# minutes means a schedule change takes that much longer to reach subscribers.
+CALENDAR_CACHE_TTL = getattr(settings, "TOURNAMENTCONTROL_CALENDAR_CACHE_TTL", 600)
 
 
 def permissions_required(
@@ -1494,6 +1500,13 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             cal.add_component(event)
 
         response.write(cal.to_ical())
+
+        # Superusers see draft divisions, so their feed must never be stored
+        # where it could be served to anyone else.
+        if request.user.is_superuser:
+            patch_cache_control(response, private=True)
+        else:
+            patch_cache_control(response, public=True, max_age=CALENDAR_CACHE_TTL)
         return response
 
     @competition_by_slug_m
