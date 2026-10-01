@@ -65,6 +65,7 @@ competition = [
     "django-formtools",
     "django-htmx>=1.23.2",
     "django-mathfilters",
+    "django-oauth-toolkit>=3.4",
     "djangorestframework>3.11",
     "drf-nested-routers",
     "google-api-python-client",
