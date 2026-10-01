@@ -1864,6 +1864,9 @@ class AdminToolset(CompetitionToolset):
             )
         )
         with transaction.atomic():
+            # The date is validated and saved under the season lock, like
+            # every other scheduling change (see _lock_seasons).
+            self._lock_seasons([stage.division.season_id])
             match = self._save(AgentMatchEditForm, match, changes)
             if time is not None or place_id is not None:
                 match = self._reschedule(
@@ -2760,17 +2763,21 @@ class AdminToolset(CompetitionToolset):
         """
         season = self._season(season_id)
         self._require("add", SeasonMatchTime)
-        timeslot = self._save(
-            SeasonMatchTimeForm,
-            SeasonMatchTime(season=season),
-            {
-                "start": start,
-                "interval": interval,
-                "count": count,
-                "start_date": start_date,
-                "end_date": end_date,
-            },
-        )
+        with transaction.atomic():
+            # A time slot rule decides which times are valid: change it only
+            # while no scheduling call is validating against it.
+            self._lock_seasons([season.pk])
+            timeslot = self._save(
+                SeasonMatchTimeForm,
+                SeasonMatchTime(season=season),
+                {
+                    "start": start,
+                    "interval": interval,
+                    "count": count,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                },
+            )
         return {
             "saved": True,
             "timeslot": _timeslot_summary(timeslot),
@@ -2795,17 +2802,19 @@ class AdminToolset(CompetitionToolset):
         """
         timeslot = self._timeslot(timeslot_id)
         self._require("change", SeasonMatchTime, timeslot)
-        timeslot = self._save(
-            SeasonMatchTimeForm,
-            timeslot,
-            {
-                "start": start,
-                "interval": interval,
-                "count": count,
-                "start_date": start_date,
-                "end_date": end_date,
-            },
-        )
+        with transaction.atomic():
+            self._lock_seasons([timeslot.season_id])
+            timeslot = self._save(
+                SeasonMatchTimeForm,
+                timeslot,
+                {
+                    "start": start,
+                    "interval": interval,
+                    "count": count,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                },
+            )
         return {"saved": True, "timeslot": _timeslot_summary(timeslot)}
 
     @tool_annotations(destructive=True)
@@ -2816,7 +2825,9 @@ class AdminToolset(CompetitionToolset):
         """
         timeslot = self._timeslot(timeslot_id)
         self._require("delete", SeasonMatchTime, timeslot)
-        return self._delete(f"time slot {timeslot.pk}", timeslot)
+        with transaction.atomic():
+            self._lock_seasons([timeslot.season_id])
+            return self._delete(f"time slot {timeslot.pk}", timeslot)
 
     # ======================================================================
     # Building draws
@@ -3339,20 +3350,23 @@ class AdminToolset(CompetitionToolset):
         if len(set(place_ids)) != len(place_ids):
             raise ToolError("Each place may be given only once.")
         places = [self._place_obj(season, place_id) for place_id in place_ids]
-        validator = ScheduleValidator(ignore_clashes=ignore_clashes)
-        if not validator.has_timeslot_rules(season):
-            raise ToolError(
-                "auto_schedule fills the season's time slots and this season "
-                "has none; add them with create_timeslot, or give the times "
-                "with schedule_matches."
-            )
-        slots = validator.timeslots(season, date)
-        if not slots:
-            raise ToolError("The season has no time slots on %s." % date.isoformat())
-        # Hold the season lock from reading the free cells until they are
-        # saved, so a concurrent scheduler cannot take the same ones.
+        # Hold the season lock from reading the time slots and free cells
+        # until they are saved, so a concurrent scheduler (or a change to the
+        # time slots) cannot invalidate them.
         with transaction.atomic():
             self._lock_seasons([season.pk])
+            validator = ScheduleValidator(ignore_clashes=ignore_clashes)
+            if not validator.has_timeslot_rules(season):
+                raise ToolError(
+                    "auto_schedule fills the season's time slots and this season "
+                    "has none; add them with create_timeslot, or give the times "
+                    "with schedule_matches."
+                )
+            slots = validator.timeslots(season, date)
+            if not slots:
+                raise ToolError(
+                    "The season has no time slots on %s." % date.isoformat()
+                )
             matches = Match.objects.filter(
                 stage__division__season=season, date=date, is_bye=False
             ).filter(Q(time__isnull=True) | Q(play_at__isnull=True))

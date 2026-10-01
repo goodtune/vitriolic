@@ -966,6 +966,43 @@ class BuildDrawTests(DemoMixin, TestCase):
             [(r["home"]["team_id"], r["away"]["team_id"]) for r in first],
         )
 
+    def test_repeats_keep_winner_references_on_their_side(self):
+        """
+        Swapping home and away on a repeat swaps W/L references whole: the
+        reference is resolved after the swap, so each side still points at
+        the match it names.
+        """
+        division = self.season.divisions_by_title["Women's"]
+        rows = self.admin_tools.build_draw(
+            [
+                {
+                    "stage_id": division.regular.pk,
+                    "draw_format_text": "ROUND\n1: 1 vs 2\n2: 3 vs 4\nROUND\n3: W1 vs L2",
+                    "start_date": WEDNESDAYS[0],
+                    "rounds": 4,
+                    "alternate_home_away_on_repeat": True,
+                }
+            ],
+            dry_run=True,
+        )["builds"][0]["rows"]
+        self.assertEqual(
+            [
+                (
+                    r["ref"],
+                    r["home"].get("eval"),
+                    r["home"].get("eval_ref"),
+                    r["away"].get("eval"),
+                    r["away"].get("eval_ref"),
+                )
+                for r in rows
+                if r["home"].get("eval")
+            ],
+            [
+                ("2.3", "W", "1.1", "L", "1.2"),
+                ("4.3", "L", "3.2", "W", "3.1"),
+            ],
+        )
+
     def test_pool_and_tournament_builds(self):
         division = self.season.divisions_by_title["Mixed"]
         pool = factories.StageGroupFactory.create(
@@ -1713,6 +1750,21 @@ class ScheduleMatchesTests(DemoMixin, TestCase):
                 self.admin_tools.swap_match_allocations,
                 (self.night[0].pk, self.night[1].pk),
                 {},
+            ),
+            (
+                self.admin_tools.create_match,
+                (self.season.divisions_by_title["Women's"].finals.pk,),
+                {"home_team_eval": "P1", "away_team_eval": "P2", "date": WEDNESDAYS[5]},
+            ),
+            (
+                self.admin_tools.create_timeslot,
+                (self.season.pk,),
+                {"start": datetime.time(21, 10), "interval": 50, "count": 1},
+            ),
+            (
+                self.admin_tools.update_timeslot,
+                (self.season.timeslots.get().pk,),
+                {"count": 2},
             ),
             (
                 self.admin_tools.build_draw,
