@@ -156,9 +156,7 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         return (self.level, self.lft) < (other.level, other.lft)
 
     def __repr__(self):
-        return '<{0}: "{1}" ({2}:{3},{4})>'.format(
-            self.__class__.__name__, self.title, self.level, self.lft, self.rght
-        )
+        return f'<{self.__class__.__name__}: "{ascii(self.title)[1:-1]}" ({self.level}:{self.lft},{self.rght})>'
 
     def disable(self):
         logger.debug("Disabling node %r", self)
@@ -176,6 +174,11 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         return set(groups).difference(user.groups.all())
 
     def get_absolute_url(self):
+        try:
+            return self._cached_absolute_url
+        except AttributeError:
+            pass
+
         parts = [
             ancestor.slug
             for ancestor in self.get_ancestors(include_self=True)

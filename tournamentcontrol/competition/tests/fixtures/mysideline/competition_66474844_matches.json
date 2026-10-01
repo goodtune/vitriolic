@@ -1,0 +1,747 @@
+{
+ "data": {
+  "competitionMatches": [
+   {
+    "_id": 1355756701,
+    "awayTeam": {
+     "_id": 68698548,
+     "name": "St Joseph's 9/10 Girls"
+    },
+    "dateTime": 1777609500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68697946,
+     "name": "St Peters Tuggerah 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "4",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Grand Final",
+     "number": 2,
+     "type": "Final"
+    },
+    "scores": {
+     "awayTeam": 2,
+     "homeTeam": 3
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355756591,
+    "awayTeam": {
+     "_id": 68698042,
+     "name": "SCEGGS 9/10 Girls"
+    },
+    "dateTime": 1777607400000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68697946,
+     "name": "St Peters Tuggerah 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "3",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Semi Finals",
+     "number": 1,
+     "type": "Final"
+    },
+    "scores": {
+     "awayTeam": 1,
+     "homeTeam": 5
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355756697,
+    "awayTeam": {
+     "_id": 68698548,
+     "name": "St Joseph's 9/10 Girls"
+    },
+    "dateTime": 1777607400000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68698460,
+     "name": "Green Point 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "4",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Semi Finals",
+     "number": 1,
+     "type": "Final"
+    },
+    "scores": {
+     "awayTeam": 2,
+     "homeTeam": 1
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355761134,
+    "awayTeam": {
+     "_id": 68698613,
+     "name": "Brisbane Water, Umina 9/10 Girls"
+    },
+    "dateTime": 1777600500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68697946,
+     "name": "St Peters Tuggerah 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "4",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 4",
+     "number": 4,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 8
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355762290,
+    "awayTeam": {
+     "_id": 68697896,
+     "name": "TLSC Berkley 9/10 Girls"
+    },
+    "dateTime": 1777600500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68698153,
+     "name": "Central Coast Adventist 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "7",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 4",
+     "number": 4,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 2,
+     "homeTeam": 0
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355761892,
+    "awayTeam": {
+     "_id": 68698241,
+     "name": "Terrigal High 9/10 Girls"
+    },
+    "dateTime": 1777600500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68698460,
+     "name": "Green Point 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "6",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 4",
+     "number": 4,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 3,
+     "homeTeam": 1
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355761671,
+    "awayTeam": {
+     "_id": 68698042,
+     "name": "SCEGGS 9/10 Girls"
+    },
+    "dateTime": 1777600500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68698548,
+     "name": "St Joseph's 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "5",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 4",
+     "number": 4,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 1,
+     "homeTeam": 2
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355756383,
+    "awayTeam": {
+     "_id": 68698153,
+     "name": "Central Coast Adventist 9/10 Girls"
+    },
+    "dateTime": 1777597500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68697896,
+     "name": "TLSC Berkley 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "6",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 3",
+     "number": 3,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 2,
+     "homeTeam": 1
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355755758,
+    "awayTeam": {
+     "_id": 68698042,
+     "name": "SCEGGS 9/10 Girls"
+    },
+    "dateTime": 1777597500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68697946,
+     "name": "St Peters Tuggerah 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "4",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 3",
+     "number": 3,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 1,
+     "homeTeam": 4
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355756487,
+    "awayTeam": {
+     "_id": 68698460,
+     "name": "Green Point 9/10 Girls"
+    },
+    "dateTime": 1777597500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68698241,
+     "name": "Terrigal High 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "7",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 3",
+     "number": 3,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 1,
+     "homeTeam": 1
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355755863,
+    "awayTeam": {
+     "_id": 68698613,
+     "name": "Brisbane Water, Umina 9/10 Girls"
+    },
+    "dateTime": 1777597500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68698548,
+     "name": "St Joseph's 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "5",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 3",
+     "number": 3,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 1,
+     "homeTeam": 8
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355755655,
+    "awayTeam": {
+     "_id": 68698613,
+     "name": "Brisbane Water, Umina 9/10 Girls"
+    },
+    "dateTime": 1777594500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68698042,
+     "name": "SCEGGS 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "5",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 2",
+     "number": 2,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 6
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355756279,
+    "awayTeam": {
+     "_id": 68698460,
+     "name": "Green Point 9/10 Girls"
+    },
+    "dateTime": 1777594500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68698153,
+     "name": "Central Coast Adventist 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "7",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 2",
+     "number": 2,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 3,
+     "homeTeam": 0
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355756175,
+    "awayTeam": {
+     "_id": 68697896,
+     "name": "TLSC Berkley 9/10 Girls"
+    },
+    "dateTime": 1777594500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68698241,
+     "name": "Terrigal High 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "6",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 2",
+     "number": 2,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 4,
+     "homeTeam": 1
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355755551,
+    "awayTeam": {
+     "_id": 68697946,
+     "name": "St Peters Tuggerah 9/10 Girls"
+    },
+    "dateTime": 1777594500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68698548,
+     "name": "St Joseph's 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "4",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 2",
+     "number": 2,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355755967,
+    "awayTeam": {
+     "_id": 68698460,
+     "name": "Green Point 9/10 Girls"
+    },
+    "dateTime": 1777591500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68697896,
+     "name": "TLSC Berkley 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "6",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 1",
+     "number": 1,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 2,
+     "homeTeam": 1
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355755343,
+    "awayTeam": {
+     "_id": 68698613,
+     "name": "Brisbane Water, Umina 9/10 Girls"
+    },
+    "dateTime": 1777591500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68697946,
+     "name": "St Peters Tuggerah 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "4",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 1",
+     "number": 1,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 10
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355755447,
+    "awayTeam": {
+     "_id": 68698548,
+     "name": "St Joseph's 9/10 Girls"
+    },
+    "dateTime": 1777591500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68698042,
+     "name": "SCEGGS 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "5",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 1",
+     "number": 1,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 3,
+     "homeTeam": 2
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355756071,
+    "awayTeam": {
+     "_id": 68698241,
+     "name": "Terrigal High 9/10 Girls"
+    },
+    "dateTime": 1777591500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.428757,
+      "lng": 151.325691
+     }
+    },
+    "homeTeam": {
+     "_id": 68698153,
+     "name": "Central Coast Adventist 9/10 Girls"
+    },
+    "meta": {
+     "fieldNo": "7",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 1",
+     "number": 1,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 2,
+     "homeTeam": 2
+    },
+    "status": "final",
+    "venue": {
+     "_id": 229,
+     "name": "Adcock Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   }
+  ]
+ }
+}

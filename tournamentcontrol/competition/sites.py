@@ -2,7 +2,7 @@ import collections
 import functools
 import logging
 import operator
-from datetime import timedelta
+from datetime import date, timedelta
 from operator import or_
 
 from dateutil.relativedelta import relativedelta
@@ -10,17 +10,19 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.sitemaps import views as sitemaps_views
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Case, Count, F, Q, Sum, When
+from django.db.models import Case, Count, F, Prefetch, Q, Sum, When
 from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
 from django.urls import include, path, re_path, reverse
 from django.urls.exceptions import NoReverseMatch
 from django.utils import timezone
+from django.utils.html import strip_tags
+from django.utils.http import urlencode
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext, gettext_lazy as _
 from django.views.decorators.cache import cache_page
 from guardian.utils import get_40x_or_None
-from icalendar import Calendar, Event
+from icalendar import Calendar, Event, vUri
 
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
@@ -42,18 +44,58 @@ from tournamentcontrol.competition.forms import (
 )
 from tournamentcontrol.competition.models import (
     Competition,
+    Ground,
     Match,
     Person,
     SimpleScoreMatchStatistic,
     Stage,
+    Team,
+    Venue,
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
     legitimate_bye_match,
+    matches_timeline,
     team_needs_progressing,
 )
 
 LOG = logging.getLogger(__name__)
+
+
+def match_location(place):
+    """
+    Describe a ``Place`` for the iCalendar ``LOCATION`` and ``GEO`` properties.
+
+    ``Match.play_at`` points at a ``Place``, which will be either a ``Venue``
+    or one of the ``Ground`` records beneath it. Grounds are named for the
+    playing surface alone ("Field 3"), so we qualify them with their venue to
+    give the calendar client something it can resolve to a point on a map.
+
+    Returns a ``(label, coordinates)`` tuple; either element may be ``None``.
+    """
+    if place is None:
+        return None, None
+
+    def coordinates(place):
+        # A half-entered latlng yields fewer pieces than we need; treat it as
+        # having no coordinates rather than raising.
+        pieces = place.location
+        if pieces and len(pieces) >= 2:
+            return pieces[0], pieces[1]
+        return None
+
+    # The reverse accessor for a multi-table inheritance child raises
+    # RelatedObjectDoesNotExist, a subclass of AttributeError, so getattr with
+    # a default tells us whether this Place is really a Ground.
+    ground = getattr(place, "ground", None)
+
+    if ground is None:
+        return place.title, coordinates(place)
+
+    # Individual playing surfaces are often mapped only at the venue.
+    label = "%s, %s" % (ground.title, ground.venue.title)
+    return label, coordinates(ground) or coordinates(ground.venue)
+
 
 THUMBNAIL_CACHE_TTL = 300  # 5 minutes
 
@@ -439,6 +481,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             path("", self.season, name="season"),
             path("forfeit/", self.forfeit_list, name="forfeit-list"),
             path("forfeit/<int:match>/", self.forfeit, name="forfeit"),
+            path("fixtures/", self.season_fixtures, name="season-fixtures"),
             path("videos/", self.season_videos, name="season-videos"),
             path(
                 "thumbnail/",
@@ -477,6 +520,11 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             ),
             path("<slug:division>/<slug:team>.ics", self.calendar, name="calendar"),
             path("<slug:division>/<slug:team>/", self.team, name="team"),
+            path(
+                "<slug:division>/<slug:team>/timeline/",
+                self.team_timeline,
+                name="team-timeline",
+            ),
         ]
 
     def competition_urls(self):
@@ -940,102 +988,302 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         )
 
     @competition_by_slug_m
+    def season_fixtures(self, request, competition, season, extra_context, **kwargs):
+        """
+        Experimental season-wide fixture navigator: every match in the
+        season grouped by day, filterable by division, team, and place.
+        Only available when the season has opted in via
+        ``enable_experimental_views``.
+
+        The full page renders only a light shell — filter controls,
+        selection counts, and one heading per day (built from a single
+        aggregate query, without materialising any match rows). Each
+        day's fixture table is fetched separately via the ``day`` GET
+        parameter: htmx swaps it in lazily as the day scrolls into view,
+        and the same URLs work as plain links without JavaScript. This
+        keeps every request small — a tournament season can hold close
+        to a thousand matches, far too many to render in one response.
+        """
+        if not season.enable_experimental_views:
+            raise Http404("Experimental views are not enabled for this season.")
+
+        # Keep the base query narrow — matches plus the joins needed for
+        # filtering and ordering only. Wide select_related chains (teams,
+        # clubs, and especially the *_eval_related self-joins back onto
+        # the match table) produced pathological query plans on large
+        # production datasets; the related objects are fetched with a
+        # handful of flat prefetch queries instead.
+        team_qs = Team.objects.select_related("club", "division")
+        matches = (
+            season.matches.exclude(is_bye=True)
+            # matches without a scheduled date cannot appear in a
+            # day-by-day navigator
+            .filter(date__isnull=False, stage__division__draft=False)
+            .select_related(None)
+            .select_related("play_at", "stage__division", "stage_group")
+            # never drag live-stream thumbnail blobs out of the database
+            # for a list view — hundreds of matches each carrying an image
+            # is hundreds of megabytes per request at tournament scale
+            .defer("live_stream_thumbnail_image")
+            .prefetch_related(
+                Prefetch("home_team", queryset=team_qs),
+                Prefetch("away_team", queryset=team_qs),
+                "home_team_undecided",
+                "away_team_undecided",
+                "home_team_eval_related",
+                "away_team_eval_related",
+            )
+            .order_by("date", "time", "play_at__ground__order", "pk")
+        )
+
+        divisions = season.divisions.public()
+
+        division = None
+        division_slug = request.GET.get("division")
+        if division_slug:
+            division = get_object_or_404(divisions, slug=division_slug)
+            matches = matches.filter(stage__division=division)
+
+        teams = Team.objects.filter(division__season=season, division__draft=False)
+        if division is not None:
+            teams = teams.filter(division=division)
+        team_choices = (
+            teams.order_by("title", "slug").values_list("slug", "title").distinct()
+        )
+
+        team_slug = request.GET.get("team")
+        if team_slug:
+            # a slug may legitimately match several teams (the same nation
+            # entered in multiple divisions), but zero matches is a bad
+            # filter value — treat it like the place filter and 404
+            selected = teams.filter(slug=team_slug)
+            if not selected.exists():
+                raise Http404("No team matches the given filter.")
+            matches = matches.filter(
+                Q(home_team__in=selected) | Q(away_team__in=selected)
+            )
+
+        venues = season.venues.prefetch_related("grounds")
+
+        selected_place = None
+        place_pk = request.GET.get("place")
+        if place_pk:
+            try:
+                place_pk = int(place_pk)
+            except ValueError:
+                raise Http404("Invalid place.")
+            try:
+                selected_place = season.venues.get(pk=place_pk)
+                # a venue selection includes matches scheduled directly at
+                # the venue and on any of its grounds
+                matches = matches.filter(
+                    Q(play_at=selected_place)
+                    | Q(play_at__ground__venue=selected_place)
+                )
+            except Venue.DoesNotExist:
+                selected_place = get_object_or_404(
+                    Ground.objects.filter(venue__season=season), pk=place_pk
+                )
+                matches = matches.filter(play_at=selected_place)
+
+        # one cheap aggregate builds the day index — no match rows are
+        # materialised for the page shell
+        day_index = list(
+            matches.order_by()
+            .values("date")
+            .annotate(count=Count("pk"))
+            .order_by("date")
+        )
+
+        selected_day = None
+        day_matches = None
+        day_param = request.GET.get("day")
+        if day_param:
+            try:
+                selected_day = date.fromisoformat(day_param)
+            except ValueError:
+                raise Http404("Invalid day.")
+            # a well-formed day outside the current selection is a bad
+            # filter value — treat it like the other filters and 404
+            if not any(each["date"] == selected_day for each in day_index):
+                raise Http404("No matches on this day.")
+            day_matches = list(matches.filter(date=selected_day))
+
+        # echo the active filters into the per-day fragment URLs
+        filter_params = {}
+        if division is not None:
+            filter_params["division"] = division.slug
+        if team_slug:
+            filter_params["team"] = team_slug
+        if selected_place is not None:
+            filter_params["place"] = selected_place.pk
+        filter_query = urlencode(filter_params)
+        if filter_query:
+            filter_query += "&"
+
+        # the same candidate chain serves the htmx fragment response and
+        # the {% include %} for the selected day on the full page, so
+        # per-competition/season template overrides apply to both
+        day_template_names = self.template_path(
+            "_season_fixtures_day.html", competition.slug, season.slug
+        )
+
+        context = {
+            "selected_day": selected_day,
+            "day_matches": day_matches,
+            "day_template_names": day_template_names,
+        }
+        context.update(extra_context)
+
+        # request.htmx is set by django_htmx.middleware.HtmxMiddleware,
+        # which is required — see tournamentcontrol.competition.E001
+        if request.htmx and selected_day is not None:
+            # htmx fragment: just the one day's fixture table
+            return self.render(request, day_template_names, context)
+
+        team_ids = set()
+        for home_team_id, away_team_id in (
+            matches.prefetch_related(None)
+            .values_list("home_team", "away_team")
+            .iterator()
+        ):
+            team_ids.update((home_team_id, away_team_id))
+        team_ids.discard(None)
+
+        context.update(
+            {
+                "divisions": divisions,
+                "team_choices": team_choices,
+                "venues": venues,
+                "selected_division": division,
+                "selected_team": team_slug,
+                "selected_place": selected_place,
+                "day_index": day_index,
+                "filter_query": filter_query,
+                "match_count": sum(each["count"] for each in day_index),
+                "team_count": len(team_ids),
+            }
+        )
+
+        templates = self.template_path(
+            "season_fixtures.html", competition.slug, season.slug
+        )
+        return self.render(request, templates, context)
+
+    @competition_by_slug_m
+    def team_timeline(
+        self, request, competition, season, division, team, extra_context, **kwargs
+    ):
+        """
+        Experimental team-centric timeline: the season from one team's
+        point of view — results so far, the gap between games, what is
+        next, and the progression matches that are still to resolve.
+        Only available when the season has opted in via
+        ``enable_experimental_views``.
+        """
+        if not season.enable_experimental_views:
+            raise Http404("Experimental views are not enabled for this season.")
+        if division.draft:
+            raise Http404("Division is not visible in the front-end.")
+
+        timeline = matches_timeline(team.matches_by_date())
+
+        record = team.ladder_summary.aggregate(
+            played=Sum("played"),
+            win=Sum("win"),
+            loss=Sum("loss"),
+            draw=Sum("draw"),
+        )
+
+        team_qs = Team.objects.select_related("club", "division")
+        undecided = (
+            division.matches.filter(team_needs_progressing)
+            .exclude(is_bye=True)
+            .select_related(None)
+            .select_related("play_at", "stage__division", "stage_group")
+            .defer("live_stream_thumbnail_image")
+            .prefetch_related(
+                Prefetch("home_team", queryset=team_qs),
+                Prefetch("away_team", queryset=team_qs),
+                "home_team_undecided",
+                "away_team_undecided",
+                "home_team_eval_related",
+                "away_team_eval_related",
+            )
+            .order_by("date", "time", "play_at__ground__order", "pk")
+        )
+        tzinfo = timezone.get_current_timezone()
+        undecided_by_date = collections.OrderedDict()
+        for match in undecided:
+            undecided_by_date.setdefault(match.get_date(tzinfo), []).append(match)
+
+        context = {
+            "timeline": timeline,
+            "record": record,
+            "undecided_by_date": undecided_by_date,
+        }
+        context.update(extra_context)
+
+        templates = self.template_path(
+            "team_timeline.html",
+            competition.slug,
+            season.slug,
+            division.slug,
+            team.slug,
+        )
+        return self.render(request, templates, context)
+
+    @competition_by_slug_m
     def calendar(self, request, season, club=None, division=None, team=None, **kwargs):
         if season.disable_calendar:
-            # The GONE response informs client that they should remove this resource
-            # from their cache. When a calendar has been added to user's mobile device
-            # they may never look at it again, but we continue to process the requests
-            # which can have poor performance. Try to influence a cleanup of clients.
+            # The GONE response informs client that they should remove this
+            # resource from their cache. When a calendar has been added to
+            # user's mobile device they may never look at it again, but we
+            # continue to process the requests which can have poor performance.
+            # Try to influence a cleanup of clients.
             return HttpResponseGone()
 
         if team is not None:
-            matches = team.matches
+            matches = Match.objects.filter(
+                Q(home_team=team) | Q(away_team=team)
+            )
         elif division is not None:
-            matches = division.matches
+            matches = Match.objects.filter(stage__division=division)
         elif club is not None:
-            matches = club.matches.filter(stage__division__season=season)
+            matches = Match.objects.filter(
+                Q(home_team__club=club) | Q(away_team__club=club),
+                stage__division__season=season,
+            )
         else:
-            matches = season.matches
+            matches = Match.objects.filter(stage__division__season=season)
 
         # Do not include matches which have not had the time scheduled
         matches = matches.exclude(datetime__isnull=True)
 
-        # Perform select_related to reduce extra queries
-        matches = matches.select_related("stage__division__season__competition")
-
-        # Reduce the size of the data set to return from the database
-        matches = matches.defer(
-            "date",
-            "time",
-            "home_team__copy",
-            "home_team__names_locked",
-            "home_team__order",
-            "home_team__short_title",
-            "home_team__timeslots_after",
-            "home_team__timeslots_before",
-            "home_team_score",
-            "away_team__copy",
-            "away_team__names_locked",
-            "away_team__order",
-            "away_team__short_title",
-            "away_team__timeslots_after",
-            "away_team__timeslots_before",
-            "away_team_score",
-            "bye_processed",
-            "evaluated",
-            "external_identifier",
-            "forfeit_winner",
-            "include_in_ladder",
-            "is_bye",
-            "is_forfeit",
-            "is_washout",
-            "videos",
-            "stage__division__season__competition__copy",
-            "stage__division__season__competition__enabled",
-            "stage__division__season__competition__order",
-            "stage__division__season__competition__short_title",
-            "stage__division__season__competition__short_title",
-            "stage__division__season__competition__slug_locked",
-            "stage__division__season__competition__slug_locked",
-            "stage__division__season__competition__title",
-            "stage__division__season__complete",
-            "stage__division__season__copy",
-            "stage__division__season__disable_calendar",
-            "stage__division__season__enabled",
-            "stage__division__season__hashtag",
-            "stage__division__season__mode",
-            "stage__division__season__mvp_results_public",
-            "stage__division__season__order",
-            "stage__division__season__short_title",
-            "stage__division__season__slug_locked",
-            "stage__division__season__start_date",
-            "stage__division__season__statistics",
-            "stage__division__season__timezone",
-            "stage__division__bonus_points_formula",
-            "stage__division__copy",
-            "stage__division__draft",
-            "stage__division__forfeit_against_score",
-            "stage__division__forfeit_for_score",
-            "stage__division__games_per_day",
-            "stage__division__include_forfeits_in_played",
-            "stage__division__order",
-            "stage__division__points_formula",
-            "stage__division__short_title",
-            "stage__division__slug_locked",
-            "stage__division__sportingpulse_url",
-            "stage__carry_ladder",
-            "stage__copy",
-            "stage__follows",
-            "stage__keep_ladder",
-            "stage__keep_mvp",
-            "stage__order",
-            "stage__scale_group_points",
-            "stage__short_title",
-            "stage__slug_locked",
+        # Fetch only the fields needed for calendar event generation.
+        # Team titles are provided by MatchManager's _team_titles() SQL
+        # annotations (home_team_title, away_team_title), so we don't need
+        # to select_related the team objects or use match.title (which
+        # triggers per-match template rendering and potential N+1 queries).
+        matches = matches.select_related(
+            "stage__division__season__competition",
+            "play_at__ground__venue",
+        ).only(
+            "uuid",
+            "datetime",
+            "play_at__title",
+            "play_at__latlng",
+            "play_at__ground__venue__title",
+            "play_at__ground__venue__latlng",
+            "stage__title",
+            "stage__division__title",
+            "stage__division__slug",
+            "stage__division__season__slug",
+            "stage__division__season__competition__slug",
         )
 
-        # Remove any matches that are part of a draft division unless being viewed
-        # by a superuser.
+        # Remove any matches that are part of a draft division unless being
+        # viewed by a superuser.
         if not request.user.is_superuser:
             matches = matches.exclude(stage__division__draft=True)
 
@@ -1051,11 +1299,53 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         cal.add("prodid", "-//Tournament Control//%s//" % request.get_host())
         cal.add("version", "2.0")
 
+        # Cache reverse() URL templates per division to avoid calling it for
+        # every match. All matches in the same division produce URLs that
+        # differ only in the match pk.
+        _url_templates = {}
+
         for match in matches.order_by("datetime", "play_at"):
             event = Event()
             event["uid"] = match.uuid.hex
-            event.add("summary", match.title)
-            event.add("location", f"{match.stage.division.title} ({match.stage.title})")
+
+            # Use SQL-computed title annotations instead of match.title to
+            # avoid per-match template rendering and N+1 queries for
+            # undecided teams. strip_tags handles bye matches which include
+            # HTML in the annotation.
+            home = strip_tags(match.home_team_title or "")
+            away = strip_tags(match.away_team_title or "")
+            if home and away:
+                summary = f"{home} vs {away}"
+            elif home or away:
+                summary = home or away
+            else:
+                summary = "TBD"
+            event.add("summary", summary)
+
+            # The division and stage are not a location; they belong in
+            # CATEGORIES (machine readable) and DESCRIPTION (human readable,
+            # because most clients do not surface CATEGORIES at all).
+            division = f"{match.stage.division.title} ({match.stage.title})"
+            event.add("categories", [match.stage.division.title, match.stage.title])
+
+            location, coordinates = match_location(match.play_at)
+            if location:
+                event.add("location", location)
+            if coordinates:
+                event.add("geo", coordinates)
+                # Apple devices ignore GEO; this proprietary property is what
+                # drops the pin on the map in their calendar applications.
+                event.add(
+                    "x-apple-structured-location",
+                    vUri("geo:%s,%s" % coordinates),
+                    parameters={
+                        "VALUE": "URI",
+                        "X-ADDRESS": location,
+                        "X-APPLE-RADIUS": "100",
+                        "X-TITLE": location,
+                    },
+                )
+
             event.add("dtstart", match.datetime)
 
             # FIXME match duration should not be hardcoded
@@ -1063,22 +1353,34 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             # FIXME should be the last modified time of the match
             event.add("dtstamp", timezone.now())
 
-            try:
-                # Determine the resource uri to the detailed match view
-                uri = reverse(
-                    "competition:match",
-                    kwargs={
-                        "match": match.pk,
-                        "division": match.stage.division.slug,
-                        "season": match.stage.division.season.slug,
-                        "competition": match.stage.division.season.competition.slug,
-                    },
-                )
-            except NoReverseMatch:
-                LOG.exception("Unable to resolve url for %r", match)
+            # Determine the resource uri to the detailed match view.
+            # Cache the URL pattern per division to avoid repeated reverse().
+            div_id = match.stage.division_id
+            if div_id not in _url_templates:
+                try:
+                    uri = reverse(
+                        "competition:match",
+                        kwargs={
+                            "match": match.pk,
+                            "division": match.stage.division.slug,
+                            "season": match.stage.division.season.slug,
+                            "competition": match.stage.division.season.competition.slug,
+                        },
+                    )
+                    _url_templates[div_id] = uri.replace(
+                        f"match:{match.pk}/", "match:{}/"
+                    )
+                except NoReverseMatch:
+                    LOG.exception("Unable to resolve url for %r", match)
+                    _url_templates[div_id] = None
+
+            url_template = _url_templates[div_id]
+            if url_template is not None:
+                uri = request.build_absolute_uri(url_template.format(match.pk))
+                event.add("url", uri)
+                event.add("description", f"{division}\n\n{uri}")
             else:
-                # Combine the resource uri with our current request context
-                event.add("description", request.build_absolute_uri(uri))
+                event.add("description", division)
 
             cal.add_component(event)
 

@@ -4,10 +4,16 @@ import os
 import platform
 import re
 import socket
+from contextlib import contextmanager
 from decimal import Decimal
 from importlib import metadata
 from itertools import islice, zip_longest
 from urllib.parse import parse_qsl
+
+try:
+    import sentry_sdk
+except ImportError:
+    sentry_sdk = None
 
 from django.conf import settings
 from django.db.models import Model, Q
@@ -35,7 +41,7 @@ from django.utils.text import slugify
 from guardian.core import ObjectPermissionChecker
 from namedentities import named_entities
 
-from touchtechnology.common.default_settings import CURRENCY_SYMBOL
+from touchtechnology.common.default_settings import CURRENCY_SYMBOL, SITEMAP_ROOT
 from touchtechnology.common.exceptions import NotModelManager
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.utils import (
@@ -217,6 +223,32 @@ def do_navigation(
     template_name=None,
     **kwargs,
 ):
+    if sentry_sdk is not None:
+        span_ctx = sentry_sdk.start_span(op="template.tag", name="do_navigation")
+    else:
+        span_ctx = contextmanager(lambda: (yield))()
+
+    with span_ctx:
+        return _do_navigation(
+            root=root,
+            start_at=start_at,
+            stop_at=stop_at,
+            current_node=current_node,
+            expand_all_nodes=expand_all_nodes,
+            template_name=template_name,
+            **kwargs,
+        )
+
+
+def _do_navigation(
+    root=None,
+    start_at=None,
+    stop_at=None,
+    current_node=None,
+    expand_all_nodes=None,
+    template_name=None,
+    **kwargs,
+):
     nodes = SitemapNode._tree_manager.select_related("content_type", "parent")
 
     if template_name is None:
@@ -268,8 +300,28 @@ def do_navigation(
 
     logger.debug("nodes[cleaned]: %r", nodes)
 
-    # flatten the list of nodes to a list
-    tree = list(nodes)
+    # flatten the list of nodes to a list, sorted so that parents
+    # always appear before their children in the URL precompute loop.
+    tree = sorted(nodes, key=operator.attrgetter("tree_id", "lft"))
+
+    # Precompute URLs using the in-memory tree to avoid per-node
+    # get_ancestors() queries.
+    _url_cache = {}
+    for node in tree:
+        if node.parent_id is None:
+            if node.is_root_node() and node.slug == SITEMAP_ROOT:
+                url = "/"
+            else:
+                url = "/" + os.path.join(node.slug, "")
+        elif node.parent_id in _url_cache:
+            parent_url = _url_cache[node.parent_id]
+            url = "/" + os.path.join(parent_url.strip("/"), node.slug, "")
+        else:
+            url = node.get_absolute_url()
+        if settings.APPEND_SLASH and not url.endswith("/"):
+            url += "/"
+        _url_cache[node.pk] = url
+        node._cached_absolute_url = url
 
     if current_node is None and not expand_all_nodes:
         stop_at = max(start_at or 0, stop_at or 0, 0)
@@ -281,13 +333,6 @@ def do_navigation(
         tree = [n for n in tree if n.level <= stop_at]
 
     if not expand_all_nodes and current_node is not None:
-        parents = []
-        n = current_node
-        while n.parent is not None:
-            parents.append(n.parent)
-            n = n.parent
-
-        fmt = "[{rel}] {url} {node}"
 
         def func(node):
             """
@@ -295,8 +340,7 @@ def do_navigation(
             navigation tree or not.
             """
             rel = current_node.rel(node)
-            url = node.get_absolute_url()
-            logger.debug(fmt.format(node=node, rel=rel, url=url))
+            logger.debug("[%s] %s %s", rel, node.get_absolute_url(), node)
             return rel in {
                 "ROOT",
                 "ANCESTOR",
@@ -307,12 +351,7 @@ def do_navigation(
                 "DESCENDANT",
             }
 
-        log = {
-            "rel": "NODE",
-            "node": repr(current_node),
-            "url": current_node.get_absolute_url(),
-        }
-        logger.debug(fmt.format(**log))
+        logger.debug("[NODE] %s %r", current_node.get_absolute_url(), current_node)
         tree = [t for t in tree if func(t)]
 
     # re-sort the queryset to get our correct tree structure back
@@ -332,9 +371,7 @@ def do_navigation(
 @register.simple_tag
 def field(bf, label=None):
     if not isinstance(bf, BoundField):
-        raise TypeError(
-            "{{% field %}} tag can only be used with " "BoundFields ({0})".format(bf)
-        )
+        raise TypeError(f"{{% field %}} tag can only be used with BoundFields ({bf})")
 
     if bf.is_hidden:
         return smart_str(bf)
@@ -418,7 +455,7 @@ def get_type_plural(obj):
         return obj._meta.verbose_name_plural
     else:
         # extremely naive
-        return obj.__class__.__name__ + "s"
+        return f"{obj.__class__.__name__}s"
 
 
 @register.filter

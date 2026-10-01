@@ -50,7 +50,7 @@ class HTMLField(forms.CharField):
     widget = HTMLWidget
 
     def widget_attrs(self, widget):
-        options = getattr(settings, "FROALA_EDITOR_OPTIONS", {})
+        options = getattr(settings, "HTML_EDITOR_OPTIONS", {})
         return {"data-options": json.dumps(options)}
 
     def clean(self, value):

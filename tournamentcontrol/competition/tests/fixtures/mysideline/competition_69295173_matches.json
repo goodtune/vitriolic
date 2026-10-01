@@ -1,0 +1,1383 @@
+{
+ "data": {
+  "competitionMatches": [
+   {
+    "_id": 1388862223,
+    "awayTeam": {
+     "_id": null,
+     "name": null
+    },
+    "dateTime": 1796005320000,
+    "fullVenue": null,
+    "homeTeam": {
+     "_id": null,
+     "name": null
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": true
+    },
+    "round": {
+     "displayName": "Semi Finals",
+     "number": 1,
+     "type": "Final"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": null
+   },
+   {
+    "_id": 1388862724,
+    "awayTeam": {
+     "_id": null,
+     "name": null
+    },
+    "dateTime": 1796005320000,
+    "fullVenue": null,
+    "homeTeam": {
+     "_id": null,
+     "name": null
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": true
+    },
+    "round": {
+     "displayName": "Grand Final",
+     "number": 2,
+     "type": "Final"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": null
+   },
+   {
+    "_id": 1388864234,
+    "awayTeam": {
+     "_id": null,
+     "name": null
+    },
+    "dateTime": 1796005320000,
+    "fullVenue": null,
+    "homeTeam": {
+     "_id": null,
+     "name": null
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": true
+    },
+    "round": {
+     "displayName": "Semi Finals",
+     "number": 1,
+     "type": "Final"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": null
+   },
+   {
+    "_id": 1388863127,
+    "awayTeam": {
+     "_id": 71093587,
+     "name": "CCGS Vikings"
+    },
+    "dateTime": 1795400520000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 69492417,
+     "name": "Steppers"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 11",
+     "number": 11,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388863427,
+    "awayTeam": {
+     "_id": 69659581,
+     "name": "Broncos"
+    },
+    "dateTime": 1795400520000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 69548820,
+     "name": "The Fast and Fearless"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 11",
+     "number": 11,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388861822,
+    "awayTeam": {
+     "_id": null,
+     "name": null
+    },
+    "dateTime": 1795400520000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 71094007,
+     "name": "Ninjas"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": true,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 11",
+     "number": 11,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388861721,
+    "awayTeam": {
+     "_id": 69548820,
+     "name": "The Fast and Fearless"
+    },
+    "dateTime": 1794795720000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": null,
+     "name": null
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": true,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 10",
+     "number": 10,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388862825,
+    "awayTeam": {
+     "_id": 71094007,
+     "name": "Ninjas"
+    },
+    "dateTime": 1794795720000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 69492417,
+     "name": "Steppers"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 10",
+     "number": 10,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388864335,
+    "awayTeam": {
+     "_id": 69659581,
+     "name": "Broncos"
+    },
+    "dateTime": 1794795720000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 71093587,
+     "name": "CCGS Vikings"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 10",
+     "number": 10,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388862625,
+    "awayTeam": {
+     "_id": 69492417,
+     "name": "Steppers"
+    },
+    "dateTime": 1794190920000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 69659581,
+     "name": "Broncos"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 9",
+     "number": 9,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388861319,
+    "awayTeam": {
+     "_id": null,
+     "name": null
+    },
+    "dateTime": 1794190920000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 71093587,
+     "name": "CCGS Vikings"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": true,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 9",
+     "number": 9,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388861620,
+    "awayTeam": {
+     "_id": 69548820,
+     "name": "The Fast and Fearless"
+    },
+    "dateTime": 1794190920000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 71094007,
+     "name": "Ninjas"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 9",
+     "number": 9,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388863025,
+    "awayTeam": {
+     "_id": null,
+     "name": null
+    },
+    "dateTime": 1793586120000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 69492417,
+     "name": "Steppers"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": true,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 8",
+     "number": 8,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388864133,
+    "awayTeam": {
+     "_id": 71093587,
+     "name": "CCGS Vikings"
+    },
+    "dateTime": 1793586120000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 69548820,
+     "name": "The Fast and Fearless"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 8",
+     "number": 8,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388861520,
+    "awayTeam": {
+     "_id": 71094007,
+     "name": "Ninjas"
+    },
+    "dateTime": 1793586120000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 69659581,
+     "name": "Broncos"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 8",
+     "number": 8,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388861218,
+    "awayTeam": {
+     "_id": 69659581,
+     "name": "Broncos"
+    },
+    "dateTime": 1792981320000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": null,
+     "name": null
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": true,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 7",
+     "number": 7,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388861419,
+    "awayTeam": {
+     "_id": 69548820,
+     "name": "The Fast and Fearless"
+    },
+    "dateTime": 1792981320000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 69492417,
+     "name": "Steppers"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 7",
+     "number": 7,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388862022,
+    "awayTeam": {
+     "_id": 71093587,
+     "name": "CCGS Vikings"
+    },
+    "dateTime": 1792981320000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 71094007,
+     "name": "Ninjas"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 7",
+     "number": 7,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388863832,
+    "awayTeam": {
+     "_id": 71094007,
+     "name": "Ninjas"
+    },
+    "dateTime": 1792376520000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": null,
+     "name": null
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": true,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 6",
+     "number": 6,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388863327,
+    "awayTeam": {
+     "_id": 69548820,
+     "name": "The Fast and Fearless"
+    },
+    "dateTime": 1792376520000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 69659581,
+     "name": "Broncos"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 6",
+     "number": 6,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388863226,
+    "awayTeam": {
+     "_id": 69492417,
+     "name": "Steppers"
+    },
+    "dateTime": 1792376520000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 71093587,
+     "name": "CCGS Vikings"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 6",
+     "number": 6,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388860917,
+    "awayTeam": {
+     "_id": 71094007,
+     "name": "Ninjas"
+    },
+    "dateTime": 1792030920000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 71093587,
+     "name": "CCGS Vikings"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 2",
+     "number": 2,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388861921,
+    "awayTeam": {
+     "_id": 69548820,
+     "name": "The Fast and Fearless"
+    },
+    "dateTime": 1792030920000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 71093587,
+     "name": "CCGS Vikings"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 3",
+     "number": 3,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388861119,
+    "awayTeam": {
+     "_id": null,
+     "name": null
+    },
+    "dateTime": 1791771720000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 69548820,
+     "name": "The Fast and Fearless"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": true,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 5",
+     "number": 5,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388862522,
+    "awayTeam": {
+     "_id": 71093587,
+     "name": "CCGS Vikings"
+    },
+    "dateTime": 1791771720000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 69659581,
+     "name": "Broncos"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 5",
+     "number": 5,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388862123,
+    "awayTeam": {
+     "_id": 69492417,
+     "name": "Steppers"
+    },
+    "dateTime": 1791771720000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 71094007,
+     "name": "Ninjas"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 5",
+     "number": 5,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388862324,
+    "awayTeam": {
+     "_id": 69659581,
+     "name": "Broncos"
+    },
+    "dateTime": 1791181500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 69492417,
+     "name": "Steppers"
+    },
+    "meta": {
+     "fieldNo": "8",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 4",
+     "number": 4,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388864034,
+    "awayTeam": {
+     "_id": 71093587,
+     "name": "CCGS Vikings"
+    },
+    "dateTime": 1791166920000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": null,
+     "name": null
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": true,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 4",
+     "number": 4,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388863631,
+    "awayTeam": {
+     "_id": 69492417,
+     "name": "Steppers"
+    },
+    "dateTime": 1790565720000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": null,
+     "name": null
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": true,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 3",
+     "number": 3,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388861017,
+    "awayTeam": {
+     "_id": 71094007,
+     "name": "Ninjas"
+    },
+    "dateTime": 1789975500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 69548820,
+     "name": "The Fast and Fearless"
+    },
+    "meta": {
+     "fieldNo": "11",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 4",
+     "number": 4,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388862423,
+    "awayTeam": {
+     "_id": 69492417,
+     "name": "Steppers"
+    },
+    "dateTime": 1789971300000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 69548820,
+     "name": "The Fast and Fearless"
+    },
+    "meta": {
+     "fieldNo": "5",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 2",
+     "number": 2,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388862925,
+    "awayTeam": {
+     "_id": 69659581,
+     "name": "Broncos"
+    },
+    "dateTime": 1789971300000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 71094007,
+     "name": "Ninjas"
+    },
+    "meta": {
+     "fieldNo": "6",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 3",
+     "number": 3,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388860816,
+    "awayTeam": {
+     "_id": null,
+     "name": null
+    },
+    "dateTime": 1789960920000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 69659581,
+     "name": "Broncos"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": true,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 2",
+     "number": 2,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388863733,
+    "awayTeam": {
+     "_id": 71094007,
+     "name": "Ninjas"
+    },
+    "dateTime": 1789368900000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 69492417,
+     "name": "Steppers"
+    },
+    "meta": {
+     "fieldNo": "8",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 1",
+     "number": 1,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 7,
+     "homeTeam": 4
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388863531,
+    "awayTeam": {
+     "_id": 69659581,
+     "name": "Broncos"
+    },
+    "dateTime": 1789366500000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 69548820,
+     "name": "The Fast and Fearless"
+    },
+    "meta": {
+     "fieldNo": "8",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 1",
+     "number": 1,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 5,
+     "homeTeam": 3
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1388863934,
+    "awayTeam": {
+     "_id": null,
+     "name": null
+    },
+    "dateTime": 1789356120000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 71093587,
+     "name": "CCGS Vikings"
+    },
+    "meta": {
+     "fieldNo": null,
+     "forfeitingTeam": null,
+     "isBye": true,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 1",
+     "number": 1,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   }
+  ]
+ }
+}

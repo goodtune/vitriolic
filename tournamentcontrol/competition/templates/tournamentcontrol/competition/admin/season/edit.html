@@ -79,9 +79,13 @@
 											</li>
 										</ul>
 									</div>
-									<a href="{% url 'admin:competition:match-washout' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
+									<a href="{% url 'admin:fixja:match-washout' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
 										<i class="fa fa-umbrella fa-fw"></i>
 										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Washout" %}</span>
+									</a>
+									<a href="{% url 'admin:fixja:match-live-stream' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
+										<i class="fa fa-video-camera fa-fw"></i>
+										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Live Stream" %}</span>
 									</a>
 									<a href="{% url 'admin:fixja:scorecards' object.competition.pk object.pk date|date:"Ymd" "pdf" %}" class="btn btn-default btn-sm" role="button">
 										<i class="fa fa-print fa-fw"></i>

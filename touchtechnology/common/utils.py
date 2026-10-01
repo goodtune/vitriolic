@@ -164,6 +164,7 @@ def tree_for_node(node):
         )
 
         nodes = parents | siblings | children | rest
+        nodes = nodes.select_related("content_type", "parent")
         nodes = nodes.filter(level__lte=node.level + 1)
 
     else:

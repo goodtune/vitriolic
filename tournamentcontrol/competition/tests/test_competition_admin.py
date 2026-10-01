@@ -1,6 +1,6 @@
 import unittest
 from datetime import date, datetime, time
-from unittest.mock import patch
+from unittest.mock import ANY, MagicMock, PropertyMock, patch
 from zoneinfo import ZoneInfo
 
 from dateutil.rrule import DAILY
@@ -242,6 +242,70 @@ class GoodViewTests(TestCase):
             )
             self.response_404()
 
+    def test_stage_reorder_down(self):
+        division = factories.DivisionFactory.create()
+        stage_a = factories.StageFactory.create(division=division, order=1)
+        stage_b = factories.StageFactory.create(division=division, order=2)
+        stage_c = factories.StageFactory.create(division=division, order=3)
+
+        with self.login(self.superuser):
+            # Without a HTTP_REFERER set this should throw a 404
+            self.get("admin:fixja:reorder", "stage:division", stage_b.pk, "down")
+            self.response_404()
+
+            # The first time we try to shift this down it will work because it
+            # isn't last in it's set.
+            self.get(
+                "admin:fixja:reorder",
+                "stage:division",
+                stage_b.pk,
+                "down",
+                extra=dict(HTTP_REFERER="http://testserver/"),
+            )
+            self.response_302()
+
+            # This time, however, it should fail because we're now last.
+            self.get(
+                "admin:fixja:reorder",
+                "stage:division",
+                stage_b.pk,
+                "down",
+                extra=dict(HTTP_REFERER="http://testserver/"),
+            )
+            self.response_404()
+
+    def test_stage_reorder_up(self):
+        division = factories.DivisionFactory.create()
+        stage_a = factories.StageFactory.create(division=division, order=1)
+        stage_b = factories.StageFactory.create(division=division, order=2)
+        stage_c = factories.StageFactory.create(division=division, order=3)
+
+        with self.login(self.superuser):
+            # Without a HTTP_REFERER set this should throw a 404
+            self.get("admin:fixja:reorder", "stage:division", stage_b.pk, "up")
+            self.response_404()
+
+            # The first time we try to shift this up it will work because it
+            # isn't first in it's set.
+            self.get(
+                "admin:fixja:reorder",
+                "stage:division",
+                stage_b.pk,
+                "up",
+                extra=dict(HTTP_REFERER="http://testserver/"),
+            )
+            self.response_302()
+
+            # This time, however, it should fail because we're now first.
+            self.get(
+                "admin:fixja:reorder",
+                "stage:division",
+                stage_b.pk,
+                "up",
+                extra=dict(HTTP_REFERER="http://testserver/"),
+            )
+            self.response_404()
+
     def test_index(self):
         self.assertLoginRequired("admin:fixja:index")
         with self.login(self.superuser):
@@ -274,6 +338,14 @@ class GoodViewTests(TestCase):
     def test_timeslot(self):
         matchtime = factories.SeasonMatchTimeFactory.create()
         self.assertGoodNamespace(matchtime)
+
+    def test_livestreamevent(self):
+        event = factories.LiveStreamEventFactory.create(season__live_stream=True)
+        self.assertGoodNamespace(event)
+
+    def test_livestreamkey(self):
+        stream_key = factories.LiveStreamKeyFactory.create(season__live_stream=True)
+        self.assertGoodNamespace(stream_key)
 
     def test_venue(self):
         venue = factories.VenueFactory.create()
@@ -398,6 +470,50 @@ class GoodViewTests(TestCase):
                 },
             )
             self.response_302()
+
+    def test_match_live_stream_requires_staff_login(self):
+        stage = factories.StageFactory.create()
+        camera_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=True
+        )
+        factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        season = stage.division.season
+
+        self.assertLoginRequired(
+            "admin:fixja:match-live-stream",
+            season.competition.pk,
+            season.pk,
+            "20250501",
+        )
+
+    def test_match_live_stream_resync_requires_staff_login(self):
+        stage = factories.StageFactory.create()
+        camera_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=True
+        )
+        factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=True,
+            external_identifier="yt-broadcast-1",
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        season = stage.division.season
+
+        self.assertLoginRequired(
+            "admin:fixja:match-live-stream-resync",
+            season.competition.pk,
+            season.pk,
+            "20250501",
+        )
 
     def test_match_schedule_division(self):
         division = factories.DivisionFactory.create()
@@ -712,6 +828,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             "forfeit_for_score": "5",
             "forfeit_against_score": "0",
             "include_forfeits_in_played": "1",
+            "color": "#ff5733",  # Add color field since it's now mandatory
             "slug": "",
             "slug_locked": "0",
         }
@@ -2132,3 +2249,545 @@ class BackendTests(MessagesTestMixin, TestCase):
         data["live_stream_thumbnail_image"] = ""
         self.post(add_match.url_name, *add_match.args, data=data)
         self.response_302()
+
+    @patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
+    @patch("tournamentcontrol.competition.models.Season.youtube", new_callable=PropertyMock)
+    def test_resync_live_stream_sends_unescaped_apostrophes(
+        self, mock_youtube_prop, mock_thumbnail
+    ):
+        """Resync must push raw apostrophes to YouTube, not ``&#x27;``.
+
+        Refs: apostrophe regression introduced in PR #206.
+        """
+        stage = factories.StageFactory.create(
+            division__title="Men's Open",
+            division__season__live_stream=True,
+            division__season__live_stream_project_id="test-project-123",
+            division__season__live_stream_client_id="test-client-id",
+            division__season__live_stream_client_secret="test-client-secret",
+        )
+        ground = factories.GroundFactory.create(
+            venue__season=stage.division.season,
+            external_identifier="yt-stream-abc",
+        )
+        home = factories.TeamFactory.create(
+            title="St George's", division=stage.division
+        )
+        away = factories.TeamFactory.create(
+            title="O'Connor", division=stage.division
+        )
+        match = factories.MatchFactory.create(
+            stage=stage,
+            play_at=ground,
+            home_team=home,
+            away_team=away,
+            label="Semi's",
+            live_stream=True,
+            external_identifier="yt-broadcast-xyz",
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+
+        mock_youtube = MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+        mock_youtube.liveBroadcasts.return_value.update.return_value.execute.return_value = {
+            "id": match.external_identifier,
+        }
+        mock_youtube.liveBroadcasts.return_value.bind.return_value.execute.return_value = {
+            "contentDetails": {"boundStreamId": ground.external_identifier},
+        }
+
+        resync = match.url_names["resync-live-stream"]
+        with self.login(self.superuser):
+            self.post(resync.url_name, *resync.args)
+        self.response_302()
+
+        update_call = mock_youtube.liveBroadcasts.return_value.update.call_args
+        body = update_call.kwargs["body"]
+        title = body["snippet"]["title"]
+        description = body["snippet"]["description"]
+
+        self.assertEqual(body["id"], "yt-broadcast-xyz")
+        self.assertIn("Men's Open", title)
+        self.assertIn("St George's", title)
+        self.assertIn("O'Connor", title)
+        self.assertNotIn("&#x27;", title)
+        self.assertNotIn("&#39;", title)
+        self.assertNotIn("&#x27;", description)
+        self.assertNotIn("&#39;", description)
+
+    @patch("tournamentcontrol.competition.models.Season.youtube", new_callable=PropertyMock)
+    def test_resync_live_stream_refuses_when_not_streaming(self, mock_youtube_prop):
+        """Resync refuses and flashes an error when the match has no broadcast."""
+        stage = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_project_id="test-project-123",
+            division__season__live_stream_client_id="test-client-id",
+            division__season__live_stream_client_secret="test-client-secret",
+        )
+        ground = factories.GroundFactory.create(venue__season=stage.division.season)
+        match = factories.MatchFactory.create(
+            stage=stage,
+            play_at=ground,
+            live_stream=False,
+            external_identifier=None,
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+
+        mock_youtube = MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+
+        resync = match.url_names["resync-live-stream"]
+        with self.login(self.superuser):
+            self.post(resync.url_name, *resync.args)
+        self.response_302()
+
+        mock_youtube.liveBroadcasts.return_value.update.assert_not_called()
+
+    def test_match_live_stream_lists_only_camera_equipped_matches_for_the_day(self):
+        stage = factories.StageFactory.create()
+        camera_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=True
+        )
+        plain_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=False
+        )
+        on_camera = factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        factories.MatchFactory.create(
+            stage=stage,
+            play_at=plain_ground,
+            date=date(2025, 5, 1),
+            time=time(15, 0),
+            datetime=datetime(2025, 5, 1, 5, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            date=date(2025, 5, 2),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 2, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        season = stage.division.season
+
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:match-live-stream",
+                season.competition.pk,
+                season.pk,
+                "20250501",
+            )
+        self.response_200()
+
+        formset = self.last_response.context["formset"]
+        listed_pks = {form.instance.pk for form in formset.forms}
+        self.assertEqual(listed_pks, {on_camera.pk})
+
+    def test_match_live_stream_post_toggles_only_selected_matches(self):
+        stage = factories.StageFactory.create()
+        camera_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=True
+        )
+        match_to_turn_on = factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=False,
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        match_to_turn_off = factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=True,
+            date=date(2025, 5, 1),
+            time=time(15, 0),
+            datetime=datetime(2025, 5, 1, 5, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        season = stage.division.season
+
+        data = {
+            "form-TOTAL_FORMS": "2",
+            "form-INITIAL_FORMS": "2",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "1000",
+            "form-0-id": str(match_to_turn_on.pk),
+            "form-0-live_stream": "1",
+            "form-1-id": str(match_to_turn_off.pk),
+            "form-1-live_stream": "0",
+        }
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:match-live-stream",
+                season.competition.pk,
+                season.pk,
+                "20250501",
+                data=data,
+            )
+        self.response_302()
+
+        match_to_turn_on.refresh_from_db()
+        match_to_turn_off.refresh_from_db()
+        self.assertTrue(match_to_turn_on.live_stream)
+        self.assertFalse(match_to_turn_off.live_stream)
+
+    def test_runsheet_and_season_schedule_link_to_bulk_live_stream_view(self):
+        stage = factories.StageFactory.create()
+        camera_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=True
+        )
+        factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        season = stage.division.season
+
+        expected_url = reverse(
+            "admin:fixja:match-live-stream",
+            args=[season.competition.pk, season.pk, "20250501"],
+        )
+
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:match-runsheet",
+                season.competition.pk,
+                season.pk,
+                "20250501",
+            )
+            self.response_200()
+            self.assertContains(self.last_response, expected_url)
+
+            season_edit_response = self.client.get(str(season.urls["edit"]))
+            self.assertContains(season_edit_response, expected_url)
+
+    def test_runsheet_shows_resync_icon_only_when_broadcast_exists(self):
+        stage = factories.StageFactory.create()
+        camera_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=True
+        )
+        streaming_match = factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=True,
+            live_stream_bind="yt-bound-abc",
+            external_identifier="yt-broadcast-abc",
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        not_yet_streaming = factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=False,
+            external_identifier=None,
+            date=date(2025, 5, 1),
+            time=time(15, 0),
+            datetime=datetime(2025, 5, 1, 5, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        season = stage.division.season
+
+        streaming_resync_url = reverse(
+            "admin:fixja:competition:season:division:stage:match:resync-live-stream",
+            args=[
+                season.competition.pk,
+                season.pk,
+                stage.division.pk,
+                stage.pk,
+                streaming_match.pk,
+            ],
+        )
+        not_yet_streaming_resync_url = reverse(
+            "admin:fixja:competition:season:division:stage:match:resync-live-stream",
+            args=[
+                season.competition.pk,
+                season.pk,
+                stage.division.pk,
+                stage.pk,
+                not_yet_streaming.pk,
+            ],
+        )
+
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:match-runsheet",
+                season.competition.pk,
+                season.pk,
+                "20250501",
+            )
+        self.response_200()
+        self.assertContains(self.last_response, streaming_resync_url)
+        self.assertNotContains(self.last_response, not_yet_streaming_resync_url)
+
+    @patch("tournamentcontrol.competition.admin.sync_live_stream")
+    def test_match_live_stream_post_enqueues_sync_when_configured(
+        self, mock_sync_live_stream
+    ):
+        stage = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_client_id="test-client-id",
+            division__season__live_stream_client_secret="test-client-secret",
+        )
+        camera_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=True
+        )
+        match_to_turn_on = factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=False,
+            external_identifier=None,
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        season = stage.division.season
+
+        data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "1",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "1000",
+            "form-0-id": str(match_to_turn_on.pk),
+            "form-0-live_stream": "1",
+        }
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:match-live-stream",
+                season.competition.pk,
+                season.pk,
+                "20250501",
+                data=data,
+            )
+        self.response_302()
+
+        mock_sync_live_stream.s.assert_called_once_with(
+            match_to_turn_on.pk, base_url=ANY
+        )
+        mock_sync_live_stream.s.return_value.apply_async.assert_called_once()
+
+    @patch("tournamentcontrol.competition.admin.sync_live_stream")
+    def test_match_live_stream_post_skips_sync_when_season_not_configured(
+        self, mock_sync_live_stream
+    ):
+        stage = factories.StageFactory.create()
+        camera_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=True
+        )
+        match_to_turn_on = factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=False,
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        season = stage.division.season
+
+        data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "1",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "1000",
+            "form-0-id": str(match_to_turn_on.pk),
+            "form-0-live_stream": "1",
+        }
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:match-live-stream",
+                season.competition.pk,
+                season.pk,
+                "20250501",
+                data=data,
+            )
+        self.response_302()
+
+        mock_sync_live_stream.s.assert_not_called()
+
+    @patch("tournamentcontrol.competition.admin.sync_live_stream")
+    def test_match_live_stream_resync_queues_all_streaming_matches(
+        self, mock_sync_live_stream
+    ):
+        stage = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_client_id="test-client-id",
+            division__season__live_stream_client_secret="test-client-secret",
+        )
+        camera_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=True
+        )
+        streaming_match_1 = factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=True,
+            external_identifier="yt-broadcast-1",
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        streaming_match_2 = factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=True,
+            external_identifier="yt-broadcast-2",
+            date=date(2025, 5, 1),
+            time=time(15, 0),
+            datetime=datetime(2025, 5, 1, 5, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        # Marked live_stream but never actually broadcast (e.g. toggled via the
+        # bulk view before sync_live_stream was wired up to it) -- this is the
+        # create half of create-or-update, so it must still be queued.
+        never_broadcast = factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=True,
+            external_identifier=None,
+            date=date(2025, 5, 1),
+            time=time(16, 0),
+            datetime=datetime(2025, 5, 1, 6, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        # Not streaming -- must be skipped.
+        factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=False,
+            external_identifier=None,
+            date=date(2025, 5, 1),
+            time=time(17, 0),
+            datetime=datetime(2025, 5, 1, 7, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        # Marked live_stream, never broadcast, AND no scheduled datetime --
+        # there's nothing to insert yet, so this must still be skipped. A
+        # distinct round keeps get_datetime() from borrowing a sibling
+        # match's datetime in the same stage/round.
+        factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=True,
+            external_identifier=None,
+            date=date(2025, 5, 1),
+            time=None,
+            datetime=None,
+            round=99,
+        )
+        season = stage.division.season
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:match-live-stream-resync",
+                season.competition.pk,
+                season.pk,
+                "20250501",
+            )
+        self.response_302()
+
+        queued_pks = {call.args[0] for call in mock_sync_live_stream.s.call_args_list}
+        self.assertEqual(
+            queued_pks,
+            {streaming_match_1.pk, streaming_match_2.pk, never_broadcast.pk},
+        )
+        self.assertEqual(
+            mock_sync_live_stream.s.return_value.apply_async.call_count, 3
+        )
+
+    @patch("tournamentcontrol.competition.admin.sync_live_stream")
+    def test_match_live_stream_resync_refuses_when_not_configured(
+        self, mock_sync_live_stream
+    ):
+        stage = factories.StageFactory.create()
+        season = stage.division.season
+
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:match-live-stream-resync",
+                season.competition.pk,
+                season.pk,
+                "20250501",
+            )
+        self.response_302()
+
+        mock_sync_live_stream.s.assert_not_called()
+
+    @patch("tournamentcontrol.competition.admin.sync_live_stream")
+    def test_match_live_stream_resync_ignores_get(self, mock_sync_live_stream):
+        stage = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_client_id="test-client-id",
+            division__season__live_stream_client_secret="test-client-secret",
+        )
+        camera_ground = factories.GroundFactory.create(
+            venue__season=stage.division.season, live_stream=True
+        )
+        factories.MatchFactory.create(
+            stage=stage,
+            play_at=camera_ground,
+            live_stream=True,
+            external_identifier="yt-broadcast-1",
+            date=date(2025, 5, 1),
+            time=time(14, 0),
+            datetime=datetime(2025, 5, 1, 4, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        season = stage.division.season
+
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:match-live-stream-resync",
+                season.competition.pk,
+                season.pk,
+                "20250501",
+            )
+        self.response_302()
+
+        mock_sync_live_stream.s.assert_not_called()
+
+
+class TeamEditViewQueryTests(TestCase):
+    """
+    The team edit page in the competition admin renders the team's
+    ``people`` (``TeamAssociation``) list using the ``mvp_list``
+    template tag. Without prefetching, that produces one
+    ``competition_person`` query and one ``competition_teamrole`` query
+    per association. Pin the view's query count so the same upper bound
+    holds whether the team is empty or fully squadded - any per-player
+    scaling trips the large case.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.empty_team = factories.TeamFactory.create()
+        cls.full_team = factories.TeamFactory.create()
+        for _ in range(20):
+            factories.TeamAssociationFactory.create(
+                team=cls.full_team,
+                person=factories.PersonFactory.create(club=cls.full_team.club),
+            )
+
+    def test_empty_team_query_count(self):
+        edit_team = self.empty_team.url_names["edit"]
+        with self.login(self.superuser):
+            self.assertGoodView(
+                edit_team.url_name,
+                *edit_team.args,
+                test_query_count=25,
+            )
+
+    def test_full_team_query_count(self):
+        edit_team = self.full_team.url_names["edit"]
+        with self.login(self.superuser):
+            self.assertGoodView(
+                edit_team.url_name,
+                *edit_team.args,
+                test_query_count=25,
+            )

@@ -24,40 +24,61 @@ class NodeRelationMixin(object):
 
          * SITEMAP
          * FAUX
+
+        Relationships are determined using MPTT tree fields (tree_id,
+        lft, rght, level) to avoid database queries. Uses ``parent_id``
+        (the raw FK column) to avoid triggering lazy loads; falls back
+        to ``getattr(node, "parent_id", None)`` so that ``FauxNode``
+        (which only carries ``parent``) works too.
         """
         from .models import SitemapNode
         from .utils import FauxNode
 
+        def _parent_id(node):
+            pid = getattr(node, "parent_id", None)
+            if pid is None:
+                parent = getattr(node, "parent", None)
+                if parent is not None:
+                    pid = getattr(parent, "pk", None)
+            return pid
+
         if other == self:
             return "ME"
 
-        if self.parent and other == self.parent:
-            return "PARENT"
-
-        if other.parent == self.parent:
-            return "SIBLING"
-
-        if other.parent and other.parent == self:
-            return "DESCENDANT"
-
-        if self.parent:
-            prel = self.parent.rel(other)
-
-            if prel == "SIBLING":
-                return "UNCLE"
-
-            if prel == "PARENT":
-                return "ANCESTOR"
-
-            if prel == "ANCESTOR":
-                return prel
-
-        if other.parent is None:
+        if _parent_id(other) is None:
             return "ROOT"
 
-        if other.tree_id == self.tree_id:
-            if other.level < self.level:
-                return "ANCESTOR"
+        if other.tree_id != self.tree_id:
+            if isinstance(other, SitemapNode):
+                return "SITEMAP"
+            if isinstance(other, FauxNode):
+                return "FAUX"
+            raise ValueError(
+                'You must provide a "SitemapNode" or "FauxNode" for comparison.'
+            )
+
+        # Same tree — use MPTT fields to determine relationship.
+        is_ancestor = other.lft < self.lft and other.rght > self.rght
+        if is_ancestor:
+            if other.level == self.level - 1:
+                return "PARENT"
+            return "ANCESTOR"
+
+        if other.lft > self.lft and other.rght < self.rght:
+            return "DESCENDANT"
+
+        self_pid = _parent_id(self)
+        other_pid = _parent_id(other)
+
+        if self_pid == other_pid:
+            return "SIBLING"
+
+        if self_pid is not None and other_pid is not None:
+            if other.level == self.level - 1 and other_pid != self_pid:
+                return "UNCLE"
+
+        if other.level < self.level:
+            return "ANCESTOR"
 
         if isinstance(other, SitemapNode):
             return "SITEMAP"
@@ -65,5 +86,5 @@ class NodeRelationMixin(object):
             return "FAUX"
 
         raise ValueError(
-            'You must provide a "SitemapNode" or ' '"FauxNode" for comparison.'
+            'You must provide a "SitemapNode" or "FauxNode" for comparison.'
         )

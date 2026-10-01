@@ -1,0 +1,1065 @@
+{
+ "data": {
+  "competitionMatches": [
+   {
+    "_id": 1355664650,
+    "awayTeam": {
+     "_id": null,
+     "name": null
+    },
+    "dateTime": 1783938600000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": null,
+     "name": null
+    },
+    "meta": {
+     "fieldNo": "3",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": true
+    },
+    "round": {
+     "displayName": "Grand Final",
+     "number": 2,
+     "type": "Final"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355664951,
+    "awayTeam": {
+     "_id": 67699589,
+     "name": "Sneaky Cheesies"
+    },
+    "dateTime": 1783936200000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67740014,
+     "name": "Before & After"
+    },
+    "meta": {
+     "fieldNo": "5",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Semi Finals",
+     "number": 1,
+     "type": "Final"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": null
+    }
+   },
+   {
+    "_id": 1355663545,
+    "awayTeam": {
+     "_id": 68100677,
+     "name": "Eat Pasta Run Faster"
+    },
+    "dateTime": 1783936200000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67776192,
+     "name": "Try Time Baby Collective"
+    },
+    "meta": {
+     "fieldNo": "3",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Semi Finals",
+     "number": 1,
+     "type": "Final"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "pre-game",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355664549,
+    "awayTeam": {
+     "_id": 67727471,
+     "name": "Touch n Go"
+    },
+    "dateTime": 1783331400000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67740014,
+     "name": "Before & After"
+    },
+    "meta": {
+     "fieldNo": "1",
+     "forfeitingTeam": {
+      "_id": 67727471,
+      "name": "Touch n Go"
+     },
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 6",
+     "number": 6,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "forfeit",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355665452,
+    "awayTeam": {
+     "_id": 67699589,
+     "name": "Sneaky Cheesies"
+    },
+    "dateTime": 1783331400000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67776192,
+     "name": "Try Time Baby Collective"
+    },
+    "meta": {
+     "fieldNo": "2",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 6",
+     "number": 6,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 9
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355663646,
+    "awayTeam": {
+     "_id": 67691981,
+     "name": "Rockets"
+    },
+    "dateTime": 1783331400000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 68100677,
+     "name": "Eat Pasta Run Faster"
+    },
+    "meta": {
+     "fieldNo": "3",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 6",
+     "number": 6,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 1,
+     "homeTeam": 2
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355665251,
+    "awayTeam": {
+     "_id": 67699589,
+     "name": "Sneaky Cheesies"
+    },
+    "dateTime": 1783326600000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67691981,
+     "name": "Rockets"
+    },
+    "meta": {
+     "fieldNo": "1",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 5",
+     "number": 5,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 4,
+     "homeTeam": 3
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355665352,
+    "awayTeam": {
+     "_id": 68100677,
+     "name": "Eat Pasta Run Faster"
+    },
+    "dateTime": 1783326600000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67727471,
+     "name": "Touch n Go"
+    },
+    "meta": {
+     "fieldNo": "2",
+     "forfeitingTeam": {
+      "_id": 67727471,
+      "name": "Touch n Go"
+     },
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 5",
+     "number": 5,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "forfeit",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355665051,
+    "awayTeam": {
+     "_id": 67776192,
+     "name": "Try Time Baby Collective"
+    },
+    "dateTime": 1783326600000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67740014,
+     "name": "Before & After"
+    },
+    "meta": {
+     "fieldNo": "3",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 5",
+     "number": 5,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 2,
+     "homeTeam": 2
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355663244,
+    "awayTeam": {
+     "_id": 68100677,
+     "name": "Eat Pasta Run Faster"
+    },
+    "dateTime": 1782724200000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67699589,
+     "name": "Sneaky Cheesies"
+    },
+    "meta": {
+     "fieldNo": "1",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 8",
+     "number": 8,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 1,
+     "homeTeam": 2
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355663847,
+    "awayTeam": {
+     "_id": 67776192,
+     "name": "Try Time Baby Collective"
+    },
+    "dateTime": 1782724200000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67727471,
+     "name": "Touch n Go"
+    },
+    "meta": {
+     "fieldNo": "3",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 8",
+     "number": 8,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 12,
+     "homeTeam": 0
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355663445,
+    "awayTeam": {
+     "_id": 67691981,
+     "name": "Rockets"
+    },
+    "dateTime": 1782724200000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67740014,
+     "name": "Before & After"
+    },
+    "meta": {
+     "fieldNo": "2",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 8",
+     "number": 8,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 6
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355664348,
+    "awayTeam": {
+     "_id": 67776192,
+     "name": "Try Time Baby Collective"
+    },
+    "dateTime": 1782123300000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67691981,
+     "name": "Rockets"
+    },
+    "meta": {
+     "fieldNo": "1",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 7",
+     "number": 7,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 9,
+     "homeTeam": 1
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355663747,
+    "awayTeam": {
+     "_id": 67727471,
+     "name": "Touch n Go"
+    },
+    "dateTime": 1782123300000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67699589,
+     "name": "Sneaky Cheesies"
+    },
+    "meta": {
+     "fieldNo": "2",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 7",
+     "number": 7,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 1,
+     "homeTeam": 3
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355664750,
+    "awayTeam": {
+     "_id": 67740014,
+     "name": "Before & After"
+    },
+    "dateTime": 1782123300000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 68100677,
+     "name": "Eat Pasta Run Faster"
+    },
+    "meta": {
+     "fieldNo": "3",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 7",
+     "number": 7,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 7,
+     "homeTeam": 2
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355663946,
+    "awayTeam": {
+     "_id": 67740014,
+     "name": "Before & After"
+    },
+    "dateTime": 1782121200000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67699589,
+     "name": "Sneaky Cheesies"
+    },
+    "meta": {
+     "fieldNo": "1",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 4",
+     "number": 4,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 3,
+     "homeTeam": 0
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355662943,
+    "awayTeam": {
+     "_id": 67691981,
+     "name": "Rockets"
+    },
+    "dateTime": 1782121200000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67727471,
+     "name": "Touch n Go"
+    },
+    "meta": {
+     "fieldNo": "2",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 4",
+     "number": 4,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 2,
+     "homeTeam": 3
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355663044,
+    "awayTeam": {
+     "_id": 67776192,
+     "name": "Try Time Baby Collective"
+    },
+    "dateTime": 1782121200000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 68100677,
+     "name": "Eat Pasta Run Faster"
+    },
+    "meta": {
+     "fieldNo": "3",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 4",
+     "number": 4,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 6,
+     "homeTeam": 2
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355664449,
+    "awayTeam": {
+     "_id": 67740014,
+     "name": "Before & After"
+    },
+    "dateTime": 1779093000000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67691981,
+     "name": "Rockets"
+    },
+    "meta": {
+     "fieldNo": "1",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 3",
+     "number": 3,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 7,
+     "homeTeam": 2
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355664850,
+    "awayTeam": {
+     "_id": 67727471,
+     "name": "Touch n Go"
+    },
+    "dateTime": 1779093000000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67776192,
+     "name": "Try Time Baby Collective"
+    },
+    "meta": {
+     "fieldNo": "2",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 3",
+     "number": 3,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 7
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355663345,
+    "awayTeam": {
+     "_id": 67699589,
+     "name": "Sneaky Cheesies"
+    },
+    "dateTime": 1779093000000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 68100677,
+     "name": "Eat Pasta Run Faster"
+    },
+    "meta": {
+     "fieldNo": "3",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 3",
+     "number": 3,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 3,
+     "homeTeam": 3
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355664048,
+    "awayTeam": {
+     "_id": 67699589,
+     "name": "Sneaky Cheesies"
+    },
+    "dateTime": 1778490600000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67727471,
+     "name": "Touch n Go"
+    },
+    "meta": {
+     "fieldNo": "1",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 2",
+     "number": 2,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 1,
+     "homeTeam": 0
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355664149,
+    "awayTeam": {
+     "_id": 68100677,
+     "name": "Eat Pasta Run Faster"
+    },
+    "dateTime": 1778490600000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67740014,
+     "name": "Before & After"
+    },
+    "meta": {
+     "fieldNo": "3",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 2",
+     "number": 2,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 0
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355663146,
+    "awayTeam": {
+     "_id": 67691981,
+     "name": "Rockets"
+    },
+    "dateTime": 1778490600000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67776192,
+     "name": "Try Time Baby Collective"
+    },
+    "meta": {
+     "fieldNo": "2",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 2",
+     "number": 2,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 0,
+     "homeTeam": 8
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355665150,
+    "awayTeam": {
+     "_id": 68100677,
+     "name": "Eat Pasta Run Faster"
+    },
+    "dateTime": 1777883400000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67691981,
+     "name": "Rockets"
+    },
+    "meta": {
+     "fieldNo": "1",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 1",
+     "number": 1,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 6,
+     "homeTeam": 2
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355662844,
+    "awayTeam": {
+     "_id": 67776192,
+     "name": "Try Time Baby Collective"
+    },
+    "dateTime": 1777883400000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67699589,
+     "name": "Sneaky Cheesies"
+    },
+    "meta": {
+     "fieldNo": "2",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 1",
+     "number": 1,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 6,
+     "homeTeam": 1
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   },
+   {
+    "_id": 1355664248,
+    "awayTeam": {
+     "_id": 67740014,
+     "name": "Before & After"
+    },
+    "dateTime": 1777883400000,
+    "fullVenue": {
+     "address": {
+      "lat": -33.42895924,
+      "lng": 151.3261477
+     }
+    },
+    "homeTeam": {
+     "_id": 67727471,
+     "name": "Touch n Go"
+    },
+    "meta": {
+     "fieldNo": "3",
+     "forfeitingTeam": null,
+     "isBye": false,
+     "isTba": false
+    },
+    "round": {
+     "displayName": "Round 1",
+     "number": 1,
+     "type": "Regular"
+    },
+    "scores": {
+     "awayTeam": 1,
+     "homeTeam": 0
+    },
+    "status": "final",
+    "venue": {
+     "_id": 230,
+     "name": "Garnet Adcock Memorial Park",
+     "venueTimezone": "Australia/Sydney"
+    }
+   }
+  ]
+ }
+}

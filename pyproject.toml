@@ -10,14 +10,13 @@ authors = [
 classifiers = []
 requires-python = ">=3.11,<3.15"
 dependencies = [
-    "django-froala-editor>=2.9",
     "django-guardian>=2.4",
-    "django-mcp-server>=0.5.5",
-    "django-modelforms",
+    "django-modelforms>=1.0",
     "django-mptt",
     "django-timezone-field",
     "django>=4.2",
     "first",
+    "mcp>=2,<3",
     "namedentities",
     "psycopg",
 ]
@@ -66,6 +65,7 @@ competition = [
     "django-formtools",
     "django-htmx>=1.23.2",
     "django-mathfilters",
+    "django-oauth-toolkit>=3.4",
     "djangorestframework>3.11",
     "drf-nested-routers",
     "google-api-python-client",
@@ -76,6 +76,7 @@ competition = [
     "pyparsing",
     "python-dateutil",
     "python-magic",
+    "requests",
 ]
 # Deprecated optional dependencies
 redis = []

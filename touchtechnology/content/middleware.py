@@ -11,7 +11,7 @@ from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.template import RequestContext, TemplateDoesNotExist
-from django.urls import include, path, reverse_lazy
+from django.urls import clear_url_caches, include, path, reverse_lazy
 from django.utils.deprecation import MiddlewareMixin
 from guardian.conf import settings as guardian_settings
 from mptt.utils import tree_item_iterator
@@ -242,6 +242,18 @@ class SitemapNodeMiddleware(MiddlewareMixin):
             path = request.META.get("PATH_INFO")
             redirect_to = urlunparse(("https", host, path, "", "", ""))
             return redirect(redirect_to)
+
+
+    def process_response(self, request, response):
+        # Each request creates a unique dynamic module for request.urlconf.
+        # Django's URL system has multiple @functools.cache caches keyed by
+        # the urlconf module or its resolvers (e.g. _get_cached_resolver,
+        # get_ns_resolver). Since our dynamic module is unique per request,
+        # every request adds entries that are never evicted — causing
+        # unbounded memory growth. Use clear_url_caches() to clear all
+        # URL-related caches after each request.
+        clear_url_caches()
+        return response
 
 
 def redirect_middleware(get_response):

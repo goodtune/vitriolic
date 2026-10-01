@@ -10,7 +10,16 @@ from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.utils.functional import wraps
 
-from tournamentcontrol.competition.models import Club, Competition, Season
+from tournamentcontrol.competition.models import (
+    Club,
+    Competition,
+    Division,
+    Match,
+    Season,
+    Stage,
+    StageGroup,
+    Team,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -210,21 +219,157 @@ def competition_by_slug(f, *a, **kw):
         datestr = kwargs.pop("datestr", None)
         timestr = kwargs.pop("timestr", None)
 
-        base = manager.prefetch_related(
-            "seasons",
-            "seasons__divisions",
-            "seasons__divisions__stages",
-            "seasons__divisions__teams",
-        )
-
         # see if there is an original node, we might need it later
         o_node = kwargs.pop("node", None)
 
+        # Resolve the deepest model in a single query using select_related,
+        # then derive all parent objects from the result. This replaces the
+        # previous approach of level-by-level resolution with prefetch_related.
+
         if competition_slug:
-            competition = get_object_or_404(base, slug=competition_slug)
+            allowed = manager.filter(slug=competition_slug)
+
+            if season_slug and division_slug:
+                # Division-level resolution — one query covers competition,
+                # season, and division via select_related.
+                if pool_slug and stage_slug:
+                    pool = get_object_or_404(
+                        StageGroup.objects.select_related(
+                            "stage__division__season__competition"
+                        ),
+                        slug=pool_slug,
+                        stage__slug=stage_slug,
+                        stage__division__slug=division_slug,
+                        stage__division__season__slug=season_slug,
+                        stage__division__season__competition__in=allowed,
+                    )
+                    stage = pool.stage
+                    stage.pool_count = StageGroup.objects.filter(
+                        stage=stage
+                    ).count()
+                    division = stage.division
+                    season = division.season
+                    competition = season.competition
+                    kwargs["pool"] = pool
+                    kwargs["stage"] = stage
+
+                elif stage_slug:
+                    stage = get_object_or_404(
+                        Stage.objects.select_related(
+                            "division__season__competition"
+                        ).annotate(pool_count=Count("pools")),
+                        slug=stage_slug,
+                        division__slug=division_slug,
+                        division__season__slug=season_slug,
+                        division__season__competition__in=allowed,
+                    )
+                    division = stage.division
+                    season = division.season
+                    competition = season.competition
+                    kwargs["stage"] = stage
+
+                elif team_slug:
+                    team = get_object_or_404(
+                        Team.objects.select_related(
+                            "club", "division__season__competition"
+                        ),
+                        slug=team_slug,
+                        division__slug=division_slug,
+                        division__season__slug=season_slug,
+                        division__season__competition__in=allowed,
+                    )
+                    division = team.division
+                    season = division.season
+                    competition = season.competition
+                    kwargs["team"] = team
+
+                    # List of players for this team.
+                    players = (
+                        team.people.select_related("person")
+                        .prefetch_related("person__user")
+                        .filter(is_player=True)
+                    )
+                    players = players.extra(
+                        select={"has_number": "number IS NULL"},
+                        order_by=(
+                            "has_number",
+                            "number",
+                            "person__last_name",
+                            "person__first_name",
+                        ),
+                    )
+                    kwargs["players"] = players
+
+                elif match_pk:
+                    match = get_object_or_404(
+                        Match.objects.select_related(
+                            "stage__division__season__competition"
+                        ),
+                        pk=match_pk,
+                        stage__division__slug=division_slug,
+                        stage__division__season__slug=season_slug,
+                        stage__division__season__competition__in=allowed,
+                    )
+                    division = match.stage.division
+                    season = division.season
+                    competition = season.competition
+                    kwargs["match"] = match
+
+                else:
+                    division = get_object_or_404(
+                        Division.objects.select_related(
+                            "season__competition"
+                        ),
+                        slug=division_slug,
+                        season__slug=season_slug,
+                        season__competition__in=allowed,
+                    )
+                    season = division.season
+                    competition = season.competition
+
+                kwargs["division"] = division
+
+                # Because Division and StageGroup use the same template
+                # we will use special context value of parent as the base
+                # for ladders and matches_by_date (both models have these
+                # methods implemented.
+                kwargs["parent"] = kwargs.get("pool", division)
+
+                # So we can build a navigation hierarchy, select extra
+                # column which tells us if the division in a list of
+                # divisions is the current scope.
+                kwargs["divisions"] = season.divisions.extra(
+                    select={"current": "id = %s"},
+                    select_params=(division.pk,),
+                )
+
+            elif season_slug and match_pk:
+                match = get_object_or_404(
+                    Match.objects.select_related(
+                        "stage__division__season__competition"
+                    ),
+                    pk=match_pk,
+                    stage__division__season__slug=season_slug,
+                    stage__division__season__competition__in=allowed,
+                )
+                season = match.stage.division.season
+                competition = season.competition
+                kwargs["match"] = match
+
+            elif season_slug:
+                season = get_object_or_404(
+                    Season.objects.select_related("competition"),
+                    slug=season_slug,
+                    competition__in=allowed,
+                )
+                competition = season.competition
+
+            else:
+                competition = get_object_or_404(manager, slug=competition_slug)
+
             kwargs["competition"] = competition
+
             if season_slug:
-                season = get_object_or_404(competition.seasons, slug=season_slug)
                 kwargs["season"] = season
 
                 # List of clubs participating in this season.
@@ -233,79 +378,20 @@ def competition_by_slug(f, *a, **kw):
                 ).distinct()
 
                 # We should deprecate this if it is unused in templates.
-                kwargs["other_seasons"] = competition.seasons.exclude(slug=season_slug)
+                kwargs["other_seasons"] = competition.seasons.exclude(
+                    slug=season_slug
+                )
 
                 # So we can build a navigation hierarchy, select extra column
                 # which tells us if the season in a list of seasons is the
                 # current scope.
                 kwargs["seasons"] = competition.seasons.extra(
-                    select={"current": "id = %s"}, select_params=(season.pk,)
+                    select={"current": "id = %s"},
+                    select_params=(season.pk,),
                 )
 
                 # List of venues setup for this season.
                 kwargs["venues"] = season.venues.all()
-
-                if division_slug:
-                    division = get_object_or_404(season.divisions, slug=division_slug)
-                    kwargs["division"] = division
-
-                    # Because Division and StageGroup use the same template
-                    # we will use special context value of parent as the base
-                    # for ladders and matches_by_date (both models have these
-                    # methods implemented.
-                    kwargs["parent"] = division
-
-                    # So we can build a navigation hierarchy, select extra
-                    # column which tells us if the division in a list of
-                    # divisions is the current scope.
-                    kwargs["divisions"] = season.divisions.extra(
-                        select={"current": "id = %s"}, select_params=(division.pk,)
-                    )
-
-                    if stage_slug:
-                        stage = get_object_or_404(
-                            division.stages.annotate(pool_count=Count("pools")),
-                            slug=stage_slug,
-                        )
-                        kwargs["stage"] = stage
-
-                        if pool_slug:
-                            pool = get_object_or_404(stage.pools, slug=pool_slug)
-                            kwargs["pool"] = pool
-
-                            # Overload the parent set above.
-                            kwargs["parent"] = pool
-
-                    if team_slug:
-                        team = get_object_or_404(
-                            division.teams.select_related("club"), slug=team_slug
-                        )
-                        kwargs["team"] = team
-
-                        # List of players for this team.
-                        players = (
-                            team.people.select_related("person")
-                            .prefetch_related("person__user")
-                            .filter(is_player=True)
-                        )
-                        players = players.extra(
-                            select={"has_number": "number IS NULL"},
-                            order_by=(
-                                "has_number",
-                                "number",
-                                "person__last_name",
-                                "person__first_name",
-                            ),
-                        )
-                        kwargs["players"] = players
-
-                    if match_pk:
-                        match = get_object_or_404(division.matches, pk=match_pk)
-                        kwargs["match"] = match
-
-                elif match_pk:
-                    match = get_object_or_404(season.matches, pk=match_pk)
-                    kwargs["match"] = match
 
         if club_slug:
             club = get_object_or_404(Club, slug=club_slug)

@@ -75,7 +75,7 @@
         <!-- Division/Stage hierarchy -->
         {% for division, stages in matches_hierarchy.items %}
         <div class="division-group">
-            <div class="division-header" @click="toggleSection('div_{{ division.id }}')">
+            <div class="division-header" @click="toggleSection('div_{{ division.id }}')" style="{% if division.get_color %}background-color: {{ division.get_color }};{% endif %}">
                 <span x-show="!collapsedSections.div_{{ division.id }}">▼</span>
                 <span x-show="collapsedSections.div_{{ division.id }}">▶</span>
                 {{ division.title }}
@@ -93,6 +93,7 @@
                         <div
                             x-show="!matches[{{ match.id }}]?.scheduled"
                             class="match-item unscheduled division-{{ match.stage.division.order }}"
+                            style="border-left: 4px solid {{ match.stage.division.get_color }};"
                             draggable="true"
                             @dragstart="startDrag(getMatch({{ match.id }}),event)"
                             @dragend="endDrag($event)"
@@ -157,6 +158,7 @@
                                     <template x-for="match in getMatchesAt(place.id, timeslot)" :key="match.id">
                                         <div
                                             :class="'match-item scheduled division-' + match.division_order"
+                                            :style="'background-color: ' + match.stage_color + '; border-left: 4px solid ' + match.division_color + ';'"
                                             draggable="true"
                                             @dragstart="startDrag(match,event)"
                                             @dragend="endDrag($event)"
@@ -223,7 +225,9 @@ function visualSchedule() {
                 round: {{ form.instance.round|default_if_none:"null" }},
                 is_final: {{ form.instance.is_final|yesno:"true,false" }},
                 division_order: {{ form.instance.stage.division.order }},
-                division_title: '{{ form.instance.stage.division.abbreviation|default:form.instance.stage.division.title|escapejs }}'
+                division_title: '{{ form.instance.stage.division.abbreviation|default:form.instance.stage.division.title|escapejs }}',
+                division_color: '{{ form.instance.stage.division.get_color }}',
+                stage_color: '{{ form.instance.stage.get_color }}'
             };
             {% endfor %}
 
@@ -266,7 +270,7 @@ function visualSchedule() {
             if (match.label) {
                 return match.label;
             } else if (!match.is_final) {
-                return `Round{match.round}`;
+                return `Round ${match.round}`;
             }
             return '';
         },

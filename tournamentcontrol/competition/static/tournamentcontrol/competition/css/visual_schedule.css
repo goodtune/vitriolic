@@ -188,6 +188,8 @@ body {
 }
 
 .match-item.scheduled {
+    /* Background color will be set via inline styles from Stage.get_color() */
+    /* Fallback to light green if no color is set */
     background: #e8f5e8;
     border-color: #4caf50;
 }
@@ -197,36 +199,38 @@ body {
     border-color: #ff9800;
 }
 
-/* Division-specific styling - customize colors as needed */
-.match-item.division-1 {
+/* Division-specific styling - fallback colors if no custom color is set */
+/* These are now applied via inline styles from Division.get_color() */
+/* Keeping as low-priority fallback only */
+.match-item.division-1:not([style*="border-left"]) {
     border-left: 4px solid #e74c3c; /* Red accent */
 }
 
-.match-item.division-2 {
+.match-item.division-2:not([style*="border-left"]) {
     border-left: 4px solid #3498db; /* Blue accent */
 }
 
-.match-item.division-3 {
+.match-item.division-3:not([style*="border-left"]) {
     border-left: 4px solid #2ecc71; /* Green accent */
 }
 
-.match-item.division-4 {
+.match-item.division-4:not([style*="border-left"]) {
     border-left: 4px solid #f39c12; /* Orange accent */
 }
 
-.match-item.division-5 {
+.match-item.division-5:not([style*="border-left"]) {
     border-left: 4px solid #9b59b6; /* Purple accent */
 }
 
-.match-item.division-6 {
+.match-item.division-6:not([style*="border-left"]) {
     border-left: 4px solid #1abc9c; /* Teal accent */
 }
 
-.match-item.division-7 {
+.match-item.division-7:not([style*="border-left"]) {
     border-left: 4px solid #e67e22; /* Dark orange accent */
 }
 
-.match-item.division-8 {
+.match-item.division-8:not([style*="border-left"]) {
     border-left: 4px solid #34495e; /* Dark gray accent */
 }
 

@@ -111,6 +111,33 @@ class GroundFactory(OrderedSitemapNodeFactory):
     venue = factory.SubFactory(VenueFactory)
 
 
+class LiveStreamKeyFactory(DjangoModelFactory):
+    class Meta:
+        model = models.LiveStreamKey
+
+    season = factory.SubFactory(SeasonFactory)
+
+    title = factory.Sequence(lambda n: "Stream Key %d" % (n + 1))
+    # The YouTube liveStream identifier is the primary key.
+    external_identifier = factory.Sequence(lambda n: "stream%d" % (n + 1))
+    stream_key = factory.Sequence(lambda n: "abcd-%04d" % (n + 1))
+
+
+class LiveStreamEventFactory(DjangoModelFactory):
+    class Meta:
+        model = models.LiveStreamEvent
+
+    season = factory.SubFactory(SeasonFactory)
+
+    title = factory.Sequence(lambda n: "Live Stream Event %d" % (n + 1))
+    start = factory.fuzzy.FuzzyDateTime(
+        datetime.datetime(2020, 1, 1, tzinfo=ZoneInfo("UTC"))
+    )
+    stop = factory.LazyAttribute(lambda o: o.start + datetime.timedelta(hours=1))
+    # The YouTube broadcast identifier is the primary key.
+    external_identifier = factory.Sequence(lambda n: "adhoc%d" % (n + 1))
+
+
 class DivisionFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Division
@@ -121,6 +148,7 @@ class DivisionFactory(OrderedSitemapNodeFactory):
     forfeit_against_score = 0
     include_forfeits_in_played = True
     games_per_day = 2
+    color = factory.LazyFunction(lambda: models.generate_random_color())
 
     season = factory.SubFactory(SeasonFactory)
 
@@ -148,6 +176,7 @@ class StageFactory(OrderedSitemapNodeFactory):
         model = models.Stage
 
     title = factory.Sequence(lambda n: "Stage %d" % (n + 1))
+    color = "#e8f5e8"  # Use the default light green
 
     division = factory.SubFactory(DivisionFactory)
 
