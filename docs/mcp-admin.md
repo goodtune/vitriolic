@@ -247,14 +247,17 @@ Every tool that sets a match's date or time applies the same rules
    against the database and against the other matches of the same batch.
 
 `ignore_clashes` waives rules 3 and 4 only, as in the admin scheduler; it
-never waives an excluded date or a time slot.
+never waives an excluded date or a time slot. A match has no database
+constraint against two matches sharing a place and time, so the tools take a
+row lock on the season while they check clashes and save, and concurrent
+calls are applied one after the other.
 
 | Tool | Does |
 | --- | --- |
 | `reschedule_match(match_id, date, time, place_id, ignore_clashes)` | Sets the date, time and/or place of one match. The kick-off instant is recomputed in the place's time zone. |
 | `schedule_matches(items, ignore_clashes, atomic, verbose)` | The same for up to 500 matches at once. With `atomic` (default) nothing is saved unless every item is valid, and every failing item is reported by index; otherwise the valid items are saved. |
 | `auto_schedule(season_id, date, place_ids, stage_ids, ignore_clashes, dry_run)` | Fills a date's time slots × grounds grid with that date's unscheduled matches: matches in division, stage, pool, round and id order each take the first free cell, slots earliest first and grounds in the order given, skipping cells that break a rule for that match. |
-| `swap_match_allocations(match_id, other_match_id)` | Exchanges the date, time and place of two matches of the same season (date and time slot rules apply to each new slot). |
+| `swap_match_allocations(match_id, other_match_id, ignore_clashes)` | Exchanges the date, time and place of two matches of the same season; every rule above applies to each match in its new slot. |
 
 A match that is live streamed is not moved off a streamed ground and is
 never swapped: remove its live stream first. Moving it between streamed

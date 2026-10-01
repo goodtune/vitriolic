@@ -352,14 +352,18 @@ class DrawGenerator(object):
     def validate(cls, text):
         errors = set()
         keys = set()
+        in_round = False
         for line, data in enumerate(text.splitlines()):
             match = cls.regex.match(data)
             if not match:
                 errors.add(line)
                 continue
+            if match.groupdict().get("round"):
+                in_round = True
             match_id = match.groupdict().get("match_id")
             if match_id:
-                if match_id in keys:
+                # Every match belongs to a round, and its id is unique.
+                if match_id in keys or not in_round:
                     errors.add(line)
                 keys.add(match_id)
         if errors:

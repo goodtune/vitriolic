@@ -1972,8 +1972,9 @@ class AdminToolset(CompetitionToolset):
             if team_eval is not None:
                 res[f"{side}_team_eval"] = team_eval
                 res[f"{side}_team_eval_related"] = related_id
-                if not team_eval:
-                    # Clearing the eval clears what it referred to.
+                if team_eval.strip().upper() not in ("W", "L"):
+                    # Only a W or L eval refers to a match: clearing the eval,
+                    # or replacing it with a position, drops the reference.
                     setattr(match, f"{side}_team_eval_related", None)
             elif related_id is not None:
                 res[f"{side}_team_eval_related"] = related_id
@@ -2026,6 +2027,21 @@ class AdminToolset(CompetitionToolset):
     # -- scheduling ----------------------------------------------------------
 
     @staticmethod
+    def _lock_seasons(season_ids):
+        """
+        Serialise scheduling within the seasons: a match has no database
+        constraint against two of them taking the same place and time, so
+        every tool that checks clashes and then saves holds a lock on the
+        season rows (inside the caller's transaction) for the duration.
+        """
+        list(
+            Season.objects.select_for_update()
+            .filter(pk__in=set(season_ids))
+            .order_by("pk")
+            .values_list("pk", flat=True)
+        )
+
+    @staticmethod
     def _raise_schedule_errors(errors):
         if errors:
             raise ToolError(" ".join(errors))
@@ -2053,8 +2069,23 @@ class AdminToolset(CompetitionToolset):
         season's places, to spare a batch looking them up per match.
 
         With ``save=False`` the validated form is returned for the caller to
-        save; otherwise the saved match.
+        save (holding the season lock, see ``_lock_seasons``); otherwise the
+        match is validated and saved under the lock.
         """
+        if save:
+            with transaction.atomic():
+                self._lock_seasons([match.stage.division.season_id])
+                return self._reschedule(
+                    match,
+                    date=date,
+                    time=time,
+                    place_id=place_id,
+                    ignore_clashes=ignore_clashes,
+                    validator=validator,
+                    places=places,
+                    save=False,
+                    description=description,
+                ).save()
         season = match.stage.division.season
         if validator is None:
             validator = ScheduleValidator(
@@ -2093,11 +2124,7 @@ class AdminToolset(CompetitionToolset):
             )
         )
         validator.claim(form.instance, description or f"match {match.pk}")
-        if not save:
-            return form
-        with transaction.atomic():
-            match = form.save()
-        return match
+        return form
 
     @tool_annotations(idempotent=True, open_world=True)
     def reschedule_match(
@@ -2154,13 +2181,15 @@ class AdminToolset(CompetitionToolset):
 
     @tool_annotations(open_world=False)
     def swap_match_allocations(
-        self, match_id: int, other_match_id: int
+        self, match_id: int, other_match_id: int, ignore_clashes: bool = False
     ) -> dict[str, Any]:
         """
         Exchange the date, time and place of two matches of the same season
-        (for example to move a game into an earlier slot). The date and time
-        slot rules of ``reschedule_match`` apply to each match in its new
-        slot. Refused if either
+        (for example to move a game into an earlier slot). The rules of
+        ``reschedule_match`` apply to each match in its new slot: excluded
+        dates, time slots and, unless ``ignore_clashes``, clashes with any
+        other match (a team already playing then, or a declared team
+        clash). Refused if either
         match is live streamed: remove the live stream from both first
         (``disable_match_live_stream``), swap, then enable it again.
         """
@@ -2182,12 +2211,16 @@ class AdminToolset(CompetitionToolset):
         second_slot = (second.date, second.time, second.play_at)
         first.date, first.time, first.play_at = second_slot
         second.date, second.time, second.play_at = first_slot
-        # The date and time slot rules apply to the slots each match takes
-        # over; the two matches only exchange places, so nothing new clashes.
-        validator = ScheduleValidator()
+        # Both matches leave their current slots; each is checked in the slot
+        # it takes over, against the rest of the season and the other match.
+        validator = ScheduleValidator(
+            ignore_clashes=ignore_clashes, moving={first.pk, second.pk}
+        )
         with transaction.atomic():
+            self._lock_seasons([first.stage.division.season_id])
             for match in (first, second):
-                errors = validator.errors(match, clashes=False)
+                errors = validator.errors(match)
+                validator.claim(match, f"match {match.pk}")
                 if errors:
                     raise ToolError(
                         "Match %d: %s"
@@ -3101,6 +3134,7 @@ class AdminToolset(CompetitionToolset):
         """
         failed = {}
         moving = {}
+        seasons = set()
         for index, match_id, __ in entries:
             if match_id in moving.values():
                 failed[index] = f"match {match_id} is given more than once."
@@ -3112,6 +3146,21 @@ class AdminToolset(CompetitionToolset):
                 failed[index] = str(exc)
                 continue
             moving[index] = match.pk
+            seasons.add(match.stage.division.season_id)
+        with transaction.atomic():
+            self._lock_seasons(seasons)
+            saved = self._schedule_locked(
+                entries, failed, moving, ignore_clashes, atomic, refused
+            )
+        for match in saved.values():
+            if match.live_stream:
+                self._sync_match_live_stream(match)
+        return saved, failed
+
+    def _schedule_locked(
+        self, entries, failed, moving, ignore_clashes, atomic, refused
+    ):
+        """The body of ``_schedule_batch``, run under the season locks."""
         places = {}
         while True:
             validator = ScheduleValidator(
@@ -3143,13 +3192,8 @@ class AdminToolset(CompetitionToolset):
             if atomic or not new_failures:
                 break
         if refused or (atomic and failed):
-            return {}, failed
-        with transaction.atomic():
-            saved = {index: form.save() for index, form in sorted(forms.items())}
-        for match in saved.values():
-            if match.live_stream:
-                self._sync_match_live_stream(match)
-        return saved, failed
+            return {}
+        return {index: form.save() for index, form in sorted(forms.items())}
 
     @staticmethod
     def _failures(failed, entries):
@@ -3272,63 +3316,67 @@ class AdminToolset(CompetitionToolset):
         slots = validator.timeslots(season, date)
         if not slots:
             raise ToolError("The season has no time slots on %s." % date.isoformat())
-        matches = Match.objects.filter(
-            stage__division__season=season, date=date, is_bye=False
-        ).filter(Q(time__isnull=True) | Q(play_at__isnull=True))
-        if stage_ids:
-            matches = matches.filter(stage_id__in=stage_ids)
-        matches = list(
-            matches.order_by(
-                "stage__division__order",
-                "stage__order",
-                F("stage_group__order").asc(nulls_first=True),
-                "round",
-                "pk",
-            )
-        )
-        validator.moving = {match.pk for match in matches}
-        occupied = set(
-            Match.objects.filter(date=date, play_at__in=places, time__in=slots)
-            .exclude(pk__in=validator.moving)
-            .values_list("time", "play_at_id")
-        )
-        cells = [
-            (time, place)
-            for time in slots
-            for place in places
-            if (time, place.pk) not in occupied
-        ]
-        forms = []
-        unscheduled = []
-        choices = None
-        for candidate in matches:
-            self._require("change", Match, candidate)
-            reason = "every time slot and place is taken."
-            for cell in list(cells):
-                time, place = cell
-                try:
-                    form = self._reschedule(
-                        self._match(candidate.pk),
-                        time=time,
-                        place_id=place.pk,
-                        ignore_clashes=ignore_clashes,
-                        validator=validator,
-                        places=choices,
-                        save=False,
-                    )
-                except ToolError as exc:
-                    reason = str(exc)
-                    continue
-                choices = form.fields["play_at"].queryset
-                cells.remove(cell)
-                forms.append(form)
-                break
-            else:
-                unscheduled.append({"match_id": candidate.pk, "reason": reason})
+        # Hold the season lock from reading the free cells until they are
+        # saved, so a concurrent scheduler cannot take the same ones.
         with transaction.atomic():
-            saved = [form.save() for form in forms]
-            if dry_run:
-                transaction.set_rollback(True)
+            self._lock_seasons([season.pk])
+            matches = Match.objects.filter(
+                stage__division__season=season, date=date, is_bye=False
+            ).filter(Q(time__isnull=True) | Q(play_at__isnull=True))
+            if stage_ids:
+                matches = matches.filter(stage_id__in=stage_ids)
+            matches = list(
+                matches.order_by(
+                    "stage__division__order",
+                    "stage__order",
+                    F("stage_group__order").asc(nulls_first=True),
+                    "round",
+                    "pk",
+                )
+            )
+            validator.moving = {match.pk for match in matches}
+            occupied = set(
+                Match.objects.filter(date=date, play_at__in=places, time__in=slots)
+                .exclude(pk__in=validator.moving)
+                .values_list("time", "play_at_id")
+            )
+            cells = [
+                (time, place)
+                for time in slots
+                for place in places
+                if (time, place.pk) not in occupied
+            ]
+            forms = []
+            unscheduled = []
+            choices = None
+            for candidate in matches:
+                self._require("change", Match, candidate)
+                reason = "every time slot and place is taken."
+                for cell in list(cells):
+                    time, place = cell
+                    try:
+                        form = self._reschedule(
+                            self._match(candidate.pk),
+                            time=time,
+                            place_id=place.pk,
+                            ignore_clashes=ignore_clashes,
+                            validator=validator,
+                            places=choices,
+                            save=False,
+                        )
+                    except ToolError as exc:
+                        reason = str(exc)
+                        continue
+                    choices = form.fields["play_at"].queryset
+                    cells.remove(cell)
+                    forms.append(form)
+                    break
+                else:
+                    unscheduled.append({"match_id": candidate.pk, "reason": reason})
+            with transaction.atomic():
+                saved = [form.save() for form in forms]
+                if dry_run:
+                    transaction.set_rollback(True)
         if not dry_run:
             for match in saved:
                 if match.live_stream:

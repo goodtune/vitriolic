@@ -15,6 +15,8 @@ from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 from dateutil.rrule import DAILY
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from guardian.shortcuts import assign_perm
 from mcp.server.mcpserver.exceptions import ToolError
 from test_plus import TestCase
@@ -236,6 +238,22 @@ class DrawFormatToolTests(DemoMixin, TestCase):
             admin.preview_draw_format,
             "   ",
         )
+        # A match must follow a ROUND line.
+        orphan = "1: 1 vs 2\nROUND\n2: 1 vs 3"
+        self.assertEqual(
+            DrawFormatForm(data={"name": "Orphan", "text": orphan}).errors["text"],
+            ["Draw formula is invalid: line(s) '0' are not in the correct format."],
+        )
+        for tool in (admin.preview_draw_format, admin.create_draw_format):
+            with self.subTest(tool=tool.__name__):
+                kwargs = {"name": "Orphan"} if tool == admin.create_draw_format else {}
+                self.assertToolError(
+                    "Validation failed: text: Draw formula is invalid: line(s) '0' "
+                    "are not in the correct format.",
+                    tool,
+                    text=orphan,
+                    **kwargs,
+                )
 
     def test_preview_warnings(self):
         structure = self.admin().preview_draw_format(
@@ -1423,6 +1441,34 @@ class MatchEvalTests(DemoMixin, TestCase):
         )
         self.assertEqual(self.division.finals.matches.count(), 1)
 
+    def test_winner_eval_replaced_by_a_position(self):
+        semi = self.create(round=8, home_team_eval="P1", away_team_eval="P4")
+        final = self.create(
+            round=9,
+            home_team_eval="W",
+            home_team_eval_related_id=semi["id"],
+            away_team_eval="P2",
+        )
+        res = self.admin_tools.update_match(final["id"], home_team_eval="P1")["match"]
+        self.assertEqual(
+            res["home_team"],
+            {
+                "id": None,
+                "title": "1st",
+                "slug": None,
+                "club": None,
+                "eval": "P1",
+                "eval_related_id": None,
+            },
+        )
+        res = self.admin_tools.update_match(
+            final["id"], home_team_eval="L", home_team_eval_related_id=semi["id"]
+        )["match"]
+        self.assertEqual(
+            (res["home_team"]["eval"], res["home_team"]["eval_related_id"]),
+            ("L", semi["id"]),
+        )
+
     def test_update_and_clear(self):
         semi = self.create(round=8, home_team_eval="P1", away_team_eval="P4")
         res = self.admin_tools.update_match(semi["id"], away_team_eval="P3")["match"]
@@ -1556,6 +1602,86 @@ class ScheduleMatchesTests(DemoMixin, TestCase):
                 },
             ],
         )
+
+    def test_swap_checks_clashes_with_other_matches(self):
+        first, second = self.night[0], self.night[1]
+        early, late = datetime.time(18, 40), datetime.time(19, 30)
+        field_1, field_2 = self.season.grounds[:2]
+        self.admin_tools.schedule_matches(
+            [
+                {"match_id": first.pk, "time": early, "place_id": field_1.pk},
+                {"match_id": second.pk, "time": late, "place_id": field_1.pk},
+            ]
+        )
+        # Another match already has one of the second match's teams at 18:40.
+        busy = second.home_team
+        factories.MatchFactory.create(
+            stage=self.season.divisions_by_title["Men's"].regular,
+            home_team=busy,
+            away_team=self.night[2].home_team,
+            date=WEDNESDAYS[0],
+            time=early,
+            datetime=None,
+            play_at=field_2,
+            round=1,
+        )
+        self.assertToolError(
+            f"Match {second.pk}: {busy.title} are already playing at 18:40 on "
+            "2026-10-07.",
+            self.admin_tools.swap_match_allocations,
+            first.pk,
+            second.pk,
+        )
+        second.refresh_from_db()
+        self.assertEqual((second.time, second.play_at_id), (late, field_1.pk))
+        res = self.admin_tools.swap_match_allocations(
+            first.pk, second.pk, ignore_clashes=True
+        )
+        self.assertEqual(
+            [(m["id"], m["time"]) for m in res["matches"]],
+            [(first.pk, "19:30"), (second.pk, "18:40")],
+        )
+
+    def test_scheduling_locks_the_season(self):
+        """
+        Clash checks and the writes they guard run under a row lock on the
+        season, so concurrent schedulers cannot book the same slot.
+        """
+        item = {
+            "match_id": self.night[0].pk,
+            "time": datetime.time(18, 40),
+            "place_id": self.season.grounds[0].pk,
+        }
+        calls = [
+            (self.admin_tools.schedule_matches, ([item],), {}),
+            (
+                self.admin_tools.reschedule_match,
+                (self.night[1].pk,),
+                {"time": datetime.time(19, 30)},
+            ),
+            (
+                self.admin_tools.auto_schedule,
+                (self.season.pk, WEDNESDAYS[0], [g.pk for g in self.season.grounds]),
+                {},
+            ),
+            (
+                self.admin_tools.swap_match_allocations,
+                (self.night[0].pk, self.night[1].pk),
+                {},
+            ),
+        ]
+        for tool, args, kwargs in calls:
+            with self.subTest(tool=tool.__name__):
+                with CaptureQueriesContext(connection) as queries:
+                    tool(*args, **kwargs)
+                self.assertEqual(
+                    [
+                        q["sql"].startswith('SELECT "competition_season"."id"')
+                        for q in queries.captured_queries
+                        if q["sql"].endswith("FOR UPDATE")
+                    ],
+                    [True],
+                )
 
     def test_limits_and_shape(self):
         self.assertToolError(
