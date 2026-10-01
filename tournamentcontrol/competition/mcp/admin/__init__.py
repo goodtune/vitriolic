@@ -3099,6 +3099,9 @@ class AdminToolset(CompetitionToolset):
                 )
             seen[key] = plan["index"]
         with transaction.atomic():
+            # Without the lock two concurrent calls could both find a target
+            # empty and build it twice (nothing in the database prevents it).
+            self._lock_seasons(plan["stage"].division.season_id for plan in plans)
             results = [
                 self._build(
                     plan,

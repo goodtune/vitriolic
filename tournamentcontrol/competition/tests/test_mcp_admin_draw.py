@@ -1645,7 +1645,8 @@ class ScheduleMatchesTests(DemoMixin, TestCase):
     def test_scheduling_locks_the_season(self):
         """
         Clash checks and the writes they guard run under a row lock on the
-        season, so concurrent schedulers cannot book the same slot.
+        season, so concurrent schedulers cannot book the same slot (nor two
+        builds fill the same stage).
         """
         item = {
             "match_id": self.night[0].pk,
@@ -1668,6 +1669,21 @@ class ScheduleMatchesTests(DemoMixin, TestCase):
                 self.admin_tools.swap_match_allocations,
                 (self.night[0].pk, self.night[1].pk),
                 {},
+            ),
+            (
+                self.admin_tools.build_draw,
+                (
+                    [
+                        {
+                            "stage_id": self.season.divisions_by_title[
+                                "Men's"
+                            ].finals.pk,
+                            "draw_format_text": FINALS_TEXT,
+                            "start_date": datetime.date(2027, 1, 20),
+                        }
+                    ],
+                ),
+                {"dry_run": True},
             ),
         ]
         for tool, args, kwargs in calls:
