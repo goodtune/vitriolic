@@ -36,7 +36,11 @@ class ClubFactory(SitemapNodeBaseFactory):
     class Meta:
         model = models.Club
 
-    title = factory.Faker("company")
+    # A club's slug is derived from its title and looked up on its own, so
+    # titles must be unique: Faker company names occasionally repeat (two
+    # "Smith Group" clubs share a slug and the club page can no longer
+    # resolve either of them).
+    title = factory.Sequence(lambda n: "Club %d" % (n + 1))
 
 
 class CompetitionFactory(OrderedSitemapNodeFactory):
