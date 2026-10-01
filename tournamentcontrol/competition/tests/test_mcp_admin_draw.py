@@ -24,6 +24,7 @@ from test_plus import TestCase
 from tournamentcontrol.competition.draw.services import generate_stage_draw
 from tournamentcontrol.competition.forms import DrawFormatForm, DrawGenerationForm
 from tournamentcontrol.competition.mcp import admin as mcp_admin
+from tournamentcontrol.competition.mcp.admin.scheduling import ScheduleValidator
 from tournamentcontrol.competition.models import DrawFormat, Match, SeasonMatchTime
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin_format
@@ -380,26 +381,27 @@ class ExclusionDateToolTests(DemoMixin, TestCase):
             ["2026-12-23", "2026-12-30", "2027-01-06"],
         )
 
-    def test_adding_and_deleting_dates_locks_the_owner(self):
+    def test_adding_and_deleting_dates_locks_the_season(self):
         """
-        The existing dates are read under a lock on the season (or division),
-        so concurrent calls adding or deleting the same date cannot both act
-        on it.
+        The existing dates are read under the season lock the scheduling
+        tools take (for a division's dates too), so concurrent calls adding
+        or deleting the same date cannot both act on it, and no match is
+        scheduled on a date while it is being excluded.
         """
         division = self.season.divisions_by_title["Mixed"]
         admin = self.admin()
-        for tool, owner, table in (
-            (admin.add_season_exclusion_dates, self.season, "season"),
-            (admin.add_division_exclusion_dates, division, "division"),
-            (admin.delete_season_exclusion_dates, self.season, "season"),
-            (admin.delete_division_exclusion_dates, division, "division"),
+        for tool, owner in (
+            (admin.add_season_exclusion_dates, self.season),
+            (admin.add_division_exclusion_dates, division),
+            (admin.delete_season_exclusion_dates, self.season),
+            (admin.delete_division_exclusion_dates, division),
         ):
             with self.subTest(tool=tool.__name__):
                 with CaptureQueriesContext(connection) as queries:
                     tool(owner.pk, [CHRISTMAS[0]])
                 self.assertEqual(
                     [
-                        q["sql"].startswith(f'SELECT "competition_{table}"."id"')
+                        q["sql"].startswith('SELECT "competition_season"."id"')
                         for q in queries.captured_queries
                         if q["sql"].endswith("FOR UPDATE")
                     ],
@@ -1740,6 +1742,37 @@ class ScheduleMatchesTests(DemoMixin, TestCase):
                     ],
                     [True],
                 )
+
+    def test_batch_clash_checks_do_not_query_per_match(self):
+        """
+        The clash checks of a batch read the date's existing bookings once
+        and every team's declared clashes in one query: a whole night costs
+        the same two queries as a single match.
+        """
+        mens = self.season.divisions_by_title["Men's"]
+        mens.team_list[0].team_clashes.add(
+            self.season.divisions_by_title["Women's"].team_list[0]
+        )
+
+        def queries_for(count):
+            matches = list(
+                Match.objects.select_related("home_team", "away_team").filter(
+                    pk__in=[m.pk for m in self.night[:count]]
+                )
+            )
+            for match, (time, ground) in zip(matches, self.cells):
+                match.time, match.play_at_id = time, ground.pk
+            validator = ScheduleValidator(moving={m.pk for m in matches})
+            with CaptureQueriesContext(connection) as queries:
+                validator.prefetch_clashes(
+                    t for m in matches for t in (m.home_team_id, m.away_team_id)
+                )
+                for match in matches:
+                    self.assertEqual(validator.clash_errors(match), [])
+                    validator.claim(match, f"match {match.pk}")
+            return len(queries.captured_queries)
+
+        self.assertEqual((queries_for(1), queries_for(12)), (2, 2))
 
     def test_limits_and_shape(self):
         self.assertToolError(

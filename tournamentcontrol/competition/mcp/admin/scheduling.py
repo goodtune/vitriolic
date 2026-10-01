@@ -24,9 +24,8 @@ waives them. ``ignore_clashes`` never waives a date or time slot rule.
 """
 
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
-from django.db.models import Q
 
-from tournamentcontrol.competition.models import Match
+from tournamentcontrol.competition.models import Match, Team
 
 
 def validation_message(errors):
@@ -71,6 +70,10 @@ class ScheduleValidator:
         self._teams = {}
         self._rules = {}
         self._slots = {}
+        # date -> what the database already has booked on it
+        self._db = {}
+        # team id -> the teams it declares a clash with
+        self._clash_cache = {}
 
     # -- time slots -----------------------------------------------------------
 
@@ -119,20 +122,72 @@ class ScheduleValidator:
             % (_hhmm(match.time), when, valid)
         ]
 
+    def _booked(self, date):
+        """
+        The places and teams already taken on ``date`` in the database, read
+        once per date (matches being moved excluded): ``(places, teams)``
+        where ``places`` maps ``(place id, time)`` and ``teams`` maps
+        ``(team id, time)`` to the identifiers of the matches holding them.
+        """
+        if date not in self._db:
+            places, teams = {}, {}
+            for pk, time, play_at_id, home_id, away_id in (
+                Match.objects.filter(date=date)
+                .exclude(pk__in=self.moving)
+                .exclude(play_at=None, time=None)
+                .values_list("pk", "time", "play_at_id", "home_team_id", "away_team_id")
+            ):
+                if time is None:
+                    continue
+                if play_at_id is not None:
+                    places.setdefault((play_at_id, time), set()).add(pk)
+                for team_id in (home_id, away_id):
+                    if team_id is not None:
+                        teams.setdefault((team_id, time), set()).add(pk)
+            self._db[date] = (places, teams)
+        return self._db[date]
+
+    def prefetch_clashes(self, team_ids):
+        """
+        Load the declared clashes of every team in ``team_ids`` in one query,
+        for a batch about to be checked.
+        """
+        team_ids = {pk for pk in team_ids if pk is not None} - set(self._clash_cache)
+        if not team_ids:
+            return
+        for team_id in team_ids:
+            self._clash_cache[team_id] = []
+        through = Team.team_clashes.through
+        for link in through.objects.filter(from_team_id__in=team_ids).select_related(
+            "to_team__division"
+        ):
+            self._clash_cache[link.from_team_id].append(link.to_team)
+
+    def _clashes(self, team):
+        """The teams ``team`` declares a clash with, read once per team."""
+        if team.pk not in self._clash_cache:
+            self._clash_cache[team.pk] = list(
+                team.team_clashes.select_related("division")
+            )
+        return self._clash_cache[team.pk]
+
     def clash_errors(self, match):
         """
-        Another match at the same place and time, or a team the sides clash
-        with playing at the same time; in the database or already claimed by
-        this validator.
+        Another match at the same place and time, the same team playing
+        twice at once, or a team the sides clash with playing at the same
+        time; in the database or already claimed by this validator. The
+        database is read once per date and each team's clashes once, so a
+        batch costs a handful of queries rather than several per match.
         """
         if self.ignore_clashes or match.date is None:
             return []
         errors = []
-        others = (
-            Match.objects.filter(date=match.date)
-            .exclude(pk__in=self.moving | ({match.pk} - {None}))
-            .exclude(play_at=None, time=None)
-        )
+        booked_places, booked_teams = self._booked(match.date)
+        others = {match.pk} - {None}
+
+        def taken(booked, key):
+            return bool(booked.get(key, set()) - others)
+
         play_at_id, time = match.play_at_id, match.time
         if play_at_id is not None and time is not None:
             claimant = self._places.get((match.date, play_at_id, time))
@@ -141,7 +196,7 @@ class ScheduleValidator:
                     "%s is already scheduled for this time & place."
                     % claimant.capitalize()
                 )
-            elif others.filter(play_at_id=play_at_id, time=time).exists():
+            elif taken(booked_places, (play_at_id, time)):
                 errors.append(
                     "Another match is already scheduled for this time & place."
                 )
@@ -151,11 +206,7 @@ class ScheduleValidator:
                 if team is None:
                     continue
                 claimant = claimed.get(team.pk)
-                if claimant is not None or (
-                    others.filter(
-                        Q(home_team=team) | Q(away_team=team), time=time
-                    ).exists()
-                ):
+                if claimant is not None or taken(booked_teams, (team.pk, time)):
                     errors.append(
                         "%s are already playing at %s on %s%s."
                         % (
@@ -165,13 +216,9 @@ class ScheduleValidator:
                             f" ({claimant})" if claimant else "",
                         )
                     )
-                for clash in team.team_clashes.all():
+                for clash in self._clashes(team):
                     claimant = claimed.get(clash.pk)
-                    if claimant is None and not (
-                        others.filter(
-                            Q(home_team=clash) | Q(away_team=clash), time=time
-                        ).exists()
-                    ):
+                    if claimant is None and not taken(booked_teams, (clash.pk, time)):
                         continue
                     errors.append(
                         "%s must not play at the same time as %s (%s), who "

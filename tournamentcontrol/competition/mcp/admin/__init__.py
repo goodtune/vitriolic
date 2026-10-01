@@ -2027,14 +2027,9 @@ class AdminToolset(CompetitionToolset):
     # -- scheduling ----------------------------------------------------------
 
     @staticmethod
-    def _lock(instance):
-        """Lock ``instance``'s row for the rest of the caller's transaction."""
-        list(
-            type(instance)
-            .objects.select_for_update()
-            .filter(pk=instance.pk)
-            .values_list("pk", flat=True)
-        )
+    def _owner_season_id(owner):
+        """The season of an exclusion date's owner (a season or division)."""
+        return owner.pk if isinstance(owner, Season) else owner.season_id
 
     @staticmethod
     def _lock_seasons(season_ids):
@@ -2572,9 +2567,10 @@ class AdminToolset(CompetitionToolset):
             raise ToolError("Give one or more dates to exclude.")
         self._require("add", model)
         with transaction.atomic():
-            # Locking the season or division makes "already excluded" exact:
-            # a concurrent call adding the same date waits, then sees it.
-            self._lock(owner)
+            # Locking the season makes "already excluded" exact (a concurrent
+            # call adding the same date waits, then sees it) and keeps a
+            # scheduler from putting a match on a date being excluded.
+            self._lock_seasons([self._owner_season_id(owner)])
             existing = set(
                 manager.filter(date__in=dates).values_list("date", flat=True)
             )
@@ -2595,9 +2591,9 @@ class AdminToolset(CompetitionToolset):
             raise ToolError("Give one or more dates to stop excluding.")
         self._require("delete", model)
         with transaction.atomic():
-            # As when adding: under the owner's lock the report matches what
+            # As when adding: under the season lock the report matches what
             # this call actually deleted.
-            self._lock(owner)
+            self._lock_seasons([self._owner_season_id(owner)])
             doomed = manager.filter(date__in=dates)
             removed = sorted(doomed.values_list("date", flat=True))
             doomed.delete()
@@ -3197,6 +3193,13 @@ class AdminToolset(CompetitionToolset):
                 ignore_clashes=ignore_clashes,
                 moving={pk for index, pk in moving.items() if index not in failed},
             )
+            validator.prefetch_clashes(
+                team_id
+                for pair in Match.objects.filter(pk__in=moving.values()).values_list(
+                    "home_team_id", "away_team_id"
+                )
+                for team_id in pair
+            )
             forms, new_failures = {}, {}
             for index, match_id, changes in entries:
                 if index in failed:
@@ -3365,6 +3368,11 @@ class AdminToolset(CompetitionToolset):
                 )
             )
             validator.moving = {match.pk for match in matches}
+            validator.prefetch_clashes(
+                team_id
+                for match in matches
+                for team_id in (match.home_team_id, match.away_team_id)
+            )
             occupied = set(
                 Match.objects.filter(date=date, play_at__in=places, time__in=slots)
                 .exclude(pk__in=validator.moving)
