@@ -92,6 +92,20 @@ class Calculator(object):
     def parse(self, data):
         self.pattern.parseString(data)
 
+    def identifiers(self):
+        """
+        Return the set of identifiers referenced by the parsed formula.
+
+        Identifiers resolve to attributes of ``self.instance`` when evaluated,
+        so this allows callers to verify that a formula only refers to values
+        that will actually be available at calculation time.
+        """
+        return {
+            token
+            for token in self.stack
+            if token not in self.Operators and Identifier.re.match(token)
+        }
+
     def _push(self, string, position, tokens):
         """Add an element to the parse stack"""
         self.stack.append(tokens[0])
@@ -104,8 +118,11 @@ class BonusPointCalculator(Calculator):
         Sydney Uni Touch
         "[win=1, score_against=0, forfeit_for=0: 1] + [loss=1, margin<=2: 1]"
 
-        Super 14 Rugby
-        "[tries>=4: 1] + [loss=1, margin<=7: 1]"
+        Rugby style losing bonus
+        "[loss=1, margin<=7: 1]"
+
+    Identifiers resolve to attributes of the ladder entry being evaluated,
+    ``margin`` being the absolute score difference for the match.
     """
 
     def __init__(self, *args, **kwargs):

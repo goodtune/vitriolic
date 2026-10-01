@@ -126,6 +126,26 @@ valid_ladder_identifiers = collections.OrderedDict(
     )
 )
 
+# Every identifier that a points or bonus points formula may refer to. These
+# are the LadderEntry fields set by the match signal handler, plus the ``diff``
+# and ``margin`` values which are populated there to mirror the annotations in
+# ``LadderEntryQuerySet._all``.
+ladder_formula_identifiers = frozenset(
+    (
+        "played",
+        "win",
+        "draw",
+        "loss",
+        "bye",
+        "forfeit_for",
+        "forfeit_against",
+        "score_for",
+        "score_against",
+        "diff",
+        "margin",
+    )
+)
+
 
 def ladder_points_widget(name, **attrs):
     defaults = {"placeholder": valid_ladder_identifiers[name].lower()}
@@ -818,6 +838,10 @@ class DivisionForm(MySidelineTitleMixin, SuperUserSlugMixin, ModelForm):
     def _clean_formula(self, field_name, calculator_class):
         """
         Generic clean function for both the formula fields.
+
+        As well as checking the syntax, make sure the formula only refers to
+        identifiers that will be available on a LadderEntry when the formula is
+        evaluated; unknown identifiers would otherwise silently evaluate to 0.
         """
         fake = LadderEntry()
         formula = self.cleaned_data.get(field_name)
@@ -826,6 +850,12 @@ class DivisionForm(MySidelineTitleMixin, SuperUserSlugMixin, ModelForm):
             parser.parse(formula)
         except ParseException:
             raise forms.ValidationError(_("Syntax of this points formula is invalid."))
+        unknown = parser.identifiers() - ladder_formula_identifiers
+        if unknown:
+            raise forms.ValidationError(
+                _("Unknown identifier(s) in this points formula: %(identifiers)s."),
+                params={"identifiers": ", ".join(sorted(unknown))},
+            )
         return formula
 
     def clean_points_formula(self):

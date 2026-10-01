@@ -58,6 +58,75 @@ class SignalHandlerTests(TestCase):
         )
 
 
+class BonusPointsFormulaTests(TestCase):
+    """
+    Bonus points formulas may reference ``margin`` (and ``diff``), which are
+    normally only available as queryset annotations. The signal handler must
+    make them available on the freshly built LadderEntry before evaluation.
+    """
+
+    def setUp(self):
+        self.division = factories.DivisionFactory.create(
+            points_formula="3*win + 2*draw + 1*loss",
+            bonus_points_formula="[loss=1, margin<=2: 1]",
+        )
+        self.stage = factories.StageFactory.create(division=self.division)
+        self.home = factories.TeamFactory.create(division=self.division)
+        self.away = factories.TeamFactory.create(division=self.division)
+
+    def _play(self, home_score, away_score):
+        return factories.MatchFactory.create(
+            stage=self.stage,
+            home_team=self.home,
+            away_team=self.away,
+            home_team_score=home_score,
+            away_team_score=away_score,
+        )
+
+    def _ladder(self, match):
+        return {
+            entry.team_id: (entry.win, entry.loss, entry.bonus_points, entry.points)
+            for entry in match.ladder_entries.all()
+        }
+
+    def test_narrow_loss_earns_losing_bonus(self):
+        match = self._play(4, 5)
+        self.assertEqual(
+            {self.home.pk: (0, 1, 1, 2), self.away.pk: (1, 0, 0, 3)},
+            self._ladder(match),
+        )
+
+    def test_two_point_loss_earns_losing_bonus(self):
+        match = self._play(7, 5)
+        self.assertEqual(
+            {self.home.pk: (1, 0, 0, 3), self.away.pk: (0, 1, 1, 2)},
+            self._ladder(match),
+        )
+
+    def test_wide_loss_earns_no_losing_bonus(self):
+        match = self._play(3, 7)
+        self.assertEqual(
+            {self.home.pk: (0, 1, 0, 1), self.away.pk: (1, 0, 0, 3)},
+            self._ladder(match),
+        )
+
+    def test_shutout_loss_earns_no_losing_bonus(self):
+        match = self._play(6, 0)
+        self.assertEqual(
+            {self.home.pk: (1, 0, 0, 3), self.away.pk: (0, 1, 0, 1)},
+            self._ladder(match),
+        )
+
+    def test_diff_available_to_bonus_formula(self):
+        self.division.bonus_points_formula = "[diff>=5: 1]"
+        self.division.save()
+        match = self._play(8, 2)
+        self.assertEqual(
+            {self.home.pk: (1, 0, 1, 4), self.away.pk: (0, 1, 0, 1)},
+            self._ladder(match),
+        )
+
+
 class CombinedAgeGradeLadderTests(TestCase):
     """
     Model the "Mens 50/55" structure used at Euros 2026.
