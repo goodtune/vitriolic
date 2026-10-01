@@ -66,6 +66,7 @@ from tournamentcontrol.competition.forms import (
     CompetitionForm,
     DivisionForm,
     GroundForm,
+    LiveStreamEventForm,
     LiveStreamKeyForm,
     MatchEditForm,
     MatchRefereeForm,
@@ -94,6 +95,7 @@ from tournamentcontrol.competition.models import (
     Competition,
     Division,
     Ground,
+    LiveStreamEvent,
     LiveStreamKey,
     Match,
     Place,
@@ -103,7 +105,11 @@ from tournamentcontrol.competition.models import (
     Team,
     Venue,
 )
-from tournamentcontrol.competition.tasks import sync_live_stream
+from tournamentcontrol.competition.tasks import (
+    build_live_stream_event_body,
+    sync_live_stream,
+    sync_live_stream_event,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +148,13 @@ configured): `list_streamed_grounds` and `enable_ground_live_stream` /
 keys; `enable_match_live_stream` / `disable_match_live_stream` schedule or
 withdraw the broadcast of a match; `list_season_stream_keys`,
 `create_season_stream_key` and `delete_season_stream_key` manage the pool of
-keys used by ad-hoc events (`list_season_stream_events`).
+keys used by ad-hoc events, which `list_season_stream_events`,
+`create_season_stream_event`, `update_season_stream_event` and
+`delete_season_stream_event` manage. `resync_match_live_stream` and
+`resync_season_stream_event` bring a broadcast into line with its match or
+event right away (creating a missing match broadcast, otherwise updating the
+title, description, schedule and stream binding) and report the outcome,
+including any rejection by YouTube; both are safe to repeat.
 
 Every tool that changes data reports the record as saved. A tool that cannot
 proceed (missing permission, a rule such as "the stream key is in use", or a
@@ -518,6 +530,12 @@ class AdminToolset(CompetitionToolset):
             pk,
         )
 
+    def _event(self, season, pk):
+        """An ad-hoc live stream event of the season."""
+        return self._get(
+            season.live_stream_events.select_related("season", "stream_key"), pk
+        )
+
     def _place_obj(self, season, pk):
         """A venue of the season or one of its grounds."""
         place = self._get(
@@ -703,6 +721,31 @@ class AdminToolset(CompetitionToolset):
                 return False
         sync_live_stream.s(match.pk, base_url=self._base_url()).apply_async()
         return True
+
+    def _sync_stream_event(self, event):
+        """
+        Queue the broadcast synchronisation the admin's live stream event
+        view queues after saving (update, binding, thumbnail or removal).
+        """
+        if not self._credentials(event.season):
+            return False
+        sync_live_stream_event.s(event.pk).apply_async()
+        return True
+
+    @staticmethod
+    def _run_sync(task, *args, **kwargs):
+        """
+        Run a broadcast synchronisation task in the request rather than
+        queueing it, so its outcome is reported in the tool result. A
+        rejection by YouTube or an expired authorisation is reported as the
+        error rather than logged and lost in the worker.
+        """
+        try:
+            return task(*args, **kwargs)
+        except RefreshError:
+            raise ToolError(str(YOUTUBE_AUTH_EXPIRED_MESSAGE))
+        except HttpError as exc:
+            raise ToolError("YouTube API error: %s" % exc.reason)
 
     # ======================================================================
     # Competitions
@@ -2147,6 +2190,205 @@ class AdminToolset(CompetitionToolset):
             "saved": True,
             "live_stream_sync_queued": synced,
             "match": self._admin_match(match),
+        }
+
+    @tool_annotations(idempotent=True, open_world=True)
+    def resync_match_live_stream(self, match_id: int) -> dict[str, Any]:
+        """
+        Bring the YouTube broadcast of a live streamed match into line with
+        the match, now rather than queued: the broadcast is created when the
+        match has none yet, otherwise its title, description, schedule and
+        stream binding are updated (the synchronisation the admin's resync
+        action runs; a title YouTube finds too long is retried in its short
+        form). A match whose live stream was withdrawn but still has a
+        broadcast has it removed. Safe to repeat: an unchanged match is
+        simply updated again. Reports the broadcast id and link and whether
+        it was created, updated or removed; a rejection by YouTube is
+        reported as the error.
+        """
+        match = self._match(match_id)
+        self._require("change", Match, match)
+        season = match.stage.division.season
+        if not match.live_stream and not match.external_identifier:
+            raise ToolError("This match is not set to be live streamed.")
+        self._youtube(season)
+        if match.live_stream and match.get_datetime(datetime.timezone.utc) is None:
+            raise ToolError("Cannot resync a match without a scheduled date and time.")
+        action = self._run_sync(sync_live_stream, match.pk, base_url=self._base_url())
+        match = self._match(match.pk)
+        return {
+            "saved": True,
+            "action": action,
+            "youtube_broadcast_id": match.external_identifier or None,
+            "video_url": (
+                f"https://youtu.be/{match.external_identifier}"
+                if match.external_identifier
+                else None
+            ),
+            "bound_stream_id": match.live_stream_bind or None,
+            "match": self._admin_match(match),
+        }
+
+    # -- ad-hoc live stream events ------------------------------------------
+
+    @staticmethod
+    def _event_time(season, value):
+        """
+        A scheduled time of an event. A time given without an offset is in
+        the season's time zone, which is how the admin form reads it.
+        """
+        if value is not None and timezone.is_naive(value):
+            tzinfo = season.timezone or timezone.get_current_timezone()
+            value = timezone.make_aware(value, tzinfo)
+        return value
+
+    def _event_result(self, event, synced):
+        return {
+            "saved": True,
+            "live_stream_sync_queued": synced,
+            "event": _stream_event_summary(self._event(event.season, event.pk)),
+        }
+
+    @tool_annotations(open_world=True)
+    def create_season_stream_event(
+        self,
+        season_id: int,
+        title: str,
+        start: datetime.datetime,
+        stop: datetime.datetime,
+        description: str | None = None,
+        stream_key_id: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Schedule an ad-hoc live stream event of a season (a broadcast that is
+        not a match, such as an opening ceremony) from ``start`` to ``stop``
+        (to the minute; a time without an offset is in the season's time
+        zone), delivered on one of the season's stream keys (``stream_key_id``
+        is an ``id`` from ``list_season_stream_keys``). The broadcast is
+        created on YouTube straight away (its id becomes the event's id) with
+        the season's privacy setting, so the season needs live streaming
+        enabled with credentials and authorisation; binding it to the stream
+        key and the thumbnail are queued, as in the admin site.
+        """
+        season = self._season(season_id)
+        self._require("add", LiveStreamEvent)
+        if not season.live_stream:
+            raise ToolError("Live streaming is not enabled for this season.")
+        youtube = self._youtube(season)
+
+        def pre_save(obj):
+            broadcast = self._youtube_call(
+                youtube.liveBroadcasts().insert(
+                    part="id,snippet,status,contentDetails",
+                    body=build_live_stream_event_body(obj),
+                )
+            )
+            obj.external_identifier = broadcast["id"]
+            logger.info("YouTube video %(id)r inserted", broadcast)
+
+        event = self._save(
+            LiveStreamEventForm,
+            LiveStreamEvent(season=season),
+            {
+                "title": title,
+                "description": description,
+                "start": self._event_time(season, start),
+                "stop": self._event_time(season, stop),
+                "stream_key": stream_key_id,
+            },
+            pre_save=pre_save,
+        )
+        return self._event_result(event, self._sync_stream_event(event))
+
+    @tool_annotations(idempotent=True, open_world=True)
+    def update_season_stream_event(
+        self,
+        season_id: int,
+        event_id: str,
+        title: str | None = None,
+        description: str | None = None,
+        start: datetime.datetime | None = None,
+        stop: datetime.datetime | None = None,
+        stream_key_id: str | None = None,
+        live_stream: bool | None = None,
+    ) -> dict[str, Any]:
+        """
+        Change an ad-hoc live stream event (``event_id`` is the ``id`` from
+        ``list_season_stream_events``). Only the arguments given are changed;
+        an empty ``stream_key_id`` detaches the stream key. Setting
+        ``live_stream`` to false removes the broadcast from YouTube while
+        keeping the event for the records (it cannot be reinstated). The
+        broadcast is brought into line by the queued synchronisation when
+        the season has credentials; ``resync_season_stream_event`` does it
+        right away.
+        """
+        season = self._season(season_id)
+        event = self._event(season, event_id)
+        self._require("change", LiveStreamEvent, event)
+        event = self._save(
+            LiveStreamEventForm,
+            event,
+            {
+                "title": title,
+                "description": description,
+                "start": self._event_time(season, start),
+                "stop": self._event_time(season, stop),
+                "stream_key": stream_key_id,
+                "live_stream": live_stream,
+            },
+        )
+        return self._event_result(event, self._sync_stream_event(event))
+
+    @tool_annotations(destructive=True, open_world=True)
+    def delete_season_stream_event(
+        self, season_id: int, event_id: str
+    ) -> dict[str, Any]:
+        """
+        Delete an ad-hoc live stream event of a season (``event_id`` is the
+        ``id`` from ``list_season_stream_events``). The broadcast is removed
+        from YouTube first; one already gone counts as removed.
+        """
+        season = self._season(season_id)
+        event = self._event(season, event_id)
+        self._require("delete", LiveStreamEvent, event)
+        youtube = self._youtube(season)
+        self._youtube_delete(youtube, "liveBroadcasts", event.external_identifier)
+        return self._delete(f"live stream event {event.title}", event)
+
+    @tool_annotations(idempotent=True, open_world=True)
+    def resync_season_stream_event(
+        self, season_id: int, event_id: str
+    ) -> dict[str, Any]:
+        """
+        Bring the YouTube broadcast of an ad-hoc live stream event into line
+        with the event, now rather than queued: its title, description,
+        schedule and stream key binding are updated (the synchronisation the
+        admin site queues after saving); an event whose live stream was
+        withdrawn has its broadcast removed. Safe to repeat: an unchanged
+        event is simply updated again. Reports the broadcast id and link and
+        whether it was updated or removed; a rejection by YouTube is
+        reported as the error. The broadcast id is the event's id, so a
+        broadcast that no longer exists on YouTube cannot be recreated: the
+        event must be deleted and created again.
+        """
+        season = self._season(season_id)
+        event = self._event(season, event_id)
+        self._require("change", LiveStreamEvent, event)
+        self._youtube(season)
+        action = self._run_sync(sync_live_stream_event, event.pk)
+        if action == "missing":
+            raise ToolError(
+                "The YouTube broadcast of this live stream event no longer exists "
+                "and cannot be reinstated; delete the event and create it again."
+            )
+        event = self._event(season, event.pk)
+        return {
+            "saved": True,
+            "action": action,
+            "youtube_broadcast_id": event.external_identifier,
+            "video_url": event.video_url,
+            "bound_stream_id": event.live_stream_bind or None,
+            "event": _stream_event_summary(event),
         }
 
 
