@@ -143,9 +143,10 @@ class StageGroupPositionModelFixTests(TestCase):
                     home_result = match.get_home_team()
                     away_result = match.get_away_team()
 
-                    # Should return fallback values
-                    self.assertEqual(home_result, {"title": "None"})
-                    self.assertEqual(away_result, {"title": "None"})
+                    # An unreadable formula is shown as written, and no
+                    # formula at all is "to be advised".
+                    self.assertEqual(home_result, {"title": home_formula or "TBA"})
+                    self.assertEqual(away_result, {"title": away_formula})
 
     def test_no_crash_on_invalid_formulas_eval_method(self):
         """Test Match.eval() method doesn't crash on invalid formulas."""
@@ -160,8 +161,8 @@ class StageGroupPositionModelFixTests(TestCase):
         # This should not raise AttributeError
         home_team, away_team = match.eval()
 
-        self.assertEqual(home_team, {"title": "None"})
-        self.assertEqual(away_team, {"title": "None"})
+        self.assertEqual(home_team, {"title": "BAD1"})
+        self.assertEqual(away_team, {"title": "Team B"})
 
     def test_valid_formulas_still_work_correctly(self):
         """Test that valid formulas continue to work after the fix."""
@@ -223,7 +224,9 @@ class StageGroupPositionModelFixTests(TestCase):
                 home_result = match.get_home_team()
                 away_result = match.get_away_team()
 
-                self.assertEqual(home_result, {"title": "None"})
+                self.assertEqual(
+                    home_result, {"title": (formula or "").strip() or "TBA"}
+                )
                 self.assertEqual(away_result, {"title": "1st"})
 
 

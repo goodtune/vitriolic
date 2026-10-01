@@ -205,19 +205,31 @@ class DrawGenerator(object):
         self.stage = stage
         self.start_date = start_date
         self.teams = defaultdict(lambda: None)
+        # Without a stage (previewing a format) there are no teams to map.
+        teams = {}
         if isinstance(stage, Stage):
             if stage.order > 1:
                 queryset = stage.undecided_teams.all()
             else:
                 queryset = stage.division.teams.all()
-            teams = dict(enumerate(queryset))
+            teams = dict(enumerate(self._stable(queryset)))
         elif isinstance(stage, StageGroup):
             if stage.stage.order > 1:
                 queryset = stage.undecided_teams.all()
             else:
                 queryset = stage.teams.all()
-            teams = dict(enumerate(queryset))
+            teams = dict(enumerate(self._stable(queryset)))
         self.teams.update(teams)
+
+    @staticmethod
+    def _stable(queryset):
+        """
+        Numeric references are mapped to teams by their position in the
+        queryset, so the order must be total for the same inputs to always
+        produce the same draw: keep the model's ordering and break any tie
+        on the primary key.
+        """
+        return queryset.order_by(*queryset.model._meta.ordering, "pk")
 
     def team(self, text):
         if text.isdigit():
@@ -240,7 +252,19 @@ class DrawGenerator(object):
             match = MatchDescriptor(**data)
             round.add(match)
 
-    def generate(self, n=None, offset=0, custom_date_generator=None):
+    def generate(
+        self,
+        n=None,
+        offset=0,
+        custom_date_generator=None,
+        alternate_home_away_on_repeat=False,
+    ):
+        """
+        Generate ``n`` rounds (default: one pass of the format), cycling
+        through the format when ``n`` exceeds its length. With
+        ``alternate_home_away_on_repeat`` every second pass through the
+        format swaps the home and away sides of each match.
+        """
         # if n is not specified generate one complete round
         if n is None:
             n = len(self.rounds)
@@ -289,11 +313,14 @@ class DrawGenerator(object):
             if follows is not None:
                 initial += follows.matches.aggregate(max=Max("round")).get("max") or 0
 
-        for i in range(offset + initial, offset + n + initial):
+        for index, i in enumerate(range(offset + initial, offset + n + initial)):
             date = next(dates)
             round = next(rounds)
+            swap = alternate_home_away_on_repeat and (index // len(self.rounds)) % 2
             for match_id, match in round.generate(self, self.stage, date):
                 match.round = i
+                if swap:
+                    self._swap_home_away(match)
                 matches.add(match_id, match)
 
                 # update the related match values and store only the W or L
@@ -311,6 +338,15 @@ class DrawGenerator(object):
                         setattr(match, f"{team}_team_eval", decode.get("result"))
 
         return matches
+
+    @staticmethod
+    def _swap_home_away(match):
+        for field in ("team", "team_undecided", "team_eval"):
+            home, away = getattr(match, f"home_{field}"), getattr(
+                match, f"away_{field}"
+            )
+            setattr(match, f"home_{field}", away)
+            setattr(match, f"away_{field}", home)
 
     @classmethod
     def validate(cls, text):

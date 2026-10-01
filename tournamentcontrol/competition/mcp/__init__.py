@@ -64,6 +64,9 @@ from tournamentcontrol.competition.models import (
     Venue,
 )
 
+#: The title of a side of a match with no team and nothing to decide it by.
+TBA = "TBA"
+
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
 MAX_DAYS = 366
@@ -181,7 +184,9 @@ def _match_team(match, field):
     """
     The home or away team of a match. Teams that are yet to be decided (for
     example "Winner Semi Final 1" or "1st Pool A") have no identifier, only a
-    descriptive title.
+    descriptive title; a side that is decided by a formula also carries it as
+    ``eval`` ("P1", "G2P3", "W", "L"), with the match a "W" or "L" refers to
+    as ``eval_related_id``. A side with nothing to go on is "TBA".
     """
     team = getattr(match, field)
     if team is not None:
@@ -189,8 +194,13 @@ def _match_team(match, field):
     title = getattr(match, f"{field}_title", None)
     if title is None:
         title = getattr(match, f"get_{field}_plain")()
-    title = strip_tags(str(title or "")).strip() or None
-    return {"id": None, "title": title, "slug": None, "club": None}
+    title = strip_tags(str(title or "")).strip() or TBA
+    res = {"id": None, "title": title, "slug": None, "club": None}
+    team_eval = getattr(match, f"{field}_eval", None)
+    if team_eval:
+        res["eval"] = team_eval
+        res["eval_related_id"] = getattr(match, f"{field}_eval_related_id", None)
+    return res
 
 
 def _match_tzinfo(match):

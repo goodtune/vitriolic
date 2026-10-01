@@ -188,7 +188,7 @@ from the form, or a rule such as "the stream key is in use").
 | `create_team(division_id, title or club_id, …)`, `update_team`, `delete_team` | `TeamForm`; a team with matches cannot be deleted. |
 | `create_stage(division_id, title, …)`, `update_stage`, `delete_stage` | `StageForm`. |
 | `create_pool(stage_id, title)`, `update_pool(pool_id, team_ids, …)`, `delete_pool` | `StageGroupForm`; membership can only change while the pool has no matches. |
-| `create_match(stage_id, home_team_id, away_team_id, date, time, place_id, …)`, `update_match`, `delete_match` | `MatchEditForm` (or `MatchStreamForm` in a live streamed season), then the scheduling rules below for the time and place. |
+| `create_match(stage_id, home_team_id, away_team_id, date, time, place_id, …)`, `update_match`, `delete_match` | `AgentMatchEditForm` (or `AgentMatchStreamForm` in a live streamed season), then the scheduling rules below for the date, time and place. A side can instead be an eval (`home_team_eval` "P1", "G2P3", "S1G1P2", or "W"/"L" with `home_team_eval_related_id`), validated as described under [Draws](#draws). |
 
 Only the arguments given to an `update_*` tool are changed: the form is
 bound to the record's current values with the changes laid over them, so
@@ -196,12 +196,65 @@ the validation and side effects of a form submission from the admin site
 apply (for example changing a division's points formula recalculates its
 ladders, and changing a venue's time zone recomputes kick-off instants).
 
-### Scheduling
+Titles, short titles, labels and names are stored as plain text and
+escaped when rendered, so "Hit & Run" is stored as typed (slug `hit-run`).
+The server never escapes them; some MCP clients HTML-escape the arguments
+they relay, so entities in these fields ("Hit &amp; Run") are decoded
+before saving.
+
+### Draws
+
+Rather than create a season's matches one call at a time, an agent sets up
+the same inputs an administrator gives the admin site's Draw Generation
+wizard and asks the server to build the draw. The wizard's form
+(`DrawGenerationForm`), the division structure builder and `build_draw`
+share `tournamentcontrol.competition.draw.services.generate_stage_draw`, so
+the same inputs always build the same matches.
 
 | Tool | Does |
 | --- | --- |
-| `reschedule_match(match_id, date, time, place_id, ignore_clashes)` | Sets the date, time and/or place with the rules of the admin scheduler: not before the season starts nor on an excluded date (`Match.clean`), the teams' time preferences (`MatchScheduleForm`), and, unless `ignore_clashes`, no other match at the same place and time that day and no declared team clash (`MatchScheduleFormSet`). The kick-off instant is recomputed in the place's time zone. |
-| `swap_match_allocations(match_id, other_match_id)` | Exchanges the date, time and place of two matches of the same season. |
+| `list_draw_formats(teams, is_final, include_text)` | Draw formats, filtered as the wizard does: an odd team count rounds up and formats for that number or one fewer suit. |
+| `get_draw_format(draw_format_id)`, `preview_draw_format(text, teams)` | A format's rounds and matches as structured data, with warnings (a team twice in a round, W/L references to a later match, byes, pairings covered). Preview does not save. |
+| `create_draw_format(name, text, teams, is_final)`, `update_draw_format`, `delete_draw_format` | `DrawFormatForm`, whose line-numbered validation errors are returned as the admin form shows them. The `create_draw_format` description carries the format syntax. Formats are global; deleting one needs `competition.delete_drawformat` and leaves matches built from it untouched. |
+| `list_season_exclusion_dates`, `add_season_exclusion_dates(season_id, dates)`, `delete_season_exclusion_dates` | Several dates per call; adding an existing date is a no-op. Matches already on an added date are listed, not moved. |
+| `list_division_exclusion_dates`, `add_division_exclusion_dates(division_id, dates)`, `delete_division_exclusion_dates` | The same for one division. |
+| `list_timeslots(season_id)`, `create_timeslot(season_id, start, interval, count, start_date, end_date)`, `update_timeslot`, `delete_timeslot` | Time slot rules (`SeasonMatchTime`): `start=18:40, interval=50, count=3` gives 18:40, 19:30 and 20:20. |
+| `get_timeslots(season_id, date)` | The kick-off times the rules produce (`Season.get_timeslots`). |
+| `build_draw(builds, dry_run, replace_existing, verbose)` | Builds stages or pools from formats in one atomic call (up to 50). Each build gives `stage_id` or `pool_id`, `draw_format_id` or `draw_format_text`, `start_date`, `rounds` (repeating the format), `offset` and `alternate_home_away_on_repeat`. Dates follow the season's mode and skip excluded dates; W/L references are wired to `*_eval_related`. `dry_run` returns the plan (exactly what a real run saves) without saving; existing matches are refused unless `replace_existing`, which deletes those without results. |
+
+An eval on `create_match` / `update_match` (`AgentMatchEditForm`) is checked
+before it is saved: a side is one of a team, an undecided team or an eval;
+a positional eval must name an earlier stage (by default the one this stage
+follows), an existing pool and a position within its team count; a W or L
+eval needs a related match of the same division in an earlier stage or an
+earlier round of the same stage, which rules out self references and
+cycles. Placeholder sides are serialised with their eval:
+`{"id": null, "title": "Winner Semi 1", "eval": "W", "eval_related_id": 599}`,
+and a side with nothing to decide it is titled "TBA".
+
+### Scheduling
+
+Every tool that sets a match's date or time applies the same rules
+(`tournamentcontrol.competition.mcp.admin.scheduling.ScheduleValidator`):
+
+1. the date is not before the season starts nor excluded for the season or
+   the division (`Match.clean`);
+2. when the season has time slot rules, the time is one of the date's slots
+   ("19:00 is not a time slot on 2026-10-14; valid: 18:40, 19:30, 20:20");
+3. the teams' time preferences are respected (`MatchScheduleForm`);
+4. unless `ignore_clashes`: no other match at the same place and time, no
+   team playing twice at the same time, and no declared team clash, checked
+   against the database and against the other matches of the same batch.
+
+`ignore_clashes` waives rules 3 and 4 only, as in the admin scheduler; it
+never waives an excluded date or a time slot.
+
+| Tool | Does |
+| --- | --- |
+| `reschedule_match(match_id, date, time, place_id, ignore_clashes)` | Sets the date, time and/or place of one match. The kick-off instant is recomputed in the place's time zone. |
+| `schedule_matches(items, ignore_clashes, atomic, verbose)` | The same for up to 500 matches at once. With `atomic` (default) nothing is saved unless every item is valid, and every failing item is reported by index; otherwise the valid items are saved. |
+| `auto_schedule(season_id, date, place_ids, stage_ids, ignore_clashes, dry_run)` | Fills a date's time slots × grounds grid with that date's unscheduled matches: matches in division, stage, pool, round and id order each take the first free cell, slots earliest first and grounds in the order given, skipping cells that break a rule for that match. |
+| `swap_match_allocations(match_id, other_match_id)` | Exchanges the date, time and place of two matches of the same season (date and time slot rules apply to each new slot). |
 
 A match that is live streamed is not moved off a streamed ground and is
 never swapped: remove its live stream first. Moving it between streamed
@@ -235,6 +288,37 @@ forms (`edit_ground`, `edit_livestreamkey`, `delete_livestreamkey`,
 `edit_match`); they need the season's YouTube credentials and authorisation,
 which are configured from the admin site.
 
+### Compact responses
+
+`create_match`, `update_match`, `reschedule_match`, `record_match_result`
+and `create_team` take `verbose`. With `verbose=false` a match is returned
+as its identifiers and scheduling fields only:
+
+```json
+{"saved": true, "match": {"id": 451, "round": 1, "date": "2026-10-07",
+ "time": "18:40", "place_id": 22, "home_team_id": 31, "away_team_id": 38,
+ "status": "upcoming"}}
+```
+
+`build_draw`, `schedule_matches` and `auto_schedule` are compact unless
+`verbose=true`.
+
+## Changelog
+
+- **Draw building and batch scheduling.** Draw format, exclusion date and
+  time slot tools, `build_draw`, `schedule_matches` and `auto_schedule`;
+  eval fields on `create_match` / `update_match`; time slot rules enforced on
+  every scheduling path; a team can no longer be scheduled twice at the same
+  time (unless `ignore_clashes`).
+- **Response size.** The match tools listed under
+  [Compact responses](#compact-responses) gained `verbose`. It defaults to
+  `true` (the full match, as before) for this release; the next release
+  will default it to `false`. Clients that read the full match from these
+  tools should pass `verbose=true` explicitly.
+- **Placeholder titles.** A side of a match with no team, undecided team or
+  eval is titled "TBA" (it was the string "None") in the MCP tools, the REST
+  API and the web pages; an eval that cannot be read is shown as written.
+
 ## Tool annotations
 
 The read tools carry `readOnlyHint: true`; every tool that changes data is
@@ -247,11 +331,13 @@ a tool.
 ## Testing
 
 ```bash
-uvx tox -e dj52-py313 -- tournamentcontrol.competition.tests.test_mcp_admin
+uvx tox -e dj52-py313 -- tournamentcontrol.competition.tests.test_mcp_admin tournamentcontrol.competition.tests.test_mcp_admin_draw
 ```
 
 The tests call the toolset directly with a fake request, drive the tools
 over JSON-RPC through the HTTP endpoint with a session, and run the
 complete OAuth flow (registration, authorization with PKCE, token exchange,
 refresh) against django-oauth-toolkit before calling the tools with the
-bearer token.
+bearer token. `tests/e2e/test_mcp_admin_client.py` rebuilds a demo
+competition (three divisions, 153 matches including finals) with the MCP
+client in about two dozen tool calls.
