@@ -2589,14 +2589,17 @@ class AdminToolset(CompetitionToolset):
             "matches_on_excluded_dates": self._matches_on(matches, dates),
         }
 
-    def _delete_exclusions(self, manager, model, dates):
+    def _delete_exclusions(self, manager, model, owner, dates):
         dates = sorted(set(dates or []))
         if not dates:
             raise ToolError("Give one or more dates to stop excluding.")
         self._require("delete", model)
-        doomed = manager.filter(date__in=dates)
-        removed = sorted(doomed.values_list("date", flat=True))
         with transaction.atomic():
+            # As when adding: under the owner's lock the report matches what
+            # this call actually deleted.
+            self._lock(owner)
+            doomed = manager.filter(date__in=dates)
+            removed = sorted(doomed.values_list("date", flat=True))
             doomed.delete()
         return {
             "deleted": [d.isoformat() for d in removed],
@@ -2646,7 +2649,9 @@ class AdminToolset(CompetitionToolset):
         reported in ``not_excluded``.
         """
         season = self._season(season_id)
-        return self._delete_exclusions(season.exclusions, SeasonExclusionDate, dates)
+        return self._delete_exclusions(
+            season.exclusions, SeasonExclusionDate, season, dates
+        )
 
     def list_division_exclusion_dates(self, division_id: int) -> dict[str, Any]:
         """
@@ -2690,7 +2695,7 @@ class AdminToolset(CompetitionToolset):
         """Stop excluding dates for a division."""
         division = self._division(division_id)
         return self._delete_exclusions(
-            division.exclusions, DivisionExclusionDate, dates
+            division.exclusions, DivisionExclusionDate, division, dates
         )
 
     # ======================================================================

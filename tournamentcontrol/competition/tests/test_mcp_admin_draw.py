@@ -380,17 +380,21 @@ class ExclusionDateToolTests(DemoMixin, TestCase):
             ["2026-12-23", "2026-12-30", "2027-01-06"],
         )
 
-    def test_adding_dates_locks_the_owner(self):
+    def test_adding_and_deleting_dates_locks_the_owner(self):
         """
         The existing dates are read under a lock on the season (or division),
-        so concurrent calls adding the same date cannot both insert it.
+        so concurrent calls adding or deleting the same date cannot both act
+        on it.
         """
         division = self.season.divisions_by_title["Mixed"]
+        admin = self.admin()
         for tool, owner, table in (
-            (self.admin().add_season_exclusion_dates, self.season, "season"),
-            (self.admin().add_division_exclusion_dates, division, "division"),
+            (admin.add_season_exclusion_dates, self.season, "season"),
+            (admin.add_division_exclusion_dates, division, "division"),
+            (admin.delete_season_exclusion_dates, self.season, "season"),
+            (admin.delete_division_exclusion_dates, division, "division"),
         ):
-            with self.subTest(owner=table):
+            with self.subTest(tool=tool.__name__):
                 with CaptureQueriesContext(connection) as queries:
                     tool(owner.pk, [CHRISTMAS[0]])
                 self.assertEqual(
