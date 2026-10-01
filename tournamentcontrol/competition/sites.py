@@ -1248,48 +1248,70 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         )
         return self.render(request, templates, context)
 
+    def _place_context(self, matches, day=None):
+        """
+        Build the shared context for the venue and ground views: the days
+        on which the place hosts public matches, and those matches grouped
+        by day — narrowed to ``day`` when one is selected.
+        """
+        matches = matches.exclude(is_bye=True).filter(
+            date__isnull=False, stage__division__draft=False
+        )
+
+        dates = list(matches.dates("date", "day"))
+        if day is not None:
+            # a well-formed day without matches at this place is a bad
+            # filter value, just like on the season fixtures navigator
+            if day not in dates:
+                raise Http404("No matches on this day.")
+            matches = matches.filter(date=day)
+
+        # keep the query narrow and fetch the teams with flat prefetch
+        # queries — see season_fixtures for the reasoning
+        team_qs = Team.objects.select_related("club", "division")
+        matches = (
+            matches.select_related(None)
+            .select_related("play_at", "stage__division", "stage_group")
+            .defer("live_stream_thumbnail_image")
+            .prefetch_related(
+                Prefetch("home_team", queryset=team_qs),
+                Prefetch("away_team", queryset=team_qs),
+                "home_team_undecided",
+                "away_team_undecided",
+                "home_team_eval_related",
+                "away_team_eval_related",
+            )
+            .order_by("date", "time", "play_at__ground__order", "pk")
+        )
+
+        matches_by_date = collections.OrderedDict()
+        for match in matches:
+            matches_by_date.setdefault(match.date, []).append(match)
+
+        return {
+            "dates": dates,
+            "selected_date": day,
+            "matches_by_date": matches_by_date,
+        }
+
     @competition_by_slug_m
     def venue(
         self, request, competition, season, venue, extra_context, date=None, **kwargs
     ):
-        templates = self.template_path(
-            "venue.html", competition.slug, season.slug, venue.slug
-        )
-
+        """
+        Every public match at a venue — scheduled on the venue itself or on
+        any of its grounds — grouped by day, optionally for a single day.
+        """
         matches = season.matches.filter(
             Q(play_at=venue) | Q(play_at__ground__venue=venue)
         )
-        if date is not None:
-            matches = matches.filter(date=date)
+        context = self._place_context(matches, date)
+        context.update(extra_context)
 
-        matches = matches.select_related(
-            "play_at",
-            "stage__division",
-            "home_team__club",
-            "away_team__club",
-        ).order_by("datetime", "date", "time", "pk")
-
-        dates = list(matches.dates("date", "day"))
-        tzinfo = timezone.get_current_timezone()
-        matches_by_date = collections.OrderedDict()
-        for m in matches:
-            matches_by_date.setdefault(m.get_date(tzinfo), []).append(m)
-
-        extra_context.update(
-            {
-                "grounds": venue.grounds.all(),
-                "dates": dates,
-                "matches_by_date": matches_by_date,
-            }
+        templates = self.template_path(
+            "venue.html", competition.slug, season.slug, venue.slug
         )
-
-        return self.generic_detail(
-            request,
-            season.venues,
-            slug=venue.slug,
-            templates=templates,
-            extra_context=extra_context,
-        )
+        return self.render(request, templates, context)
 
     @competition_by_slug_m
     def ground(
@@ -1303,6 +1325,14 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         date=None,
         **kwargs,
     ):
+        """
+        Every public match on a single ground of a venue, grouped by day,
+        optionally for a single day.
+        """
+        matches = season.matches.filter(play_at=ground)
+        context = self._place_context(matches, date)
+        context.update(extra_context)
+
         templates = self.template_path(
             "ground.html",
             competition.slug,
@@ -1310,38 +1340,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             venue.slug,
             ground.slug,
         )
-
-        matches = season.matches.filter(play_at=ground)
-        if date is not None:
-            matches = matches.filter(date=date)
-
-        matches = matches.select_related(
-            "play_at",
-            "stage__division",
-            "home_team__club",
-            "away_team__club",
-        ).order_by("datetime", "date", "time", "pk")
-
-        dates = list(matches.dates("date", "day"))
-        tzinfo = timezone.get_current_timezone()
-        matches_by_date = collections.OrderedDict()
-        for m in matches:
-            matches_by_date.setdefault(m.get_date(tzinfo), []).append(m)
-
-        extra_context.update(
-            {
-                "dates": dates,
-                "matches_by_date": matches_by_date,
-            }
-        )
-
-        return self.generic_detail(
-            request,
-            venue.grounds,
-            slug=ground.slug,
-            templates=templates,
-            extra_context=extra_context,
-        )
+        return self.render(request, templates, context)
 
     @competition_by_slug_m
     def calendar(self, request, season, club=None, division=None, team=None, **kwargs):

@@ -1,26 +1,40 @@
 {% extends "tournamentcontrol/competition/base.html" %}
-{% load i18n %}
+{% load i18n tz %}
 
-{% block page_title %}{{ competition.title }} - {{ season.title }} - {{ venue.title }} - {{ ground.title }}{% endblock %}
+{% block body_class %}{{ block.super }} ground{% endblock %}
+
+{% block page_title %}{% trans competition.title %} - {% trans season.title %} - {% trans venue.title %} - {% trans ground.title %}{% endblock %}
 
 {% block content %}
-<h1>{% trans competition.title %} - {% trans season.title %}</h1>
-<h2>{% trans venue.title %} - {% trans ground.title %}</h2>
+	{% block heading %}
+		<h1>{% trans competition.title %} - {% trans season.title %}</h1>
+		{% url application.name|add:":venue" competition=competition.slug season=season.slug venue=venue.slug as url1 %}
+		{% url application.name|add:":venue" season=season.slug venue=venue.slug as url2 %}
+		{% url application.name|add:":venue" venue=venue.slug as url3 %}
+		<h2><a href="{{ url1|default:url2|default:url3 }}">{% trans venue.title %}</a> - {% trans ground.title %}</h2>
+	{% endblock %}
 
-<ul id="dates">
-{% for d in dates %}
-    <li><a href="{{ d|date:'Ymd' }}/">{{ d|date }}</a></li>
-{% endfor %}
-</ul>
+	{% block dates %}
+		{% if dates %}
+			<ul id="dates">
+				{% url application.name|add:":ground" competition=competition.slug season=season.slug venue=venue.slug ground=ground.slug as url1 %}
+				{% url application.name|add:":ground" season=season.slug venue=venue.slug ground=ground.slug as url2 %}
+				{% url application.name|add:":ground" venue=venue.slug ground=ground.slug as url3 %}
+				<li class="all{% if not selected_date %} current{% endif %}"><a href="{{ url1|default:url2|default:url3 }}">{% trans "All days" %}</a></li>
+				{% for d in dates %}
+					{% url application.name|add:":ground" competition=competition.slug season=season.slug venue=venue.slug ground=ground.slug datestr=d|date:"Ymd" as url1 %}
+					{% url application.name|add:":ground" season=season.slug venue=venue.slug ground=ground.slug datestr=d|date:"Ymd" as url2 %}
+					{% url application.name|add:":ground" venue=venue.slug ground=ground.slug datestr=d|date:"Ymd" as url3 %}
+					<li{% if d == selected_date %} class="current"{% endif %}><a href="{{ url1|default:url2|default:url3 }}">{{ d|date:"D j M" }}</a></li>
+				{% endfor %}
+			</ul>
+		{% endif %}
+	{% endblock %}
 
-{% for date, matches in matches_by_date.items %}
-<h3>{{ date }}</h3>
-<table class="draw">
-<tbody>
-{% for match in matches %}
-<tr><td class="time">{{ match.datetime|time }}</td><td>{{ match.get_home_team.title }}</td><td>{{ match.get_away_team.title }}</td></tr>
-{% endfor %}
-</tbody>
-</table>
-{% endfor %}
+	{% block matches %}
+		{# kick-off times are local to the place, as on the match detail page #}
+		{% timezone ground.timezone|default:venue.timezone|default:season.timezone %}
+			{% include "tournamentcontrol/competition/_place_matches.html" %}
+		{% endtimezone %}
+	{% endblock %}
 {% endblock %}

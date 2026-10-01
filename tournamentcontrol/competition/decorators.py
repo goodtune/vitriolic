@@ -6,6 +6,7 @@ from urllib.parse import ParseResult
 
 from dateutil.parser import parse
 from django.db.models import Count
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.utils.functional import wraps
@@ -418,7 +419,11 @@ def competition_by_slug(f, *a, **kw):
                 ).prefetch_related("division", "stage_group")
 
         if datestr:
-            kwargs["date"] = parse(datestr).date()
+            # the url patterns only promise eight digits, not a real date
+            try:
+                kwargs["date"] = parse(datestr).date()
+            except ValueError:
+                raise Http404("Invalid date.")
             if timestr:
                 kwargs["time"] = datetime.time(*time.strptime(timestr, "%H%M")[3:5])
 
