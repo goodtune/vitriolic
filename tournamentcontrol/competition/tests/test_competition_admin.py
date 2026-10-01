@@ -2812,7 +2812,11 @@ class EditViewPermissionTests(TestCase):
         with self.login(self.staff):
             self.get("admin:fixja:competition:season:edit", *self.season._get_url_args())
             self.response_200()
-            self.assertResponseContains(self.season.title, html=False)
+            self.assertResponseContains(
+                '<input type="text" name="title" value="%s" maxlength="255" '
+                'placeholder="Title" class="form-control" required id="id_title">'
+                % self.season.title
+            )
 
     def test_object_level_change_permission_is_scoped_to_object(self):
         assign_perm("competition.change_season", self.staff, self.season)
