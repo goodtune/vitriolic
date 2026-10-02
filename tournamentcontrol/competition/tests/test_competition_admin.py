@@ -191,14 +191,14 @@ class TemplateTests(TestCase):
     def test_scorecards_pdf_task(self, mock_prince):
         # Regression test for #82: the PDF variant renders the same template
         # inside the celery task (a fresh worker process in production)
-        # before handing the markup to Prince.
+        # before handing the markup to Prince. Called the way the admin view
+        # queues it since #42: primary keys only, the task loads the season
+        # and competition for the template itself.
         mock_prince.return_value = b"%PDF-1.4"
         templates = ["tournamentcontrol/competition/admin/scorecards.html"]
         match_pks = list(self.season.matches.values_list("pk", flat=True))
         data = generate_pdf_scorecards(
-            match_pks,
-            templates,
-            {"competition": self.competition, "season": self.season},
+            match_pks, templates, {}, season_pk=self.season.pk
         )
         self.assertEqual(base64.b64decode(data), b"%PDF-1.4")
         mock_prince.assert_called_once()
