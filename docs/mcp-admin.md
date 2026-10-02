@@ -185,10 +185,10 @@ from the form, or a rule such as "the stream key is in use").
 | `create_venue(season_id, title, latitude, longitude, zoom, …)`, `update_venue`, `delete_venue` | `VenueForm`. |
 | `create_ground(venue_id, title, …, live_stream)`, `update_ground`, `delete_ground` | `GroundForm`, with the YouTube stream kept in step as the admin's ground view does. |
 | `create_division(season_id, title, points_formula, …)`, `update_division`, `delete_division` | `DivisionForm`, including the points formula validation. |
-| `create_team(division_id, title or club_id, …)`, `update_team`, `delete_team` | `TeamForm`; a team with matches cannot be deleted. |
+| `create_team(division_id, title or club_id, …)`, `update_team`, `delete_team` | `TeamForm`; a team with matches cannot be deleted (see `withdraw_team` under [Withdrawals](#withdrawals)). |
 | `create_stage(division_id, title, …)`, `update_stage`, `delete_stage` | `StageForm`. |
 | `create_pool(stage_id, title)`, `update_pool(pool_id, team_ids, …)`, `delete_pool` | `StageGroupForm`; membership can only change while the pool has no matches. |
-| `create_match(stage_id, home_team_id, away_team_id, date, time, place_id, …)`, `update_match`, `delete_match` | `AgentMatchEditForm` (or `AgentMatchStreamForm` in a live streamed season), then the scheduling rules below for the date, time and place. A side can instead be an eval (`home_team_eval` "P1", "G2P3", "S1G1P2", or "W"/"L" with `home_team_eval_related_id`), validated as described under [Draws](#draws). |
+| `create_match(stage_id, home_team_id, away_team_id, date, time, place_id, …)`, `update_match`, `delete_match` | `AgentMatchEditForm` (or `AgentMatchStreamForm` in a live streamed season), then the scheduling rules below for the date, time and place. A side can instead be an eval (`home_team_eval` "P1", "G2P3", "S1G1P2", or "W"/"L" with `home_team_eval_related_id`), validated as described under [Draws](#draws). `create_match(is_bye=true)` creates a bye (one team, no time or place); `update_match(is_bye=true, clear_away_team=true)` converts an unplayed match into a bye, releasing its time, ground and referees, and `update_match(is_bye=false, away_team_id=…)` turns an unprocessed bye back into an unscheduled match. |
 
 Only the arguments given to an `update_*` tool are changed: the form is
 bound to the record's current values with the changes laid over them, so
@@ -263,6 +263,12 @@ A match that is live streamed is not moved off a streamed ground and is
 never swapped: remove its live stream first. Moving it between streamed
 grounds resynchronises its broadcast.
 
+### Withdrawals
+
+| Tool | Does |
+| --- | --- |
+| `withdraw_team(team_id, from_date, void_played_results, dry_run)` | Takes a team out of its division part way through a season. Each unplayed match of the team on or after `from_date` (default: its first unplayed match) becomes a bye for the opponent through `utils.convert_to_byes`, the block `regrade` uses: the team's side is cleared, `is_bye` set, the time and ground released and the referee appointments removed, while the date is kept so the bye is listed by `list_matches_awaiting_results` and processed with `record_match_result(bye_processed=true)`. A match whose other side is already empty is deleted. Played matches, forfeits and processed byes are kept; `void_played_results` sets `include_in_ladder=false` on them and the ladder signals rebuild the totals. The team is removed from other teams' clash lists. Refused while the team is in an unplayed match of a later stage or in a live streamed match; `dry_run` reports the plan without saving; a second call changes nothing. The response lists `converted_to_bye` (with the time and ground released), `deleted`, `kept_with_results`, `blocked`, `clashes_removed` and `warnings` (a points formula without a `bye` term). Every other match keeps its id, time, ground, referees and broadcast. |
+
 ### Results and referees
 
 | Tool | Does |
@@ -317,6 +323,12 @@ as its identifiers and scheduling fields only:
 
 ## Changelog
 
+- **Byes and withdrawals.** `create_match(is_bye=true)` creates a single
+  bye; `update_match` gained `is_bye`, `clear_home_team` and
+  `clear_away_team` to convert an unplayed match to a bye (releasing its
+  slot and referees) and an unprocessed bye back to a match; the new
+  `withdraw_team` turns a team's remaining matches into byes for the
+  opponents without rebuilding the draw. `delete_team` points to it.
 - **MySideline matches.** `list_matches_awaiting_results` (like the admin
   dashboard's Awaiting Scores and the season results page) no longer lists
   matches mirrored from MySideline, whose results come from MySideline. The

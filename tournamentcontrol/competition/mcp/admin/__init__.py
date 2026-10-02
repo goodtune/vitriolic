@@ -42,6 +42,7 @@ error result carrying the message.
 import datetime
 import html
 import logging
+import re
 from typing import Any, Literal
 
 from dateutil.rrule import DAILY, WEEKLY
@@ -138,6 +139,7 @@ from tournamentcontrol.competition.tasks import (
     sync_live_stream,
     sync_live_stream_event,
 )
+from tournamentcontrol.competition.utils import convert_to_byes
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +184,14 @@ the draw:
    matches their times and grounds in one call.
 
 `create_match` remains for one-off matches and repairs; it accepts the same
-evals (`home_team_eval`, `home_team_eval_related_id`, ...) as a draw format.
+evals (`home_team_eval`, `home_team_eval_related_id`, ...) as a draw format,
+and `is_bye` for a single bye. `update_match` converts a match to a bye
+(`is_bye=true` with `clear_home_team` / `clear_away_team`) and back.
+
+Withdrawals: `withdraw_team` takes a team out of its division part way
+through a season, turning its unplayed matches into byes for the opponents
+and leaving every other match untouched; `delete_team` is only for a team
+with no matches.
 
 Scheduling: `reschedule_match` sets the date, time and place (venue or
 ground) of one match and `schedule_matches` of many at once. Every path that
@@ -1652,17 +1661,207 @@ class AdminToolset(CompetitionToolset):
     @tool_annotations(destructive=True)
     def delete_team(self, team_id: int) -> dict[str, Any]:
         """
-        Withdraw a team from its division. Refused once the team has matches,
-        as the admin site refuses it.
+        Remove a team from its division. Refused once the team has matches,
+        as the admin site refuses it: use ``withdraw_team`` to take a team
+        out part way through a season.
         """
         team = self._team(team_id)
         self._require("delete", Team, team)
         if team.home_games.exists() or team.away_games.exists():
             raise ToolError(
                 "This team cannot be deleted because it has matches scheduled "
-                "or played."
+                "or played; use withdraw_team to take it out of the draw."
             )
         return self._delete(f"team {team.title}", team)
+
+    @tool_annotations(destructive=True)
+    def withdraw_team(
+        self,
+        team_id: int,
+        from_date: datetime.date | None = None,
+        void_played_results: bool = False,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Withdraw a team from its division part way through a season. Every
+        other match keeps its id, time, ground, referees and broadcast.
+
+        Each unplayed match of the team dated on or after ``from_date``
+        (default: the date of its first unplayed match) becomes a bye for
+        the opponent: the team's side is cleared, the referees are removed
+        and the time and ground are released for ``auto_schedule`` /
+        ``schedule_matches``; the date is kept, so
+        ``list_matches_awaiting_results`` lists the bye once it has passed
+        and ``record_match_result(bye_processed=true)`` awards the division's
+        bye points. A match whose other side is already empty (two withdrawn
+        teams drawn together, or an unprocessed bye of the team) is deleted.
+        Played matches, forfeits and processed byes are kept; with
+        ``void_played_results`` they are taken out of the ladder
+        (``include_in_ladder=false``) and the ladders rebuilt, so the
+        opponents who already played the team are treated like those who
+        get a bye. The team is also removed from the clash lists of other
+        teams.
+
+        Refused while the team is in an unplayed match of a later stage (it
+        has progressed to finals: repair those matches first) or in a live
+        streamed match (``disable_match_live_stream`` first). ``dry_run``
+        reports the same plan, and anything that blocks it, without saving.
+        Safe to repeat: a second call finds nothing left to change. Warns
+        when the division's points formula has no ``bye`` term, as the
+        opponents then score nothing for their byes. ``delete_team`` removes
+        a team that has no matches.
+        """
+        team = self._team(team_id)
+        self._require("change", Team, team)
+        division = team.division
+        with transaction.atomic():
+            self._lock_seasons([division.season_id])
+            matches = list(
+                team.matches.select_related(
+                    "stage", "play_at", "home_team__club", "away_team__club"
+                ).order_by("date", "stage__order", "round", "pk")
+            )
+            played = [m for m in matches if self._has_result(m)]
+            unplayed = [m for m in matches if not self._has_result(m)]
+            if from_date is None:
+                from_date = min(
+                    (m.date for m in unplayed if m.date is not None), default=None
+                )
+            pending = [
+                m
+                for m in unplayed
+                if m.date is not None and from_date is not None and m.date >= from_date
+            ]
+            first_stage_order = min((m.stage.order for m in matches), default=None)
+            now, today = self._now()
+
+            convert, delete, blocked = [], [], []
+            for match in pending:
+                opponent_side = "away" if match.home_team_id == team.pk else "home"
+                if match.stage.order > first_stage_order:
+                    blocked.append(
+                        (match, "the team has progressed to %s" % match.stage.title)
+                    )
+                elif match.live_stream:
+                    blocked.append(
+                        (
+                            match,
+                            "the match is live streamed; remove the live stream first",
+                        )
+                    )
+                elif self._side_is_empty(match, opponent_side):
+                    delete.append(match)
+                else:
+                    convert.append(match)
+
+            def entry(match, **extra):
+                opponent_side = "away" if match.home_team_id == team.pk else "home"
+                res = {
+                    "id": match.pk,
+                    "round": match.round,
+                    "date": _iso(match.date),
+                    "stage": _ref(match.stage),
+                    "opponent": _team_ref(getattr(match, f"{opponent_side}_team")),
+                }
+                res.update(extra)
+                return res
+
+            report = {
+                "saved": False,
+                "dry_run": dry_run,
+                "team": _team_ref(team),
+                "from_date": _iso(from_date),
+                "converted_to_bye": [
+                    entry(
+                        m,
+                        time=_hhmm(m.time),
+                        **_place(m.play_at),
+                        referees_removed=m.referees.count(),
+                    )
+                    for m in convert
+                ],
+                "deleted": [entry(m) for m in delete],
+                "kept_with_results": [
+                    entry(
+                        m,
+                        status=_match_status(m, now, today),
+                        voided=void_played_results or not m.include_in_ladder,
+                    )
+                    for m in played
+                ],
+                "blocked": [entry(m, reason=reason) for m, reason in blocked],
+                "clashes_removed": [
+                    _ref(t) for t in team.team_clashes.select_related("division")
+                ],
+                "warnings": [],
+            }
+            if (convert or delete) and not re.search(
+                r"\bbye\b", division.points_formula or ""
+            ):
+                report["warnings"].append(
+                    "The points formula of %s has no bye term, so the opponents "
+                    "score nothing for these byes; teams that had not yet "
+                    "played %s are disadvantaged unless the formula is changed "
+                    "with update_division." % (division.title, team.title)
+                )
+            if blocked:
+                if dry_run:
+                    return report
+                raise ToolError(
+                    "%s cannot be withdrawn: %s."
+                    % (
+                        team.title,
+                        "; ".join(
+                            "match %d (round %s, %s) %s"
+                            % (m.pk, m.round, _iso(m.date), reason)
+                            for m, reason in blocked
+                        ),
+                    )
+                )
+            if dry_run:
+                return report
+
+            for match in convert:
+                self._require("change", Match, match)
+            for match in delete:
+                self._require("delete", Match, match)
+            if void_played_results:
+                for match in played:
+                    self._require("change", Match, match)
+
+            for match in convert:
+                match.referees.clear()
+            if convert or delete:
+                convert_to_byes(team, from_date)
+            for match in delete:
+                match.delete()
+            if void_played_results:
+                for match in played:
+                    if match.include_in_ladder:
+                        match.include_in_ladder = False
+                        # The ladders are rebuilt by the save signal.
+                        match.save(update_fields=["include_in_ladder"])
+            team.team_clashes.clear()
+        report["saved"] = True
+        return report
+
+    @staticmethod
+    def _has_result(match):
+        """A match the ladder counts: scored, forfeited or a processed bye."""
+        return (
+            match.is_forfeit
+            or (match.home_team_score is not None and match.away_team_score is not None)
+            or (match.is_bye and match.bye_processed)
+        )
+
+    @staticmethod
+    def _side_is_empty(match, side):
+        """Whether ``side`` of ``match`` has no team, undecided team or eval."""
+        return not (
+            getattr(match, f"{side}_team_id")
+            or getattr(match, f"{side}_team_undecided_id")
+            or (getattr(match, f"{side}_team_eval") or "").strip()
+        )
 
     # ======================================================================
     # Stages and pools
@@ -1854,6 +2053,7 @@ class AdminToolset(CompetitionToolset):
         home_team_eval_related_id: int | None = None,
         away_team_eval: str | None = None,
         away_team_eval_related_id: int | None = None,
+        is_bye: bool = False,
         verbose: bool = True,
     ) -> dict[str, Any]:
         """
@@ -1883,11 +2083,28 @@ class AdminToolset(CompetitionToolset):
         ``reschedule_match``; ``ignore_clashes`` waives the clash checks only,
         never excluded dates or the season's time slots.
         ``include_in_ladder`` defaults to whether the stage keeps a ladder.
-        ``verbose=false`` returns just the identifiers and scheduling fields.
+
+        ``is_bye`` creates a bye: exactly one side is a team
+        (``home_team_id`` or ``away_team_id``), the other side is left empty,
+        and there is no ``time`` or ``place_id`` (a ``date`` puts the bye in
+        its round). ``verbose=false`` returns just the identifiers and
+        scheduling fields.
         """
         stage = self._stage(stage_id)
         self._require("add", Match)
         match = Match(stage=stage, include_in_ladder=stage.keep_ladder)
+        if is_bye:
+            self._check_bye_sides(
+                home_team_id,
+                away_team_id,
+                home_team_undecided_id or home_team_eval,
+                away_team_undecided_id or away_team_eval,
+            )
+            if time is not None or place_id is not None:
+                raise ToolError(
+                    "A bye has no time or place: leave time and place_id out."
+                )
+            match.is_bye = True
         changes = {
             "home_team": home_team_id,
             "away_team": away_team_id,
@@ -1937,17 +2154,29 @@ class AdminToolset(CompetitionToolset):
         home_team_eval_related_id: int | None = None,
         away_team_eval: str | None = None,
         away_team_eval_related_id: int | None = None,
+        clear_home_team: bool = False,
+        clear_away_team: bool = False,
+        is_bye: bool | None = None,
         verbose: bool = True,
     ) -> dict[str, Any]:
         """
         Change the teams, evals, pool, round, label, ladder inclusion or
         video links of a match. Only the arguments given are changed. Giving
         a side a team, an undecided team or an eval replaces whichever of
-        the three it had (``home_team_eval=""`` clears an eval); the evals
-        are those of ``create_match``. Use ``reschedule_match`` for the
-        date, time and place, ``record_match_result`` for scores and
-        ``set_match_referees`` for appointments. In a live streamed season
-        the broadcast of a streamed match is resynchronised.
+        the three it had (``home_team_eval=""`` clears an eval);
+        ``clear_home_team`` / ``clear_away_team`` empty a side altogether;
+        the evals are those of ``create_match``. Use ``reschedule_match``
+        for the date, time and place, ``record_match_result`` for scores
+        and ``set_match_referees`` for appointments. In a live streamed
+        season the broadcast of a streamed match is resynchronised.
+
+        ``is_bye=true`` with one side cleared converts an unplayed match
+        into a bye for the team that remains: its time and ground are
+        released (for ``auto_schedule`` / ``schedule_matches`` to reuse) and
+        its referee appointments removed. Refused for a match with a result,
+        a forfeit or a live stream. ``is_bye=false`` with the empty side
+        given a team turns a bye back into a match, left unscheduled;
+        refused once the bye has been processed.
         """
         match = self._match(match_id)
         self._require("change", Match, match)
@@ -1962,6 +2191,26 @@ class AdminToolset(CompetitionToolset):
             "label": label,
             "include_in_ladder": include_in_ladder,
         }
+        clearing = (
+            ("home", clear_home_team, home_team_eval, home_team_eval_related_id),
+            ("away", clear_away_team, away_team_eval, away_team_eval_related_id),
+        )
+        for side, clear, team_eval, related_id in clearing:
+            if not clear:
+                continue
+            given = (
+                changes[f"{side}_team"],
+                changes[f"{side}_team_undecided"],
+                team_eval,
+                related_id,
+            )
+            if any(value is not None for value in given):
+                raise ToolError(
+                    f"clear_{side}_team cannot be combined with giving the "
+                    f"{side} side a team, an undecided team or an eval."
+                )
+            for attname in ("team", "team_undecided", "team_eval", "team_eval_related"):
+                setattr(match, f"{side}_{attname}", None)
         changes.update(
             self._eval_changes(
                 match,
@@ -1972,6 +2221,7 @@ class AdminToolset(CompetitionToolset):
                 changes=changes,
             )
         )
+        converted = self._bye_changes(match, changes, is_bye)
         if season.live_stream:
             if videos is not None:
                 raise ToolError(
@@ -1984,11 +2234,87 @@ class AdminToolset(CompetitionToolset):
             changes["videos"] = videos
             match = self._save(AgentMatchEditForm, match, changes)
             synced = False
-        return {
-            "saved": True,
-            "live_stream_sync_queued": synced,
-            "match": self._match_result(match, verbose),
-        }
+        res = {"saved": True, "live_stream_sync_queued": synced}
+        if converted:
+            res["referees_removed"] = match.referees.count()
+            match.referees.clear()
+        res["match"] = self._match_result(match, verbose)
+        return res
+
+    @staticmethod
+    def _check_bye_sides(home_team, away_team, home_other, away_other):
+        """
+        A bye is exactly one team with nothing on the other side: refuse
+        an undecided team or eval on either side, two teams, or none.
+        """
+        if home_other or away_other:
+            raise ToolError(
+                "A bye is one team with no opponent: it cannot have an "
+                "undecided team or an eval."
+            )
+        if bool(home_team) == bool(away_team):
+            raise ToolError(
+                "A bye is one team with no opponent: exactly one side must "
+                "have a team."
+            )
+
+    def _bye_changes(self, match, changes, is_bye):
+        """
+        Apply ``is_bye`` of ``update_match`` to ``match`` (whose sides
+        ``changes`` and the instance already describe as they will be
+        saved), checking the rules of a conversion either way. Returns
+        whether the match is being converted into a bye.
+        """
+
+        def side(name):
+            team = changes[f"{name}_team"]
+            if team is None:
+                team = getattr(match, f"{name}_team_id")
+            other = changes[f"{name}_team_undecided"]
+            if other is None:
+                other = getattr(match, f"{name}_team_undecided_id")
+            if not other:
+                if f"{name}_team_eval" in changes:
+                    other = (changes[f"{name}_team_eval"] or "").strip()
+                else:
+                    other = (getattr(match, f"{name}_team_eval") or "").strip()
+            return team, other
+
+        was_bye = match.is_bye
+        if is_bye is None:
+            is_bye = was_bye
+        if not is_bye:
+            if was_bye:
+                if match.bye_processed:
+                    raise ToolError(
+                        "This bye has been processed; revert it with "
+                        "record_match_result(bye_processed=false) before "
+                        "turning it into a match."
+                    )
+                for name in ("home", "away"):
+                    if not any(side(name)):
+                        raise ToolError(
+                            "A match has two sides: give the %s side a team, an "
+                            "undecided team or an eval." % name
+                        )
+                match.is_bye = False
+            return False
+        home_team, home_other = side("home")
+        away_team, away_other = side("away")
+        self._check_bye_sides(home_team, away_team, home_other, away_other)
+        if was_bye:
+            return False
+        if self._has_result(match):
+            raise ToolError("This match has a result; it cannot be converted to a bye.")
+        if match.live_stream:
+            raise ToolError(
+                "A live streamed match cannot be converted to a bye; remove "
+                "the live stream first with disable_match_live_stream."
+            )
+        match.is_bye = True
+        match.time = None
+        match.play_at = None
+        return True
 
     @staticmethod
     def _eval_changes(match, *, changes, **evals):
