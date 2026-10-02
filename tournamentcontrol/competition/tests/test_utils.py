@@ -244,10 +244,12 @@ class RegradeTests(TestCase):
         self.team.division = self.upper
         self.team.save()
 
+        # The team takes the next order in the upper division and the lower
+        # division closes the gap it left.
         self.assertEqual(self.team.order, 4)
         self.assertEqual(
-            list(self.lower.teams.order_by("order").values_list("order", flat=True)),
-            [1, 2],
+            list(self.lower.teams.order_by("order").values_list("title", "order")),
+            [("Lower 2", 1), ("Lower 3", 2)],
         )
         for match in (played, forfeit, processed_bye, untouched):
             before = Match.objects.filter(pk=match.pk).values().get()

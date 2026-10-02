@@ -820,8 +820,16 @@ class ByeTests(AdminFixtureMixin, TestCase):
             time=datetime.time(9, 0),
             is_bye=True,
         )
-        # None of the refused calls created a match (the fixture has two).
-        self.assertEqual(Match.objects.filter(stage=self.womens_stage).count(), 2)
+        # None of the refused calls created a match: the stage still holds
+        # only the two fixture matches.
+        self.assertEqual(
+            set(
+                Match.objects.filter(stage=self.womens_stage).values_list(
+                    "pk", flat=True
+                )
+            ),
+            {self.aus_v_nzl_women.pk, self.nzl_v_aus_women.pk},
+        )
 
     def test_convert_match_to_bye(self):
         # France v England is unplayed and scheduled with a referee; making it
@@ -841,36 +849,108 @@ class ByeTests(AdminFixtureMixin, TestCase):
         )
 
         res = admin.update_match(self.fra_v_eng.pk, is_bye=True, clear_away_team=True)
-        self.assertTrue(res["saved"])
-        self.assertEqual(res["referees_removed"], 1)
-        self.assertTrue(res["match"]["is_bye"])
-        self.assertEqual(res["match"]["status"], "bye")
-        self.assertEqual(res["match"]["home_team"]["title"], "France")
-        self.assertEqual(res["match"]["away_team"]["title"], "Bye")
-        self.assertEqual(res["match"]["date"], "2026-07-16")
-        self.assertIsNone(res["match"]["time"])
-        self.assertIsNone(res["match"]["datetime"])
-        self.assertIsNone(res["match"]["ground"])
-        self.assertEqual(res["match"]["referees"], [])
+        self.assertEqual(
+            res,
+            {
+                "saved": True,
+                "live_stream_sync_queued": False,
+                "referees_removed": 1,
+                "match": {
+                    "id": self.fra_v_eng.pk,
+                    "uuid": str(self.fra_v_eng.uuid),
+                    "competition": {
+                        "id": self.competition.pk,
+                        "title": "European Championships",
+                        "slug": self.competition.slug,
+                    },
+                    "season": {
+                        "id": self.season.pk,
+                        "title": "2026",
+                        "slug": self.season.slug,
+                    },
+                    "division": {
+                        "id": self.mens.pk,
+                        "title": "Men's Open",
+                        "slug": self.mens.slug,
+                    },
+                    "stage": {
+                        "id": self.mens_pools.pk,
+                        "title": "Pool Stage",
+                        "slug": self.mens_pools.slug,
+                    },
+                    "pool": {
+                        "id": self.pool_b.pk,
+                        "title": "Pool B",
+                        "slug": self.pool_b.slug,
+                    },
+                    "round": 2,
+                    "label": None,
+                    "datetime": None,
+                    "date": "2026-07-16",
+                    "time": None,
+                    "timezone": "Europe/Amsterdam",
+                    "home_team": {
+                        "id": self.fra_men.pk,
+                        "title": "France",
+                        "slug": self.fra_men.slug,
+                        "club": {
+                            "id": self.france.pk,
+                            "title": "France",
+                            "slug": self.france.slug,
+                        },
+                    },
+                    "away_team": {
+                        "id": None,
+                        "title": "Bye",
+                        "slug": None,
+                        "club": None,
+                    },
+                    "home_team_score": None,
+                    "away_team_score": None,
+                    "status": "bye",
+                    "winner": None,
+                    "is_draw": False,
+                    "live_stream": False,
+                    "live_stream_url": None,
+                    "videos": [],
+                    "venue": None,
+                    "ground": None,
+                    "is_bye": True,
+                    "is_forfeit": False,
+                    "is_washout": False,
+                    "bye_processed": False,
+                    "include_in_ladder": True,
+                    "youtube_broadcast_id": None,
+                    "referees": [],
+                },
+            },
+        )
         self.fra_v_eng.refresh_from_db()
+        self.assertTrue(self.fra_v_eng.is_bye)
         self.assertIsNone(self.fra_v_eng.away_team)
+        self.assertIsNone(self.fra_v_eng.time)
+        self.assertIsNone(self.fra_v_eng.datetime)
         self.assertIsNone(self.fra_v_eng.play_at)
-        self.assertEqual(self.fra_v_eng.referees.count(), 0)
+        self.assertFalse(self.fra_v_eng.referees.exists())
 
         # The released slot is free for another match.
-        res = admin.reschedule_match(
+        admin.reschedule_match(
             self.mixed_match.pk,
             date=datetime.date(2026, 7, 16),
             time=datetime.time(17, 0),
             place_id=self.field2.pk,
         )
-        self.assertEqual(res["match"]["datetime"], "2026-07-16T17:00:00+02:00")
+        self.mixed_match.refresh_from_db()
+        self.assertEqual(self.mixed_match.date, datetime.date(2026, 7, 16))
+        self.assertEqual(self.mixed_match.time, datetime.time(17, 0))
+        self.assertEqual(self.mixed_match.play_at_id, self.field2.pk)
 
     def test_convert_match_to_bye_rules(self):
         # England v France has a result and Australia v England is live
         # streamed: neither can become a bye. France v England can, but only
         # with exactly one side left.
         admin = self.admin()
+        before = Match.objects.filter(pk=self.fra_v_eng.pk).values().get()
         self.assertToolError(
             "This match has a result; it cannot be converted to a bye.",
             admin.update_match,
@@ -908,11 +988,12 @@ class ByeTests(AdminFixtureMixin, TestCase):
             away_team_id=self.aus_men.pk,
             clear_away_team=True,
         )
-        # The refused calls left the match as it was.
-        self.fra_v_eng.refresh_from_db()
-        self.assertFalse(self.fra_v_eng.is_bye)
-        self.assertEqual(self.fra_v_eng.away_team_id, self.eng_men.pk)
-        self.assertEqual(self.fra_v_eng.time, datetime.time(17, 0))
+        # The refused calls left the match exactly as it was.
+        self.assertEqual(
+            Match.objects.filter(pk=self.fra_v_eng.pk).values().get(), before
+        )
+        self.assertFalse(Match.objects.get(pk=self.eng_v_fra.pk).is_bye)
+        self.assertFalse(Match.objects.get(pk=self.aus_v_eng.pk).is_bye)
 
     def test_convert_bye_to_match(self):
         # Australia's round 2 bye becomes a match against New Zealand, left
@@ -929,15 +1010,93 @@ class ByeTests(AdminFixtureMixin, TestCase):
         res = admin.update_match(
             self.bye.pk, is_bye=False, away_team_id=self.nzl_men.pk
         )
-        self.assertFalse(res["match"]["is_bye"])
-        self.assertEqual(res["match"]["home_team"]["title"], "Australia")
-        self.assertEqual(res["match"]["away_team"]["title"], "New Zealand")
-        self.assertIsNone(res["match"]["time"])
-        self.assertIsNone(res["match"]["venue"])
-        self.assertNotIn("referees_removed", res)
+        self.assertEqual(
+            res,
+            {
+                "saved": True,
+                "live_stream_sync_queued": False,
+                "match": {
+                    "id": self.bye.pk,
+                    "uuid": str(self.bye.uuid),
+                    "competition": {
+                        "id": self.competition.pk,
+                        "title": "European Championships",
+                        "slug": self.competition.slug,
+                    },
+                    "season": {
+                        "id": self.season.pk,
+                        "title": "2026",
+                        "slug": self.season.slug,
+                    },
+                    "division": {
+                        "id": self.mens.pk,
+                        "title": "Men's Open",
+                        "slug": self.mens.slug,
+                    },
+                    "stage": {
+                        "id": self.mens_pools.pk,
+                        "title": "Pool Stage",
+                        "slug": self.mens_pools.slug,
+                    },
+                    "pool": {
+                        "id": self.pool_a.pk,
+                        "title": "Pool A",
+                        "slug": self.pool_a.slug,
+                    },
+                    "round": 2,
+                    "label": None,
+                    "datetime": None,
+                    "date": "2026-07-15",
+                    "time": None,
+                    "timezone": "Europe/Amsterdam",
+                    "home_team": {
+                        "id": self.aus_men.pk,
+                        "title": "Australia",
+                        "slug": self.aus_men.slug,
+                        "club": {
+                            "id": self.australia.pk,
+                            "title": "Australia",
+                            "slug": self.australia.slug,
+                        },
+                    },
+                    "away_team": {
+                        "id": self.nzl_men.pk,
+                        "title": "New Zealand",
+                        "slug": self.nzl_men.slug,
+                        "club": {
+                            "id": self.new_zealand.pk,
+                            "title": "New Zealand",
+                            "slug": self.new_zealand.slug,
+                        },
+                    },
+                    "home_team_score": None,
+                    "away_team_score": None,
+                    "status": "upcoming",
+                    "winner": None,
+                    "is_draw": False,
+                    "live_stream": False,
+                    "live_stream_url": None,
+                    "videos": [],
+                    "venue": None,
+                    "ground": None,
+                    "is_bye": False,
+                    "is_forfeit": False,
+                    "is_washout": False,
+                    "bye_processed": False,
+                    "include_in_ladder": True,
+                    "youtube_broadcast_id": None,
+                    "referees": [],
+                },
+            },
+        )
+        self.bye.refresh_from_db()
+        self.assertFalse(self.bye.is_bye)
+        self.assertEqual(self.bye.away_team, self.nzl_men)
+        self.assertIsNone(self.bye.time)
         # Back to a bye, processed: it can no longer be turned into a match.
         admin.update_match(self.bye.pk, is_bye=True, clear_away_team=True)
         admin.record_match_result(self.bye.pk, bye_processed=True)
+        before = Match.objects.filter(pk=self.bye.pk).values().get()
         self.assertToolError(
             "This bye has been processed; revert it with "
             "record_match_result(bye_processed=false) before turning it into a "
@@ -947,21 +1106,37 @@ class ByeTests(AdminFixtureMixin, TestCase):
             is_bye=False,
             away_team_id=self.nzl_men.pk,
         )
-        self.bye.refresh_from_db()
-        self.assertTrue(self.bye.is_bye)
-        self.assertIsNone(self.bye.away_team)
+        self.assertEqual(Match.objects.filter(pk=self.bye.pk).values().get(), before)
+        self.assertTrue(before["is_bye"])
+        self.assertTrue(before["bye_processed"])
+        self.assertIsNone(before["away_team_id"])
 
     def test_bye_flag_is_explicit_and_idempotent(self):
         # is_bye is a statement of what the match is, not a toggle: repeating
         # it is harmless, and a bye only changes kind when told to.
         admin = self.admin()
-        # Restating what a match already is changes nothing.
+        # Restating what a match already is changes nothing: the database
+        # row is identical afterwards and the response is the ordinary saved
+        # match (its scheduled fields carry the fixture's random time zone, so
+        # the row, not a literal, is the reference here).
+        before = Match.objects.filter(pk=self.fra_v_eng.pk).values().get()
         res = admin.update_match(self.fra_v_eng.pk, is_bye=False)
-        self.assertFalse(res["match"]["is_bye"])
-        self.assertEqual(res["match"]["time"], "17:00")
+        self.assertEqual(
+            Match.objects.filter(pk=self.fra_v_eng.pk).values().get(), before
+        )
+        self.assertEqual(
+            {k: v for k, v in res.items() if k != "match"},
+            {"saved": True, "live_stream_sync_queued": False},
+        )
+        self.assertEqual(res["match"]["id"], self.fra_v_eng.pk)
+        before = Match.objects.filter(pk=self.bye.pk).values().get()
         res = admin.update_match(self.bye.pk, is_bye=True)
-        self.assertTrue(res["match"]["is_bye"])
-        self.assertNotIn("referees_removed", res)
+        self.assertEqual(Match.objects.filter(pk=self.bye.pk).values().get(), before)
+        self.assertEqual(
+            {k: v for k, v in res.items() if k != "match"},
+            {"saved": True, "live_stream_sync_queued": False},
+        )
+        self.assertEqual(res["match"]["id"], self.bye.pk)
         # A bye is not given an opponent without is_bye=false ...
         one_team = (
             "A bye is one team with no opponent: exactly one side must have a team."
@@ -984,21 +1159,97 @@ class ByeTests(AdminFixtureMixin, TestCase):
             is_bye=True,
             away_team_undecided_id=1,
         )
-        self.bye.refresh_from_db()
-        self.assertTrue(self.bye.is_bye)
-        self.assertIsNone(self.bye.away_team)
-        # The empty side of a bye can be an eval when it becomes a match.
+        self.assertEqual(Match.objects.filter(pk=self.bye.pk).values().get(), before)
+        # The empty side of a bye can be an eval when it becomes a match: the
+        # winner of England v France (round 1 of the same stage, which has no
+        # label, so the side is titled just "Winner").
         res = admin.update_match(
             self.bye.pk,
             is_bye=False,
             away_team_eval="W",
             away_team_eval_related_id=self.eng_v_fra.pk,
         )
-        self.assertFalse(res["match"]["is_bye"])
-        self.assertEqual(res["match"]["away_team"]["eval"], "W")
         self.assertEqual(
-            res["match"]["away_team"]["eval_related_id"], self.eng_v_fra.pk
+            res,
+            {
+                "saved": True,
+                "live_stream_sync_queued": False,
+                "match": {
+                    "id": self.bye.pk,
+                    "uuid": str(self.bye.uuid),
+                    "competition": {
+                        "id": self.competition.pk,
+                        "title": "European Championships",
+                        "slug": self.competition.slug,
+                    },
+                    "season": {
+                        "id": self.season.pk,
+                        "title": "2026",
+                        "slug": self.season.slug,
+                    },
+                    "division": {
+                        "id": self.mens.pk,
+                        "title": "Men's Open",
+                        "slug": self.mens.slug,
+                    },
+                    "stage": {
+                        "id": self.mens_pools.pk,
+                        "title": "Pool Stage",
+                        "slug": self.mens_pools.slug,
+                    },
+                    "pool": {
+                        "id": self.pool_a.pk,
+                        "title": "Pool A",
+                        "slug": self.pool_a.slug,
+                    },
+                    "round": 2,
+                    "label": None,
+                    "datetime": None,
+                    "date": "2026-07-15",
+                    "time": None,
+                    "timezone": "Europe/Amsterdam",
+                    "home_team": {
+                        "id": self.aus_men.pk,
+                        "title": "Australia",
+                        "slug": self.aus_men.slug,
+                        "club": {
+                            "id": self.australia.pk,
+                            "title": "Australia",
+                            "slug": self.australia.slug,
+                        },
+                    },
+                    "away_team": {
+                        "id": None,
+                        "title": "Winner",
+                        "slug": None,
+                        "club": None,
+                        "eval": "W",
+                        "eval_related_id": self.eng_v_fra.pk,
+                    },
+                    "home_team_score": None,
+                    "away_team_score": None,
+                    "status": "upcoming",
+                    "winner": None,
+                    "is_draw": False,
+                    "live_stream": False,
+                    "live_stream_url": None,
+                    "videos": [],
+                    "venue": None,
+                    "ground": None,
+                    "is_bye": False,
+                    "is_forfeit": False,
+                    "is_washout": False,
+                    "bye_processed": False,
+                    "include_in_ladder": True,
+                    "youtube_broadcast_id": None,
+                    "referees": [],
+                },
+            },
         )
+        self.bye.refresh_from_db()
+        self.assertFalse(self.bye.is_bye)
+        self.assertEqual(self.bye.away_team_eval, "W")
+        self.assertEqual(self.bye.away_team_eval_related, self.eng_v_fra)
 
 
 @freeze_time(NOW)
