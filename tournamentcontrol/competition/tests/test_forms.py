@@ -1,13 +1,86 @@
+from django import forms
 from test_plus import TestCase
 
 from tournamentcontrol.competition.admin import next_related_factory
 from tournamentcontrol.competition.forms import (
+    DivisionForm,
     DrawFormatForm,
     MatchEditForm,
     TeamForm,
 )
 from tournamentcontrol.competition.models import Team
 from tournamentcontrol.competition.tests import factories
+
+
+class DivisionFormTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.division = factories.DivisionFactory.create()
+
+    def _form(self, **data):
+        defaults = {
+            "title": self.division.title,
+            "points_formula_0": "3",
+            "points_formula_1": "2",
+            "points_formula_2": "1",
+            "points_formula_3": "",
+            "points_formula_4": "",
+            "points_formula_5": "",
+            "bonus_points_formula": "",
+            "forfeit_for_score": "5",
+            "forfeit_against_score": "0",
+            "include_forfeits_in_played": "1",
+            "games_per_day": "2",
+            "color": "#ffffff",
+        }
+        defaults.update(data)
+        return DivisionForm(instance=self.division, data=defaults)
+
+    def test_bonus_points_formula_margin(self):
+        "A bonus formula may refer to the margin and diff of the match."
+        form = self._form(
+            bonus_points_formula="[win=1, score_against=0, forfeit_for=0: 1] "
+            "+ [loss=1, margin<=2: 1] + [diff>=10: 1]"
+        )
+        self.assertFormError(form, "bonus_points_formula", [])
+        self.assertEqual(
+            "[win=1, score_against=0, forfeit_for=0: 1] "
+            "+ [loss=1, margin<=2: 1] + [diff>=10: 1]",
+            form.save().bonus_points_formula,
+        )
+
+    def test_bonus_points_formula_unknown_identifier(self):
+        "A bonus formula must not refer to values a ladder entry does not have."
+        form = self._form(bonus_points_formula="[tries>=4: 1] + [loss=1, margin<=7: 1]")
+        self.assertFormError(
+            form,
+            "bonus_points_formula",
+            ["Unknown identifier(s) in this points formula: tries."],
+        )
+
+    def test_points_formula_identifiers_limited_to_widget(self):
+        """
+        The points formula editor is a coefficient per identifier in
+        ``valid_ladder_identifiers``; any other identifier would be dropped
+        the next time the division is edited, so it must be rejected.
+        """
+        form = self._form()
+        form.cleaned_data = {"points_formula": "3*win + 2*draw + 1*loss"}
+        self.assertEqual(form.clean_points_formula(), "3*win + 2*draw + 1*loss")
+        form.cleaned_data = {"points_formula": "3*win + diff"}
+        with self.assertRaisesMessage(
+            forms.ValidationError,
+            "Unknown identifier(s) in this points formula: diff.",
+        ):
+            form.clean_points_formula()
+
+    def test_bonus_points_formula_invalid_syntax(self):
+        form = self._form(bonus_points_formula="loss=1: 1")
+        self.assertFormError(
+            form,
+            "bonus_points_formula",
+            ["Syntax of this points formula is invalid."],
+        )
 
 
 class TeamFormTests(TestCase):

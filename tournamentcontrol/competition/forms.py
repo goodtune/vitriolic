@@ -131,6 +131,29 @@ valid_ladder_identifiers = collections.OrderedDict(
     )
 )
 
+# Every identifier that a bonus points formula may refer to. These are the
+# LadderEntry fields set by the match signal handler, plus the ``diff`` and
+# ``margin`` values which are populated there to mirror the annotations in
+# ``LadderEntryQuerySet._all``. The points formula is restricted to
+# ``valid_ladder_identifiers``: its form field is a set of coefficients, one
+# per identifier, and anything else would be dropped when the division is next
+# edited.
+bonus_points_formula_identifiers = frozenset(
+    (
+        "played",
+        "win",
+        "draw",
+        "loss",
+        "bye",
+        "forfeit_for",
+        "forfeit_against",
+        "score_for",
+        "score_against",
+        "diff",
+        "margin",
+    )
+)
+
 
 def ladder_points_widget(name, **attrs):
     defaults = {"placeholder": valid_ladder_identifiers[name].lower()}
@@ -820,9 +843,14 @@ class DivisionForm(MySidelineTitleMixin, SuperUserSlugMixin, ModelForm):
             "color": forms.TextInput(attrs={"type": "color"}),
         }
 
-    def _clean_formula(self, field_name, calculator_class):
+    def _clean_formula(self, field_name, calculator_class, allowed):
         """
         Generic clean function for both the formula fields.
+
+        As well as checking the syntax, make sure the formula only refers to
+        the ``allowed`` identifiers, which will be available on a LadderEntry
+        when the formula is evaluated; unknown identifiers would otherwise
+        silently evaluate to 0.
         """
         fake = LadderEntry()
         formula = self.cleaned_data.get(field_name)
@@ -831,13 +859,25 @@ class DivisionForm(MySidelineTitleMixin, SuperUserSlugMixin, ModelForm):
             parser.parse(formula)
         except ParseException:
             raise forms.ValidationError(_("Syntax of this points formula is invalid."))
+        unknown = parser.identifiers() - allowed
+        if unknown:
+            raise forms.ValidationError(
+                _("Unknown identifier(s) in this points formula: %(identifiers)s."),
+                params={"identifiers": ", ".join(sorted(unknown))},
+            )
         return formula
 
     def clean_points_formula(self):
-        return self._clean_formula("points_formula", Calculator)
+        return self._clean_formula(
+            "points_formula", Calculator, frozenset(valid_ladder_identifiers)
+        )
 
     def clean_bonus_points_formula(self):
-        return self._clean_formula("bonus_points_formula", BonusPointCalculator)
+        return self._clean_formula(
+            "bonus_points_formula",
+            BonusPointCalculator,
+            bonus_points_formula_identifiers,
+        )
 
 
 class StageForm(SuperUserSlugMixin, ModelForm):
