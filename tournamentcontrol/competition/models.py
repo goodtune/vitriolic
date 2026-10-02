@@ -2541,14 +2541,28 @@ class Match(AdminUrlMixin, models.Model):
                 )
                 return (self.home_team, self.away_team)
 
-        positions = {
-            index + 1: each.team
-            for index, each in enumerate(stage.ladder_summary.select_related("team"))
-        }
-        group_positions = {
-            index + 1: [each.team for each in group.ladder]
-            for index, group in enumerate(stage.pools.all())
-        }
+        ladders = {}
+
+        def lookup(source):
+            """
+            Positions (and pool positions) on the ladder of ``source``, read
+            once per stage referenced by this match's formulas.
+            """
+            if source.pk not in ladders:
+                ladders[source.pk] = (
+                    {
+                        index + 1: each.team
+                        for index, each in enumerate(
+                            source.ladder_summary.select_related("team")
+                        )
+                    },
+                    {
+                        index + 1: [each.team for each in group.ladder]
+                        for index, group in enumerate(source.pools.all())
+                    },
+                )
+            return ladders[source.pk]
+
         res = [None, None]
         for index, field in enumerate(("home_team", "away_team")):
             team = self._get_team(field)
@@ -2570,7 +2584,7 @@ class Match(AdminUrlMixin, models.Model):
                         match = stage_group_position_re.match(team_eval)
                         if not match:
                             raise AttributeError("Invalid stage_group_position pattern")
-                        __, group, position = match.groups()
+                        selected, group, position = match.groups()
                     except (AttributeError, TypeError):
                         logger.debug(
                             "Failed evaluating `stage_group_position` %s for %s",
@@ -2579,6 +2593,15 @@ class Match(AdminUrlMixin, models.Model):
                         )
                     else:
                         try:
+                            # An explicit stage (S1P1, S1G2P1) is resolved
+                            # against that stage of the division, otherwise
+                            # the stage this one follows.
+                            source = stage
+                            if selected is not None:
+                                source = self.stage.division.stages.all()[
+                                    int(selected) - 1
+                                ]
+                            positions, group_positions = lookup(source)
                             try:
                                 g = int(group)
                                 p = int(position)
