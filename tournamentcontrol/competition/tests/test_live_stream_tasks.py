@@ -312,6 +312,35 @@ class SyncLiveStreamTaskTests(TestCase):
         "tournamentcontrol.competition.models.Season.youtube",
         new_callable=mock.PropertyMock,
     )
+    def test_unbinds_when_ground_has_no_stream(self, mock_youtube_prop, mock_thumbnail):
+        """
+        A broadcast bound to a stream stays bound to it when the match moves
+        to a ground without one unless the binding is removed, so bind is
+        called without a stream and the recorded binding is cleared.
+        """
+        mock_youtube = mock.MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+        broadcasts = mock_youtube.liveBroadcasts.return_value
+        self.match.external_identifier = "yt-existing"
+        self.match.live_stream_bind = "stale-bound-stream"
+        self.match.save()
+        self.match.play_at.external_identifier = None
+        self.match.play_at.save()
+
+        self.assertEqual("updated", sync_live_stream(self.match.pk))
+
+        broadcasts.bind.assert_called_once_with(
+            part="id,snippet,contentDetails,status", id="yt-existing"
+        )
+        self.match.refresh_from_db()
+        self.assertEqual(None, self.match.live_stream_bind)
+        mock_thumbnail.s.assert_called_once_with(self.match.pk)
+
+    @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
     def test_retries_with_short_titles_when_title_too_long(
         self, mock_youtube_prop, mock_thumbnail
     ):

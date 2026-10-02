@@ -3890,8 +3890,18 @@ class AdminToolset(CompetitionToolset):
         event = self._event(season, event_id)
         self._require("delete", LiveStreamEvent, event)
         youtube = self._youtube(season)
-        self._youtube_delete(youtube, "liveBroadcasts", event.external_identifier)
-        return self._delete(f"live stream event {event.title}", event)
+        with transaction.atomic():
+            # Hold the event's row so a queued synchronisation of it either
+            # finishes first or finds the record gone, rather than touching
+            # the broadcast between its removal and the record's deletion.
+            list(
+                LiveStreamEvent.objects.select_for_update()
+                .filter(pk=event.pk)
+                .order_by()
+                .values_list("pk", flat=True)
+            )
+            self._youtube_delete(youtube, "liveBroadcasts", event.external_identifier)
+            return self._delete(f"live stream event {event.title}", event)
 
     @tool_annotations(idempotent=True, open_world=True)
     def resync_season_stream_event(

@@ -1422,8 +1422,22 @@ class LiveStreamEventTests(AdminFixtureMixin, TestCase):
         youtube.liveBroadcasts.return_value.delete.return_value.execute.side_effect = (
             _http_error(404)
         )
-        res = admin.delete_season_stream_event(self.season.pk, self.event.pk)
+        # The event's row is held while the broadcast and then the record are
+        # removed, so a queued synchronisation cannot run in between.
+        with CaptureQueriesContext(connection) as ctx:
+            res = admin.delete_season_stream_event(self.season.pk, self.event.pk)
         self.assertEqual(res, {"deleted": "live stream event Opening ceremony"})
+        self.assertEqual(
+            1,
+            len(
+                [
+                    q["sql"]
+                    for q in ctx.captured_queries
+                    if "FOR UPDATE" in q["sql"]
+                    and '"competition_livestreamevent"' in q["sql"]
+                ]
+            ),
+        )
         youtube.liveBroadcasts.return_value.delete.assert_called_with(id=self.event.pk)
         self.assertEqual(LiveStreamEvent.objects.filter(pk=self.event.pk).count(), 0)
 

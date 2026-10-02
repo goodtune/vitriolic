@@ -218,7 +218,6 @@ def _apply_sync(match, season, body):
             part="snippet,status,contentDetails", body=body
         ).execute()
         logger.info("YouTube video %r updated", match.external_identifier)
-        set_youtube_thumbnail.s(match.pk).apply_async(countdown=10)
     elif match.live_stream:
         broadcast = (
             youtube.liveBroadcasts()
@@ -232,7 +231,6 @@ def _apply_sync(match, season, body):
         match.videos = videos
         match.save(update_fields=["external_identifier", "videos"])
         logger.info("YouTube video %r inserted", match.external_identifier)
-        set_youtube_thumbnail.s(match.pk).apply_async(countdown=10)
         action = "created"
 
     ground = _get_ground(match.play_at)
@@ -250,6 +248,15 @@ def _apply_sync(match, season, body):
         if bound != match.live_stream_bind:
             match.live_stream_bind = bound
             match.save(update_fields=["live_stream_bind"])
+    elif match.external_identifier and match.live_stream_bind:
+        # The match no longer plays on a ground with a stream; calling bind
+        # without a streamId removes the existing binding.
+        youtube.liveBroadcasts().bind(
+            part="id,snippet,contentDetails,status",
+            id=match.external_identifier,
+        ).execute()
+        match.live_stream_bind = None
+        match.save(update_fields=["live_stream_bind"])
     return action
 
 
@@ -274,7 +281,7 @@ def sync_live_stream(match_pk, base_url=None):
     Returns what was done to the broadcast (``"created"``, ``"updated"`` or
     ``"removed"``), or ``None`` when there was nothing to do.
     """
-    error = None
+    error = action = None
     with transaction.atomic():
         try:
             # The default manager annotates team titles through outer joins
@@ -291,10 +298,16 @@ def sync_live_stream(match_pk, base_url=None):
             logger.info("sync_live_stream skipped: match %s no longer exists", match_pk)
             return None
         try:
-            return _sync_live_stream(match, base_url)
+            action = _sync_live_stream(match, base_url)
         except (HttpError, RefreshError) as exc:
             error = exc
-    raise error
+    if error is not None:
+        raise error
+    if action in ("created", "updated"):
+        # Queued once the broadcast is committed, so a broker failure cannot
+        # roll back the record of a broadcast YouTube has already accepted.
+        set_youtube_thumbnail.s(match_pk).apply_async(countdown=10)
+    return action
 
 
 def _sync_live_stream(match, base_url):
@@ -410,9 +423,6 @@ def _apply_event_sync(event, season):
         )
         return "missing"
 
-    if event.get_thumbnail_media_upload() is not None:
-        set_live_stream_event_thumbnail.s(event.pk).apply_async(countdown=10)
-
     stream_key = event.stream_key
     if stream_key is not None:
         bind = (
@@ -455,7 +465,7 @@ def sync_live_stream_event(event_pk):
     Returns what was done to the broadcast (``"updated"``, ``"removed"`` or
     ``"missing"``), or ``None`` when there was nothing to do.
     """
-    error = None
+    error = action = None
     with transaction.atomic():
         try:
             event = (
@@ -477,11 +487,16 @@ def sync_live_stream_event(event_pk):
             return None
 
         try:
-            return _apply_event_sync(event, season)
+            action = _apply_event_sync(event, season)
         except (HttpError, RefreshError) as exc:
             logger.error("YouTube API error syncing event %s: %s", event_pk, exc)
             error = exc
-    raise error
+    if error is not None:
+        raise error
+    if action == "updated" and event.get_thumbnail_media_upload() is not None:
+        # Queued once the update is committed (see ``sync_live_stream``).
+        set_live_stream_event_thumbnail.s(event_pk).apply_async(countdown=10)
+    return action
 
 
 @shared_task
