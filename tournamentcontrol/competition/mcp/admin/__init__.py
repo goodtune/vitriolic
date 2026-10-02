@@ -3863,18 +3863,24 @@ class AdminToolset(CompetitionToolset):
         season = self._season(season_id)
         event = self._event(season, event_id)
         self._require("change", LiveStreamEvent, event)
-        event = self._save(
-            LiveStreamEventForm,
-            event,
-            {
-                "title": title,
-                "description": description,
-                "start": self._event_time(season, start),
-                "stop": self._event_time(season, stop),
-                "stream_key": stream_key_id,
-                "live_stream": live_stream,
-            },
-        )
+        with transaction.atomic():
+            # Hold the event's row and re-read it, so the save cannot race a
+            # concurrent delete (which would resurrect the record under the
+            # same primary key) or a synchronisation of the event.
+            self._lock_event(event)
+            event = self._event(season, event.pk)
+            event = self._save(
+                LiveStreamEventForm,
+                event,
+                {
+                    "title": title,
+                    "description": description,
+                    "start": self._event_time(season, start),
+                    "stop": self._event_time(season, stop),
+                    "stream_key": stream_key_id,
+                    "live_stream": live_stream,
+                },
+            )
         return self._event_result(event, self._sync_stream_event(event))
 
     @tool_annotations(destructive=True, open_world=True)
@@ -3894,14 +3900,23 @@ class AdminToolset(CompetitionToolset):
             # Hold the event's row so a queued synchronisation of it either
             # finishes first or finds the record gone, rather than touching
             # the broadcast between its removal and the record's deletion.
-            list(
-                LiveStreamEvent.objects.select_for_update()
-                .filter(pk=event.pk)
-                .order_by()
-                .values_list("pk", flat=True)
-            )
+            self._lock_event(event)
             self._youtube_delete(youtube, "liveBroadcasts", event.external_identifier)
             return self._delete(f"live stream event {event.title}", event)
+
+    @staticmethod
+    def _lock_event(event):
+        """
+        Take the row lock on ``event`` (inside the caller's transaction) that
+        ``sync_live_stream_event`` takes, serialising the caller with any
+        synchronisation, update or deletion of the same event.
+        """
+        list(
+            LiveStreamEvent.objects.select_for_update()
+            .filter(pk=event.pk)
+            .order_by()
+            .values_list("pk", flat=True)
+        )
 
     @tool_annotations(idempotent=True, open_world=True)
     def resync_season_stream_event(

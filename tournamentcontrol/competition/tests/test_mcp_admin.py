@@ -1322,13 +1322,27 @@ class LiveStreamEventTests(AdminFixtureMixin, TestCase):
     def test_update(self, mock_youtube_prop, mock_sync):
         youtube = self.youtube(mock_youtube_prop)
         admin = self.admin()
-        res = admin.update_season_stream_event(
-            self.season.pk,
-            self.event.pk,
-            title="Opening Ceremony",
-            description="Welcome to Nottingham.",
-            stop=datetime.datetime(2026, 7, 15, 19, 30, tzinfo=TZ),
-            stream_key_id=self.key.pk,
+        # The event's row is held while it is saved, so the save cannot race
+        # a concurrent deletion or synchronisation of the event.
+        with CaptureQueriesContext(connection) as ctx:
+            res = admin.update_season_stream_event(
+                self.season.pk,
+                self.event.pk,
+                title="Opening Ceremony",
+                description="Welcome to Nottingham.",
+                stop=datetime.datetime(2026, 7, 15, 19, 30, tzinfo=TZ),
+                stream_key_id=self.key.pk,
+            )
+        self.assertEqual(
+            1,
+            len(
+                [
+                    q["sql"]
+                    for q in ctx.captured_queries
+                    if "FOR UPDATE" in q["sql"]
+                    and '"competition_livestreamevent"' in q["sql"]
+                ]
+            ),
         )
         self.assertEqual(res["saved"], True)
         self.assertEqual(res["live_stream_sync_queued"], True)
