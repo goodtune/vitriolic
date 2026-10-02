@@ -158,7 +158,7 @@ record through django-guardian, exactly as `generic_edit` and
 | Tools | Permission |
 | --- | --- |
 | `create_*` | `competition.add_<model>` |
-| `update_*`, `reschedule_match`, `swap_match_allocations`, `set_match_referees`, `record_match_result`, `enable_*_live_stream`, `disable_*_live_stream` | `competition.change_<model>` (globally or on the record) |
+| `update_*`, `reschedule_match`, `swap_match_allocations`, `set_match_referees`, `record_match_result`, `enable_*_live_stream`, `disable_*_live_stream`, `resync_match_live_stream`, `resync_season_stream_event` | `competition.change_<model>` (globally or on the record) |
 | `delete_*` | `competition.delete_<model>` (globally or on the record) |
 | `list_season_stream_keys`, `list_streamed_grounds` (they reveal stream keys) | `competition.change_season` for the season |
 | other `list_*` tools and the inherited read tools | a staff user |
@@ -285,11 +285,20 @@ grounds resynchronises its broadcast.
 | `disable_ground_live_stream(ground_id)` | Refused while an upcoming match on the ground is set to be streamed; removes the stream from YouTube. |
 | `enable_match_live_stream(match_id)` | Requires a streamed ground; queues the broadcast creation and binding (`sync_live_stream`). |
 | `disable_match_live_stream(match_id)` | Requires the match to be streamed; queues the broadcast removal. |
+| `resync_match_live_stream(match_id)` | Runs `sync_live_stream` in the request: creates the broadcast of a streamed match that has none, otherwise updates its title, description, schedule and stream binding (removes it when the live stream was withdrawn). Returns `action` (`created`, `updated` or `removed`), the broadcast id, its link and the bound stream; a rejection by YouTube is the error result. Safe to repeat. |
+| `create_season_stream_event(season_id, title, start, stop, description, stream_key_id)` | `LiveStreamEventForm`; the broadcast is created on YouTube first (its id is the event's id), then the binding and thumbnail are queued (`sync_live_stream_event`). Times without an offset are in the season's time zone. |
+| `update_season_stream_event(season_id, event_id, …)` | Only the arguments given change; an empty `stream_key_id` detaches the key and `live_stream: false` withdraws the broadcast. Queues the synchronisation. |
+| `delete_season_stream_event(season_id, event_id)` | The broadcast is removed from YouTube first; one already gone counts as removed. |
+| `resync_season_stream_event(season_id, event_id)` | Runs `sync_live_stream_event` in the request: updates the broadcast's title, description, schedule and stream key binding, or removes it for a withdrawn event. Returns `action`, the broadcast id, link and bound stream; a rejection by YouTube is the error result. A broadcast that no longer exists on YouTube cannot be recreated under the event's id, which is reported as an error. Safe to repeat. |
 
 The YouTube side effects are the ones the admin views perform around the
 forms (`edit_ground`, `edit_livestreamkey`, `delete_livestreamkey`,
-`edit_match`); they need the season's YouTube credentials and authorisation,
-which are configured from the admin site.
+`edit_livestreamevent`, `delete_livestreamevent`, `edit_match`,
+`resync_match_live_stream`); they need the season's YouTube credentials and
+authorisation, which are configured from the admin site. The `enable`,
+`disable`, `create` and `update` tools queue the broadcast synchronisation
+as the admin views do; the `resync` tools run it before answering so the
+outcome can be reported.
 
 ### Compact responses
 

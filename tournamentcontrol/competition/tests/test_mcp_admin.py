@@ -18,8 +18,10 @@ from unittest import mock
 from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth.models import AnonymousUser
-from django.test.utils import override_settings
+from django.db import connection
+from django.test.utils import CaptureQueriesContext, override_settings
 from freezegun import freeze_time
+from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from guardian.shortcuts import assign_perm
 from mcp.server.mcpserver.exceptions import ToolError
@@ -30,6 +32,7 @@ from tournamentcontrol.competition.mcp import admin as mcp_admin
 from tournamentcontrol.competition.models import (
     Competition,
     Ground,
+    LiveStreamEvent,
     LiveStreamKey,
     Match,
     Season,
@@ -85,6 +88,11 @@ WRITE_TOOLS = {
     "disable_ground_live_stream",
     "enable_match_live_stream",
     "disable_match_live_stream",
+    "resync_match_live_stream",
+    "create_season_stream_event",
+    "update_season_stream_event",
+    "delete_season_stream_event",
+    "resync_season_stream_event",
     "create_draw_format",
     "update_draw_format",
     "delete_draw_format",
@@ -117,8 +125,8 @@ READ_TOOLS = {
 }
 
 
-def _http_error(status):
-    return HttpError(SimpleNamespace(status=status, reason="boom"), b"")
+def _http_error(status, content=b""):
+    return HttpError(SimpleNamespace(status=status, reason="boom"), content)
 
 
 class AdminFixtureMixin(MCPFixtureMixin):
@@ -1144,6 +1152,713 @@ class LiveStreamTests(AdminFixtureMixin, TestCase):
         )
 
 
+@mock.patch("tournamentcontrol.competition.mcp.admin.sync_live_stream_event")
+@mock.patch(
+    "tournamentcontrol.competition.models.Season.youtube",
+    new_callable=mock.PropertyMock,
+)
+class LiveStreamEventTests(AdminFixtureMixin, TestCase):
+    """The create, update and delete tools for ad-hoc live stream events."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.season.live_stream_client_id = "client-id"
+        cls.season.live_stream_client_secret = "client-secret"
+        cls.season.save()
+        cls.key = factories.LiveStreamKeyFactory.create(
+            season=cls.season, title="Roaming camera"
+        )
+        cls.other_key = factories.LiveStreamKeyFactory.create(
+            season=cls.nationals_2026, title="Elsewhere"
+        )
+        cls.event = factories.LiveStreamEventFactory.create(
+            season=cls.season,
+            title="Opening ceremony",
+            start=datetime.datetime(2026, 7, 15, 18, 0, tzinfo=TZ),
+            stop=datetime.datetime(2026, 7, 15, 19, 0, tzinfo=TZ),
+        )
+
+    def youtube(self, mock_youtube_prop):
+        youtube = mock.MagicMock()
+        mock_youtube_prop.return_value = youtube
+        youtube.liveBroadcasts.return_value.insert.return_value.execute.return_value = {
+            "id": "yt-new-event",
+        }
+        return youtube
+
+    def test_create(self, mock_youtube_prop, mock_sync):
+        youtube = self.youtube(mock_youtube_prop)
+        admin = self.admin()
+        res = admin.create_season_stream_event(
+            self.season.pk,
+            title="Closing ceremony",
+            description="Presentations and farewell.",
+            start=datetime.datetime(2026, 7, 19, 17, 0, tzinfo=TZ),
+            stop=datetime.datetime(2026, 7, 19, 18, 30, tzinfo=TZ),
+            stream_key_id=self.key.pk,
+        )
+        self.assertEqual(res["saved"], True)
+        self.assertEqual(res["live_stream_sync_queued"], True)
+        self.assertEqual(
+            res["event"],
+            {
+                "id": "yt-new-event",
+                "title": "Closing ceremony",
+                "description": "Presentations and farewell.",
+                "start": "2026-07-19T17:00:00+02:00",
+                "stop": "2026-07-19T18:30:00+02:00",
+                "live_stream": True,
+                "stream_key": {"id": self.key.pk, "title": "Roaming camera"},
+                "youtube_broadcast_id": "yt-new-event",
+                "video_url": "https://youtu.be/yt-new-event",
+            },
+        )
+        youtube.liveBroadcasts.return_value.insert.assert_called_once_with(
+            part="id,snippet,status,contentDetails",
+            body={
+                "snippet": {
+                    "title": "Closing ceremony",
+                    "description": "Presentations and farewell.",
+                    "scheduledStartTime": "2026-07-19T15:00:00+00:00",
+                    "scheduledEndTime": "2026-07-19T16:30:00+00:00",
+                },
+                "status": {
+                    "privacyStatus": self.season.live_stream_privacy,
+                    "selfDeclaredMadeForKids": False,
+                },
+                "contentDetails": {
+                    "enableAutoStart": False,
+                    "enableAutoStop": False,
+                    "monitorStream": {
+                        "broadcastStreamDelayMs": 0,
+                        "enableMonitorStream": True,
+                    },
+                },
+            },
+        )
+        mock_sync.s.assert_called_once_with("yt-new-event")
+        mock_sync.s.return_value.apply_async.assert_called_once_with()
+        event = LiveStreamEvent.objects.get(pk="yt-new-event")
+        self.assertEqual(event.season_id, self.season.pk)
+        self.assertEqual(event.stream_key_id, self.key.pk)
+        self.assertEqual(
+            [
+                e["id"]
+                for e in admin.list_season_stream_events(self.season.pk)["events"]
+            ],
+            [self.event.pk, "yt-new-event"],
+        )
+
+    def test_create_naive_times_are_in_the_season_zone(
+        self, mock_youtube_prop, mock_sync
+    ):
+        self.youtube(mock_youtube_prop)
+        admin = self.admin()
+        res = admin.create_season_stream_event(
+            self.season.pk,
+            title="Welcome",
+            start=datetime.datetime(2026, 7, 13, 9, 0),
+            stop=datetime.datetime(2026, 7, 13, 9, 45),
+        )
+        self.assertEqual(res["event"]["start"], "2026-07-13T09:00:00+02:00")
+        self.assertEqual(res["event"]["stop"], "2026-07-13T09:45:00+02:00")
+        self.assertEqual(res["event"]["description"], None)
+        self.assertEqual(res["event"]["stream_key"], None)
+
+    def test_create_rules(self, mock_youtube_prop, mock_sync):
+        youtube = self.youtube(mock_youtube_prop)
+        admin = self.admin()
+        start = datetime.datetime(2026, 7, 19, 17, 0, tzinfo=TZ)
+        self.assertToolError(
+            "Validation failed: stop: The scheduled finish must be after the "
+            "scheduled start.",
+            admin.create_season_stream_event,
+            self.season.pk,
+            title="Backwards",
+            start=start,
+            stop=start,
+        )
+        self.assertToolError(
+            "Validation failed: stream_key: Select a valid choice. That choice is "
+            "not one of the available choices.",
+            admin.create_season_stream_event,
+            self.season.pk,
+            title="Wrong key",
+            start=start,
+            stop=start + datetime.timedelta(hours=1),
+            stream_key_id=self.other_key.pk,
+        )
+        self.assertToolError(
+            "Live streaming is not enabled for this season.",
+            admin.create_season_stream_event,
+            self.nationals_2026.pk,
+            title="Elsewhere",
+            start=start,
+            stop=start + datetime.timedelta(hours=1),
+        )
+        # Nothing was created on the platform for a refused request.
+        youtube.liveBroadcasts.return_value.insert.assert_not_called()
+        self.assertEqual(LiveStreamEvent.objects.count(), 1)
+
+        # A rejection by YouTube is reported and nothing is saved.
+        youtube.liveBroadcasts.return_value.insert.return_value.execute.side_effect = (
+            _http_error(400)
+        )
+        self.assertToolError(
+            "YouTube API error: boom",
+            admin.create_season_stream_event,
+            self.season.pk,
+            title="Rejected",
+            start=start,
+            stop=start + datetime.timedelta(hours=1),
+        )
+        self.assertEqual(LiveStreamEvent.objects.count(), 1)
+        mock_sync.s.assert_not_called()
+
+        self.season.live_stream_client_secret = None
+        self.season.save()
+        self.assertToolError(
+            "YouTube credentials must be configured for this season before live "
+            "streams can be managed.",
+            admin.create_season_stream_event,
+            self.season.pk,
+            title="No credentials",
+            start=start,
+            stop=start + datetime.timedelta(hours=1),
+        )
+
+    def test_update(self, mock_youtube_prop, mock_sync):
+        youtube = self.youtube(mock_youtube_prop)
+        admin = self.admin()
+        # The event's row is held while it is saved, so the save cannot race
+        # a concurrent deletion or synchronisation of the event.
+        with CaptureQueriesContext(connection) as ctx:
+            res = admin.update_season_stream_event(
+                self.season.pk,
+                self.event.pk,
+                title="Opening Ceremony",
+                description="Welcome to Nottingham.",
+                stop=datetime.datetime(2026, 7, 15, 19, 30, tzinfo=TZ),
+                stream_key_id=self.key.pk,
+            )
+        self.assertEqual(
+            1,
+            len(
+                [
+                    q["sql"]
+                    for q in ctx.captured_queries
+                    if "FOR UPDATE" in q["sql"]
+                    and '"competition_livestreamevent"' in q["sql"]
+                ]
+            ),
+        )
+        self.assertEqual(res["saved"], True)
+        self.assertEqual(res["live_stream_sync_queued"], True)
+        self.assertEqual(
+            res["event"],
+            {
+                "id": self.event.pk,
+                "title": "Opening Ceremony",
+                "description": "Welcome to Nottingham.",
+                "start": "2026-07-15T18:00:00+02:00",
+                "stop": "2026-07-15T19:30:00+02:00",
+                "live_stream": True,
+                "stream_key": {"id": self.key.pk, "title": "Roaming camera"},
+                "youtube_broadcast_id": self.event.pk,
+                "video_url": "https://youtu.be/%s" % self.event.pk,
+            },
+        )
+        # The broadcast is brought into line by the queued synchronisation,
+        # not by the tool itself.
+        youtube.liveBroadcasts.assert_not_called()
+        mock_sync.s.assert_called_once_with(self.event.pk)
+        mock_sync.s.return_value.apply_async.assert_called_once_with()
+
+        # An empty stream key id clears the key; a withdrawn event keeps
+        # its record.
+        mock_sync.s.reset_mock()
+        res = admin.update_season_stream_event(
+            self.season.pk, self.event.pk, stream_key_id="", live_stream=False
+        )
+        self.assertEqual(res["event"]["stream_key"], None)
+        self.assertEqual(res["event"]["live_stream"], False)
+        mock_sync.s.assert_called_once_with(self.event.pk)
+
+        self.assertToolError(
+            "Validation failed: stop: The scheduled finish must be after the "
+            "scheduled start.",
+            admin.update_season_stream_event,
+            self.season.pk,
+            self.event.pk,
+            start=datetime.datetime(2026, 7, 15, 20, 0, tzinfo=TZ),
+        )
+        self.assertToolError(
+            "Live stream event nope was not found.",
+            admin.update_season_stream_event,
+            self.season.pk,
+            "nope",
+            title="Nope",
+        )
+        self.assertToolError(
+            "Live stream event %s was not found." % self.event.pk,
+            admin.update_season_stream_event,
+            self.nationals_2026.pk,
+            self.event.pk,
+            title="Wrong season",
+        )
+
+    def test_update_without_credentials_does_not_queue(
+        self, mock_youtube_prop, mock_sync
+    ):
+        self.season.live_stream_client_secret = None
+        self.season.save()
+        admin = self.admin()
+        res = admin.update_season_stream_event(
+            self.season.pk, self.event.pk, title="Renamed"
+        )
+        self.assertEqual(res["event"]["title"], "Renamed")
+        self.assertEqual(res["live_stream_sync_queued"], False)
+        mock_sync.s.assert_not_called()
+
+    def test_delete(self, mock_youtube_prop, mock_sync):
+        youtube = self.youtube(mock_youtube_prop)
+        admin = self.admin()
+        self.assertToolError(
+            "Live stream event nope was not found.",
+            admin.delete_season_stream_event,
+            self.season.pk,
+            "nope",
+        )
+        # Any platform error other than "already gone" keeps the record.
+        youtube.liveBroadcasts.return_value.delete.return_value.execute.side_effect = (
+            _http_error(500)
+        )
+        self.assertToolError(
+            "YouTube API error: boom",
+            admin.delete_season_stream_event,
+            self.season.pk,
+            self.event.pk,
+        )
+        self.assertEqual(LiveStreamEvent.objects.filter(pk=self.event.pk).count(), 1)
+
+        youtube.liveBroadcasts.return_value.delete.return_value.execute.side_effect = (
+            _http_error(404)
+        )
+        # The event's row is held while the broadcast and then the record are
+        # removed, so a queued synchronisation cannot run in between.
+        with CaptureQueriesContext(connection) as ctx:
+            res = admin.delete_season_stream_event(self.season.pk, self.event.pk)
+        self.assertEqual(res, {"deleted": "live stream event Opening ceremony"})
+        self.assertEqual(
+            1,
+            len(
+                [
+                    q["sql"]
+                    for q in ctx.captured_queries
+                    if "FOR UPDATE" in q["sql"]
+                    and '"competition_livestreamevent"' in q["sql"]
+                ]
+            ),
+        )
+        youtube.liveBroadcasts.return_value.delete.assert_called_with(id=self.event.pk)
+        self.assertEqual(LiveStreamEvent.objects.filter(pk=self.event.pk).count(), 0)
+
+    def test_permissions(self, mock_youtube_prop, mock_sync):
+        self.youtube(mock_youtube_prop)
+        admin = self.admin(self.staff)
+        start = datetime.datetime(2026, 7, 19, 17, 0, tzinfo=TZ)
+        self.assertToolError(
+            "Permission denied: add live stream event requires the "
+            "competition.add_livestreamevent permission.",
+            admin.create_season_stream_event,
+            self.season.pk,
+            title="Closing ceremony",
+            start=start,
+            stop=start + datetime.timedelta(hours=1),
+        )
+        self.assertToolError(
+            "Permission denied: change live stream event requires the "
+            "competition.change_livestreamevent permission for this live stream "
+            "event.",
+            admin.update_season_stream_event,
+            self.season.pk,
+            self.event.pk,
+            title="Renamed",
+        )
+        self.assertToolError(
+            "Permission denied: delete live stream event requires the "
+            "competition.delete_livestreamevent permission for this live stream "
+            "event.",
+            admin.delete_season_stream_event,
+            self.season.pk,
+            self.event.pk,
+        )
+        self.assertToolError(
+            "Permission denied: change live stream event requires the "
+            "competition.change_livestreamevent permission for this live stream "
+            "event.",
+            admin.resync_season_stream_event,
+            self.season.pk,
+            self.event.pk,
+        )
+        assign_perm("competition.change_livestreamevent", self.staff, self.event)
+        res = admin.update_season_stream_event(
+            self.season.pk, self.event.pk, title="Renamed"
+        )
+        self.assertEqual(res["event"]["title"], "Renamed")
+
+
+@mock.patch("tournamentcontrol.competition.tasks.set_live_stream_event_thumbnail")
+@mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
+@mock.patch(
+    "tournamentcontrol.competition.models.Season.youtube",
+    new_callable=mock.PropertyMock,
+)
+class LiveStreamResyncTests(AdminFixtureMixin, TestCase):
+    """
+    The resync tools run the broadcast synchronisation of the celery tasks
+    in the request, so the outcome (and any YouTube rejection) is reported
+    in the result.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.season.live_stream_client_id = "client-id"
+        cls.season.live_stream_client_secret = "client-secret"
+        cls.season.save()
+        cls.field1.live_stream = True
+        cls.field1.external_identifier = "yt-field-1"
+        cls.field1.stream_key = "key-field-1"
+        cls.field1.save()
+        cls.key = factories.LiveStreamKeyFactory.create(
+            season=cls.season, title="Roaming camera"
+        )
+        cls.event = factories.LiveStreamEventFactory.create(
+            season=cls.season,
+            title="Opening ceremony",
+            stream_key=cls.key,
+            start=datetime.datetime(2026, 7, 15, 18, 0, tzinfo=TZ),
+            stop=datetime.datetime(2026, 7, 15, 19, 0, tzinfo=TZ),
+        )
+
+    def youtube(self, mock_youtube_prop):
+        youtube = mock.MagicMock()
+        mock_youtube_prop.return_value = youtube
+        broadcasts = youtube.liveBroadcasts.return_value
+        broadcasts.insert.return_value.execute.return_value = {"id": "yt-inserted"}
+        broadcasts.bind.return_value.execute.side_effect = lambda: {
+            "contentDetails": {
+                "boundStreamId": broadcasts.bind.call_args.kwargs.get("streamId")
+            }
+        }
+        return youtube
+
+    def test_match_created_then_updated(
+        self, mock_youtube_prop, mock_thumbnail, mock_event_thumbnail
+    ):
+        youtube = self.youtube(mock_youtube_prop)
+        broadcasts = youtube.liveBroadcasts.return_value
+        admin = self.admin()
+
+        # aus_v_eng is set to stream but has no broadcast yet.
+        res = admin.resync_match_live_stream(self.aus_v_eng.pk)
+        self.assertEqual(res["saved"], True)
+        self.assertEqual(res["action"], "created")
+        self.assertEqual(res["youtube_broadcast_id"], "yt-inserted")
+        self.assertEqual(res["video_url"], "https://youtu.be/yt-inserted")
+        self.assertEqual(res["bound_stream_id"], "yt-field-1")
+        self.assertEqual(res["match"]["id"], self.aus_v_eng.pk)
+        self.assertEqual(res["match"]["youtube_broadcast_id"], "yt-inserted")
+        self.assertEqual(
+            res["match"]["live_stream_url"], "https://youtu.be/yt-inserted"
+        )
+        broadcasts.insert.assert_called_once()
+        body = broadcasts.insert.call_args.kwargs["body"]
+        self.assertEqual(
+            body["snippet"]["scheduledStartTime"], "2026-07-16T13:00:00+00:00"
+        )
+        broadcasts.update.assert_not_called()
+        broadcasts.bind.assert_called_once_with(
+            part="id,snippet,contentDetails,status",
+            id="yt-inserted",
+            streamId="yt-field-1",
+        )
+        mock_thumbnail.s.assert_called_once_with(self.aus_v_eng.pk)
+        self.aus_v_eng.refresh_from_db()
+        self.assertEqual(self.aus_v_eng.external_identifier, "yt-inserted")
+        self.assertEqual(self.aus_v_eng.live_stream_bind, "yt-field-1")
+
+        # Running it again on the unchanged match updates the broadcast in
+        # place and reports success.
+        broadcasts.reset_mock()
+        mock_thumbnail.reset_mock()
+        res = admin.resync_match_live_stream(self.aus_v_eng.pk)
+        self.assertEqual(res["action"], "updated")
+        self.assertEqual(res["youtube_broadcast_id"], "yt-inserted")
+        broadcasts.insert.assert_not_called()
+        broadcasts.update.assert_called_once()
+        self.assertEqual(
+            broadcasts.update.call_args.kwargs["body"]["id"], "yt-inserted"
+        )
+        broadcasts.bind.assert_called_once()
+        mock_thumbnail.s.assert_called_once_with(self.aus_v_eng.pk)
+
+        # A match whose live stream was withdrawn has its broadcast removed.
+        broadcasts.reset_mock()
+        with mock.patch("tournamentcontrol.competition.mcp.admin.sync_live_stream"):
+            admin.disable_match_live_stream(self.aus_v_eng.pk)
+        res = admin.resync_match_live_stream(self.aus_v_eng.pk)
+        self.assertEqual(res["action"], "removed")
+        self.assertEqual(res["youtube_broadcast_id"], None)
+        self.assertEqual(res["video_url"], None)
+        self.assertEqual(res["bound_stream_id"], None)
+        broadcasts.delete.assert_called_once_with(id="yt-inserted")
+        self.assertToolError(
+            "This match is not set to be live streamed.",
+            admin.resync_match_live_stream,
+            self.aus_v_eng.pk,
+        )
+
+    def test_match_youtube_errors_are_reported(
+        self, mock_youtube_prop, mock_thumbnail, mock_event_thumbnail
+    ):
+        youtube = self.youtube(mock_youtube_prop)
+        broadcasts = youtube.liveBroadcasts.return_value
+        admin = self.admin()
+
+        # A title that is too long is retried with short titles by the task;
+        # when that is rejected too YouTube's own message is reported, not
+        # swallowed.
+        broadcasts.insert.return_value.execute.side_effect = _http_error(
+            400, b'{"error": {"message": "The request title is too long"}}'
+        )
+        self.assertToolError(
+            "YouTube API error: The request title is too long",
+            admin.resync_match_live_stream,
+            self.aus_v_eng.pk,
+        )
+        self.assertEqual(broadcasts.insert.call_count, 2)
+        self.aus_v_eng.refresh_from_db()
+        self.assertEqual(self.aus_v_eng.external_identifier, None)
+
+        # Updating an existing broadcast can be rejected too.
+        broadcasts.reset_mock()
+        broadcasts.update.return_value.execute.side_effect = _http_error(403)
+        self.assertToolError(
+            "YouTube API error: boom",
+            admin.resync_match_live_stream,
+            self.aus_v_nzl.pk,
+        )
+        broadcasts.update.assert_called_once()
+
+        # Expired authorisation is reported with the admin site's message.
+        mock_youtube_prop.side_effect = RefreshError("expired")
+        self.assertToolError(
+            str(mcp_admin.YOUTUBE_AUTH_EXPIRED_MESSAGE),
+            admin.resync_match_live_stream,
+            self.aus_v_nzl.pk,
+        )
+
+    def test_match_rules(self, mock_youtube_prop, mock_thumbnail, mock_event_thumbnail):
+        youtube = self.youtube(mock_youtube_prop)
+        admin = self.admin()
+        self.assertToolError(
+            "This match is not set to be live streamed.",
+            admin.resync_match_live_stream,
+            self.fra_v_eng.pk,
+        )
+        self.assertToolError(
+            "Permission denied: change match requires the competition.change_match "
+            "permission for this match.",
+            self.admin(self.staff).resync_match_live_stream,
+            self.aus_v_eng.pk,
+        )
+        # The final is the only match of its round, so it has no sibling to
+        # borrow a kick-off time from once its own is cleared.
+        Match.objects.filter(pk=self.final.pk).update(time=None, datetime=None)
+        self.assertToolError(
+            "Cannot resync a match without a scheduled date and time.",
+            admin.resync_match_live_stream,
+            self.final.pk,
+        )
+        self.season.live_stream_client_secret = None
+        self.season.save()
+        self.assertToolError(
+            "YouTube credentials must be configured for this season before live "
+            "streams can be managed.",
+            admin.resync_match_live_stream,
+            self.aus_v_nzl.pk,
+        )
+        youtube.liveBroadcasts.assert_not_called()
+
+    def test_event(self, mock_youtube_prop, mock_thumbnail, mock_event_thumbnail):
+        youtube = self.youtube(mock_youtube_prop)
+        broadcasts = youtube.liveBroadcasts.return_value
+        admin = self.admin()
+
+        res = admin.resync_season_stream_event(self.season.pk, self.event.pk)
+        self.assertEqual(res["saved"], True)
+        self.assertEqual(res["action"], "updated")
+        self.assertEqual(res["youtube_broadcast_id"], self.event.pk)
+        self.assertEqual(res["video_url"], "https://youtu.be/%s" % self.event.pk)
+        self.assertEqual(res["bound_stream_id"], self.key.pk)
+        self.assertEqual(res["event"]["id"], self.event.pk)
+        self.assertEqual(res["event"]["title"], "Opening ceremony")
+        broadcasts.update.assert_called_once()
+        body = broadcasts.update.call_args.kwargs["body"]
+        self.assertEqual(body["id"], self.event.pk)
+        self.assertEqual(body["snippet"]["title"], "Opening ceremony")
+        self.assertEqual(
+            body["snippet"]["scheduledStartTime"], "2026-07-15T16:00:00+00:00"
+        )
+        broadcasts.bind.assert_called_once_with(
+            part="id,snippet,contentDetails,status",
+            id=self.event.pk,
+            streamId=self.key.pk,
+        )
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.live_stream_bind, self.key.pk)
+
+        # Repeating it on the unchanged event is harmless.
+        broadcasts.reset_mock()
+        res = admin.resync_season_stream_event(self.season.pk, self.event.pk)
+        self.assertEqual(res["action"], "updated")
+        broadcasts.update.assert_called_once()
+
+        # A YouTube rejection is reported.
+        broadcasts.reset_mock()
+        broadcasts.update.return_value.execute.side_effect = _http_error(400)
+        self.assertToolError(
+            "YouTube API error: boom",
+            admin.resync_season_stream_event,
+            self.season.pk,
+            self.event.pk,
+        )
+
+        # A broadcast that no longer exists cannot be reinstated: the
+        # identifier is the event's primary key.
+        broadcasts.update.return_value.execute.side_effect = _http_error(404)
+        self.assertToolError(
+            "The YouTube broadcast of this live stream event no longer exists "
+            "and cannot be reinstated; delete the event and create it again.",
+            admin.resync_season_stream_event,
+            self.season.pk,
+            self.event.pk,
+        )
+
+        # A withdrawn event has its broadcast removed; already gone is fine.
+        broadcasts.reset_mock()
+        LiveStreamEvent.objects.filter(pk=self.event.pk).update(live_stream=False)
+        broadcasts.delete.return_value.execute.side_effect = _http_error(404)
+        res = admin.resync_season_stream_event(self.season.pk, self.event.pk)
+        self.assertEqual(res["action"], "removed")
+        self.assertEqual(res["youtube_broadcast_id"], self.event.pk)
+        self.assertEqual(res["bound_stream_id"], None)
+        broadcasts.delete.assert_called_once_with(id=self.event.pk)
+        broadcasts.update.assert_not_called()
+
+    def test_event_rules(self, mock_youtube_prop, mock_thumbnail, mock_event_thumbnail):
+        youtube = self.youtube(mock_youtube_prop)
+        admin = self.admin()
+        self.assertToolError(
+            "Live stream event nope was not found.",
+            admin.resync_season_stream_event,
+            self.season.pk,
+            "nope",
+        )
+        self.assertToolError(
+            "Live stream event %s was not found." % self.event.pk,
+            admin.resync_season_stream_event,
+            self.nationals_2026.pk,
+            self.event.pk,
+        )
+        self.season.live_stream_client_secret = None
+        self.season.save()
+        self.assertToolError(
+            "YouTube credentials must be configured for this season before live "
+            "streams can be managed.",
+            admin.resync_season_stream_event,
+            self.season.pk,
+            self.event.pk,
+        )
+        youtube.liveBroadcasts.assert_not_called()
+
+    def _lock_queries(self, queries, table):
+        return [
+            q["sql"]
+            for q in queries
+            if "FOR UPDATE" in q["sql"] and '"%s"' % table in q["sql"]
+        ]
+
+    def test_match_resync_locks_the_match(
+        self, mock_youtube_prop, mock_thumbnail, mock_event_thumbnail
+    ):
+        """
+        A resync and any concurrent synchronisation of one match (another
+        resync, or the queued task) are serialised on its row, so the second
+        sees the broadcast the first created rather than inserting a
+        duplicate.
+        """
+        self.youtube(mock_youtube_prop)
+        admin = self.admin()
+        with CaptureQueriesContext(connection) as ctx:
+            res = admin.resync_match_live_stream(self.aus_v_eng.pk)
+        self.assertEqual(res["action"], "created")
+        self.assertEqual(
+            1, len(self._lock_queries(ctx.captured_queries, "competition_match"))
+        )
+
+    def test_match_broadcast_kept_when_binding_fails(
+        self, mock_youtube_prop, mock_thumbnail, mock_event_thumbnail
+    ):
+        """
+        A broadcast inserted before a later step is rejected stays recorded
+        against the match, so it is updated (not duplicated) by the next
+        resync rather than orphaned on YouTube.
+        """
+        youtube = self.youtube(mock_youtube_prop)
+        broadcasts = youtube.liveBroadcasts.return_value
+        broadcasts.bind.return_value.execute.side_effect = _http_error(
+            403, b'{"error": {"message": "The stream is already bound"}}'
+        )
+        admin = self.admin()
+        self.assertToolError(
+            "YouTube API error: The stream is already bound",
+            admin.resync_match_live_stream,
+            self.aus_v_eng.pk,
+        )
+        broadcasts.insert.assert_called_once()
+        self.aus_v_eng.refresh_from_db()
+        self.assertEqual(self.aus_v_eng.external_identifier, "yt-inserted")
+
+        broadcasts.bind.return_value.execute.side_effect = lambda: {
+            "contentDetails": {"boundStreamId": "yt-field-1"}
+        }
+        res = admin.resync_match_live_stream(self.aus_v_eng.pk)
+        self.assertEqual(res["action"], "updated")
+        self.assertEqual(res["youtube_broadcast_id"], "yt-inserted")
+        broadcasts.insert.assert_called_once()
+
+    def test_event_resync_locks_the_event(
+        self, mock_youtube_prop, mock_thumbnail, mock_event_thumbnail
+    ):
+        self.youtube(mock_youtube_prop)
+        admin = self.admin()
+        with CaptureQueriesContext(connection) as ctx:
+            res = admin.resync_season_stream_event(self.season.pk, self.event.pk)
+        self.assertEqual(res["action"], "updated")
+        self.assertEqual(
+            1,
+            len(
+                self._lock_queries(
+                    ctx.captured_queries, "competition_livestreamevent"
+                )
+            ),
+        )
+
+
 def _pkce():
     verifier = secrets.token_urlsafe(48)
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
@@ -1230,6 +1945,19 @@ class AdminMCPHTTPTests(AdminFixtureMixin, TestCase):
         )
         self.assertEqual(
             by_name["update_season"]["annotations"]["idempotentHint"], True
+        )
+        for name in ("resync_match_live_stream", "resync_season_stream_event"):
+            with self.subTest(tool=name):
+                self.assertEqual(by_name[name]["annotations"]["idempotentHint"], True)
+                self.assertEqual(by_name[name]["annotations"]["openWorldHint"], True)
+                self.assertEqual(by_name[name]["annotations"]["destructiveHint"], False)
+        self.assertEqual(
+            by_name["delete_season_stream_event"]["annotations"]["destructiveHint"],
+            True,
+        )
+        self.assertEqual(
+            by_name["create_season_stream_event"]["inputSchema"]["properties"]["start"],
+            {"format": "date-time", "title": "Start", "type": "string"},
         )
         self.assertEqual(
             by_name["create_season"]["inputSchema"]["properties"]["mode"]["enum"],

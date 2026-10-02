@@ -6,9 +6,12 @@ from datetime import date, datetime, time
 from unittest import mock
 from zoneinfo import ZoneInfo
 
+from django.db import connection
 from django.template import Context, Template
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import NoReverseMatch
+from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from test_plus import TestCase
 
@@ -214,6 +217,124 @@ class SyncLiveStreamTaskTests(TestCase):
         mock_thumbnail.s.return_value.apply_async.assert_called_once_with(
             countdown=10
         )
+
+    @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_locks_the_match_row(self, mock_youtube_prop, mock_thumbnail):
+        """
+        The match row is locked while the broadcast is created, so a
+        concurrent synchronisation of the same match (a resync while this
+        queued run is in flight) waits and then updates the broadcast rather
+        than inserting a second one.
+        """
+        mock_youtube = mock.MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+        mock_youtube.liveBroadcasts.return_value.insert.return_value.execute.return_value = {
+            "id": "yt-broadcast-new",
+        }
+
+        with CaptureQueriesContext(connection) as ctx:
+            self.assertEqual("created", sync_live_stream(self.match.pk))
+
+        self.assertEqual(
+            1,
+            len(
+                [
+                    q["sql"]
+                    for q in ctx.captured_queries
+                    if "FOR UPDATE OF" in q["sql"] and '"competition_match"' in q["sql"]
+                ]
+            ),
+        )
+
+    @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_identifier_kept_when_bind_fails(self, mock_youtube_prop, mock_thumbnail):
+        """
+        A broadcast inserted before the binding was rejected stays recorded
+        against the match (the error is raised after the transaction
+        commits), so the next synchronisation updates it rather than
+        inserting another and orphaning this one.
+        """
+        mock_youtube = mock.MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+        broadcasts = mock_youtube.liveBroadcasts.return_value
+        broadcasts.insert.return_value.execute.return_value = {"id": "yt-broadcast-new"}
+        self.match.play_at.external_identifier = "yt-stream"
+        self.match.play_at.save()
+        broadcasts.bind.return_value.execute.side_effect = HttpError(
+            mock.Mock(status=403, reason="Forbidden"), b"stream already bound"
+        )
+
+        with self.assertRaises(HttpError):
+            sync_live_stream(self.match.pk)
+
+        self.match.refresh_from_db()
+        self.assertEqual("yt-broadcast-new", self.match.external_identifier)
+        broadcasts.insert.assert_called_once()
+
+    @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_identifier_kept_when_authorisation_expires_after_insert(
+        self, mock_youtube_prop, mock_thumbnail
+    ):
+        """
+        An authorisation that expires between inserting the broadcast and
+        binding it is reported, but the inserted broadcast stays recorded
+        against the match so it is not orphaned.
+        """
+        mock_youtube = mock.MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+        broadcasts = mock_youtube.liveBroadcasts.return_value
+        broadcasts.insert.return_value.execute.return_value = {"id": "yt-broadcast-new"}
+        self.match.play_at.external_identifier = "yt-stream"
+        self.match.play_at.save()
+        broadcasts.bind.return_value.execute.side_effect = RefreshError("expired")
+
+        with self.assertRaises(RefreshError):
+            sync_live_stream(self.match.pk)
+
+        self.match.refresh_from_db()
+        self.assertEqual("yt-broadcast-new", self.match.external_identifier)
+        broadcasts.insert.assert_called_once()
+
+    @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_unbinds_when_ground_has_no_stream(self, mock_youtube_prop, mock_thumbnail):
+        """
+        A broadcast bound to a stream stays bound to it when the match moves
+        to a ground without one unless the binding is removed, so bind is
+        called without a stream and the recorded binding is cleared.
+        """
+        mock_youtube = mock.MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+        broadcasts = mock_youtube.liveBroadcasts.return_value
+        self.match.external_identifier = "yt-existing"
+        self.match.live_stream_bind = "stale-bound-stream"
+        self.match.save()
+        self.match.play_at.external_identifier = None
+        self.match.play_at.save()
+
+        self.assertEqual("updated", sync_live_stream(self.match.pk))
+
+        broadcasts.bind.assert_called_once_with(
+            part="id,snippet,contentDetails,status", id="yt-existing"
+        )
+        self.match.refresh_from_db()
+        self.assertEqual(None, self.match.live_stream_bind)
+        mock_thumbnail.s.assert_called_once_with(self.match.pk)
 
     @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
     @mock.patch(
