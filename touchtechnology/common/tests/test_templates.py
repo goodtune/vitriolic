@@ -1,6 +1,9 @@
+import sys
+from importlib import import_module
 from urllib.parse import urlparse, urlunparse
 
-from django.template import Context, Template
+from django.template import Context, Template, engines
+from django.template.engine import Engine
 from django.test.utils import override_settings
 from django.utils.http import urlencode
 from test_plus import TestCase
@@ -9,6 +12,56 @@ from touchtechnology.common.models import SitemapNode
 
 CSSIFY_TEMPLATE = Template("{% load common %}{{ value|cssify }}")
 TWITTIFY_TEMPLATE = Template("{% load common %}{{ value|twittify }}")
+
+
+class LibraryRegistrationTest(TestCase):
+    """
+    Regression test for goodtune/vitriolic#82.
+
+    The ``common`` template tag library used to call ``get_template`` at
+    import time. In a fresh process (such as a celery worker generating
+    scorecards) that caused the template engine to be initialised while the
+    ``common`` module was only partially imported, so Django's library
+    discovery silently skipped it and every ``{% load common %}`` then failed
+    with ``'common' is not a registered tag library``.
+    """
+
+    MODULE = "touchtechnology.common.templatetags.common"
+
+    def setUp(self):
+        super().setUp()
+        original_module = sys.modules.pop(self.MODULE)
+        original_engines = engines._engines
+        engines._engines = {}
+        Engine.get_default.cache_clear()
+
+        def restore():
+            sys.modules[self.MODULE] = original_module
+            engines._engines = original_engines
+            Engine.get_default.cache_clear()
+
+        self.addCleanup(restore)
+
+    def test_common_registered_when_imported_before_engine(self):
+        # Simulate a process where the library module is imported before the
+        # template engine has been constructed for the first time.
+        import_module(self.MODULE)
+        libraries = engines["django"].engine.template_libraries
+        self.assertIn("common", libraries)
+        self.assertIn("dashboard", libraries)
+
+    def test_common_registered_when_discovered_by_engine(self):
+        # Simulate a process where engine construction is what first imports
+        # the library module.
+        libraries = engines["django"].engine.template_libraries
+        self.assertIn("common", libraries)
+        self.assertIn("dashboard", libraries)
+
+    def test_load_common_renders(self):
+        import_module(self.MODULE)
+        template = Template("{% load common %}{{ value|cssify }}")
+        value = template.render(Context({"value": "some-normal-slug"}))
+        self.assertEqual("some_normal_slug", value)
 
 
 class CssifyTest(TestCase):
