@@ -2472,8 +2472,10 @@ class Match(AdminUrlMixin, models.Model):
                 if stage.pools.count():
                     try:
                         context["group"] = stage.pools.all()[int(group) - 1]
-                    except IndexError:
-                        # If there are ANY issues in evaluating a formula, return the formula itself
+                    except (IndexError, ValueError):
+                        # If there are ANY issues in evaluating a formula
+                        # (a group beyond the stage's pools, or G0 which
+                        # would index from the end), return the formula itself
                         if plain:
                             return team_eval
                         return {"title": team_eval}
@@ -2532,7 +2534,14 @@ class Match(AdminUrlMixin, models.Model):
         Attempt to populate the `home_team` and `away_team` fields as
         appropriate.
 
-        When lazy=False we should always evaluate the teams, if possible.
+        Teams which have already been assigned are returned as-is. Otherwise
+        the positional (P1, G1P2) or winner/loser reference is resolved against
+        the ladder of the preceding stage or the result of the related match.
+        When a reference cannot be resolved the descriptive result of
+        ``_get_team`` is returned instead of a ``Team``.
+
+        The ``lazy`` argument is retained for backwards compatibility; teams
+        which are already assigned are never re-evaluated.
         """
         try:
             stage = self.stage.comes_after
@@ -2546,62 +2555,86 @@ class Match(AdminUrlMixin, models.Model):
                 )
                 return (self.home_team, self.away_team)
 
-        positions = {
-            index + 1: team
-            for index, team in enumerate(
-                stage.ladder_summary.values_list("team", flat=True)
-            )
-        }
-        group_positions = {
-            index + 1: [each.team for each in group.ladder]
-            for index, group in enumerate(stage.pools.all())
-        }
+        ladders = {}
+
+        def lookup(source):
+            """
+            Positions (and pool positions) on the ladder of ``source``, read
+            once per stage referenced by this match's formulas.
+            """
+            if source.pk not in ladders:
+                ladders[source.pk] = (
+                    {
+                        index + 1: each.team
+                        for index, each in enumerate(
+                            source.ladder_summary.select_related("team")
+                        )
+                    },
+                    {
+                        index + 1: [each.team for each in group.ladder]
+                        for index, group in enumerate(source.pools.all())
+                    },
+                )
+            return ladders[source.pk]
+
         res = [None, None]
         for index, field in enumerate(("home_team", "away_team")):
             team = self._get_team(field)
             is_team_model = isinstance(team, Team)
             if not is_team_model:
                 logger.warning("%r is not a Team instance.", team)
-            if not lazy:
-                # For lazy=False, use the result from _get_team() as-is
-                # (either Team instances or dictionaries with titles for invalid formulas)
-                pass
-            else:
-                # Only do additional processing when lazy=True
-                if not is_team_model:
-                    team_undecided = getattr(self, f"{field}_undecided")
-                    if team_undecided:
-                        team_eval = team_undecided.formula
-                        team_eval_related = None
-                    else:
-                        team_eval = getattr(self, f"{field}_eval")
-                        team_eval_related = getattr(self, f"{field}_eval_related")
-                    if team_eval in WIN_LOSE:
+            if not is_team_model:
+                team_undecided = getattr(self, f"{field}_undecided")
+                if team_undecided:
+                    team_eval = team_undecided.formula
+                    team_eval_related = None
+                else:
+                    team_eval = getattr(self, f"{field}_eval")
+                    team_eval_related = getattr(self, f"{field}_eval_related")
+                if team_eval in WIN_LOSE:
+                    # A winner/loser reference without its related match
+                    # cannot be resolved; keep the descriptive fallback.
+                    if team_eval_related is not None:
                         team = team_eval_related._winner_loser(team_eval)
+                else:
+                    try:
+                        match = stage_group_position_re.match(team_eval)
+                        if not match:
+                            raise AttributeError("Invalid stage_group_position pattern")
+                        selected, group, position = match.groups()
+                    except (AttributeError, TypeError):
+                        logger.debug(
+                            "Failed evaluating `stage_group_position` %s for %s",
+                            team_eval,
+                            self,
+                        )
                     else:
                         try:
-                            match = stage_group_position_re.match(team_eval)
-                            if not match:
-                                raise AttributeError(
-                                    "Invalid stage_group_position pattern"
-                                )
-                            stage, group, position = match.groups()
-                        except (AttributeError, TypeError):
-                            logger.exception(
-                                "Failed evaluating `stage_group_position` %s for %s",
-                                team_eval,
-                                self,
-                            )
-                        else:
+                            # Stages, groups and positions are numbered from
+                            # one; anything else is treated as unresolved
+                            # rather than indexing from the end.
+                            numbers = [int(n) for n in (selected, group, position) if n]
+                            if min(numbers) < 1:
+                                raise IndexError("Numbering starts at 1")
+                            # An explicit stage (S1P1, S1G2P1) is resolved
+                            # against that stage of the division, otherwise
+                            # the stage this one follows.
+                            source = stage
+                            if selected is not None:
+                                source = self.stage.division.stages.all()[
+                                    int(selected) - 1
+                                ]
+                            positions, group_positions = lookup(source)
                             try:
-                                try:
-                                    g = int(group)
-                                    p = int(position)
-                                    team = group_positions[g][p - 1]
-                                except TypeError:
-                                    team = positions[int(position)]
-                            except (IndexError, KeyError):
-                                pass
+                                g = int(group)
+                                p = int(position)
+                                team = group_positions[g][p - 1]
+                            except TypeError:
+                                team = positions[int(position)]
+                        except (IndexError, KeyError):
+                            # Unable to resolve the reference (yet), fall back
+                            # to the descriptive result from _get_team().
+                            pass
             res[index] = team
         return tuple(res)
 

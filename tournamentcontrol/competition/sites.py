@@ -391,10 +391,23 @@ class CompetitionAdminMixin(object):
         if not matches:
             return HttpResponseGone()
 
-        elif matches.filter(
+        undecided = matches.filter(
             Q(home_team_undecided__isnull=False, home_team__isnull=True)
             | Q(away_team_undecided__isnull=False, away_team__isnull=True)
-        ):
+        )
+
+        # Positional (P1, G1P2) and winner/loser references can be resolved
+        # mechanically from results, whereas an undecided team may depend on
+        # the outcome of matches in this very stage (eg. "Lower placed
+        # qualifier" of two qualifying finals). Always progress the matches
+        # which can be resolved before asking for undecided teams.
+        def resolvable(match):
+            home_team, away_team = match.eval(lazy=True)
+            return (match.home_team is None and isinstance(home_team, Team)) or (
+                match.away_team is None and isinstance(away_team, Team)
+            )
+
+        if undecided.exists() and not any(resolvable(match) for match in matches):
             follows = stage.comes_after
 
             ladders = collections.OrderedDict()

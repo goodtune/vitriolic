@@ -593,5 +593,5 @@ def test_demo_competition_within_budget(live_server, admin_user):
         semi_1, semi_2, __ = Match.objects.filter(stage_id=division["finals"]).order_by(
             "round", "pk"
         )
-        assert semi_1.eval(lazy=True) == (top[0], top[3])
-        assert semi_2.eval(lazy=True) == (top[1], top[2])
+        assert [t.pk for t in semi_1.eval(lazy=True)] == [top[0], top[3]]
+        assert [t.pk for t in semi_2.eval(lazy=True)] == [top[1], top[2]]

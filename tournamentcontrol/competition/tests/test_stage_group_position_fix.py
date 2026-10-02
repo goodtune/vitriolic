@@ -230,6 +230,99 @@ class StageGroupPositionModelFixTests(TestCase):
                 self.assertEqual(away_result, {"title": "1st"})
 
 
+class ExplicitStageEvalTests(TestCase):
+    """
+    ``Match.eval`` resolves a positional reference with an explicit stage
+    (``S1P1``) against that stage's ladder, not the ladder of the stage the
+    match's own stage follows.
+    """
+
+    def test_explicit_stage_resolves_against_that_stage(self):
+        division = DivisionFactory.create()
+        teams = [TeamFactory.create(division=division) for _ in range(3)]
+        stage1 = StageFactory.create(division=division, order=1)
+        stage2 = StageFactory.create(division=division, order=2, follows=stage1)
+        stage3 = StageFactory.create(division=division, order=3, follows=stage2)
+
+        # Stage 1 ladder: teams[0] beats everyone, so leads.
+        for home, away in ((teams[0], teams[1]), (teams[0], teams[2])):
+            MatchFactory.create(
+                stage=stage1,
+                home_team=home,
+                away_team=away,
+                home_team_score=5,
+                away_team_score=0,
+            )
+        # Stage 2 ladder: only teams[1] and teams[2] play, teams[1] leads.
+        MatchFactory.create(
+            stage=stage2,
+            home_team=teams[1],
+            away_team=teams[2],
+            home_team_score=5,
+            away_team_score=0,
+        )
+
+        final = MatchFactory.create(
+            stage=stage3,
+            home_team=None,
+            away_team=None,
+            home_team_eval="S1P1",
+            away_team_eval="P1",
+        )
+
+        self.assertEqual(final.eval(), (teams[0], teams[1]))
+
+    def test_zero_numbers_are_unresolved(self):
+        """
+        ``S0``, ``G0`` and ``P0`` pass the formula pattern but refer to
+        nothing; they must fall back to the descriptive result rather than
+        crash on a negative queryset index or pick a team from the end of a
+        list.
+        """
+        division = DivisionFactory.create()
+        teams = [TeamFactory.create(division=division) for _ in range(2)]
+        stage1 = StageFactory.create(division=division, order=1)
+        pool = StageGroupFactory.create(stage=stage1)
+        pool.teams.set(teams)
+        stage2 = StageFactory.create(division=division, order=2, follows=stage1)
+        MatchFactory.create(
+            stage=stage1,
+            stage_group=pool,
+            home_team=teams[0],
+            away_team=teams[1],
+            home_team_score=5,
+            away_team_score=0,
+        )
+
+        for formula in ("S0P1", "G1P0", "G0P1"):
+            with self.subTest(formula=formula):
+                match = MatchFactory.create(
+                    stage=stage2,
+                    home_team=None,
+                    away_team=None,
+                    home_team_eval=formula,
+                    away_team_eval="G1P1",
+                )
+                home, away = match.eval()
+                self.assertNotIsInstance(home, type(teams[0]))
+                self.assertEqual(away, teams[0])
+
+    def test_winner_reference_without_related_match_is_unresolved(self):
+        division = DivisionFactory.create()
+        stage1 = StageFactory.create(division=division, order=1)
+        stage2 = StageFactory.create(division=division, order=2, follows=stage1)
+        match = MatchFactory.create(
+            stage=stage2,
+            home_team=None,
+            away_team=None,
+            home_team_eval="W",
+            home_team_eval_related=None,
+            away_team_eval="L",
+            away_team_eval_related=None,
+        )
+        self.assertEqual(match.eval(), ({"title": "Winner"}, {"title": "Loser"}))
+
+
 class StageGroupPositionIntegrationTests(TestCase):
     """
     Integration tests that verify stage_group_position works correctly

@@ -1960,6 +1960,14 @@ class ProgressMatchesForm(BaseMatchFormMixin, ModelForm):
         self.initial["home_team"] = home_team
         self.initial["away_team"] = away_team
 
+        # An undecided team which could not be resolved must be progressed
+        # via the ProgressTeamsFormSet so that every match it appears in is
+        # updated consistently; don't offer it for selection here.
+        if self.instance.home_team_undecided and not isinstance(home_team, Team):
+            home_team = None
+        if self.instance.away_team_undecided and not isinstance(away_team, Team):
+            away_team = None
+
         if (
             isinstance(home_team, ByeTeam)
             or self.instance.home_team

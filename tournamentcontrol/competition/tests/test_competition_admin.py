@@ -25,6 +25,7 @@ from tournamentcontrol.competition.models import (
     Stage,
     StageGroup,
     Team,
+    UndecidedTeam,
 )
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.tests import factories
@@ -658,6 +659,181 @@ class GoodViewTests(TestCase):
             # The final series progression should now be accessible.
             self.get(url_finals.url_name, *url_finals.args)
             self.response_200()
+
+    def test_progress_teams_position_before_undecided(self):
+        """
+        Regression test for issue #62.
+
+        A finals series which mixes positional references (P1..P6) with
+        undecided teams whose identity depends on the result of matches in the
+        same stage ("Lower placed qualifier") must progress the positional
+        references first. The undecided teams can only be chosen once the
+        qualifying matches have been played.
+        """
+        division = factories.DivisionFactory.create()
+        teams = factories.TeamFactory.create_batch(division=division, size=6)
+
+        round_games = factories.StageFactory.create(division=division, order=1)
+        finals = factories.StageFactory.create(
+            division=division, order=2, follows=round_games
+        )
+
+        # Lower index team always wins, so the ladder is teams[0] .. teams[5]
+        for round in round_robin(teams):
+            for home_team, away_team in round:
+                winner = min(home_team, away_team, key=teams.index)
+                factories.MatchFactory.create(
+                    stage=round_games,
+                    home_team=home_team,
+                    away_team=away_team,
+                    home_team_score=5 if winner == home_team else 0,
+                    away_team_score=5 if winner == away_team else 0,
+                )
+
+        lower = finals.undecided_teams.create(label="Lower placed qualifier")
+        higher = finals.undecided_teams.create(label="Higher placed qualifier")
+
+        qual_1 = factories.MatchFactory.create(
+            stage=finals,
+            label="Qualifier 1",
+            round=1,
+            home_team=None,
+            home_team_eval="P3",
+            away_team=None,
+            away_team_eval="P6",
+        )
+        qual_2 = factories.MatchFactory.create(
+            stage=finals,
+            label="Qualifier 2",
+            round=1,
+            home_team=None,
+            home_team_eval="P4",
+            away_team=None,
+            away_team_eval="P5",
+        )
+        semi_1 = factories.MatchFactory.create(
+            stage=finals,
+            label="Semi 1",
+            round=2,
+            home_team=None,
+            home_team_eval="P1",
+            away_team=None,
+            away_team_undecided=lower,
+        )
+        semi_2 = factories.MatchFactory.create(
+            stage=finals,
+            label="Semi 2",
+            round=2,
+            home_team=None,
+            home_team_eval="P2",
+            away_team=None,
+            away_team_undecided=higher,
+        )
+
+        url = finals.url_names["progress"]
+
+        with self.login(self.superuser):
+            # Positional references from the previous stage can be resolved
+            # immediately, so the match progression form must be presented.
+            self.get(url.url_name, *url.args)
+            self.response_200()
+            self.assertTemplateUsed(
+                self.last_response,
+                "tournamentcontrol/competition/admin/progress_matches.html",
+            )
+            formset = self.get_context("formset")
+            self.assertEqual(formset.model, Match)
+            # The undecided teams are not offered for selection yet, they can
+            # only be identified once the qualifiers have been played.
+            self.assertEqual(
+                {
+                    form.instance.pk: {
+                        name: form.initial[name]
+                        for name in form.fields
+                        if name != "id"
+                    }
+                    for form in formset.forms
+                },
+                {
+                    qual_1.pk: {"home_team": teams[2], "away_team": teams[5]},
+                    qual_2.pk: {"home_team": teams[3], "away_team": teams[4]},
+                    semi_1.pk: {"home_team": teams[0]},
+                    semi_2.pk: {"home_team": teams[1]},
+                },
+            )
+
+            data = {
+                "form-TOTAL_FORMS": "4",
+                "form-INITIAL_FORMS": "4",
+                "form-MIN_NUM_FORMS": "0",
+                "form-MAX_NUM_FORMS": "1000",
+            }
+            for i, (match, home, away) in enumerate(
+                [
+                    (qual_1, teams[2], teams[5]),
+                    (qual_2, teams[3], teams[4]),
+                    (semi_1, teams[0], None),
+                    (semi_2, teams[1], None),
+                ]
+            ):
+                data[f"form-{i}-id"] = str(match.pk)
+                data[f"form-{i}-home_team"] = str(home.pk)
+                if away is not None:
+                    data[f"form-{i}-away_team"] = str(away.pk)
+
+            self.post(url.url_name, *url.args, data=data)
+            self.response_302()
+
+            for match in (qual_1, qual_2, semi_1, semi_2):
+                match.refresh_from_db()
+
+            self.assertEqual((qual_1.home_team, qual_1.away_team), (teams[2], teams[5]))
+            self.assertEqual((qual_2.home_team, qual_2.away_team), (teams[3], teams[4]))
+            self.assertEqual((semi_1.home_team, semi_1.away_team), (teams[0], None))
+            self.assertEqual((semi_2.home_team, semi_2.away_team), (teams[1], None))
+
+            # P6 upsets P3 and P4 beats P5; P6 is the lower placed qualifier.
+            qual_1.home_team_score, qual_1.away_team_score = 2, 3
+            qual_1.save()
+            qual_2.home_team_score, qual_2.away_team_score = 3, 2
+            qual_2.save()
+
+            # Only the undecided teams remain to be progressed.
+            self.get(url.url_name, *url.args)
+            self.response_200()
+            self.assertTemplateUsed(
+                self.last_response,
+                "tournamentcontrol/competition/admin/progress_teams.html",
+            )
+            formset = self.get_context("formset")
+            self.assertEqual(formset.model, UndecidedTeam)
+            self.assertCountEqual(
+                [form.instance for form in formset.forms], [lower, higher]
+            )
+
+            data = {
+                "form-TOTAL_FORMS": "2",
+                "form-INITIAL_FORMS": "2",
+                "form-MIN_NUM_FORMS": "0",
+                "form-MAX_NUM_FORMS": "1000",
+            }
+            for i, (undecided, team) in enumerate(
+                [(lower, teams[5]), (higher, teams[3])]
+            ):
+                data[f"form-{i}-id"] = str(undecided.pk)
+                data[f"form-{i}-team"] = str(team.pk)
+
+            self.post(url.url_name, *url.args, data=data)
+            self.response_302()
+
+            semi_1.refresh_from_db()
+            semi_2.refresh_from_db()
+            self.assertEqual((semi_1.home_team, semi_1.away_team), (teams[0], teams[5]))
+            self.assertEqual((semi_2.home_team, semi_2.away_team), (teams[1], teams[3]))
+
+            # Nothing left to progress.
+            self.get(url.url_name, *url.args)
+            self.response_410()
 
     def test_edit_person(self):
         person = factories.PersonFactory.create()
