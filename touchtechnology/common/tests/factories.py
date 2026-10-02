@@ -23,8 +23,11 @@ class UserFactory(DjangoModelFactory):
     first_name = factory.Faker("first_name")
     last_name = factory.Faker("last_name")
 
+    # Include the (unique) username so two users who happen to draw the same
+    # first name do not share an email address; the password reset form
+    # sends one email per matching user, which broke tests that expected one.
     email = factory.LazyAttribute(
-        lambda a: "{0}@example.com".format(a.first_name.lower())
+        lambda a: "{0}.{1}@example.com".format(a.first_name.lower(), a.username)
     )
     date_joined = factory.LazyFunction(timezone.now)
 

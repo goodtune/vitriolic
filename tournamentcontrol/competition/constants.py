@@ -13,6 +13,13 @@ SEASON_MODE_CHOICES = (
     (DAILY, _("Tournament")),
 )
 
+# MySideline splits each calendar year into two periods ("seasonTag"):
+# winter competitions carry tag 1, summer/spring competitions carry tag 2.
+MYSIDELINE_SEASON_TAG_CHOICES = (
+    (1, _("First half (winter)")),
+    (2, _("Second half (summer)")),
+)
+
 WIN_LOSE = {
     "W": _("Winner"),
     "L": _("Loser"),

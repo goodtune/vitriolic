@@ -15,9 +15,10 @@ class CompetitionConfig(AppConfig):
     name = "tournamentcontrol.competition"
 
     def ready(self):
-        """Wire up signal handlers and admin registration."""
+        """Wire up signal handlers, system checks and admin registration."""
         from touchtechnology.admin.sites import site
         from touchtechnology.content import utils
+        from tournamentcontrol.competition import checks  # noqa
         from tournamentcontrol.competition.admin import (
             CompetitionAdminComponent,
         )
@@ -28,6 +29,8 @@ class CompetitionConfig(AppConfig):
             Ground,
             LadderEntry,
             LadderSummary,
+            LiveStreamEvent,
+            LiveStreamKey,
             Match,
             Season,
             Stage,
@@ -37,7 +40,7 @@ class CompetitionConfig(AppConfig):
         )
         from tournamentcontrol.competition.signals import (
             capture_timezone_before_save,
-            changed_points_formula,
+            changed_ladder_formula,
             delete_related,
             delete_team,
             match_forfeit,
@@ -48,6 +51,14 @@ class CompetitionConfig(AppConfig):
             set_ground_timezone,
             team_ladder_entry_aggregation,
             update_match_datetimes_on_place_timezone_change,
+        )
+
+        # Imported from the submodule rather than the signals package to
+        # avoid a circular import: models imports the signals package, and
+        # these handlers import tasks which imports models.
+        from tournamentcontrol.competition.signals.live_streams import (
+            cleanup_youtube_broadcast,
+            cleanup_youtube_stream,
         )
 
         site.register(CompetitionAdminComponent)
@@ -61,6 +72,10 @@ class CompetitionConfig(AppConfig):
         post_save.connect(set_ground_latlng, sender=Ground)
         post_save.connect(set_ground_timezone, sender=Ground)
 
+        # Remove YouTube platform resources when their local records go away
+        post_delete.connect(cleanup_youtube_broadcast, sender=LiveStreamEvent)
+        post_delete.connect(cleanup_youtube_stream, sender=LiveStreamKey)
+
         # Capture timezone before save to detect changes
         pre_save.connect(capture_timezone_before_save, sender=Venue)
         pre_save.connect(capture_timezone_before_save, sender=Ground)
@@ -71,7 +86,7 @@ class CompetitionConfig(AppConfig):
             update_match_datetimes_on_place_timezone_change, sender=Ground
         )
 
-        post_save.connect(changed_points_formula, sender=Division)
+        post_save.connect(changed_ladder_formula, sender=Division)
 
         pre_delete.connect(delete_team, sender=Team)
 

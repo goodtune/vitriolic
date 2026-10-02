@@ -1,0 +1,84 @@
+{% extends "tournamentcontrol/competition/base.html" %}
+{% load i18n %}
+{% load common competition %}
+
+{% block body_class %}{{ block.super }} season-fixtures{% endblock %}
+
+{% block content %}
+	{% trans "TBA" as tba context "abbreviation: to be advised" %}
+
+	{% block heading %}
+		<h1>{% block page_title %}{% trans season.competition.title %} - {% trans season.title %}{% endblock %}</h1>
+		<h2>{% trans "Fixtures &amp; Results" %}</h2>
+	{% endblock %}
+
+	{% block filters %}
+		<form method="get" action="" class="fixtures-filters">
+			<label for="filter-division">{% trans "Division" %}</label>
+			<select name="division" id="filter-division">
+				<option value="">{% trans "All divisions" %}</option>
+				{% for d in divisions %}
+					<option value="{{ d.slug }}"{% if d == selected_division %} selected{% endif %}>{% trans d.title %}</option>
+				{% endfor %}
+			</select>
+
+			<label for="filter-team">{% trans "Team" %}</label>
+			<select name="team" id="filter-team">
+				<option value="">{% trans "All teams" %}</option>
+				{% for slug, title in team_choices %}
+					<option value="{{ slug }}"{% if slug == selected_team %} selected{% endif %}>{% trans title %}</option>
+				{% endfor %}
+			</select>
+
+			<label for="filter-place">{% trans "Field" %}</label>
+			<select name="place" id="filter-place">
+				<option value="">{% trans "All fields" %}</option>
+				{% for venue in venues %}
+					{% if venue.grounds.all %}
+						<optgroup label="{% trans venue.title %}">
+							<option value="{{ venue.pk }}"{% if selected_place and selected_place.pk == venue.pk %} selected{% endif %}>{% blocktrans with venue=venue.title %}{{ venue }} — all fields{% endblocktrans %}</option>
+							{% for ground in venue.grounds.all %}
+								<option value="{{ ground.pk }}"{% if selected_place and selected_place.pk == ground.pk %} selected{% endif %}>{% trans ground.title %}</option>
+							{% endfor %}
+						</optgroup>
+					{% else %}
+						<option value="{{ venue.pk }}"{% if selected_place and selected_place.pk == venue.pk %} selected{% endif %}>{% trans venue.title %}</option>
+					{% endif %}
+				{% endfor %}
+			</select>
+
+			<button type="submit">{% trans "Apply" %}</button>
+			<a class="reset" href="?">{% trans "Reset to all" %}</a>
+		</form>
+	{% endblock %}
+
+	{% block summary %}
+		<div class="fixtures-summary">
+			<span class="count matches"><strong>{{ match_count }}</strong> {% trans "matches" %}</span>
+			<span class="count teams"><strong>{{ team_count }}</strong> {% trans "teams" %}</span>
+		</div>
+	{% endblock %}
+
+	{% block fixtures %}
+		{% for day in day_index %}
+			<div class="fixtures-day" id="day-{{ day.date|date:"Ymd" }}">
+				<h3>{{ day.date|date:"l, jS F Y" }} <span class="count">{{ day.count }}</span></h3>
+				{% if selected_day == day.date %}
+					{% include day_template_names %}
+				{% else %}
+					{# each day's table loads separately — htmx swaps it in as the day scrolls into view; the link works without JavaScript #}
+					<div class="fixtures-day-body"
+						hx-get="?{{ filter_query }}day={{ day.date|date:"Y-m-d" }}"
+						hx-trigger="revealed once"
+						hx-swap="outerHTML">
+						<a href="?{{ filter_query }}day={{ day.date|date:"Y-m-d" }}">
+							{% blocktrans count counter=day.count %}Show {{ counter }} match{% plural %}Show {{ counter }} matches{% endblocktrans %}
+						</a>
+					</div>
+				{% endif %}
+			</div>
+		{% empty %}
+			<p class="empty">{% trans "No matches for this selection." %}</p>
+		{% endfor %}
+	{% endblock %}
+{% endblock %}

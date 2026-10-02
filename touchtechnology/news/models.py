@@ -1,7 +1,7 @@
 """[Developer API] Data models for the news application."""
 
 from django.db import models
-from django.db.models import DateTimeField, ManyToManyField
+from django.db.models import DateTimeField, ManyToManyField, UniqueConstraint
 from django.template.defaultfilters import slugify
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -136,7 +136,12 @@ class Translation(AdminUrlModel):
         return self.headline
 
     class Meta:
-        unique_together = ("article", "locale")
+        constraints = [
+            UniqueConstraint(
+                fields=["article", "locale"],
+                name="news_translation_unique_article_locale",
+            ),
+        ]
 
 
 class Category(AdminUrlModel):

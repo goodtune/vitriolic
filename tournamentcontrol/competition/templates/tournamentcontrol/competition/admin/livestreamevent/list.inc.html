@@ -1,0 +1,73 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	<th>{% trans "Title" %}</th>
+	<th class="hidden-sm hidden-xs">{% trans "Start" %}</th>
+	<th class="hidden-sm hidden-xs">{% trans "Finish" %}</th>
+	<th>{% trans "Streaming" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td>
+		{% if change_perm in object_perms %}
+			<a href="{{ obj.urls.edit }}">{{ obj.title }}</a>&nbsp;
+		{% else %}
+			<span>{{ obj.title }}</span>
+		{% endif %}
+	</td>
+	<td class="hidden-sm hidden-xs">{{ obj.start }}</td>
+	<td class="hidden-sm hidden-xs">{{ obj.stop }}</td>
+	<td>
+		{% if obj.external_identifier %}
+			<em class="fa fa-youtube"></em>
+		{% endif %}
+		{% if obj.stream_key %}
+			{{ obj.stream_key.label }}
+		{% endif %}
+	</td>
+{% endblock %}
+
+{% block row-buttons %}
+	{% if obj.live_stream %}
+		{# The rows render inside the season edit <form>, so the button #}
+		{# must never act as a submit. #}
+		<button type="button"
+				class="btn btn-default btn-sm js-copy-video-link"
+				data-video-url="{{ obj.video_url }}"
+				title="{% trans "Copy video link" %}">
+			<i class="fa fa-clipboard"></i>
+			<span class="hidden-sm hidden-xs">&nbsp;{% trans "Copy video link" %}</span>
+		</button>
+	{% endif %}
+	{{ block.super }}
+{% endblock %}
+
+{% block empty-row-colspan %}5{% endblock %}
+
+{% block pagination %}
+	{{ block.super }}
+	<style>
+		.js-copy-video-link {
+			vertical-align: middle;
+		}
+		.js-copy-video-link + .dropdown {
+			display: inline-block;
+			vertical-align: middle;
+			margin-left: 4px;
+		}
+	</style>
+	<script>
+		document.addEventListener("click", function (e) {
+			var button = e.target.closest(".js-copy-video-link");
+			if (!button) return;
+			navigator.clipboard.writeText(button.dataset.videoUrl).then(function () {
+				var icon = button.querySelector("i");
+				icon.className = "fa fa-check";
+				setTimeout(function () {
+					icon.className = "fa fa-clipboard";
+				}, 2000);
+			});
+		});
+	</script>
+{% endblock %}

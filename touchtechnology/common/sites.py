@@ -280,7 +280,7 @@ class Application(object):
 
             # If permission is denied, return the response. May already have
             # thrown an exception by now.
-            if not queryset and has_permission is not None:
+            if has_permission is not None and not queryset.exists():
                 return has_permission
 
         if extra_context is None:
@@ -351,7 +351,7 @@ class Application(object):
         if paginate_by > 0:
             try:
                 page_num = int(request.GET.get("page", 1))
-            except TypeError:
+            except (TypeError, ValueError):
                 page_num = 1
 
             paginator = Paginator(queryset, paginate_by)
@@ -491,9 +491,11 @@ class Application(object):
             if perms is None:
                 perms = get_perms_for_model(model, change=True)
 
-                # When there is no pk value, we're doing a creation and should
-                # have permission to create the object.
-                if pk is None or instance.pk is None:
+                # When the instance has not been saved yet, we're doing a
+                # creation and should have permission to create the object.
+                # Decide on the instance alone (not the ``pk`` argument) as
+                # most callers pass an existing ``instance`` without ``pk``.
+                if instance is None or instance.pk is None:
                     perms = get_perms_for_model(model, add=True)
 
             # Determine the user's permission to edit this object using the
@@ -664,7 +666,7 @@ class Application(object):
 
             # If permission is denied, return the response. May already have
             # thrown an exception by now.
-            if not queryset and has_permission is not None:
+            if has_permission is not None and not queryset.exists():
                 return has_permission
 
             queryset = get_objects_for_user(

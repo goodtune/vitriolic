@@ -1,8 +1,13 @@
 # Migration to add color fields to Division and Stage models
 
+import django
 from django.core import validators
 from django.db import migrations, models
 import tournamentcontrol.competition.models
+
+# Django 6.0 removed the `check` kwarg; Django 4.2 only supports `check`.
+# Django 5.x supports both, so use `check` until 6.0.
+_check_constraint_kwarg = "condition" if django.VERSION >= (6, 0) else "check"
 
 
 class Migration(migrations.Migration):
@@ -29,12 +34,12 @@ class Migration(migrations.Migration):
                 ],
             ),
         ),
-        # Add Stage color field (not null, with db_default)
+        # Add Stage color field (not null, with default)
         migrations.AddField(
             model_name="stage",
             name="color",
             field=models.CharField(
-                db_default="#e8f5e8",
+                default="#e8f5e8",
                 help_text="Background color for matches in the visual scheduler. Used to highlight matches of increased importance.",
                 max_length=7,
                 verbose_name="Background Color",
@@ -50,14 +55,14 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="division",
             constraint=models.CheckConstraint(
-                condition=models.Q(color__regex=r'^#[0-9a-fA-F]{6}$'),
+                **{_check_constraint_kwarg: models.Q(color__regex=r'^#[0-9a-fA-F]{6}$')},
                 name='division_color_valid_hex',
             ),
         ),
         migrations.AddConstraint(
             model_name="stage",
             constraint=models.CheckConstraint(
-                condition=models.Q(color__regex=r'^#[0-9a-fA-F]{6}$'),
+                **{_check_constraint_kwarg: models.Q(color__regex=r'^#[0-9a-fA-F]{6}$')},
                 name='stage_color_valid_hex',
             ),
         ),

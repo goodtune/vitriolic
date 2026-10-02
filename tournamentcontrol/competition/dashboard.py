@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 def matches_require_basic_results(now=None, matches=None):
+    """
+    Matches that have been played (and byes not yet processed) without a
+    result. Matches mirrored from MySideline are left out: their results
+    come from MySideline, so they are never entered here.
+    """
     if now is None:
         now = timezone.now()
         now = now.replace(second=0, microsecond=0)
@@ -43,6 +48,7 @@ def matches_require_basic_results(now=None, matches=None):
         away_team_score=None,
         is_washout=False,
         include_in_ladder=True,
+        mysideline_id__isnull=True,
     ).select_related(
         "stage__division__season__competition",
         "play_at",
@@ -54,6 +60,12 @@ def matches_require_basic_results(now=None, matches=None):
 
 
 def matches_require_details_results(matches=None, include_forfeits=False):
+    """
+    Matches with a result in a season that records statistics but with no
+    detailed result yet. Matches mirrored from MySideline are left out, as
+    they are for basic results: their results come from MySideline, so their
+    detailed results are never entered here.
+    """
     # If not provided up front, build a base queryset of all matches
     if matches is None:
         matches = Match.objects.filter(
@@ -68,6 +80,7 @@ def matches_require_details_results(matches=None, include_forfeits=False):
         home_team_score__isnull=False,
         away_team__isnull=False,
         away_team_score__isnull=False,
+        mysideline_id__isnull=True,
     )
 
     if not include_forfeits:

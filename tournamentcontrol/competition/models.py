@@ -2,12 +2,14 @@
 
 
 import collections
+import html
 import logging
 import random
 import uuid
 import warnings
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlencode
 
 import requests
 from cloudinary.models import CloudinaryField
@@ -21,7 +23,16 @@ from django.core import validators
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.http import Http404, HttpResponse
-from django.db.models import Count, DateField, DateTimeField, Q, Sum, TimeField
+from django.db.models import (
+    Count,
+    DateField,
+    DateTimeField,
+    F,
+    Q,
+    Sum,
+    TimeField,
+    UniqueConstraint,
+)
 from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
 from django.template import Template
 from django.template.loader import get_template
@@ -29,6 +40,7 @@ from django.utils import timezone
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
+from django.utils.translation import pgettext
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -40,6 +52,7 @@ from timezone_field.fields import TimeZoneField
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
 from touchtechnology.common.db.models import (
     BooleanField,
+    DateTimeField as SelectDateTimeField,
     ForeignKey,
     HTMLField,
     LocationField,
@@ -49,6 +62,7 @@ from touchtechnology.common.models import SitemapNodeBase
 from tournamentcontrol.competition._mediaupload import MediaMemoryUpload
 from tournamentcontrol.competition.constants import (
     GENDER_CHOICES,
+    MYSIDELINE_SEASON_TAG_CHOICES,
     SEASON_MODE_CHOICES,
     WIN_LOSE,
     ClubStatus,
@@ -103,7 +117,7 @@ win_lose_team_tpl = lazy_get_template(
 def generate_random_color():
     """
     Generate a random hex color code.
-    
+
     Returns a string in the format #RRGGBB with bright, vibrant colors
     suitable for visual differentiation.
     """
@@ -117,7 +131,6 @@ def generate_random_color():
 class AdminUrlMixin(BaseAdminUrlMixin):
     def _get_url_args(self):
         return (self.pk,)
-
 
 
 class LadderPointsField(models.TextField):
@@ -157,6 +170,24 @@ class OrderedSitemapNode(SitemapNodeBase):
 class Competition(AdminUrlMixin, OrderedSitemapNode):
     enabled = BooleanField(default=True)
     clubs = ManyToManyField("Club", blank=True, related_name="competitions")
+
+    # MySideline synchronisation. A MySideline association corresponds to a
+    # Competition; each of its "years" corresponds to a Season (see
+    # ``Season.mysideline_season``). See
+    # ``tournamentcontrol.competition.mysideline``.
+    mysideline_url = models.URLField(
+        max_length=1024,
+        blank=True,
+        null=True,
+        verbose_name=_("MySideline URL"),
+        help_text=_(
+            "Association URL on MySideline, for example "
+            "https://tfa.mysideline.com.au/competitions/association/6338. "
+            "Seasons that name a MySideline season are then synchronised "
+            "from MySideline, which is authoritative for their divisions, "
+            "teams, fixtures and results."
+        ),
+    )
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition"
@@ -318,8 +349,6 @@ class Club(AdminUrlMixin, SitemapNodeBase):
             "home_team", "away_team"
         )
         return home | away
-
-
 
 
 class Person(AdminUrlMixin, models.Model):
@@ -499,7 +528,42 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
             "match of tournament has taken place."
         ),
     )
+    enable_experimental_views = BooleanField(
+        default=False,
+        verbose_name=_("Enable experimental views"),
+        help_text=_(
+            "Set to expose experimental spectator views "
+            "(fixtures navigator, team timeline) for this "
+            "season. When unset those views return Not Found, "
+            "so existing seasons are unaffected."
+        ),
+    )
     timezone = TimeZoneField(max_length=50, blank=True, null=True, use_pytz=False)
+
+    # MySideline synchronisation. The association URL lives on the
+    # Competition; a season selects the MySideline "year" (and optionally
+    # the half-year period) whose competitions it mirrors. See
+    # ``tournamentcontrol.competition.mysideline``.
+    mysideline_season = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("MySideline season"),
+        help_text=_(
+            "The MySideline season (a year, for example 2026) whose "
+            "competitions this season mirrors. Required for synchronisation "
+            "when the competition has a MySideline URL."
+        ),
+    )
+    mysideline_season_tag = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        choices=MYSIDELINE_SEASON_TAG_CHOICES,
+        verbose_name=_("MySideline season period"),
+        help_text=_(
+            "Only synchronise MySideline competitions from this period of "
+            "the season. Leave blank for the whole season."
+        ),
+    )
 
     forfeit_notifications = ManyToManyField(
         settings.AUTH_USER_MODEL,
@@ -512,10 +576,16 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
     )
 
     class Meta(OrderedSitemapNode.Meta):
-        unique_together = (
-            ("title", "competition"),
-            ("slug", "competition"),
-        )
+        constraints = [
+            UniqueConstraint(
+                fields=["title", "competition"],
+                name="competition_season_unique_title_competition",
+            ),
+            UniqueConstraint(
+                fields=["slug", "competition"],
+                name="competition_season_unique_slug_competition",
+            ),
+        ]
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season"
@@ -523,8 +593,41 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
     def _get_url_args(self):
         return (self.competition_id, self.pk)
 
+    @cached_property
+    def _mvp_related(self):
+        return {
+            # live-stream thumbnail blobs are only needed by the thumbnail
+            # views, never drag them out of the database for list views.
+            "live_stream_events": self.live_stream_events.select_related(
+                "stream_key"
+            ).defer("live_stream_thumbnail_image"),
+        }
+
     def __repr__(self):
         return "<Season: {} - {}>".format(self.competition, self)
+
+    @property
+    def mysideline_url(self):
+        """
+        The MySideline association page filtered to this season, or ``None``
+        when the competition is not linked to MySideline. This is the same
+        URL the MySideline site produces from its year/period drop-downs.
+        """
+        url = self.competition.mysideline_url
+        if not url:
+            return None
+        params = {}
+        if self.mysideline_season is not None:
+            params["season"] = self.mysideline_season
+        if self.mysideline_season_tag is not None:
+            params["seasonTag"] = self.mysideline_season_tag
+        if params:
+            return "%s?%s" % (url, urlencode(params))
+        return url
+
+    @property
+    def mysideline_enabled(self):
+        return bool(self.competition.mysideline_url and self.mysideline_season)
 
     def flow(self, **kwargs):
         "Generate an authorization Flow"
@@ -752,9 +855,90 @@ class Ground(Place):
         )
 
 
+class MySidelineMixin(models.Model):
+    """
+    Link a record to the MySideline entity it mirrors.
+
+    ``mysideline_id`` is set by the synchronisation, never by hand; a record
+    which has one is managed by MySideline and is updated on every sync. See
+    :mod:`tournamentcontrol.competition.mysideline`.
+
+    The name is the exception to "MySideline is authoritative". Upstream
+    naming is frequently unwieldy -- "Born 2014 & 2013 u14 Boys" for what we
+    would rather publish as "14 Boys" -- so the local ``title`` may be
+    changed and the synchronisation will then leave it alone. To tell our
+    variation from theirs, two copies of the remote name are kept beside our
+    own:
+
+    ``mysideline_title``
+        what MySideline calls the record right now, refreshed on every sync
+        whether or not we use it;
+
+    ``mysideline_title_synced``
+        what MySideline called it when our ``title`` was last reconciled
+        with it: when the record was linked, when a remote rename was last
+        applied, or when an administrator last saved the record.
+
+    ``title != mysideline_title_synced`` is therefore our variation and
+    ``mysideline_title != mysideline_title_synced`` is theirs, so an upstream
+    rename of a record we have renamed ourselves can be reported instead of
+    being silently discarded or silently applied.
+
+    Classes using this mixin must provide a ``title``; in practice they are
+    all :class:`~touchtechnology.common.models.SitemapNodeBase` subclasses.
+    """
+
+    mysideline_id = models.BigIntegerField(
+        blank=True, null=True, unique=True, editable=False
+    )
+
+    mysideline_title = models.CharField(
+        max_length=255, blank=True, null=True, editable=False
+    )
+
+    mysideline_title_synced = models.CharField(
+        max_length=255, blank=True, null=True, editable=False
+    )
+
+    class Meta:
+        abstract = True
+
+    @property
+    def mysideline_reconciled(self):
+        """The record has been reconciled with MySideline at least once."""
+        return bool(self.mysideline_id) and self.mysideline_title_synced is not None
+
+    @property
+    def mysideline_title_overridden(self):
+        """Our ``title`` differs from the remote name it was reconciled with."""
+        return self.mysideline_reconciled and self.title != self.mysideline_title_synced
+
+    @property
+    def mysideline_title_changed(self):
+        """MySideline has renamed the record since we last reconciled it."""
+        return (
+            self.mysideline_reconciled
+            and self.mysideline_title != self.mysideline_title_synced
+        )
+
+
+def mysideline_renamed(queryset):
+    """
+    Filter ``queryset`` to the records MySideline has renamed since they were
+    last reconciled -- the local name of each is one an administrator chose
+    and the synchronisation will keep, so the change needs a human decision.
+    """
+    return queryset.filter(
+        mysideline_id__isnull=False,
+        mysideline_title__isnull=False,
+        mysideline_title_synced__isnull=False,
+    ).exclude(mysideline_title=F("mysideline_title_synced"))
+
+
 class Division(
     AdminUrlMixin,
     ModelDiffMixin,
+    MySidelineMixin,
     OrderedSitemapNode,
 ):
     """
@@ -800,26 +984,25 @@ class Division(
         ),
         validators=[
             validators.RegexValidator(
-                regex=r'^#[0-9a-fA-F]{6}$',
-                message=_('Enter a valid hex color code (e.g., #ff5733)'),
+                regex=r"^#[0-9a-fA-F]{6}$",
+                message=_("Enter a valid hex color code (e.g., #ff5733)"),
             )
         ],
-    )
-
-    # This is an advanced feature, we would not wish to surface it under
-    # normal circumstances, but the theory is that we can use the report URL
-    # to construct the minimum data for a division.
-    sportingpulse_url = models.URLField(
-        max_length=1024, blank=True, null=True, editable=False
     )
 
     objects = DivisionQuerySet.as_manager()
 
     class Meta(OrderedSitemapNode.Meta):
-        unique_together = (
-            ("title", "season"),
-            ("slug", "season"),
-        )
+        constraints = [
+            UniqueConstraint(
+                fields=["title", "season"],
+                name="competition_division_unique_title_season",
+            ),
+            UniqueConstraint(
+                fields=["slug", "season"],
+                name="competition_division_unique_slug_season",
+            ),
+        ]
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:division"
@@ -830,7 +1013,7 @@ class Division(
     def get_color(self):
         """
         Get the division color.
-        
+
         Since color is now a required field, this simply returns the stored color.
         """
         return self.color
@@ -842,17 +1025,70 @@ class Division(
         )
 
     def ladders(self):
+        """
+        Build the ladder structure used by ``division.html``.
+
+        The prefetch configuration lives on ``StageQuerySet.with_ladder_data``
+        so it can be reused by anything else that needs the same shape;
+        this method just walks the prefetched data and assembles the
+        nested ``{stage: {pool: [summary...]}}`` dict the template
+        expects.
+        """
+        stages = (
+            self.stages.exclude(keep_ladder=False)
+            .with_ladder_data()
+            .order_by("order")
+        )
         res = collections.OrderedDict()
-        for stage in self.stages.exclude(keep_ladder=False).annotate(
-            pool_count=Count("pools")
-        ):
-            res.update(stage.ladders())
+        for stage in stages:
+            if stage.pool_count:
+                pools = collections.OrderedDict()
+                for pool in stage.pools.all():
+                    pools[pool] = list(pool.ladder_summary.all())
+                res[stage] = pools
+            else:
+                res[stage] = list(stage.ladder_summary.all())
         return res
 
     def matches_by_date(self):
+        """
+        Build the match-by-date structure used by ``division.html``.
+
+        Fetches every match for the division in a single query (with the
+        same ``select_related`` set as ``Stage.matches_by_date``), and
+        groups the results by stage and date in Python. This keeps the
+        query count bounded regardless of the number of stages or
+        matches in the division.
+        """
+        tzinfo = timezone.get_current_timezone()
+        matches = (
+            Match.objects.filter(stage__division=self)
+            .select_related(
+                "play_at",
+                "stage__division",
+                "stage_group",
+                "home_team__club",
+                "home_team__division",
+                "away_team__club",
+                "away_team__division",
+            )
+            # live-stream thumbnail blobs are only needed by the thumbnail
+            # endpoints and YouTube sync — never in a match listing
+            .defer("live_stream_thumbnail_image")
+            .annotate(
+                statistics_count=Count("statistics"),
+                videos_count=Count("videos"),
+                referee_count=Count("referees"),
+            )
+            .order_by(
+                "stage__order", "datetime", "date", "time", "round"
+            )
+        )
         res = collections.OrderedDict()
-        for stage in self.stages.all():
-            res.update(stage.matches_by_date())
+        for match in matches:
+            res.setdefault(
+                match.stage, collections.OrderedDict()
+            ).setdefault(match.get_date(tzinfo), []).append(match)
         return res
 
     def to_division_structure(self):
@@ -1157,7 +1393,7 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
 
     color = models.CharField(
         max_length=7,
-        db_default="#e8f5e8",
+        default="#e8f5e8",
         verbose_name=_("Background Color"),
         help_text=_(
             "Background color for matches in the visual scheduler. "
@@ -1165,8 +1401,8 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
         ),
         validators=[
             validators.RegexValidator(
-                regex=r'^#[0-9a-fA-F]{6}$',
-                message=_('Enter a valid hex color code (e.g., #ff5733)'),
+                regex=r"^#[0-9a-fA-F]{6}$",
+                message=_("Enter a valid hex color code (e.g., #ff5733)"),
             )
         ],
     )
@@ -1178,10 +1414,16 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
     objects = StageQuerySet.as_manager()
 
     class Meta(OrderedSitemapNode.Meta):
-        unique_together = (
-            ("title", "division"),
-            ("slug", "division"),
-        )
+        constraints = [
+            UniqueConstraint(
+                fields=["title", "division"],
+                name="competition_stage_unique_title_division",
+            ),
+            UniqueConstraint(
+                fields=["slug", "division"],
+                name="competition_stage_unique_slug_division",
+            ),
+        ]
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:division:stage"
@@ -1200,7 +1442,7 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
     def get_color(self):
         """
         Get the stage background color.
-        
+
         Since color has a database default, this simply returns the stored color.
         """
         return self.color
@@ -1249,11 +1491,15 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
             self.matches.select_related(
                 "play_at",
                 "stage__division",
+                "stage_group",
                 "home_team__club",
                 "home_team__division",
                 "away_team__club",
                 "away_team__division",
             )
+            # live-stream thumbnail blobs are only needed by the thumbnail
+            # endpoints and YouTube sync — never in a match listing
+            .defer("live_stream_thumbnail_image")
             .annotate(
                 statistics_count=Count("statistics"),
                 videos_count=Count("videos"),
@@ -1289,7 +1535,12 @@ class StageGroup(AdminUrlMixin, OrderedSitemapNode):
 
     class Meta(OrderedSitemapNode.Meta):
         verbose_name = "pool"
-        unique_together = ("stage", "order")
+        constraints = [
+            UniqueConstraint(
+                fields=["stage", "order"],
+                name="competition_stagegroup_unique_stage_order",
+            ),
+        ]
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:division:stage:stagegroup"
@@ -1319,21 +1570,28 @@ class StageGroup(AdminUrlMixin, OrderedSitemapNode):
     def matches_by_date(self):
         tzinfo = timezone.get_current_timezone()
         res = collections.OrderedDict()
-        matches = self.matches.select_related(
-            "play_at",
-            "stage__division",
-            "home_team__club",
-            "home_team__division",
-            "away_team__club",
-            "away_team__division",
-        ).order_by(
-            "date",
-            "stage",
-            "round",
-            "is_bye",
-            "time",
-            "play_at__ground__order",
-            "pk",
+        matches = (
+            self.matches.select_related(
+                "play_at",
+                "stage__division",
+                "stage_group",
+                "home_team__club",
+                "home_team__division",
+                "away_team__club",
+                "away_team__division",
+            )
+            # live-stream thumbnail blobs are only needed by the thumbnail
+            # endpoints and YouTube sync — never in a match listing
+            .defer("live_stream_thumbnail_image")
+            .order_by(
+                "date",
+                "stage",
+                "round",
+                "is_bye",
+                "time",
+                "play_at__ground__order",
+                "pk",
+            )
         )
         for match in matches.annotate(
             statistics_count=Count("statistics"),
@@ -1346,7 +1604,7 @@ class StageGroup(AdminUrlMixin, OrderedSitemapNode):
         return res
 
 
-class Team(AdminUrlMixin, OrderedSitemapNode):
+class Team(AdminUrlMixin, MySidelineMixin, OrderedSitemapNode):
     """
     A model which represents a team in a competition. A team may not yet be
     placed into a division, as it might only be at the nomination stage.
@@ -1429,12 +1687,18 @@ class Team(AdminUrlMixin, OrderedSitemapNode):
             "stage_group__order",
             "order",
         )
-        unique_together = (("title", "division"),)
+        constraints = [
+            UniqueConstraint(
+                fields=["title", "division"],
+                name="competition_team_unique_title_division",
+            ),
+        ]
 
     def clean(self):
         errors = {}
 
-        # Ensure the Meta.unique_together constraint is applied consistently
+        # The DB UniqueConstraint is case-sensitive; enforce case-insensitive
+        # uniqueness at the application level.
         other_teams = self.division.teams.exclude(pk=self.pk)
         if other_teams.filter(title__iexact=self.title):
             errors.setdefault("title", []).append(
@@ -1445,6 +1709,14 @@ class Team(AdminUrlMixin, OrderedSitemapNode):
             raise ValidationError(errors)
 
         return super(Team, self).clean()
+
+    @cached_property
+    def _mvp_select_related(self):
+        return {"people": ["person"]}
+
+    @cached_property
+    def _mvp_prefetch_related(self):
+        return {"people": ["roles"]}
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:division:team"
@@ -1533,22 +1805,28 @@ class Team(AdminUrlMixin, OrderedSitemapNode):
     def matches_by_date(self):
         tzinfo = timezone.get_current_timezone()
         res = collections.OrderedDict()
-        matches = self.matches.select_related(
-            "play_at",
-            "stage__division",
-            "stage_group",
-            "home_team__club",
-            "home_team__division",
-            "away_team__club",
-            "away_team__division",
-        ).order_by(
-            "date",
-            "stage",
-            "round",
-            "is_bye",
-            "time",
-            "play_at__ground__order",
-            "pk",
+        matches = (
+            self.matches.select_related(
+                "play_at",
+                "stage__division",
+                "stage_group",
+                "home_team__club",
+                "home_team__division",
+                "away_team__club",
+                "away_team__division",
+            )
+            # live-stream thumbnail blobs are only needed by the thumbnail
+            # endpoints and YouTube sync — never in a match listing
+            .defer("live_stream_thumbnail_image")
+            .order_by(
+                "date",
+                "stage",
+                "round",
+                "is_bye",
+                "time",
+                "play_at__ground__order",
+                "pk",
+            )
         )
         for m in matches.annotate(
             statistics_count=Count("statistics"), videos_count=Count("videos")
@@ -1689,7 +1967,12 @@ class ClubAssociation(AdminUrlMixin, models.Model):
 
     class Meta:
         ordering = ("person__last_name", "person__first_name")
-        unique_together = ("club", "person")
+        constraints = [
+            UniqueConstraint(
+                fields=["club", "person"],
+                name="competition_clubassociation_unique_club_person",
+            ),
+        ]
         verbose_name = _("Official")
         verbose_name_plural = _("Officials")
 
@@ -1741,7 +2024,12 @@ class TeamAssociation(AdminUrlMixin, models.Model):
             "person__last_name",
             "person__first_name",
         )
-        unique_together = ("team", "person")
+        constraints = [
+            UniqueConstraint(
+                fields=["team", "person"],
+                name="competition_teamassociation_unique_team_person",
+            ),
+        ]
         verbose_name = "linked person"
         verbose_name_plural = "linked people"
 
@@ -1785,7 +2073,12 @@ class SeasonReferee(AdminUrlMixin, models.Model):
             "person__last_name",
             "person__first_name",
         )
-        unique_together = ("season", "person")
+        constraints = [
+            UniqueConstraint(
+                fields=["season", "person"],
+                name="competition_seasonreferee_unique_season_person",
+            ),
+        ]
         verbose_name = _("referee")
 
     def _get_admin_namespace(self):
@@ -1808,7 +2101,12 @@ class SeasonAssociation(AdminUrlMixin, models.Model):
             "person__last_name",
             "person__first_name",
         )
-        unique_together = ("season", "person")
+        constraints = [
+            UniqueConstraint(
+                fields=["season", "person"],
+                name="competition_seasonassociation_unique_season_person",
+            ),
+        ]
 
 
 class Match(AdminUrlMixin, models.Model):
@@ -1932,6 +2230,12 @@ class Match(AdminUrlMixin, models.Model):
         max_length=20, blank=True, null=True, unique=True, db_index=True
     )
 
+    # Identifier of the MySideline match this fixture mirrors. A match has
+    # no name of its own, so it does not need MySidelineMixin.
+    mysideline_id = models.BigIntegerField(
+        blank=True, null=True, unique=True, editable=False
+    )
+
     videos = PG.ArrayField(
         models.URLField(),
         null=True,
@@ -1976,7 +2280,7 @@ class Match(AdminUrlMixin, models.Model):
         )
 
     def _get_url_names(self):
-        return super()._get_url_names() + ["referees"]
+        return super()._get_url_names() + ["referees", "resync-live-stream"]
 
     def get_date(self, tzinfo):
         dt = self.get_datetime(tzinfo)
@@ -2135,6 +2439,15 @@ class Match(AdminUrlMixin, models.Model):
         except (AttributeError, TypeError):
             if not team_undecided and self.is_bye:
                 return ByeTeam()
+            if not team_undecided and team_eval not in WIN_LOSE:
+                # No reference at all is "to be advised"; a reference that
+                # cannot be understood is shown as written.
+                title = (team_eval or "").strip() or pgettext(
+                    "abbreviation: to be advised", "TBA"
+                )
+                if plain:
+                    return title
+                return {"title": title}
             stage = group = position = None
         else:
             stage = self.stage.comes_after
@@ -2159,8 +2472,10 @@ class Match(AdminUrlMixin, models.Model):
                 if stage.pools.count():
                     try:
                         context["group"] = stage.pools.all()[int(group) - 1]
-                    except IndexError:
-                        # If there are ANY issues in evaluating a formula, return the formula itself
+                    except (IndexError, ValueError):
+                        # If there are ANY issues in evaluating a formula
+                        # (a group beyond the stage's pools, or G0 which
+                        # would index from the end), return the formula itself
                         if plain:
                             return team_eval
                         return {"title": team_eval}
@@ -2172,7 +2487,8 @@ class Match(AdminUrlMixin, models.Model):
 
         try:
             if plain:
-                return template.render(context).strip()
+                # The templates render HTML (titles escaped); plain is text.
+                return html.unescape(template.render(context).strip())
             return {"title": template.render(context).strip()}
         except Exception:
             # If there are ANY issues in evaluating a formula, return the formula itself
@@ -2218,7 +2534,14 @@ class Match(AdminUrlMixin, models.Model):
         Attempt to populate the `home_team` and `away_team` fields as
         appropriate.
 
-        When lazy=False we should always evaluate the teams, if possible.
+        Teams which have already been assigned are returned as-is. Otherwise
+        the positional (P1, G1P2) or winner/loser reference is resolved against
+        the ladder of the preceding stage or the result of the related match.
+        When a reference cannot be resolved the descriptive result of
+        ``_get_team`` is returned instead of a ``Team``.
+
+        The ``lazy`` argument is retained for backwards compatibility; teams
+        which are already assigned are never re-evaluated.
         """
         try:
             stage = self.stage.comes_after
@@ -2232,62 +2555,86 @@ class Match(AdminUrlMixin, models.Model):
                 )
                 return (self.home_team, self.away_team)
 
-        positions = {
-            index + 1: team
-            for index, team in enumerate(
-                stage.ladder_summary.values_list("team", flat=True)
-            )
-        }
-        group_positions = {
-            index + 1: [each.team for each in group.ladder]
-            for index, group in enumerate(stage.pools.all())
-        }
+        ladders = {}
+
+        def lookup(source):
+            """
+            Positions (and pool positions) on the ladder of ``source``, read
+            once per stage referenced by this match's formulas.
+            """
+            if source.pk not in ladders:
+                ladders[source.pk] = (
+                    {
+                        index + 1: each.team
+                        for index, each in enumerate(
+                            source.ladder_summary.select_related("team")
+                        )
+                    },
+                    {
+                        index + 1: [each.team for each in group.ladder]
+                        for index, group in enumerate(source.pools.all())
+                    },
+                )
+            return ladders[source.pk]
+
         res = [None, None]
         for index, field in enumerate(("home_team", "away_team")):
             team = self._get_team(field)
             is_team_model = isinstance(team, Team)
             if not is_team_model:
                 logger.warning("%r is not a Team instance.", team)
-            if not lazy:
-                # For lazy=False, use the result from _get_team() as-is
-                # (either Team instances or dictionaries with titles for invalid formulas)
-                pass
-            else:
-                # Only do additional processing when lazy=True
-                if not is_team_model:
-                    team_undecided = getattr(self, f"{field}_undecided")
-                    if team_undecided:
-                        team_eval = team_undecided.formula
-                        team_eval_related = None
-                    else:
-                        team_eval = getattr(self, f"{field}_eval")
-                        team_eval_related = getattr(self, f"{field}_eval_related")
-                    if team_eval in WIN_LOSE:
+            if not is_team_model:
+                team_undecided = getattr(self, f"{field}_undecided")
+                if team_undecided:
+                    team_eval = team_undecided.formula
+                    team_eval_related = None
+                else:
+                    team_eval = getattr(self, f"{field}_eval")
+                    team_eval_related = getattr(self, f"{field}_eval_related")
+                if team_eval in WIN_LOSE:
+                    # A winner/loser reference without its related match
+                    # cannot be resolved; keep the descriptive fallback.
+                    if team_eval_related is not None:
                         team = team_eval_related._winner_loser(team_eval)
+                else:
+                    try:
+                        match = stage_group_position_re.match(team_eval)
+                        if not match:
+                            raise AttributeError("Invalid stage_group_position pattern")
+                        selected, group, position = match.groups()
+                    except (AttributeError, TypeError):
+                        logger.debug(
+                            "Failed evaluating `stage_group_position` %s for %s",
+                            team_eval,
+                            self,
+                        )
                     else:
                         try:
-                            match = stage_group_position_re.match(team_eval)
-                            if not match:
-                                raise AttributeError(
-                                    "Invalid stage_group_position pattern"
-                                )
-                            stage, group, position = match.groups()
-                        except (AttributeError, TypeError):
-                            logger.exception(
-                                "Failed evaluating `stage_group_position` %s for %s",
-                                team_eval,
-                                self,
-                            )
-                        else:
+                            # Stages, groups and positions are numbered from
+                            # one; anything else is treated as unresolved
+                            # rather than indexing from the end.
+                            numbers = [int(n) for n in (selected, group, position) if n]
+                            if min(numbers) < 1:
+                                raise IndexError("Numbering starts at 1")
+                            # An explicit stage (S1P1, S1G2P1) is resolved
+                            # against that stage of the division, otherwise
+                            # the stage this one follows.
+                            source = stage
+                            if selected is not None:
+                                source = self.stage.division.stages.all()[
+                                    int(selected) - 1
+                                ]
+                            positions, group_positions = lookup(source)
                             try:
-                                try:
-                                    g = int(group)
-                                    p = int(position)
-                                    team = group_positions[g][p - 1]
-                                except TypeError:
-                                    team = positions[int(position)]
-                            except (IndexError, KeyError):
-                                pass
+                                g = int(group)
+                                p = int(position)
+                                team = group_positions[g][p - 1]
+                            except TypeError:
+                                team = positions[int(position)]
+                        except (IndexError, KeyError):
+                            # Unable to resolve the reference (yet), fall back
+                            # to the descriptive result from _get_team().
+                            pass
             res[index] = team
         return tuple(res)
 
@@ -2467,7 +2814,12 @@ class LadderSummary(LadderBase):
             "-percentage",
             "team__title",
         )
-        unique_together = ("stage", "team")
+        constraints = [
+            UniqueConstraint(
+                fields=["stage", "team"],
+                name="competition_laddersummary_unique_stage_team",
+            ),
+        ]
 
     def __repr__(self):
         return f"<LadderSummary: {self.stage!s} - {self.stage_group!s} - {self.team!s}>"
@@ -2509,7 +2861,12 @@ class SeasonExclusionDate(ExclusionDateBase):
     season = ForeignKey("Season", related_name="exclusions", on_delete=CASCADE)
 
     class Meta(ExclusionDateBase.Meta):
-        unique_together = ("season", "date")
+        constraints = [
+            UniqueConstraint(
+                fields=["season", "date"],
+                name="competition_seasonexclusiondate_unique_season_date",
+            ),
+        ]
         verbose_name = "exclusion date"
 
     def _get_admin_namespace(self):
@@ -2523,7 +2880,12 @@ class DivisionExclusionDate(ExclusionDateBase):
     division = ForeignKey("Division", related_name="exclusions", on_delete=CASCADE)
 
     class Meta:
-        unique_together = ("division", "date")
+        constraints = [
+            UniqueConstraint(
+                fields=["division", "date"],
+                name="competition_divisionexclusiondate_unique_division_date",
+            ),
+        ]
         verbose_name = "exclusion date"
 
     def _get_admin_namespace(self):
@@ -2583,6 +2945,203 @@ class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
 
     def __str__(self):
         return "#{}".format(self.pk)
+
+
+class LiveStreamKey(AdminUrlMixin, models.Model):
+    """
+    A managed stream key associated with a Season, for use by adhoc live
+    stream events.
+
+    Each record is backed by a liveStream resource on the YouTube platform —
+    the generated stream key is what the camera or encoder operator uses to
+    deliver video. This pool is a unique domain associated to the season and
+    is entirely separate from the stream keys managed against grounds for
+    match streaming.
+    """
+
+    season = ForeignKey(
+        Season, related_name="live_stream_keys", on_delete=CASCADE
+    )
+
+    title = models.CharField(
+        max_length=100,
+        help_text=_(
+            "Identify this stream key — for example the camera or "
+            "production position that will use it."
+        ),
+    )
+    # The liveStream identifier issued by the YouTube platform is globally
+    # unique and never reused, so it serves as the primary key.
+    external_identifier = models.CharField(max_length=50, primary_key=True)
+    stream_key = models.CharField(max_length=50, unique=True, db_index=True)
+
+    class Meta:
+        ordering = ("title", "pk")
+        verbose_name = "stream key"
+
+    def __str__(self):
+        return self.label
+
+    @property
+    def label(self):
+        if self.stream_key:
+            return f"{self.title} ({self.stream_key})"
+        return self.title
+
+    def _get_admin_namespace(self):
+        return "admin:fixja:competition:season:livestreamkey"
+
+    def _get_url_args(self):
+        return (self.season.competition_id, self.season_id, self.pk)
+
+    def _get_url_names(self):
+        # No per-object permissions view is routed for this model.
+        return ["add", "edit", "delete"]
+
+
+class LiveStreamEvent(AdminUrlMixin, models.Model):
+    """
+    An adhoc live stream event associated with a Season.
+
+    This is a standalone feature — it has no crossover with match streaming.
+    Unlike a Match, which derives its broadcast window from the fixture, an
+    adhoc event captures an explicit scheduled start and stop time — for
+    example an opening ceremony, an awards presentation, or a commentary
+    desk between fixtures.
+    """
+
+    season = ForeignKey(
+        Season, related_name="live_stream_events", on_delete=CASCADE
+    )
+
+    title = models.CharField(
+        max_length=100,
+        help_text=_("Title of the broadcast on the YouTube platform."),
+    )
+    description = models.TextField(
+        blank=True,
+        help_text=_("Description of the broadcast on the YouTube platform."),
+    )
+
+    start = SelectDateTimeField(
+        verbose_name=_("Scheduled start"),
+        help_text=_("When the live stream is scheduled to commence."),
+    )
+    stop = SelectDateTimeField(
+        verbose_name=_("Scheduled finish"),
+        help_text=_("When the live stream is scheduled to conclude."),
+    )
+
+    live_stream = BooleanField(
+        default=True,
+        help_text=_(
+            "Set to No to remove the scheduled broadcast from the YouTube "
+            "platform while keeping this event for your records. The "
+            "broadcast cannot be reinstated once removed."
+        ),
+    )
+    stream_key = ForeignKey(
+        LiveStreamKey,
+        blank=True,
+        null=True,
+        related_name="live_stream_events",
+        label_from_instance="label",
+        on_delete=PROTECT,
+        help_text=_(
+            "The stream key the camera or encoder operator should use to "
+            "deliver video for this event."
+        ),
+    )
+    # The broadcast identifier issued by the YouTube platform is globally
+    # unique and never reused, so it serves as the primary key. The
+    # broadcast is created when the event is, and the record retains its
+    # identifier even after the broadcast is removed from the platform.
+    external_identifier = models.CharField(max_length=20, primary_key=True)
+    live_stream_bind = models.CharField(
+        max_length=50, blank=True, null=True, db_index=True
+    )
+    live_stream_thumbnail_image = models.BinaryField(
+        blank=True,
+        null=True,
+        editable=True,
+        help_text="Image to be used as thumbnail image on the YouTube platform",
+    )
+
+    class Meta:
+        ordering = ("start", "title")
+        verbose_name = "live stream event"
+
+    def __str__(self):
+        return self.title
+
+    def _get_admin_namespace(self):
+        return "admin:fixja:competition:season:livestreamevent"
+
+    def _get_url_args(self):
+        return (self.season.competition_id, self.season_id, self.pk)
+
+    def _get_url_names(self):
+        # No per-object permissions view is routed for this model.
+        return ["add", "edit", "delete"]
+
+    @property
+    def video_url(self):
+        """Shareable link to the broadcast on the YouTube platform."""
+        return f"https://youtu.be/{self.external_identifier}"
+
+    def clean(self):
+        errors = {}
+        if self.start and self.stop and self.stop <= self.start:
+            errors.setdefault("stop", []).append(
+                _("The scheduled finish must be after the scheduled start.")
+            )
+        if self.stream_key_id and self.season_id:
+            if self.stream_key.season_id != self.season_id:
+                errors.setdefault("stream_key", []).append(
+                    _("This stream key does not belong to this season.")
+                )
+        if errors:
+            raise ValidationError(errors)
+
+    def get_thumbnail_media_upload(self) -> MediaUpload | None:
+        """
+        Get a MediaMemoryUpload instance for this event's thumbnail.
+        Falls back to season thumbnail if the event has no specific thumbnail.
+
+        Returns:
+            MediaMemoryUpload or None if no thumbnail is available
+        """
+        if self.live_stream_thumbnail_image:
+            return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
+
+        if self.season.live_stream_thumbnail_image:
+            return MediaMemoryUpload(
+                self.season.live_stream_thumbnail_image, resumable=True
+            )
+
+        return None
+
+    def live_stream_thumbnail_response(self, width=None, height=None) -> HttpResponse:
+        """
+        Get HttpResponse for this event's thumbnail image.
+        Falls back to season thumbnail if the event has no specific thumbnail.
+
+        Args:
+            width (int, optional): Maximum width for resizing
+            height (int, optional): Maximum height for resizing
+
+        Returns:
+            HttpResponse: Image response with appropriate headers
+
+        Raises:
+            Http404: If no thumbnail is available or processing fails
+        """
+        return create_thumbnail_response(
+            self.live_stream_thumbnail_image
+            or self.season.live_stream_thumbnail_image,
+            width,
+            height,
+        )
 
 
 class MatchScoreSheet(AdminUrlMixin, models.Model):

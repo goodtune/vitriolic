@@ -16,6 +16,20 @@ def browser_context_args():
 
 
 @pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args):
+    """
+    Allow environments with a pre-installed browser to run the E2E suite
+    without downloading one, by pointing PLAYWRIGHT_CHROMIUM_EXECUTABLE at
+    the browser binary. CI is unaffected -- it installs the browser
+    matching the pinned Playwright version.
+    """
+    executable = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE")
+    if executable:
+        return {**browser_type_launch_args, "executable_path": executable}
+    return browser_type_launch_args
+
+
+@pytest.fixture(scope="session")
 def screenshot_dir():
     """
     Create and return the directory for storing test screenshots.

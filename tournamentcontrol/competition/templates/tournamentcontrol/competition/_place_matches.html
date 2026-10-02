@@ -1,0 +1,51 @@
+{% load i18n tz %}
+{# the enclosing page activates the place's timezone; a ground may still keep its own #}
+{% get_current_timezone as place_tz %}
+{% trans "TBA" as tba context "abbreviation: to be advised" %}
+{% for day, matches in matches_by_date.items %}
+	<h3 class="date">{{ day|date:"l, jS F Y" }}</h3>
+	<table class="draw place-matches">
+		<thead>
+			<tr>
+				<th class="time">{% trans "Time" %}</th>
+				{% if show_ground %}<th class="ground">{% trans "Field" %}</th>{% endif %}
+				<th class="division">{% trans "Division" %}</th>
+				<th class="team home">{% trans "Home" %}</th>
+				<th class="score">{% trans "Score" %}</th>
+				<th class="team away">{% trans "Away" %}</th>
+				<th></th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for match in matches %}
+				<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}{% if match.live_stream %} live{% endif %}">
+					<td class="time">{% timezone match.play_at.timezone|default:place_tz %}{{ match.datetime|time|default:tba }}{% endtimezone %}</td>
+					{% if show_ground %}<td class="ground">{{ match.play_at.title|default:tba }}</td>{% endif %}
+					<td class="division {{ match.stage.division.slug }}">
+						{% url application.name|add:":division" competition=competition.slug season=season.slug division=match.stage.division.slug as url1 %}
+						{% url application.name|add:":division" season=season.slug division=match.stage.division.slug as url2 %}
+						{% url application.name|add:":division" division=match.stage.division.slug as url3 %}
+						<a href="{{ url1|default:url2|default:url3 }}">{{ match.stage.division.short_title|default:match.stage.division.title }}</a>
+					</td>
+					<td class="team home">{{ match.get_home_team.title }}</td>
+					<td class="score">
+						{% if match.home_team_score is not None or match.away_team_score is not None %}
+							{{ match.home_team_score|default_if_none:"" }} &ndash; {{ match.away_team_score|default_if_none:"" }}
+						{% else %}
+							{% trans "v" context "abbreviation: versus" %}
+						{% endif %}
+					</td>
+					<td class="team away">{{ match.get_away_team.title }}</td>
+					<td class="detail">
+						{% url application.name|add:":match" competition=competition.slug season=season.slug division=match.stage.division.slug match=match.pk as url1 %}
+						{% url application.name|add:":match" season=season.slug division=match.stage.division.slug match=match.pk as url2 %}
+						{% url application.name|add:":match" division=match.stage.division.slug match=match.pk as url3 %}
+						<a href="{{ url1|default:url2|default:url3 }}">{% trans "Detail" %}</a>
+					</td>
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+{% empty %}
+	<p class="empty">{% trans "No matches have been scheduled here yet." %}</p>
+{% endfor %}

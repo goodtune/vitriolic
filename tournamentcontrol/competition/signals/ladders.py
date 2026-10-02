@@ -26,14 +26,26 @@ aggregate_kw = dict(
 )
 
 
+# Division fields that are read when a LadderEntry is built from a Match (see
+# ``signals.matches.create_team_ladder_entry``). Changing any of these must
+# rebuild the stored entries. ``forfeit_for_score`` and ``forfeit_against_score``
+# are deliberately excluded: they are copied onto the Match scores at the time
+# of the forfeit, so re-saving the match would not pick up a new value.
+LADDER_FORMULA_FIELDS = frozenset(
+    ["points_formula", "bonus_points_formula", "include_forfeits_in_played"]
+)
+
+
 @disable_for_loaddata
-def changed_points_formula(sender, instance, *args, **kwargs):
+def changed_ladder_formula(sender, instance, *args, **kwargs):
     """
-    When the ``points_formula`` is edited, we need to trigger a rebuild of all
-    matches that have results and are related to the updated instance.
+    When any of the ``points_formula``, ``bonus_points_formula`` or
+    ``include_forfeits_in_played`` fields are edited, we need to trigger a
+    rebuild of all matches that have results and are related to the updated
+    instance.
     """
-    if "points_formula" in instance.changed_fields:
-        for m in instance.matches.filter(ladder_entries__isnull=False):
+    if LADDER_FORMULA_FIELDS & set(instance.changed_fields):
+        for m in instance.matches.filter(ladder_entries__isnull=False).distinct():
             m.save()
 
 
@@ -184,8 +196,22 @@ def team_ladder_entry_aggregation(sender, instance, created=None, *args, **kwarg
     aggregate.update({"difference": difference})
     aggregate.update({"percentage": percentage})
 
+    # A team keeps a reference to the pool it was drawn into, which belongs to
+    # a single stage. When a later stage reuses some of those teams -- for
+    # example a combined age group where the second stage is a round robin of
+    # the teams from one grade -- the pool must not be carried onto the summary
+    # or it will be reported as part of the earlier stage's pool ladder.
+    stage_group = instance.team.stage_group
+    if stage_group is not None and stage_group.stage_id != instance.match.stage_id:
+        logger.debug(
+            "%r belongs to %r from another stage, not attributing summary to it.",
+            instance.team,
+            stage_group,
+        )
+        stage_group = None
+
     instance.team.ladder_summary.create(
         stage=instance.match.stage,
-        stage_group=instance.team.stage_group,
+        stage_group=stage_group,
         **aggregate,
     )

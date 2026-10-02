@@ -9,6 +9,7 @@ from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.dashboard import (
     matches_progression_possible,
     matches_require_basic_results,
+    matches_require_details_results,
     matches_require_progression,
     stages_require_progression,
 )
@@ -60,6 +61,34 @@ class BasicResultTests(TestCase):
             away_team_score=4,
         )
         self.assertCountEqual(matches_require_basic_results(), [match])
+
+    @freeze_time("2019-07-15 09:00 UTC")
+    def test_mysideline_match_excluded(self):
+        kickoff = datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC"))
+        match = MatchFactory.create(
+            datetime=kickoff, stage__division__season__timezone="UTC"
+        )
+        # Its result comes from MySideline, so it is never awaiting entry.
+        MatchFactory.create(datetime=kickoff, stage=match.stage, mysideline_id=12345)
+        self.assertCountEqual(matches_require_basic_results(), [match])
+
+
+class DetailResultTests(TestCase):
+    def test_mysideline_match_excluded(self):
+        match = MatchFactory.create(
+            home_team_score=5,
+            away_team_score=3,
+            stage__division__season__statistics=True,
+        )
+        # Its detailed result comes from MySideline, so it is never awaiting
+        # entry here, whatever the season's statistics setting.
+        MatchFactory.create(
+            stage=match.stage,
+            home_team_score=4,
+            away_team_score=2,
+            mysideline_id=12345,
+        )
+        self.assertCountEqual(matches_require_details_results(), [match])
 
 
 @freeze_time("2019-07-15 09:30 UTC")

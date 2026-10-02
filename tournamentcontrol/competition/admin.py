@@ -5,7 +5,6 @@ import logging
 import operator
 from zoneinfo import ZoneInfo
 
-from dateutil.relativedelta import relativedelta
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
@@ -19,18 +18,20 @@ from django.http import (
     HttpResponseRedirect,
 )
 from django.shortcuts import get_object_or_404
-from django.template.loader import render_to_string
 from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _, ngettext
+from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
+from guardian.utils import get_40x_or_None
 
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.common.decorators import (
     csrf_exempt_m,
     staff_login_required_m,
 )
+from touchtechnology.common.utils import get_perms_for_model
 from touchtechnology.common.prince import prince
 from tournamentcontrol.competition.dashboard import (
     BasicResultWidget,
@@ -53,7 +54,10 @@ from tournamentcontrol.competition.forms import (
     DrawGenerationFormSet,
     DrawGenerationMatchFormSet,
     GroundForm,
+    LiveStreamEventForm,
+    LiveStreamKeyForm,
     MatchEditForm,
+    MatchLiveStreamFormSet,
     MatchRefereeForm,
     MatchScheduleFormSet,
     MatchStreamForm,
@@ -84,6 +88,8 @@ from tournamentcontrol.competition.models import (
     Ground,
     LadderEntry,
     LadderSummary,
+    LiveStreamEvent,
+    LiveStreamKey,
     Match,
     MatchScoreSheet,
     Person,
@@ -101,12 +107,16 @@ from tournamentcontrol.competition.models import (
     TeamRole,
     UndecidedTeam,
     Venue,
+    mysideline_renamed,
 )
 from tournamentcontrol.competition.sites import CompetitionAdminMixin
 from tournamentcontrol.competition.tasks import (
+    build_live_stream_event_body,
     generate_pdf_grid,
     generate_pdf_scorecards,
-    set_youtube_thumbnail,
+    sync_live_stream,
+    sync_live_stream_event,
+    synchronise_mysideline_season,
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
@@ -118,6 +128,13 @@ from tournamentcontrol.competition.utils import (
 from tournamentcontrol.competition.wizards import DrawGenerationWizard
 
 SCORECARD_PDF_WAIT = getattr(settings, "TOURNAMENTCONTROL_SCORECARD_PDF_WAIT", 5)
+
+# Shown when the season's stored OAuth2 refresh token is expired or revoked
+# and the YouTube platform can no longer be reached on its behalf.
+YOUTUBE_AUTH_EXPIRED_MESSAGE = _(
+    "YouTube authorisation for this season has expired or been revoked. "
+    "Re-authorise from the YouTube button on the seasons list and try again."
+)
 
 log = logging.getLogger(__name__)
 
@@ -200,6 +217,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path("<int:match_id>/delete/", self.delete_match, name="delete"),
                 path("<int:match_id>/detail/", self.edit_match_detail, name="detail"),
                 path(
+                    "<int:match_id>/resync-live-stream/",
+                    self.resync_match_live_stream,
+                    name="resync-live-stream",
+                ),
+                path(
                     "<int:match_id>/referee/",
                     self.referee_appointments,
                     name="referees",
@@ -244,6 +266,28 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path("add/", self.edit_seasonreferee, name="add"),
                 path("<int:pk>/", self.edit_seasonreferee, name="edit"),
                 path("<int:pk>/delete/", self.delete_seasonreferee, name="delete"),
+            ],
+            self.app_name,
+        )
+
+        livestreamevent_urls = (
+            [
+                # The primary key is the YouTube broadcast identifier, so
+                # these routes match strings rather than integers.
+                path("add/", self.edit_livestreamevent, name="add"),
+                path("<str:pk>/", self.edit_livestreamevent, name="edit"),
+                path("<str:pk>/delete/", self.delete_livestreamevent, name="delete"),
+            ],
+            self.app_name,
+        )
+
+        livestreamkey_urls = (
+            [
+                # The primary key is the YouTube liveStream identifier, so
+                # these routes match strings rather than integers.
+                path("add/", self.edit_livestreamkey, name="add"),
+                path("<str:pk>/", self.edit_livestreamkey, name="edit"),
+                path("<str:pk>/delete/", self.delete_livestreamkey, name="delete"),
             ],
             self.app_name,
         )
@@ -396,7 +440,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path(
                     "<int:season_id>/authorize", self.oauth_authorize, name="authorize"
                 ),
-                path("<int:season_id>/callback", self.oauth_callback, name="callback"),
+                path(
+                    "<int:season_id>/mysideline/",
+                    self.mysideline_sync,
+                    name="mysideline-sync",
+                ),
                 path("<int:season_id>/delete/", self.delete_season, name="delete"),
                 path(
                     "<int:season_id>/json-builder/",
@@ -415,6 +463,14 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path(
                     "<int:season_id>/referees/",
                     include(referees_urls, namespace="seasonreferee"),
+                ),
+                path(
+                    "<int:season_id>/live-stream-event/",
+                    include(livestreamevent_urls, namespace="livestreamevent"),
+                ),
+                path(
+                    "<int:season_id>/stream-key/",
+                    include(livestreamkey_urls, namespace="livestreamkey"),
                 ),
                 path("<int:season_id>/permission/", self.perms_season, name="perms"),
                 path("<int:season_id>/venue/", include(venue_urls, namespace="venue")),
@@ -571,6 +627,12 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 "results:<int:division_id>/", self.match_results, name="match-results"
             ),
             path("washout/", self.match_washout, name="match-washout"),
+            path("live-stream/", self.match_live_stream, name="match-live-stream"),
+            path(
+                "live-stream/resync/",
+                self.match_live_stream_resync,
+                name="match-live-stream-resync",
+            ),
             path("schedule/", self.match_schedule, name="match-schedule"),
             path(
                 "schedule/<int:division_id>/",
@@ -610,6 +672,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             ),
             path("club/", include(club_urls, namespace="club")),
             path("scorecards/", self.scorecard_report, name="scorecard-report"),
+            path(
+                "youtube/callback",
+                self.oauth_callback,
+                name="youtube-callback",
+            ),
             path("draw-format/", include(drawformat_urls, namespace="format")),
             re_path(
                 r"^reorder/(?P<model>[^/:]+)(?::(?P<parent>[^/]+))?/(?P<pk>\d+)/(?P<direction>\w+)/$",  # noqa: E501
@@ -844,23 +911,71 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
         extra_context.setdefault("dates", dates)
 
+        related = (
+            "exclusions",
+            "divisions",
+            "venues",
+            "timeslots",
+            "referees",
+        )
+        # Adhoc live stream events and their managed stream keys are only
+        # relevant when the season is being live streamed, keep the tabs
+        # hidden otherwise.
+        if season.live_stream:
+            related += ("live_stream_events", "live_stream_keys")
+
         return self.generic_edit(
             request,
             Season,
             instance=season,
-            related=(
-                "exclusions",
-                "divisions",
-                "venues",
-                "timeslots",
-                "referees",
-            ),
+            related=related,
             form_class=SeasonForm,
             form_kwargs={"user": request.user},
             post_save_redirect=self.redirect(competition.urls["edit"]),
             permission_required=True,
             extra_context=extra_context,
         )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def mysideline_sync(self, request, competition, season, extra_context, **kwargs):
+        """
+        Queue a synchronisation of the season with MySideline.
+
+        The work happens in a background task so that a slow or unavailable
+        remote does not tie up the request; the outcome is written to the
+        task log.
+        """
+        if not season.mysideline_enabled:
+            raise Http404(
+                "Competition.mysideline_url and Season.mysideline_season must be set."
+            )
+
+        redirect_url = request.GET.get("next") or season.urls["edit"]
+
+        if request.method == "GET":
+            # Divisions and teams whose names have been changed locally are
+            # not overwritten, so an upstream rename of one needs a human to
+            # decide between the two names; show them the outstanding ones.
+            context = dict(
+                extra_context or {},
+                competition=competition,
+                season=season,
+                cancel_url=redirect_url,
+                renamed_divisions=mysideline_renamed(season.divisions),
+                renamed_teams=mysideline_renamed(
+                    Team.objects.filter(division__season=season)
+                ).select_related("division"),
+            )
+            return self.render(
+                request,
+                self.template_path("season/mysideline_sync.html"),
+                context,
+            )
+
+        synchronise_mysideline_season.delay(season.pk)
+        messages.info(request, _("Synchronisation with MySideline has been queued."))
+        return self.redirect(redirect_url)
 
     @competition_by_pk_m
     @staff_login_required_m
@@ -874,9 +989,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             return self.redirect(season.urls["edit"])
         flow = season.flow()
         flow.redirect_uri = request.build_absolute_uri(
-            self.reverse(
-                "competition:season:callback", args=(competition.pk, season.pk)
-            )
+            self.reverse("youtube-callback")
         )
         authorization_url, state = flow.authorization_url(
             # Enable offline access so that you can refresh an access token without
@@ -889,17 +1002,17 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             prompt="consent",  # Needs to be consent to get refresh token?
         )
         request.session["oauth_state"] = state
+        request.session["oauth_season_id"] = season.pk
         return self.redirect(authorization_url)
 
-    @competition_by_pk_m
     @staff_login_required_m
-    def oauth_callback(self, request, competition, season, **kwargs):
-        state = request.session["oauth_state"]
+    def oauth_callback(self, request, **kwargs):
+        state = request.session.pop("oauth_state")
+        season_id = request.session.pop("oauth_season_id")
+        season = get_object_or_404(Season, pk=season_id)
         flow = season.flow(state=state)
         flow.redirect_uri = request.build_absolute_uri(
-            self.reverse(
-                "competition:season:callback", args=(competition.pk, season.pk)
-            )
+            self.reverse("youtube-callback")
         )
         authorization_response = (
             f"{request.build_absolute_uri(request.path)}?{request.META['QUERY_STRING']}"
@@ -1529,6 +1642,266 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
+    def edit_livestreamevent(self, request, season, extra_context, pk=None, **kwargs):
+        if pk is None:
+            instance = LiveStreamEvent(season=season)
+        else:
+            instance = get_object_or_404(season.live_stream_events, pk=pk)
+
+        def pre_save_callback(obj: LiveStreamEvent):
+            # The broadcast identifier is the primary key, so a new event
+            # must create its broadcast on the YouTube platform up front.
+            if obj.pk:
+                return
+
+            if not (season.live_stream_client_id and season.live_stream_client_secret):
+                messages.error(
+                    request,
+                    _(
+                        "YouTube credentials must be configured for this "
+                        "season before live stream events can be created."
+                    ),
+                )
+                return self.redirect(".")
+
+            try:
+                broadcast = (
+                    season.youtube.liveBroadcasts()
+                    .insert(
+                        part="id,snippet,status,contentDetails",
+                        body=build_live_stream_event_body(obj),
+                    )
+                    .execute()
+                )
+            except RefreshError:
+                messages.error(request, YOUTUBE_AUTH_EXPIRED_MESSAGE)
+                return self.redirect(".")
+            except HttpError as exc:
+                messages.error(request, exc.reason)
+                return self.redirect(".")
+
+            obj.external_identifier = broadcast["id"]
+            log.info("YouTube video %(id)r inserted", broadcast)
+
+        def post_save_callback(obj: LiveStreamEvent):
+            # Check if YouTube credentials are configured before queuing
+            # anything, we can't interact with the YouTube API without them.
+            if not (season.live_stream_client_id and season.live_stream_client_secret):
+                return None
+            sync_live_stream_event.s(obj.pk).apply_async()
+            return None
+
+        return self.generic_edit(
+            request,
+            season.live_stream_events,
+            instance=instance,
+            related=(),
+            form_class=LiveStreamEventForm,
+            always_save=season.live_stream,
+            pre_save_callback=pre_save_callback,
+            post_save_callback=post_save_callback,
+            post_save_redirect=self.redirect(
+                season.urls["edit"] + "#live_stream_events-tab"
+            ),
+            permission_required=True,
+            extra_context=extra_context,
+        )
+
+    def _confirm_youtube_destroyed(
+        self, request, season, instance, collection_name, redirect_response
+    ):
+        """
+        Guard local deletion of a record backed by a YouTube resource.
+
+        The record must not be removed from the database while its resource
+        may still exist on the platform — that would leave clutter we have
+        no way of removing. Destroy the resource first; a 404 means it is
+        already gone, which is equally confirmation.
+
+        Returns None when destruction is confirmed, otherwise the
+        HttpResponse to return instead of deleting.
+        """
+        # Mirror the permission check performed by generic_delete so the
+        # platform is never touched on behalf of a user who is not entitled
+        # to delete the record locally.
+        has_permission = get_40x_or_None(
+            request,
+            get_perms_for_model(type(instance), delete=True),
+            obj=instance,
+            return_403=not request.user.is_anonymous,
+            accept_global_perms=True,
+        )
+        if has_permission is not None:
+            return has_permission
+
+        verbose_name = instance._meta.verbose_name
+
+        if not (season.live_stream_client_id and season.live_stream_client_secret):
+            messages.error(
+                request,
+                _(
+                    "YouTube credentials are not configured for this season; "
+                    "unable to confirm the %s has been removed from the "
+                    "platform."
+                )
+                % verbose_name,
+            )
+            return redirect_response
+
+        try:
+            getattr(season.youtube, collection_name)().delete(
+                id=instance.pk
+            ).execute()
+            log.info("YouTube resource %r deleted", instance.pk)
+        except RefreshError:
+            # Destruction cannot be confirmed without authorisation, so the
+            # record must be retained.
+            messages.error(request, YOUTUBE_AUTH_EXPIRED_MESSAGE)
+            return redirect_response
+        except HttpError as exc:
+            if getattr(exc.resp, "status", None) != 404:
+                messages.error(request, exc.reason)
+                return redirect_response
+            # Already absent from the platform — confirmed destroyed.
+            log.info("YouTube resource %r already deleted", instance.pk)
+
+        return None
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def delete_livestreamevent(self, request, season, pk, **kwargs):
+        post_delete_redirect = self.redirect(
+            season.urls["edit"] + "#live_stream_events-tab"
+        )
+        if request.method == "POST":
+            event = get_object_or_404(season.live_stream_events, pk=pk)
+            blocked = self._confirm_youtube_destroyed(
+                request, season, event, "liveBroadcasts", post_delete_redirect
+            )
+            if blocked is not None:
+                return blocked
+        return self.generic_delete(
+            request,
+            season.live_stream_events,
+            pk=pk,
+            permission_required=True,
+            post_delete_redirect=post_delete_redirect,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def edit_livestreamkey(self, request, season, extra_context, pk=None, **kwargs):
+        if pk is None:
+            instance = LiveStreamKey(season=season)
+        else:
+            instance = get_object_or_404(season.live_stream_keys, pk=pk)
+
+        def pre_save_callback(obj: LiveStreamKey):
+            # The liveStream identifier is the primary key, so a new record
+            # must generate its stream on the YouTube platform up front. For
+            # an existing record the platform update is cosmetic, so missing
+            # credentials only warrant a warning.
+            if not (season.live_stream_client_id and season.live_stream_client_secret):
+                if not obj.pk:
+                    messages.error(
+                        request,
+                        _(
+                            "YouTube credentials must be configured for this "
+                            "season before stream keys can be generated."
+                        ),
+                    )
+                    return self.redirect(".")
+                messages.warning(
+                    request,
+                    _(
+                        "YouTube credentials are not configured for this "
+                        "season; the stream title was not updated on the "
+                        "platform."
+                    ),
+                )
+                return
+
+            body = {
+                "snippet": {
+                    "title": f"{season.competition} {season} ({obj.title})",
+                },
+                "cdn": {
+                    "ingestionType": "rtmp",
+                    "frameRate": "variable",
+                    "resolution": "variable",
+                },
+            }
+
+            try:
+                if obj.external_identifier:
+                    body["id"] = obj.external_identifier
+                    stream = (
+                        season.youtube.liveStreams()
+                        .update(part="snippet,cdn", body=body)
+                        .execute()
+                    )
+                    log.info("YouTube stream %(id)r updated", stream)
+                else:
+                    stream = (
+                        season.youtube.liveStreams()
+                        .insert(part="snippet,cdn", body=body)
+                        .execute()
+                    )
+                    obj.external_identifier = stream["id"]
+                    log.info("YouTube stream %(id)r inserted", stream)
+
+                obj.stream_key = stream["cdn"]["ingestionInfo"]["streamName"]
+
+            except RefreshError:
+                messages.error(request, YOUTUBE_AUTH_EXPIRED_MESSAGE)
+                return self.redirect(".")
+            except HttpError as exc:
+                messages.error(request, exc.reason)
+                return self.redirect(".")
+
+        return self.generic_edit(
+            request,
+            season.live_stream_keys,
+            instance=instance,
+            # The reverse relation to events must not be enumerated as
+            # related tabs — there is no nested namespace routed for it.
+            related=(),
+            form_class=LiveStreamKeyForm,
+            always_save=season.live_stream,
+            pre_save_callback=pre_save_callback,
+            post_save_redirect=self.redirect(
+                season.urls["edit"] + "#live_stream_keys-tab"
+            ),
+            permission_required=True,
+            extra_context=extra_context,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def delete_livestreamkey(self, request, season, pk, **kwargs):
+        post_delete_redirect = self.redirect(
+            season.urls["edit"] + "#live_stream_keys-tab"
+        )
+        if request.method == "POST":
+            stream_key = get_object_or_404(season.live_stream_keys, pk=pk)
+            # A key still referenced by events is protected — let
+            # generic_delete refuse it without touching the platform.
+            if not stream_key.live_stream_events.exists():
+                blocked = self._confirm_youtube_destroyed(
+                    request, season, stream_key, "liveStreams", post_delete_redirect
+                )
+                if blocked is not None:
+                    return blocked
+        return self.generic_delete(
+            request,
+            season.live_stream_keys,
+            pk=pk,
+            permission_required=True,
+            post_delete_redirect=post_delete_redirect,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
     def generate_draw(
         self, request, competition, season, division, stage, extra_context, **kwargs
     ):
@@ -1613,156 +1986,23 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         if match is None:
             match = Match(stage=stage, include_in_ladder=stage.keep_ladder)
 
-        def pre_save_callback(obj: Match):
-            # Check if YouTube credentials are configured before attempting anything else,
+        base_url = request.build_absolute_uri("/").rstrip("/")
+
+        def post_save_callback(obj: Match):
+            # Check if YouTube credentials are configured before queuing anything,
             # we can't interact with the YouTube API without them.
             if not (season.live_stream_client_id and season.live_stream_client_secret):
-                return obj
-
-            # Build match video URL for description
-            # Only build the URL if the match has been saved and has a primary key
-            match_url = None
-            if obj.pk is not None:
-                match_url = request.build_absolute_uri(
-                    reverse(
-                        "competition:match-video",
-                        kwargs={
-                            "competition": competition.slug,
-                            "season": season.slug,
-                            "division": division.slug,
-                            "match": obj.pk,
-                        },
-                    )
-                )
-
-            # Create context for template rendering
-            template_context = {
-                "match": obj,
-                "competition": competition,
-                "season": season,
-                "division": division,
-                "stage": stage,
-                "match_url": match_url,
-            }
-
-            # Render title from template with hierarchical fallback
-            title_templates = [
-                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/{competition.slug}/match/live_stream/title.txt",
-                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/match/live_stream/title.txt",
-                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/match/live_stream/title.txt",
-                f"tournamentcontrol/competition/{stage.slug}/match/live_stream/title.txt",
-                "tournamentcontrol/competition/match/live_stream/title.txt",
-            ]
-            title = render_to_string(title_templates, template_context, request).strip()
-
-            # Render description from template with hierarchical fallback
-            description_templates = [
-                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/{competition.slug}/match/live_stream/description.txt",
-                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/{season.slug}/match/live_stream/description.txt",
-                f"tournamentcontrol/competition/{stage.slug}/{division.slug}/match/live_stream/description.txt",
-                f"tournamentcontrol/competition/{stage.slug}/match/live_stream/description.txt",
-                "tournamentcontrol/competition/match/live_stream/description.txt",
-            ]
-            description = render_to_string(
-                description_templates, template_context, request
-            ).strip()
-
-            start_time = obj.get_datetime(ZoneInfo("UTC"))
-
-            # Skip YouTube API interaction if we don't have valid start time
-            # This can happen for new matches that don't have complete date/time data
-            if start_time is None:
-                return
-
-            stop_time = start_time + relativedelta(minutes=50)  # FIXME: hard coded
-
-            body = {
-                "snippet": {
-                    "title": title,
-                    "description": description,
-                    "scheduledStartTime": start_time.isoformat(),
-                    "scheduledEndTime": stop_time.isoformat(),
-                },
-                "status": {
-                    "privacyStatus": season.live_stream_privacy,
-                    "selfDeclaredMadeForKids": False,
-                },
-                "contentDetails": {
-                    "enableAutoStart": False,
-                    "enableAutoStop": False,
-                    "monitorStream": {
-                        "broadcastStreamDelayMs": 0,
-                        "enableMonitorStream": True,
-                    },
-                },
-            }
-
-            try:
-                if obj.external_identifier:
-                    # If we have disabled live-streaming where it was previously
-                    # enabled, we need to remove it using the YouTube API.
-                    if not obj.live_stream:
-                        video_id = obj.external_identifier
-                        season.youtube.liveBroadcasts().delete(id=video_id).execute()
-                        if obj.videos is not None:
-                            obj.videos.remove(f"https://youtu.be/{video_id}")
-                        if not obj.videos:
-                            obj.videos = None
-                        obj.external_identifier = None
-                        log.info("YouTube video %(id)r deleted", video_id)
-                        return
-
-                    # Alternatively we're making sure the representation on the backend
-                    # is consistent with the current status.
-                    else:
-                        body["id"] = obj.external_identifier
-                        broadcast = (
-                            season.youtube.liveBroadcasts()
-                            .update(part="snippet,status,contentDetails", body=body)
-                            .execute()
-                        )
-                        set_youtube_thumbnail.s(obj.pk).apply_async(countdown=10)
-                        log.info("YouTube video %(id)r updated", broadcast)
-
-                # If we have enabled live-streaming, but don't have an external id, we
-                # need to create an event with the YouTube API and store the external
-                # id.
-                elif obj.live_stream:
-                    broadcast = (
-                        season.youtube.liveBroadcasts()
-                        .insert(
-                            part="id,snippet,status,contentDetails",
-                            body=body,
-                        )
-                        .execute()
-                    )
-                    obj.external_identifier = broadcast["id"]
-                    set_youtube_thumbnail.s(obj.pk).apply_async(countdown=10)
-                    video_link = f"https://youtu.be/{obj.external_identifier}"
-                    obj.videos = (
-                        [video_link]
-                        if obj.videos is None
-                        else obj.videos.append(video_link)
-                    )
-                    log.info("YouTube video %(id)r inserted", broadcast)
-
-                # We need to bind to a liveStream resource. This is only supported on
-                # a Ground, not a Venue. Only attempt binding if external_identifier exists.
-                if obj.external_identifier and obj.play_at.ground.external_identifier:
-                    bind = (
-                        season.youtube.liveBroadcasts()
-                        .bind(
-                            part="id,snippet,contentDetails,status",
-                            id=obj.external_identifier,
-                            streamId=obj.play_at.ground.external_identifier,
-                        )
-                        .execute()
-                    )
-                    obj.live_stream_bind = bind["contentDetails"].get("boundStreamId")
-
-            except HttpError as exc:
-                messages.error(request, exc.reason)
-                return self.redirect(".")
+                return None
+            # An existing broadcast always needs syncing (update or delete). For
+            # insert/update we additionally need a scheduled datetime, otherwise
+            # the task would just no-op after rendering templates.
+            if not obj.external_identifier:
+                if not obj.live_stream:
+                    return None
+                if obj.get_datetime(ZoneInfo("UTC")) is None:
+                    return None
+            sync_live_stream.s(obj.pk, base_url=base_url).apply_async()
+            return None
 
         return self.generic_edit(
             request,
@@ -1773,10 +2013,76 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_save_redirect=self.redirect(
                 request.GET.get("next") or stage.urls["edit"]
             ),
-            pre_save_callback=pre_save_callback if season.live_stream else lambda o: o,
+            post_save_callback=post_save_callback if season.live_stream else lambda o: None,
             permission_required=True,
             extra_context=extra_context,
         )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def resync_match_live_stream(
+        self,
+        request,
+        competition,
+        season,
+        division,
+        stage,
+        match,
+        extra_context,
+        **kwargs,
+    ):
+        """Re-push the current match title/description/schedule to its existing YouTube broadcast.
+
+        Useful when a match's title, teams, or timing have changed since the broadcast
+        was created and the public YouTube URL must be kept stable.
+        """
+        redirect_url = request.GET.get("next") or stage.urls["edit"]
+
+        if request.method == "GET":
+            context = dict(
+                extra_context or {},
+                match=match,
+                competition=competition,
+                season=season,
+                division=division,
+                stage=stage,
+                cancel_url=redirect_url,
+            )
+            return self.render(
+                request,
+                self.template_path("match/resync_live_stream.html"),
+                context,
+            )
+
+        if not (season.live_stream_client_id and season.live_stream_client_secret):
+            messages.error(
+                request, _("Live streaming is not configured for this season.")
+            )
+            return self.redirect(redirect_url)
+
+        if not match.live_stream or not match.external_identifier:
+            messages.error(
+                request,
+                _("This match is not currently streaming; nothing to resync."),
+            )
+            return self.redirect(redirect_url)
+
+        if match.get_datetime(ZoneInfo("UTC")) is None:
+            messages.error(
+                request,
+                _("Cannot resync a match without a scheduled date and time."),
+            )
+            return self.redirect(redirect_url)
+
+        sync_live_stream.s(
+            match.pk, base_url=request.build_absolute_uri("/").rstrip("/")
+        ).apply_async()
+
+        messages.success(
+            request,
+            _("YouTube live stream resync has been queued."),
+        )
+        return self.redirect(redirect_url)
 
     @competition_by_pk_m
     @staff_login_required_m
@@ -2270,6 +2576,103 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context=extra_context,
         )
 
+    @competition_by_pk_m
+    @staff_login_required_m
+    def match_live_stream(
+        self, request, competition, season, date, extra_context, **kwargs
+    ):
+        matches = Match.objects.filter(
+            stage__division__season__id=season.pk,
+            stage__division__season__competition__id=competition.pk,
+            date=date,
+            play_at__ground__live_stream=True,
+        ).order_by("datetime", "play_at", "pk")
+
+        base_url = request.build_absolute_uri("/").rstrip("/")
+
+        def post_save_callback(obj: Match):
+            # Check if YouTube credentials are configured before queuing anything,
+            # we can't interact with the YouTube API without them.
+            if not (season.live_stream_client_id and season.live_stream_client_secret):
+                return None
+            # An existing broadcast always needs syncing (update or delete). For
+            # insert/update we additionally need a scheduled datetime, otherwise
+            # the task would just no-op after rendering templates.
+            if not obj.external_identifier:
+                if not obj.live_stream:
+                    return None
+                if obj.get_datetime(ZoneInfo("UTC")) is None:
+                    return None
+            sync_live_stream.s(obj.pk, base_url=base_url).apply_async()
+            return None
+
+        return self.generic_edit_multiple(
+            request,
+            matches,
+            formset_class=MatchLiveStreamFormSet,
+            templates=self.template_path("match_live_stream.html"),
+            post_save_callback=post_save_callback,
+            post_save_redirect=self.redirect(season.urls["edit"]),
+            extra_context=extra_context,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def match_live_stream_resync(
+        self, request, competition, season, date, extra_context, **kwargs
+    ):
+        """Re-push every match marked to stream on camera-equipped fields for the day.
+
+        A quick bulk equivalent of the per-match "Resync live stream" action, but
+        create-or-update rather than update-only: it also creates the broadcast for
+        matches that were marked to stream but never got one synced (e.g. toggled
+        via the bulk view before sync_live_stream was wired up to it), in addition
+        to updating already-created broadcasts (e.g. after changing the season
+        thumbnail). Relies on sync_live_stream/_apply_sync's existing
+        create-or-update semantics, keyed on external_identifier.
+        """
+        redirect_url = season.urls["edit"]
+
+        if request.method != "POST":
+            return self.redirect(redirect_url)
+
+        if not (season.live_stream_client_id and season.live_stream_client_secret):
+            messages.error(
+                request, _("Live streaming is not configured for this season.")
+            )
+            return self.redirect(redirect_url)
+
+        matches = Match.objects.filter(
+            stage__division__season__id=season.pk,
+            stage__division__season__competition__id=competition.pk,
+            date=date,
+            play_at__ground__live_stream=True,
+            live_stream=True,
+        )
+
+        base_url = request.build_absolute_uri("/").rstrip("/")
+        count = 0
+        for match in matches:
+            # A new broadcast needs a scheduled datetime to insert; an existing
+            # one always needs syncing, to push updated title/thumbnail/schedule.
+            if not match.external_identifier and match.get_datetime(ZoneInfo("UTC")) is None:
+                continue
+            sync_live_stream.s(match.pk, base_url=base_url).apply_async()
+            count += 1
+
+        if count:
+            message = ngettext(
+                "YouTube live stream resync has been queued for %(count)d match.",
+                "YouTube live stream resync has been queued for %(count)d matches.",
+                count,
+            ) % {"count": count}
+            messages.success(request, message)
+        else:
+            messages.info(
+                request, _("No currently-streaming matches to resync for this day.")
+            )
+        return self.redirect(redirect_url)
+
     @staff_login_required_m
     def scorecard_report(self, request, **extra_context):
         from tournamentcontrol.competition.wizards import (
@@ -2340,17 +2743,18 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             "date": date,
             "time": time,
             "stage": stage,
-            "filtered": round is not None,
-            "round": round,
         }
 
         templates = self.template_path("scorecards.html", competition.slug, season.slug)
 
         if mode == "pdf":
+            # The task arguments must be serializable by celery, so model
+            # instances are passed by primary key and reloaded by the task.
             kw = {
                 "match_pks": [pk for pk in matches.values_list("pk", flat=True)],
                 "templates": templates,
-                "extra_context": extra_context,
+                "extra_context": {"date": date, "time": time},
+                "season_pk": season.pk,
             }
             if stage is not None:
                 kw["stage_pk"] = stage.pk

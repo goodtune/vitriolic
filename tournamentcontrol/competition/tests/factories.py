@@ -36,7 +36,11 @@ class ClubFactory(SitemapNodeBaseFactory):
     class Meta:
         model = models.Club
 
-    title = factory.Faker("company")
+    # A club's slug is derived from its title and looked up on its own, so
+    # titles must be unique: Faker company names occasionally repeat (two
+    # "Smith Group" clubs share a slug and the club page can no longer
+    # resolve either of them).
+    title = factory.Sequence(lambda n: "Club %d" % (n + 1))
 
 
 class CompetitionFactory(OrderedSitemapNodeFactory):
@@ -109,6 +113,33 @@ class GroundFactory(OrderedSitemapNodeFactory):
     timezone = factory.SelfAttribute("venue.timezone")
 
     venue = factory.SubFactory(VenueFactory)
+
+
+class LiveStreamKeyFactory(DjangoModelFactory):
+    class Meta:
+        model = models.LiveStreamKey
+
+    season = factory.SubFactory(SeasonFactory)
+
+    title = factory.Sequence(lambda n: "Stream Key %d" % (n + 1))
+    # The YouTube liveStream identifier is the primary key.
+    external_identifier = factory.Sequence(lambda n: "stream%d" % (n + 1))
+    stream_key = factory.Sequence(lambda n: "abcd-%04d" % (n + 1))
+
+
+class LiveStreamEventFactory(DjangoModelFactory):
+    class Meta:
+        model = models.LiveStreamEvent
+
+    season = factory.SubFactory(SeasonFactory)
+
+    title = factory.Sequence(lambda n: "Live Stream Event %d" % (n + 1))
+    start = factory.fuzzy.FuzzyDateTime(
+        datetime.datetime(2020, 1, 1, tzinfo=ZoneInfo("UTC"))
+    )
+    stop = factory.LazyAttribute(lambda o: o.start + datetime.timedelta(hours=1))
+    # The YouTube broadcast identifier is the primary key.
+    external_identifier = factory.Sequence(lambda n: "adhoc%d" % (n + 1))
 
 
 class DivisionFactory(OrderedSitemapNodeFactory):

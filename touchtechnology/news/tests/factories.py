@@ -35,5 +35,5 @@ class CategoryFactory(DjangoModelFactory):
     class Meta:
         model = Category
 
-    title = factory.Faker("country")
+    title = factory.Sequence(lambda n: "Category %d" % n)
     slug = factory.LazyAttribute(lambda a: slugify(a.title))

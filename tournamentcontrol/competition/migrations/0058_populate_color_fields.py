@@ -45,6 +45,6 @@ class Migration(migrations.Migration):
             populate_division_colors, 
             reverse_code=migrations.RunPython.noop
         ),
-        # Note: Stage colors are handled by db_default in migration 0057,
+        # Note: Stage colors are handled by default in migration 0057,
         # so no data migration needed for stages
     ]
