@@ -185,8 +185,14 @@ class ScorecardWizardBase(SessionWizardView):
                 kw["_schema_name"] = self.request.tenant.schema_name
                 kw["base_url"] = self.request.build_absolute_uri("/")
 
+            # The task arguments must be serializable by celery, so model
+            # instances are passed by primary key and reloaded by the task.
             result = generate_pdf_scorecards.delay(
-                matches, templates, extra_context, **kw
+                match_pks=[pk for pk in matches.values_list("pk", flat=True)],
+                templates=templates,
+                extra_context={},
+                season_pk=season.pk,
+                **kw,
             )
 
             reverse_kwargs = {
@@ -200,7 +206,9 @@ class ScorecardWizardBase(SessionWizardView):
             )
             response = HttpResponseRedirect(redirect_to)
         else:
-            output = generate_scorecards(matches, templates, extra_context)
+            output = generate_scorecards(
+                matches, templates, mode, extra_context=extra_context
+            )
             response = HttpResponse(output)
 
         return response
