@@ -319,7 +319,9 @@ as its identifiers and scheduling fields only:
 
 - **MySideline matches.** `list_matches_awaiting_results` (like the admin
   dashboard's Awaiting Scores and the season results page) no longer lists
-  matches mirrored from MySideline, whose results come from MySideline.
+  matches mirrored from MySideline, whose results come from MySideline. The
+  dashboard's Awaiting Detailed Results widget and the detailed results on
+  the season results page leave them out as well.
 - **Draw building and batch scheduling.** Draw format, exclusion date and
   time slot tools, `build_draw`, `schedule_matches` and `auto_schedule`;
   eval fields on `create_match` / `update_match`; time slot rules enforced on

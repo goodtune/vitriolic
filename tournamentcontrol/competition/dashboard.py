@@ -60,6 +60,12 @@ def matches_require_basic_results(now=None, matches=None):
 
 
 def matches_require_details_results(matches=None, include_forfeits=False):
+    """
+    Matches with a result in a season that records statistics but with no
+    detailed result yet. Matches mirrored from MySideline are left out, as
+    they are for basic results: their results come from MySideline, so their
+    detailed results are never entered here.
+    """
     # If not provided up front, build a base queryset of all matches
     if matches is None:
         matches = Match.objects.filter(
@@ -74,6 +80,7 @@ def matches_require_details_results(matches=None, include_forfeits=False):
         home_team_score__isnull=False,
         away_team__isnull=False,
         away_team_score__isnull=False,
+        mysideline_id__isnull=True,
     )
 
     if not include_forfeits:
