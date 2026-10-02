@@ -2160,6 +2160,13 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         self.assertEqual(entries[self.team.pk]["points"], 0)
         for match in self.played:
             self.assertEqual(entries[self.opponent(match).pk]["played"], 3)
+        # Voiding again finds the matches already out of the ladder.
+        again = self.admin_tools.withdraw_team(self.team.pk, void_played_results=True)
+        self.assertEqual([m["voided"] for m in again["kept_with_results"]], [True] * 4)
+        ladder = self.admin_tools.get_ladder(stage_id=self.stage.pk)
+        self.assertEqual(
+            sum(e["played"] for e in ladder["stages"][0]["pools"][0]["ladder"]), 16
+        )
 
     def test_byes_are_processed_like_any_other(self):
         self.admin_tools.update_division(

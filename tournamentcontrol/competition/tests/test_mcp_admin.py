@@ -876,6 +876,52 @@ class ByeTests(AdminFixtureMixin, TestCase):
         self.assertEqual(self.bye.is_bye, True)
         self.assertEqual(self.bye.away_team, None)
 
+    def test_bye_flag_is_explicit_and_idempotent(self):
+        admin = self.admin()
+        # Restating what a match already is changes nothing.
+        res = admin.update_match(self.fra_v_eng.pk, is_bye=False)
+        self.assertEqual(res["match"]["is_bye"], False)
+        self.assertEqual(res["match"]["time"], "17:00")
+        res = admin.update_match(self.bye.pk, is_bye=True)
+        self.assertEqual(res["match"]["is_bye"], True)
+        self.assertNotIn("referees_removed", res)
+        # A bye is not given an opponent without is_bye=false ...
+        one_team = (
+            "A bye is one team with no opponent: exactly one side must have a team."
+        )
+        self.assertToolError(
+            one_team, admin.update_match, self.bye.pk, away_team_id=self.nzl_men.pk
+        )
+        # ... nor an undecided team or an eval while it stays a bye.
+        other = (
+            "A bye is one team with no opponent: it cannot have an undecided team "
+            "or an eval."
+        )
+        self.assertToolError(
+            other, admin.update_match, self.bye.pk, is_bye=True, away_team_eval="P1"
+        )
+        self.assertToolError(
+            other,
+            admin.update_match,
+            self.bye.pk,
+            is_bye=True,
+            away_team_undecided_id=1,
+        )
+        self.bye.refresh_from_db()
+        self.assertEqual((self.bye.is_bye, self.bye.away_team), (True, None))
+        # The empty side of a bye can be an eval when it becomes a match.
+        res = admin.update_match(
+            self.bye.pk,
+            is_bye=False,
+            away_team_eval="W",
+            away_team_eval_related_id=self.eng_v_fra.pk,
+        )
+        self.assertEqual(res["match"]["is_bye"], False)
+        self.assertEqual(res["match"]["away_team"]["eval"], "W")
+        self.assertEqual(
+            res["match"]["away_team"]["eval_related_id"], self.eng_v_fra.pk
+        )
+
 
 @freeze_time(NOW)
 class ResultTests(AdminFixtureMixin, TestCase):
