@@ -47,7 +47,6 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Count, F, Max, Min, Q
 from django.db.models.functions import Coalesce
 from django.utils import timezone
-from django.utils.html import strip_tags
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
@@ -191,10 +190,20 @@ def _match_team(match, field):
     team = getattr(match, field)
     if team is not None:
         return _team_ref(team)
-    title = getattr(match, f"{field}_title", None)
-    if title is None:
-        title = getattr(match, f"get_{field}_plain")()
-    title = strip_tags(str(title or "")).strip() or TBA
+    if (
+        match.is_bye
+        and not getattr(match, f"{field}_undecided_id", None)
+        and not (getattr(match, f"{field}_eval", None))
+    ):
+        title = "Bye"
+    else:
+        # The SQL annotation saves rendering a template per match; a title
+        # with markup in it (a team, pool or label named with "<") is built
+        # as plain text instead, so it is returned exactly as written.
+        title = getattr(match, f"{field}_title", None)
+        if title is None or "<" in title:
+            title = getattr(match, f"get_{field}_plain")()
+        title = str(title or "").strip() or TBA
     res = {"id": None, "title": title, "slug": None, "club": None}
     team_eval = getattr(match, f"{field}_eval", None)
     if team_eval:

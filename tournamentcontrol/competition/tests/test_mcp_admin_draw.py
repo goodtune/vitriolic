@@ -858,6 +858,37 @@ class BuildDrawTests(DemoMixin, TestCase):
             Match.objects.get(pk=final.pk).eval(lazy=True), (team[0], team[2])
         )
 
+    def test_earlier_stages_are_built_first(self):
+        """
+        Finals listed before the regular season in the same call still carry
+        on its round numbers; the response keeps the order given.
+        """
+        finals = self.finals_format()
+        mens = self.season.divisions_by_title["Men's"]
+        res = self.admin_tools.build_draw(
+            [
+                {
+                    "stage_id": mens.finals.pk,
+                    "draw_format_id": finals.pk,
+                    "start_date": datetime.date(2027, 1, 20),
+                },
+                {
+                    "stage_id": mens.regular.pk,
+                    "draw_format_id": self.round_robin(8).pk,
+                    "start_date": WEDNESDAYS[0],
+                    "rounds": 12,
+                },
+            ],
+            dry_run=True,
+        )
+        self.assertEqual(
+            [
+                (b["stage"]["id"], b["first_round"], b["last_round"])
+                for b in res["builds"]
+            ],
+            [(mens.finals.pk, 13, 14), (mens.regular.pk, 1, 12)],
+        )
+
     def test_dry_run_matches_the_real_run(self):
         finals = self.finals_format()
         builds = self.regular_builds(self.season) + [
@@ -2044,6 +2075,42 @@ class TitleTests(DemoMixin, TestCase):
         )
         self.assertEqual(final.get_home_team_plain(), "1st A & <b>B</b>")
         self.assertEqual(pool.title, "A & <b>B</b>")
+
+    def test_placeholder_titles_keep_their_markup(self):
+        """
+        A placeholder named after a label with markup in it is returned as
+        written, not stripped of its tags.
+        """
+        division = self.season.divisions_by_title["Women's"]
+        undecided = factories.UndecidedTeamFactory.create(
+            stage=division.finals, label="<TBC>"
+        )
+        semi = factories.MatchFactory.create(
+            stage=division.finals,
+            home_team=None,
+            away_team=None,
+            home_team_undecided=undecided,
+            away_team_eval="P2",
+            label="Semi <1>",
+            date=None,
+            time=None,
+            datetime=None,
+        )
+        final = factories.MatchFactory.create(
+            stage=division.finals,
+            home_team=None,
+            away_team=None,
+            home_team_eval="W",
+            home_team_eval_related=semi,
+            date=None,
+            time=None,
+            datetime=None,
+            round=2,
+        )
+        res = self.admin().get_match(semi.pk)
+        self.assertEqual(res["home_team"]["title"], "<TBC>")
+        res = self.admin().get_match(final.pk)
+        self.assertEqual(res["home_team"]["title"], "Winner Semi <1>")
 
     def test_placeholder_titles(self):
         division = self.season.divisions_by_title["Women's"]

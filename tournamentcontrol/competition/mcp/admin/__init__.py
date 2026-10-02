@@ -3106,7 +3106,9 @@ class AdminToolset(CompetitionToolset):
         Numbered references are the teams of the stage or pool; finals
         stages use P/G..P/W/L references (no teams needed), which build with
         their evals wired: a ``W1`` side refers to the match built from
-        line 1, and round numbers carry on from the stage before.
+        line 1, and round numbers carry on from the stage before (builds of
+        earlier stages in the same call are made first, whatever their order
+        in ``builds``).
 
         The same inputs always build the same matches. ``dry_run`` builds
         and reports the plan without saving it: for each build, ``rows``
@@ -3152,15 +3154,20 @@ class AdminToolset(CompetitionToolset):
             # Without the lock two concurrent calls could both find a target
             # empty and build it twice (nothing in the database prevents it).
             self._lock_seasons(plan["stage"].division.season_id for plan in plans)
-            results = [
-                self._build(
+            # A later stage numbers its rounds on from the stage before it,
+            # so build earlier stages first; report in the order given.
+            built = {
+                plan["index"]: self._build(
                     plan,
                     replace_existing=replace_existing,
                     dry_run=dry_run,
                     verbose=verbose,
                 )
-                for plan in plans
-            ]
+                for plan in sorted(
+                    plans, key=lambda plan: (plan["stage"].order, plan["index"])
+                )
+            }
+            results = [built[plan["index"]] for plan in plans]
             if dry_run:
                 transaction.set_rollback(True)
         return {
