@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 from celery import shared_task
 from dateutil.relativedelta import relativedelta
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
 from django.template.loader import render_to_string
 from django.urls import NoReverseMatch, reverse
 from googleapiclient.errors import HttpError
@@ -261,17 +262,42 @@ def sync_live_stream(match_pk, base_url=None):
     Competition, and Stage where set) so a recoverable failure remains
     non-fatal and the broadcast can still be created.
 
+    The match row is locked for the duration, so concurrent synchronisations
+    (a queued run and a resync from the admin site or MCP server, say) are
+    serialised and the second sees the broadcast the first created rather
+    than inserting another. Whatever was saved before YouTube rejected a
+    later step (the id of an inserted broadcast whose binding failed) is
+    committed before the error is raised, so a broadcast is never orphaned.
+
     Returns what was done to the broadcast (``"created"``, ``"updated"`` or
     ``"removed"``), or ``None`` when there was nothing to do.
     """
-    try:
-        match = Match.objects.select_related(
-            "stage__division__season__competition",
-        ).get(pk=match_pk)
-    except Match.DoesNotExist:
-        # Match was deleted between enqueuing and execution; nothing to sync.
-        logger.info("sync_live_stream skipped: match %s no longer exists", match_pk)
-        return None
+    error = None
+    with transaction.atomic():
+        try:
+            # The default manager annotates team titles through outer joins
+            # that a row lock cannot be taken across.
+            match = (
+                Match._base_manager.select_related(
+                    "stage__division__season__competition",
+                )
+                .select_for_update(of=("self",))
+                .get(pk=match_pk)
+            )
+        except Match.DoesNotExist:
+            # Match was deleted between enqueuing and execution; nothing to sync.
+            logger.info("sync_live_stream skipped: match %s no longer exists", match_pk)
+            return None
+        try:
+            return _sync_live_stream(match, base_url)
+        except HttpError as exc:
+            error = exc
+    raise error
+
+
+def _sync_live_stream(match, base_url):
+    """Insert, update or delete the broadcast of a locked ``match``."""
+    match_pk = match.pk
     season = match.stage.division.season
 
     if not (season.live_stream_client_id and season.live_stream_client_secret):
@@ -420,29 +446,40 @@ def sync_live_stream_event(event_pk):
     binds the broadcast to the selected stream key from the season's managed
     pool, as required by the current state of the event.
 
+    The event row is locked for the duration so concurrent synchronisations
+    are serialised, and whatever was saved before a rejection by YouTube is
+    committed before the error is raised (see ``sync_live_stream``).
+
     Returns what was done to the broadcast (``"updated"``, ``"removed"`` or
     ``"missing"``), or ``None`` when there was nothing to do.
     """
-    try:
-        event = LiveStreamEvent.objects.select_related(
-            "season__competition", "stream_key"
-        ).get(pk=event_pk)
-    except LiveStreamEvent.DoesNotExist:
-        # Event was deleted between enqueuing and execution; nothing to sync.
-        logger.info(
-            "sync_live_stream_event skipped: event %s no longer exists", event_pk
-        )
-        return None
-    season = event.season
+    error = None
+    with transaction.atomic():
+        try:
+            event = (
+                LiveStreamEvent.objects.select_related(
+                    "season__competition", "stream_key"
+                )
+                .select_for_update(of=("self",))
+                .get(pk=event_pk)
+            )
+        except LiveStreamEvent.DoesNotExist:
+            # Event was deleted between enqueuing and execution; nothing to sync.
+            logger.info(
+                "sync_live_stream_event skipped: event %s no longer exists", event_pk
+            )
+            return None
+        season = event.season
 
-    if not (season.live_stream_client_id and season.live_stream_client_secret):
-        return None
+        if not (season.live_stream_client_id and season.live_stream_client_secret):
+            return None
 
-    try:
-        return _apply_event_sync(event, season)
-    except HttpError as exc:
-        logger.error("YouTube API error syncing event %s: %s", event_pk, exc)
-        raise
+        try:
+            return _apply_event_sync(event, season)
+        except HttpError as exc:
+            logger.error("YouTube API error syncing event %s: %s", event_pk, exc)
+            error = exc
+    raise error
 
 
 @shared_task

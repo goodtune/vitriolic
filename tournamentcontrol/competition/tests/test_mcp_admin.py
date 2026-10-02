@@ -1759,8 +1759,9 @@ class LiveStreamResyncTests(AdminFixtureMixin, TestCase):
         self, mock_youtube_prop, mock_thumbnail, mock_event_thumbnail
     ):
         """
-        Concurrent resyncs of one match are serialised on its row, so the
-        second sees the broadcast the first created rather than inserting a
+        A resync and any concurrent synchronisation of one match (another
+        resync, or the queued task) are serialised on its row, so the second
+        sees the broadcast the first created rather than inserting a
         duplicate.
         """
         self.youtube(mock_youtube_prop)
