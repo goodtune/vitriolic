@@ -267,7 +267,7 @@ grounds resynchronises its broadcast.
 
 | Tool | Does |
 | --- | --- |
-| `list_matches_awaiting_results(season_id, division_id, date)` | Matches that have kicked off without a result, as the admin dashboard lists them. |
+| `list_matches_awaiting_results(season_id, division_id, date)` | Matches that have kicked off without a result, as the admin dashboard lists them. Matches mirrored from MySideline are left out (their results come from MySideline). |
 | `record_match_result(match_id, home_team_score, away_team_score, is_forfeit, forfeit_winner_id, bye_processed)` | Enters or revises a result through `MatchResultForm`; the ladders are updated by the same signals as the admin. |
 | `list_season_referees(season_id)` | The referees registered for the season. |
 | `set_match_referees(match_id, referee_ids)` | Replaces the appointments through `MatchRefereeForm`. |
@@ -308,6 +308,9 @@ as its identifiers and scheduling fields only:
 
 ## Changelog
 
+- **MySideline matches.** `list_matches_awaiting_results` (like the admin
+  dashboard's Awaiting Scores and the season results page) no longer lists
+  matches mirrored from MySideline, whose results come from MySideline.
 - **Draw building and batch scheduling.** Draw format, exclusion date and
   time slot tools, `build_draw`, `schedule_matches` and `auto_schedule`;
   eval fields on `create_match` / `update_match`; time slot rules enforced on
