@@ -2296,6 +2296,8 @@ class AdminToolset(CompetitionToolset):
         Matches that have kicked off (and unprocessed byes) in seasons not
         yet complete that have no result recorded, as the admin dashboard
         lists them, oldest first; narrow by season, division or date.
+        Matches mirrored from MySideline are not listed: their results come
+        from MySideline and are never entered here.
         """
         self._staff()
         matches = matches_require_basic_results()
