@@ -34,7 +34,6 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _, ngettext
-from first import first
 from googleapiclient.errors import HttpError
 from modelforms.forms import ModelForm
 from pyparsing import ParseException
@@ -56,6 +55,12 @@ from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
 from tournamentcontrol.competition.draw.algorithms import seeded_tournament
 from tournamentcontrol.competition.draw.builders import build
 from tournamentcontrol.competition.draw.generators import DrawGenerator
+from tournamentcontrol.competition.draw.services import (
+    draw_generator,
+    draw_target_team_count,
+    generate_stage_draw,
+    suitable_draw_formats,
+)
 from tournamentcontrol.competition.draw.schemas import DivisionStructure
 from tournamentcontrol.competition.exceptions import (
     LiveStreamError,
@@ -2033,31 +2038,10 @@ class DrawGenerationForm(BootstrapFormControlMixin, forms.Form):
         super().__init__(*args, **kwargs)
         self.instance = initial
 
-        # ensure we have an even number for filtering the `DrawFormat` table
-
-        if isinstance(self.instance, Stage):
-            teams = first(
-                (self.instance.teams.count(), self.instance.undecided_teams.count()),
-                default=0,
-            )
-
-        elif isinstance(self.instance, StageGroup):
-            teams = first(
-                (self.instance.undecided_teams.count(), self.instance.teams.count()),
-                default=0,
-            )
-
-        else:
-            teams = 0
-
-        if teams % 2:
-            teams += 1
-
         # produce a list of appropriate `DrawFormat` options
-        suitable_draw_formats = DrawFormat.objects.filter(
-            Q(teams__in=(teams, teams - 1)) if teams else Q()
+        self.fields["format"].queryset = suitable_draw_formats(
+            draw_target_team_count(self.instance)
         )
-        self.fields["format"].queryset = suitable_draw_formats
 
         if self.instance:
             self.fields["format"].help_text = _(
@@ -2078,10 +2062,7 @@ class DrawGenerationForm(BootstrapFormControlMixin, forms.Form):
     def generator(self):
         format = self.cleaned_data.get("format")
         start_date = self.cleaned_data.get("start_date")
-
-        generator = DrawGenerator(self.instance, start_date)
-        generator.parse(format.text)
-        return generator
+        return draw_generator(self.instance, format, start_date)
 
     def clean_start_date(self):
         start_date = self.cleaned_data.get("start_date")
@@ -2107,9 +2088,17 @@ class DrawGenerationForm(BootstrapFormControlMixin, forms.Form):
         return data
 
     def get_matches(self):
-        n = self.cleaned_data.get("rounds")
-        offset = self.cleaned_data.get("offset") or 0
-        return self.generator.generate(n, offset)
+        format = self.cleaned_data.get("format")
+        if format is None:
+            # Preserve the historical failure mode ``clean`` relies on.
+            raise AttributeError("A draw format must be chosen.")
+        return generate_stage_draw(
+            self.instance,
+            format,
+            self.cleaned_data.get("start_date"),
+            self.cleaned_data.get("rounds"),
+            self.cleaned_data.get("offset") or 0,
+        )
 
 
 DrawGenerationFormSetBase = formset_factory(
