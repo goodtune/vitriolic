@@ -449,9 +449,11 @@ class Application(object):
             if perms is None:
                 perms = get_perms_for_model(model, change=True)
 
-                # When there is no pk value, we're doing a creation and should
-                # have permission to create the object.
-                if pk is None or instance.pk is None:
+                # When the instance has not been saved yet, we're doing a
+                # creation and should have permission to create the object.
+                # Decide on the instance alone (not the ``pk`` argument) as
+                # most callers pass an existing ``instance`` without ``pk``.
+                if instance is None or instance.pk is None:
                     perms = get_perms_for_model(model, add=True)
 
             # Determine the user's permission to edit this object using the

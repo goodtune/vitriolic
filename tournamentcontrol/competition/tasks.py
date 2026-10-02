@@ -523,12 +523,32 @@ def delete_youtube_stream(season_pk, external_identifier):
 
 @shared_task
 def generate_pdf_scorecards(
-    match_pks, templates, extra_context, stage_pk=None, **kwargs
+    match_pks, templates, extra_context, stage_pk=None, season_pk=None, **kwargs
 ):
+    """
+    Render scorecards for the given matches to PDF.
+
+    Every argument must survive the configured task serializer (JSON by
+    default), so callers pass primary keys rather than model instances. The
+    ``competition``, ``season`` and ``stage`` model instances that the
+    scorecard templates expect are loaded here and added to ``extra_context``.
+    """
     matches = Match.objects.filter(pk__in=match_pks)
+    extra_context = dict(extra_context or {})
     stage = None
     if stage_pk is not None:
-        stage = Stage.objects.get(pk=stage_pk)
+        stage = Stage.objects.select_related("division__season__competition").get(
+            pk=stage_pk
+        )
+        extra_context["stage"] = stage
+        season = stage.division.season
+    elif season_pk is not None:
+        season = Season.objects.select_related("competition").get(pk=season_pk)
+    else:
+        season = None
+    if season is not None:
+        extra_context["season"] = season
+        extra_context["competition"] = season.competition
     data = generate_scorecards(
         matches, templates, "pdf", extra_context, stage, **kwargs
     )

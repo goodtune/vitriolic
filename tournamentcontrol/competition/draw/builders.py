@@ -12,8 +12,8 @@ from tournamentcontrol.competition.models import (
     Team,
 )
 
-from .generators import DrawGenerator
 from .schemas import CompetitionExecutionError
+from .services import generate_stage_draw
 
 logger = logging.getLogger(__name__)
 
@@ -140,25 +140,20 @@ def _generate_matches_from_draw_format(
         stage_group: Optional StageGroup for pool-level matches
     """
     try:
-        # Create a temporary DrawGenerator instance with no start date (uses fallback mode)
-        generator = DrawGenerator(stage, start_date=None)
-
-        # Override the team mapping - DrawGenerator expects 0-based indexing
-        # Only update if we have actual team mappings, otherwise let DrawGenerator
-        # handle symbolic team references (like G1P1, W1, L2, etc.)
-        if team_mapping:
-            generator.teams.update(
-                {i: team for i, team in enumerate(team_mapping.values())}
-            )
-
-        # Parse the draw format
-        generator.parse(draw_format)
-
         # Generate matches using custom date generator that returns None dates
         def no_date_generator(stage, start_date):
             return itertools.cycle([None])
 
-        matches = generator.generate(custom_date_generator=no_date_generator)
+        # Override the team mapping - DrawGenerator expects 0-based indexing
+        # Only update if we have actual team mappings, otherwise let DrawGenerator
+        # handle symbolic team references (like G1P1, W1, L2, etc.)
+        matches = generate_stage_draw(
+            stage,
+            draw_format,
+            start_date=None,
+            teams={i: team for i, team in enumerate(team_mapping.values())},
+            custom_date_generator=no_date_generator,
+        )
 
         logger.debug(f"DrawGenerator produced {len(matches)} matches")
         if len(matches) == 0:

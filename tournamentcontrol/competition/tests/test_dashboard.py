@@ -61,6 +61,16 @@ class BasicResultTests(TestCase):
         )
         self.assertCountEqual(matches_require_basic_results(), [match])
 
+    @freeze_time("2019-07-15 09:00 UTC")
+    def test_mysideline_match_excluded(self):
+        kickoff = datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC"))
+        match = MatchFactory.create(
+            datetime=kickoff, stage__division__season__timezone="UTC"
+        )
+        # Its result comes from MySideline, so it is never awaiting entry.
+        MatchFactory.create(datetime=kickoff, stage=match.stage, mysideline_id=12345)
+        self.assertCountEqual(matches_require_basic_results(), [match])
+
 
 @freeze_time("2019-07-15 09:30 UTC")
 class RequireProgression(TestCase):
