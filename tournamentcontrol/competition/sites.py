@@ -16,6 +16,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import include, path, re_path, reverse
 from django.urls.exceptions import NoReverseMatch
 from django.utils import timezone
+from django.utils.cache import patch_vary_headers
 from django.utils.html import strip_tags
 from django.utils.http import urlencode
 from django.utils.module_loading import import_string
@@ -1502,7 +1503,9 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         response.write(cal.to_ical())
 
         # Superusers see draft divisions, so their feed must never be stored
-        # where it could be served to anyone else.
+        # where it could be served to anyone else. Varying on Cookie keeps a
+        # cached public feed from being served to a signed-in superuser.
+        patch_vary_headers(response, ["Cookie"])
         if request.user.is_superuser:
             patch_cache_control(response, private=True)
         else:

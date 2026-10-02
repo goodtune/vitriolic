@@ -2,6 +2,7 @@ import unittest
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+from django.conf import settings
 from django.test import override_settings
 from freezegun import freeze_time
 from icalendar import Calendar
@@ -766,6 +767,42 @@ class CalendarQueryTests(TestCase):
             )
         self.response_200(response)
         self.assertEqual(response["Cache-Control"], "private")
+
+    @override_settings(
+        CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}},
+        CACHE_MIDDLEWARE_SECONDS=0,
+        MIDDLEWARE=[
+            "django.middleware.cache.UpdateCacheMiddleware",
+            *settings.MIDDLEWARE,
+            "django.middleware.cache.FetchFromCacheMiddleware",
+        ],
+    )
+    def test_calendar_cached_for_anonymous_not_served_to_superuser(self):
+        draft_division = factories.DivisionFactory.create(
+            season=self.season, draft=True
+        )
+        draft_stage = factories.StageFactory.create(division=draft_division)
+        factories.MatchFactory.create_batch(stage=draft_stage, size=3)
+        url = self.reverse(
+            "competition:calendar",
+            competition=self.competition.slug,
+            season=self.season.slug,
+        )
+
+        # The anonymous feed is stored by the cache middleware...
+        self.get(url)
+        self.response_200()
+        self.assertIn("Cookie", self.last_response["Vary"])
+        cal, events = self._parse_events(self.last_response)
+        self.assertEqual(len(events), 10)
+
+        # ...but must not be what a superuser receives for the same URL.
+        superuser = factories.SuperUserFactory.create()
+        with self.login(superuser):
+            self.get(url)
+        self.response_200()
+        cal, events = self._parse_events(self.last_response)
+        self.assertEqual(len(events), 13)
 
     def test_calendar_excludes_unscheduled_matches(self):
         unscheduled = factories.MatchFactory.create(
