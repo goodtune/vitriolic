@@ -11,6 +11,7 @@ from django.template import Context, Template
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import NoReverseMatch
+from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from test_plus import TestCase
 
@@ -272,6 +273,34 @@ class SyncLiveStreamTaskTests(TestCase):
         )
 
         with self.assertRaises(HttpError):
+            sync_live_stream(self.match.pk)
+
+        self.match.refresh_from_db()
+        self.assertEqual("yt-broadcast-new", self.match.external_identifier)
+        broadcasts.insert.assert_called_once()
+
+    @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_identifier_kept_when_authorisation_expires_after_insert(
+        self, mock_youtube_prop, mock_thumbnail
+    ):
+        """
+        An authorisation that expires between inserting the broadcast and
+        binding it is reported, but the inserted broadcast stays recorded
+        against the match so it is not orphaned.
+        """
+        mock_youtube = mock.MagicMock()
+        mock_youtube_prop.return_value = mock_youtube
+        broadcasts = mock_youtube.liveBroadcasts.return_value
+        broadcasts.insert.return_value.execute.return_value = {"id": "yt-broadcast-new"}
+        self.match.play_at.external_identifier = "yt-stream"
+        self.match.play_at.save()
+        broadcasts.bind.return_value.execute.side_effect = RefreshError("expired")
+
+        with self.assertRaises(RefreshError):
             sync_live_stream(self.match.pk)
 
         self.match.refresh_from_db()

@@ -1822,10 +1822,6 @@ class LiveStreamResyncTests(AdminFixtureMixin, TestCase):
         )
 
 
-@freeze_time(NOW)
-@override_settings(ROOT_URLCONF="vitriolic.urls")
-
-
 def _pkce():
     verifier = secrets.token_urlsafe(48)
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
@@ -1833,6 +1829,8 @@ def _pkce():
     return verifier, challenge
 
 
+@freeze_time(NOW)
+@override_settings(ROOT_URLCONF="vitriolic.urls")
 class AdminMCPHTTPTests(AdminFixtureMixin, TestCase):
     """Drive the administration tools over the Streamable HTTP transport."""
 

@@ -6,6 +6,7 @@ from celery import shared_task
 from dateutil.relativedelta import relativedelta
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
+from google.auth.exceptions import RefreshError
 from django.template.loader import render_to_string
 from django.urls import NoReverseMatch, reverse
 from googleapiclient.errors import HttpError
@@ -265,9 +266,10 @@ def sync_live_stream(match_pk, base_url=None):
     The match row is locked for the duration, so concurrent synchronisations
     (a queued run and a resync from the admin site or MCP server, say) are
     serialised and the second sees the broadcast the first created rather
-    than inserting another. Whatever was saved before YouTube rejected a
-    later step (the id of an inserted broadcast whose binding failed) is
-    committed before the error is raised, so a broadcast is never orphaned.
+    than inserting another. Whatever was saved before a later step failed
+    (the id of an inserted broadcast whose binding was rejected, or whose
+    authorisation expired) is committed before the error is raised, so a
+    broadcast is never orphaned.
 
     Returns what was done to the broadcast (``"created"``, ``"updated"`` or
     ``"removed"``), or ``None`` when there was nothing to do.
@@ -290,7 +292,7 @@ def sync_live_stream(match_pk, base_url=None):
             return None
         try:
             return _sync_live_stream(match, base_url)
-        except HttpError as exc:
+        except (HttpError, RefreshError) as exc:
             error = exc
     raise error
 
@@ -476,7 +478,7 @@ def sync_live_stream_event(event_pk):
 
         try:
             return _apply_event_sync(event, season)
-        except HttpError as exc:
+        except (HttpError, RefreshError) as exc:
             logger.error("YouTube API error syncing event %s: %s", event_pk, exc)
             error = exc
     raise error
