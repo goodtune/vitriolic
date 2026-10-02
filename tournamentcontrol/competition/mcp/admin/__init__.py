@@ -965,19 +965,33 @@ class AdminToolset(CompetitionToolset):
         return True
 
     @staticmethod
-    def _run_sync(task, *args, **kwargs):
+    def _run_sync(lock, task, *args, **kwargs):
         """
         Run a broadcast synchronisation task in the request rather than
         queueing it, so its outcome is reported in the tool result. A
         rejection by YouTube or an expired authorisation is reported as the
         error rather than logged and lost in the worker.
+
+        ``lock`` is a queryset selecting the record being synchronised. Its
+        row is locked while the task runs so that concurrent resyncs of the
+        same record are serialised: the second waits for the first and then
+        sees the broadcast it created instead of inserting another. What the
+        task saved before a failure (the id of a broadcast inserted before
+        its binding was rejected, for example) is kept, so the broadcast is
+        not orphaned on YouTube.
         """
-        try:
-            return task(*args, **kwargs)
-        except RefreshError:
+        error = None
+        with transaction.atomic():
+            list(lock.select_for_update().order_by().values_list("pk", flat=True))
+            try:
+                action = task(*args, **kwargs)
+            except (RefreshError, HttpError) as exc:
+                error = exc
+        if isinstance(error, RefreshError):
             raise ToolError(str(YOUTUBE_AUTH_EXPIRED_MESSAGE))
-        except HttpError as exc:
-            raise ToolError("YouTube API error: %s" % exc.reason)
+        if error is not None:
+            raise ToolError("YouTube API error: %s" % error.reason)
+        return action
 
     # ======================================================================
     # Competitions
@@ -3750,7 +3764,14 @@ class AdminToolset(CompetitionToolset):
         self._youtube(season)
         if match.live_stream and match.get_datetime(datetime.timezone.utc) is None:
             raise ToolError("Cannot resync a match without a scheduled date and time.")
-        action = self._run_sync(sync_live_stream, match.pk, base_url=self._base_url())
+        # The default manager annotates team titles through outer joins,
+        # which a row lock cannot be applied across.
+        action = self._run_sync(
+            Match._base_manager.filter(pk=match.pk),
+            sync_live_stream,
+            match.pk,
+            base_url=self._base_url(),
+        )
         match = self._match(match.pk)
         return {
             "saved": True,
@@ -3911,7 +3932,11 @@ class AdminToolset(CompetitionToolset):
         event = self._event(season, event_id)
         self._require("change", LiveStreamEvent, event)
         self._youtube(season)
-        action = self._run_sync(sync_live_stream_event, event.pk)
+        action = self._run_sync(
+            LiveStreamEvent.objects.filter(pk=event.pk),
+            sync_live_stream_event,
+            event.pk,
+        )
         if action == "missing":
             raise ToolError(
                 "The YouTube broadcast of this live stream event no longer exists "

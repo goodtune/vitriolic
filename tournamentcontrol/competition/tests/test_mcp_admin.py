@@ -18,7 +18,8 @@ from unittest import mock
 from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth.models import AnonymousUser
-from django.test.utils import override_settings
+from django.db import connection
+from django.test.utils import CaptureQueriesContext, override_settings
 from freezegun import freeze_time
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
@@ -1747,6 +1748,82 @@ class LiveStreamResyncTests(AdminFixtureMixin, TestCase):
         )
         youtube.liveBroadcasts.assert_not_called()
 
+    def _lock_queries(self, queries, table):
+        return [
+            q["sql"]
+            for q in queries
+            if "FOR UPDATE" in q["sql"] and '"%s"' % table in q["sql"]
+        ]
+
+    def test_match_resync_locks_the_match(
+        self, mock_youtube_prop, mock_thumbnail, mock_event_thumbnail
+    ):
+        """
+        Concurrent resyncs of one match are serialised on its row, so the
+        second sees the broadcast the first created rather than inserting a
+        duplicate.
+        """
+        self.youtube(mock_youtube_prop)
+        admin = self.admin()
+        with CaptureQueriesContext(connection) as ctx:
+            res = admin.resync_match_live_stream(self.aus_v_eng.pk)
+        self.assertEqual(res["action"], "created")
+        self.assertEqual(
+            1, len(self._lock_queries(ctx.captured_queries, "competition_match"))
+        )
+
+    def test_match_broadcast_kept_when_binding_fails(
+        self, mock_youtube_prop, mock_thumbnail, mock_event_thumbnail
+    ):
+        """
+        A broadcast inserted before a later step is rejected stays recorded
+        against the match, so it is updated (not duplicated) by the next
+        resync rather than orphaned on YouTube.
+        """
+        youtube = self.youtube(mock_youtube_prop)
+        broadcasts = youtube.liveBroadcasts.return_value
+        broadcasts.bind.return_value.execute.side_effect = _http_error(
+            403, b'{"error": {"message": "The stream is already bound"}}'
+        )
+        admin = self.admin()
+        self.assertToolError(
+            "YouTube API error: The stream is already bound",
+            admin.resync_match_live_stream,
+            self.aus_v_eng.pk,
+        )
+        broadcasts.insert.assert_called_once()
+        self.aus_v_eng.refresh_from_db()
+        self.assertEqual(self.aus_v_eng.external_identifier, "yt-inserted")
+
+        broadcasts.bind.return_value.execute.side_effect = lambda: {
+            "contentDetails": {"boundStreamId": "yt-field-1"}
+        }
+        res = admin.resync_match_live_stream(self.aus_v_eng.pk)
+        self.assertEqual(res["action"], "updated")
+        self.assertEqual(res["youtube_broadcast_id"], "yt-inserted")
+        broadcasts.insert.assert_called_once()
+
+    def test_event_resync_locks_the_event(
+        self, mock_youtube_prop, mock_thumbnail, mock_event_thumbnail
+    ):
+        self.youtube(mock_youtube_prop)
+        admin = self.admin()
+        with CaptureQueriesContext(connection) as ctx:
+            res = admin.resync_season_stream_event(self.season.pk, self.event.pk)
+        self.assertEqual(res["action"], "updated")
+        self.assertEqual(
+            1,
+            len(
+                self._lock_queries(
+                    ctx.captured_queries, "competition_livestreamevent"
+                )
+            ),
+        )
+
+
+@freeze_time(NOW)
+@override_settings(ROOT_URLCONF="vitriolic.urls")
+
 
 def _pkce():
     verifier = secrets.token_urlsafe(48)
@@ -1755,8 +1832,6 @@ def _pkce():
     return verifier, challenge
 
 
-@freeze_time(NOW)
-@override_settings(ROOT_URLCONF="vitriolic.urls")
 class AdminMCPHTTPTests(AdminFixtureMixin, TestCase):
     """Drive the administration tools over the Streamable HTTP transport."""
 
