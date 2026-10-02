@@ -1,3 +1,4 @@
+import base64
 import unittest
 from datetime import date, datetime, time
 from unittest.mock import ANY, MagicMock, PropertyMock, patch
@@ -8,6 +9,7 @@ from django import VERSION
 from django.contrib import messages
 from django.template import Context, Template
 from django.urls import reverse
+from guardian.shortcuts import assign_perm
 from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.common.tests.factories import UserFactory
@@ -25,6 +27,7 @@ from tournamentcontrol.competition.models import (
     Team,
     UndecidedTeam,
 )
+from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin, round_robin_format
 
@@ -160,6 +163,52 @@ class TemplateTests(TestCase):
             self.assertResponseContains(
                 "<p>Chees&eacute;&nbsp;&amp;&nbsp;Crackers<br>4th</p>"
             )
+
+    def test_scorecards_html(self):
+        # Regression test for #82: the scorecards template does
+        # ``{% load common %}`` and must render.
+        self.assertLoginRequired(
+            "admin:fixja:scorecards",
+            self.competition.pk,
+            self.season.pk,
+            "20170213",
+            "html",
+        )
+        with self.login(self.superuser):
+            self.assertGoodView(
+                "admin:fixja:scorecards",
+                self.competition.pk,
+                self.season.pk,
+                "20170213",
+                "html",
+            )
+            self.assertResponseContains("<title>Scorecards</title>")
+            self.assertResponseContains(
+                '<th colspan="5" class="team">'
+                "Chees&eacute;&nbsp;&amp;&nbsp;Crackers</th>"
+            )
+
+    @patch("tournamentcontrol.competition.utils.prince")
+    def test_scorecards_pdf_task(self, mock_prince):
+        # Regression test for #82: the PDF variant renders the same template
+        # inside the celery task (a fresh worker process in production)
+        # before handing the markup to Prince. Called the way the admin view
+        # queues it since #42: primary keys only, the task loads the season
+        # and competition for the template itself.
+        mock_prince.return_value = b"%PDF-1.4"
+        templates = ["tournamentcontrol/competition/admin/scorecards.html"]
+        match_pks = list(self.season.matches.values_list("pk", flat=True))
+        data = generate_pdf_scorecards(
+            match_pks, templates, {}, season_pk=self.season.pk
+        )
+        self.assertEqual(base64.b64decode(data), b"%PDF-1.4")
+        mock_prince.assert_called_once()
+        html = mock_prince.call_args.args[0]
+        self.assertIn("<title>Scorecards</title>", html)
+        self.assertIn(
+            '<th colspan="5" class="team">Chees\u00e9\u00a0&amp;\u00a0Crackers</th>',
+            html,
+        )
 
 
 class GoodViewTests(TestCase):
@@ -2967,3 +3016,48 @@ class TeamEditViewQueryTests(TestCase):
                 *edit_team.args,
                 test_query_count=25,
             )
+
+
+class EditViewPermissionTests(TestCase):
+    """
+    Editing an existing record must be governed by the ``change_<model>``
+    permission (including object-level permissions assigned through the
+    permissions tab), while creating a record is governed by ``add_<model>``.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create()
+        cls.other = factories.SeasonFactory.create()
+        cls.staff = factories.UserFactory.create(is_staff=True)
+
+    def test_object_level_change_permission_allows_edit(self):
+        assign_perm("competition.change_season", self.staff, self.season)
+        with self.login(self.staff):
+            self.get("admin:fixja:competition:season:edit", *self.season._get_url_args())
+            self.response_200()
+            self.assertResponseContains(
+                '<input type="text" name="title" value="%s" maxlength="255" '
+                'placeholder="Title" class="form-control" required id="id_title">'
+                % self.season.title
+            )
+
+    def test_object_level_change_permission_is_scoped_to_object(self):
+        assign_perm("competition.change_season", self.staff, self.season)
+        with self.login(self.staff):
+            self.get("admin:fixja:competition:season:edit", *self.other._get_url_args())
+            self.response_403()
+
+    def test_change_permission_does_not_allow_add(self):
+        assign_perm("competition.change_season", self.staff)
+        with self.login(self.staff):
+            self.get("admin:fixja:competition:season:add", self.season.competition_id)
+            self.response_403()
+
+    def test_add_permission_allows_add_but_not_edit(self):
+        assign_perm("competition.add_season", self.staff)
+        with self.login(self.staff):
+            self.get("admin:fixja:competition:season:add", self.season.competition_id)
+            self.response_200()
+            self.get("admin:fixja:competition:season:edit", *self.season._get_url_args())
+            self.response_403()

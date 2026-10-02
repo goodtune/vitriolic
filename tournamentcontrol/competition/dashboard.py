@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 def matches_require_basic_results(now=None, matches=None):
+    """
+    Matches that have been played (and byes not yet processed) without a
+    result. Matches mirrored from MySideline are left out: their results
+    come from MySideline, so they are never entered here.
+    """
     if now is None:
         now = timezone.now()
         now = now.replace(second=0, microsecond=0)
@@ -43,6 +48,7 @@ def matches_require_basic_results(now=None, matches=None):
         away_team_score=None,
         is_washout=False,
         include_in_ladder=True,
+        mysideline_id__isnull=True,
     ).select_related(
         "stage__division__season__competition",
         "play_at",

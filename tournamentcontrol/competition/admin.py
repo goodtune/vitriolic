@@ -2743,17 +2743,18 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             "date": date,
             "time": time,
             "stage": stage,
-            "filtered": round is not None,
-            "round": round,
         }
 
         templates = self.template_path("scorecards.html", competition.slug, season.slug)
 
         if mode == "pdf":
+            # The task arguments must be serializable by celery, so model
+            # instances are passed by primary key and reloaded by the task.
             kw = {
                 "match_pks": [pk for pk in matches.values_list("pk", flat=True)],
                 "templates": templates,
-                "extra_context": extra_context,
+                "extra_context": {"date": date, "time": time},
+                "season_pk": season.pk,
             }
             if stage is not None:
                 kw["stage_pk"] = stage.pk

@@ -2,6 +2,7 @@
 
 
 import collections
+import html
 import logging
 import random
 import uuid
@@ -39,6 +40,7 @@ from django.utils import timezone
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
+from django.utils.translation import pgettext
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -2437,6 +2439,15 @@ class Match(AdminUrlMixin, models.Model):
         except (AttributeError, TypeError):
             if not team_undecided and self.is_bye:
                 return ByeTeam()
+            if not team_undecided and team_eval not in WIN_LOSE:
+                # No reference at all is "to be advised"; a reference that
+                # cannot be understood is shown as written.
+                title = (team_eval or "").strip() or pgettext(
+                    "abbreviation: to be advised", "TBA"
+                )
+                if plain:
+                    return title
+                return {"title": title}
             stage = group = position = None
         else:
             stage = self.stage.comes_after
@@ -2476,7 +2487,8 @@ class Match(AdminUrlMixin, models.Model):
 
         try:
             if plain:
-                return template.render(context).strip()
+                # The templates render HTML (titles escaped); plain is text.
+                return html.unescape(template.render(context).strip())
             return {"title": template.render(context).strip()}
         except Exception:
             # If there are ANY issues in evaluating a formula, return the formula itself

@@ -47,7 +47,6 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Count, F, Max, Min, Q
 from django.db.models.functions import Coalesce
 from django.utils import timezone
-from django.utils.html import strip_tags
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
@@ -63,6 +62,9 @@ from tournamentcontrol.competition.models import (
     Team,
     Venue,
 )
+
+#: The title of a side of a match with no team and nothing to decide it by.
+TBA = "TBA"
 
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
@@ -181,16 +183,33 @@ def _match_team(match, field):
     """
     The home or away team of a match. Teams that are yet to be decided (for
     example "Winner Semi Final 1" or "1st Pool A") have no identifier, only a
-    descriptive title.
+    descriptive title; a side that is decided by a formula also carries it as
+    ``eval`` ("P1", "G2P3", "W", "L"), with the match a "W" or "L" refers to
+    as ``eval_related_id``. A side with nothing to go on is "TBA".
     """
     team = getattr(match, field)
     if team is not None:
         return _team_ref(team)
-    title = getattr(match, f"{field}_title", None)
-    if title is None:
-        title = getattr(match, f"get_{field}_plain")()
-    title = strip_tags(str(title or "")).strip() or None
-    return {"id": None, "title": title, "slug": None, "club": None}
+    if (
+        match.is_bye
+        and not getattr(match, f"{field}_undecided_id", None)
+        and not (getattr(match, f"{field}_eval", None))
+    ):
+        title = "Bye"
+    else:
+        # The SQL annotation saves rendering a template per match; a title
+        # with markup in it (a team, pool or label named with "<") is built
+        # as plain text instead, so it is returned exactly as written.
+        title = getattr(match, f"{field}_title", None)
+        if title is None or "<" in title:
+            title = getattr(match, f"get_{field}_plain")()
+        title = str(title or "").strip() or TBA
+    res = {"id": None, "title": title, "slug": None, "club": None}
+    team_eval = getattr(match, f"{field}_eval", None)
+    if team_eval:
+        res["eval"] = team_eval
+        res["eval_related_id"] = getattr(match, f"{field}_eval_related_id", None)
+    return res
 
 
 def _match_tzinfo(match):

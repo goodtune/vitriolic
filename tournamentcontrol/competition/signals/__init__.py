@@ -2,7 +2,7 @@ from django.db import models
 
 from tournamentcontrol.competition.signals.custom import match_forfeit  # noqa
 from tournamentcontrol.competition.signals.ladders import (  # noqa
-    changed_points_formula,
+    changed_ladder_formula,
     scale_ladder_entry,
     team_ladder_entry_aggregation,
 )

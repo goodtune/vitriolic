@@ -99,6 +99,13 @@ def create_team_ladder_entry(instance, home_or_away):
     if team is not None:
         ladder = LadderEntry(**ladder_kwargs)
 
+        # ``diff`` and ``margin`` are normally queryset annotations (see
+        # ``LadderEntryQuerySet._all``) and are therefore missing from a freshly
+        # constructed instance. Populate them so formulas such as
+        # ``[loss=1, margin<=2: 1]`` do not silently evaluate against zero.
+        ladder.diff = team_score - opponent_score
+        ladder.margin = abs(team_score - opponent_score)
+
         calculator = Calculator(ladder)
         calculator.parse(instance.stage.division.points_formula)
         ladder.points = calculator.evaluate()

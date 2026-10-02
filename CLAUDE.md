@@ -41,6 +41,7 @@ This is a Django-based repository providing reusable applications for sporting c
 - Follow existing code patterns and Django idioms
 - Always use named URLs and proper template path methods
 - Test both positive outcomes and security/permission scenarios
+- In tests, `assertResponseContains` must be given a full HTML fragment (the whole element); never use `html=False` to search for bare text
 - Use ORM relations instead of manual queries
 - Never perform `git add .` - always be explicit about the files you add
 - Never make up ways to run the tests, follow the instructions
