@@ -269,6 +269,56 @@ class ExplicitStageEvalTests(TestCase):
 
         self.assertEqual(final.eval(), (teams[0], teams[1]))
 
+    def test_zero_numbers_are_unresolved(self):
+        """
+        ``S0``, ``G0`` and ``P0`` pass the formula pattern but refer to
+        nothing; they must fall back to the descriptive result rather than
+        crash on a negative queryset index or pick a team from the end of a
+        list.
+        """
+        division = DivisionFactory.create()
+        teams = [TeamFactory.create(division=division) for _ in range(2)]
+        stage1 = StageFactory.create(division=division, order=1)
+        pool = StageGroupFactory.create(stage=stage1)
+        pool.teams.set(teams)
+        stage2 = StageFactory.create(division=division, order=2, follows=stage1)
+        MatchFactory.create(
+            stage=stage1,
+            stage_group=pool,
+            home_team=teams[0],
+            away_team=teams[1],
+            home_team_score=5,
+            away_team_score=0,
+        )
+
+        for formula in ("S0P1", "G1P0", "G0P1"):
+            with self.subTest(formula=formula):
+                match = MatchFactory.create(
+                    stage=stage2,
+                    home_team=None,
+                    away_team=None,
+                    home_team_eval=formula,
+                    away_team_eval="G1P1",
+                )
+                home, away = match.eval()
+                self.assertNotIsInstance(home, type(teams[0]))
+                self.assertEqual(away, teams[0])
+
+    def test_winner_reference_without_related_match_is_unresolved(self):
+        division = DivisionFactory.create()
+        stage1 = StageFactory.create(division=division, order=1)
+        stage2 = StageFactory.create(division=division, order=2, follows=stage1)
+        match = MatchFactory.create(
+            stage=stage2,
+            home_team=None,
+            away_team=None,
+            home_team_eval="W",
+            home_team_eval_related=None,
+            away_team_eval="L",
+            away_team_eval_related=None,
+        )
+        self.assertEqual(match.eval(), ({"title": "Winner"}, {"title": "Loser"}))
+
 
 class StageGroupPositionIntegrationTests(TestCase):
     """

@@ -2461,8 +2461,10 @@ class Match(AdminUrlMixin, models.Model):
                 if stage.pools.count():
                     try:
                         context["group"] = stage.pools.all()[int(group) - 1]
-                    except IndexError:
-                        # If there are ANY issues in evaluating a formula, return the formula itself
+                    except (IndexError, ValueError):
+                        # If there are ANY issues in evaluating a formula
+                        # (a group beyond the stage's pools, or G0 which
+                        # would index from the end), return the formula itself
                         if plain:
                             return team_eval
                         return {"title": team_eval}
@@ -2578,7 +2580,10 @@ class Match(AdminUrlMixin, models.Model):
                     team_eval = getattr(self, f"{field}_eval")
                     team_eval_related = getattr(self, f"{field}_eval_related")
                 if team_eval in WIN_LOSE:
-                    team = team_eval_related._winner_loser(team_eval)
+                    # A winner/loser reference without its related match
+                    # cannot be resolved; keep the descriptive fallback.
+                    if team_eval_related is not None:
+                        team = team_eval_related._winner_loser(team_eval)
                 else:
                     try:
                         match = stage_group_position_re.match(team_eval)
@@ -2593,6 +2598,12 @@ class Match(AdminUrlMixin, models.Model):
                         )
                     else:
                         try:
+                            # Stages, groups and positions are numbered from
+                            # one; anything else is treated as unresolved
+                            # rather than indexing from the end.
+                            numbers = [int(n) for n in (selected, group, position) if n]
+                            if min(numbers) < 1:
+                                raise IndexError("Numbering starts at 1")
                             # An explicit stage (S1P1, S1G2P1) is resolved
                             # against that stage of the division, otherwise
                             # the stage this one follows.
