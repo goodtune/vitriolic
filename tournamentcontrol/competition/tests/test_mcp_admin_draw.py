@@ -839,9 +839,9 @@ class BuildDrawTests(DemoMixin, TestCase):
         semi_1 = Match.objects.get(pk=semi_1)
         semi_2 = Match.objects.get(pk=semi_2)
         team = mens.team_list
-        # Ladder positions evaluate to the teams' identifiers.
-        self.assertEqual(semi_1.eval(lazy=True), (team[0].pk, team[3].pk))
-        self.assertEqual(semi_2.eval(lazy=True), (team[1].pk, team[2].pk))
+        # Ladder positions evaluate to the teams.
+        self.assertEqual(semi_1.eval(lazy=True), (team[0], team[3]))
+        self.assertEqual(semi_2.eval(lazy=True), (team[1], team[2]))
         for semi, (home, away) in (
             (semi_1, (team[0], team[3])),
             (semi_2, (team[1], team[2])),
@@ -1460,10 +1460,10 @@ class MatchEvalTests(DemoMixin, TestCase):
             )
         team = self.division.team_list
         self.assertEqual(
-            Match.objects.get(pk=semi_1["id"]).eval(lazy=True), (team[0].pk, team[3].pk)
+            Match.objects.get(pk=semi_1["id"]).eval(lazy=True), (team[0], team[3])
         )
         self.assertEqual(
-            Match.objects.get(pk=semi_2["id"]).eval(lazy=True), (team[1].pk, team[2].pk)
+            Match.objects.get(pk=semi_2["id"]).eval(lazy=True), (team[1], team[2])
         )
         self.admin_tools.update_match(
             semi_1["id"], home_team_id=team[0].pk, away_team_id=team[3].pk
