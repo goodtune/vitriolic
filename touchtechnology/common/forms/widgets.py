@@ -49,6 +49,34 @@ class GoogleMapsWidget(MultiWidget):
         return ("", "", "")
 
 
+class LocationWidget(GoogleMapsWidget):
+    """
+    Latitude, longitude and zoom inputs accompanied by an OpenStreetMap map.
+
+    Clicking the map or dragging the marker fills in the inputs, and editing
+    the inputs moves the marker. The value is stored in the same
+    "latitude,longitude,zoom" form as before, so no data migration is needed.
+    """
+
+    template_name = "touchtechnology/common/widgets/location_widget.html"
+
+    class Media:
+        css = {
+            "all": ("https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",),
+        }
+        js = (
+            "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
+            "touchtechnology/common/js/location-widget.js",
+        )
+
+    def get_context(self, name, value, attrs):
+        context = super().get_context(name, value, attrs)
+        context["widget"].update(
+            {"height": self.height, "width": self.width, "zoom": self.zoom}
+        )
+        return context
+
+
 class SelectDateTimeWidget(MultiWidget):
     def __init__(
         self,

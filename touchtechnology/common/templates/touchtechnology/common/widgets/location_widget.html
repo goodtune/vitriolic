@@ -1,0 +1,6 @@
+<div class="location-widget">
+	<div class="location-widget-inputs">
+		{% for widget in widget.subwidgets %}{% include widget.template_name %}{% endfor %}
+	</div>
+	<div class="location-widget-map" data-zoom="{{ widget.zoom }}" style="height: {{ widget.height }}px; max-width: {{ widget.width }}px; margin-top: 5px;"></div>
+</div>

@@ -15,8 +15,8 @@ from timezone_field import TimeZoneFormField
 from touchtechnology.common.forms.iter import TemplateChoiceIterator
 from touchtechnology.common.forms.mixins import LabelFromInstanceMixin
 from touchtechnology.common.forms.widgets import (
-    GoogleMapsWidget,
     HTMLWidget,
+    LocationWidget,
     SelectDateTimeHiddenWidget,
     SelectDateTimeWidget,
 )
@@ -66,7 +66,7 @@ class GoogleMapsField(forms.MultiValueField):
             forms.CharField(max_length=25, required=False),
             forms.IntegerField(required=False),
         )
-        kwargs["widget"] = GoogleMapsWidget(height, width, zoom)
+        kwargs["widget"] = LocationWidget(height, width, zoom)
         super().__init__(fields, *args, **kwargs)
 
     def compress(self, data_list):
