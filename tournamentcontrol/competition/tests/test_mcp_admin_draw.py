@@ -1952,6 +1952,11 @@ class WithdrawTeamTests(DemoMixin, TestCase):
     """
 
     def setUp(self):
+        # Women's 6 withdraws. It has played rounds 1-4 (results recorded),
+        # has a referee appointed to its round 5 match, declares a clash with
+        # Men's 1, and owns an unprocessed bye in round 13 whose other side
+        # is empty. Every other Women's match is scheduled and must survive
+        # the withdrawal untouched.
         super().setUp()
         self.admin_tools = self.admin()
         self.division = self.season.divisions_by_title["Women's"]
@@ -2011,14 +2016,16 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         }
 
     def test_dry_run_then_withdraw(self):
+        # The dry run and the real run report the same plan; only the real
+        # run changes the database, and running it again finds nothing left.
         others = self.snapshot()
         self.assertEqual(len(others), 36 - 12)
         first = self.unplayed[0]
         released_time, released_place = first.time, first.play_at_id
 
         plan = self.admin_tools.withdraw_team(self.team.pk, dry_run=True)
-        self.assertEqual(plan["saved"], False)
-        self.assertEqual(plan["dry_run"], True)
+        self.assertFalse(plan["saved"])
+        self.assertTrue(plan["dry_run"])
         self.assertEqual(plan["team"]["title"], "Women's 6")
         self.assertEqual(plan["from_date"], WEDNESDAYS[4].isoformat())
         self.assertEqual(
@@ -2078,14 +2085,14 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         )
         # Nothing was saved.
         first.refresh_from_db()
-        self.assertEqual(first.is_bye, False)
+        self.assertFalse(first.is_bye)
         self.assertEqual(first.referees.count(), 1)
         self.assertEqual(self.team.team_clashes.count(), 1)
-        self.assertEqual(Match.objects.filter(pk=self.bye.pk).exists(), True)
+        self.assertTrue(Match.objects.filter(pk=self.bye.pk).exists())
 
         res = self.admin_tools.withdraw_team(self.team.pk)
-        self.assertEqual(res["saved"], True)
-        self.assertEqual(res["dry_run"], False)
+        self.assertTrue(res["saved"])
+        self.assertFalse(res["dry_run"])
         self.assertEqual(
             {k: v for k, v in res.items() if k not in ("saved", "dry_run")},
             {k: v for k, v in plan.items() if k not in ("saved", "dry_run")},
@@ -2093,20 +2100,22 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         for match in self.unplayed:
             opponent = self.opponent(match)
             match.refresh_from_db()
-            self.assertEqual(match.is_bye, True)
-            self.assertEqual(match.bye_processed, False)
+            self.assertTrue(match.is_bye)
+            self.assertFalse(match.bye_processed)
             self.assertEqual(
                 {match.home_team_id, match.away_team_id}, {opponent.pk, None}
             )
-            self.assertEqual(
-                (match.time, match.datetime, match.play_at), (None, None, None)
-            )
+            self.assertIsNone(match.time)
+            self.assertIsNone(match.datetime)
+            self.assertIsNone(match.play_at)
             self.assertEqual(match.referees.count(), 0)
-        self.assertEqual(Match.objects.filter(pk=self.bye.pk).exists(), False)
+        self.assertFalse(Match.objects.filter(pk=self.bye.pk).exists())
         for match in self.played:
             match.refresh_from_db()
-            self.assertEqual((match.is_bye, match.include_in_ladder), (False, True))
-            self.assertEqual({match.home_team_id, match.away_team_id} & {None}, set())
+            self.assertFalse(match.is_bye)
+            self.assertTrue(match.include_in_ladder)
+            self.assertIsNotNone(match.home_team_id)
+            self.assertIsNotNone(match.away_team_id)
         self.assertEqual(self.snapshot(), others)
         self.assertEqual(self.team.team_clashes.count(), 0)
         self.assertEqual(self.clash.team_clashes.count(), 0)
@@ -2126,12 +2135,14 @@ class WithdrawTeamTests(DemoMixin, TestCase):
 
         # Repeating the withdrawal changes nothing.
         again = self.admin_tools.withdraw_team(self.team.pk)
-        self.assertEqual(again["saved"], True)
+        self.assertTrue(again["saved"])
         self.assertEqual((again["converted_to_bye"], again["deleted"]), ([], []))
         self.assertEqual(len(again["kept_with_results"]), 4)
-        self.assertEqual(again["from_date"], None)
+        self.assertIsNone(again["from_date"])
 
     def test_from_date(self):
+        # An explicit from_date leaves the unplayed matches before it alone,
+        # for a team that plays on until a given week.
         res = self.admin_tools.withdraw_team(self.team.pk, from_date=WEDNESDAYS[6])
         self.assertEqual(res["from_date"], WEDNESDAYS[6].isoformat())
         self.assertEqual(
@@ -2139,10 +2150,13 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         )
         for match in self.unplayed[:2]:
             match.refresh_from_db()
-            self.assertEqual(match.is_bye, False)
+            self.assertFalse(match.is_bye)
             self.assertIn(self.team.pk, (match.home_team_id, match.away_team_id))
 
     def test_void_played_results(self):
+        # Twelve matches have results, so the ladder counts 24 appearances.
+        # Voiding the withdrawn team's four takes 8 away: its opponents drop
+        # from 4 played to 3 and the team itself to nothing.
         ladder = self.admin_tools.get_ladder(stage_id=self.stage.pk)
         entries = ladder["stages"][0]["pools"][0]["ladder"]
         self.assertEqual(sum(e["played"] for e in entries), 24)
@@ -2150,7 +2164,7 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         self.assertEqual([m["voided"] for m in res["kept_with_results"]], [True] * 4)
         for match in self.played:
             match.refresh_from_db()
-            self.assertEqual(match.include_in_ladder, False)
+            self.assertFalse(match.include_in_ladder)
         ladder = self.admin_tools.get_ladder(stage_id=self.stage.pk)
         entries = {
             e["team"]["id"]: e for e in ladder["stages"][0]["pools"][0]["ladder"]
@@ -2169,6 +2183,9 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         )
 
     def test_byes_are_processed_like_any_other(self):
+        # With a bye term in the points formula there is nothing to warn
+        # about, and the new byes flow through the ordinary results path:
+        # listed once their date passes, processed, and scored.
         self.admin_tools.update_division(
             self.division.pk, points_formula="3*win + 2*draw + 1*loss + 3*bye"
         )
@@ -2184,7 +2201,7 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         self.assertEqual(by_id[first.pk]["status"], "bye")
         self.assertEqual(len(by_id), 3)
         res = self.admin_tools.record_match_result(first.pk, bye_processed=True)
-        self.assertEqual(res["match"]["bye_processed"], True)
+        self.assertTrue(res["match"]["bye_processed"])
         ladder = self.admin_tools.get_ladder(stage_id=self.stage.pk)
         entries = {
             e["team"]["id"]: e for e in ladder["stages"][0]["pools"][0]["ladder"]
@@ -2197,6 +2214,13 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         )
 
     def test_blocked(self):
+        # Two situations an administrator must resolve by hand before the
+        # team can be withdrawn: it has already been progressed into a Finals
+        # match (a bye there would hand its opponent a walkover the ladder
+        # never decided), and one of its remaining matches has a live stream
+        # bound to it (converting it would orphan the broadcast). Both are
+        # reported by a dry run and refuse the real run, leaving everything
+        # as it was.
         final = Match.objects.get(
             pk=self.admin_tools.create_match(
                 self.division.finals.pk,
@@ -2208,7 +2232,7 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         )
         Match.objects.filter(pk=self.unplayed[1].pk).update(live_stream=True)
         plan = self.admin_tools.withdraw_team(self.team.pk, dry_run=True)
-        self.assertEqual(plan["saved"], False)
+        self.assertFalse(plan["saved"])
         self.assertEqual(
             [(m["id"], m["reason"]) for m in plan["blocked"]],
             [
@@ -2234,9 +2258,11 @@ class WithdrawTeamTests(DemoMixin, TestCase):
             self.team.pk,
         )
         self.unplayed[0].refresh_from_db()
-        self.assertEqual(self.unplayed[0].is_bye, False)
+        self.assertFalse(self.unplayed[0].is_bye)
 
     def test_permissions(self):
+        # Changing the team needs change_team; changing its matches needs
+        # change_match on each of them, checked before anything is written.
         self.assertToolError(
             "Permission denied: change team requires the competition.change_team "
             "permission for this team.",
@@ -2251,7 +2277,7 @@ class WithdrawTeamTests(DemoMixin, TestCase):
             self.team.pk,
         )
         self.unplayed[0].refresh_from_db()
-        self.assertEqual(self.unplayed[0].is_bye, False)
+        self.assertFalse(self.unplayed[0].is_bye)
         self.assertToolError(
             "This team cannot be deleted because it has matches scheduled or "
             "played; use withdraw_team to take it out of the draw.",

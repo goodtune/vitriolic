@@ -699,6 +699,8 @@ class ByeTests(AdminFixtureMixin, TestCase):
     """A single bye through ``create_match``; conversions with ``update_match``."""
 
     def test_create_bye(self):
+        # A bye is a match with one team and no opponent, time or place; it
+        # keeps its date so it is processed with the round it belongs to.
         admin = self.admin()
         res = admin.create_match(
             self.womens_stage.pk,
@@ -707,19 +709,80 @@ class ByeTests(AdminFixtureMixin, TestCase):
             date=datetime.date(2026, 7, 20),
             is_bye=True,
         )
-        self.assertEqual(res["saved"], True)
-        self.assertEqual(res["match"]["is_bye"], True)
-        self.assertEqual(res["match"]["status"], "bye")
-        self.assertEqual(res["match"]["home_team"]["title"], "Australia")
-        self.assertEqual(res["match"]["away_team"]["title"], "Bye")
-        self.assertEqual(res["match"]["date"], "2026-07-20")
-        self.assertEqual(res["match"]["time"], None)
-        self.assertEqual(res["match"]["venue"], None)
-        self.assertEqual(res["match"]["include_in_ladder"], True)
-        match = Match.objects.get(pk=res["match"]["id"])
-        self.assertEqual(match.is_bye, True)
-        self.assertEqual(match.away_team, None)
-        self.assertEqual(match.datetime, None)
+        match = Match.objects.get(stage=self.womens_stage, round=3)
+        self.assertEqual(
+            res,
+            {
+                "saved": True,
+                "match": {
+                    "id": match.pk,
+                    "uuid": str(match.uuid),
+                    "competition": {
+                        "id": self.competition.pk,
+                        "title": "European Championships",
+                        "slug": self.competition.slug,
+                    },
+                    "season": {
+                        "id": self.season.pk,
+                        "title": "2026",
+                        "slug": self.season.slug,
+                    },
+                    "division": {
+                        "id": self.womens.pk,
+                        "title": "Women's Open",
+                        "slug": self.womens.slug,
+                    },
+                    "stage": {
+                        "id": self.womens_stage.pk,
+                        "title": "Round Robin",
+                        "slug": self.womens_stage.slug,
+                    },
+                    "pool": None,
+                    "round": 3,
+                    "label": None,
+                    "datetime": None,
+                    "date": "2026-07-20",
+                    "time": None,
+                    "timezone": "Europe/Amsterdam",
+                    "home_team": {
+                        "id": self.aus_women.pk,
+                        "title": "Australia",
+                        "slug": self.aus_women.slug,
+                        "club": {
+                            "id": self.australia.pk,
+                            "title": "Australia",
+                            "slug": self.australia.slug,
+                        },
+                    },
+                    "away_team": {
+                        "id": None,
+                        "title": "Bye",
+                        "slug": None,
+                        "club": None,
+                    },
+                    "home_team_score": None,
+                    "away_team_score": None,
+                    "status": "bye",
+                    "winner": None,
+                    "is_draw": False,
+                    "live_stream": False,
+                    "live_stream_url": None,
+                    "videos": [],
+                    "venue": None,
+                    "ground": None,
+                    "is_bye": True,
+                    "is_forfeit": False,
+                    "is_washout": False,
+                    "bye_processed": False,
+                    "include_in_ladder": True,
+                    "youtube_broadcast_id": None,
+                    "referees": [],
+                },
+            },
+        )
+        self.assertTrue(match.is_bye)
+        self.assertIsNone(match.away_team)
+        self.assertIsNone(match.datetime)
 
     def test_create_bye_rules(self):
         admin = self.admin()
@@ -737,6 +800,8 @@ class ByeTests(AdminFixtureMixin, TestCase):
         self.assertToolError(
             one_team, admin.create_match, self.womens_stage.pk, is_bye=True
         )
+        # Evals and undecided teams describe a side to be decided later; a bye
+        # has nothing to decide.
         self.assertToolError(
             "A bye is one team with no opponent: it cannot have an undecided team "
             "or an eval.",
@@ -755,9 +820,12 @@ class ByeTests(AdminFixtureMixin, TestCase):
             time=datetime.time(9, 0),
             is_bye=True,
         )
+        # None of the refused calls created a match (the fixture has two).
         self.assertEqual(Match.objects.filter(stage=self.womens_stage).count(), 2)
 
     def test_convert_match_to_bye(self):
+        # France v England is unplayed and scheduled with a referee; making it
+        # a bye for France must release the slot and the appointment.
         admin = self.admin()
         referee = factories.SeasonRefereeFactory.create(season=self.season)
         admin.set_match_referees(self.fra_v_eng.pk, [referee.pk])
@@ -773,20 +841,20 @@ class ByeTests(AdminFixtureMixin, TestCase):
         )
 
         res = admin.update_match(self.fra_v_eng.pk, is_bye=True, clear_away_team=True)
-        self.assertEqual(res["saved"], True)
+        self.assertTrue(res["saved"])
         self.assertEqual(res["referees_removed"], 1)
-        self.assertEqual(res["match"]["is_bye"], True)
+        self.assertTrue(res["match"]["is_bye"])
         self.assertEqual(res["match"]["status"], "bye")
         self.assertEqual(res["match"]["home_team"]["title"], "France")
         self.assertEqual(res["match"]["away_team"]["title"], "Bye")
         self.assertEqual(res["match"]["date"], "2026-07-16")
-        self.assertEqual(res["match"]["time"], None)
-        self.assertEqual(res["match"]["datetime"], None)
-        self.assertEqual(res["match"]["ground"], None)
+        self.assertIsNone(res["match"]["time"])
+        self.assertIsNone(res["match"]["datetime"])
+        self.assertIsNone(res["match"]["ground"])
         self.assertEqual(res["match"]["referees"], [])
         self.fra_v_eng.refresh_from_db()
-        self.assertEqual(self.fra_v_eng.away_team, None)
-        self.assertEqual(self.fra_v_eng.play_at, None)
+        self.assertIsNone(self.fra_v_eng.away_team)
+        self.assertIsNone(self.fra_v_eng.play_at)
         self.assertEqual(self.fra_v_eng.referees.count(), 0)
 
         # The released slot is free for another match.
@@ -799,6 +867,9 @@ class ByeTests(AdminFixtureMixin, TestCase):
         self.assertEqual(res["match"]["datetime"], "2026-07-16T17:00:00+02:00")
 
     def test_convert_match_to_bye_rules(self):
+        # England v France has a result and Australia v England is live
+        # streamed: neither can become a bye. France v England can, but only
+        # with exactly one side left.
         admin = self.admin()
         self.assertToolError(
             "This match has a result; it cannot be converted to a bye.",
@@ -837,12 +908,16 @@ class ByeTests(AdminFixtureMixin, TestCase):
             away_team_id=self.aus_men.pk,
             clear_away_team=True,
         )
+        # The refused calls left the match as it was.
         self.fra_v_eng.refresh_from_db()
-        self.assertEqual(self.fra_v_eng.is_bye, False)
+        self.assertFalse(self.fra_v_eng.is_bye)
         self.assertEqual(self.fra_v_eng.away_team_id, self.eng_men.pk)
         self.assertEqual(self.fra_v_eng.time, datetime.time(17, 0))
 
     def test_convert_bye_to_match(self):
+        # Australia's round 2 bye becomes a match against New Zealand, left
+        # for the scheduler; once a bye has been processed (points awarded)
+        # it stays a bye.
         admin = self.admin()
         self.assertToolError(
             "A match has two sides: give the away side a team, an undecided team "
@@ -854,11 +929,11 @@ class ByeTests(AdminFixtureMixin, TestCase):
         res = admin.update_match(
             self.bye.pk, is_bye=False, away_team_id=self.nzl_men.pk
         )
-        self.assertEqual(res["match"]["is_bye"], False)
+        self.assertFalse(res["match"]["is_bye"])
         self.assertEqual(res["match"]["home_team"]["title"], "Australia")
         self.assertEqual(res["match"]["away_team"]["title"], "New Zealand")
-        self.assertEqual(res["match"]["time"], None)
-        self.assertEqual(res["match"]["venue"], None)
+        self.assertIsNone(res["match"]["time"])
+        self.assertIsNone(res["match"]["venue"])
         self.assertNotIn("referees_removed", res)
         # Back to a bye, processed: it can no longer be turned into a match.
         admin.update_match(self.bye.pk, is_bye=True, clear_away_team=True)
@@ -873,17 +948,19 @@ class ByeTests(AdminFixtureMixin, TestCase):
             away_team_id=self.nzl_men.pk,
         )
         self.bye.refresh_from_db()
-        self.assertEqual(self.bye.is_bye, True)
-        self.assertEqual(self.bye.away_team, None)
+        self.assertTrue(self.bye.is_bye)
+        self.assertIsNone(self.bye.away_team)
 
     def test_bye_flag_is_explicit_and_idempotent(self):
+        # is_bye is a statement of what the match is, not a toggle: repeating
+        # it is harmless, and a bye only changes kind when told to.
         admin = self.admin()
         # Restating what a match already is changes nothing.
         res = admin.update_match(self.fra_v_eng.pk, is_bye=False)
-        self.assertEqual(res["match"]["is_bye"], False)
+        self.assertFalse(res["match"]["is_bye"])
         self.assertEqual(res["match"]["time"], "17:00")
         res = admin.update_match(self.bye.pk, is_bye=True)
-        self.assertEqual(res["match"]["is_bye"], True)
+        self.assertTrue(res["match"]["is_bye"])
         self.assertNotIn("referees_removed", res)
         # A bye is not given an opponent without is_bye=false ...
         one_team = (
@@ -908,7 +985,8 @@ class ByeTests(AdminFixtureMixin, TestCase):
             away_team_undecided_id=1,
         )
         self.bye.refresh_from_db()
-        self.assertEqual((self.bye.is_bye, self.bye.away_team), (True, None))
+        self.assertTrue(self.bye.is_bye)
+        self.assertIsNone(self.bye.away_team)
         # The empty side of a bye can be an eval when it becomes a match.
         res = admin.update_match(
             self.bye.pk,
@@ -916,7 +994,7 @@ class ByeTests(AdminFixtureMixin, TestCase):
             away_team_eval="W",
             away_team_eval_related_id=self.eng_v_fra.pk,
         )
-        self.assertEqual(res["match"]["is_bye"], False)
+        self.assertFalse(res["match"]["is_bye"])
         self.assertEqual(res["match"]["away_team"]["eval"], "W")
         self.assertEqual(
             res["match"]["away_team"]["eval_related_id"], self.eng_v_fra.pk

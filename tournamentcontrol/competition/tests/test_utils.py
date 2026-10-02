@@ -163,68 +163,79 @@ class RegradeTests(TestCase):
             datetime.date(2026, 3, 7) + datetime.timedelta(weeks=n) for n in range(5)
         ]
 
-    def match(self, stage, home, away, date, **kwargs):
-        return MatchFactory.create(
-            stage=stage, home_team=home, away_team=away, date=date, **kwargs
-        )
-
     def test_regrade(self):
         # Round 1 played; round 2 forfeited; round 3 a processed bye of the
         # team; rounds 4 and 5 unplayed and scheduled.
-        played = self.match(
-            self.lower_stage,
-            self.team,
-            self.rival,
-            self.dates[0],
+        played = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.team,
+            away_team=self.rival,
+            date=self.dates[0],
             home_team_score=3,
             away_team_score=1,
         )
-        forfeit = self.match(
-            self.lower_stage,
-            self.rival,
-            self.team,
-            self.dates[1],
+        forfeit = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.rival,
+            away_team=self.team,
+            date=self.dates[1],
             is_forfeit=True,
             forfeit_winner=self.rival,
             home_team_score=5,
             away_team_score=0,
         )
-        processed_bye = self.match(
-            self.lower_stage,
-            self.team,
-            None,
-            self.dates[2],
+        processed_bye = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.team,
+            away_team=None,
+            date=self.dates[2],
             is_bye=True,
             bye_processed=True,
         )
-        home = self.match(
-            self.lower_stage,
-            self.team,
-            self.third,
-            self.dates[3],
+        home = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.team,
+            away_team=self.third,
+            date=self.dates[3],
             time=datetime.time(19, 0),
         )
-        away = self.match(
-            self.lower_stage,
-            self.rival,
-            self.team,
-            self.dates[4],
+        away = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.rival,
+            away_team=self.team,
+            date=self.dates[4],
             time=datetime.time(20, 0),
         )
-        untouched = self.match(
-            self.lower_stage, self.rival, self.third, self.dates[3], round=4
+        untouched = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.rival,
+            away_team=self.third,
+            date=self.dates[3],
+            round=4,
         )
         # The upper division has a bye each week from round 4 on, and an
         # earlier bye that is left alone (the default regrade date is that
         # of the team's first unscored match, the processed bye in round 3).
-        earlier = self.match(
-            self.upper_stage, self.upper_teams[0], None, self.dates[1], is_bye=True
+        earlier = MatchFactory.create(
+            stage=self.upper_stage,
+            home_team=self.upper_teams[0],
+            away_team=None,
+            date=self.dates[1],
+            is_bye=True,
         )
-        upper_home = self.match(
-            self.upper_stage, self.upper_teams[1], None, self.dates[3], is_bye=True
+        upper_home = MatchFactory.create(
+            stage=self.upper_stage,
+            home_team=self.upper_teams[1],
+            away_team=None,
+            date=self.dates[3],
+            is_bye=True,
         )
-        upper_away = self.match(
-            self.upper_stage, None, self.upper_teams[2], self.dates[4], is_bye=True
+        upper_away = MatchFactory.create(
+            stage=self.upper_stage,
+            home_team=None,
+            away_team=self.upper_teams[2],
+            date=self.dates[4],
+            is_bye=True,
         )
 
         # ``regrade`` reorders and rewires the matches; the caller moves the
@@ -245,29 +256,52 @@ class RegradeTests(TestCase):
         self.assertEqual(processed_bye.home_team, self.team)
         for match, side in ((home, "home_team"), (away, "away_team")):
             match.refresh_from_db()
-            self.assertEqual(match.is_bye, True)
-            self.assertEqual(getattr(match, side), None)
-            self.assertEqual((match.time, match.datetime, match.play_at), (None,) * 3)
+            self.assertTrue(match.is_bye)
+            self.assertIsNone(getattr(match, side))
+            self.assertIsNone(match.time)
+            self.assertIsNone(match.datetime)
+            self.assertIsNone(match.play_at)
         self.assertEqual(home.away_team, self.third)
         self.assertEqual(away.home_team, self.rival)
         earlier.refresh_from_db()
-        self.assertEqual((earlier.is_bye, earlier.away_team), (True, None))
+        self.assertTrue(earlier.is_bye)
+        self.assertIsNone(earlier.away_team)
         upper_home.refresh_from_db()
-        self.assertEqual((upper_home.is_bye, upper_home.away_team), (False, self.team))
+        self.assertFalse(upper_home.is_bye)
+        self.assertEqual(upper_home.away_team, self.team)
         upper_away.refresh_from_db()
-        self.assertEqual((upper_away.is_bye, upper_away.home_team), (False, self.team))
+        self.assertFalse(upper_away.is_bye)
+        self.assertEqual(upper_away.home_team, self.team)
 
     def test_convert_to_byes_returns_the_matches_changed(self):
-        home = self.match(self.lower_stage, self.team, self.rival, self.dates[0])
-        away = self.match(self.lower_stage, self.third, self.team, self.dates[1])
-        other = self.match(self.lower_stage, self.rival, self.third, self.dates[1])
+        # Only the team's own unplayed matches from the given date change;
+        # the ids returned are those matches, and a repeat finds none.
+        home = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.team,
+            away_team=self.rival,
+            date=self.dates[0],
+        )
+        away = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.third,
+            away_team=self.team,
+            date=self.dates[1],
+        )
+        other = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.rival,
+            away_team=self.third,
+            date=self.dates[1],
+        )
         self.assertEqual(
             sorted(utils.convert_to_byes(self.team, self.dates[1])), [away.pk]
         )
         home.refresh_from_db()
-        self.assertEqual((home.is_bye, home.home_team), (False, self.team))
+        self.assertFalse(home.is_bye)
+        self.assertEqual(home.home_team, self.team)
         other.refresh_from_db()
-        self.assertEqual(other.is_bye, False)
+        self.assertFalse(other.is_bye)
         self.assertEqual(utils.convert_to_byes(self.team, self.dates[0]), [home.pk])
         self.assertEqual(utils.convert_to_byes(self.team, self.dates[0]), [])
 
