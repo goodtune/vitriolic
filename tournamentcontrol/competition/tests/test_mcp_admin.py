@@ -10,6 +10,7 @@ obtain a bearer token.
 import base64
 import datetime
 import hashlib
+import html
 import json
 import secrets
 from types import SimpleNamespace
@@ -84,6 +85,19 @@ WRITE_TOOLS = {
     "disable_ground_live_stream",
     "enable_match_live_stream",
     "disable_match_live_stream",
+    "create_draw_format",
+    "update_draw_format",
+    "delete_draw_format",
+    "add_season_exclusion_dates",
+    "delete_season_exclusion_dates",
+    "add_division_exclusion_dates",
+    "delete_division_exclusion_dates",
+    "create_timeslot",
+    "update_timeslot",
+    "delete_timeslot",
+    "build_draw",
+    "schedule_matches",
+    "auto_schedule",
 }
 READ_TOOLS = {
     "list_competitions",
@@ -93,6 +107,13 @@ READ_TOOLS = {
     "list_season_stream_keys",
     "list_season_stream_events",
     "list_streamed_grounds",
+    "list_draw_formats",
+    "get_draw_format",
+    "preview_draw_format",
+    "list_season_exclusion_dates",
+    "list_division_exclusion_dates",
+    "list_timeslots",
+    "get_timeslots",
 }
 
 
@@ -547,9 +568,11 @@ class SchedulingTests(AdminFixtureMixin, TestCase):
 
     def test_clashes(self):
         admin = self.admin()
-        # aus_v_eng and fra_v_eng are both on 16 July; put them in the same slot.
+        # aus_v_eng and fra_v_eng are both on 16 July; put them in the same
+        # slot, which also has England playing twice at once.
         self.assertToolError(
-            "Another match is already scheduled for this time & place.",
+            "Another match is already scheduled for this time & place. "
+            "England are already playing at 15:00 on 2026-07-16.",
             admin.reschedule_match,
             self.fra_v_eng.pk,
             time=datetime.time(15, 0),
@@ -1278,6 +1301,91 @@ class AdminMCPHTTPTests(AdminFixtureMixin, TestCase):
             "streamed; remove its live stream before swapping its allocation."
             % self.aus_v_eng.pk,
         )
+
+    def test_draw_tools_over_http(self):
+        """
+        The list arguments of the batch tools are JSON objects; dates and
+        times arrive as ISO strings.
+        """
+        self.login(self.superuser)
+        tools = {t["name"]: t for t in self.rpc("tools/list")["tools"]}
+        build_schema = tools["build_draw"]["inputSchema"]
+        self.assertEqual(build_schema["required"], ["builds"])
+        self.assertEqual(
+            sorted(build_schema["$defs"]["BuildSpec"]["properties"]),
+            [
+                "alternate_home_away_on_repeat",
+                "draw_format_id",
+                "draw_format_text",
+                "offset",
+                "pool_id",
+                "rounds",
+                "stage_id",
+                "start_date",
+            ],
+        )
+        self.assertEqual(tools["build_draw"]["annotations"]["destructiveHint"], True)
+
+        division = factories.DivisionFactory.create(season=self.season, order=4)
+        stage = factories.StageFactory.create(division=division, order=1)
+        factories.TeamFactory.create_batch(2, division=division)
+        result = self.rpc(
+            "tools/call",
+            {
+                "name": "build_draw",
+                "arguments": {
+                    "builds": [
+                        {
+                            "stage_id": stage.pk,
+                            "draw_format_text": "ROUND\n1: 1 vs 2",
+                            "start_date": "2026-07-20",
+                        }
+                    ]
+                },
+            },
+        )
+        self.assertEqual(result["isError"], False)
+        build = result["structuredContent"]["builds"][0]
+        self.assertEqual((build["matches"], build["first_date"]), (1, "2026-07-20"))
+        result = self.rpc(
+            "tools/call",
+            {
+                "name": "schedule_matches",
+                "arguments": {
+                    "items": [
+                        {
+                            "match_id": build["match_ids"][0],
+                            "time": "10:00",
+                            "place_id": self.field2.pk,
+                        }
+                    ]
+                },
+            },
+        )
+        self.assertEqual(result["isError"], False)
+        self.assertEqual(result["structuredContent"]["matches"][0]["time"], "10:00")
+
+    def test_plain_text_titles_over_http(self):
+        """
+        An ampersand sent over the wire is stored as it was sent: the
+        server does not escape titles (an escaped "&amp;" seen in practice
+        came from the client, and is decoded defensively).
+        """
+        self.login(self.superuser)
+        for title, slug in (("Hit & Run", "hit-run"), ("Hit &amp; Miss", "hit-miss")):
+            with self.subTest(title=title):
+                result = self.rpc(
+                    "tools/call",
+                    {
+                        "name": "create_team",
+                        "arguments": {"division_id": self.womens.pk, "title": title},
+                    },
+                )
+                team = result["structuredContent"]["team"]
+                self.assertEqual(team["slug"], slug)
+                self.assertEqual(
+                    self.womens.teams.get(slug=slug).title, html.unescape(title)
+                )
 
     def test_staff_permissions_apply_over_http(self):
         self.login(self.staff)

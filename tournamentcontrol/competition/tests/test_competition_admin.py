@@ -9,6 +9,7 @@ from django import VERSION
 from django.contrib import messages
 from django.template import Context, Template
 from django.urls import reverse
+from guardian.shortcuts import assign_perm
 from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.common.tests.factories import UserFactory
@@ -2839,3 +2840,48 @@ class TeamEditViewQueryTests(TestCase):
                 *edit_team.args,
                 test_query_count=25,
             )
+
+
+class EditViewPermissionTests(TestCase):
+    """
+    Editing an existing record must be governed by the ``change_<model>``
+    permission (including object-level permissions assigned through the
+    permissions tab), while creating a record is governed by ``add_<model>``.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create()
+        cls.other = factories.SeasonFactory.create()
+        cls.staff = factories.UserFactory.create(is_staff=True)
+
+    def test_object_level_change_permission_allows_edit(self):
+        assign_perm("competition.change_season", self.staff, self.season)
+        with self.login(self.staff):
+            self.get("admin:fixja:competition:season:edit", *self.season._get_url_args())
+            self.response_200()
+            self.assertResponseContains(
+                '<input type="text" name="title" value="%s" maxlength="255" '
+                'placeholder="Title" class="form-control" required id="id_title">'
+                % self.season.title
+            )
+
+    def test_object_level_change_permission_is_scoped_to_object(self):
+        assign_perm("competition.change_season", self.staff, self.season)
+        with self.login(self.staff):
+            self.get("admin:fixja:competition:season:edit", *self.other._get_url_args())
+            self.response_403()
+
+    def test_change_permission_does_not_allow_add(self):
+        assign_perm("competition.change_season", self.staff)
+        with self.login(self.staff):
+            self.get("admin:fixja:competition:season:add", self.season.competition_id)
+            self.response_403()
+
+    def test_add_permission_allows_add_but_not_edit(self):
+        assign_perm("competition.add_season", self.staff)
+        with self.login(self.staff):
+            self.get("admin:fixja:competition:season:add", self.season.competition_id)
+            self.response_200()
+            self.get("admin:fixja:competition:season:edit", *self.season._get_url_args())
+            self.response_403()

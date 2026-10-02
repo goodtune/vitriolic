@@ -40,20 +40,23 @@ error result carrying the message.
 """
 
 import datetime
+import html
 import logging
 from typing import Any, Literal
 
 from dateutil.rrule import DAILY, WEEKLY
 from django.conf import settings
 from django.contrib.postgres.forms import SplitArrayWidget
-from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
+from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import ProtectedError, Q
+from django.db.models import F, ProtectedError, Q
 from django.forms.widgets import MultiWidget
 from django.utils import timezone
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from mcp.server.mcpserver.exceptions import ToolError
+from pydantic import BaseModel, Field
+from pydantic import ValidationError as PydanticValidationError
 
 from tournamentcontrol.competition.admin import (
     YOUTUBE_AUTH_EXPIRED_MESSAGE,
@@ -62,12 +65,20 @@ from tournamentcontrol.competition.admin import (
 from tournamentcontrol.competition.dashboard import (
     matches_require_basic_results,
 )
+from tournamentcontrol.competition.draw.generators import DrawGenerator
+from tournamentcontrol.competition.draw.schemas import WIN_LOSE_RE
+from tournamentcontrol.competition.draw.services import (
+    draw_generator,
+    draw_target_team_count,
+    generate_stage_draw,
+    suitable_draw_formats,
+)
 from tournamentcontrol.competition.forms import (
     CompetitionForm,
     DivisionForm,
+    DrawFormatForm,
     GroundForm,
     LiveStreamKeyForm,
-    MatchEditForm,
     MatchRefereeForm,
     MatchResultForm,
     MatchScheduleForm,
@@ -82,6 +93,7 @@ from tournamentcontrol.competition.mcp import (
     MAX_LIMIT,
     CompetitionToolset,
     _clamp,
+    _match_status,
     _match_summary,
     _place,
     _ref,
@@ -90,14 +102,30 @@ from tournamentcontrol.competition.mcp import (
     build_server,
     tool_annotations,
 )
+from tournamentcontrol.competition.mcp.admin.forms import (
+    AgentMatchEditForm,
+    AgentMatchStreamForm,
+    SeasonMatchTimeForm,
+    position_eval_error,
+)
+from tournamentcontrol.competition.mcp.admin.scheduling import (
+    ScheduleValidator,
+)
+from tournamentcontrol.competition.mcp.admin.scheduling import (
+    validation_message as _validation_message,
+)
 from tournamentcontrol.competition.models import (
     Competition,
     Division,
+    DivisionExclusionDate,
+    DrawFormat,
     Ground,
     LiveStreamKey,
     Match,
     Place,
     Season,
+    SeasonExclusionDate,
+    SeasonMatchTime,
     Stage,
     StageGroup,
     Team,
@@ -106,6 +134,14 @@ from tournamentcontrol.competition.models import (
 from tournamentcontrol.competition.tasks import sync_live_stream
 
 logger = logging.getLogger(__name__)
+
+#: The most builds ``build_draw`` and items ``schedule_matches`` take at once.
+MAX_BUILDS = 50
+MAX_SCHEDULE_ITEMS = 500
+
+#: Text inputs that agents (or the clients relaying them) sometimes send
+#: HTML-escaped; they are stored as plain text and escaped when rendered.
+PLAIN_TEXT_FIELDS = {"title", "short_title", "label", "name"}
 
 SeasonMode = Literal["season", "tournament"]
 SEASON_MODES = {"season": WEEKLY, "tournament": DAILY}
@@ -119,18 +155,40 @@ These tools act on behalf of the signed-in administrator and apply the same
 permissions as the admin site. Build a competition top down: `create_competition`,
 `create_season`, then `create_venue` and `create_ground` for where matches
 are played, `create_division`, `create_team` (per division), `create_stage`
-and `create_pool` (teams are placed in pools with `update_pool`), and finally
-`create_match`. Use the read tools (`search`, `get_season`, `list_teams`,
-`list_matches`, `get_match`, `get_ladder`) to find identifiers and to confirm
-each step; as an administrator you also see disabled competitions and draft
-divisions.
+and `create_pool` (teams are placed in pools with `update_pool`). Use the read
+tools (`search`, `get_season`, `list_teams`, `list_matches`, `get_match`,
+`get_ladder`) to find identifiers and to confirm each step; as an
+administrator you also see disabled competitions and draft divisions.
+
+Draws: do not create a season's matches one by one. Configure the season the
+way the admin site's Draw Generation wizard expects and let the server build
+the draw:
+
+1. `create_timeslot` for the kick-off times (check with `get_timeslots`) and
+   `add_season_exclusion_dates` / `add_division_exclusion_dates` for breaks;
+2. find or create a draw format (`list_draw_formats`, `preview_draw_format`,
+   `create_draw_format`): round robins for the regular season, and finals
+   formats using ladder positions (P1), pool positions (G1P2) and winners or
+   losers of earlier matches (W1, L1);
+3. `build_draw` for every stage or pool in one call, first with `dry_run` to
+   check the plan; dates follow the season's mode and skip excluded dates;
+4. `schedule_matches` (or `auto_schedule`, a date at a time) to give the
+   matches their times and grounds in one call.
+
+`create_match` remains for one-off matches and repairs; it accepts the same
+evals (`home_team_eval`, `home_team_eval_related_id`, ...) as a draw format.
 
 Scheduling: `reschedule_match` sets the date, time and place (venue or
-ground) of one match and applies the same rules as the admin scheduler
-(season start and excluded dates, team time preferences, time-and-place and
-team clashes unless `ignore_clashes`). `swap_match_allocations` exchanges the
-date, time and place of two matches. Neither will move a match that is
-being live streamed; remove the live stream first.
+ground) of one match and `schedule_matches` of many at once. Every path that
+sets a date or time applies the same rules: not before the season starts or
+on a date excluded for the season or division; a time from the season's
+time slots when it has any; the teams' time preferences; and, unless
+`ignore_clashes`, no clash of place and time, of a team with itself or with
+a team it declares a clash with. `ignore_clashes` waives the clash checks
+and time preferences only, never excluded dates or time slots.
+`swap_match_allocations` exchanges the date, time and place of two matches.
+None of them will move a match that is being live streamed; remove the live
+stream first.
 
 Results: `list_matches_awaiting_results` finds matches that have been played
 without a result; `record_match_result` enters or revises scores, forfeits
@@ -144,10 +202,195 @@ withdraw the broadcast of a match; `list_season_stream_keys`,
 `create_season_stream_key` and `delete_season_stream_key` manage the pool of
 keys used by ad-hoc events (`list_season_stream_events`).
 
-Every tool that changes data reports the record as saved. A tool that cannot
-proceed (missing permission, a rule such as "the stream key is in use", or a
-validation failure) returns an error explaining why.
+Every tool that changes data reports the record as saved. Match tools take
+`verbose`: false returns only the identifiers and the scheduling fields, which
+keeps long sessions small. A tool that cannot proceed (missing permission, a
+rule such as "the stream key is in use", or a validation failure) returns an
+error explaining why.
 """.strip()
+
+
+class BuildSpec(BaseModel):
+    """One stage or pool to build a draw for (see ``build_draw``)."""
+
+    stage_id: int | None = Field(
+        None, description="The stage to build (a stage without pools)."
+    )
+    pool_id: int | None = Field(None, description="The pool to build.")
+    draw_format_id: int | None = Field(
+        None, description="A saved draw format (see list_draw_formats)."
+    )
+    draw_format_text: str | None = Field(
+        None, description="Draw format text, instead of a saved format."
+    )
+    start_date: datetime.date | None = Field(
+        None,
+        description="The date of the first round; defaults to the season's "
+        "start date.",
+    )
+    rounds: int | None = Field(
+        None,
+        ge=1,
+        description="How many rounds to build; defaults to one pass of the "
+        "format, more repeat it.",
+    )
+    offset: int = Field(0, description="Added to every round number.")
+    alternate_home_away_on_repeat: bool = Field(
+        False,
+        description="Swap home and away on every second pass through the format.",
+    )
+
+
+class ScheduleItem(BaseModel):
+    """The new date, time and/or place of one match (see ``schedule_matches``)."""
+
+    match_id: int
+    date: datetime.date | None = None
+    time: datetime.time | None = None
+    place_id: int | None = Field(
+        None, description="A venue of the season or one of its grounds."
+    )
+
+
+def _coerce(model, value, what):
+    if isinstance(value, model):
+        return value
+    try:
+        return model.model_validate(value)
+    except PydanticValidationError as exc:
+        raise ToolError(
+            "%s: %s"
+            % (
+                what,
+                "; ".join(
+                    "%s: %s" % (".".join(str(p) for p in e["loc"]) or "value", e["msg"])
+                    for e in exc.errors()
+                ),
+            )
+        )
+
+
+def _hhmm(time):
+    return time.strftime("%H:%M") if time else None
+
+
+def _iso(date):
+    return date.isoformat() if date else None
+
+
+def _compact_match(match, now, today):
+    """
+    The identifiers and scheduling fields of a match, for tools called
+    with ``verbose=False``.
+    """
+    return {
+        "id": match.pk,
+        "round": match.round,
+        "date": _iso(match.date),
+        "time": _hhmm(match.time),
+        "place_id": match.play_at_id,
+        "home_team_id": match.home_team_id,
+        "away_team_id": match.away_team_id,
+        "status": _match_status(match, now, today),
+    }
+
+
+def _draw_format_summary(draw_format, text=True):
+    res = {
+        "id": draw_format.pk,
+        "name": draw_format.name,
+        "teams": draw_format.teams,
+        "is_final": draw_format.is_final,
+    }
+    if text:
+        res["text"] = draw_format.text
+    return res
+
+
+def _format_structure(generator, teams=None):
+    """
+    The rounds and matches of a parsed draw format, with the warnings an
+    agent should know about before using it.
+    """
+    rounds = []
+    warnings = []
+    seen = {}
+    highest = 0
+    for round in generator.rounds:
+        matches = []
+        in_round = {}
+        for descriptor in round.matches:
+            for ref in (descriptor.home_team, descriptor.away_team):
+                if ref.isdigit():
+                    highest = max(highest, int(ref))
+                    if ref in in_round:
+                        warnings.append(
+                            "Team %s plays more than once in round %d."
+                            % (ref, round.count)
+                        )
+                    in_round[ref] = True
+                win_lose = WIN_LOSE_RE.fullmatch(ref)
+                if win_lose and win_lose.group("match_id") not in seen:
+                    warnings.append(
+                        "Match %s refers to %s, but match %s is not in an "
+                        "earlier round."
+                        % (descriptor.match_id, ref, win_lose.group("match_id"))
+                    )
+            matches.append(
+                {
+                    "id": descriptor.match_id,
+                    "home": descriptor.home_team,
+                    "away": descriptor.away_team,
+                    "label": descriptor.match_label or round.round_label or None,
+                }
+            )
+        for descriptor in round.matches:
+            seen[descriptor.match_id] = round.count
+        rounds.append(
+            {
+                "round": round.count,
+                "label": round.round_label or None,
+                "matches": matches,
+            }
+        )
+    res = {
+        "rounds": rounds,
+        "round_count": len(rounds),
+        "match_count": sum(len(r["matches"]) for r in rounds),
+        "highest_team_number": highest,
+    }
+    if teams is not None:
+        if highest > teams:
+            warnings.append(
+                "Teams %s are byes for %d teams."
+                % (", ".join(str(n) for n in range(teams + 1, highest + 1)), teams)
+            )
+        pairings = set()
+        for round in rounds:
+            for m in round["matches"]:
+                if m["home"].isdigit() and m["away"].isdigit():
+                    a, b = int(m["home"]), int(m["away"])
+                    if a <= teams and b <= teams:
+                        pairings.add(frozenset((a, b)))
+        expected = teams * (teams - 1) // 2
+        res["pairings"] = {"covered": len(pairings), "possible": expected}
+    res["warnings"] = warnings
+    return res
+
+
+def _exclusion_summary(exclusion):
+    return {"id": exclusion.pk, "date": exclusion.date.isoformat()}
+
+
+def _timeslot_summary(timeslot):
+    return {
+        "id": timeslot.pk,
+        "start": _hhmm(timeslot.start),
+        "interval": timeslot.interval,
+        "count": timeslot.count,
+        "start_date": _iso(timeslot.start_date),
+        "end_date": _iso(timeslot.end_date),
+    }
 
 
 def _perm(model, action):
@@ -156,23 +399,6 @@ def _perm(model, action):
 
 def _label(obj):
     return obj._meta.verbose_name
-
-
-def _validation_message(errors):
-    """
-    Flatten form or model validation errors into one readable sentence.
-    """
-    if isinstance(errors, ValidationError):
-        errors = (
-            errors.message_dict
-            if hasattr(errors, "error_dict")
-            else {NON_FIELD_ERRORS: errors.messages}
-        )
-    parts = []
-    for field, messages in errors.items():
-        name = "error" if field == NON_FIELD_ERRORS else field
-        parts.append("%s: %s" % (name, " ".join(str(m) for m in messages)))
-    return "; ".join(parts)
 
 
 def _ground(place):
@@ -542,6 +768,10 @@ class AdminToolset(CompetitionToolset):
         field the form does not offer for this record (for example a pool
         for a stage that has none, or the slug for a user who is not a
         superuser) is refused rather than silently ignored.
+
+        Titles, labels and names are plain text, escaped when they are
+        rendered; some clients HTML-escape the arguments they relay
+        ("Hit &amp; Run"), so entities in them are decoded first.
         """
         unbound = form_class(*form_args, instance=instance, **form_kwargs)
         data = {}
@@ -550,6 +780,8 @@ class AdminToolset(CompetitionToolset):
         for name, value in changes.items():
             if value is None:
                 continue
+            if name in PLAIN_TEXT_FIELDS and isinstance(value, str):
+                value = html.unescape(value)
             if name not in unbound.fields:
                 raise ToolError(
                     "%s cannot be set for this %s."
@@ -1292,15 +1524,18 @@ class AdminToolset(CompetitionToolset):
         timeslots_before: datetime.time | None = None,
         team_clash_ids: list[int] | None = None,
         slug: str | None = None,
+        verbose: bool = True,
     ) -> dict[str, Any]:
         """
         Enter a team in a division. In a competition with clubs the team
         belongs to ``club_id`` (one of the competition's clubs) and its title
-        defaults to the club's; otherwise ``title`` is required.
-        ``timeslots_after`` / ``timeslots_before`` (weekly seasons only)
-        record when the team can play and ``team_clash_ids`` the teams in
-        other divisions that must not play at the same time (shared
-        players), both enforced when scheduling.
+        defaults to the club's; otherwise ``title`` is required. The title
+        is stored as plain text ("Hit & Run"). ``timeslots_after`` /
+        ``timeslots_before`` (weekly seasons only) record when the team can
+        play and ``team_clash_ids`` the teams in other divisions that must
+        not play at the same time (shared players), both enforced when
+        scheduling. ``verbose=false`` returns just the team's id, title and
+        slug.
         """
         division = self._division(division_id)
         self._require("add", Team)
@@ -1321,6 +1556,11 @@ class AdminToolset(CompetitionToolset):
             division,
             user=self._user(),
         )
+        if not verbose:
+            return {
+                "saved": True,
+                "team": {"id": team.pk, "title": team.title, "slug": team.slug},
+            }
         return {"saved": True, "team": _team_summary(team)}
 
     @tool_annotations(idempotent=True)
@@ -1565,40 +1805,75 @@ class AdminToolset(CompetitionToolset):
         place_id: int | None = None,
         include_in_ladder: bool | None = None,
         ignore_clashes: bool = False,
+        home_team_eval: str | None = None,
+        home_team_eval_related_id: int | None = None,
+        away_team_eval: str | None = None,
+        away_team_eval_related_id: int | None = None,
+        verbose: bool = True,
     ) -> dict[str, Any]:
         """
-        Schedule a match in a stage between two teams of the division (or
-        two of the stage's undecided teams, such as "1st Pool A", in a
-        later stage). ``pool_id`` places it in a pool of the stage, in which
-        case both teams must be in that pool. ``date``, ``time`` and
-        ``place_id`` (a venue or ground) are applied with the scheduling
-        rules of ``reschedule_match``. ``include_in_ladder`` defaults to
-        whether the stage keeps a ladder.
+        Schedule one match in a stage. Prefer ``build_draw`` for a whole
+        draw; use this for one-off matches and repairs.
+
+        Each side is one of: a team of the division (``home_team_id``), one
+        of the stage's undecided teams such as "1st Pool A"
+        (``home_team_undecided_id``), or an eval decided by earlier results
+        (``home_team_eval``):
+
+        - "P1", "P2", ...: ladder position in the stage this one follows;
+        - "G2P3": position 3 in pool 2 of that stage; "S1G1P2": stage 1,
+          pool 1, position 2;
+        - "W" or "L": winner or loser of the match given as
+          ``home_team_eval_related_id``, which must be in an earlier stage
+          or an earlier ``round`` of this stage.
+
+        For example a grand final in round 14: ``home_team_eval="W"``,
+        ``home_team_eval_related_id=<semi 1>``, ``away_team_eval="W"``,
+        ``away_team_eval_related_id=<semi 2>``. The teams are filled in when
+        the matches are progressed after the results are in.
+
+        ``pool_id`` places the match in a pool of the stage, in which case
+        both teams must be in that pool. ``date``, ``time`` and ``place_id``
+        (a venue or ground) are checked with the rules of
+        ``reschedule_match``; ``ignore_clashes`` waives the clash checks only,
+        never excluded dates or the season's time slots.
+        ``include_in_ladder`` defaults to whether the stage keeps a ladder.
+        ``verbose=false`` returns just the identifiers and scheduling fields.
         """
         stage = self._stage(stage_id)
         self._require("add", Match)
         match = Match(stage=stage, include_in_ladder=stage.keep_ladder)
-        with transaction.atomic():
-            match = self._save(
-                MatchEditForm,
+        changes = {
+            "home_team": home_team_id,
+            "away_team": away_team_id,
+            "home_team_undecided": home_team_undecided_id,
+            "away_team_undecided": away_team_undecided_id,
+            "stage_group": pool_id,
+            "round": round,
+            "label": label,
+            "date": date,
+            "include_in_ladder": include_in_ladder,
+        }
+        changes.update(
+            self._eval_changes(
                 match,
-                {
-                    "home_team": home_team_id,
-                    "away_team": away_team_id,
-                    "home_team_undecided": home_team_undecided_id,
-                    "away_team_undecided": away_team_undecided_id,
-                    "stage_group": pool_id,
-                    "round": round,
-                    "label": label,
-                    "date": date,
-                    "include_in_ladder": include_in_ladder,
-                },
+                home_team_eval=home_team_eval,
+                home_team_eval_related_id=home_team_eval_related_id,
+                away_team_eval=away_team_eval,
+                away_team_eval_related_id=away_team_eval_related_id,
+                changes=changes,
             )
+        )
+        with transaction.atomic():
+            # The date is validated and saved under the season lock, like
+            # every other scheduling change (see _lock_seasons).
+            self._lock_seasons([stage.division.season_id])
+            match = self._save(AgentMatchEditForm, match, changes)
             if time is not None or place_id is not None:
                 match = self._reschedule(
                     match, time=time, place_id=place_id, ignore_clashes=ignore_clashes
                 )
-        return {"saved": True, "match": self._admin_match(match)}
+        return {"saved": True, "match": self._match_result(match, verbose)}
 
     @tool_annotations(idempotent=True, open_world=True)
     def update_match(
@@ -1613,14 +1888,21 @@ class AdminToolset(CompetitionToolset):
         label: str | None = None,
         include_in_ladder: bool | None = None,
         videos: list[str] | None = None,
+        home_team_eval: str | None = None,
+        home_team_eval_related_id: int | None = None,
+        away_team_eval: str | None = None,
+        away_team_eval_related_id: int | None = None,
+        verbose: bool = True,
     ) -> dict[str, Any]:
         """
-        Change the teams, pool, round, label, ladder inclusion or video links
-        of a match. Only the arguments given are changed. Use
-        ``reschedule_match`` for the date, time and place,
-        ``record_match_result`` for scores and ``set_match_referees`` for
-        appointments. In a live streamed season the broadcast of a streamed
-        match is resynchronised.
+        Change the teams, evals, pool, round, label, ladder inclusion or
+        video links of a match. Only the arguments given are changed. Giving
+        a side a team, an undecided team or an eval replaces whichever of
+        the three it had (``home_team_eval=""`` clears an eval); the evals
+        are those of ``create_match``. Use ``reschedule_match`` for the
+        date, time and place, ``record_match_result`` for scores and
+        ``set_match_referees`` for appointments. In a live streamed season
+        the broadcast of a streamed match is resynchronised.
         """
         match = self._match(match_id)
         self._require("change", Match, match)
@@ -1635,23 +1917,80 @@ class AdminToolset(CompetitionToolset):
             "label": label,
             "include_in_ladder": include_in_ladder,
         }
+        changes.update(
+            self._eval_changes(
+                match,
+                home_team_eval=home_team_eval,
+                home_team_eval_related_id=home_team_eval_related_id,
+                away_team_eval=away_team_eval,
+                away_team_eval_related_id=away_team_eval_related_id,
+                changes=changes,
+            )
+        )
         if season.live_stream:
             if videos is not None:
                 raise ToolError(
                     "Video links of a live streamed season are managed by the "
                     "broadcast synchronisation."
                 )
-            match = self._save(MatchStreamForm, match, changes)
+            match = self._save(AgentMatchStreamForm, match, changes)
             synced = self._sync_match_live_stream(match)
         else:
             changes["videos"] = videos
-            match = self._save(MatchEditForm, match, changes)
+            match = self._save(AgentMatchEditForm, match, changes)
             synced = False
         return {
             "saved": True,
             "live_stream_sync_queued": synced,
-            "match": self._admin_match(match),
+            "match": self._match_result(match, verbose),
         }
+
+    @staticmethod
+    def _eval_changes(match, *, changes, **evals):
+        """
+        Lay the eval arguments of ``create_match`` / ``update_match`` over
+        ``changes``. A side is given one of a team, an undecided team or an
+        eval; giving one replaces the others the match had for that side.
+        """
+        res = {}
+        for side in ("home", "away"):
+            team_eval = evals[f"{side}_team_eval"]
+            related_id = evals[f"{side}_team_eval_related_id"]
+            given = [
+                name
+                for name, value in (
+                    (f"{side}_team_id", changes[f"{side}_team"]),
+                    (
+                        f"{side}_team_undecided_id",
+                        changes[f"{side}_team_undecided"],
+                    ),
+                    (f"{side}_team_eval", team_eval or None),
+                )
+                if value is not None
+            ]
+            if len(given) > 1:
+                raise ToolError(
+                    "Give the %s side one of %s, not more than one."
+                    % (side, " or ".join(given))
+                )
+            if team_eval is not None:
+                res[f"{side}_team_eval"] = team_eval
+                res[f"{side}_team_eval_related"] = related_id
+                if team_eval.strip().upper() not in ("W", "L"):
+                    # Only a W or L eval refers to a match: clearing the eval,
+                    # or replacing it with a position, drops the reference.
+                    setattr(match, f"{side}_team_eval_related", None)
+            elif related_id is not None:
+                res[f"{side}_team_eval_related"] = related_id
+            if given:
+                # The side is being replaced: forget what it had.
+                keep = given[0].removeprefix(f"{side}_").removesuffix("_id")
+                for attname in ("team", "team_undecided", "team_eval"):
+                    if attname != keep:
+                        setattr(match, f"{side}_{attname}", None)
+                if keep != "team_eval":
+                    setattr(match, f"{side}_team_eval_related", None)
+        return res
 
     @tool_annotations(destructive=True)
     def delete_match(self, match_id: int) -> dict[str, Any]:
@@ -1680,48 +2019,89 @@ class AdminToolset(CompetitionToolset):
         ]
         return res
 
+    def _match_result(self, match, verbose, **extra):
+        """The full or compact (``verbose=False``) description of a match."""
+        if verbose:
+            return self._admin_match(match)
+        now, today = self._now()
+        res = _compact_match(match, now, today)
+        res.update(extra)
+        return res
+
     # -- scheduling ----------------------------------------------------------
 
-    def _check_clashes(self, match, play_at, time):
+    @staticmethod
+    def _owner_season_id(owner):
+        """The season of an exclusion date's owner (a season or division)."""
+        return owner.pk if isinstance(owner, Season) else owner.season_id
+
+    @staticmethod
+    def _lock_seasons(season_ids):
         """
-        The clash rules of the admin scheduler's ``MatchScheduleFormSet``
-        applied to one match: no other match at the same place and time on
-        the day, and none of the teams' declared clashes playing at the same
-        time.
+        Serialise scheduling within the seasons: a match has no database
+        constraint against two of them taking the same place and time, so
+        every tool that checks clashes and then saves holds a lock on the
+        season rows (inside the caller's transaction) for the duration.
         """
-        others = (
-            Match.objects.filter(date=match.date)
-            .exclude(pk=match.pk)
-            .exclude(play_at=None, time=None)
+        list(
+            Season.objects.select_for_update()
+            .filter(pk__in=set(season_ids))
+            .order_by("pk")
+            .values_list("pk", flat=True)
         )
-        if play_at is not None and time is not None:
-            if others.filter(play_at=play_at, time=time).exists():
-                raise ToolError(
-                    "Another match is already scheduled for this time & place."
-                )
-        if time is not None:
-            for team in (match.home_team, match.away_team):
-                if team is None:
-                    continue
-                for clash in team.team_clashes.all():
-                    if others.filter(
-                        Q(home_team=clash) | Q(away_team=clash), time=time
-                    ).exists():
-                        raise ToolError(
-                            "%s must not play at the same time as %s (%s), who "
-                            "are already scheduled at %s."
-                            % (
-                                team.title,
-                                clash.title,
-                                clash.division.title,
-                                time.strftime("%H:%M"),
-                            )
-                        )
+
+    @staticmethod
+    def _raise_schedule_errors(errors):
+        if errors:
+            raise ToolError(" ".join(errors))
 
     def _reschedule(
-        self, match, *, date=None, time=None, place_id=None, ignore_clashes=False
+        self,
+        match,
+        *,
+        date=None,
+        time=None,
+        place_id=None,
+        ignore_clashes=False,
+        validator=None,
+        places=None,
+        save=True,
+        description=None,
     ):
+        """
+        Give ``match`` a new date, time and/or place, applying every
+        scheduling rule (see ``scheduling.ScheduleValidator``): the admin
+        scheduler's ``MatchScheduleForm`` checks the place and the teams'
+        time preferences, the model checks the dates, the validator the
+        season's time slots and the clashes. ``validator`` carries the
+        places and times already handed out in a batch; ``places`` the
+        season's places, to spare a batch looking them up per match.
+
+        With ``save=False`` the validated form is returned for the caller to
+        save (holding the season lock, see ``_lock_seasons``); otherwise the
+        match is validated and saved under the lock.
+        """
+        if save:
+            with transaction.atomic():
+                self._lock_seasons([match.stage.division.season_id])
+                # Another call may have moved the match while this one waited
+                # for the lock: start from what is saved now.
+                return self._reschedule(
+                    self._match(match.pk),
+                    date=date,
+                    time=time,
+                    place_id=place_id,
+                    ignore_clashes=ignore_clashes,
+                    validator=validator,
+                    places=places,
+                    save=False,
+                    description=description,
+                ).save()
         season = match.stage.division.season
+        if validator is None:
+            validator = ScheduleValidator(
+                ignore_clashes=ignore_clashes, moving={match.pk}
+            )
         place = None
         if place_id is not None:
             place = self._place_obj(season, place_id)
@@ -1744,15 +2124,18 @@ class AdminToolset(CompetitionToolset):
             match,
             {"time": time, "play_at": None if place is None else place.pk},
             ignore_clashes,
+            places,
         )
         self._validate(form)
-        if not ignore_clashes:
-            self._check_clashes(
-                match, form.cleaned_data.get("play_at"), form.cleaned_data.get("time")
+        self._raise_schedule_errors(
+            validator.errors(
+                form.instance,
+                dates=False,  # checked by the form, through the model
+                time=time is not None or date is not None,
             )
-        with transaction.atomic():
-            match = form.save()
-        return match
+        )
+        validator.claim(form.instance, description or f"match {match.pk}")
+        return form
 
     @tool_annotations(idempotent=True, open_world=True)
     def reschedule_match(
@@ -1762,19 +2145,32 @@ class AdminToolset(CompetitionToolset):
         time: datetime.time | None = None,
         place_id: int | None = None,
         ignore_clashes: bool = False,
+        verbose: bool = True,
     ) -> dict[str, Any]:
         """
         Move a match: set its date, time and/or place (a venue of the season
         or one of its grounds; see ``list_venues``). Arguments left out are
-        unchanged. The rules of the admin scheduler apply: the date must not
-        be before the season starts or on a date excluded for the season or
-        division; the time must respect the teams' time preferences; and,
-        unless ``ignore_clashes``, no other match may be at the same place
-        and time that day and no team the sides clash with may play at that
-        time. The kick-off instant is recomputed in the place's time zone. A
-        match that is live streamed can only be moved between streamed
-        grounds, and its broadcast is then resynchronised; remove the live
-        stream first to move it elsewhere.
+        unchanged. Use ``schedule_matches`` to move many matches at once.
+
+        The rules of the admin scheduler apply:
+
+        - the date must not be before the season starts or on a date
+          excluded for the season or the division;
+        - when the season has time slot rules (``get_timeslots``) the time
+          must be one of that date's slots, for example "19:00 is not a time
+          slot on 2026-10-14; valid: 18:40, 19:30, 20:20";
+        - the time must respect the teams' time preferences;
+        - no other match may be at the same place and time that day, no team
+          may play twice at the same time, and no team the sides clash with
+          may play at that time.
+
+        ``ignore_clashes`` waives the last two (the clash checks and the
+        time preferences, as in the admin scheduler); it never waives an
+        excluded date or the time slots. The kick-off instant is recomputed
+        in the place's time zone. A match that is live streamed can only be
+        moved between streamed grounds, and its broadcast is then
+        resynchronised; remove the live stream first to move it elsewhere.
+        ``verbose=false`` returns just the identifiers and scheduling fields.
         """
         match = self._match(match_id)
         self._require("change", Match, match)
@@ -1791,16 +2187,20 @@ class AdminToolset(CompetitionToolset):
         return {
             "saved": True,
             "live_stream_sync_queued": synced,
-            "match": self._admin_match(match),
+            "match": self._match_result(match, verbose),
         }
 
     @tool_annotations(open_world=False)
     def swap_match_allocations(
-        self, match_id: int, other_match_id: int
+        self, match_id: int, other_match_id: int, ignore_clashes: bool = False
     ) -> dict[str, Any]:
         """
         Exchange the date, time and place of two matches of the same season
-        (for example to move a game into an earlier slot). Refused if either
+        (for example to move a game into an earlier slot). The rules of
+        ``reschedule_match`` apply to each match in its new slot: excluded
+        dates, time slots and, unless ``ignore_clashes``, clashes with any
+        other match (a team already playing then, or a declared team
+        clash). Refused if either
         match is live streamed: remove the live stream from both first
         (``disable_match_live_stream``), swap, then enable it again.
         """
@@ -1812,23 +2212,38 @@ class AdminToolset(CompetitionToolset):
         self._require("change", Match, second)
         if first.stage.division.season_id != second.stage.division.season_id:
             raise ToolError("Both matches must belong to the same season.")
-        for match in (first, second):
-            if match.live_stream:
-                raise ToolError(
-                    "Match %d is live streamed; remove its live stream before "
-                    "swapping its allocation." % match.pk
-                )
-        first_slot = (first.date, first.time, first.play_at)
-        second_slot = (second.date, second.time, second.play_at)
-        first.date, first.time, first.play_at = second_slot
-        second.date, second.time, second.play_at = first_slot
         with transaction.atomic():
+            # Read the slots under the lock, so a concurrent change to either
+            # match is swapped from rather than overwritten.
+            self._lock_seasons([first.stage.division.season_id])
+            first = self._match(first.pk)
+            second = self._match(second.pk)
             for match in (first, second):
-                try:
-                    match.clean()
-                except ValidationError as exc:
+                if match.live_stream:
                     raise ToolError(
-                        "Match %d: %s" % (match.pk, _validation_message(exc))
+                        "Match %d is live streamed; remove its live stream "
+                        "before swapping its allocation." % match.pk
+                    )
+            first_slot = (first.date, first.time, first.play_at)
+            second_slot = (second.date, second.time, second.play_at)
+            first.date, first.time, first.play_at = second_slot
+            second.date, second.time, second.play_at = first_slot
+            # Both matches leave their current slots; each is checked in the
+            # slot it takes over, against the rest of the season and the
+            # other match.
+            validator = ScheduleValidator(
+                ignore_clashes=ignore_clashes, moving={first.pk, second.pk}
+            )
+            for match in (first, second):
+                errors = validator.errors(match)
+                validator.claim(match, f"match {match.pk}")
+                if errors:
+                    raise ToolError(
+                        "Match %d: %s"
+                        % (
+                            match.pk,
+                            " ".join(errors).removeprefix("Validation failed: "),
+                        )
                     )
                 match.save()
         return {
@@ -1914,13 +2329,15 @@ class AdminToolset(CompetitionToolset):
         is_forfeit: bool | None = None,
         forfeit_winner_id: int | None = None,
         bye_processed: bool | None = None,
+        verbose: bool = True,
     ) -> dict[str, Any]:
         """
         Enter or revise the result of a match: both scores together (home
         then away); for a forfeit set ``is_forfeit`` with the
         ``forfeit_winner_id`` (leave it out for a double forfeit) and the
         scores to record; for a bye set ``bye_processed``. The ladders are
-        updated when the result is saved.
+        updated when the result is saved. ``verbose=false`` returns just the
+        identifiers, scheduling fields and scores.
         """
         match = self._match(match_id)
         self._require("change", Match, match)
@@ -1935,7 +2352,1126 @@ class AdminToolset(CompetitionToolset):
                 "bye_processed": bye_processed,
             },
         )
-        return {"saved": True, "match": self._admin_match(match)}
+        return {
+            "saved": True,
+            "match": self._match_result(
+                match,
+                verbose,
+                home_team_score=match.home_team_score,
+                away_team_score=match.away_team_score,
+            ),
+        }
+
+    # ======================================================================
+    # Draw formats
+    # ======================================================================
+
+    def _draw_format(self, pk):
+        return self._get(DrawFormat.objects.all(), pk, "draw format")
+
+    @staticmethod
+    def _parse_draw_format(text):
+        """
+        Validate draw format text as ``DrawFormatForm`` does and parse it,
+        raising ``ToolError`` with the form's line-numbered message.
+        """
+        text = (text or "").strip()
+        if not text:
+            raise ToolError("Validation failed: text: This field is required.")
+        try:
+            DrawGenerator.validate(text)
+        except ValueError as exc:
+            raise ToolError("Validation failed: text: %s" % exc)
+        generator = draw_generator(None, text)
+        if not generator.rounds:
+            raise ToolError(
+                "Validation failed: text: The draw format has no ROUND lines."
+            )
+        return generator
+
+    def list_draw_formats(
+        self,
+        teams: int | None = None,
+        is_final: bool | None = None,
+        include_text: bool = False,
+    ) -> dict[str, Any]:
+        """
+        The saved draw formats (fixture templates; see
+        ``create_draw_format``), shared by every competition. ``teams``
+        lists the formats the Draw Generation wizard offers for that many
+        teams: an odd number is rounded up (the extra team is a bye) and
+        formats for that number or one fewer are suitable, so 7 teams match
+        formats for 7 and 8 teams. ``is_final`` narrows to finals formats
+        (or excludes them with false). ``include_text`` adds each format's
+        text.
+        """
+        self._staff()
+        formats = DrawFormat.objects.all()
+        if teams is not None:
+            formats = suitable_draw_formats(teams, formats)
+        if is_final is not None:
+            formats = formats.filter(is_final=is_final)
+        return {
+            "teams": teams,
+            "draw_formats": [
+                _draw_format_summary(draw_format, text=include_text)
+                for draw_format in formats.order_by("teams", "name", "pk")
+            ],
+        }
+
+    def get_draw_format(self, draw_format_id: int) -> dict[str, Any]:
+        """
+        One draw format with its text and its rounds and matches as
+        structured data (see ``preview_draw_format``).
+        """
+        self._staff()
+        draw_format = self._draw_format(draw_format_id)
+        res = _draw_format_summary(draw_format)
+        res["structure"] = _format_structure(
+            draw_generator(None, draw_format), draw_format.teams
+        )
+        return {"draw_format": res}
+
+    def preview_draw_format(
+        self, text: str, teams: int | None = None
+    ) -> dict[str, Any]:
+        """
+        Check draw format text without saving it: the same validation as
+        ``create_draw_format`` (an invalid line is reported by its 0-based
+        line number), then its rounds and matches as structured data (match
+        id, home and away references, label). With ``teams`` it also reports
+        the numbers that would be byes and how many of the possible pairings
+        of that many teams the format covers. Warnings flag a team playing
+        twice in a round and a W/L reference to a match that is not in an
+        earlier round.
+        """
+        self._staff()
+        return {"structure": _format_structure(self._parse_draw_format(text), teams)}
+
+    @tool_annotations()
+    def create_draw_format(
+        self,
+        name: str,
+        text: str,
+        teams: int | None = None,
+        is_final: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Save a draw format: a fixture template ``build_draw`` (and the admin
+        site's Draw Generation wizard) turns into matches. Formats are shared
+        by every competition; ``teams`` is how many teams it is for and
+        ``is_final`` marks a finals format. Check text first with
+        ``preview_draw_format``.
+
+        Syntax, one statement per line:
+
+        - ``ROUND [label]`` starts a round, for example ``ROUND`` or
+          ``ROUND Semi Finals``; every round of a draw is played on its own
+          date (weekly seasons) or slot of the day (tournaments).
+        - ``id: home vs away [label]`` is a match. ``id`` is a number unique
+          in the format, used by W/L references; the label is optional and
+          defaults to the round's label.
+
+        Team references:
+
+        - ``1`` .. ``n``: the n-th team of the stage or pool (in a first
+          stage, the teams in their division or pool order). A number with
+          no team (7 teams in an 8-team format) is a bye.
+        - ``P1``: 1st on the ladder of the stage this one follows.
+        - ``G1P1``: 1st of pool (group) 1 of that stage.
+        - ``S1G1P2``: 2nd of pool 1 of stage 1.
+        - ``W1`` / ``L1``: winner / loser of match 1 of this format, which
+          must be in an earlier round.
+
+        A round robin for 4 teams::
+
+            ROUND
+            1: 1 vs 2
+            2: 3 vs 4
+            ROUND
+            3: 1 vs 3
+            4: 2 vs 4
+            ROUND
+            5: 1 vs 4
+            6: 2 vs 3
+
+        Finals (top 4 of the regular season)::
+
+            ROUND Semi Finals
+            1: P1 vs P4 Semi 1
+            2: P2 vs P3 Semi 2
+            ROUND Grand Final
+            3: W1 vs W2 Final
+
+        Invalid text is refused with the admin form's message, naming the
+        0-based numbers of the offending lines.
+        """
+        self._require("add", DrawFormat)
+        self._parse_draw_format(text)
+        draw_format = self._save(
+            DrawFormatForm,
+            DrawFormat(),
+            {"name": name, "text": text, "teams": teams, "is_final": is_final},
+        )
+        return {"saved": True, "draw_format": _draw_format_summary(draw_format)}
+
+    @tool_annotations(idempotent=True)
+    def update_draw_format(
+        self,
+        draw_format_id: int,
+        name: str | None = None,
+        text: str | None = None,
+        teams: int | None = None,
+        is_final: bool | None = None,
+    ) -> dict[str, Any]:
+        """
+        Change a draw format (syntax as for ``create_draw_format``). Only the
+        arguments given are changed. Matches already built from it are not
+        affected.
+        """
+        draw_format = self._draw_format(draw_format_id)
+        self._require("change", DrawFormat, draw_format)
+        if text is not None:
+            self._parse_draw_format(text)
+        draw_format = self._save(
+            DrawFormatForm,
+            draw_format,
+            {"name": name, "text": text, "teams": teams, "is_final": is_final},
+        )
+        return {"saved": True, "draw_format": _draw_format_summary(draw_format)}
+
+    @tool_annotations(destructive=True)
+    def delete_draw_format(self, draw_format_id: int) -> dict[str, Any]:
+        """
+        Delete a draw format. Formats are shared by every competition, so
+        this needs the delete permission on draw formats. Matches already
+        built from the format are not affected: a draw keeps no link to the
+        format it was built from.
+        """
+        draw_format = self._draw_format(draw_format_id)
+        self._require("delete", DrawFormat, draw_format)
+        return self._delete(f"draw format {draw_format.name}", draw_format)
+
+    # ======================================================================
+    # Exclusion dates
+    # ======================================================================
+
+    def _matches_on(self, matches, dates):
+        now, today = self._now()
+        return [
+            dict(_compact_match(match, now, today), division_id=match.stage.division_id)
+            for match in matches.filter(date__in=dates)
+            .select_related("stage")
+            .order_by("date", "time", "pk")
+        ]
+
+    def _add_exclusions(self, manager, model, owner, dates, matches):
+        dates = sorted(set(dates or []))
+        if not dates:
+            raise ToolError("Give one or more dates to exclude.")
+        self._require("add", model)
+        with transaction.atomic():
+            # Locking the season makes "already excluded" exact (a concurrent
+            # call adding the same date waits, then sees it) and keeps a
+            # scheduler from putting a match on a date being excluded.
+            self._lock_seasons([self._owner_season_id(owner)])
+            existing = set(
+                manager.filter(date__in=dates).values_list("date", flat=True)
+            )
+            added = [date for date in dates if date not in existing]
+            for date in added:
+                manager.create(date=date)
+        return {
+            "saved": True,
+            "added": [d.isoformat() for d in added],
+            "already_excluded": [d.isoformat() for d in sorted(existing)],
+            "exclusion_dates": [_exclusion_summary(e) for e in manager.all()],
+            "matches_on_excluded_dates": self._matches_on(matches, dates),
+        }
+
+    def _delete_exclusions(self, manager, model, owner, dates):
+        dates = sorted(set(dates or []))
+        if not dates:
+            raise ToolError("Give one or more dates to stop excluding.")
+        self._require("delete", model)
+        with transaction.atomic():
+            # As when adding: under the season lock the report matches what
+            # this call actually deleted.
+            self._lock_seasons([self._owner_season_id(owner)])
+            doomed = manager.filter(date__in=dates)
+            removed = sorted(doomed.values_list("date", flat=True))
+            doomed.delete()
+        return {
+            "deleted": [d.isoformat() for d in removed],
+            "not_excluded": [d.isoformat() for d in dates if d not in removed],
+            "exclusion_dates": [_exclusion_summary(e) for e in manager.all()],
+        }
+
+    def list_season_exclusion_dates(self, season_id: int) -> dict[str, Any]:
+        """
+        The dates excluded for a season (no matches are scheduled on them;
+        ``build_draw`` skips them).
+        """
+        self._staff()
+        season = self._season(season_id)
+        return {
+            "season": _ref(season),
+            "exclusion_dates": [_exclusion_summary(e) for e in season.exclusions.all()],
+        }
+
+    @tool_annotations(idempotent=True)
+    def add_season_exclusion_dates(
+        self, season_id: int, dates: list[datetime.date]
+    ) -> dict[str, Any]:
+        """
+        Exclude dates for every division of a season, for example a
+        Christmas break: ``dates=["2026-12-23", "2026-12-30", "2027-01-06"]``.
+        A date already excluded is left as it is. ``build_draw`` skips
+        excluded dates and no tool will schedule a match on one. Matches
+        already on an excluded date are not moved: they are listed in
+        ``matches_on_excluded_dates`` for you to reschedule.
+        """
+        season = self._season(season_id)
+        return self._add_exclusions(
+            season.exclusions,
+            SeasonExclusionDate,
+            season,
+            dates,
+            Match.objects.filter(stage__division__season=season),
+        )
+
+    @tool_annotations(destructive=True)
+    def delete_season_exclusion_dates(
+        self, season_id: int, dates: list[datetime.date]
+    ) -> dict[str, Any]:
+        """
+        Stop excluding dates for a season. Dates that are not excluded are
+        reported in ``not_excluded``.
+        """
+        season = self._season(season_id)
+        return self._delete_exclusions(
+            season.exclusions, SeasonExclusionDate, season, dates
+        )
+
+    def list_division_exclusion_dates(self, division_id: int) -> dict[str, Any]:
+        """
+        The dates excluded for one division, and those excluded for its whole
+        season.
+        """
+        self._staff()
+        division = self._division(division_id)
+        return {
+            "division": _ref(division),
+            "exclusion_dates": [
+                _exclusion_summary(e) for e in division.exclusions.all()
+            ],
+            "season_exclusion_dates": [
+                e.date.isoformat() for e in division.season.exclusions.all()
+            ],
+        }
+
+    @tool_annotations(idempotent=True)
+    def add_division_exclusion_dates(
+        self, division_id: int, dates: list[datetime.date]
+    ) -> dict[str, Any]:
+        """
+        Exclude dates for one division only (as ``add_season_exclusion_dates``
+        does for a season). Matches of the division already on those dates
+        are listed in ``matches_on_excluded_dates``, not moved.
+        """
+        division = self._division(division_id)
+        return self._add_exclusions(
+            division.exclusions,
+            DivisionExclusionDate,
+            division,
+            dates,
+            Match.objects.filter(stage__division=division),
+        )
+
+    @tool_annotations(destructive=True)
+    def delete_division_exclusion_dates(
+        self, division_id: int, dates: list[datetime.date]
+    ) -> dict[str, Any]:
+        """Stop excluding dates for a division."""
+        division = self._division(division_id)
+        return self._delete_exclusions(
+            division.exclusions, DivisionExclusionDate, division, dates
+        )
+
+    # ======================================================================
+    # Time slots
+    # ======================================================================
+
+    def _timeslot(self, pk):
+        return self._get(
+            SeasonMatchTime.objects.select_related("season__competition"),
+            pk,
+            "time slot",
+        )
+
+    def list_timeslots(self, season_id: int) -> dict[str, Any]:
+        """
+        The time slot rules of a season (see ``create_timeslot``); use
+        ``get_timeslots`` for the kick-off times they produce.
+        """
+        self._staff()
+        season = self._season(season_id)
+        return {
+            "season": _ref(season),
+            "timeslots": [
+                _timeslot_summary(t) for t in season.timeslots.order_by("start", "pk")
+            ],
+        }
+
+    def get_timeslots(
+        self, season_id: int, date: datetime.date | None = None
+    ) -> dict[str, Any]:
+        """
+        The kick-off times a season's time slot rules produce, on ``date``
+        (rules with a ``start_date`` after it or an ``end_date`` before it do
+        not apply) or, without a date, from every rule. An empty list with no
+        rules means any time is allowed.
+        """
+        self._staff()
+        season = self._season(season_id)
+        validator = ScheduleValidator()
+        return {
+            "season": _ref(season),
+            "date": _iso(date),
+            "rules": season.timeslots.count(),
+            "times": [_hhmm(t) for t in validator.timeslots(season, date)],
+        }
+
+    @tool_annotations()
+    def create_timeslot(
+        self,
+        season_id: int,
+        start: datetime.time,
+        interval: int,
+        count: int,
+        start_date: datetime.date | None = None,
+        end_date: datetime.date | None = None,
+    ) -> dict[str, Any]:
+        """
+        Add a time slot rule to a season: ``count`` kick-off times starting
+        at ``start``, ``interval`` minutes apart. For example
+        ``start="18:40", interval=50, count=3`` gives 18:40, 19:30 and 20:20.
+        ``start_date`` / ``end_date`` limit the dates the rule applies to.
+
+        Once a season has any rule, every match time must be one of the
+        slots for its date (several rules add up); a season without rules
+        accepts any time.
+        """
+        season = self._season(season_id)
+        self._require("add", SeasonMatchTime)
+        with transaction.atomic():
+            # A time slot rule decides which times are valid: change it only
+            # while no scheduling call is validating against it.
+            self._lock_seasons([season.pk])
+            timeslot = self._save(
+                SeasonMatchTimeForm,
+                SeasonMatchTime(season=season),
+                {
+                    "start": start,
+                    "interval": interval,
+                    "count": count,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                },
+            )
+        return {
+            "saved": True,
+            "timeslot": _timeslot_summary(timeslot),
+            "times": [
+                _hhmm(t) for t in ScheduleValidator().timeslots(season, start_date)
+            ],
+        }
+
+    @tool_annotations(idempotent=True)
+    def update_timeslot(
+        self,
+        timeslot_id: int,
+        start: datetime.time | None = None,
+        interval: int | None = None,
+        count: int | None = None,
+        start_date: datetime.date | None = None,
+        end_date: datetime.date | None = None,
+    ) -> dict[str, Any]:
+        """
+        Change a time slot rule (see ``create_timeslot``). Only the arguments
+        given are changed. Matches already scheduled are not moved.
+        """
+        timeslot = self._timeslot(timeslot_id)
+        self._require("change", SeasonMatchTime, timeslot)
+        with transaction.atomic():
+            self._lock_seasons([timeslot.season_id])
+            # Another call may have changed the rule while this one waited.
+            timeslot = self._save(
+                SeasonMatchTimeForm,
+                self._timeslot(timeslot.pk),
+                {
+                    "start": start,
+                    "interval": interval,
+                    "count": count,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                },
+            )
+        return {"saved": True, "timeslot": _timeslot_summary(timeslot)}
+
+    @tool_annotations(destructive=True)
+    def delete_timeslot(self, timeslot_id: int) -> dict[str, Any]:
+        """
+        Delete a time slot rule. When a season has no rules left any time is
+        allowed again.
+        """
+        timeslot = self._timeslot(timeslot_id)
+        self._require("delete", SeasonMatchTime, timeslot)
+        with transaction.atomic():
+            self._lock_seasons([timeslot.season_id])
+            return self._delete(f"time slot {timeslot.pk}", timeslot)
+
+    # ======================================================================
+    # Building draws
+    # ======================================================================
+
+    def _build_plan(self, index, spec):
+        """Resolve and check one ``BuildSpec`` before anything is built."""
+
+        def fail(message):
+            raise ToolError(f"build {index}: {message}")
+
+        if (spec.stage_id is None) == (spec.pool_id is None):
+            fail("give exactly one of stage_id or pool_id.")
+        if (spec.draw_format_id is None) == (spec.draw_format_text is None):
+            fail("give exactly one of draw_format_id or draw_format_text.")
+        try:
+            if spec.pool_id is not None:
+                target = self._pool(spec.pool_id)
+                stage, pool = target.stage, target
+            else:
+                target = stage = self._stage(spec.stage_id)
+                pool = None
+                if stage.pools.exists():
+                    fail(
+                        f"stage {stage.title} has pools; build each of its pools "
+                        "(pool_id) instead."
+                    )
+            if spec.draw_format_id is not None:
+                draw_format = self._draw_format(spec.draw_format_id)
+                text = draw_format.text
+            else:
+                draw_format, text = None, spec.draw_format_text
+            generator = self._parse_draw_format(text)
+        except ToolError as exc:
+            if str(exc).startswith(f"build {index}: "):
+                raise
+            fail(str(exc))
+
+        structure = _format_structure(generator)
+        for warning in structure["warnings"]:
+            if "is not in an earlier round" in warning:
+                fail(warning)
+        season = stage.division.season
+        start_date = spec.start_date or season.start_date
+        if start_date is None:
+            fail("give a start_date; the season has no start date.")
+        teams = draw_target_team_count(target)
+        if teams == 0 and structure["highest_team_number"]:
+            fail(
+                f"{target.title} has no teams for the format's numbered "
+                "references (add teams, or place them in the pool with "
+                "update_pool)."
+            )
+        warnings = []
+        if (
+            draw_format is not None
+            and draw_format.teams
+            and not suitable_draw_formats(teams).filter(pk=draw_format.pk).exists()
+        ):
+            warnings.append(
+                f"Draw format {draw_format.name} is for {draw_format.teams} teams; "
+                f"{target.title} has {teams}."
+            )
+        return {
+            "index": index,
+            "target": target,
+            "stage": stage,
+            "pool": pool,
+            "draw_format": draw_format,
+            "text": text,
+            "spec": spec,
+            "start_date": start_date,
+            "warnings": warnings,
+        }
+
+    def _clear_draw(self, index, matches):
+        """
+        Delete the matches of a stage or pool that have no result, keeping
+        those that do.
+        """
+        resulted = matches.filter(
+            Q(home_team_score__isnull=False)
+            | Q(away_team_score__isnull=False)
+            | Q(is_forfeit=True)
+            | Q(bye_processed=True)
+        )
+        kept = sorted(resulted.values_list("pk", flat=True))
+        doomed = Match.objects.filter(
+            pk__in=matches.exclude(pk__in=kept).values_list("pk", flat=True)
+        )
+        streamed = sorted(doomed.filter(live_stream=True).values_list("pk", flat=True))
+        if streamed:
+            raise ToolError(
+                "build %d: match%s %s %s live streamed; disable the live stream "
+                "before replacing the draw."
+                % (
+                    index,
+                    "" if len(streamed) == 1 else "es",
+                    ", ".join(str(pk) for pk in streamed),
+                    "is" if len(streamed) == 1 else "are",
+                )
+            )
+        deleted = doomed.count()
+        # The matches being replaced may refer to each other (W/L evals).
+        doomed.update(home_team_eval_related=None, away_team_eval_related=None)
+        try:
+            doomed.delete()
+        except ProtectedError as exc:
+            raise ToolError(
+                "build %d: the draw cannot be replaced while other matches refer "
+                "to it (W/L evals): %s."
+                % (
+                    index,
+                    ", ".join(
+                        sorted(
+                            f"match {o.pk}"
+                            for o in exc.protected_objects
+                            if isinstance(o, Match)
+                        )
+                    ),
+                )
+            )
+        return {"deleted": deleted, "kept_with_results": kept}
+
+    @staticmethod
+    def _draw_side(match, side, refs, with_ids):
+        team = getattr(match, f"{side}_team")
+        if team is not None:
+            return {"team_id": team.pk, "title": team.title}
+        undecided = getattr(match, f"{side}_team_undecided")
+        if undecided is not None:
+            return {"undecided_team_id": undecided.pk, "title": undecided.title}
+        team_eval = getattr(match, f"{side}_team_eval")
+        if team_eval:
+            res = {
+                "eval": team_eval,
+                "title": getattr(match, f"get_{side}_team_plain")(),
+            }
+            related = getattr(match, f"{side}_team_eval_related")
+            if related is not None:
+                res["eval_ref"] = refs.get(id(related))
+                if with_ids:
+                    res["eval_related_id"] = related.pk
+            return res
+        if match.is_bye:
+            return {"bye": True}
+        return {"title": "TBA"}
+
+    def _draw_rows(self, matches, refs, with_ids):
+        rows = []
+        for match in matches:
+            row = {
+                "ref": refs[id(match)],
+                "round": match.round,
+                "date": _iso(match.date),
+                "pool_id": match.stage_group_id,
+                "label": match.label or None,
+                "is_bye": match.is_bye,
+                "home": self._draw_side(match, "home", refs, with_ids),
+                "away": self._draw_side(match, "away", refs, with_ids),
+            }
+            if with_ids:
+                row = {"id": match.pk, **row}
+            rows.append(row)
+        return rows
+
+    def _build(self, plan, *, replace_existing, dry_run, verbose):
+        index, target, spec = plan["index"], plan["target"], plan["spec"]
+        existing = target.matches.all()
+        replaced = None
+        if existing.exists():
+            if not replace_existing:
+                raise ToolError(
+                    "build %d: %s already has %d matches; pass "
+                    "replace_existing=true to replace those without results."
+                    % (index, target.title, existing.count())
+                )
+            self._require("delete", Match)
+            replaced = self._clear_draw(index, existing)
+
+        matches = generate_stage_draw(
+            target,
+            plan["draw_format"] or plan["text"],
+            plan["start_date"],
+            spec.rounds,
+            spec.offset,
+            alternate_home_away_on_repeat=spec.alternate_home_away_on_repeat,
+        )
+        validator = ScheduleValidator()
+        errors = []
+        # Ladder and pool positions must resolve as Match.eval will resolve
+        # them, before anything is saved or described.
+        checked = {}
+        for match in matches:
+            for side in ("home", "away"):
+                team_eval = getattr(match, f"{side}_team_eval")
+                if not team_eval or team_eval in ("W", "L"):
+                    continue
+                if team_eval not in checked:
+                    checked[team_eval] = position_eval_error(plan["stage"], team_eval)
+                if checked[team_eval]:
+                    errors.append(f"round {match.round}: {checked[team_eval]}")
+        if errors:
+            raise ToolError(f"build {index}: " + " ".join(dict.fromkeys(errors)))
+        for match in matches:
+            # Weekly dates come from the recurrence rule as midnight in the
+            # current time zone; the match is played on that day.
+            if isinstance(match.date, datetime.datetime):
+                match.date = match.date.date()
+            for error in validator.errors(match, time=False, clashes=False):
+                errors.append(f"round {match.round} on {_iso(match.date)}: {error}")
+        if errors:
+            raise ToolError(f"build {index}: " + " ".join(dict.fromkeys(errors)))
+        matches.save()
+
+        refs = {id(m): f"{m.round}.{m.descriptor.match_id}" for m in matches}
+        dates = [m.date for m in matches if m.date is not None]
+        rounds = [m.round for m in matches]
+        res = {
+            "index": index,
+            "stage": _ref(plan["stage"]),
+            "pool": _ref(plan["pool"]),
+            "draw_format": (
+                _draw_format_summary(plan["draw_format"], text=False)
+                if plan["draw_format"] is not None
+                else None
+            ),
+            "start_date": _iso(plan["start_date"]),
+            "matches": len(matches),
+            "byes": sum(1 for m in matches if m.is_bye),
+            "first_round": min(rounds, default=None),
+            "last_round": max(rounds, default=None),
+            "first_date": _iso(min(dates, default=None)),
+            "last_date": _iso(max(dates, default=None)),
+        }
+        if not dry_run:
+            res["match_ids"] = [m.pk for m in matches]
+        if dry_run or verbose:
+            res["rows"] = self._draw_rows(matches, refs, with_ids=not dry_run)
+        if replaced is not None:
+            res["replaced"] = replaced
+        if plan["warnings"]:
+            res["warnings"] = plan["warnings"]
+        return res
+
+    @tool_annotations(destructive=True)
+    def build_draw(
+        self,
+        builds: list[BuildSpec],
+        dry_run: bool = False,
+        replace_existing: bool = False,
+        verbose: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Build the matches of one or more stages or pools from draw formats,
+        as the admin site's Draw Generation wizard does, in one atomic call
+        (up to 50 builds; all are saved or none).
+
+        Each build gives the stage (``stage_id``, a stage without pools) or
+        pool (``pool_id``) to build, a format (``draw_format_id`` from
+        ``list_draw_formats``, or ``draw_format_text``; see
+        ``create_draw_format`` for the syntax), the ``start_date`` of the
+        first round (default: the season's start date), ``rounds`` (default:
+        one pass of the format; more rounds repeat it, so a 7-round format
+        for 8 teams gives a 14-round double round robin with ``rounds=14``),
+        an ``offset`` added to the round numbers, and
+        ``alternate_home_away_on_repeat`` to swap home and away on every
+        second pass through the format.
+
+        Dates follow the season's mode: one round a week in a weekly season,
+        rounds packed ``games_per_day`` to a day in a tournament, always
+        skipping the season's and the division's excluded dates. Times and
+        grounds are not set: use ``schedule_matches`` or ``auto_schedule``.
+        Numbered references are the teams of the stage or pool; finals
+        stages use P/G..P/W/L references (no teams needed), which build with
+        their evals wired: a ``W1`` side refers to the match built from
+        line 1, and round numbers carry on from the stage before (builds of
+        earlier stages in the same call are made first, whatever their order
+        in ``builds``).
+
+        The same inputs always build the same matches. ``dry_run`` builds
+        and reports the plan without saving it: for each build, ``rows``
+        with each match's ``ref`` ("round.format match id"), round, date,
+        pool, label and sides (a team, an undecided team, an eval with the
+        ``eval_ref`` of the match it refers to, or a bye) — exactly what a
+        real run saves. A real run reports per build how many matches were
+        created, their ``match_ids``, rounds and date range; ``verbose``
+        adds the rows, with match ids.
+
+        A stage or pool that already has matches is refused unless
+        ``replace_existing``, which deletes its matches that have no result
+        (never one with a result, which is kept and reported) before
+        building.
+
+        Example: ``builds=[{"stage_id": 12, "draw_format_id": 3,
+        "start_date": "2026-10-07", "rounds": 12}, {"stage_id": 13,
+        "draw_format_id": 9, "start_date": "2027-01-13"}]``.
+        """
+        self._staff()
+        if not builds:
+            raise ToolError("Give one or more builds.")
+        if len(builds) > MAX_BUILDS:
+            raise ToolError("Give at most %d builds at once." % MAX_BUILDS)
+        specs = [
+            _coerce(BuildSpec, build, f"build {index}")
+            for index, build in enumerate(builds)
+        ]
+        self._require("add", Match)
+        plans = [self._build_plan(index, spec) for index, spec in enumerate(specs)]
+        seen = {}
+        for plan in plans:
+            # A stage with pools is built pool by pool, so a stage and one of
+            # its pools are never both targets.
+            key = (type(plan["target"]), plan["target"].pk)
+            if key in seen:
+                raise ToolError(
+                    "builds %d and %d build the same %s."
+                    % (seen[key], plan["index"], _label(plan["target"]))
+                )
+            seen[key] = plan["index"]
+        with transaction.atomic():
+            # Without the lock two concurrent calls could both find a target
+            # empty and build it twice (nothing in the database prevents it).
+            self._lock_seasons(plan["stage"].division.season_id for plan in plans)
+            # A later stage numbers its rounds on from the stage before it,
+            # so build earlier stages first; report in the order given.
+            built = {
+                plan["index"]: self._build(
+                    plan,
+                    replace_existing=replace_existing,
+                    dry_run=dry_run,
+                    verbose=verbose,
+                )
+                for plan in sorted(
+                    plans, key=lambda plan: (plan["stage"].order, plan["index"])
+                )
+            }
+            results = [built[plan["index"]] for plan in plans]
+            if dry_run:
+                transaction.set_rollback(True)
+        return {
+            "dry_run": dry_run,
+            "saved": not dry_run,
+            "matches": sum(r["matches"] for r in results),
+            "builds": results,
+        }
+
+    # ======================================================================
+    # Batch scheduling
+    # ======================================================================
+
+    def _schedule_batch(self, entries, *, ignore_clashes, atomic, refused=False):
+        """
+        Validate (and, unless refused, save) a batch of ``(index, match_id,
+        changes)`` entries against each other and the database. Returns the
+        saved matches by index and the failures by index.
+
+        When not ``atomic``, an entry that fails stays where it is, so the
+        others are checked again against its current place until no new
+        failure appears. ``refused`` validates (to report every failure)
+        without saving anything.
+        """
+        failed = {}
+        moving = {}
+        seasons = set()
+        for index, match_id, __ in entries:
+            if match_id in moving.values():
+                failed[index] = f"match {match_id} is given more than once."
+                continue
+            try:
+                match = self._match(match_id)
+                self._require("change", Match, match)
+            except ToolError as exc:
+                failed[index] = str(exc)
+                continue
+            moving[index] = match.pk
+            seasons.add(match.stage.division.season_id)
+        with transaction.atomic():
+            self._lock_seasons(seasons)
+            saved = self._schedule_locked(
+                entries, failed, moving, ignore_clashes, atomic, refused
+            )
+        for match in saved.values():
+            if match.live_stream:
+                self._sync_match_live_stream(match)
+        return saved, failed
+
+    def _schedule_locked(
+        self, entries, failed, moving, ignore_clashes, atomic, refused
+    ):
+        """The body of ``_schedule_batch``, run under the season locks."""
+        places = {}
+        while True:
+            validator = ScheduleValidator(
+                ignore_clashes=ignore_clashes,
+                moving={pk for index, pk in moving.items() if index not in failed},
+            )
+            validator.prefetch_clashes(
+                team_id
+                for pair in Match.objects.filter(pk__in=moving.values()).values_list(
+                    "home_team_id", "away_team_id"
+                )
+                for team_id in pair
+            )
+            forms, new_failures = {}, {}
+            for index, match_id, changes in entries:
+                if index in failed:
+                    continue
+                match = self._match(match_id)
+                season_id = match.stage.division.season_id
+                try:
+                    form = self._reschedule(
+                        match,
+                        ignore_clashes=ignore_clashes,
+                        validator=validator,
+                        places=places.get(season_id),
+                        save=False,
+                        description=f"item {index} (match {match.pk})",
+                        **changes,
+                    )
+                except ToolError as exc:
+                    new_failures[index] = str(exc)
+                    continue
+                places.setdefault(season_id, form.fields["play_at"].queryset)
+                forms[index] = form
+            failed.update(new_failures)
+            if atomic or not new_failures:
+                break
+        if refused or (atomic and failed):
+            return {}
+        return {index: form.save() for index, form in sorted(forms.items())}
+
+    @staticmethod
+    def _failures(failed, entries):
+        match_ids = {index: match_id for index, match_id, __ in entries}
+        return [
+            {"index": index, "match_id": match_ids.get(index), "error": failed[index]}
+            for index in sorted(failed)
+        ]
+
+    def _refuse_batch(self, failed, entries, total):
+        lines = [
+            "item %d (match %s): %s" % (f["index"], f["match_id"], f["error"])
+            for f in self._failures(failed, entries)
+        ]
+        raise ToolError(
+            "Nothing was scheduled: %d of %d item%s failed.\n%s"
+            % (len(failed), total, "" if total == 1 else "s", "\n".join(lines))
+        )
+
+    @tool_annotations(idempotent=True, open_world=True)
+    def schedule_matches(
+        self,
+        items: list[ScheduleItem],
+        ignore_clashes: bool = False,
+        atomic: bool = True,
+        verbose: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Set the date, time and/or place of many matches in one call (up to
+        500 items), for example a whole night or a whole season after
+        ``build_draw``: ``items=[{"match_id": 451, "time": "18:40",
+        "place_id": 22}, {"match_id": 452, "time": "18:40", "place_id":
+        23}, ...]``. Each item takes the arguments of ``reschedule_match``
+        and the same rules apply to every item: excluded dates, the season's
+        time slots, the teams' time preferences, and (unless
+        ``ignore_clashes``) clashes, checked against the database and
+        against the other items, so two items on the same ground at the
+        same time are refused.
+
+        With ``atomic`` (the default) nothing is saved unless every item is
+        valid, and the error lists every failing item by its 0-based index.
+        Without it the valid items are saved and the failures reported.
+        The response is compact unless ``verbose``.
+        """
+        self._staff()
+        if not items:
+            raise ToolError("Give one or more items.")
+        if len(items) > MAX_SCHEDULE_ITEMS:
+            raise ToolError(
+                "Give at most %d items at once; split the batch." % MAX_SCHEDULE_ITEMS
+            )
+        entries = []
+        failed = {}
+        for index, item in enumerate(items):
+            try:
+                item = _coerce(ScheduleItem, item, f"item {index}")
+            except ToolError as exc:
+                failed[index] = str(exc)
+                continue
+            changes = {"date": item.date, "time": item.time, "place_id": item.place_id}
+            if all(value is None for value in changes.values()):
+                failed[index] = "give a date, time or place_id to change."
+            entries.append((index, item.match_id, changes))
+        saved, batch_failed = self._schedule_batch(
+            [e for e in entries if e[0] not in failed],
+            ignore_clashes=ignore_clashes,
+            atomic=atomic,
+            refused=atomic and bool(failed),
+        )
+        failed.update(batch_failed)
+        if atomic and failed:
+            self._refuse_batch(failed, entries, len(items))
+        return {
+            "saved": len(saved),
+            "failed": self._failures(failed, entries),
+            "matches": [self._match_result(match, verbose) for match in saved.values()],
+        }
+
+    @tool_annotations(idempotent=True, open_world=True)
+    def auto_schedule(
+        self,
+        season_id: int,
+        date: datetime.date,
+        place_ids: list[int],
+        stage_ids: list[int] | None = None,
+        ignore_clashes: bool = False,
+        dry_run: bool = False,
+        verbose: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Give the unscheduled matches of a season on ``date`` (those without
+        a time or a place; byes are skipped) a time slot and a ground from
+        ``place_ids``, optionally only those of ``stage_ids``. The season
+        must have time slots (``create_timeslot``).
+
+        The rule is deterministic: matches are taken in division, stage,
+        pool, round and id order, and each takes the first free cell of the
+        grid scanning the date's time slots earliest first and, within a
+        slot, the places in the order of ``place_ids``. A cell that would
+        break a scheduling rule for that match (a team's time preference, a
+        clash) is skipped for it. Cells already used by scheduled matches
+        are left alone. Matches that fit nowhere are listed in
+        ``unscheduled`` with the reason. ``dry_run`` reports the assignment
+        without saving it.
+        """
+        self._staff()
+        season = self._season(season_id)
+        if not place_ids:
+            raise ToolError("Give the place_ids (grounds) to schedule on.")
+        if len(set(place_ids)) != len(place_ids):
+            raise ToolError("Each place may be given only once.")
+        places = [self._place_obj(season, place_id) for place_id in place_ids]
+        # Hold the season lock from reading the time slots and free cells
+        # until they are saved, so a concurrent scheduler (or a change to the
+        # time slots) cannot invalidate them.
+        with transaction.atomic():
+            self._lock_seasons([season.pk])
+            validator = ScheduleValidator(ignore_clashes=ignore_clashes)
+            if not validator.has_timeslot_rules(season):
+                raise ToolError(
+                    "auto_schedule fills the season's time slots and this season "
+                    "has none; add them with create_timeslot, or give the times "
+                    "with schedule_matches."
+                )
+            slots = validator.timeslots(season, date)
+            if not slots:
+                raise ToolError(
+                    "The season has no time slots on %s." % date.isoformat()
+                )
+            matches = Match.objects.filter(
+                stage__division__season=season, date=date, is_bye=False
+            ).filter(Q(time__isnull=True) | Q(play_at__isnull=True))
+            if stage_ids:
+                matches = matches.filter(stage_id__in=stage_ids)
+            matches = list(
+                matches.order_by(
+                    "stage__division__order",
+                    "stage__order",
+                    F("stage_group__order").asc(nulls_first=True),
+                    "round",
+                    "pk",
+                )
+            )
+            validator.moving = {match.pk for match in matches}
+            validator.prefetch_clashes(
+                team_id
+                for match in matches
+                for team_id in (match.home_team_id, match.away_team_id)
+            )
+            occupied = set(
+                Match.objects.filter(date=date, play_at__in=places, time__in=slots)
+                .exclude(pk__in=validator.moving)
+                .values_list("time", "play_at_id")
+            )
+            cells = [
+                (time, place)
+                for time in slots
+                for place in places
+                if (time, place.pk) not in occupied
+            ]
+            forms = []
+            unscheduled = []
+            choices = None
+            for candidate in matches:
+                self._require("change", Match, candidate)
+                reason = "every time slot and place is taken."
+                for cell in list(cells):
+                    time, place = cell
+                    try:
+                        form = self._reschedule(
+                            self._match(candidate.pk),
+                            time=time,
+                            place_id=place.pk,
+                            ignore_clashes=ignore_clashes,
+                            validator=validator,
+                            places=choices,
+                            save=False,
+                        )
+                    except ToolError as exc:
+                        reason = str(exc)
+                        continue
+                    choices = form.fields["play_at"].queryset
+                    cells.remove(cell)
+                    forms.append(form)
+                    break
+                else:
+                    unscheduled.append({"match_id": candidate.pk, "reason": reason})
+            with transaction.atomic():
+                saved = [form.save() for form in forms]
+                if dry_run:
+                    transaction.set_rollback(True)
+        if not dry_run:
+            for match in saved:
+                if match.live_stream:
+                    self._sync_match_live_stream(match)
+        now, today = self._now()
+        return {
+            "dry_run": dry_run,
+            "date": date.isoformat(),
+            "time_slots": [_hhmm(t) for t in slots],
+            "scheduled": len(saved),
+            "matches": [
+                (
+                    _compact_match(match, now, today)
+                    if dry_run or not verbose
+                    else self._admin_match(match)
+                )
+                for match in saved
+            ],
+            "unscheduled": unscheduled,
+        }
 
     # ======================================================================
     # Live streaming

@@ -64,6 +64,7 @@ This is a Python based repository, it provides a Django reusable application tha
 - **HTTP requests**: Use `self.get(named_url, *args)` instead of direct client calls or manual URL construction
 - **Response validation**: Use `self.response_XXX()` to check status codes
 - **Content validation**: Use `self.assertResponseContains(...)` to check for HTML fragments
+  - **Always assert a full HTML fragment** (e.g. the whole `<td>` or `<input>` element) and never pass `html=False` to search for bare text; a bare string can keep matching after a regression because the text appears somewhere unrelated on the page
 - **URL Testing**: Always use named URLs with `self.reverse("url_name", args...)` - never hardcode URL strings
 
 ### Model Field Guidelines
