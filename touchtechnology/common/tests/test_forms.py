@@ -44,17 +44,19 @@ class CustomFormField(TestCase):
 class LocationWidgetTest(TestCase):
     def test_render(self):
         field = GoogleMapsField(max_length=100)
-        self.assertHTMLEqual(
-            field.widget.render("latlng", "-33.8471,151.0685,15"),
+        self.assertInHTML(
             '<div class="location-widget">'
+            '<div class="location-widget-map" data-zoom="8" style="height: 200px;">'
+            "</div>"
             '<div class="location-widget-inputs">'
             '<input type="text" name="latlng_0" value="-33.8471" placeholder="Latitude">'
             '<input type="text" name="latlng_1" value="151.0685" placeholder="Longitude">'
             '<input type="text" name="latlng_2" value="15" placeholder="Zoom">'
+            '<button type="button" class="btn btn-default location-widget-toggle" '
+            'aria-pressed="false" hidden>Edit</button>'
             "</div>"
-            '<div class="location-widget-map" data-zoom="8" '
-            'style="height: 200px; max-width: 300px; margin-top: 5px;"></div>'
             "</div>",
+            field.widget.render("latlng", "-33.8471,151.0685,15"),
         )
 
     def test_media(self):

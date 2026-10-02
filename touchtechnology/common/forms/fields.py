@@ -60,13 +60,13 @@ class HTMLField(forms.CharField):
 
 
 class GoogleMapsField(forms.MultiValueField):
-    def __init__(self, max_length, width=300, height=200, zoom=8, *args, **kwargs):
+    def __init__(self, max_length, height=200, zoom=8, *args, **kwargs):
         fields = (
             forms.CharField(max_length=25, required=False),
             forms.CharField(max_length=25, required=False),
             forms.IntegerField(required=False),
         )
-        kwargs["widget"] = LocationWidget(height, width, zoom)
+        kwargs["widget"] = LocationWidget(height, zoom)
         super().__init__(fields, *args, **kwargs)
 
     def compress(self, data_list):

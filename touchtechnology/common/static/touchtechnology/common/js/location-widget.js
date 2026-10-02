@@ -4,6 +4,7 @@ document.addEventListener("DOMContentLoaded", function () {
     var latitude = inputs[0];
     var longitude = inputs[1];
     var zoom = inputs[2];
+    var toggle = elem.querySelector(".location-widget-toggle");
     var canvas = elem.querySelector(".location-widget-map");
     var defaultZoom = parseInt(canvas.getAttribute("data-zoom"), 10);
     var marker = null;
@@ -73,6 +74,22 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       });
     });
+
+    // The inputs are locked by default so the map is the way to pick a
+    // location; the toggle unlocks them for typing exact coordinates.
+    function setLocked(locked) {
+      [latitude, longitude, zoom].forEach(function (input) {
+        input.readOnly = locked;
+      });
+      toggle.textContent = locked ? "Edit" : "Lock";
+      toggle.setAttribute("aria-pressed", locked ? "false" : "true");
+    }
+
+    toggle.addEventListener("click", function () {
+      setLocked(!latitude.readOnly);
+    });
+    toggle.hidden = false;
+    setLocked(true);
 
     // The map may start inside a hidden tab; redraw once it becomes visible.
     if (window.ResizeObserver) {

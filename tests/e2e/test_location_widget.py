@@ -1,8 +1,9 @@
 """
 End-to-end validation of the OpenStreetMap location picker on the venue admin
 page: the stored location is shown as a marker, clicking the map moves the
-marker and fills in the latitude, longitude and zoom inputs, and saving the
-form stores the new "latitude,longitude,zoom" value.
+marker and fills in the locked latitude, longitude and zoom inputs, saving the
+form stores the new "latitude,longitude,zoom" value, and unlocking the inputs
+lets coordinates be typed in to move the map.
 """
 
 import pytest
@@ -35,6 +36,9 @@ def test_location_widget_venue(
     expect(latitude).to_have_value("-33.847100")
     expect(longitude).to_have_value("151.068500")
     expect(zoom).to_have_value("15")
+    for field in (latitude, longitude, zoom):
+        expect(field).not_to_be_editable()
+    expect(widget.get_by_role("button", name="Edit")).to_be_visible()
 
     page.wait_for_load_state("networkidle")
     page.screenshot(
@@ -72,6 +76,10 @@ def test_location_widget_inputs_move_map(authenticated_page: Page, live_server, 
     expect(widget.locator('img.leaflet-tile[src*="/15/"]').first).to_be_visible()
 
     latitude, longitude, zoom = _inputs(page)
+    widget.get_by_role("button", name="Edit").click()
+    for field in (latitude, longitude, zoom):
+        expect(field).to_be_editable()
+
     latitude.fill("-33.900000")
     longitude.fill("151.000000")
     zoom.fill("12")
@@ -85,3 +93,7 @@ def test_location_widget_inputs_move_map(authenticated_page: Page, live_server, 
     assert (
         abs(marker["x"] + marker["width"] / 2 - (canvas["x"] + canvas["width"] / 2)) < 2
     )
+
+    widget.get_by_role("button", name="Lock").click()
+    for field in (latitude, longitude, zoom):
+        expect(field).not_to_be_editable()
