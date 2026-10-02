@@ -1,3 +1,4 @@
+from django import forms
 from test_plus import TestCase
 
 from tournamentcontrol.competition.admin import next_related_factory
@@ -56,6 +57,22 @@ class DivisionFormTests(TestCase):
             "bonus_points_formula",
             ["Unknown identifier(s) in this points formula: tries."],
         )
+
+    def test_points_formula_identifiers_limited_to_widget(self):
+        """
+        The points formula editor is a coefficient per identifier in
+        ``valid_ladder_identifiers``; any other identifier would be dropped
+        the next time the division is edited, so it must be rejected.
+        """
+        form = self._form()
+        form.cleaned_data = {"points_formula": "3*win + 2*draw + 1*loss"}
+        self.assertEqual(form.clean_points_formula(), "3*win + 2*draw + 1*loss")
+        form.cleaned_data = {"points_formula": "3*win + diff"}
+        with self.assertRaisesMessage(
+            forms.ValidationError,
+            "Unknown identifier(s) in this points formula: diff.",
+        ):
+            form.clean_points_formula()
 
     def test_bonus_points_formula_invalid_syntax(self):
         form = self._form(bonus_points_formula="loss=1: 1")
