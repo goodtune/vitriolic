@@ -684,6 +684,35 @@ def forfeit_notification_recipients(match):
 #
 
 
+def convert_to_byes(team, from_date):
+    """
+    Turn every unplayed match of ``team`` dated on or after ``from_date``
+    into a bye for its opponent: the team's side is cleared, ``is_bye`` is
+    set, and the time and place are released (the date is kept, so the bye
+    is processed in its round). The matches are updated in bulk, without
+    signals: an unplayed match has no ladder entries to rebuild. A forfeit
+    or a processed bye of the team is left alone, as the ladder has counted
+    it.
+
+    Returns the ids of the matches changed. Shared by ``regrade`` and the
+    ``withdraw_team`` administration tool.
+    """
+    released = {"is_bye": True, "time": None, "datetime": None, "play_at": None}
+    counted = Q(is_forfeit=True) | Q(is_bye=True, bye_processed=True)
+    home = team.home_games.filter(match_unplayed, date__gte=from_date).exclude(
+        counted
+    )
+    away = team.away_games.filter(match_unplayed, date__gte=from_date).exclude(
+        counted
+    )
+    pks = list(home.values_list("pk", flat=True)) + list(
+        away.values_list("pk", flat=True)
+    )
+    home.update(home_team=None, **released)
+    away.update(away_team=None, **released)
+    return pks
+
+
 def regrade(team, to, from_date=None):
     Division = apps.get_model("competition", "Division")
     Team = apps.get_model("competition", "Team")
@@ -704,13 +733,7 @@ def regrade(team, to, from_date=None):
     # All unplayed matches that this team is assigned to play need to be turned
     # into byes, removing them from the home_team and away_team fields. Strip
     # the time and field also.
-    old_matches = team.matches.filter(match_unplayed, date__gte=from_date)
-    old_matches.filter(home_team=team).update(
-        home_team=None, is_bye=True, time=None, datetime=None, play_at=None
-    )
-    old_matches.filter(away_team=team).update(
-        away_team=None, is_bye=True, time=None, datetime=None, play_at=None
-    )
+    convert_to_byes(team, from_date)
 
     # Move team into the bye matches in the new division.
     new_matches = to.matches.filter(legitimate_bye_match, date__gte=from_date)

@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 from dateutil.rrule import DAILY
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from freezegun import freeze_time
 from guardian.shortcuts import assign_perm
 from mcp.server.mcpserver.exceptions import ToolError
 from test_plus import TestCase
@@ -1941,6 +1942,314 @@ class ScheduleMatchesTests(DemoMixin, TestCase):
         self.assertEqual(
             [u["reason"] for u in res["unscheduled"]],
             ["every time slot and place is taken."] * 3,
+        )
+
+
+class WithdrawTeamTests(DemoMixin, TestCase):
+    """
+    A team withdraws from the Women's division (6 teams, 12 rounds built
+    and scheduled) after round 4: its 8 remaining matches become byes.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin_tools = self.admin()
+        self.division = self.season.divisions_by_title["Women's"]
+        self.stage = self.division.regular
+        self.teams = self.division.team_list
+        self.team = self.teams[5]
+        self.admin_tools.create_timeslot(
+            self.season.pk, start=datetime.time(18, 40), interval=50, count=3
+        )
+        self.admin_tools.build_draw(
+            [
+                {
+                    "stage_id": self.stage.pk,
+                    "draw_format_id": self.round_robin(6).pk,
+                    "start_date": WEDNESDAYS[0],
+                    "rounds": 12,
+                }
+            ]
+        )
+        grounds = [g.pk for g in self.season.grounds]
+        for night in WEDNESDAYS[:12]:
+            self.admin_tools.auto_schedule(self.season.pk, night, grounds)
+        for match in Match.objects.filter(stage=self.stage, round__lte=4):
+            self.admin_tools.record_match_result(
+                match.pk, home_team_score=5, away_team_score=3
+            )
+        self.played = list(self.team.matches.filter(round__lte=4).order_by("round"))
+        self.unplayed = list(self.team.matches.filter(round__gt=4).order_by("round"))
+        self.assertEqual((len(self.played), len(self.unplayed)), (4, 8))
+        self.referee = factories.SeasonRefereeFactory.create(season=self.season)
+        self.admin_tools.set_match_referees(self.unplayed[0].pk, [self.referee.pk])
+        self.clash = self.season.divisions_by_title["Men's"].team_list[0]
+        self.admin_tools.update_team(self.team.pk, team_clash_ids=[self.clash.pk])
+        # A bye of the team with nothing on the other side.
+        self.bye = Match.objects.get(
+            pk=self.admin_tools.create_match(
+                self.stage.pk,
+                home_team_id=self.team.pk,
+                round=13,
+                date=WEDNESDAYS[12],
+                is_bye=True,
+            )["match"]["id"]
+        )
+
+    def opponent(self, match):
+        return (
+            match.away_team if match.home_team_id == self.team.pk else match.home_team
+        )
+
+    def snapshot(self):
+        """Every match of the division the team is not in, as it is now."""
+        return {
+            m.pk: (m.home_team_id, m.away_team_id, m.time, m.play_at_id, m.is_bye)
+            for m in Match.objects.filter(stage=self.stage).exclude(
+                pk__in=[m.pk for m in self.played + self.unplayed + [self.bye]]
+            )
+        }
+
+    def test_dry_run_then_withdraw(self):
+        others = self.snapshot()
+        self.assertEqual(len(others), 36 - 12)
+        first = self.unplayed[0]
+        released_time, released_place = first.time, first.play_at_id
+
+        plan = self.admin_tools.withdraw_team(self.team.pk, dry_run=True)
+        self.assertEqual(plan["saved"], False)
+        self.assertEqual(plan["dry_run"], True)
+        self.assertEqual(plan["team"]["title"], "Women's 6")
+        self.assertEqual(plan["from_date"], WEDNESDAYS[4].isoformat())
+        self.assertEqual(
+            [m["id"] for m in plan["converted_to_bye"]],
+            [m.pk for m in self.unplayed],
+        )
+        self.assertEqual(
+            plan["converted_to_bye"][0],
+            {
+                "id": first.pk,
+                "round": 5,
+                "date": WEDNESDAYS[4].isoformat(),
+                "stage": {
+                    "id": self.stage.pk,
+                    "title": "Regular Season",
+                    "slug": "regular-season",
+                },
+                "opponent": {
+                    "id": self.opponent(first).pk,
+                    "title": self.opponent(first).title,
+                    "slug": self.opponent(first).slug,
+                    "club": {
+                        "id": self.opponent(first).club.pk,
+                        "title": self.opponent(first).club.title,
+                        "slug": self.opponent(first).club.slug,
+                    },
+                },
+                "time": first.time.strftime("%H:%M"),
+                "venue": {"id": self.season.grounds[0].venue_id, "title": "Park"},
+                "ground": {"id": first.play_at_id, "title": first.play_at.title},
+                "referees_removed": 1,
+            },
+        )
+        self.assertEqual(
+            [m["referees_removed"] for m in plan["converted_to_bye"][1:]], [0] * 7
+        )
+        self.assertEqual([m["id"] for m in plan["deleted"]], [self.bye.pk])
+        self.assertEqual(
+            [(m["id"], m["status"], m["voided"]) for m in plan["kept_with_results"]],
+            [(m.pk, "completed", False) for m in self.played],
+        )
+        self.assertEqual(plan["blocked"], [])
+        self.assertEqual(
+            plan["clashes_removed"],
+            [{"id": self.clash.pk, "title": "Men's 1", "slug": "mens-1"}],
+        )
+        self.assertEqual(
+            plan["warnings"],
+            [
+                (
+                    "The points formula of Women's has no bye term, so the "
+                    "opponents score nothing for these byes; teams that had not "
+                    "yet played Women's 6 are disadvantaged unless the formula "
+                    "is changed with update_division."
+                )
+            ],
+        )
+        # Nothing was saved.
+        first.refresh_from_db()
+        self.assertEqual(first.is_bye, False)
+        self.assertEqual(first.referees.count(), 1)
+        self.assertEqual(self.team.team_clashes.count(), 1)
+        self.assertEqual(Match.objects.filter(pk=self.bye.pk).exists(), True)
+
+        res = self.admin_tools.withdraw_team(self.team.pk)
+        self.assertEqual(res["saved"], True)
+        self.assertEqual(res["dry_run"], False)
+        self.assertEqual(
+            {k: v for k, v in res.items() if k not in ("saved", "dry_run")},
+            {k: v for k, v in plan.items() if k not in ("saved", "dry_run")},
+        )
+        for match in self.unplayed:
+            opponent = self.opponent(match)
+            match.refresh_from_db()
+            self.assertEqual(match.is_bye, True)
+            self.assertEqual(match.bye_processed, False)
+            self.assertEqual(
+                {match.home_team_id, match.away_team_id}, {opponent.pk, None}
+            )
+            self.assertEqual(
+                (match.time, match.datetime, match.play_at), (None, None, None)
+            )
+            self.assertEqual(match.referees.count(), 0)
+        self.assertEqual(Match.objects.filter(pk=self.bye.pk).exists(), False)
+        for match in self.played:
+            match.refresh_from_db()
+            self.assertEqual((match.is_bye, match.include_in_ladder), (False, True))
+            self.assertEqual({match.home_team_id, match.away_team_id} & {None}, set())
+        self.assertEqual(self.snapshot(), others)
+        self.assertEqual(self.team.team_clashes.count(), 0)
+        self.assertEqual(self.clash.team_clashes.count(), 0)
+
+        # The released slot is free for another match.
+        extra = self.admin_tools.create_match(
+            self.season.divisions_by_title["Men's"].regular.pk,
+            home_team_id=self.clash.pk,
+            away_team_id=self.season.divisions_by_title["Men's"].team_list[1].pk,
+            round=1,
+            date=WEDNESDAYS[4],
+            time=released_time,
+            place_id=released_place,
+        )
+        self.assertEqual(extra["match"]["time"], released_time.strftime("%H:%M"))
+        self.assertEqual(extra["match"]["ground"]["id"], released_place)
+
+        # Repeating the withdrawal changes nothing.
+        again = self.admin_tools.withdraw_team(self.team.pk)
+        self.assertEqual(again["saved"], True)
+        self.assertEqual((again["converted_to_bye"], again["deleted"]), ([], []))
+        self.assertEqual(len(again["kept_with_results"]), 4)
+        self.assertEqual(again["from_date"], None)
+
+    def test_from_date(self):
+        res = self.admin_tools.withdraw_team(self.team.pk, from_date=WEDNESDAYS[6])
+        self.assertEqual(res["from_date"], WEDNESDAYS[6].isoformat())
+        self.assertEqual(
+            [m["round"] for m in res["converted_to_bye"]], list(range(7, 13))
+        )
+        for match in self.unplayed[:2]:
+            match.refresh_from_db()
+            self.assertEqual(match.is_bye, False)
+            self.assertIn(self.team.pk, (match.home_team_id, match.away_team_id))
+
+    def test_void_played_results(self):
+        ladder = self.admin_tools.get_ladder(stage_id=self.stage.pk)
+        entries = ladder["stages"][0]["pools"][0]["ladder"]
+        self.assertEqual(sum(e["played"] for e in entries), 24)
+        res = self.admin_tools.withdraw_team(self.team.pk, void_played_results=True)
+        self.assertEqual([m["voided"] for m in res["kept_with_results"]], [True] * 4)
+        for match in self.played:
+            match.refresh_from_db()
+            self.assertEqual(match.include_in_ladder, False)
+        ladder = self.admin_tools.get_ladder(stage_id=self.stage.pk)
+        entries = {
+            e["team"]["id"]: e for e in ladder["stages"][0]["pools"][0]["ladder"]
+        }
+        self.assertEqual(sum(e["played"] for e in entries.values()), 16)
+        self.assertEqual(entries[self.team.pk]["played"], 0)
+        self.assertEqual(entries[self.team.pk]["points"], 0)
+        for match in self.played:
+            self.assertEqual(entries[self.opponent(match).pk]["played"], 3)
+
+    def test_byes_are_processed_like_any_other(self):
+        self.admin_tools.update_division(
+            self.division.pk, points_formula="3*win + 2*draw + 1*loss + 3*bye"
+        )
+        res = self.admin_tools.withdraw_team(self.team.pk)
+        self.assertEqual(res["warnings"], [])
+        first = self.unplayed[0]
+        opponent = self.opponent(first)
+        with freeze_time(WEDNESDAYS[5]):
+            awaiting = self.admin_tools.list_matches_awaiting_results(
+                division_id=self.division.pk, date=WEDNESDAYS[4]
+            )
+        by_id = {m["id"]: m for m in awaiting["matches"]}
+        self.assertEqual(by_id[first.pk]["status"], "bye")
+        self.assertEqual(len(by_id), 3)
+        res = self.admin_tools.record_match_result(first.pk, bye_processed=True)
+        self.assertEqual(res["match"]["bye_processed"], True)
+        ladder = self.admin_tools.get_ladder(stage_id=self.stage.pk)
+        entries = {
+            e["team"]["id"]: e for e in ladder["stages"][0]["pools"][0]["ladder"]
+        }
+        self.assertEqual(entries[opponent.pk]["bye"], 1)
+        entry = entries[opponent.pk]
+        self.assertEqual(
+            entry["points"],
+            3 * entry["win"] + 2 * entry["draw"] + entry["loss"] + 3 * entry["bye"],
+        )
+
+    def test_blocked(self):
+        final = Match.objects.get(
+            pk=self.admin_tools.create_match(
+                self.division.finals.pk,
+                home_team_id=self.team.pk,
+                away_team_id=self.teams[0].pk,
+                round=1,
+                date=WEDNESDAYS[13],
+            )["match"]["id"]
+        )
+        Match.objects.filter(pk=self.unplayed[1].pk).update(live_stream=True)
+        plan = self.admin_tools.withdraw_team(self.team.pk, dry_run=True)
+        self.assertEqual(plan["saved"], False)
+        self.assertEqual(
+            [(m["id"], m["reason"]) for m in plan["blocked"]],
+            [
+                (
+                    self.unplayed[1].pk,
+                    "the match is live streamed; remove the live stream first",
+                ),
+                (final.pk, "the team has progressed to Finals"),
+            ],
+        )
+        self.assertEqual(len(plan["converted_to_bye"]), 7)
+        self.assertToolError(
+            "Women's 6 cannot be withdrawn: match %d (round 6, %s) the match is "
+            "live streamed; remove the live stream first; match %d (round 1, %s) "
+            "the team has progressed to Finals."
+            % (
+                self.unplayed[1].pk,
+                WEDNESDAYS[5].isoformat(),
+                final.pk,
+                WEDNESDAYS[13].isoformat(),
+            ),
+            self.admin_tools.withdraw_team,
+            self.team.pk,
+        )
+        self.unplayed[0].refresh_from_db()
+        self.assertEqual(self.unplayed[0].is_bye, False)
+
+    def test_permissions(self):
+        self.assertToolError(
+            "Permission denied: change team requires the competition.change_team "
+            "permission for this team.",
+            self.admin(self.staff).withdraw_team,
+            self.team.pk,
+        )
+        assign_perm("change_team", self.staff, self.team)
+        self.assertToolError(
+            "Permission denied: change match requires the competition.change_match "
+            "permission for this match.",
+            self.admin(self.fresh(self.staff)).withdraw_team,
+            self.team.pk,
+        )
+        self.unplayed[0].refresh_from_db()
+        self.assertEqual(self.unplayed[0].is_bye, False)
+        self.assertToolError(
+            "This team cannot be deleted because it has matches scheduled or "
+            "played; use withdraw_team to take it out of the draw.",
+            self.admin_tools.delete_team,
+            self.team.pk,
         )
 
 

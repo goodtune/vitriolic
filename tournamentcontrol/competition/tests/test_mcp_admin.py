@@ -69,6 +69,7 @@ WRITE_TOOLS = {
     "create_team",
     "update_team",
     "delete_team",
+    "withdraw_team",
     "create_stage",
     "update_stage",
     "delete_stage",
@@ -346,7 +347,7 @@ class BuildCompetitionTests(AdminFixtureMixin, TestCase):
         )
         self.assertToolError(
             "This team cannot be deleted because it has matches scheduled or "
-            "played.",
+            "played; use withdraw_team to take it out of the draw.",
             admin.delete_team,
             aus["id"],
         )
@@ -691,6 +692,189 @@ class SchedulingTests(AdminFixtureMixin, TestCase):
             self.aus_v_eng.pk,
             videos=["https://youtu.be/abc123"],
         )
+
+
+@freeze_time(NOW)
+class ByeTests(AdminFixtureMixin, TestCase):
+    """A single bye through ``create_match``; conversions with ``update_match``."""
+
+    def test_create_bye(self):
+        admin = self.admin()
+        res = admin.create_match(
+            self.womens_stage.pk,
+            home_team_id=self.aus_women.pk,
+            round=3,
+            date=datetime.date(2026, 7, 20),
+            is_bye=True,
+        )
+        self.assertEqual(res["saved"], True)
+        self.assertEqual(res["match"]["is_bye"], True)
+        self.assertEqual(res["match"]["status"], "bye")
+        self.assertEqual(res["match"]["home_team"]["title"], "Australia")
+        self.assertEqual(res["match"]["away_team"]["title"], "Bye")
+        self.assertEqual(res["match"]["date"], "2026-07-20")
+        self.assertEqual(res["match"]["time"], None)
+        self.assertEqual(res["match"]["venue"], None)
+        self.assertEqual(res["match"]["include_in_ladder"], True)
+        match = Match.objects.get(pk=res["match"]["id"])
+        self.assertEqual(match.is_bye, True)
+        self.assertEqual(match.away_team, None)
+        self.assertEqual(match.datetime, None)
+
+    def test_create_bye_rules(self):
+        admin = self.admin()
+        one_team = (
+            "A bye is one team with no opponent: exactly one side must have a team."
+        )
+        self.assertToolError(
+            one_team,
+            admin.create_match,
+            self.womens_stage.pk,
+            home_team_id=self.aus_women.pk,
+            away_team_id=self.nzl_women.pk,
+            is_bye=True,
+        )
+        self.assertToolError(
+            one_team, admin.create_match, self.womens_stage.pk, is_bye=True
+        )
+        self.assertToolError(
+            "A bye is one team with no opponent: it cannot have an undecided team "
+            "or an eval.",
+            admin.create_match,
+            self.mens_finals.pk,
+            home_team_id=self.aus_men.pk,
+            away_team_eval="P1",
+            is_bye=True,
+        )
+        self.assertToolError(
+            "A bye has no time or place: leave time and place_id out.",
+            admin.create_match,
+            self.womens_stage.pk,
+            home_team_id=self.aus_women.pk,
+            date=datetime.date(2026, 7, 20),
+            time=datetime.time(9, 0),
+            is_bye=True,
+        )
+        self.assertEqual(Match.objects.filter(stage=self.womens_stage).count(), 2)
+
+    def test_convert_match_to_bye(self):
+        admin = self.admin()
+        referee = factories.SeasonRefereeFactory.create(season=self.season)
+        admin.set_match_referees(self.fra_v_eng.pk, [referee.pk])
+        # The slot France v England holds is taken until it is released.
+        taken = "Another match is already scheduled for this time & place."
+        self.assertToolError(
+            taken,
+            admin.reschedule_match,
+            self.mixed_match.pk,
+            date=datetime.date(2026, 7, 16),
+            time=datetime.time(17, 0),
+            place_id=self.field2.pk,
+        )
+
+        res = admin.update_match(self.fra_v_eng.pk, is_bye=True, clear_away_team=True)
+        self.assertEqual(res["saved"], True)
+        self.assertEqual(res["referees_removed"], 1)
+        self.assertEqual(res["match"]["is_bye"], True)
+        self.assertEqual(res["match"]["status"], "bye")
+        self.assertEqual(res["match"]["home_team"]["title"], "France")
+        self.assertEqual(res["match"]["away_team"]["title"], "Bye")
+        self.assertEqual(res["match"]["date"], "2026-07-16")
+        self.assertEqual(res["match"]["time"], None)
+        self.assertEqual(res["match"]["datetime"], None)
+        self.assertEqual(res["match"]["ground"], None)
+        self.assertEqual(res["match"]["referees"], [])
+        self.fra_v_eng.refresh_from_db()
+        self.assertEqual(self.fra_v_eng.away_team, None)
+        self.assertEqual(self.fra_v_eng.play_at, None)
+        self.assertEqual(self.fra_v_eng.referees.count(), 0)
+
+        # The released slot is free for another match.
+        res = admin.reschedule_match(
+            self.mixed_match.pk,
+            date=datetime.date(2026, 7, 16),
+            time=datetime.time(17, 0),
+            place_id=self.field2.pk,
+        )
+        self.assertEqual(res["match"]["datetime"], "2026-07-16T17:00:00+02:00")
+
+    def test_convert_match_to_bye_rules(self):
+        admin = self.admin()
+        self.assertToolError(
+            "This match has a result; it cannot be converted to a bye.",
+            admin.update_match,
+            self.eng_v_fra.pk,
+            is_bye=True,
+            clear_away_team=True,
+        )
+        self.assertToolError(
+            "A live streamed match cannot be converted to a bye; remove the live "
+            "stream first with disable_match_live_stream.",
+            admin.update_match,
+            self.aus_v_eng.pk,
+            is_bye=True,
+            clear_away_team=True,
+        )
+        one_team = (
+            "A bye is one team with no opponent: exactly one side must have a team."
+        )
+        self.assertToolError(
+            one_team, admin.update_match, self.fra_v_eng.pk, is_bye=True
+        )
+        self.assertToolError(
+            one_team,
+            admin.update_match,
+            self.fra_v_eng.pk,
+            is_bye=True,
+            clear_home_team=True,
+            clear_away_team=True,
+        )
+        self.assertToolError(
+            "clear_away_team cannot be combined with giving the away side a team, "
+            "an undecided team or an eval.",
+            admin.update_match,
+            self.fra_v_eng.pk,
+            away_team_id=self.aus_men.pk,
+            clear_away_team=True,
+        )
+        self.fra_v_eng.refresh_from_db()
+        self.assertEqual(self.fra_v_eng.is_bye, False)
+        self.assertEqual(self.fra_v_eng.away_team_id, self.eng_men.pk)
+        self.assertEqual(self.fra_v_eng.time, datetime.time(17, 0))
+
+    def test_convert_bye_to_match(self):
+        admin = self.admin()
+        self.assertToolError(
+            "A match has two sides: give the away side a team, an undecided team "
+            "or an eval.",
+            admin.update_match,
+            self.bye.pk,
+            is_bye=False,
+        )
+        res = admin.update_match(
+            self.bye.pk, is_bye=False, away_team_id=self.nzl_men.pk
+        )
+        self.assertEqual(res["match"]["is_bye"], False)
+        self.assertEqual(res["match"]["home_team"]["title"], "Australia")
+        self.assertEqual(res["match"]["away_team"]["title"], "New Zealand")
+        self.assertEqual(res["match"]["time"], None)
+        self.assertEqual(res["match"]["venue"], None)
+        self.assertNotIn("referees_removed", res)
+        # Back to a bye, processed: it can no longer be turned into a match.
+        admin.update_match(self.bye.pk, is_bye=True, clear_away_team=True)
+        admin.record_match_result(self.bye.pk, bye_processed=True)
+        self.assertToolError(
+            "This bye has been processed; revert it with "
+            "record_match_result(bye_processed=false) before turning it into a "
+            "match.",
+            admin.update_match,
+            self.bye.pk,
+            is_bye=False,
+            away_team_id=self.nzl_men.pk,
+        )
+        self.bye.refresh_from_db()
+        self.assertEqual(self.bye.is_bye, True)
+        self.assertEqual(self.bye.away_team, None)
 
 
 @freeze_time(NOW)
@@ -1852,9 +2036,7 @@ class LiveStreamResyncTests(AdminFixtureMixin, TestCase):
         self.assertEqual(
             1,
             len(
-                self._lock_queries(
-                    ctx.captured_queries, "competition_livestreamevent"
-                )
+                self._lock_queries(ctx.captured_queries, "competition_livestreamevent")
             ),
         )
 
