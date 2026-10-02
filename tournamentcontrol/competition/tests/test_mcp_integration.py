@@ -761,11 +761,25 @@ class MatchToolTests(MCPFixtureMixin, TestCase):
         res = self.toolset().get_match(self.final.pk)
         self.assertEqual(
             res["home_team"],
-            {"id": None, "title": "Winner Semi Final 1", "slug": None, "club": None},
+            {
+                "id": None,
+                "title": "Winner Semi Final 1",
+                "slug": None,
+                "club": None,
+                "eval": "W",
+                "eval_related_id": self.final.home_team_eval_related_id,
+            },
         )
         self.assertEqual(
             res["away_team"],
-            {"id": None, "title": "Loser Semi Final 1", "slug": None, "club": None},
+            {
+                "id": None,
+                "title": "Loser Semi Final 1",
+                "slug": None,
+                "club": None,
+                "eval": "L",
+                "eval_related_id": self.final.away_team_eval_related_id,
+            },
         )
         self.assertEqual(res["status"], "upcoming")
         self.assertEqual(res["label"], "Final")
