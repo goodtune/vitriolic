@@ -1,0 +1,21 @@
+<style>
+	.location-widget-inputs {
+		display: flex;
+		gap: 5px;
+		margin-top: 5px;
+	}
+	.location-widget-inputs input {
+		flex: 1 1 0;
+		min-width: 0;
+	}
+	.location-widget-inputs input:nth-of-type(3) {
+		flex: 0 0 5em;
+	}
+</style>
+<div class="location-widget">
+	<div class="location-widget-map" data-zoom="{{ widget.zoom }}" style="height: {{ widget.height }}px;"></div>
+	<div class="location-widget-inputs">
+		{% for widget in widget.subwidgets %}{% include widget.template_name %}{% endfor %}
+		<button type="button" class="btn btn-default location-widget-toggle" aria-pressed="false" hidden>Edit</button>
+	</div>
+</div>

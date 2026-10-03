@@ -6,7 +6,11 @@ from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 
 from touchtechnology.common.forms.auth import permissionformset_factory
-from touchtechnology.common.forms.fields import EmailField, HTMLField
+from touchtechnology.common.forms.fields import (
+    EmailField,
+    GoogleMapsField,
+    HTMLField,
+)
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.tests import factories
 
@@ -35,6 +39,42 @@ class CustomFormField(TestCase):
         self.assertFieldOutput(HTMLField, valid, {})
 
     maxDiff = None
+
+
+class LocationWidgetTest(TestCase):
+    def test_render(self):
+        field = GoogleMapsField(max_length=100)
+        self.assertInHTML(
+            '<div class="location-widget">'
+            '<div class="location-widget-map" data-zoom="8" style="height: 200px;">'
+            "</div>"
+            '<div class="location-widget-inputs">'
+            '<input type="text" name="latlng_0" value="-33.8471" placeholder="Latitude">'
+            '<input type="text" name="latlng_1" value="151.0685" placeholder="Longitude">'
+            '<input type="text" name="latlng_2" value="15" placeholder="Zoom">'
+            '<button type="button" class="btn btn-default location-widget-toggle" '
+            'aria-pressed="false" hidden>Edit</button>'
+            "</div>"
+            "</div>",
+            field.widget.render("latlng", "-33.8471,151.0685,15"),
+        )
+
+    def test_media(self):
+        field = GoogleMapsField(max_length=100)
+        self.assertHTMLEqual(
+            str(field.widget.media),
+            '<link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" '
+            'media="all" rel="stylesheet">'
+            '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>'
+            '<script src="/static/touchtechnology/common/js/location-widget.js">'
+            "</script>",
+        )
+
+    def test_clean(self):
+        field = GoogleMapsField(max_length=100)
+        self.assertEqual(
+            field.clean(["-33.8471", "151.0685", "15"]), "-33.8471,151.0685,15"
+        )
 
 
 class TestPermissionFormSet(TestCase):
