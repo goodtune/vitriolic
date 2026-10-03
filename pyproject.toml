@@ -29,6 +29,7 @@ dev = [
     "ruff>=0.12.8",
 ]
 test = [
+    "babel==2.17.0",
     "coverage",
     "django-environ",
     "django-test-plus",
@@ -51,7 +52,6 @@ admin = ["django-bootstrap3", "django-gravatar2"]
 common = []
 content = []
 news = [
-    "babel",
     "django-imagekit",
     "python-dateutil",
     "python-magic",

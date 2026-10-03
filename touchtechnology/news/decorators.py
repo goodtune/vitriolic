@@ -1,8 +1,6 @@
 import datetime
 import logging
 
-from babel import Locale
-from babel.dates import get_month_names
 from dateutil.parser import parse as parse_datetime
 from dateutil.relativedelta import relativedelta
 from django.http import Http404
@@ -13,6 +11,7 @@ from django.views.decorators.http import last_modified
 
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.news.models import Article, Category
+from touchtechnology.news.month_names import MONTH_NUMBERS
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +20,8 @@ def parse_month_name(month_str):
     """
     Parse month name from various formats including localized month names.
 
-    Uses Babel library for comprehensive international month name support.
+    Month names are looked up in a table generated from Babel's locale data, so
+    Babel itself is not needed at request time.
 
     Args:
         month_str (str): Month name in various formats (English short/full, localized)
@@ -45,71 +45,10 @@ def parse_month_name(month_str):
     except ValueError:
         pass
 
-    # Use Babel for comprehensive international month name support
-    month_lookup = {}
-
-    # Common locales to support - covers most major languages
-    locales = [
-        "en",
-        "fr",
-        "de",
-        "es",
-        "it",
-        "pt",
-        "zh",
-        "ja",
-        "ko",
-        "ru",
-        "nl",
-        "da",
-        "sv",
-        "no",
-        "fi",
-        "pl",
-        "cs",
-        "hu",
-        "ro",
-        "bg",
-        "hr",
-        "sl",
-        "sk",
-        "lt",
-        "lv",
-        "et",
-        "ar",
-        "he",
-        "hi",
-        "th",
-        "vi",
-        "id",
-        "ms",
-        "ru",
-    ]
-
-    for locale_code in locales:
-        try:
-            locale = Locale(locale_code)
-
-            # Get full month names
-            months = get_month_names("wide", locale=locale)
-            for month_num, month_name in months.items():
-                if month_name:
-                    month_lookup[month_name.lower()] = month_num
-
-            # Get abbreviated month names
-            months_abbr = get_month_names("abbreviated", locale=locale)
-            for month_num, month_name in months_abbr.items():
-                if month_name and month_name.lower() not in month_lookup:
-                    month_lookup[month_name.lower()] = month_num
-
-        except Exception:
-            # Skip this locale if it fails
-            continue
-
-    # Look up the month name
-    month_lower = month_str.lower()
-    if month_lower in month_lookup:
-        return month_lookup[month_lower]
+    # Month names in the languages the URLs may use (see month_names.py)
+    month_num = MONTH_NUMBERS.get(month_str.lower())
+    if month_num is not None:
+        return month_num
 
     # Last resort: try dateutil's parser
     try:
