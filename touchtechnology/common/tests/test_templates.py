@@ -129,6 +129,76 @@ class NavigationTest(TestCase):
             ),
         )
 
+    def test_a_tag_makes_a_single_query(self):
+        # Every page of a site runs several of these, so each one counts.
+        template = Template("{% load common %}{% navigation %}")
+        with self.assertNumQueries(1):
+            template.render(Context())
+
+    def test_the_children_of_a_hidden_node_are_hidden_too(self):
+        """
+        The nodes created here are added to the ones in ``setUpClass``::
+
+            Home Page
+            About Us
+            ├── Our People
+            │   ├── Gary Reynolds
+            │   └── Fred Nurks (hidden)
+            └── Our Work
+            Contact Us
+            Staff Only (hidden)
+            └── Rosters
+            Retired (disabled)
+            └── Archive
+
+        Rosters and Archive are not hidden or disabled themselves, but are
+        within a node that is.
+        """
+        hidden = SitemapNode.objects.create(
+            title="Staff Only", slug="staff", hidden_from_navigation=True
+        )
+        SitemapNode.objects.create(title="Rosters", slug="rosters", parent=hidden)
+        disabled = SitemapNode.objects.create(
+            title="Retired", slug="retired", enabled=False
+        )
+        SitemapNode.objects.create(title="Archive", slug="archive", parent=disabled)
+
+        template = Template("{% load common %}{% navigation start_at=0 stop_at=3 %}")
+        value = template.render(Context())
+        self.assertHTMLEqual(
+            value,
+            f"""
+            <ul class="navigation">
+                <li class="root first NoneType" id="node{self.home.pk}">
+                    <a href="/">Home Page</a>
+                </li>
+                <li class=" has_children NoneType" id="node{self.about.pk}">
+                    <a href="/about/">About Us</a>
+                    <ul class="navigation">
+                        <li class=" first has_children NoneType"
+                            id="node{self.about_people.pk}">
+                            <a href="/about/people/">Our People</a>
+                            <ul class="navigation">
+                                <li class=" first last NoneType"
+                                    id="node{self.about_people_gary.pk}">
+                                    <a href="/about/people/goodtune/">
+                                        Gary Reynolds
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                        <li class=" last NoneType" id="node{self.about_work.pk}">
+                            <a href="/about/work/">Our Work</a>
+                        </li>
+                    </ul>
+                </li>
+                <li class=" last NoneType" id="node{self.contact.pk}">
+                    <a href="/contact/">Contact Us</a>
+                </li>
+            </ul>
+            """,
+        )
+
     def test_current_node(self):
         template = Template("{% load common %}{% navigation current_node=node %}")
         context = Context({"node": self.contact})
