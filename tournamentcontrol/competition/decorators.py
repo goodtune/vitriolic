@@ -293,6 +293,7 @@ def competition_by_slug(f, *a, **kw):
                         team.people.select_related("person")
                         .prefetch_related("person__user")
                         .filter(is_player=True)
+                        .with_statistics(team)
                     )
                     players = players.extra(
                         select={"has_number": "number IS NULL"},

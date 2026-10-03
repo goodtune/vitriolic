@@ -7,7 +7,11 @@ from django.db.models import (
     F,
     FloatField,
     Func,
+    OuterRef,
     Prefetch,
+    Q,
+    Subquery,
+    Sum,
     When,
 )
 from django.db.models.query import QuerySet
@@ -99,3 +103,34 @@ class LadderEntryQuerySet(QuerySet):
 class StatisticQuerySet(QuerySet):
     def played(self):
         return self.exclude(played=0)
+
+
+class TeamAssociationQuerySet(QuerySet):
+    def with_statistics(self, team):
+        """
+        Total each person's played, points and MVP counts for ``team``.
+
+        ``TeamAssociation.statistics()`` makes a query of its own for every
+        person, so a team page with a roster of twenty made twenty more. This
+        does the same sums, over the same matches, as one subquery for each
+        in the query which fetches the roster; ``statistics()`` returns them
+        without asking the database again.
+        """
+        SimpleScoreMatchStatistic = apps.get_model(
+            "competition", "SimpleScoreMatchStatistic"
+        )
+        stats = SimpleScoreMatchStatistic.objects.filter(
+            Q(match__home_team=team) | Q(match__away_team=team),
+            player=OuterRef("person"),
+        ).order_by()
+
+        def total(field):
+            return Subquery(
+                stats.values("player").annotate(total=Sum(field)).values("total")
+            )
+
+        return self.annotate(
+            stat_played=total("played"),
+            stat_points=total("points"),
+            stat_mvp=total("mvp"),
+        )
