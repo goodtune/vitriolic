@@ -16,7 +16,7 @@ except ImportError:
     sentry_sdk = None
 
 from django.conf import settings
-from django.db.models import Model, Q
+from django.db.models import Exists, Model, OuterRef, Q
 from django.db.models.query import QuerySet
 from django.forms.boundfield import BoundField
 from django.forms.widgets import (
@@ -45,7 +45,6 @@ from touchtechnology.common.default_settings import CURRENCY_SYMBOL, SITEMAP_ROO
 from touchtechnology.common.exceptions import NotModelManager
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.utils import (
-    create_exclude_filter,
     get_all_perms_for_model_cached,
     model_and_manager,
     tree_for_node,
@@ -289,14 +288,22 @@ def _do_navigation(
 
     logger.debug("nodes: %r", nodes)
 
-    # make sure we hide any nodes that are in a hidden part of the tree
+    # make sure we hide any nodes that are in a hidden part of the tree: those
+    # which lie within the subtree of a hidden (or disabled) node of ``nodes``.
+    # The database is asked whether each node lies within a hidden one, rather
+    # than being asked for the hidden nodes first, because every page renders
+    # several of these tags and each extra query is paid on every request.
     nodes_hidden_from_navigation = nodes.filter(
         Q(hidden_from_navigation=True) | Q(enabled=False)
     )
 
-    hidden_from_navigation = create_exclude_filter(nodes_hidden_from_navigation)
+    within_hidden_node = nodes_hidden_from_navigation.filter(
+        tree_id=OuterRef("tree_id"),
+        lft__lte=OuterRef("lft"),
+        rght__gte=OuterRef("lft"),
+    ).order_by()
 
-    nodes = nodes.exclude(hidden_from_navigation)
+    nodes = nodes.exclude(Exists(within_hidden_node))
 
     logger.debug("nodes[cleaned]: %r", nodes)
 
