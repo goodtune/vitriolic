@@ -1444,9 +1444,9 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         # does too.
         render_key = None
         if archived and not request.user.is_superuser:
-            identity = "%s|%s" % (request.get_host(), request.path)
+            identity = f"{request.get_host()}|{request.path}"
             digest = hashlib.sha256(identity.encode()).hexdigest()
-            render_key = "competition.calendar.%s" % digest
+            render_key = f"competition.calendar.{digest}"
             body = cache.get(render_key)
             if body is not None:
                 return self._calendar_response(request, body, archived)
