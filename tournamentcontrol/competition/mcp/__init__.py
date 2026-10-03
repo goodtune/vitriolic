@@ -39,11 +39,12 @@ import contextvars
 import datetime
 import functools
 import inspect
+from time import perf_counter
 from typing import Any, Literal
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
 from django.db.models import Count, F, Max, Min, Q
 from django.db.models.functions import Coalesce
 from django.utils import timezone
@@ -73,6 +74,45 @@ MAX_DAYS = 366
 #: The Django request carrying the MCP call currently being served, set by
 #: ``views.MCPView`` for the duration of the request.
 current_request = contextvars.ContextVar("tournamentcontrol_mcp_request")
+
+
+class ToolCall:
+    """
+    What became of the tool run by the request being served: how long it
+    took and the exception it raised, if any. ``views.MCPView`` puts one in
+    ``current_tool_call`` and the tool wrapper fills it in.
+    """
+
+    def __init__(self):
+        self.duration = None
+        self.exception = None
+
+
+current_tool_call = contextvars.ContextVar("tournamentcontrol_mcp_tool_call")
+
+
+#: What a sensitive argument's value is replaced with before it is reported.
+REDACTED = "[redacted]"
+
+
+def sensitive_arguments(*names):
+    """
+    Declare the arguments of a tool that may carry personal details (free
+    text a caller types, such as a search for a person's name) or secrets.
+
+    Decorate a toolset method with it, in the manner of Django's
+    ``sensitive_variables``. The tool still receives the values; they are
+    only replaced by ``REDACTED`` in what ``mcp_request_handled`` reports, so
+    a project that logs tool calls does not write them out. ``build_server``
+    refuses a name that is not one of the method's parameters.
+    """
+
+    def decorator(method):
+        method.mcp_sensitive_arguments = frozenset(names)
+        return method
+
+    return decorator
+
 
 MatchStatus = Literal["any", "upcoming", "past", "completed"]
 MatchGroupBy = Literal[
@@ -624,6 +664,7 @@ class CompetitionToolset:
             "events": [self._event(season, today) for season in seasons[:limit]],
         }
 
+    @sensitive_arguments("query")
     def search(self, query: str, limit: int = 10) -> dict[str, Any]:
         """
         Find competitions, seasons, divisions, teams, clubs and venues whose
@@ -830,6 +871,7 @@ class CompetitionToolset:
             ],
         }
 
+    @sensitive_arguments("query")
     def list_teams(
         self,
         season_id: int | None = None,
@@ -1308,7 +1350,15 @@ def _tool(toolset_class, name):
     @functools.wraps(method)
     async def tool(**kwargs):
         toolset = toolset_class(request=current_request.get(None))
-        return await sync_to_async(getattr(toolset, name))(**kwargs)
+        call = current_tool_call.get(None) or ToolCall()
+        start = perf_counter()
+        try:
+            return await sync_to_async(getattr(toolset, name))(**kwargs)
+        except Exception as exc:
+            call.exception = exc
+            raise
+        finally:
+            call.duration = perf_counter() - start
 
     # Drop ``self`` from the published signature.
     parameters = list(inspect.signature(method).parameters.values())[1:]
@@ -1363,6 +1413,32 @@ def tool_annotations(
     return decorator
 
 
+def redact_arguments(server, tool, arguments):
+    """
+    ``arguments`` for ``tool`` with the values of its sensitive arguments
+    replaced by ``REDACTED``; the names are kept, so a reader can still see
+    the argument was given. Anything that is not a dict is returned as is.
+    """
+    sensitive = getattr(server, "sensitive_arguments", {}).get(tool)
+    if not sensitive or not isinstance(arguments, dict):
+        return arguments
+    return {
+        name: REDACTED if name in sensitive else value
+        for name, value in arguments.items()
+    }
+
+
+def _sensitive_arguments(method_name, method):
+    names = getattr(method, "mcp_sensitive_arguments", frozenset())
+    unknown = names - set(inspect.signature(method).parameters)
+    if unknown:
+        raise ImproperlyConfigured(
+            f"{method_name} marks {', '.join(sorted(unknown))} as sensitive, "
+            "but has no such argument."
+        )
+    return names
+
+
 def _annotations(method_name, method=None):
     """
     The annotations of a tool. A method that is not decorated with
@@ -1388,11 +1464,17 @@ def build_server(name=None, instructions=None, toolset_class=CompetitionToolset)
     if instructions:
         combined = instructions.strip() + "\n\n" + INSTRUCTIONS
     server = MCPServer(name=name or "tournamentcontrol", instructions=combined)
+    # The arguments of each tool that ``redact_arguments`` hides; read by
+    # ``views.MCPView`` before it reports a request.
+    server.sensitive_arguments = {}
     for method_name, method in inspect.getmembers(
         toolset_class, predicate=inspect.isfunction
     ):
         if method_name.startswith("_"):
             continue
+        sensitive = _sensitive_arguments(method_name, method)
+        if sensitive:
+            server.sensitive_arguments[method_name] = sensitive
         server.add_tool(
             _tool(toolset_class, method_name),
             name=method_name,
