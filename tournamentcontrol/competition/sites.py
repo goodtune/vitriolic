@@ -1,5 +1,6 @@
 import collections
 import functools
+import hashlib
 import logging
 import operator
 from datetime import date, timedelta
@@ -9,8 +10,9 @@ from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.sitemaps import views as sitemaps_views
+from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Case, Count, F, Prefetch, Q, Sum, When
+from django.db.models import Case, Count, F, Max, Prefetch, Q, Sum, When
 from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
 from django.urls import include, path, re_path, reverse
@@ -105,6 +107,18 @@ THUMBNAIL_CACHE_TTL = 300  # 5 minutes
 # shared caches (a CDN, or Django's cache middleware) hold the feed for a few
 # minutes means a schedule change takes that much longer to reach subscribers.
 CALENDAR_CACHE_TTL = getattr(settings, "TOURNAMENTCONTROL_CALENDAR_CACHE_TTL", 600)
+
+# Once the last match in a feed is this long past it will never change again
+# in any way a subscriber cares about, so the feed can be held for much longer.
+CALENDAR_ARCHIVE_AFTER = timedelta(
+    seconds=getattr(settings, "TOURNAMENTCONTROL_CALENDAR_ARCHIVE_AFTER", 3 * 86400)
+)
+CALENDAR_ARCHIVE_CACHE_TTL = getattr(
+    settings, "TOURNAMENTCONTROL_CALENDAR_ARCHIVE_CACHE_TTL", 7 * 86400
+)
+# How long the rendered archived feed is kept in Django's cache; short enough
+# that a correction to an old match reaches subscribers within a day.
+CALENDAR_ARCHIVE_RENDER_TTL = 86400
 
 
 def permissions_required(
@@ -1416,13 +1430,26 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         if not request.user.is_superuser:
             matches = matches.exclude(stage__division__draft=True)
 
-        # For development server turn back plain text to make debugging easier
-        if settings.DEBUG:
-            content_type = "text/plain"
-        else:
-            content_type = "text/calendar"
+        # A feed whose last match finished some time ago is archived: it will
+        # not change again, so it can be cached for a long time. An empty feed
+        # is treated as live because matches may yet be scheduled.
+        last_match = matches.aggregate(last=Max("datetime"))["last"]
+        archived = (
+            last_match is not None
+            and last_match + CALENDAR_ARCHIVE_AFTER < timezone.now()
+        )
 
-        response = HttpResponse(content_type=content_type)
+        # The rendered archived feed is shared by everyone except superusers,
+        # who see draft divisions. It names the host in its links, so the key
+        # does too.
+        render_key = None
+        if archived and not request.user.is_superuser:
+            identity = "%s|%s" % (request.get_host(), request.path)
+            digest = hashlib.sha256(identity.encode()).hexdigest()
+            render_key = "competition.calendar.%s" % digest
+            body = cache.get(render_key)
+            if body is not None:
+                return self._calendar_response(request, body, archived)
 
         cal = Calendar()
         cal.add("prodid", "-//Tournament Control//%s//" % request.get_host())
@@ -1479,8 +1506,9 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
             # FIXME match duration should not be hardcoded
             event.add("dtend", match.datetime + timedelta(minutes=45))
-            # FIXME should be the last modified time of the match
-            event.add("dtstamp", timezone.now())
+            # FIXME should be the last modified time of the match. An archived
+            # feed uses a fixed stamp so its ETag does not change on every fetch.
+            event.add("dtstamp", last_match if archived else timezone.now())
 
             # Determine the resource uri to the detailed match view.
             # Cache the URL pattern per division to avoid repeated reverse().
@@ -1513,7 +1541,15 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
             cal.add_component(event)
 
-        response.write(cal.to_ical())
+        body = cal.to_ical()
+        if render_key is not None:
+            cache.set(render_key, body, CALENDAR_ARCHIVE_RENDER_TTL)
+        return self._calendar_response(request, body, archived)
+
+    def _calendar_response(self, request, body, archived):
+        # For development server turn back plain text to make debugging easier
+        content_type = "text/plain" if settings.DEBUG else "text/calendar"
+        response = HttpResponse(body, content_type=content_type)
 
         # Superusers see draft divisions, so their feed must never be stored
         # where it could be served to anyone else. Varying on Cookie keeps a
@@ -1522,7 +1558,12 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         if request.user.is_superuser:
             patch_cache_control(response, private=True)
         else:
-            patch_cache_control(response, public=True, max_age=CALENDAR_CACHE_TTL)
+            ttl = CALENDAR_ARCHIVE_CACHE_TTL if archived else CALENDAR_CACHE_TTL
+            # Let a shared cache keep serving the previous copy while it
+            # fetches a new one, so a subscriber never waits for generation.
+            patch_cache_control(
+                response, public=True, max_age=ttl, stale_while_revalidate=ttl
+            )
         return response
 
     @competition_by_slug_m
