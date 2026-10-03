@@ -10,6 +10,7 @@ talks to the server.
 import datetime
 import json
 from types import SimpleNamespace
+from unittest import mock
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth.models import AnonymousUser
@@ -19,6 +20,7 @@ from freezegun import freeze_time
 from test_plus import TestCase
 
 from tournamentcontrol.competition import mcp
+from tournamentcontrol.competition.mcp.signals import mcp_request_handled
 from tournamentcontrol.competition.tests import factories
 
 TZ = ZoneInfo("Europe/Amsterdam")
@@ -1316,3 +1318,78 @@ class MCPServerHTTPTests(MCPFixtureMixin, TestCase):
             "tools/call", {"name": "list_matches", "arguments": {"status": "finished"}}
         )
         self.assertEqual(result["isError"], True)
+
+
+@freeze_time(NOW)
+@override_settings(ROOT_URLCONF="vitriolic.urls")
+class MCPRequestHandledSignalTests(MCPFixtureMixin, TestCase):
+    """``mcp_request_handled`` describes each request the endpoint answers."""
+
+    def setUp(self):
+        super().setUp()
+        self.sent = []
+        mcp_request_handled.connect(self.receiver)
+        self.addCleanup(mcp_request_handled.disconnect, self.receiver)
+
+    def receiver(self, sender, **kwargs):
+        self.sent.append(kwargs)
+
+    def rpc(self, method, params=None):
+        payload = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}}
+        response = self.client.post(
+            self.reverse("mcp"),
+            data=json.dumps(payload),
+            content_type="application/json",
+            HTTP_ACCEPT="application/json, text/event-stream",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(self.sent), 1)
+        self.assertEqual(self.sent[0]["request"].path, self.reverse("mcp"))
+        return response.json()["result"], self.sent[0]
+
+    def test_method_without_tool(self):
+        __, sent = self.rpc("tools/list")
+        self.assertEqual(sent["method"], "tools/list")
+        self.assertIsNone(sent["tool"])
+        self.assertIsNone(sent["duration"])
+        self.assertIsNone(sent["error"])
+
+    def test_tool_call(self):
+        result, sent = self.rpc(
+            "tools/call", {"name": "upcoming_events", "arguments": {"days": 365}}
+        )
+        self.assertEqual(result["isError"], False)
+        self.assertEqual(sent["method"], "tools/call")
+        self.assertEqual(sent["tool"], "upcoming_events")
+        self.assertGreaterEqual(sent["duration"], 0)
+        self.assertIsNone(sent["error"])
+
+    def test_tool_call_with_invalid_arguments(self):
+        # The SDK rejects the arguments before the tool runs.
+        result, sent = self.rpc(
+            "tools/call", {"name": "list_matches", "arguments": {"status": "finished"}}
+        )
+        self.assertEqual(result["isError"], True)
+        self.assertEqual(sent["tool"], "list_matches")
+        self.assertIsNone(sent["duration"])
+        self.assertEqual(sent["error"], "isError")
+
+    def test_tool_call_that_raises(self):
+        with mock.patch.object(
+            mcp.CompetitionToolset, "whoami", side_effect=RuntimeError("boom")
+        ):
+            result, sent = self.rpc("tools/call", {"name": "whoami", "arguments": {}})
+        self.assertEqual(result["isError"], True)
+        self.assertEqual(sent["tool"], "whoami")
+        self.assertGreaterEqual(sent["duration"], 0)
+        self.assertEqual(sent["error"], "RuntimeError")
+
+    def test_failing_receiver_does_not_break_the_response(self):
+        def broken(sender, **kwargs):
+            raise RuntimeError("receiver bug")
+
+        mcp_request_handled.connect(broken)
+        self.addCleanup(mcp_request_handled.disconnect, broken)
+        with self.assertLogs("tournamentcontrol.competition.mcp.views", "ERROR"):
+            result, __ = self.rpc("tools/call", {"name": "whoami", "arguments": {}})
+        self.assertEqual(result["structuredContent"]["authenticated"], False)

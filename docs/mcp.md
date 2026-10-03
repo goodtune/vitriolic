@@ -140,6 +140,36 @@ A second server for competition *administrators*, with tools that create
 and change competitions, schedule matches, enter results and manage live
 streams, is described in [mcp-admin.md](mcp-admin.md).
 
+## Observing tool calls
+
+Each request the public and administration endpoints answer sends the
+`tournamentcontrol.competition.mcp.signals.mcp_request_handled` signal,
+so a project can log or count how its MCP servers are used without
+patching the views. The receiver is given the Django `request`, the
+JSON-RPC `method`, the `tool` a `tools/call` asked for, the `duration` in
+seconds the tool ran for (`None` if it did not run), and `error`: `None`
+on success, otherwise the class name of the exception the tool raised,
+`"isError"` for a result the SDK marked as an error without the tool
+raising (arguments that failed validation, an unknown tool), or
+`"jsonrpc"` for a JSON-RPC error. A failed tool still answers with HTTP
+200, so `error` is the only place the failure shows.
+
+```python
+from django.dispatch import receiver
+
+from tournamentcontrol.competition.mcp.signals import mcp_request_handled
+
+
+@receiver(mcp_request_handled)
+def log_mcp_request(sender, request, method, tool, duration, error, **kwargs):
+    ...
+```
+
+Receivers run in the request thread once the response is built. An
+exception in a receiver is logged and does not change the response. A
+request refused before it reaches the MCP server (a `401` or `403` from
+the administration endpoint, a `405`) does not send the signal.
+
 ## Testing
 
 ```bash

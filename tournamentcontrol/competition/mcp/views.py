@@ -24,6 +24,9 @@ with the ``401`` challenge that lets an MCP client discover how to obtain a
 token (RFC 9728).
 """
 
+import json
+import logging
+
 from asgiref.sync import async_to_sync
 from django.contrib.auth import authenticate
 from django.http import HttpResponse, JsonResponse
@@ -32,8 +35,24 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from mcp.server.transport_security import TransportSecuritySettings
 
-from tournamentcontrol.competition.mcp import current_request, get_server
+from tournamentcontrol.competition.mcp import (
+    ToolCall,
+    current_request,
+    current_tool_call,
+    get_server,
+)
 from tournamentcontrol.competition.mcp.admin import get_admin_server
+from tournamentcontrol.competition.mcp.signals import mcp_request_handled
+
+LOG = logging.getLogger(__name__)
+
+
+def _json(content):
+    """``content`` decoded as JSON, or ``None`` if it is not JSON."""
+    try:
+        return json.loads(content)
+    except ValueError:
+        return None
 
 
 def bearer_token(request):
@@ -102,11 +121,52 @@ class MCPView(View):
         refusal = self.check_access(request)
         if refusal is not None:
             return refusal
-        token = current_request.set(request)
+        call = ToolCall()
+        request_token = current_request.set(request)
+        call_token = current_tool_call.set(call)
         try:
-            return async_to_sync(self.handle)(request, request.body)
+            response = async_to_sync(self.handle)(request, request.body)
         finally:
-            current_request.reset(token)
+            current_tool_call.reset(call_token)
+            current_request.reset(request_token)
+        self.request_handled(request, response, call)
+        return response
+
+    def request_handled(self, request, response, call):
+        """Send ``mcp_request_handled`` describing the request just answered."""
+        message = _json(request.body)
+        method = message.get("method") if isinstance(message, dict) else None
+        tool = None
+        if method == "tools/call" and isinstance(message.get("params"), dict):
+            tool = message["params"].get("name")
+        if call.exception is not None:
+            error = type(call.exception).__name__
+        else:
+            answer = _json(response.content)
+            if not isinstance(answer, dict):
+                error = None
+            elif "error" in answer:
+                error = "jsonrpc"
+            elif isinstance(answer.get("result"), dict) and answer["result"].get(
+                "isError"
+            ):
+                error = "isError"
+            else:
+                error = None
+        for receiver, result in mcp_request_handled.send_robust(
+            sender=self.__class__,
+            request=request,
+            method=method,
+            tool=tool,
+            duration=call.duration,
+            error=error,
+        ):
+            if isinstance(result, Exception):
+                LOG.error(
+                    "mcp_request_handled receiver %r failed",
+                    receiver,
+                    exc_info=result,
+                )
 
     async def handle(self, request, body):
         scope = {

@@ -39,6 +39,7 @@ import contextvars
 import datetime
 import functools
 import inspect
+from time import perf_counter
 from typing import Any, Literal
 
 from asgiref.sync import sync_to_async
@@ -73,6 +74,21 @@ MAX_DAYS = 366
 #: The Django request carrying the MCP call currently being served, set by
 #: ``views.MCPView`` for the duration of the request.
 current_request = contextvars.ContextVar("tournamentcontrol_mcp_request")
+
+
+class ToolCall:
+    """
+    What became of the tool run by the request being served: how long it
+    took and the exception it raised, if any. ``views.MCPView`` puts one in
+    ``current_tool_call`` and the tool wrapper fills it in.
+    """
+
+    def __init__(self):
+        self.duration = None
+        self.exception = None
+
+
+current_tool_call = contextvars.ContextVar("tournamentcontrol_mcp_tool_call")
 
 MatchStatus = Literal["any", "upcoming", "past", "completed"]
 MatchGroupBy = Literal[
@@ -1308,7 +1324,15 @@ def _tool(toolset_class, name):
     @functools.wraps(method)
     async def tool(**kwargs):
         toolset = toolset_class(request=current_request.get(None))
-        return await sync_to_async(getattr(toolset, name))(**kwargs)
+        call = current_tool_call.get(None) or ToolCall()
+        start = perf_counter()
+        try:
+            return await sync_to_async(getattr(toolset, name))(**kwargs)
+        except Exception as exc:
+            call.exception = exc
+            raise
+        finally:
+            call.duration = perf_counter() - start
 
     # Drop ``self`` from the published signature.
     parameters = list(inspect.signature(method).parameters.values())[1:]
