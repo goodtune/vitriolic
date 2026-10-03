@@ -290,9 +290,9 @@ def _do_navigation(
 
     # make sure we hide any nodes that are in a hidden part of the tree: those
     # which lie within the subtree of a hidden (or disabled) node of ``nodes``.
-    # This used to fetch the hidden nodes to build a filter from them, and then
-    # fetch the rest, two queries for every tag on every page. Asking whether
-    # each node lies within a hidden one is a single query.
+    # The database is asked whether each node lies within a hidden one, rather
+    # than being asked for the hidden nodes first, because every page renders
+    # several of these tags and each extra query is paid on every request.
     nodes_hidden_from_navigation = nodes.filter(
         Q(hidden_from_navigation=True) | Q(enabled=False)
     )
