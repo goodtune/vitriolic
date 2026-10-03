@@ -15,6 +15,7 @@ from test_plus import TestCase
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.draw import schemas
 from tournamentcontrol.competition.draw.builders import build
+from tournamentcontrol.competition.models import Match
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin_format
 
@@ -776,6 +777,13 @@ class CalendarQueryTests(TestCase):
             division=self.division.slug,
         )
 
+    def _finish_all_matches(self):
+        # The factory picks match times at random between 2008 and now, so
+        # one could fall inside the grace period; make them all long past.
+        Match.objects.filter(stage__division__season=self.season).update(
+            datetime=timezone.now() - timedelta(days=30)
+        )
+
     def _schedule_match_at(self, when, **kwargs):
         return factories.MatchFactory.create(
             stage=self.stage,
@@ -797,7 +805,7 @@ class CalendarQueryTests(TestCase):
         )
 
     def test_calendar_with_all_matches_past_is_cacheable_for_a_week(self):
-        # The factory schedules every match between 2008 and now.
+        self._finish_all_matches()
         self._schedule_match_at(timezone.now() - timedelta(days=4))
         response = self._get_division_calendar()
         self.response_200(response)
@@ -898,6 +906,7 @@ class CalendarQueryTests(TestCase):
         self.assertEqual(len(events), 13)
 
     def test_archived_calendar_is_rendered_once(self):
+        self._finish_all_matches()
         with CaptureQueriesContext(connection) as first_queries:
             first = self._get_division_calendar()
         with CaptureQueriesContext(connection) as second_queries:
@@ -920,6 +929,7 @@ class CalendarQueryTests(TestCase):
         self.assertEqual(len(second_queries), len(first_queries))
 
     def test_archived_calendar_cache_follows_a_rescheduled_match(self):
+        self._finish_all_matches()
         self._get_division_calendar()
 
         # A match moved into the future makes the feed live again at once.
@@ -936,6 +946,7 @@ class CalendarQueryTests(TestCase):
         )
         draft_stage = factories.StageFactory.create(division=draft_division)
         factories.MatchFactory.create_batch(stage=draft_stage, size=3)
+        self._finish_all_matches()
 
         def get_season_calendar():
             return self.get(
