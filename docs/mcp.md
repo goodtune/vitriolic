@@ -148,8 +148,7 @@ so a project can log or count how its MCP servers are used without
 patching the views. The receiver is given the Django `request`, the
 JSON-RPC `method`, the `tool` a `tools/call` asked for, its `arguments`
 exactly as the client sent them (before validation, so rejected arguments
-are there too; they can include personal details, so take care where they
-are written), the `duration` in
+are there too), the `duration` in
 seconds the tool ran for (`None` if it did not run), and `error`: `None`
 on success, otherwise the class name of the exception the tool raised,
 `"isError"` for a result the SDK marked as an error without the tool
@@ -169,6 +168,28 @@ def log_mcp_request(
 ):
     ...
 ```
+
+Arguments that may carry personal details or secrets have their value
+replaced by `"[redacted]"`; the name is kept, so a reader can still see the
+argument was given. The tools mark them with
+`tournamentcontrol.competition.mcp.sensitive_arguments`: the free-text
+`query` of `search` and `list_teams` (a visitor can type a person's name)
+and the `live_stream_client_secret` of the administration server's
+`update_season`. Mark the arguments of a project's own tools the same way:
+
+```python
+from tournamentcontrol.competition.mcp import sensitive_arguments
+
+
+class MyToolset(CompetitionToolset):
+    @sensitive_arguments("email")
+    def find_registration(self, email: str) -> dict:
+        ...
+```
+
+`build_server` refuses a name that is not one of the method's arguments.
+Everything else is reported as sent, so treat what the receiver gets with
+the same care as the rest of the request.
 
 Receivers run in the request thread once the response is built. An
 exception in a receiver is logged and does not change the response. A

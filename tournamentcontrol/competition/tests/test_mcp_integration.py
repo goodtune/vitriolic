@@ -14,12 +14,14 @@ from unittest import mock
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth.models import AnonymousUser
+from django.core.exceptions import ImproperlyConfigured
 from django.test.utils import override_settings
 from django.utils import timezone
 from freezegun import freeze_time
 from test_plus import TestCase
 
 from tournamentcontrol.competition import mcp
+from tournamentcontrol.competition.mcp.admin import get_admin_server
 from tournamentcontrol.competition.mcp.signals import mcp_request_handled
 from tournamentcontrol.competition.tests import factories
 
@@ -1366,6 +1368,25 @@ class MCPRequestHandledSignalTests(MCPFixtureMixin, TestCase):
         self.assertGreaterEqual(sent["duration"], 0)
         self.assertIsNone(sent["error"])
 
+    def test_sensitive_arguments_are_redacted(self):
+        result, sent = self.rpc(
+            "tools/call",
+            {"name": "search", "arguments": {"query": "Jane Citizen", "limit": 5}},
+        )
+        self.assertEqual(result["isError"], False)
+        self.assertEqual(sent["tool"], "search")
+        self.assertEqual(sent["arguments"], {"query": "[redacted]", "limit": 5})
+
+    def test_sensitive_arguments_are_redacted_when_rejected(self):
+        # Arguments the SDK rejects are reported too, so they must be
+        # redacted before validation, not after.
+        result, sent = self.rpc(
+            "tools/call",
+            {"name": "search", "arguments": {"query": "Jane Citizen", "limit": "x"}},
+        )
+        self.assertEqual(result["isError"], True)
+        self.assertEqual(sent["arguments"], {"query": "[redacted]", "limit": "x"})
+
     def test_tool_call_with_invalid_arguments(self):
         # The SDK rejects the arguments before the tool runs.
         result, sent = self.rpc(
@@ -1397,3 +1418,46 @@ class MCPRequestHandledSignalTests(MCPFixtureMixin, TestCase):
         with self.assertLogs("tournamentcontrol.competition.mcp.views", "ERROR"):
             result, __ = self.rpc("tools/call", {"name": "whoami", "arguments": {}})
         self.assertEqual(result["structuredContent"]["authenticated"], False)
+
+
+class SensitiveArgumentsTests(TestCase):
+    def test_servers_know_their_sensitive_arguments(self):
+        self.assertEqual(
+            mcp.get_server().sensitive_arguments,
+            {"search": {"query"}, "list_teams": {"query"}},
+        )
+        self.assertEqual(
+            get_admin_server().sensitive_arguments["update_season"],
+            {"live_stream_client_secret"},
+        )
+
+    def test_redact_arguments(self):
+        server = mcp.get_server()
+        self.assertEqual(
+            mcp.redact_arguments(server, "search", {"query": "Jane", "limit": 5}),
+            {"query": mcp.REDACTED, "limit": 5},
+        )
+        # Only the arguments that were sent are reported.
+        self.assertEqual(mcp.redact_arguments(server, "search", {}), {})
+        # Tools with nothing sensitive, unknown tools and arguments that are
+        # not an object are left alone.
+        self.assertEqual(
+            mcp.redact_arguments(server, "get_match", {"match_id": 1}),
+            {"match_id": 1},
+        )
+        self.assertEqual(
+            mcp.redact_arguments(server, "no_such_tool", {"query": "Jane"}),
+            {"query": "Jane"},
+        )
+        self.assertEqual(mcp.redact_arguments(server, "search", "Jane"), "Jane")
+
+    def test_a_misspelt_sensitive_argument_is_refused(self):
+        class Toolset(mcp.CompetitionToolset):
+            @mcp.sensitive_arguments("qeury")
+            def search(self, query: str, limit: int = 10) -> dict:
+                return {}
+
+        with self.assertRaisesMessage(
+            ImproperlyConfigured, "search marks qeury as sensitive"
+        ):
+            mcp.build_server(toolset_class=Toolset)

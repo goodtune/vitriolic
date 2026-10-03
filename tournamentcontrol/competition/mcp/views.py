@@ -40,6 +40,7 @@ from tournamentcontrol.competition.mcp import (
     current_request,
     current_tool_call,
     get_server,
+    redact_arguments,
 )
 from tournamentcontrol.competition.mcp.admin import get_admin_server
 from tournamentcontrol.competition.mcp.signals import mcp_request_handled
@@ -139,7 +140,9 @@ class MCPView(View):
         tool = arguments = None
         if method == "tools/call" and isinstance(message.get("params"), dict):
             tool = message["params"].get("name")
-            arguments = message["params"].get("arguments")
+            arguments = redact_arguments(
+                self.get_server(), tool, message["params"].get("arguments")
+            )
         if call.exception is not None:
             error = type(call.exception).__name__
         else:

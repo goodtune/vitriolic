@@ -14,8 +14,9 @@ from django.dispatch import Signal
 #: ``arguments``
 #:     The arguments of that ``tools/call`` exactly as the client sent them,
 #:     before the SDK validated them (so arguments that failed validation are
-#:     here too), otherwise ``None``. They are whatever the caller typed and
-#:     can include personal details, so take care where they are written.
+#:     here too), otherwise ``None``. Arguments a tool marks with
+#:     ``sensitive_arguments`` (free text that may name a person, secrets)
+#:     have their value replaced by ``"[redacted]"``.
 #: ``duration``
 #:     Seconds spent running the tool, or ``None`` if it did not run (another
 #:     method, an unknown tool, or arguments that failed validation).

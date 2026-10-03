@@ -102,6 +102,7 @@ from tournamentcontrol.competition.mcp import (
     _team_ref,
     _tzname,
     build_server,
+    sensitive_arguments,
     tool_annotations,
 )
 from tournamentcontrol.competition.mcp.admin.forms import (
@@ -1143,6 +1144,7 @@ class AdminToolset(CompetitionToolset):
         return {"saved": True, "season": _season_summary(season)}
 
     @tool_annotations(idempotent=True)
+    @sensitive_arguments("live_stream_client_secret")
     def update_season(
         self,
         season_id: int,
