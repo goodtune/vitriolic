@@ -3,7 +3,11 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
+from django.core.cache import cache
+from django.db import connection
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 from freezegun import freeze_time
 from icalendar import Calendar
 from test_plus import TestCase
@@ -11,6 +15,7 @@ from test_plus import TestCase
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.draw import schemas
 from tournamentcontrol.competition.draw.builders import build
+from tournamentcontrol.competition.models import Match
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin_format
 
@@ -439,9 +444,23 @@ class CalendarQueryTests(TestCase):
             size=10,
         )
 
+    def setUp(self):
+        # Archived feeds are stored in the cache, which outlives each test.
+        cache.clear()
+        # Fetch a feed no test looks at, so that the lookups made by
+        # middleware are already cached and do not count against the tests.
+        self.get(
+            "competition:calendar",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            division=self.division.slug,
+            team=self.team_b.slug,
+        )
+
     def test_team_calendar_query_count(self):
-        # Middleware redirect check (1) + slug resolution (1) + match query (1)
-        with self.assertNumQueries(3):
+        # Middleware redirect check (1) + slug resolution (1) + last match (1)
+        # + match query (1)
+        with self.assertNumQueries(4):
             response = self.get(
                 "competition:calendar",
                 competition=self.competition.slug,
@@ -452,8 +471,9 @@ class CalendarQueryTests(TestCase):
         self.response_200(response)
 
     def test_division_calendar_query_count(self):
-        # Middleware redirect check (1) + slug resolution (1) + match query (1)
-        with self.assertNumQueries(3):
+        # Middleware redirect check (1) + slug resolution (1) + last match (1)
+        # + match query (1)
+        with self.assertNumQueries(4):
             response = self.get(
                 "competition:calendar",
                 competition=self.competition.slug,
@@ -463,8 +483,9 @@ class CalendarQueryTests(TestCase):
         self.response_200(response)
 
     def test_season_calendar_query_count(self):
-        # Middleware redirect check (1) + slug resolution (1) + match query (1)
-        with self.assertNumQueries(3):
+        # Middleware redirect check (1) + slug resolution (1) + last match (1)
+        # + match query (1)
+        with self.assertNumQueries(4):
             response = self.get(
                 "competition:calendar",
                 competition=self.competition.slug,
@@ -477,8 +498,8 @@ class CalendarQueryTests(TestCase):
         self.team_a.club = club
         self.team_a.save()
         # Middleware (3) + season resolution (1) + club resolution (1)
-        # + match query (1)
-        with self.assertNumQueries(6):
+        # + last match (1) + match query (1)
+        with self.assertNumQueries(7):
             response = self.get(
                 "competition:calendar",
                 competition=self.competition.slug,
@@ -743,18 +764,98 @@ class CalendarQueryTests(TestCase):
         # Superuser sees all matches: 10 regular + 3 draft
         self.assertEqual(len(events), 13)
 
-    def test_calendar_cacheable_for_anonymous(self):
-        response = self.get(
+    def _cache_control(self, response):
+        return {
+            directive.strip() for directive in response["Cache-Control"].split(",")
+        }
+
+    def _get_division_calendar(self):
+        return self.get(
             "competition:calendar",
             competition=self.competition.slug,
             season=self.season.slug,
             division=self.division.slug,
         )
+
+    def _finish_all_matches(self):
+        # The factory picks match times at random between 2008 and now, so
+        # one could fall inside the grace period; make them all long past.
+        Match.objects.filter(stage__division__season=self.season).update(
+            datetime=timezone.now() - timedelta(days=30)
+        )
+
+    def _schedule_match_at(self, when, **kwargs):
+        return factories.MatchFactory.create(
+            stage=self.stage,
+            home_team=self.team_a,
+            away_team=self.team_b,
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            **kwargs,
+        )
+
+    def test_calendar_cacheable_for_anonymous(self):
+        self._schedule_match_at(timezone.now() + timedelta(days=1))
+        response = self._get_division_calendar()
         self.response_200(response)
-        cache_control = {
-            directive.strip() for directive in response["Cache-Control"].split(",")
-        }
-        self.assertEqual(cache_control, {"public", "max-age=600"})
+        self.assertEqual(
+            self._cache_control(response),
+            {"public", "max-age=600", "stale-while-revalidate=600"},
+        )
+
+    def test_calendar_with_all_matches_past_is_cacheable_for_a_week(self):
+        self._finish_all_matches()
+        self._schedule_match_at(timezone.now() - timedelta(days=4))
+        response = self._get_division_calendar()
+        self.response_200(response)
+        self.assertEqual(
+            self._cache_control(response),
+            {"public", "max-age=604800", "stale-while-revalidate=604800"},
+        )
+
+    def test_calendar_is_live_until_the_grace_period_has_passed(self):
+        self.division.matches.update(datetime=timezone.now() - timedelta(days=30))
+        self._schedule_match_at(timezone.now() - timedelta(days=2))
+        response = self._get_division_calendar()
+        self.response_200(response)
+        self.assertIn("max-age=600", self._cache_control(response))
+
+    def test_calendar_without_matches_is_live(self):
+        division = factories.DivisionFactory.create(season=self.season)
+        response = self.get(
+            "competition:calendar",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            division=division.slug,
+        )
+        self.response_200(response)
+        self.assertIn("max-age=600", self._cache_control(response))
+
+    def test_archived_calendar_has_a_stable_dtstamp(self):
+        last = self._schedule_match_at(timezone.now() - timedelta(days=10))
+        self.division.matches.exclude(pk=last.pk).update(
+            datetime=timezone.now() - timedelta(days=20)
+        )
+        last.refresh_from_db()
+
+        first = self._get_division_calendar()
+        with freeze_time(timezone.now() + timedelta(hours=5)):
+            second = self._get_division_calendar()
+
+        self.assertEqual(first.content, second.content)
+        cal, events = self._parse_events(first)
+        for event in events:
+            self.assertEqual(event["dtstamp"].dt, last.datetime.replace(microsecond=0))
+
+    def test_live_calendar_dtstamp_is_the_time_of_the_request(self):
+        self._schedule_match_at(timezone.now() + timedelta(days=1))
+        now = timezone.now()
+        with freeze_time(now):
+            response = self._get_division_calendar()
+        cal, events = self._parse_events(response)
+        for event in events:
+            self.assertEqual(event["dtstamp"].dt, now.replace(microsecond=0))
 
     def test_calendar_private_for_superuser(self):
         superuser = factories.SuperUserFactory.create()
@@ -803,6 +904,73 @@ class CalendarQueryTests(TestCase):
         self.response_200()
         cal, events = self._parse_events(self.last_response)
         self.assertEqual(len(events), 13)
+
+    def test_archived_calendar_is_rendered_once(self):
+        self._finish_all_matches()
+        with CaptureQueriesContext(connection) as first_queries:
+            first = self._get_division_calendar()
+        with CaptureQueriesContext(connection) as second_queries:
+            second = self._get_division_calendar()
+
+        # The match query is not needed once the feed has been rendered.
+        self.assertEqual(len(second_queries), len(first_queries) - 1)
+        self.response_200(second)
+        self.assertEqual(first.content, second.content)
+        self.assertEqual(first["Cache-Control"], second["Cache-Control"])
+        self.assertEqual(second["Content-Type"], "text/calendar")
+
+    def test_live_calendar_is_never_rendered_from_the_cache(self):
+        self._schedule_match_at(timezone.now() + timedelta(days=1))
+        with CaptureQueriesContext(connection) as first_queries:
+            self._get_division_calendar()
+        with CaptureQueriesContext(connection) as second_queries:
+            self._get_division_calendar()
+
+        self.assertEqual(len(second_queries), len(first_queries))
+
+    def test_archived_calendar_cache_follows_a_rescheduled_match(self):
+        self._finish_all_matches()
+        self._get_division_calendar()
+
+        # A match moved into the future makes the feed live again at once.
+        self._schedule_match_at(timezone.now() + timedelta(days=1))
+        response = self._get_division_calendar()
+
+        cal, events = self._parse_events(response)
+        self.assertEqual(len(events), 11)
+        self.assertIn("max-age=600", self._cache_control(response))
+
+    def test_archived_calendar_cache_is_not_shared_with_superuser(self):
+        draft_division = factories.DivisionFactory.create(
+            season=self.season, draft=True
+        )
+        draft_stage = factories.StageFactory.create(division=draft_division)
+        factories.MatchFactory.create_batch(stage=draft_stage, size=3)
+        self._finish_all_matches()
+
+        def get_season_calendar():
+            return self.get(
+                "competition:calendar",
+                competition=self.competition.slug,
+                season=self.season.slug,
+            )
+
+        get_season_calendar()
+        cal, events = self._parse_events(self.last_response)
+        self.assertEqual(len(events), 10)
+
+        superuser = factories.SuperUserFactory.create()
+        with self.login(superuser):
+            get_season_calendar()
+        self.response_200()
+        cal, events = self._parse_events(self.last_response)
+        self.assertEqual(len(events), 13)
+        self.assertEqual(self.last_response["Cache-Control"], "private")
+
+        # Nor does the superuser's feed replace the one stored for others.
+        get_season_calendar()
+        cal, events = self._parse_events(self.last_response)
+        self.assertEqual(len(events), 10)
 
     def test_calendar_excludes_unscheduled_matches(self):
         unscheduled = factories.MatchFactory.create(
