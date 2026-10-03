@@ -87,6 +87,7 @@ from tournamentcontrol.competition.query import (
     DivisionQuerySet,
     StageQuerySet,
     StatisticQuerySet,
+    TeamAssociationQuerySet,
 )
 from tournamentcontrol.competition.signals import match_forfeit
 from tournamentcontrol.competition.utils import (
@@ -2014,6 +2015,8 @@ class TeamAssociation(AdminUrlMixin, models.Model):
     number = models.IntegerField(blank=True, null=True)
     is_player = BooleanField(default=True)
 
+    objects = TeamAssociationQuerySet.as_manager()
+
     def __str__(self):
         return self.person.get_full_name
 
@@ -2046,6 +2049,16 @@ class TeamAssociation(AdminUrlMixin, models.Model):
         )
 
     def statistics(self):
+        if hasattr(self, "stat_played"):
+            # Annotated by TeamAssociationQuerySet.with_statistics(), so a
+            # roster is totalled in the query which fetches it rather than
+            # with one more query for each player.
+            return {
+                "played": self.stat_played,
+                "points": self.stat_points,
+                "mvp": self.stat_mvp,
+            }
+
         stats = SimpleScoreMatchStatistic.objects.filter(
             player=self.person, player__teamassociation__team=self.team
         )
