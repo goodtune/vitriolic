@@ -129,6 +129,30 @@ class NavigationTest(TestCase):
             ),
         )
 
+    def test_a_tag_makes_a_single_query(self):
+        # Every page of a site runs several of these, so each one counts.
+        template = Template("{% load common %}{% navigation %}")
+        with self.assertNumQueries(1):
+            template.render(Context())
+
+    def test_the_children_of_a_hidden_node_are_hidden_too(self):
+        hidden = SitemapNode.objects.create(
+            title="Staff Only", slug="staff", hidden_from_navigation=True
+        )
+        SitemapNode.objects.create(title="Rosters", slug="rosters", parent=hidden)
+        disabled = SitemapNode.objects.create(
+            title="Retired", slug="retired", enabled=False
+        )
+        SitemapNode.objects.create(title="Archive", slug="archive", parent=disabled)
+
+        template = Template("{% load common %}{% navigation start_at=0 stop_at=3 %}")
+        value = template.render(Context())
+
+        for title in ("Staff Only", "Rosters", "Retired", "Archive"):
+            with self.subTest(title=title):
+                self.assertNotIn(title, value)
+        self.assertIn("About Us", value)
+
     def test_current_node(self):
         template = Template("{% load common %}{% navigation current_node=node %}")
         context = Context({"node": self.contact})
