@@ -10,6 +10,11 @@ To regenerate the module, run this with ``-m`` and write the output over
 ``touchtechnology/news/month_names.py``::
 
     python -m touchtechnology.news.tests.month_names
+
+Babel is pinned in the ``test`` dependency group because CLDR revises month
+names between releases (Hindi October changed spelling in a recent one). To
+move to a newer Babel, bump the pin and regenerate the module in the same
+change.
 """
 
 import pprint
