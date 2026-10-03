@@ -136,9 +136,10 @@ class MCPView(View):
         """Send ``mcp_request_handled`` describing the request just answered."""
         message = _json(request.body)
         method = message.get("method") if isinstance(message, dict) else None
-        tool = None
+        tool = arguments = None
         if method == "tools/call" and isinstance(message.get("params"), dict):
             tool = message["params"].get("name")
+            arguments = message["params"].get("arguments")
         if call.exception is not None:
             error = type(call.exception).__name__
         else:
@@ -158,6 +159,7 @@ class MCPView(View):
             request=request,
             method=method,
             tool=tool,
+            arguments=arguments,
             duration=call.duration,
             error=error,
         ):

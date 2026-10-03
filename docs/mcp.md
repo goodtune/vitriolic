@@ -146,7 +146,10 @@ Each request the public and administration endpoints answer sends the
 `tournamentcontrol.competition.mcp.signals.mcp_request_handled` signal,
 so a project can log or count how its MCP servers are used without
 patching the views. The receiver is given the Django `request`, the
-JSON-RPC `method`, the `tool` a `tools/call` asked for, the `duration` in
+JSON-RPC `method`, the `tool` a `tools/call` asked for, its `arguments`
+exactly as the client sent them (before validation, so rejected arguments
+are there too; they can include personal details, so take care where they
+are written), the `duration` in
 seconds the tool ran for (`None` if it did not run), and `error`: `None`
 on success, otherwise the class name of the exception the tool raised,
 `"isError"` for a result the SDK marked as an error without the tool
@@ -161,7 +164,9 @@ from tournamentcontrol.competition.mcp.signals import mcp_request_handled
 
 
 @receiver(mcp_request_handled)
-def log_mcp_request(sender, request, method, tool, duration, error, **kwargs):
+def log_mcp_request(
+    sender, request, method, tool, arguments, duration, error, **kwargs
+):
     ...
 ```
 

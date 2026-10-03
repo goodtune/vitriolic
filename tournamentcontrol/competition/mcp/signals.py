@@ -11,6 +11,11 @@ from django.dispatch import Signal
 #:     or ``None`` when the body is not a single JSON-RPC request.
 #: ``tool``
 #:     The name of the tool asked for by a ``tools/call``, otherwise ``None``.
+#: ``arguments``
+#:     The arguments of that ``tools/call`` exactly as the client sent them,
+#:     before the SDK validated them (so arguments that failed validation are
+#:     here too), otherwise ``None``. They are whatever the caller typed and
+#:     can include personal details, so take care where they are written.
 #: ``duration``
 #:     Seconds spent running the tool, or ``None`` if it did not run (another
 #:     method, an unknown tool, or arguments that failed validation).

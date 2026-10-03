@@ -1351,6 +1351,7 @@ class MCPRequestHandledSignalTests(MCPFixtureMixin, TestCase):
         __, sent = self.rpc("tools/list")
         self.assertEqual(sent["method"], "tools/list")
         self.assertIsNone(sent["tool"])
+        self.assertIsNone(sent["arguments"])
         self.assertIsNone(sent["duration"])
         self.assertIsNone(sent["error"])
 
@@ -1361,6 +1362,7 @@ class MCPRequestHandledSignalTests(MCPFixtureMixin, TestCase):
         self.assertEqual(result["isError"], False)
         self.assertEqual(sent["method"], "tools/call")
         self.assertEqual(sent["tool"], "upcoming_events")
+        self.assertEqual(sent["arguments"], {"days": 365})
         self.assertGreaterEqual(sent["duration"], 0)
         self.assertIsNone(sent["error"])
 
@@ -1371,6 +1373,8 @@ class MCPRequestHandledSignalTests(MCPFixtureMixin, TestCase):
         )
         self.assertEqual(result["isError"], True)
         self.assertEqual(sent["tool"], "list_matches")
+        # The rejected arguments are reported, to show what the client sent.
+        self.assertEqual(sent["arguments"], {"status": "finished"})
         self.assertIsNone(sent["duration"])
         self.assertEqual(sent["error"], "isError")
 
