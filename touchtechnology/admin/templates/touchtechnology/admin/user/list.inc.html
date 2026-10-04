@@ -3,6 +3,13 @@
 {% load common %}
 {% load gravatar %}
 
+{% block table-headings %}
+	{{ block.super }}
+	{# Registered is the first to go on a narrow screen, last login is kept #}
+	<th class="hidden-xs">{% trans "Registered" %}</th>
+	<th>{% trans "Last login" %}</th>
+{% endblock %}
+
 {% block table-columns %}
 	<td>
 		<img src="{% gravatar_url obj.email 24 %}" class="img-circle" alt="{{ obj.email }}">&nbsp;
@@ -12,7 +19,11 @@
 			{{ obj.get_full_name|default:obj.get_username }}
 		{% endif %}
 	</td>
+	<td class="hidden-xs">{{ obj.date_joined|date:"j M Y" }}</td>
+	<td>{% if obj.last_login %}{{ obj.last_login|date:"j M Y" }}{% else %}{% trans "Never" %}{% endif %}</td>
 {% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}
 
 {% block row-buttons-items %}
 	{% if change_perm in object_perms %}
