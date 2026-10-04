@@ -1231,6 +1231,31 @@ class TeamForm(MySidelineTitleMixin, SuperUserSlugMixin, ModelForm):
         return title
 
 
+class TeamBulkCreateForm(BootstrapFormControlMixin, ModelForm):
+    """
+    The name of each of several new teams and, in a competition with clubs,
+    its club (the name then defaults to the club's); the rest can be set on
+    each team later.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        clubs = self.instance.division.season.competition.clubs.all()
+        if clubs.exists():
+            self.fields["club"].queryset = clubs
+            self.fields["title"].required = False
+        else:
+            self.fields.pop("club")
+
+    class Meta:
+        model = Team
+        # The club is cleaned first: an empty name defaults to the club's.
+        fields = ("club", "title")
+        labels = {"title": _("Name")}
+
+    clean_title = TeamForm.clean_title
+
+
 class DrawFormatForm(BootstrapFormControlMixin, ModelForm):
     def clean_text(self):
         text = self.cleaned_data.get("text").strip()

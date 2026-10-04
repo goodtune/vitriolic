@@ -1,6 +1,25 @@
 {% extends "mvp/list.split.inc.html" %}
 {% load i18n %}
 
+{% block actions %}
+	{% url 'admin:fixja:competition:season:division:team:bulk' competition.pk season.pk division.pk as bulk_url %}
+	{% if bulk_url %}
+		<a href="#" title="{% trans "Add several teams" %}" role="button" data-toggle="modal" data-target="#bulkCreateModal_team">
+			<i class="fa fa-th-list"></i>
+		</a>
+	{% endif %}
+	{{ block.super }}
+{% endblock %}
+
+{% block modal %}
+	{{ block.super }}
+	{% url 'admin:fixja:competition:season:division:team:bulk' competition.pk season.pk division.pk as bulk_url %}
+	{% if bulk_url %}
+		{% trans "Add several teams" as bulk_title %}
+		{% include "tournamentcontrol/competition/admin/bulk_create_modal.inc.html" with name="team" url=bulk_url title=bulk_title %}
+	{% endif %}
+{% endblock %}
+
 {% block table-headings %}
 	{{ block.super }}
 	<th>{% trans "Slug" %}</th>

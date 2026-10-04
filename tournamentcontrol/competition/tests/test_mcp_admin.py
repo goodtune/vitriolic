@@ -36,6 +36,7 @@ from tournamentcontrol.competition.models import (
     LiveStreamKey,
     Match,
     Season,
+    Team,
 )
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.tests.test_mcp_integration import (
@@ -68,6 +69,7 @@ WRITE_TOOLS = {
     "update_division",
     "delete_division",
     "create_team",
+    "create_teams",
     "update_team",
     "delete_team",
     "withdraw_team",
@@ -603,6 +605,83 @@ class BulkCreateTests(AdminFixtureMixin, TestCase):
         staff = type(self.staff).objects.get(pk=self.staff.pk)
         res = self.admin(staff).create_divisions(items)
         self.assertEqual(res["divisions"][0]["title"], "Men's 30s")
+
+    def test_create_teams(self):
+        self.competition.clubs.set([self.australia, self.france])
+        last = {
+            division.pk: division.teams.order_by("order").last().order
+            for division in (self.mens, self.womens)
+        }
+        res = self.admin().create_teams(
+            [
+                {"division_id": self.womens.pk, "club_id": self.france.pk},
+                {"division_id": self.mens.pk, "title": "Barbarians"},
+                {
+                    "division_id": self.womens.pk,
+                    "club_id": self.australia.pk,
+                    "title": "Australia B",
+                    "copy": "Development squad",
+                },
+            ]
+        )
+        self.assertEqual(
+            [(t["title"], set(t)) for t in res["teams"]],
+            [
+                ("France", {"id", "title", "slug"}),
+                ("Barbarians", {"id", "title", "slug"}),
+                ("Australia B", {"id", "title", "slug"}),
+            ],
+        )
+        self.assertEqual(
+            list(
+                Team.objects.filter(pk__in=[t["id"] for t in res["teams"]])
+                .order_by("pk")
+                .values_list("division", "club", "order", "copy")
+            ),
+            [
+                (self.womens.pk, self.france.pk, last[self.womens.pk] + 1, ""),
+                (self.mens.pk, None, last[self.mens.pk] + 1, ""),
+                (
+                    self.womens.pk,
+                    self.australia.pk,
+                    last[self.womens.pk] + 2,
+                    "Development squad",
+                ),
+            ],
+        )
+
+    def test_create_teams_verbose(self):
+        res = self.admin().create_teams(
+            [{"division_id": self.womens.pk, "title": "France"}], verbose=True
+        )
+        self.assertEqual(res["teams"][0]["division"]["id"], self.womens.pk)
+
+    def test_create_teams_saves_all_or_none(self):
+        count = Team.objects.count()
+        self.assertToolError(
+            "Nothing was saved. "
+            "team 1 (France): Validation failed: title: Team with this Title "
+            "already exists. "
+            "team 2: Validation failed: title: This field is required. "
+            "team 3 (Spain): Division 999999 was not found.",
+            self.admin().create_teams,
+            [
+                {"division_id": self.womens.pk, "title": "France"},
+                {"division_id": self.womens.pk, "title": "France"},
+                {"division_id": self.womens.pk},
+                {"division_id": 999999, "title": "Spain"},
+            ],
+        )
+        self.assertEqual(Team.objects.count(), count)
+
+    def test_create_teams_permission(self):
+        items = [{"division_id": self.womens.pk, "title": "France"}]
+        self.assertToolError(
+            "Permission denied: add team requires the "
+            "competition.add_team permission.",
+            self.admin(self.staff).create_teams,
+            items,
+        )
 
 
 @freeze_time(NOW)

@@ -203,6 +203,7 @@ Records of the same kind are best added in one call:
 | Tool | Does |
 | --- | --- |
 | `create_divisions(divisions=[{season_id, title, …}, …])` | Several divisions, each with the arguments of `create_division`. |
+| `create_teams(teams=[{division_id, title or club_id, …}, …])` | Several teams, each with the arguments of `create_team`; one call can enter a club's team in every division. |
 
 A bulk tool takes up to 50 items, each with the arguments of the
 single-record tool including its parent, so one call can fill several
@@ -339,8 +340,9 @@ as its identifiers and scheduling fields only:
 
 ## Changelog
 
-- **Bulk creation.** `create_divisions` adds several divisions in one call,
-  all or none (see [Bulk creation](#bulk-creation)).
+- **Bulk creation.** `create_divisions` and `create_teams` add several
+  divisions or teams in one call, all or none (see
+  [Bulk creation](#bulk-creation)).
 - **Byes and withdrawals.** `create_match(is_bye=true)` creates a single
   bye; `update_match` gained `is_bye`, `clear_home_team` and
   `clear_away_team` to convert an unplayed match to a bye (releasing its

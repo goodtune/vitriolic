@@ -3222,3 +3222,132 @@ class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
             self.post(self.viewname, *self.args, data=data)
             self.response_302()
         self.assertEqual(self.season.divisions.get().title, "Men's Open")
+
+
+class BulkCreateTeamTests(MessagesTestMixin, TestCase):
+    """Add several teams to a division at once."""
+
+    viewname = "admin:fixja:competition:season:division:team:bulk"
+
+    def setUp(self):
+        super().setUp()
+        self.division = factories.DivisionFactory.create()
+        self.competition = self.division.season.competition
+        self.args = (self.competition.pk, self.division.season_id, self.division.pk)
+
+    def rows(self, *rows):
+        data = {
+            "form-TOTAL_FORMS": str(len(rows)),
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "50",
+        }
+        for index, row in enumerate(rows):
+            for name, value in row.items():
+                data[f"form-{index}-{name}"] = value
+        return data
+
+    def test_division_edit_offers_bulk_create(self):
+        with self.login(self.superuser):
+            self.get("admin:fixja:competition:season:division:edit", *self.args)
+            self.response_200()
+            self.assertResponseContains(
+                '<button type="button" class="btn btn-primary js-bulk-create" '
+                f'data-url="{self.reverse(self.viewname, *self.args)}">'
+                "Continue</button>"
+            )
+
+    def test_get_shows_count_blank_rows_after_existing_teams(self):
+        factories.TeamFactory.create(division=self.division, order=2)
+        self.assertLoginRequired(self.viewname, *self.args)
+        with self.login(self.superuser):
+            self.get(self.viewname, *self.args, data={"count": "4"})
+            self.response_200()
+            self.assertResponseContains(
+                '<input type="hidden" name="form-TOTAL_FORMS" value="4" '
+                'id="id_form-TOTAL_FORMS">'
+            )
+            formset = self.get_context("formset")
+            self.assertEqual([form.instance.order for form in formset], [3, 4, 5, 6])
+            self.assertEqual(
+                [field.name for field in formset.forms[0].visible_fields()], ["title"]
+            )
+
+    def test_post_creates_teams_in_row_order(self):
+        factories.TeamFactory.create(division=self.division, title="Alpha", order=1)
+        data = self.rows({"title": "Bravo"}, {"title": ""}, {"title": "Charlie"})
+        with self.login(self.superuser):
+            self.post(self.viewname, *self.args, data=data)
+            self.response_302()
+            self.assertRedirects(
+                self.last_response,
+                self.division.urls["edit"] + "#teams-tab",
+                fetch_redirect_response=False,
+            )
+        self.assertEqual(
+            list(self.division.teams.order_by("order").values_list("title", "order")),
+            [("Alpha", 1), ("Bravo", 2), ("Charlie", 3)],
+        )
+
+    def test_post_with_clubs_defaults_title_to_club(self):
+        nzl = factories.ClubFactory.create(title="New Zealand")
+        aus = factories.ClubFactory.create(title="Australia")
+        other = factories.ClubFactory.create(title="Elsewhere")
+        self.competition.clubs.set([nzl, aus])
+        with self.login(self.superuser):
+            self.get(self.viewname, *self.args)
+            formset = self.get_context("formset")
+            self.assertEqual(
+                list(formset.forms[0].fields["club"].queryset.order_by("title")),
+                [aus, nzl],
+            )
+            rows = [
+                {"title": "", "club": str(nzl.pk)},
+                {"title": "Kangaroos", "club": str(aus.pk)},
+            ]
+            self.post(
+                self.viewname,
+                *self.args,
+                data=self.rows(*rows, {"title": "", "club": str(other.pk)}),
+            )
+            self.response_200()
+            self.assertEqual(
+                [list(form.errors) for form in self.get_context("formset")],
+                [[], [], ["club", "title"]],
+            )
+            self.post(self.viewname, *self.args, data=self.rows(*rows))
+            self.response_302()
+        self.assertEqual(
+            list(self.division.teams.order_by("order").values_list("title", "club")),
+            [("New Zealand", nzl.pk), ("Kangaroos", aus.pk)],
+        )
+
+    def test_post_refuses_duplicate_titles(self):
+        factories.TeamFactory.create(division=self.division, title="Alpha")
+        data = self.rows({"title": "Bravo"}, {"title": "Bravo"}, {"title": "Alpha"})
+        with self.login(self.superuser):
+            self.post(self.viewname, *self.args, data=data)
+            self.response_200()
+            self.assertEqual(
+                [form.errors.get("title") for form in self.get_context("formset")],
+                [
+                    None,
+                    ["This title is already used in row 1."],
+                    ["Team with this Title already exists."],
+                ],
+            )
+        self.assertEqual(self.division.teams.count(), 1)
+
+    def test_permission_required(self):
+        staff = UserFactory.create(is_staff=True)
+        data = self.rows({"title": "Bravo"})
+        with self.login(staff):
+            self.get(self.viewname, *self.args)
+            self.response_403()
+            self.post(self.viewname, *self.args, data=data)
+            self.response_403()
+        assign_perm("competition.add_team", staff)
+        with self.login(staff):
+            self.post(self.viewname, *self.args, data=data)
+            self.response_302()
+        self.assertEqual(self.division.teams.get().title, "Bravo")
