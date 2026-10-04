@@ -77,6 +77,7 @@ class MatchCollection(object):
         self.iterable = []
         # QuerySet faking attributes
         self.ordered = True
+        self.totally_ordered = True
         # self.db = 'default'
 
     def __add__(self, other):
