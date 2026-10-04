@@ -73,6 +73,7 @@ from tournamentcontrol.competition.forms import (
     StageGroupForm,
     TeamAssociationForm,
     TeamAssociationFormSet,
+    TeamBulkCreateForm,
     TeamForm,
     TeamRoleForm,
     UndecidedTeamForm,
@@ -407,6 +408,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         team_urls = (
             [
                 path("add/", self.edit_team, name="add"),
+                path("bulk/", self.bulk_create_team, name="bulk"),
                 path("<int:team_id>/", self.edit_team, name="edit"),
                 path("<int:team_id>/delete/", self.delete_team, name="delete"),
                 path("<int:team_id>/permissions/", self.perms_team, name="perms"),
@@ -1547,6 +1549,24 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_save_redirect=post_save_redirect,
             permission_required=True,
             extra_context=extra_context,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def bulk_create_team(self, request, division, extra_context, **kwargs):
+        division_url = division.urls["edit"] + "#teams-tab"
+        return self.generic_bulk_create(
+            request,
+            Team,
+            form_class=TeamBulkCreateForm,
+            formset_class=bulk_create_formset_factory(
+                TeamBulkCreateForm, bulk_create_count(request)
+            ),
+            formset_kwargs={"parent": division},
+            post_save_redirect=self.redirect(division_url),
+            templates=self.template_path("bulk_create.html", "team"),
+            permission_required=True,
+            extra_context={"cancel_url": division_url, **extra_context},
         )
 
     @competition_by_pk_m

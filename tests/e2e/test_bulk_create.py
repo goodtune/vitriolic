@@ -68,3 +68,37 @@ class TestBulkCreate:
         assert list(
             season.divisions.order_by("order").values_list("title", "order")
         ) == [("Mixed", 1), ("Men's Open", 2), ("Women's Open", 3)]
+
+    def test_bulk_create_teams(
+        self, authenticated_page: Page, live_server, season, screenshot_dir
+    ):
+        division = season.divisions.get()
+        page = authenticated_page
+        page.goto(f"{live_server.url}{division.urls['edit']}#teams-tab")
+
+        count = open_modal(page, "team")
+        expect(count).to_be_visible()
+        count.fill("3")
+        page.screenshot(path=str(screenshot_dir / "bulk_create_teams_modal.png"))
+        page.click("#bulkCreateModal_team .js-bulk-create")
+
+        expect(page).to_have_url(
+            f"{live_server.url}{division.urls['edit']}teams/bulk/?count=3"
+        )
+        expect(page.locator("table.bulk-create tbody tr")).to_have_count(3)
+        page.fill('input[name="form-0-title"]', "Alpha")
+        page.fill('input[name="form-2-title"]', "Charlie")
+        page.screenshot(
+            path=str(screenshot_dir / "bulk_create_teams_form.png"), full_page=True
+        )
+        page.click('button[type="submit"]')
+
+        expect(page).to_have_url(f"{live_server.url}{division.urls['edit']}#teams-tab")
+        expect(page.locator("#teams-tab")).to_contain_text("Charlie")
+        page.screenshot(
+            path=str(screenshot_dir / "bulk_create_teams_saved.png"), full_page=True
+        )
+        assert list(division.teams.order_by("order").values_list("title", "order")) == [
+            ("Alpha", 1),
+            ("Charlie", 2),
+        ]

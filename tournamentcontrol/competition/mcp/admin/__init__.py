@@ -172,10 +172,10 @@ tools (`search`, `get_season`, `list_teams`, `list_matches`, `get_match`,
 administrator you also see disabled competitions and draft divisions.
 
 When there are several records of the same kind to add, add them in one call
-with the bulk tool rather than one at a time: `create_divisions`. It takes a
-list of the same arguments as its single-record tool (each naming its
-parent, so one call can fill several parents) and saves all of them or, if
-any is refused, none, reporting every item that failed.
+with the bulk tool rather than one at a time: `create_divisions` and
+`create_teams`. Each takes a list of the same arguments as its single-record
+tool (each naming its parent, so one call can fill several parents) and saves
+all of them or, if any is refused, none, reporting every item that failed.
 
 Draws: do not create a season's matches one by one. Configure the season the
 way the admin site's Draw Generation wizard expects and let the server build
@@ -304,6 +304,21 @@ class DivisionSpec(BulkSpec):
     color: str | None = None
     # "copy" would shadow ``BaseModel.copy``.
     copy_: str | None = Field(None, alias="copy")
+    slug: str | None = None
+
+
+class TeamSpec(BulkSpec):
+    """One team to enter (see ``create_teams``)."""
+
+    division_id: int
+    title: str | None = None
+    club_id: int | None = None
+    short_title: str | None = None
+    # "copy" would shadow ``BaseModel.copy``.
+    copy_: str | None = Field(None, alias="copy")
+    timeslots_after: datetime.time | None = None
+    timeslots_before: datetime.time | None = None
+    team_clash_ids: list[int] | None = None
     slug: str | None = None
 
 
@@ -1049,7 +1064,8 @@ class AdminToolset(CompetitionToolset):
                     with transaction.atomic():
                         created.append(create(spec))
                 except ToolError as exc:
-                    errors.append(f"{what} {index} ({spec.title}): {exc}")
+                    title = f" ({spec.title})" if spec.title else ""
+                    errors.append(f"{what} {index}{title}: {exc}")
             if errors:
                 transaction.set_rollback(True)
         if errors:
@@ -1686,31 +1702,54 @@ class AdminToolset(CompetitionToolset):
         scheduling. ``verbose=false`` returns just the team's id, title and
         slug.
         """
+        team = self._create_team(
+            division_id,
+            title=title,
+            club_id=club_id,
+            short_title=short_title,
+            copy=copy,
+            timeslots_after=timeslots_after,
+            timeslots_before=timeslots_before,
+            team_clash_ids=team_clash_ids,
+            slug=slug,
+        )
+        if not verbose:
+            return {"saved": True, "team": _ref(team)}
+        return {"saved": True, "team": _team_summary(team)}
+
+    @tool_annotations()
+    def create_teams(
+        self, teams: list[TeamSpec], verbose: bool = False
+    ) -> dict[str, Any]:
+        """
+        Enter several teams in one call (up to 50), each after the teams
+        already in its division, in the order given. Each item takes the
+        arguments of ``create_team``, including its ``division_id``, so one
+        call can enter a club's team in every division it plays in. All of
+        them are saved or, if any is refused, none; the error then names
+        every item that failed and why.
+
+        ``verbose=false`` returns each team's id, title and slug;
+        ``verbose=true`` the full record, as ``create_team`` does.
+
+        Example: ``teams=[{"division_id": 7, "club_id": 3}, {"division_id": 8,
+        "club_id": 3}, {"division_id": 7, "title": "Barbarians"}]``.
+        """
+        created = self._bulk_create(
+            Team,
+            teams,
+            TeamSpec,
+            lambda spec: self._create_team(**spec.model_dump(by_alias=True)),
+        )
+        summary = _team_summary if verbose else _ref
+        return {"saved": True, "teams": [summary(t) for t in created]}
+
+    def _create_team(self, division_id, club_id, team_clash_ids, **changes):
         division = self._division(division_id)
         self._require("add", Team)
         team = next_related_factory(Team, division)
-        team = self._save(
-            TeamForm,
-            team,
-            {
-                "title": title,
-                "club": club_id,
-                "short_title": short_title,
-                "copy": copy,
-                "timeslots_after": timeslots_after,
-                "timeslots_before": timeslots_before,
-                "team_clashes": team_clash_ids,
-                "slug": slug,
-            },
-            division,
-            user=self._user(),
-        )
-        if not verbose:
-            return {
-                "saved": True,
-                "team": {"id": team.pk, "title": team.title, "slug": team.slug},
-            }
-        return {"saved": True, "team": _team_summary(team)}
+        changes.update(club=club_id, team_clashes=team_clash_ids)
+        return self._save(TeamForm, team, changes, division, user=self._user())
 
     @tool_annotations(idempotent=True)
     def update_team(
