@@ -5,8 +5,8 @@ from unittest.mock import ANY, MagicMock, PropertyMock, patch
 from zoneinfo import ZoneInfo
 
 from dateutil.rrule import DAILY
-from django import VERSION
 from django.contrib import messages
+from django.contrib.messages.test import MessagesTestMixin
 from django.template import Context, Template
 from django.urls import reverse
 from guardian.shortcuts import assign_perm
@@ -30,13 +30,6 @@ from tournamentcontrol.competition.models import (
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin, round_robin_format
-
-try:
-    from django.contrib.messages.test import MessagesTestMixin
-except ImportError:  # Django < 5.0
-    from tournamentcontrol.competition.tests.test_utils import (
-        MessagesTestMixin,
-    )
 
 
 class TestCase(BaseTestCase):
@@ -429,9 +422,6 @@ class GoodViewTests(TestCase):
         match = factories.MatchFactory.create()
         self.assertGoodNamespace(match)
 
-    @unittest.skipIf(
-        VERSION > (4, 0), "FIXME: Django 4.1+ error seems to be factory_boy related"
-    )
     def test_pool(self):
         pool = factories.StageGroupFactory.create()
         self.assertGoodNamespace(pool)
@@ -1428,9 +1418,6 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.get(team._get_admin_namespace() + ":delete", *team._get_url_args())
         self.response_404()
 
-    @unittest.skipIf(
-        VERSION > (4, 0), "FIXME: Django 4.1+ error seems to be factory_boy related"
-    )
     def test_bug_80_add_stagegroup(self):
         "Add Pool should gain order equal to max(order) + 1"
         pool = factories.StageGroupFactory.create()
@@ -1442,7 +1429,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             "carry_ladder": "0",
         }
         add_pool = pool.url_names["add"]
-        self.post(add_pool.url_name, *add_pool.args, data=data)
+        self.post(add_pool.url_name, *add_pool.args[:-1], data=data)
         self.response_302()
         z = pool.stage.pools.latest("order")
         self.assertEqual(z.order, pool.order + 1)
@@ -1665,21 +1652,20 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.assertQuerySetEqual(Team.objects.all(), [team])
 
         # Check that error message was set
-        if VERSION >= (5, 0):
-            self.assertMessages(
-                self.last_response,
-                [
-                    messages.Message(
-                        level=messages.ERROR,
-                        message=(
-                            f'Cannot delete {division._meta.verbose_name} "{division.title}" '
-                            f"because it is still referenced by: "
-                            f"1 stage: {stage.title}; 1 team: {team.title}. "
-                            "Please delete or move these related objects first."
-                        ),
-                    )
-                ],
-            )
+        self.assertMessages(
+            self.last_response,
+            [
+                messages.Message(
+                    level=messages.ERROR,
+                    message=(
+                        f'Cannot delete {division._meta.verbose_name} "{division.title}" '
+                        f"because it is still referenced by: "
+                        f"1 stage: {stage.title}; 1 team: {team.title}. "
+                        "Please delete or move these related objects first."
+                    ),
+                )
+            ],
+        )
 
     def test_delete_division_without_protected_objects(self):
         """
@@ -1700,16 +1686,15 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.assertQuerySetEqual(Division.objects.all(), [])
 
         # Check that success message was displayed
-        if VERSION >= (5, 0):
-            self.assertMessages(
-                self.last_response,
-                [
-                    messages.Message(
-                        level=messages.SUCCESS,
-                        message=f"The {division._meta.verbose_name} has been deleted.",
-                    )
-                ],
-            )
+        self.assertMessages(
+            self.last_response,
+            [
+                messages.Message(
+                    level=messages.SUCCESS,
+                    message=f"The {division._meta.verbose_name} has been deleted.",
+                )
+            ],
+        )
 
     def test_delete_stage_with_protected_objects(self):
         """
@@ -1732,20 +1717,19 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.assertQuerySetEqual(StageGroup.objects.all(), [pool])
 
         # Check that error message was set
-        if VERSION >= (5, 0):
-            self.assertMessages(
-                self.last_response,
-                [
-                    messages.Message(
-                        level=messages.ERROR,
-                        message=(
-                            f'Cannot delete {stage._meta.verbose_name} "{stage.title}" because '
-                            f"it is still referenced by: 1 pool: {pool.title}. "
-                            "Please delete or move these related objects first."
-                        ),
-                    )
-                ],
-            )
+        self.assertMessages(
+            self.last_response,
+            [
+                messages.Message(
+                    level=messages.ERROR,
+                    message=(
+                        f'Cannot delete {stage._meta.verbose_name} "{stage.title}" because '
+                        f"it is still referenced by: 1 pool: {pool.title}. "
+                        "Please delete or move these related objects first."
+                    ),
+                )
+            ],
+        )
 
     def test_draw_generation_wizard_empty_form_bug(self):
         """
