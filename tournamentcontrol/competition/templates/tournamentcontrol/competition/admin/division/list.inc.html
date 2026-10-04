@@ -5,7 +5,17 @@
 	<a href="{% url 'admin:fixja:competition:season:json-builder' competition.pk season.pk %}" title="{% trans "JSON Division Builder" %}" role="button">
 		<i class="fa fa-sitemap"></i>
 	</a>
+	<a href="#" title="{% trans "Add several divisions" %}" role="button" data-toggle="modal" data-target="#bulkCreateModal_division">
+		<i class="fa fa-th-list"></i>
+	</a>
 	{{ block.super }}
+{% endblock %}
+
+{% block modal %}
+	{{ block.super }}
+	{% url 'admin:fixja:competition:season:division:bulk' competition.pk season.pk as bulk_url %}
+	{% trans "Add several divisions" as bulk_title %}
+	{% include "tournamentcontrol/competition/admin/bulk_create_modal.inc.html" with name="division" url=bulk_url title=bulk_title %}
 {% endblock %}
 
 {% block table-headings %}

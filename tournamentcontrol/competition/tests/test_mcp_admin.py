@@ -64,6 +64,7 @@ WRITE_TOOLS = {
     "update_ground",
     "delete_ground",
     "create_division",
+    "create_divisions",
     "update_division",
     "delete_division",
     "create_team",
@@ -503,6 +504,105 @@ class BuildCompetitionTests(AdminFixtureMixin, TestCase):
             pool["id"],
             team_ids=[self.aus_men.pk],
         )
+
+
+@freeze_time(NOW)
+class BulkCreateTests(AdminFixtureMixin, TestCase):
+    """Add several records of the same kind in one call."""
+
+    def division(self, title, **kwargs):
+        return {
+            "season_id": self.season.pk,
+            "title": title,
+            "points_formula": "3*win + 2*draw + 1*loss",
+            "forfeit_for_score": 5,
+            "forfeit_against_score": 0,
+            **kwargs,
+        }
+
+    def test_create_divisions(self):
+        res = self.admin().create_divisions(
+            [
+                self.division("Men's 30s", draft=True),
+                self.division("Women's 27s", copy="Over 27s"),
+            ]
+        )
+        self.assertEqual(res["saved"], True)
+        self.assertEqual(
+            [d["title"] for d in res["divisions"]], ["Men's 30s", "Women's 27s"]
+        )
+        self.assertEqual(set(res["divisions"][0]), {"id", "title", "slug"})
+        self.assertEqual(
+            list(
+                self.season.divisions.order_by("order").values_list(
+                    "title", "order", "draft", "copy"
+                )
+            ),
+            [
+                ("Men's Open", 1, False, ""),
+                ("Women's Open", 2, False, ""),
+                ("Mixed Open", 3, True, ""),
+                ("Men's 30s", 4, True, ""),
+                ("Women's 27s", 5, False, "Over 27s"),
+            ],
+        )
+
+    def test_create_divisions_verbose(self):
+        res = self.admin().create_divisions([self.division("Men's 30s")], verbose=True)
+        self.assertEqual(res["divisions"][0]["season"]["id"], self.season.pk)
+        self.assertEqual(res["divisions"][0]["team_count"], 0)
+
+    def test_create_divisions_saves_all_or_none(self):
+        count = self.season.divisions.count()
+        self.assertToolError(
+            "Nothing was saved. "
+            "division 1 (Men's 30s): Validation failed: title: Division with "
+            "this Title already exists. "
+            "division 2 (Bad): Validation failed: points_formula: Expected end "
+            "of text, found 'wins'  (at char 2), (line:1, col:3) "
+            "division 3 (Elsewhere): Season 999999 was not found.",
+            self.admin().create_divisions,
+            [
+                self.division("Men's 30s"),
+                self.division("Men's 30s"),
+                self.division("Bad", points_formula="3 wins"),
+                self.division("Elsewhere", season_id=999999),
+            ],
+        )
+        self.assertEqual(self.season.divisions.count(), count)
+
+    def test_create_divisions_limits(self):
+        admin = self.admin()
+        self.assertToolError("Give one or more divisions.", admin.create_divisions, [])
+        self.assertToolError(
+            "Give at most 50 divisions at once.",
+            admin.create_divisions,
+            [self.division(f"D{n}") for n in range(51)],
+        )
+        self.assertToolError(
+            "division 0: title: Field required",
+            admin.create_divisions,
+            [{"season_id": self.season.pk}],
+        )
+        self.assertToolError(
+            "division 0: points: Extra inputs are not permitted",
+            admin.create_divisions,
+            [self.division("Men's 30s", points="3*win")],
+        )
+
+    def test_create_divisions_permission(self):
+        items = [self.division("Men's 30s")]
+        self.assertToolError(
+            "Permission denied: add division requires the "
+            "competition.add_division permission.",
+            self.admin(self.staff).create_divisions,
+            items,
+        )
+        assign_perm("competition.add_division", self.staff)
+        # A fresh instance, without the permissions cached by the first call.
+        staff = type(self.staff).objects.get(pk=self.staff.pk)
+        res = self.admin(staff).create_divisions(items)
+        self.assertEqual(res["divisions"][0]["title"], "Men's 30s")
 
 
 @freeze_time(NOW)

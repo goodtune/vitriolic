@@ -48,6 +48,7 @@ from tournamentcontrol.competition.forms import (
     ClubAssociationForm,
     ClubRoleForm,
     CompetitionForm,
+    DivisionBulkCreateForm,
     DivisionForm,
     DivisionStructureJSONFormSet,
     DrawFormatForm,
@@ -76,6 +77,7 @@ from tournamentcontrol.competition.forms import (
     TeamRoleForm,
     UndecidedTeamForm,
     VenueForm,
+    bulk_create_formset_factory,
 )
 from tournamentcontrol.competition.models import (
     Club,
@@ -137,6 +139,17 @@ YOUTUBE_AUTH_EXPIRED_MESSAGE = _(
 )
 
 log = logging.getLogger(__name__)
+
+
+def bulk_create_count(request, default=5):
+    """
+    The number of blank rows a bulk create view shows, from the ``count``
+    query parameter.
+    """
+    try:
+        return int(request.GET.get("count", default))
+    except ValueError:
+        return default
 
 
 def next_related_factory(model, parent=None, fk_name=None):
@@ -409,6 +422,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         division_urls = (
             [
                 path(r"add/", self.edit_division, name="add"),
+                path("bulk/", self.bulk_create_division, name="bulk"),
                 path("<int:division_id>/", self.edit_division, name="edit"),
                 path("<int:division_id>/delete/", self.delete_division, name="delete"),
                 path(
@@ -1322,6 +1336,26 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_save_redirect=self.redirect(season.urls["edit"]),
             permission_required=True,
             extra_context=extra_context,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def bulk_create_division(self, request, season, extra_context, **kwargs):
+        return self.generic_bulk_create(
+            request,
+            Division,
+            form_class=DivisionBulkCreateForm,
+            formset_class=bulk_create_formset_factory(
+                DivisionBulkCreateForm, bulk_create_count(request)
+            ),
+            formset_kwargs={"parent": season},
+            post_save_redirect=self.redirect(season.urls["edit"] + "#divisions-tab"),
+            templates=self.template_path("bulk_create.html", "division"),
+            permission_required=True,
+            extra_context={
+                "cancel_url": season.urls["edit"] + "#divisions-tab",
+                **extra_context,
+            },
         )
 
     @competition_by_pk_m

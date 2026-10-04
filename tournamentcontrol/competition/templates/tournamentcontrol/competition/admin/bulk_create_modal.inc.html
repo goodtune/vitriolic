@@ -1,0 +1,48 @@
+{% load i18n %}
+{% comment %}
+	Ask how many records to add, then open the bulk create view at ``url``
+	with that many rows (at most 50, BULK_CREATE_MAX in forms.py). List
+	includes render inside the edit <form> of their parent, so this must not be a <form> of its own nor submit it.
+{% endcomment %}
+<div class="modal modal-styled fade bulk-create" id="bulkCreateModal_{{ name }}" tabindex="-1" role="dialog" aria-labelledby="bulkCreateModalLabel_{{ name }}" aria-hidden="true">
+	<div class="modal-dialog modal-sm">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-label="{% trans "Close" %}">
+					<span aria-hidden="true">&times;</span>
+				</button>
+				<h4 class="modal-title" id="bulkCreateModalLabel_{{ name }}">{{ title }}</h4>
+			</div>
+			<div class="modal-body">
+				<label for="bulkCreateCount_{{ name }}">{% trans "How many do you want to add?" %}</label>
+				<input type="number" class="form-control js-bulk-create-count" id="bulkCreateCount_{{ name }}" min="1" max="50" value="5">
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-default" data-dismiss="modal">{% trans "Cancel" %}</button>
+				<button type="button" class="btn btn-primary js-bulk-create" data-url="{{ url }}">{% trans "Continue" %}</button>
+			</div>
+		</div>
+	</div>
+</div>
+<script>
+	(function () {
+		var modal = document.getElementById("bulkCreateModal_{{ name|escapejs }}");
+		var input = modal.querySelector(".js-bulk-create-count");
+		var button = modal.querySelector(".js-bulk-create");
+		function go() {
+			var count = parseInt(input.value, 10);
+			if (count >= 1 && count <= 50) {
+				window.location.href = button.dataset.url + "?count=" + count;
+			} else {
+				input.focus();
+			}
+		}
+		button.addEventListener("click", go);
+		input.addEventListener("keydown", function (e) {
+			if (e.key === "Enter") {
+				e.preventDefault();
+				go();
+			}
+		});
+	})();
+</script>
