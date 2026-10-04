@@ -196,6 +196,22 @@ the validation and side effects of a form submission from the admin site
 apply (for example changing a division's points formula recalculates its
 ladders, and changing a venue's time zone recomputes kick-off instants).
 
+#### Bulk creation
+
+Records of the same kind are best added in one call:
+
+| Tool | Does |
+| --- | --- |
+| `create_divisions(divisions=[{season_id, title, …}, …])` | Several divisions, each with the arguments of `create_division`. |
+
+A bulk tool takes up to 50 items, each with the arguments of the
+single-record tool including its parent, so one call can fill several
+parents. The records are created in the order given (each ordered after
+those before it) through the same form as the single-record tool, in one
+transaction: if any item is refused nothing is saved, and the error names
+every item that failed and why. The response lists each record's id,
+title and slug, or the full record with `verbose=true`.
+
 Titles, short titles, labels and names are stored as plain text and
 escaped when rendered, so "Hit & Run" is stored as typed (slug `hit-run`).
 The server never escapes them; some MCP clients HTML-escape the arguments
@@ -323,6 +339,8 @@ as its identifiers and scheduling fields only:
 
 ## Changelog
 
+- **Bulk creation.** `create_divisions` adds several divisions in one call,
+  all or none (see [Bulk creation](#bulk-creation)).
 - **Byes and withdrawals.** `create_match(is_bye=true)` creates a single
   bye; `update_match` gained `is_bye`, `clear_home_team` and
   `clear_away_team` to convert an unplayed match to a bye (releasing its

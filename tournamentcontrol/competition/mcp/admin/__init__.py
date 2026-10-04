@@ -56,7 +56,7 @@ from django.utils import timezone
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from mcp.server.mcpserver.exceptions import ToolError
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic import ValidationError as PydanticValidationError
 
 from tournamentcontrol.competition.admin import (
@@ -147,6 +147,8 @@ logger = logging.getLogger(__name__)
 #: The most builds ``build_draw`` and items ``schedule_matches`` take at once.
 MAX_BUILDS = 50
 MAX_SCHEDULE_ITEMS = 500
+#: The most records a bulk create tool (``create_divisions``, ...) takes at once.
+MAX_BULK_CREATE = 50
 
 #: Text inputs that agents (or the clients relaying them) sometimes send
 #: HTML-escaped; they are stored as plain text and escaped when rendered.
@@ -168,6 +170,12 @@ and `create_pool` (teams are placed in pools with `update_pool`). Use the read
 tools (`search`, `get_season`, `list_teams`, `list_matches`, `get_match`,
 `get_ladder`) to find identifiers and to confirm each step; as an
 administrator you also see disabled competitions and draft divisions.
+
+When there are several records of the same kind to add, add them in one call
+with the bulk tool rather than one at a time: `create_divisions`. It takes a
+list of the same arguments as its single-record tool (each naming its
+parent, so one call can fill several parents) and saves all of them or, if
+any is refused, none, reporting every item that failed.
 
 Draws: do not create a season's matches one by one. Configure the season the
 way the admin site's Draw Generation wizard expects and let the server build
@@ -272,6 +280,31 @@ class ScheduleItem(BaseModel):
     place_id: int | None = Field(
         None, description="A venue of the season or one of its grounds."
     )
+
+
+class BulkSpec(BaseModel):
+    """One record to create with a bulk tool; unknown arguments are refused."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class DivisionSpec(BulkSpec):
+    """One division to create (see ``create_divisions``)."""
+
+    season_id: int
+    title: str
+    short_title: str | None = None
+    draft: bool = False
+    points_formula: str | None = None
+    bonus_points_formula: str | None = None
+    forfeit_for_score: int | None = None
+    forfeit_against_score: int | None = None
+    include_forfeits_in_played: bool = True
+    games_per_day: int | None = None
+    color: str | None = None
+    # "copy" would shadow ``BaseModel.copy``.
+    copy_: str | None = Field(None, alias="copy")
+    slug: str | None = None
 
 
 def _coerce(model, value, what):
@@ -991,6 +1024,38 @@ class AdminToolset(CompetitionToolset):
         except HttpError as exc:
             raise ToolError("YouTube API error: %s" % exc.reason)
 
+    def _bulk_create(self, model, items, spec_class, create):
+        """
+        Create a ``model`` record from each of ``items`` (validated as
+        ``spec_class``) with ``create``, in one transaction: every item is
+        tried so that all the failures are reported together, and unless all
+        of them succeed nothing is saved. Records are created in the order
+        given, so each is ordered after those before it.
+        """
+        what = _label(model)
+        self._require("add", model)
+        if not items:
+            raise ToolError("Give one or more %ss." % what)
+        if len(items) > MAX_BULK_CREATE:
+            raise ToolError("Give at most %d %ss at once." % (MAX_BULK_CREATE, what))
+        specs = [
+            _coerce(spec_class, item, f"{what} {index}")
+            for index, item in enumerate(items)
+        ]
+        created, errors = [], []
+        with transaction.atomic():
+            for index, spec in enumerate(specs):
+                try:
+                    with transaction.atomic():
+                        created.append(create(spec))
+                except ToolError as exc:
+                    errors.append(f"{what} {index} ({spec.title}): {exc}")
+            if errors:
+                transaction.set_rollback(True)
+        if errors:
+            raise ToolError("Nothing was saved. " + " ".join(errors))
+        return created
+
     # ======================================================================
     # Competitions
     # ======================================================================
@@ -1485,29 +1550,57 @@ class AdminToolset(CompetitionToolset):
         "3*win + 2*draw + 1*loss"; ``games_per_day`` only applies to
         tournament seasons.
         """
+        division = self._create_division(
+            season_id,
+            title=title,
+            short_title=short_title,
+            draft=draft,
+            points_formula=points_formula,
+            bonus_points_formula=bonus_points_formula,
+            forfeit_for_score=forfeit_for_score,
+            forfeit_against_score=forfeit_against_score,
+            include_forfeits_in_played=include_forfeits_in_played,
+            games_per_day=games_per_day,
+            color=color,
+            copy=copy,
+            slug=slug,
+        )
+        return {"saved": True, "division": _division_summary(division)}
+
+    @tool_annotations()
+    def create_divisions(
+        self, divisions: list[DivisionSpec], verbose: bool = False
+    ) -> dict[str, Any]:
+        """
+        Create several divisions in one call (up to 50), each after the
+        divisions already in its season, in the order given. Each item takes
+        the arguments of ``create_division``, including its ``season_id``.
+        All of them are saved or, if any is refused, none; the error then
+        names every item that failed and why.
+
+        ``verbose=false`` returns each division's id, title and slug;
+        ``verbose=true`` the full record, as ``create_division`` does.
+
+        Example: ``divisions=[{"season_id": 4, "title": "Men's Open",
+        "points_formula": "3*win + 2*draw + 1*loss", "forfeit_for_score": 5,
+        "forfeit_against_score": 0}, {"season_id": 4, "title": "Women's Open",
+        "points_formula": "3*win + 2*draw + 1*loss", "forfeit_for_score": 5,
+        "forfeit_against_score": 0}]``.
+        """
+        created = self._bulk_create(
+            Division,
+            divisions,
+            DivisionSpec,
+            lambda spec: self._create_division(**spec.model_dump(by_alias=True)),
+        )
+        summary = _division_summary if verbose else _ref
+        return {"saved": True, "divisions": [summary(d) for d in created]}
+
+    def _create_division(self, season_id, **changes):
         season = self._season(season_id)
         self._require("add", Division)
         division = next_related_factory(Division, season)
-        division = self._save(
-            DivisionForm,
-            division,
-            {
-                "title": title,
-                "short_title": short_title,
-                "draft": draft,
-                "points_formula": points_formula,
-                "bonus_points_formula": bonus_points_formula,
-                "forfeit_for_score": forfeit_for_score,
-                "forfeit_against_score": forfeit_against_score,
-                "include_forfeits_in_played": include_forfeits_in_played,
-                "games_per_day": games_per_day,
-                "color": color,
-                "copy": copy,
-                "slug": slug,
-            },
-            user=self._user(),
-        )
-        return {"saved": True, "division": _division_summary(division)}
+        return self._save(DivisionForm, division, changes, user=self._user())
 
     @tool_annotations(idempotent=True)
     def update_division(

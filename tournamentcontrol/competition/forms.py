@@ -14,7 +14,7 @@ from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.forms import array as PGA
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Max, Q
 from django.forms import BooleanField as BooleanChoiceField
 from django.forms.formsets import (
     DELETION_FIELD_NAME,
@@ -27,6 +27,7 @@ from django.forms.formsets import (
 from django.forms.models import (
     BaseInlineFormSet,
     BaseModelFormSet,
+    _get_foreign_key,
     inlineformset_factory,
     modelformset_factory,
 )
@@ -877,6 +878,100 @@ class DivisionForm(MySidelineTitleMixin, SuperUserSlugMixin, ModelForm):
             "bonus_points_formula",
             BonusPointCalculator,
             bonus_points_formula_identifiers,
+        )
+
+
+#: The most records a bulk create formset accepts at once.
+BULK_CREATE_MAX = 50
+
+
+class BulkCreateFormSet(BaseModelFormSet):
+    """
+    Create several new records under one ``parent`` at once, such as the
+    divisions of a season or the teams of a division.
+
+    None of the parent's existing records are shown. Each row is a new
+    record of the parent, ordered after the existing ones in the order the
+    rows are filled in; rows left blank are ignored. Titles must be unique
+    among the rows, as they must be among the parent's records.
+    """
+
+    def __init__(self, *args, parent, **kwargs):
+        self.parent = parent
+        self.fk = _get_foreign_key(type(parent), self.model)
+        kwargs.setdefault("queryset", self.model._default_manager.none())
+        super().__init__(*args, **kwargs)
+        last = self.model._default_manager.filter(**{self.fk.name: parent}).aggregate(
+            order=Max("order")
+        )["order"]
+        self.first_order = (last or 0) + 1
+
+    def get_form_kwargs(self, index):
+        kwargs = super().get_form_kwargs(index)
+        kwargs["instance"] = self.model(
+            order=self.first_order + (index or 0), **{self.fk.name: self.parent}
+        )
+        return kwargs
+
+    def clean(self):
+        super().clean()
+        filled = [form for form in self.forms if form.has_changed()]
+        if not filled:
+            raise ValidationError(_("Fill in at least one row."), code="empty")
+        rows = {}
+        for form in filled:
+            title = getattr(form, "cleaned_data", {}).get("title")
+            if not title:
+                continue
+            if title in rows:
+                form.add_error(
+                    "title",
+                    _("This title is already used in row %(row)d.")
+                    % {"row": rows[title]},
+                )
+            else:
+                rows[title] = self.forms.index(form) + 1
+
+    def save_new_objects(self, commit=True):
+        # Number the new records consecutively, whichever rows were filled.
+        for order, form in enumerate(
+            (form for form in self.extra_forms if form.has_changed()),
+            self.first_order,
+        ):
+            form.instance.order = order
+        return super().save_new_objects(commit)
+
+
+def bulk_create_formset_factory(form, extra):
+    """
+    A ``BulkCreateFormSet`` of ``form`` showing ``extra`` blank rows (at
+    most ``BULK_CREATE_MAX``).
+    """
+    return modelformset_factory(
+        form._meta.model,
+        form=form,
+        formset=BulkCreateFormSet,
+        extra=max(1, min(extra, BULK_CREATE_MAX)),
+        max_num=BULK_CREATE_MAX,
+        validate_max=True,
+        can_delete=False,
+    )
+
+
+class DivisionBulkCreateForm(DivisionForm):
+    """
+    The fields of ``DivisionForm`` an administrator needs to fill in for each
+    of several new divisions; the rest can be set on each division later.
+    """
+
+    class Meta(DivisionForm.Meta):
+        fields = (
+            "title",
+            "short_title",
+            "games_per_day",
+            "forfeit_for_score",
+            "forfeit_against_score",
+            "draft",
         )
 
 

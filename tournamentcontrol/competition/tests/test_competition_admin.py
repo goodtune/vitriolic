@@ -3061,3 +3061,164 @@ class EditViewPermissionTests(TestCase):
             self.response_200()
             self.get("admin:fixja:competition:season:edit", *self.season._get_url_args())
             self.response_403()
+
+
+class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
+    """Add several divisions to a season at once."""
+
+    viewname = "admin:fixja:competition:season:division:bulk"
+
+    def setUp(self):
+        super().setUp()
+        self.season = factories.SeasonFactory.create(mode=DAILY)
+        self.args = (self.season.competition_id, self.season.pk)
+
+    def rows(self, *rows, total=None):
+        data = {
+            "form-TOTAL_FORMS": str(len(rows) if total is None else total),
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "50",
+        }
+        for index, row in enumerate(rows):
+            # A browser posts the "No" the draft select shows on blank rows.
+            for name, value in {"draft": "0", **row}.items():
+                data[f"form-{index}-{name}"] = value
+        return data
+
+    def division(self, title, **kwargs):
+        return {
+            "title": title,
+            "short_title": "",
+            "games_per_day": "3",
+            "forfeit_for_score": "5",
+            "forfeit_against_score": "0",
+            **kwargs,
+        }
+
+    def test_season_edit_offers_bulk_create(self):
+        with self.login(self.superuser):
+            self.get("admin:fixja:competition:season:edit", *self.args)
+            self.response_200()
+            self.assertResponseContains(
+                '<button type="button" class="btn btn-primary js-bulk-create" '
+                f'data-url="{self.reverse(self.viewname, *self.args)}">'
+                "Continue</button>"
+            )
+
+    def test_get_shows_count_blank_rows_after_existing_divisions(self):
+        factories.DivisionFactory.create(season=self.season, order=4)
+        self.assertLoginRequired(self.viewname, *self.args)
+        with self.login(self.superuser):
+            self.get(self.viewname, *self.args, data={"count": "3"})
+            self.response_200()
+            self.assertResponseContains(
+                '<input type="hidden" name="form-TOTAL_FORMS" value="3" '
+                'id="id_form-TOTAL_FORMS">'
+            )
+            self.assertResponseContains("<th>Games per day</th>")
+            formset = self.get_context("formset")
+            self.assertEqual([form.instance.order for form in formset], [5, 6, 7])
+            self.assertEqual([form.instance.pk for form in formset], [None] * 3)
+
+    def test_get_count_is_limited(self):
+        with self.login(self.superuser):
+            for count, rows in (("0", 1), ("500", 50), ("x", 5)):
+                with self.subTest(count=count):
+                    self.get(self.viewname, *self.args, data={"count": count})
+                    self.response_200()
+                    self.assertEqual(len(self.get_context("formset").forms), rows)
+
+    def test_weekly_season_has_no_games_per_day(self):
+        season = factories.SeasonFactory.create()
+        with self.login(self.superuser):
+            self.get(self.viewname, season.competition_id, season.pk)
+            self.response_200()
+            formset = self.get_context("formset")
+            self.assertNotIn("games_per_day", formset.forms[0].fields)
+
+    def test_post_creates_divisions_in_row_order(self):
+        factories.DivisionFactory.create(season=self.season, title="Mixed", order=1)
+        data = self.rows(
+            self.division("Men's Open", short_title="Men"),
+            {},
+            self.division("Women's Open", draft="1", games_per_day="2"),
+        )
+        with self.login(self.superuser):
+            self.post(self.viewname, *self.args, data=data)
+            self.response_302()
+            self.assertRedirects(
+                self.last_response,
+                self.season.urls["edit"] + "#divisions-tab",
+                fetch_redirect_response=False,
+            )
+        self.assertEqual(
+            list(
+                self.season.divisions.order_by("order").values_list(
+                    "title",
+                    "short_title",
+                    "order",
+                    "draft",
+                    "games_per_day",
+                    "forfeit_for_score",
+                    "forfeit_against_score",
+                )
+            ),
+            [
+                ("Mixed", "", 1, False, 2, 5, 0),
+                ("Men's Open", "Men", 2, False, 3, 5, 0),
+                ("Women's Open", "", 3, True, 2, 5, 0),
+            ],
+        )
+
+    def test_post_refuses_duplicate_titles(self):
+        factories.DivisionFactory.create(season=self.season, title="Mixed")
+        data = self.rows(
+            self.division("Men's Open"),
+            self.division("Men's Open"),
+            self.division("Mixed"),
+        )
+        with self.login(self.superuser):
+            self.post(self.viewname, *self.args, data=data)
+            self.response_200()
+            formset = self.get_context("formset")
+            self.assertEqual(
+                [form.errors.get("title") for form in formset],
+                [
+                    None,
+                    ["This title is already used in row 1."],
+                    ["Division with this Title already exists."],
+                ],
+            )
+        self.assertEqual(self.season.divisions.count(), 1)
+
+    def test_post_refuses_no_rows(self):
+        with self.login(self.superuser):
+            self.post(self.viewname, *self.args, data=self.rows({}, {}))
+            self.response_200()
+            self.assertResponseContains(
+                '<div class="alert alert-danger"><ul class="errorlist nonform">'
+                "<li>Fill in at least one row.</li></ul></div>"
+            )
+        self.assertEqual(self.season.divisions.count(), 0)
+
+    def test_post_refuses_too_many_rows(self):
+        data = self.rows(*(self.division(f"D{n}") for n in range(51)))
+        with self.login(self.superuser):
+            self.post(self.viewname, *self.args, data=data)
+            self.response_200()
+        self.assertEqual(self.season.divisions.count(), 0)
+
+    def test_permission_required(self):
+        staff = UserFactory.create(is_staff=True)
+        data = self.rows(self.division("Men's Open"))
+        with self.login(staff):
+            self.get(self.viewname, *self.args)
+            self.response_403()
+            self.post(self.viewname, *self.args, data=data)
+            self.response_403()
+        assign_perm("competition.add_division", staff)
+        with self.login(staff):
+            self.post(self.viewname, *self.args, data=data)
+            self.response_302()
+        self.assertEqual(self.season.divisions.get().title, "Men's Open")
