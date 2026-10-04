@@ -62,6 +62,7 @@ WRITE_TOOLS = {
     "update_venue",
     "delete_venue",
     "create_ground",
+    "create_grounds",
     "update_ground",
     "delete_ground",
     "create_division",
@@ -74,9 +75,11 @@ WRITE_TOOLS = {
     "delete_team",
     "withdraw_team",
     "create_stage",
+    "create_stages",
     "update_stage",
     "delete_stage",
     "create_pool",
+    "create_pools",
     "update_pool",
     "delete_pool",
     "create_match",
@@ -681,6 +684,108 @@ class BulkCreateTests(AdminFixtureMixin, TestCase):
             "competition.add_team permission.",
             self.admin(self.staff).create_teams,
             items,
+        )
+
+    def test_create_grounds(self):
+        res = self.admin().create_grounds(
+            [
+                {"venue_id": self.venue.pk, "title": "Field 3"},
+                {
+                    "venue_id": self.venue.pk,
+                    "title": "Field 4",
+                    "latitude": 52.9,
+                    "longitude": -1.2,
+                    "zoom": 16,
+                },
+            ]
+        )
+        self.assertEqual([g["title"] for g in res["grounds"]], ["Field 3", "Field 4"])
+        self.assertEqual(
+            list(
+                self.venue.grounds.order_by("order").values_list(
+                    "title", "latlng", "live_stream"
+                )
+            ),
+            [
+                ("Field 1", self.field1.latlng, False),
+                ("Field 2", self.field2.latlng, False),
+                ("Field 3", "52.95,-1.15,12", False),
+                ("Field 4", "52.9,-1.2,16", False),
+            ],
+        )
+        res = self.admin().create_grounds(
+            [{"venue_id": self.venue.pk, "title": "Field 5"}], verbose=True
+        )
+        self.assertEqual(res["grounds"][0]["venue"]["id"], self.venue.pk)
+        self.assertToolError(
+            "ground 0: live_stream: Extra inputs are not permitted",
+            self.admin().create_grounds,
+            [{"venue_id": self.venue.pk, "title": "Field 6", "live_stream": True}],
+        )
+
+    def test_create_stages_in_every_division(self):
+        divisions = (self.womens, self.mixed)
+        res = self.admin().create_stages(
+            [
+                {"division_id": division.pk, **stage}
+                for division in divisions
+                for stage in (
+                    {"title": "Semi Finals", "keep_ladder": False},
+                    {"title": "Final", "keep_ladder": False},
+                )
+            ]
+        )
+        self.assertEqual(
+            [s["title"] for s in res["stages"]],
+            ["Semi Finals", "Final", "Semi Finals", "Final"],
+        )
+        for division in divisions:
+            with self.subTest(division=division.title):
+                self.assertEqual(
+                    list(
+                        division.stages.order_by("order").values_list(
+                            "title", "order", "keep_ladder"
+                        )
+                    ),
+                    [
+                        ("Round Robin", 1, True),
+                        ("Semi Finals", 2, False),
+                        ("Final", 3, False),
+                    ],
+                )
+        self.assertToolError(
+            "Nothing was saved. stage 1 (Final): Division 999999 was not found.",
+            self.admin().create_stages,
+            [
+                {"division_id": self.womens.pk, "title": "Plate"},
+                {"division_id": 999999, "title": "Final"},
+            ],
+        )
+        self.assertFalse(self.womens.stages.filter(title="Plate").exists())
+
+    def test_create_pools(self):
+        res = self.admin().create_pools(
+            [
+                {"stage_id": self.womens_stage.pk, "title": "Pool X"},
+                {"stage_id": self.womens_stage.pk, "title": "Pool Y"},
+                {"stage_id": self.mens_pools.pk, "title": "Pool C"},
+            ],
+            verbose=True,
+        )
+        self.assertEqual(
+            [(p["title"], p["order"]) for p in res["pools"]],
+            [("Pool X", 1), ("Pool Y", 2), ("Pool C", 3)],
+        )
+        self.assertToolError(
+            "Give at most 50 pools at once.",
+            self.admin().create_pools,
+            [{"stage_id": self.womens_stage.pk, "title": f"P{n}"} for n in range(51)],
+        )
+        self.assertToolError(
+            "Permission denied: add pool requires the "
+            "competition.add_stagegroup permission.",
+            self.admin(self.staff).create_pools,
+            [{"stage_id": self.womens_stage.pk, "title": "Pool Z"}],
         )
 
 

@@ -282,14 +282,10 @@ DEMO_FINALS = (
     "3: W1 vs W2 Final"
 )
 
-#: One call per record the agent has to name (competition, season, venue,
-#: grounds, divisions, stages and teams): there are no batch tools for these.
-DEMO_RECORD_CALLS = (
-    3
-    + DEMO_GROUNDS
-    + 3 * len(DEMO_DIVISIONS)
-    + sum(teams for __, teams in DEMO_DIVISIONS)
-)
+#: The records the agent has to name: the competition, season and venue,
+#: then one bulk call each for the grounds, divisions, stages and teams.
+#: Before the bulk tools this was one call per record (40).
+DEMO_RECORD_CALLS = 7
 #: Everything else: time slots, exclusions, draw formats, building the draw
 #: and scheduling it. Before ``build_draw`` and ``schedule_matches`` this was
 #: one call per match (153).
@@ -334,13 +330,16 @@ async def build_demo(live_server, person):
                 "zoom": 14,
             },
         )
-        grounds = []
-        for n in range(1, DEMO_GROUNDS + 1):
-            ground = await call(
-                "create_ground",
-                {"venue_id": venue["venue"]["id"], "title": f"Field {n}"},
-            )
-            grounds.append(ground["ground"]["id"])
+        grounds = await call(
+            "create_grounds",
+            {
+                "grounds": [
+                    {"venue_id": venue["venue"]["id"], "title": f"Field {n}"}
+                    for n in range(1, DEMO_GROUNDS + 1)
+                ]
+            },
+        )
+        grounds = [ground["id"] for ground in grounds["grounds"]]
 
         # 2. Three weeknight time slots from one rule.
         slots = await call(
@@ -354,44 +353,63 @@ async def build_demo(live_server, person):
             "add_season_exclusion_dates", {"season_id": season_id, "dates": DEMO_BREAK}
         )
 
-        # 4. Divisions, their two stages, and their teams.
-        divisions = []
-        for title, count in DEMO_DIVISIONS:
-            division = await call(
-                "create_division",
-                {
-                    "season_id": season_id,
-                    "title": title,
-                    "points_formula": "3*win + 2*draw + 1*loss",
-                    "forfeit_for_score": 5,
-                    "forfeit_against_score": 0,
-                },
-            )
-            division_id = division["division"]["id"]
-            regular = await call(
-                "create_stage", {"division_id": division_id, "title": "Regular Season"}
-            )
-            finals = await call(
-                "create_stage",
-                {"division_id": division_id, "title": "Finals", "keep_ladder": False},
-            )
-            for n in range(1, count + 1):
-                await call(
-                    "create_team",
+        # 4. Divisions, then their two stages and their teams, a call each.
+        created = await call(
+            "create_divisions",
+            {
+                "divisions": [
                     {
-                        "division_id": division_id,
-                        "title": f"{title} {n}",
-                        "verbose": False,
-                    },
-                )
-            divisions.append(
-                {
-                    "id": division_id,
-                    "teams": count,
-                    "regular": regular["stage"]["id"],
-                    "finals": finals["stage"]["id"],
-                }
+                        "season_id": season_id,
+                        "title": title,
+                        "points_formula": "3*win + 2*draw + 1*loss",
+                        "forfeit_for_score": 5,
+                        "forfeit_against_score": 0,
+                    }
+                    for title, __ in DEMO_DIVISIONS
+                ]
+            },
+        )
+        division_ids = [division["id"] for division in created["divisions"]]
+        stages = await call(
+            "create_stages",
+            {
+                "stages": [
+                    stage
+                    for division_id in division_ids
+                    for stage in (
+                        {"division_id": division_id, "title": "Regular Season"},
+                        {
+                            "division_id": division_id,
+                            "title": "Finals",
+                            "keep_ladder": False,
+                        },
+                    )
+                ]
+            },
+        )
+        stage_ids = [stage["id"] for stage in stages["stages"]]
+        teams = await call(
+            "create_teams",
+            {
+                "teams": [
+                    {"division_id": division_id, "title": f"{title} {n}"}
+                    for division_id, (title, count) in zip(division_ids, DEMO_DIVISIONS)
+                    for n in range(1, count + 1)
+                ]
+            },
+        )
+        assert len(teams["teams"]) == sum(count for __, count in DEMO_DIVISIONS)
+        divisions = [
+            {
+                "id": division_id,
+                "teams": count,
+                "regular": stage_ids[2 * index],
+                "finals": stage_ids[2 * index + 1],
+            }
+            for index, (division_id, (__, count)) in enumerate(
+                zip(division_ids, DEMO_DIVISIONS)
             )
+        ]
 
         # 5. Draw formats, created only if they are missing.
         formats = await call("list_draw_formats", {})
@@ -484,10 +502,10 @@ def test_demo_competition_within_budget(live_server, admin_user):
     finals are wired to ladder positions and semi winners, and once the
     regular season has been played the semis evaluate to the top four.
 
-    Limitations: competitions, seasons, venues, grounds, divisions, stages
-    and teams are still created one call per record, so the call budget is
-    asserted for the rest of the workflow, with the total bounded by the
-    two together.
+    The records are created with a call each for the competition, season
+    and venue and one bulk call each for the grounds, divisions, stages and
+    teams; the call budget is asserted for the rest of the workflow, with
+    the total bounded by the two together.
     """
     person = Person(live_server.url, "admin", "password")
     demo = run(build_demo, live_server, person)
@@ -502,9 +520,13 @@ def test_demo_competition_within_budget(live_server, admin_user):
             "create_season",
             "create_venue",
             "create_ground",
+            "create_grounds",
             "create_division",
+            "create_divisions",
             "create_stage",
+            "create_stages",
             "create_team",
+            "create_teams",
         }
     ]
     assert len(record_calls) == DEMO_RECORD_CALLS
