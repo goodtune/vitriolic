@@ -15,6 +15,8 @@ from zoneinfo import ZoneInfo
 
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ImproperlyConfigured
+from django.http import HttpResponse
+from django.test import RequestFactory
 from django.test.utils import override_settings
 from django.utils import timezone
 from freezegun import freeze_time
@@ -23,6 +25,7 @@ from test_plus import TestCase
 from tournamentcontrol.competition import mcp
 from tournamentcontrol.competition.mcp.admin import get_admin_server
 from tournamentcontrol.competition.mcp.signals import mcp_request_handled
+from tournamentcontrol.competition.mcp.views import MCPView
 from tournamentcontrol.competition.tests import factories
 
 TZ = ZoneInfo("Europe/Amsterdam")
@@ -1367,6 +1370,44 @@ class MCPRequestHandledSignalTests(MCPFixtureMixin, TestCase):
         self.assertEqual(sent["arguments"], {"days": 365})
         self.assertGreaterEqual(sent["duration"], 0)
         self.assertIsNone(sent["error"])
+        self.assertIsNone(sent["status_code"])
+
+    def test_unknown_method_is_a_status_code_not_an_error(self):
+        # Method not found is the caller's mistake, not the server's.
+        payload = {"jsonrpc": "2.0", "id": 1, "method": "no/such/method"}
+        response = self.client.post(
+            self.reverse("mcp"),
+            data=json.dumps(payload),
+            content_type="application/json",
+            HTTP_ACCEPT="application/json, text/event-stream",
+        )
+        self.assertEqual(response.json()["error"]["code"], -32601)
+        (sent,) = self.sent
+        self.assertEqual(sent["method"], "no/such/method")
+        self.assertEqual(sent["status_code"], "-32601")
+        self.assertIsNone(sent["error"])
+
+    def test_server_error_code_is_an_error(self):
+        # A JSON-RPC error outside the caller's mistakes, such as an internal
+        # error, is reported as the error, by its code.
+        request = RequestFactory().post(
+            "/mcp/",
+            data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}),
+            content_type="application/json",
+        )
+        response = HttpResponse(
+            json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "error": {"code": -32603, "message": "Internal error"},
+                }
+            )
+        )
+        MCPView().request_handled(request, response, mcp.ToolCall())
+        (sent,) = self.sent
+        self.assertEqual(sent["status_code"], "-32603")
+        self.assertEqual(sent["error"], "-32603")
 
     def test_sensitive_arguments_are_redacted(self):
         result, sent = self.rpc(
@@ -1397,7 +1438,8 @@ class MCPRequestHandledSignalTests(MCPFixtureMixin, TestCase):
         # The rejected arguments are reported, to show what the client sent.
         self.assertEqual(sent["arguments"], {"status": "finished"})
         self.assertIsNone(sent["duration"])
-        self.assertEqual(sent["error"], "isError")
+        self.assertEqual(sent["error"], "tool_error")
+        self.assertIsNone(sent["status_code"])
 
     def test_tool_call_that_raises(self):
         with mock.patch.object(
