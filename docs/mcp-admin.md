@@ -202,12 +202,15 @@ Records of the same kind are best added in one call:
 
 | Tool | Does |
 | --- | --- |
+| `create_grounds(grounds=[{venue_id, title, …}, …])` | Several grounds, each with the arguments of `create_ground` except `live_stream` (use `enable_ground_live_stream` afterwards, so a refused batch never leaves streams behind on YouTube). |
 | `create_divisions(divisions=[{season_id, title, …}, …])` | Several divisions, each with the arguments of `create_division`. |
 | `create_teams(teams=[{division_id, title or club_id, …}, …])` | Several teams, each with the arguments of `create_team`; one call can enter a club's team in every division. |
+| `create_stages(stages=[{division_id, title, …}, …])` | Several stages, each with the arguments of `create_stage`; one call can add the same stages to every division. |
+| `create_pools(pools=[{stage_id, title, …}, …])` | Several pools, each with the arguments of `create_pool`. |
 
 A bulk tool takes up to 50 items, each with the arguments of the
 single-record tool including its parent, so one call can fill several
-parents. The records are created in the order given (each ordered after
+parents; an argument the single-record tool does not take is refused. The records are created in the order given (each ordered after
 those before it) through the same form as the single-record tool, in one
 transaction: if any item is refused nothing is saved, and the error names
 every item that failed and why. The response lists each record's id,
@@ -340,9 +343,10 @@ as its identifiers and scheduling fields only:
 
 ## Changelog
 
-- **Bulk creation.** `create_divisions` and `create_teams` add several
-  divisions or teams in one call, all or none (see
-  [Bulk creation](#bulk-creation)).
+- **Bulk creation.** `create_grounds`, `create_divisions`, `create_teams`,
+  `create_stages` and `create_pools` add several records in one call, all
+  or none (see [Bulk creation](#bulk-creation)). Rebuilding the demo
+  competition takes 7 calls for its records instead of 40.
 - **Byes and withdrawals.** `create_match(is_bye=true)` creates a single
   bye; `update_match` gained `is_bye`, `clear_home_team` and
   `clear_away_team` to convert an unplayed match to a bye (releasing its

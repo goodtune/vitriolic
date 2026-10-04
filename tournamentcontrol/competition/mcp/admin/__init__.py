@@ -172,10 +172,12 @@ tools (`search`, `get_season`, `list_teams`, `list_matches`, `get_match`,
 administrator you also see disabled competitions and draft divisions.
 
 When there are several records of the same kind to add, add them in one call
-with the bulk tool rather than one at a time: `create_divisions` and
-`create_teams`. Each takes a list of the same arguments as its single-record
-tool (each naming its parent, so one call can fill several parents) and saves
-all of them or, if any is refused, none, reporting every item that failed.
+with the bulk tool rather than one at a time: `create_grounds`,
+`create_divisions`, `create_teams`, `create_stages` and `create_pools`. Each
+takes a list of the same arguments as its single-record tool (each naming its
+parent, so one call can fill several parents, such as the same stages in
+every division) and saves all of them or, if any is refused, none, reporting
+every item that failed.
 
 Draws: do not create a season's matches one by one. Configure the season the
 way the admin site's Draw Generation wizard expects and let the server build
@@ -319,6 +321,45 @@ class TeamSpec(BulkSpec):
     timeslots_after: datetime.time | None = None
     timeslots_before: datetime.time | None = None
     team_clash_ids: list[int] | None = None
+    slug: str | None = None
+
+
+class GroundSpec(BulkSpec):
+    """One ground to create (see ``create_grounds``)."""
+
+    venue_id: int
+    title: str
+    short_title: str | None = None
+    abbreviation: str | None = None
+    timezone: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    zoom: int | None = None
+    slug: str | None = None
+
+
+class StageSpec(BulkSpec):
+    """One stage to create (see ``create_stages``)."""
+
+    division_id: int
+    title: str
+    short_title: str | None = None
+    keep_ladder: bool = True
+    scale_group_points: bool = False
+    carry_ladder: bool = False
+    keep_mvp: bool = True
+    follows_id: int | None = None
+    color: str | None = None
+    slug: str | None = None
+
+
+class PoolSpec(BulkSpec):
+    """One pool to create (see ``create_pools``)."""
+
+    stage_id: int
+    title: str
+    short_title: str | None = None
+    carry_ladder: bool = False
     slug: str | None = None
 
 
@@ -1429,24 +1470,60 @@ class AdminToolset(CompetitionToolset):
         YouTube stream and key straight away (as ``enable_ground_live_stream``
         does).
         """
+        ground = self._create_ground(
+            venue_id,
+            title=title,
+            short_title=short_title,
+            abbreviation=abbreviation,
+            timezone=timezone,
+            latitude=latitude,
+            longitude=longitude,
+            zoom=zoom,
+            live_stream=live_stream,
+            slug=slug,
+        )
+        return {"saved": True, "ground": _ground_summary(ground, keys=True)}
+
+    @tool_annotations()
+    def create_grounds(
+        self, grounds: list[GroundSpec], verbose: bool = False
+    ) -> dict[str, Any]:
+        """
+        Create several grounds in one call (up to 50), each after the
+        grounds already at its venue, in the order given. Each item takes
+        the arguments of ``create_ground``, including its ``venue_id``,
+        except ``live_stream``: make a camera position of a ground with
+        ``enable_ground_live_stream`` afterwards. All of them are saved or,
+        if any is refused, none; the error then names every item that
+        failed and why.
+
+        ``verbose=false`` returns each ground's id, title and slug;
+        ``verbose=true`` the full record, as ``create_ground`` does.
+
+        Example: ``grounds=[{"venue_id": 5, "title": "Field 1"}, {"venue_id":
+        5, "title": "Field 2"}]``.
+        """
+        created = self._bulk_create(
+            Ground,
+            grounds,
+            GroundSpec,
+            lambda spec: self._create_ground(**spec.model_dump()),
+        )
+        if verbose:
+            return {
+                "saved": True,
+                "grounds": [_ground_summary(g, keys=True) for g in created],
+            }
+        return {"saved": True, "grounds": [_ref(g) for g in created]}
+
+    def _create_ground(self, venue_id, latitude, longitude, zoom, **changes):
         venue = self._venue(venue_id)
         self._require("add", Ground)
         ground = next_related_factory(Ground, venue, "venue")
         ground.timezone = venue.timezone
         ground.latlng = venue.latlng
-        ground = self._save_ground(
-            ground,
-            {
-                "title": title,
-                "short_title": short_title,
-                "abbreviation": abbreviation,
-                "timezone": timezone,
-                "latlng": self._latlng(ground, latitude, longitude, zoom),
-                "live_stream": live_stream,
-                "slug": slug,
-            },
-        )
-        return {"saved": True, "ground": _ground_summary(ground, keys=True)}
+        changes["latlng"] = self._latlng(ground, latitude, longitude, zoom)
+        return self._save_ground(ground, changes)
 
     @tool_annotations(idempotent=True, open_world=True)
     def update_ground(
@@ -2021,26 +2098,55 @@ class AdminToolset(CompetitionToolset):
         for the stage; ``carry_ladder`` carries points over from the stage
         it ``follows`` (defaults to the previous stage).
         """
+        stage = self._create_stage(
+            division_id,
+            title=title,
+            short_title=short_title,
+            keep_ladder=keep_ladder,
+            scale_group_points=scale_group_points,
+            carry_ladder=carry_ladder,
+            keep_mvp=keep_mvp,
+            follows_id=follows_id,
+            color=color,
+            slug=slug,
+        )
+        return {"saved": True, "stage": _stage_summary(stage)}
+
+    @tool_annotations()
+    def create_stages(
+        self, stages: list[StageSpec], verbose: bool = False
+    ) -> dict[str, Any]:
+        """
+        Add several stages in one call (up to 50), each after the stages
+        already in its division, in the order given, so the same stages can
+        be added to every division at once ("Pool Stage" then "Finals" for
+        each). Each item takes the arguments of ``create_stage``, including
+        its ``division_id``. All of them are saved or, if any is refused,
+        none; the error then names every item that failed and why.
+
+        ``verbose=false`` returns each stage's id, title and slug;
+        ``verbose=true`` the full record, as ``create_stage`` does.
+
+        Example: ``stages=[{"division_id": 7, "title": "Pool Stage"},
+        {"division_id": 7, "title": "Finals", "keep_ladder": false},
+        {"division_id": 8, "title": "Pool Stage"}, {"division_id": 8,
+        "title": "Finals", "keep_ladder": false}]``.
+        """
+        created = self._bulk_create(
+            Stage,
+            stages,
+            StageSpec,
+            lambda spec: self._create_stage(**spec.model_dump()),
+        )
+        summary = _stage_summary if verbose else _ref
+        return {"saved": True, "stages": [summary(s) for s in created]}
+
+    def _create_stage(self, division_id, follows_id, **changes):
         division = self._division(division_id)
         self._require("add", Stage)
         stage = next_related_factory(Stage, division)
-        stage = self._save(
-            StageForm,
-            stage,
-            {
-                "title": title,
-                "short_title": short_title,
-                "keep_ladder": keep_ladder,
-                "scale_group_points": scale_group_points,
-                "carry_ladder": carry_ladder,
-                "keep_mvp": keep_mvp,
-                "follows": follows_id,
-                "color": color,
-                "slug": slug,
-            },
-            user=self._user(),
-        )
-        return {"saved": True, "stage": _stage_summary(stage)}
+        changes["follows"] = follows_id
+        return self._save(StageForm, stage, changes, user=self._user())
 
     @tool_annotations(idempotent=True)
     def update_stage(
@@ -2103,21 +2209,47 @@ class AdminToolset(CompetitionToolset):
         Add a pool (group) to a stage, for example "Pool A". Place teams in it
         afterwards with ``update_pool``.
         """
+        pool = self._create_pool(
+            stage_id,
+            title=title,
+            short_title=short_title,
+            carry_ladder=carry_ladder,
+            slug=slug,
+        )
+        return {"saved": True, "pool": _pool_summary(pool)}
+
+    @tool_annotations()
+    def create_pools(
+        self, pools: list[PoolSpec], verbose: bool = False
+    ) -> dict[str, Any]:
+        """
+        Add several pools in one call (up to 50), each after the pools
+        already in its stage, in the order given. Each item takes the
+        arguments of ``create_pool``, including its ``stage_id``. All of
+        them are saved or, if any is refused, none; the error then names
+        every item that failed and why. Place teams in the pools afterwards
+        with ``update_pool``.
+
+        ``verbose=false`` returns each pool's id, title and slug;
+        ``verbose=true`` the full record, as ``create_pool`` does.
+
+        Example: ``pools=[{"stage_id": 12, "title": "Pool A"}, {"stage_id":
+        12, "title": "Pool B"}]``.
+        """
+        created = self._bulk_create(
+            StageGroup,
+            pools,
+            PoolSpec,
+            lambda spec: self._create_pool(**spec.model_dump()),
+        )
+        summary = _pool_summary if verbose else _ref
+        return {"saved": True, "pools": [summary(p) for p in created]}
+
+    def _create_pool(self, stage_id, **changes):
         stage = self._stage(stage_id)
         self._require("add", StageGroup)
         pool = next_related_factory(StageGroup, stage)
-        pool = self._save(
-            StageGroupForm,
-            pool,
-            {
-                "title": title,
-                "short_title": short_title,
-                "carry_ladder": carry_ladder,
-                "slug": slug,
-            },
-            user=self._user(),
-        )
-        return {"saved": True, "pool": _pool_summary(pool)}
+        return self._save(StageGroupForm, pool, changes, user=self._user())
 
     @tool_annotations(idempotent=True)
     def update_pool(
