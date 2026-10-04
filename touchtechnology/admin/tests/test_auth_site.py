@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from django.contrib.auth.models import Group
 from test_plus import TestCase as PlusTestCase
 
@@ -39,6 +41,34 @@ class AuthSiteUserTests(TestCase):
             ["model", "object_list"],
             "touchtechnology/admin/list.html",
         )
+
+    def test_user_list_shows_registration_and_last_login_dates(self):
+        factories.UserFactory.create(
+            username="veteran",
+            date_joined=datetime(2018, 7, 10, 12, 0, tzinfo=timezone.utc),
+            last_login=datetime(2026, 9, 19, 12, 0, tzinfo=timezone.utc),
+        )
+        factories.UserFactory.create(
+            username="lurker",
+            date_joined=datetime(2026, 9, 3, 12, 0, tzinfo=timezone.utc),
+            last_login=None,
+        )
+
+        with self.login(self.superuser):
+            self.get("admin:auth:users:list")
+            self.response_200()
+            self.assertResponseContains(
+                '<th class="hidden-xs">Registered</th>', html=True
+            )
+            self.assertResponseContains("<th>Last login</th>", html=True)
+            self.assertResponseContains(
+                '<td class="hidden-xs">10 Jul 2018</td>', html=True
+            )
+            self.assertResponseContains("<td>19 Sep 2026</td>", html=True)
+            self.assertResponseContains(
+                '<td class="hidden-xs">3 Sep 2026</td>', html=True
+            )
+            self.assertResponseContains("<td>Never</td>", html=True)
 
     def test_user_create(self):
         self.get_generic_200(
