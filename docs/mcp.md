@@ -149,12 +149,24 @@ patching the views. The receiver is given the Django `request`, the
 JSON-RPC `method`, the `tool` a `tools/call` asked for, its `arguments`
 exactly as the client sent them (before validation, so rejected arguments
 are there too), the `duration` in
-seconds the tool ran for (`None` if it did not run), and `error`: `None`
-on success, otherwise the class name of the exception the tool raised,
-`"isError"` for a result the SDK marked as an error without the tool
-raising (arguments that failed validation, an unknown tool), or
-`"jsonrpc"` for a JSON-RPC error. A failed tool still answers with HTTP
-200, so `error` is the only place the failure shows.
+seconds the tool ran for (`None` if it did not run), `error` and
+`status_code`. A failed tool still answers with HTTP 200, so `error` is the
+only place the failure shows.
+
+`error` and `status_code` follow the OpenTelemetry semantic conventions for
+MCP (`error.type` and `rpc.response.status_code`), so a project can record
+them under those names:
+
+- `error` is `None` on success, otherwise the class name of the exception
+  the tool raised, `"tool_error"` for a result the SDK marked as an error
+  without the tool raising (arguments that failed validation, an unknown
+  tool), or the JSON-RPC error code of an error response, as a string.
+- `status_code` is the JSON-RPC error code of an error response, as a
+  string, and `None` otherwise.
+- Codes that mean the caller got the request wrong (`-32700` parse error,
+  `-32600` invalid request, `-32601` method not found, `-32602` invalid
+  params, `-32002` resource not found) are reported in `status_code` but
+  are not errors of the server, so `error` stays `None` for them.
 
 ```python
 from django.dispatch import receiver
@@ -164,7 +176,7 @@ from tournamentcontrol.competition.mcp.signals import mcp_request_handled
 
 @receiver(mcp_request_handled)
 def log_mcp_request(
-    sender, request, method, tool, arguments, duration, error, **kwargs
+    sender, request, method, tool, arguments, duration, error, status_code, **kwargs
 ):
     ...
 ```

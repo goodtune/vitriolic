@@ -47,6 +47,12 @@ from tournamentcontrol.competition.mcp.signals import mcp_request_handled
 
 LOG = logging.getLogger(__name__)
 
+#: JSON-RPC error codes that mean the caller sent a request the server could
+#: not serve (a malformed message, an unknown method, invalid parameters, an
+#: unknown resource). Following the OpenTelemetry conventions for MCP they are
+#: reported as a status code, but not as an error of the server.
+CALLER_ERROR_CODES = frozenset({-32700, -32600, -32601, -32602, -32002})
+
 
 def _json(content):
     """``content`` decoded as JSON, or ``None`` if it is not JSON."""
@@ -143,20 +149,23 @@ class MCPView(View):
             arguments = redact_arguments(
                 self.get_server(), tool, message["params"].get("arguments")
             )
+        answer = _json(response.content)
+        status_code = error = None
+        if isinstance(answer, dict) and isinstance(answer.get("error"), dict):
+            code = answer["error"].get("code")
+            if code is not None:
+                status_code = str(code)
+                if code not in CALLER_ERROR_CODES:
+                    error = status_code
         if call.exception is not None:
             error = type(call.exception).__name__
-        else:
-            answer = _json(response.content)
-            if not isinstance(answer, dict):
-                error = None
-            elif "error" in answer:
-                error = "jsonrpc"
-            elif isinstance(answer.get("result"), dict) and answer["result"].get(
-                "isError"
-            ):
-                error = "isError"
-            else:
-                error = None
+        elif (
+            error is None
+            and isinstance(answer, dict)
+            and isinstance(answer.get("result"), dict)
+            and answer["result"].get("isError")
+        ):
+            error = "tool_error"
         for receiver, result in mcp_request_handled.send_robust(
             sender=self.__class__,
             request=request,
@@ -165,6 +174,7 @@ class MCPView(View):
             arguments=arguments,
             duration=call.duration,
             error=error,
+            status_code=status_code,
         ):
             if isinstance(result, Exception):
                 LOG.error(
