@@ -17,9 +17,9 @@ from tournamentcontrol.competition.models import (
     Season,
     Stage,
 )
-from tournamentcontrol.competition.mysideline.sync import (
-    synchronise_all as _mysideline_synchronise_all,
-    synchronise_season as _mysideline_synchronise_season,
+from tournamentcontrol.competition.upstream.sync import (
+    synchronise_all as _upstream_synchronise_all,
+    synchronise_season as _upstream_synchronise_season,
 )
 from tournamentcontrol.competition.utils import (
     generate_fixture_grid,
@@ -663,16 +663,17 @@ def set_youtube_thumbnail(match_pk):
 
 
 @shared_task
-def synchronise_mysideline_season(season_pk):
+def synchronise_upstream_season(season_pk):
     """
-    Converge a single season onto the competitions MySideline publishes for
-    it. See :mod:`tournamentcontrol.competition.mysideline`.
+    Converge a single season onto the competitions its upstream provider
+    (MySideline, revolutioniseSPORT, ...) publishes for it. See
+    :mod:`tournamentcontrol.competition.upstream`.
 
     A remote failure raises so that the task is recorded as failed and the
     local data is left exactly as it was.
     """
     season = Season.objects.get(pk=season_pk)
-    result = _mysideline_synchronise_season(season)
+    result = _upstream_synchronise_season(season)
     return {
         "created": result.created,
         "updated": result.updated,
@@ -683,14 +684,14 @@ def synchronise_mysideline_season(season_pk):
 
 
 @shared_task
-def synchronise_mysideline():
+def synchronise_upstream():
     """
-    Synchronise every enabled, incomplete season that names a MySideline
-    season within a competition that has a MySideline URL.
+    Synchronise every enabled, incomplete season that names an upstream URL
+    within a competition that has one.
 
     Intended to be scheduled periodically (for example with Celery beat)
     by the deploying project; each season is isolated so that one failing
     remote fetch does not prevent the others from synchronising.
     """
-    results = _mysideline_synchronise_all()
+    results = _upstream_synchronise_all()
     return {pk: result.summary() for pk, result in results.items()}

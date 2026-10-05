@@ -9,7 +9,6 @@ import uuid
 import warnings
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from urllib.parse import urlencode
 
 import requests
 from cloudinary.models import CloudinaryField
@@ -62,7 +61,6 @@ from touchtechnology.common.models import SitemapNodeBase
 from tournamentcontrol.competition._mediaupload import MediaMemoryUpload
 from tournamentcontrol.competition.constants import (
     GENDER_CHOICES,
-    MYSIDELINE_SEASON_TAG_CHOICES,
     SEASON_MODE_CHOICES,
     WIN_LOSE,
     ClubStatus,
@@ -90,6 +88,11 @@ from tournamentcontrol.competition.query import (
     TeamAssociationQuerySet,
 )
 from tournamentcontrol.competition.signals import match_forfeit
+from tournamentcontrol.competition.upstream import (
+    UpstreamURLError,
+    get_backend_for_identifier,
+    get_backend_for_url,
+)
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
     combine_and_localize,
@@ -172,26 +175,42 @@ class Competition(AdminUrlMixin, OrderedSitemapNode):
     enabled = BooleanField(default=True)
     clubs = ManyToManyField("Club", blank=True, related_name="competitions")
 
-    # MySideline synchronisation. A MySideline association corresponds to a
-    # Competition; each of its "years" corresponds to a Season (see
-    # ``Season.mysideline_season``). See
-    # ``tournamentcontrol.competition.mysideline``.
-    mysideline_url = models.URLField(
+    # Synchronisation from an upstream competition management provider
+    # (MySideline, revolutioniseSPORT, ...). The organisation's page on the
+    # provider identifies the provider and lives on the Competition; each
+    # Season names the page listing its own draws (see ``Season.upstream_url``).
+    # See ``tournamentcontrol.competition.upstream``.
+    upstream_url = models.URLField(
         max_length=1024,
         blank=True,
         null=True,
-        verbose_name=_("MySideline URL"),
+        verbose_name=_("Upstream URL"),
         help_text=_(
-            "Association URL on MySideline, for example "
-            "https://tfa.mysideline.com.au/competitions/association/6338. "
-            "Seasons that name a MySideline season are then synchronised "
-            "from MySideline, which is authoritative for their divisions, "
-            "teams, fixtures and results."
+            "The organisation's page on the competition management provider "
+            "that publishes its draws, for example "
+            "https://tfa.mysideline.com.au/competitions/association/6338 "
+            "(MySideline) or https://www.revolutionise.com.au/ccha/games "
+            "(revolutioniseSPORT). Seasons that name an upstream URL are then "
+            "synchronised from the provider, which is authoritative for their "
+            "divisions, teams, fixtures and results."
         ),
     )
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition"
+
+    @property
+    def upstream_backend(self):
+        """
+        The upstream backend :attr:`upstream_url` belongs to, or ``None``
+        when the competition is not linked to a provider.
+        """
+        if not self.upstream_url:
+            return None
+        try:
+            return get_backend_for_url(self.upstream_url)
+        except UpstreamURLError:
+            return None
 
     class Meta(OrderedSitemapNode.Meta):
         pass
@@ -541,28 +560,21 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
     )
     timezone = TimeZoneField(max_length=50, blank=True, null=True, use_pytz=False)
 
-    # MySideline synchronisation. The association URL lives on the
-    # Competition; a season selects the MySideline "year" (and optionally
-    # the half-year period) whose competitions it mirrors. See
-    # ``tournamentcontrol.competition.mysideline``.
-    mysideline_season = models.PositiveIntegerField(
+    # Upstream synchronisation. The organisation's page lives on the
+    # Competition; a season names the page on the same provider that lists
+    # the draws it mirrors. See ``tournamentcontrol.competition.upstream``.
+    upstream_url = models.URLField(
+        max_length=1024,
         blank=True,
         null=True,
-        verbose_name=_("MySideline season"),
+        verbose_name=_("Upstream URL"),
         help_text=_(
-            "The MySideline season (a year, for example 2026) whose "
-            "competitions this season mirrors. Required for synchronisation "
-            "when the competition has a MySideline URL."
-        ),
-    )
-    mysideline_season_tag = models.PositiveSmallIntegerField(
-        blank=True,
-        null=True,
-        choices=MYSIDELINE_SEASON_TAG_CHOICES,
-        verbose_name=_("MySideline season period"),
-        help_text=_(
-            "Only synchronise MySideline competitions from this period of "
-            "the season. Leave blank for the whole season."
+            "The page on the provider that lists this season's draws: the "
+            "association page filtered to a year on MySideline (for example "
+            "https://tfa.mysideline.com.au/competitions/association/6338"
+            "?season=2026&seasonTag=2) or a competition's draws page on "
+            "revolutioniseSPORT (https://www.revolutionise.com.au/ccha/games/25527). "
+            "Required for synchronisation when the competition has an upstream URL."
         ),
     )
 
@@ -608,27 +620,16 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
         return "<Season: {} - {}>".format(self.competition, self)
 
     @property
-    def mysideline_url(self):
+    def upstream_backend(self):
         """
-        The MySideline association page filtered to this season, or ``None``
-        when the competition is not linked to MySideline. This is the same
-        URL the MySideline site produces from its year/period drop-downs.
+        The upstream backend this season is synchronised through, or
+        ``None`` when the competition is not linked to a provider.
         """
-        url = self.competition.mysideline_url
-        if not url:
-            return None
-        params = {}
-        if self.mysideline_season is not None:
-            params["season"] = self.mysideline_season
-        if self.mysideline_season_tag is not None:
-            params["seasonTag"] = self.mysideline_season_tag
-        if params:
-            return "%s?%s" % (url, urlencode(params))
-        return url
+        return self.competition.upstream_backend
 
     @property
-    def mysideline_enabled(self):
-        return bool(self.competition.mysideline_url and self.mysideline_season)
+    def upstream_enabled(self):
+        return bool(self.competition.upstream_url and self.upstream_url)
 
     def flow(self, **kwargs):
         "Generate an authorization Flow"
@@ -856,32 +857,57 @@ class Ground(Place):
         )
 
 
-class MySidelineMixin(models.Model):
+class UpstreamIdentifierMixin(models.Model):
     """
-    Link a record to the MySideline entity it mirrors.
+    Link a record to the entity it mirrors on an upstream competition
+    management provider.
 
-    ``mysideline_id`` is set by the synchronisation, never by hand; a record
-    which has one is managed by MySideline and is updated on every sync. See
-    :mod:`tournamentcontrol.competition.mysideline`.
+    ``upstream_id`` is set by the synchronisation, never by hand; a record
+    which has one is managed by the provider and is updated on every sync.
+    The value is the provider's own identifier qualified by the provider's
+    key -- ``mysideline:69295321``, ``revolutionise:2433163`` -- so that it
+    is unique across providers and says where the record comes from without
+    a foreign key to anything. See :mod:`tournamentcontrol.competition.upstream`.
+    """
 
-    The name is the exception to "MySideline is authoritative". Upstream
+    upstream_id = models.CharField(
+        max_length=255, blank=True, null=True, unique=True, editable=False
+    )
+
+    class Meta:
+        abstract = True
+
+    @property
+    def upstream_backend(self):
+        """The upstream backend :attr:`upstream_id` belongs to, or ``None``."""
+        if not self.upstream_id:
+            return None
+        return get_backend_for_identifier(self.upstream_id)
+
+
+class UpstreamMixin(UpstreamIdentifierMixin):
+    """
+    Link a named record (a division or a team) to the upstream entity it
+    mirrors, keeping the upstream name beside our own.
+
+    The name is the exception to "upstream is authoritative". Upstream
     naming is frequently unwieldy -- "Born 2014 & 2013 u14 Boys" for what we
     would rather publish as "14 Boys" -- so the local ``title`` may be
     changed and the synchronisation will then leave it alone. To tell our
     variation from theirs, two copies of the remote name are kept beside our
     own:
 
-    ``mysideline_title``
-        what MySideline calls the record right now, refreshed on every sync
-        whether or not we use it;
+    ``upstream_title``
+        what the provider calls the record right now, refreshed on every
+        sync whether or not we use it;
 
-    ``mysideline_title_synced``
-        what MySideline called it when our ``title`` was last reconciled
+    ``upstream_title_synced``
+        what the provider called it when our ``title`` was last reconciled
         with it: when the record was linked, when a remote rename was last
         applied, or when an administrator last saved the record.
 
-    ``title != mysideline_title_synced`` is therefore our variation and
-    ``mysideline_title != mysideline_title_synced`` is theirs, so an upstream
+    ``title != upstream_title_synced`` is therefore our variation and
+    ``upstream_title != upstream_title_synced`` is theirs, so an upstream
     rename of a record we have renamed ourselves can be reported instead of
     being silently discarded or silently applied.
 
@@ -889,15 +915,11 @@ class MySidelineMixin(models.Model):
     all :class:`~touchtechnology.common.models.SitemapNodeBase` subclasses.
     """
 
-    mysideline_id = models.BigIntegerField(
-        blank=True, null=True, unique=True, editable=False
-    )
-
-    mysideline_title = models.CharField(
+    upstream_title = models.CharField(
         max_length=255, blank=True, null=True, editable=False
     )
 
-    mysideline_title_synced = models.CharField(
+    upstream_title_synced = models.CharField(
         max_length=255, blank=True, null=True, editable=False
     )
 
@@ -905,41 +927,42 @@ class MySidelineMixin(models.Model):
         abstract = True
 
     @property
-    def mysideline_reconciled(self):
-        """The record has been reconciled with MySideline at least once."""
-        return bool(self.mysideline_id) and self.mysideline_title_synced is not None
+    def upstream_reconciled(self):
+        """The record has been reconciled with the provider at least once."""
+        return bool(self.upstream_id) and self.upstream_title_synced is not None
 
     @property
-    def mysideline_title_overridden(self):
+    def upstream_title_overridden(self):
         """Our ``title`` differs from the remote name it was reconciled with."""
-        return self.mysideline_reconciled and self.title != self.mysideline_title_synced
+        return self.upstream_reconciled and self.title != self.upstream_title_synced
 
     @property
-    def mysideline_title_changed(self):
-        """MySideline has renamed the record since we last reconciled it."""
+    def upstream_title_changed(self):
+        """The provider has renamed the record since we last reconciled it."""
         return (
-            self.mysideline_reconciled
-            and self.mysideline_title != self.mysideline_title_synced
+            self.upstream_reconciled
+            and self.upstream_title != self.upstream_title_synced
         )
 
 
-def mysideline_renamed(queryset):
+def upstream_renamed(queryset):
     """
-    Filter ``queryset`` to the records MySideline has renamed since they were
-    last reconciled -- the local name of each is one an administrator chose
-    and the synchronisation will keep, so the change needs a human decision.
+    Filter ``queryset`` to the records the provider has renamed since they
+    were last reconciled -- the local name of each is one an administrator
+    chose and the synchronisation will keep, so the change needs a human
+    decision.
     """
     return queryset.filter(
-        mysideline_id__isnull=False,
-        mysideline_title__isnull=False,
-        mysideline_title_synced__isnull=False,
-    ).exclude(mysideline_title=F("mysideline_title_synced"))
+        upstream_id__isnull=False,
+        upstream_title__isnull=False,
+        upstream_title_synced__isnull=False,
+    ).exclude(upstream_title=F("upstream_title_synced"))
 
 
 class Division(
     AdminUrlMixin,
     ModelDiffMixin,
-    MySidelineMixin,
+    UpstreamMixin,
     OrderedSitemapNode,
 ):
     """
@@ -1605,7 +1628,7 @@ class StageGroup(AdminUrlMixin, OrderedSitemapNode):
         return res
 
 
-class Team(AdminUrlMixin, MySidelineMixin, OrderedSitemapNode):
+class Team(AdminUrlMixin, UpstreamMixin, OrderedSitemapNode):
     """
     A model which represents a team in a competition. A team may not yet be
     placed into a division, as it might only be at the nomination stage.
@@ -2122,7 +2145,13 @@ class SeasonAssociation(AdminUrlMixin, models.Model):
         ]
 
 
-class Match(AdminUrlMixin, models.Model):
+class Match(AdminUrlMixin, UpstreamIdentifierMixin, models.Model):
+    """
+    A fixture. ``upstream_id`` (from :class:`UpstreamIdentifierMixin`) names
+    the match this fixture mirrors on an upstream provider; a match has no
+    name of its own, so it does not keep an upstream title.
+    """
+
     uuid = models.UUIDField(
         primary_key=False,
         default=uuid.uuid4,
@@ -2241,12 +2270,6 @@ class Match(AdminUrlMixin, models.Model):
 
     external_identifier = models.CharField(
         max_length=20, blank=True, null=True, unique=True, db_index=True
-    )
-
-    # Identifier of the MySideline match this fixture mirrors. A match has
-    # no name of its own, so it does not need MySidelineMixin.
-    mysideline_id = models.BigIntegerField(
-        blank=True, null=True, unique=True, editable=False
     )
 
     videos = PG.ArrayField(
