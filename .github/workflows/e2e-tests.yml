@@ -30,9 +30,11 @@ jobs:
     # Screenshots taken by the E2E tests are posted on the pull request as
     # evidence. `gh pr comment --attach` (GitHub CLI 2.99+) uploads each
     # image and rewrites the local paths referenced in the body. Every
-    # comment carries a hidden marker; before a new one is posted, earlier
+    # comment carries a hidden marker; before new ones are posted, earlier
     # marked comments are minimised as outdated so that only the latest
-    # run's evidence is visible in the conversation.
+    # run's evidence is visible in the conversation. The CLI takes at most 50
+    # attachments, so the screenshots are split across as many comments as
+    # needed.
     #
     # The upload endpoint rejects GitHub App installation tokens, which
     # includes the workflow's own GITHUB_TOKEN (cli/cli#14309), so the
@@ -67,30 +69,17 @@ jobs:
       run: |
         shopt -s nullglob
         shots=(tests/screenshots/*.png)
-        body=.github/e2e-comment.md
-        attach=()
-        {
-          echo "$MARKER"
-          echo "## E2E screenshots"
-          echo
-          echo "Run [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for ${{ github.event.pull_request.head.sha }}: **${OUTCOME}**"
-          echo
-          if [ -n "$COMMENT_TOKEN" ]; then
-            for shot in "${shots[@]}"; do
-              name="$(basename "${shot%.png}")"
-              echo "<details><summary>${name}</summary>"
-              echo
-              echo "![${name}](${shot})"
-              echo
-              echo "</details>"
-              attach+=(--attach "$shot")
-            done
-          else
-            echo "_${#shots[@]} screenshot(s) taken; attachments need the E2E_COMMENT_TOKEN secret, which is not available to this run._"
-          fi
-        } > "$body"
 
-        # Minimise earlier evidence comments (any author) as outdated.
+        # `gh pr comment --attach` takes at most 50 files, so a run with more
+        # screenshots is posted as several comments of up to 40 each.
+        per_comment=40
+        parts=$(( (${#shots[@]} + per_comment - 1) / per_comment ))
+        if [ -z "$COMMENT_TOKEN" ] || [ "$parts" -lt 1 ]; then
+          parts=1
+        fi
+
+        # Minimise earlier evidence comments (any author) as outdated, before
+        # this run's comments are posted.
         gh api --paginate "repos/${{ github.repository }}/issues/${PR}/comments" \
           --jq ".[] | select(.body | startswith(\"${MARKER}\")) | .node_id" \
         | while read -r node_id; do
@@ -103,8 +92,37 @@ jobs:
             echo "Minimised ${node_id}"
           done
 
-        GH_TOKEN="${COMMENT_TOKEN:-$GITHUB_TOKEN}" gh pr comment "$PR" \
-          --body-file "$body" "${attach[@]}"
+        for ((part = 0; part < parts; part++)); do
+          body=.github/e2e-comment-${part}.md
+          attach=()
+          {
+            echo "$MARKER"
+            if [ "$parts" -gt 1 ]; then
+              echo "## E2E screenshots ($((part + 1)) of ${parts})"
+            else
+              echo "## E2E screenshots"
+            fi
+            echo
+            echo "Run [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for ${{ github.event.pull_request.head.sha }}: **${OUTCOME}**"
+            echo
+            if [ -n "$COMMENT_TOKEN" ]; then
+              for shot in "${shots[@]:part*per_comment:per_comment}"; do
+                name="$(basename "${shot%.png}")"
+                echo "<details><summary>${name}</summary>"
+                echo
+                echo "![${name}](${shot})"
+                echo
+                echo "</details>"
+                attach+=(--attach "$shot")
+              done
+            else
+              echo "_${#shots[@]} screenshot(s) taken; attachments need the E2E_COMMENT_TOKEN secret, which is not available to this run._"
+            fi
+          } > "$body"
+
+          GH_TOKEN="${COMMENT_TOKEN:-$GITHUB_TOKEN}" gh pr comment "$PR" \
+            --body-file "$body" "${attach[@]}"
+        done
 
     - name: Upload traces on failure
       uses: actions/upload-artifact@v7
