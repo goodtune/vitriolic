@@ -238,10 +238,14 @@ class HtmxTabPaginationTests(TestCase):
         "The links to the other pages are boosted into the pane they are in."
         self._get_club_tab()
         self.assertResponseContains(
-            '<div hx-boost="true" hx-target="#members-tab" hx-swap="innerHTML" '
-            'hx-push-url="false">',
+            '<div hx-boost="true" hx-target="#members-tab" hx-swap="innerHTML">',
             html=False,
         )
+
+    def test_pages_are_not_pushed_onto_the_history(self):
+        "Boosted links are pushed to the history unless the response says not."
+        self._get_club_tab()
+        self.assertEqual(self.last_response["HX-Push-Url"], "false")
 
     def test_queryset_tab_is_paginated(self):
         with self.login(self.superuser):

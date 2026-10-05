@@ -399,9 +399,10 @@ class Application(object):
 
     def _is_htmx_request(self, request):
         """Check if the request is an HTMX request."""
-        return getattr(request, "htmx", False) or request.META.get(
-            "HTTP_HX_REQUEST"
-        ) == "true"
+        return (
+            getattr(request, "htmx", False)
+            or request.META.get("HTTP_HX_REQUEST") == "true"
+        )
 
     def _render_htmx_tab_content(
         self, request, model, manager, tab_name, instance, related, extra_context
@@ -412,7 +413,9 @@ class Application(object):
         """
         # Avoid circular import: touchtechnology.admin imports from
         # touchtechnology.common.sites (Application base class).
-        from touchtechnology.admin.templatetags.mvp_tags import related as related_filter
+        from touchtechnology.admin.templatetags.mvp_tags import (
+            related as related_filter,
+        )
 
         context = {
             "model": manager.none(),
@@ -441,10 +444,17 @@ class Application(object):
                     templates = [
                         "touchtechnology/admin/_htmx_tab_related.html",
                     ]
-                    return self.render(request, templates, context)
+                    response = self.render(request, templates, context)
+                    # The links to the other pages of a tab are boosted, which
+                    # htmx records in the history unless the server says not to
+                    # (``hx-push-url="false"`` is ignored for boosted links).
+                    response["HX-Push-Url"] = "false"
+                    return response
 
         # Tab not found - return empty content
-        return TemplateResponse(request, "touchtechnology/admin/_htmx_tab_empty.html", context)
+        return TemplateResponse(
+            request, "touchtechnology/admin/_htmx_tab_empty.html", context
+        )
 
     def generic_edit(
         self,

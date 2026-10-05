@@ -182,8 +182,8 @@
 <script src="{{ STATIC_URL }}touchtechnology/admin/js/modal_delete.js"></script>
 
 <!-- HTMX -->
-{% load static %}
-<script src="{% static 'django_htmx/htmx.min.js' %}"></script>
+{% load common %}
+<script src="{% htmx_script %}"></script>
 
 {% block extrajs %}{% endblock %}
 </body>

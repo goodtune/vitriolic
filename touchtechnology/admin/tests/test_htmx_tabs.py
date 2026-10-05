@@ -1,9 +1,15 @@
+from unittest import mock
+
+from django.conf import settings
+from django.contrib.staticfiles import finders
 from django.template import Context, Template
+from django.templatetags.static import static
 from django.test import RequestFactory, override_settings
 from test_plus import TestCase
 
 from touchtechnology.common.context_processors import htmx_admin_tabs
 from touchtechnology.common.default_settings import HTMX_ADMIN_TABS, LazySetting, S
+from touchtechnology.common.templatetags.common import htmx_script
 from touchtechnology.common.tests import factories
 
 
@@ -132,17 +138,48 @@ class HtmxTabTemplateRenderingTests(TestCase):
         output = template.render(context)
         self.assertIn('<form method="post"><div class="tab-pane">', output)
 
-    def test_htmx_mode_preload_trigger(self):
+    def test_htmx_mode_lazy_trigger(self):
         template = Template(
             "{% if htmx_admin_tabs %}"
-            '<div hx-trigger="load delay:100ms">Preload</div>'
+            '<div hx-trigger="intersect once">Lazy</div>'
             "{% else %}"
             "<div>Inline</div>"
             "{% endif %}"
         )
         context = Context({"htmx_admin_tabs": True})
         output = template.render(context)
-        self.assertIn('hx-trigger="load delay:100ms"', output)
+        self.assertIn('hx-trigger="intersect once"', output)
+
+
+class HtmxScriptTagTests(TestCase):
+    """The htmx library is named differently by different django-htmx."""
+
+    @staticmethod
+    def _only(name):
+        return lambda requested: "/path" if requested == name else None
+
+    def test_unversioned_name_up_to_django_htmx_1_27(self):
+        finder = self._only("django_htmx/htmx.min.js")
+        with mock.patch.object(finders, "find", side_effect=finder):
+            self.assertEqual(htmx_script(), static("django_htmx/htmx.min.js"))
+
+    def test_versioned_name_from_django_htmx_1_28(self):
+        finder = self._only("django_htmx/htmx-2.min.js")
+        with mock.patch.object(finders, "find", side_effect=finder):
+            self.assertEqual(htmx_script(), static("django_htmx/htmx-2.min.js"))
+
+    def test_installed_library_is_served(self):
+        url = htmx_script()
+        self.assertTrue(url.startswith(settings.STATIC_URL))
+        self.assertIsNotNone(finders.find(url.removeprefix(settings.STATIC_URL)))
+
+    def test_admin_pages_include_it(self):
+        superuser = factories.UserFactory.create(is_staff=True, is_superuser=True)
+        with self.login(superuser):
+            self.get("admin:auth:users:edit", pk=superuser.pk)
+        self.assertResponseContains(
+            f'<script src="{htmx_script()}"></script>', html=True
+        )
 
 
 class HtmxTabViewTests(TestCase):
@@ -150,9 +187,7 @@ class HtmxTabViewTests(TestCase):
 
     def setUp(self):
         super().setUp()
-        self.superuser = factories.UserFactory.create(
-            is_staff=True, is_superuser=True
-        )
+        self.superuser = factories.UserFactory.create(is_staff=True, is_superuser=True)
 
     def test_edit_view_without_htmx_flag(self):
         """Edit view returns full page when HTMX flag is disabled."""
