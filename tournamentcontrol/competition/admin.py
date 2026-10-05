@@ -46,6 +46,7 @@ from tournamentcontrol.competition.decorators import (
 )
 from tournamentcontrol.competition.forms import (
     ClubAssociationForm,
+    ClubEditForm,
     ClubRoleForm,
     CompetitionForm,
     DivisionBulkCreateForm,
@@ -2919,21 +2920,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             request,
             Club,
             instance=club,
-            form_fields=(
-                "title",
-                "short_title",
-                "abbreviation",
-                "email",
-                "website",
-                "twitter",
-                "facebook",
-                "youtube",
-                "primary",
-                "primary_position",
-                "status",
-                "slug",
-                "slug_locked",
-            ),
+            form_class=ClubEditForm,
             related=(
                 "members",
                 "teams",

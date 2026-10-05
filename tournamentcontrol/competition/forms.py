@@ -532,6 +532,40 @@ class MultiConfigurationForm(PlaceholderConfigurationBase):
         )
 
 
+class ClubEditForm(BootstrapFormControlMixin, ModelForm):
+    class Meta:
+        model = Club
+        fields = (
+            "title",
+            "short_title",
+            "abbreviation",
+            "email",
+            "website",
+            "twitter",
+            "facebook",
+            "youtube",
+            "primary",
+            "primary_position",
+            "status",
+            "slug",
+            "slug_locked",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # The primary contact is one of the club's own people. Left alone the
+        # field offers every person on the site, which is thousands of options
+        # to query, label and render on each visit to a club. The current
+        # primary stays on offer so that the form never rejects a club as it
+        # already stands.
+        queryset = Person.objects.none()
+        if self.instance.pk:
+            queryset = Person.objects.filter(
+                Q(club=self.instance) | Q(pk=self.instance.primary_id)
+            )
+        self.fields["primary"].queryset = queryset
+
+
 class PersonEditForm(BootstrapFormControlMixin, ModelForm):
     class Meta:
         model = Person
