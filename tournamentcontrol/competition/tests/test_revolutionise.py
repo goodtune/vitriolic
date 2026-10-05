@@ -877,6 +877,88 @@ class MigrationTests(TransactionTestCase):
         self.assertEqual(team.upstream_id, "mysideline:65576405")
         self.assertEqual(team.upstream_title, "2025 SC Doyalson MOA")
 
+        # Data synchronised from another backend after the upgrade has no
+        # MySideline form; rolling back must leave it unlinked, not fail.
+        Match = apps.get_model("competition", "Match")
+        Stage = apps.get_model("competition", "Stage")
+        stage = Stage.objects.create(
+            division_id=division.pk,
+            title="Regular Season",
+            slug="regular-season",
+            order=1,
+        )
+        other = Division.objects.create(
+            season_id=season.pk,
+            title="Mens Division 1",
+            slug="mens-division-1",
+            order=2,
+            upstream_id="revolutionise:25527/3741",
+            upstream_title="Mens Division 1",
+            upstream_title_synced="Mens Division 1",
+            points_formula="3*win",
+        )
+        match = Match.objects.create(
+            stage_id=stage.pk, home_team_id=team.pk, upstream_id="mysideline:1388870728"
+        )
+
+        # ... and back again: the MySideline columns are restored from the
+        # qualified identifiers and the filtered season URL.
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(self.migrate_from)
+        apps = executor.loader.project_state(self.migrate_from).apps
+        Competition = apps.get_model("competition", "Competition")
+        Season = apps.get_model("competition", "Season")
+        Division = apps.get_model("competition", "Division")
+        Team = apps.get_model("competition", "Team")
+        Match = apps.get_model("competition", "Match")
+
+        self.assertEqual(
+            Competition.objects.get(pk=competition.pk).mysideline_url,
+            "https://tfa.mysideline.com.au/competitions/association/299999",
+        )
+        season = Season.objects.get(pk=season.pk)
+        self.assertEqual(
+            (season.mysideline_season, season.mysideline_season_tag), (2025, 2)
+        )
+        unlinked = Season.objects.get(pk=unlinked.pk)
+        self.assertEqual(
+            (unlinked.mysideline_season, unlinked.mysideline_season_tag),
+            (None, None),
+        )
+        division = Division.objects.get(pk=division.pk)
+        self.assertEqual(division.mysideline_id, 65396575)
+        self.assertEqual(division.mysideline_title, "2025 SC Men's Open A")
+        self.assertEqual(division.mysideline_title_synced, "2025 SC Men's Open A")
+        self.assertEqual(Team.objects.get(pk=team.pk).mysideline_id, 65576405)
+        self.assertEqual(Match.objects.get(pk=match.pk).mysideline_id, 1388870728)
+        other = Division.objects.get(pk=other.pk)
+        self.assertEqual(other.mysideline_id, None)
+        self.assertEqual(other.mysideline_title, "Mens Division 1")
+        self.assertEqual(
+            sorted(
+                Division._meta.get_field(f.name).name
+                for f in Division._meta.fields
+                if f.name.startswith(("mysideline", "upstream"))
+            ),
+            ["mysideline_id", "mysideline_title", "mysideline_title_synced"],
+        )
+
+        # Forward once more: the second upgrade reproduces the first.
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(self.migrate_to)
+        apps = executor.loader.project_state(self.migrate_to).apps
+        Division = apps.get_model("competition", "Division")
+        Match = apps.get_model("competition", "Match")
+        self.assertEqual(
+            Division.objects.get(pk=division.pk).upstream_id, "mysideline:65396575"
+        )
+        self.assertEqual(Division.objects.get(pk=other.pk).upstream_id, None)
+        self.assertEqual(
+            Match.objects.get(pk=match.pk).upstream_id, "mysideline:1388870728"
+        )
+
         # Migrate everything else forward again so later tests see the
         # expected schema.
         executor = MigrationExecutor(connection)
