@@ -963,8 +963,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         remote does not tie up the request; the outcome is written to the
         task log.
         """
-        provider = season.upstream_provider
-        if not season.upstream_enabled or provider is None:
+        backend = season.upstream_backend
+        if not season.upstream_enabled or backend is None:
             raise Http404(
                 "Competition.upstream_url and Season.upstream_url must be set."
             )
@@ -979,7 +979,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 extra_context or {},
                 competition=competition,
                 season=season,
-                provider=provider,
+                backend=backend,
                 cancel_url=redirect_url,
                 renamed_divisions=upstream_renamed(season.divisions),
                 renamed_teams=upstream_renamed(
@@ -996,7 +996,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         messages.info(
             request,
             _("Synchronisation with %(provider)s has been queued.")
-            % {"provider": provider.name},
+            % {"provider": backend.name},
         )
         return self.redirect(redirect_url)
 

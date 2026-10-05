@@ -12,9 +12,9 @@ from tournamentcontrol.competition.upstream.sync import (
 
 class Command(BaseCommand):
     help = (
-        "Synchronise seasons with their upstream provider (MySideline, "
+        "Synchronise seasons with their upstream backend (MySideline, "
         "revolutioniseSPORT, ...). Without arguments every enabled, incomplete "
-        "season linked to a provider is synchronised."
+        "season linked to a backend is synchronised."
     )
 
     def add_arguments(self, parser: ArgumentParser):
@@ -43,15 +43,15 @@ class Command(BaseCommand):
                 raise CommandError("Season %d does not exist" % pk)
             if not season.upstream_enabled:
                 raise CommandError(
-                    "Season %d is not linked to an upstream provider (the "
+                    "Season %d is not linked to an upstream backend (the "
                     "competition and the season both need an upstream URL)" % pk
                 )
-            provider = season.upstream_provider
-            if provider is None:
+            backend = season.upstream_backend
+            if backend is None:
                 raise CommandError(
                     "Season %d is linked to an unsupported upstream URL" % pk
                 )
-            client = clients.setdefault(provider.key, provider.new_client())
+            client = clients.setdefault(backend.key, backend.new_client())
             try:
                 result = synchronise_season(season, client)
             except UpstreamError as exc:

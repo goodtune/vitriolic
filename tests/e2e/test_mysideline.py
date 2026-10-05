@@ -29,7 +29,7 @@ from tournamentcontrol.competition.tests.upstream import (
     STATE_CUP_URL,
     state_cup_session,
 )
-from tournamentcontrol.competition.upstream.mysideline import MySidelineClient
+from tournamentcontrol.competition.upstream.backends.mysideline import MySidelineClient
 from tournamentcontrol.competition.upstream.sync import synchronise_season
 
 MENS_OPEN_A = "mysideline:65396575"

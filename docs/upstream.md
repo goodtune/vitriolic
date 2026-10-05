@@ -40,7 +40,7 @@ page on that provider listing their draws:
 
 A season without an upstream URL is never synchronised.
 `Season.upstream_enabled` reports whether both URLs are set and
-`Season.upstream_provider` (also on `Competition`) names the provider.
+`Season.upstream_backend` (also on `Competition`) names the provider.
 
 Both URLs are also exposed by the MCP administration tools
 (`create_competition`, `update_competition`, `create_season`, `update_season`).
@@ -72,24 +72,60 @@ does not is native and is never touched.
 
 The fields are provided by `UpstreamIdentifierMixin` (`Match`) and
 `UpstreamMixin` (`Division`, `Team`, which also keep the upstream name).
-`upstream_provider` on any of them resolves the provider from the prefix.
+`upstream_backend` on any of them resolves the backend from the prefix.
 
-### Code layout
+### Backends
+
+Providers are supported through pluggable *backends*, after the pattern of
+Django's authentication, e-mail and storage backends. A backend is a class
+implementing `tournamentcontrol.competition.upstream.base.BaseUpstreamBackend`:
+
+| Member | Purpose |
+| --- | --- |
+| `key` | prefixes every `upstream_id` the backend's records carry (`mysideline`, `revolutionise`); lower case, unique, and never changed once data has been synchronised |
+| `name` | what the admin shows to people |
+| `competition_url_example`, `season_url_example` | used in help and error text |
+| `matches(url)` | whether a URL is on the provider's site; the registry picks the backend this way |
+| `parse_competition_url(url)` | validate and canonicalise the organisation URL stored on `Competition.upstream_url` |
+| `parse_season_url(url, competition_url)` | validate and canonicalise the season URL stored on `Season.upstream_url`, rejecting one from another organisation |
+| `new_client(session=None)` | the transport `fetch_snapshot` uses; the tests pass a canned `requests.Session` |
+| `fetch_snapshot(season, client=None)` | fetch everything the season mirrors as a list of `RemoteCompetition` (see `upstream/types.py`), raising an `UpstreamError` rather than returning partial data |
+
+`identifier()`, `owns_identifier()` and `remote_id()` are inherited and turn
+the provider's own identifiers into qualified `upstream_id` values and back.
+Backends are stateless; `HttpClient` in the same module is the shared HTTP
+transport with retries, timeouts and the error mapping.
+
+The backends in use are named by the `UPSTREAM_BACKENDS` setting, a list of
+dotted paths to backend classes. Its default is the two shipped backends:
+
+```python
+UPSTREAM_BACKENDS = [
+    "tournamentcontrol.competition.upstream.backends.mysideline.MySidelineBackend",
+    "tournamentcontrol.competition.upstream.backends.revolutionise.RevolutioniseBackend",
+]
+```
+
+Adding a provider means writing one such class (anywhere importable) and
+listing it; nothing in the models, forms, admin, tasks or reconciler names a
+backend. A misconfigured entry (not importable, not a subclass, an abstract
+method left out, an invalid or duplicated key) raises
+`ImproperlyConfigured` the first time the backends are loaded. The registry
+functions in `tournamentcontrol.competition.upstream` are `get_backends()`,
+`get_backend_for_url(url)`, `get_backend_by_key(key)` and
+`get_backend_for_identifier(upstream_id)`; `Competition.upstream_backend`,
+`Season.upstream_backend` and the `upstream_backend` property of a linked
+division, team or match resolve through them.
 
 ```
 tournamentcontrol/competition/upstream/
-    base.py          errors, HTTP transport, the UpstreamProvider interface
-    types.py         provider-neutral snapshot types (RemoteCompetition, ...)
-    sync.py          the reconciler
-    mysideline.py    the MySideline provider
-    revolutionise.py the revolutioniseSPORT provider
-    __init__.py      the registry: provider_for_url, provider_for_identifier
+    __init__.py               the registry and UPSTREAM_BACKENDS loader
+    base.py                   BaseUpstreamBackend, errors, HTTP transport
+    types.py                  backend-neutral snapshot types (RemoteCompetition, ...)
+    sync.py                   the reconciler
+    backends/mysideline.py    MySidelineBackend
+    backends/revolutionise.py RevolutioniseBackend
 ```
-
-Adding a provider means adding one module implementing `UpstreamProvider`
-(URL recognition and canonicalisation, a client, and `fetch_snapshot`
-returning `RemoteCompetition` objects) and listing it in `PROVIDERS`. Nothing
-in the models, forms, admin or reconciler names a provider.
 
 ## Mapping onto Vitriolic
 

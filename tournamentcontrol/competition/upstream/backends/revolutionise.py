@@ -55,7 +55,7 @@ from bs4 import BeautifulSoup
 from tournamentcontrol.competition.upstream.base import (
     HttpClient,
     UpstreamError,
-    UpstreamProvider,
+    BaseUpstreamBackend,
     UpstreamResponseError,
     UpstreamURLError,
 )
@@ -716,10 +716,10 @@ def infer_ladder_template(
     return template, notes
 
 
-# -- provider ----------------------------------------------------------------
+# -- backend -----------------------------------------------------------------
 
 
-class RevolutioniseProvider(UpstreamProvider):
+class RevolutioniseBackend(BaseUpstreamBackend):
     key = "revolutionise"
     name = "revolutioniseSPORT"
     competition_url_example = "https://www.revolutionise.com.au/ccha/games"

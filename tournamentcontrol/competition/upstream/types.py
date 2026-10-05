@@ -1,5 +1,5 @@
 """
-Typed, provider-neutral representations of the remote entities consumed by
+Typed, backend-neutral representations of the remote entities consumed by
 the reconciler.
 
 These are deliberately minimal: they carry only the data that Vitriolic needs
@@ -9,7 +9,7 @@ in :mod:`.sync` never has to reason about the shape of a remote payload.
 
 Identifiers are the provider's own, as strings (an integer is accepted and
 converted); the reconciler qualifies them with the provider's key before
-storing them (see :meth:`~.base.UpstreamProvider.identifier`).
+storing them (see :meth:`~.base.BaseUpstreamBackend.identifier`).
 """
 
 from datetime import datetime, timezone

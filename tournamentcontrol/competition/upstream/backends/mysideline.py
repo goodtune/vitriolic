@@ -37,7 +37,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from tournamentcontrol.competition.upstream.base import (
     HttpClient,
-    UpstreamProvider,
+    BaseUpstreamBackend,
     UpstreamResponseError,
     UpstreamURLError,
 )
@@ -581,7 +581,7 @@ def select_competitions(
     return selected
 
 
-class MySidelineProvider(UpstreamProvider):
+class MySidelineBackend(BaseUpstreamBackend):
     key = "mysideline"
     name = "MySideline"
     competition_url_example = (

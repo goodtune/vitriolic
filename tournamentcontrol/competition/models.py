@@ -90,8 +90,8 @@ from tournamentcontrol.competition.query import (
 from tournamentcontrol.competition.signals import match_forfeit
 from tournamentcontrol.competition.upstream import (
     UpstreamURLError,
-    provider_for_identifier,
-    provider_for_url,
+    get_backend_for_identifier,
+    get_backend_for_url,
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
@@ -200,15 +200,15 @@ class Competition(AdminUrlMixin, OrderedSitemapNode):
         return "admin:fixja:competition"
 
     @property
-    def upstream_provider(self):
+    def upstream_backend(self):
         """
-        The provider :attr:`upstream_url` belongs to, or ``None`` when the
-        competition is not linked to one.
+        The upstream backend :attr:`upstream_url` belongs to, or ``None``
+        when the competition is not linked to a provider.
         """
         if not self.upstream_url:
             return None
         try:
-            return provider_for_url(self.upstream_url)
+            return get_backend_for_url(self.upstream_url)
         except UpstreamURLError:
             return None
 
@@ -620,12 +620,12 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
         return "<Season: {} - {}>".format(self.competition, self)
 
     @property
-    def upstream_provider(self):
+    def upstream_backend(self):
         """
-        The provider this season is synchronised from, or ``None`` when the
-        competition is not linked to one.
+        The upstream backend this season is synchronised through, or
+        ``None`` when the competition is not linked to a provider.
         """
-        return self.competition.upstream_provider
+        return self.competition.upstream_backend
 
     @property
     def upstream_enabled(self):
@@ -878,11 +878,11 @@ class UpstreamIdentifierMixin(models.Model):
         abstract = True
 
     @property
-    def upstream_provider(self):
-        """The provider :attr:`upstream_id` belongs to, or ``None``."""
+    def upstream_backend(self):
+        """The upstream backend :attr:`upstream_id` belongs to, or ``None``."""
         if not self.upstream_id:
             return None
-        return provider_for_identifier(self.upstream_id)
+        return get_backend_for_identifier(self.upstream_id)
 
 
 class UpstreamMixin(UpstreamIdentifierMixin):

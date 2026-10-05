@@ -48,7 +48,7 @@ from tournamentcontrol.competition.upstream import (
     UpstreamTransportError,
     UpstreamURLError,
 )
-from tournamentcontrol.competition.upstream.mysideline import (
+from tournamentcontrol.competition.upstream.backends.mysideline import (
     GRAPHQL_ENDPOINT,
     MySidelineClient,
     MySidelineURL,
@@ -1650,7 +1650,7 @@ class SelectionTests(SyncTestCase):
             ["mysideline:300"],
         )
         self.assertEqual(self.season.upstream_enabled, True)
-        self.assertEqual(self.season.upstream_provider.name, "MySideline")
+        self.assertEqual(self.season.upstream_backend.name, "MySideline")
 
     def test_apply_snapshot_directly(self):
         result = apply_snapshot(
@@ -1671,7 +1671,7 @@ class SelectionTests(SyncTestCase):
     def test_competition_without_url(self):
         self.season.competition.upstream_url = None
         self.season.competition.save()
-        self.assertEqual(self.season.upstream_provider, None)
+        self.assertEqual(self.season.upstream_backend, None)
         with self.assertRaises(ValueError):
             self.sync()
 
@@ -1723,7 +1723,7 @@ class InvocationTests(SyncTestCase):
         synchronise.assert_called_once_with(self.season)
 
     @mock.patch(
-        "tournamentcontrol.competition.upstream.mysideline.MySidelineProvider.new_client"
+        "tournamentcontrol.competition.upstream.backends.mysideline.MySidelineBackend.new_client"
     )
     def test_command(self, new_client):
         new_client.return_value = self.mysideline

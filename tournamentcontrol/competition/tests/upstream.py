@@ -85,7 +85,7 @@ def state_cup_session(renames=None):
     replaced in their JSON-quoted form, so a name which happens to be a
     substring of another value is not touched.
     """
-    from tournamentcontrol.competition.upstream.mysideline import GRAPHQL_ENDPOINT
+    from tournamentcontrol.competition.upstream.backends.mysideline import GRAPHQL_ENDPOINT
 
     def rename(text):
         for before, after in (renames or {}).items():

@@ -36,17 +36,17 @@ from tournamentcontrol.competition.tests.upstream import (
     ccha_session,
 )
 from tournamentcontrol.competition.upstream import (
-    PROVIDERS,
+    get_backends,
     UpstreamResponseError,
     UpstreamTransportError,
     UpstreamURLError,
-    provider_for_identifier,
-    provider_for_url,
+    get_backend_for_identifier,
+    get_backend_for_url,
 )
-from tournamentcontrol.competition.upstream.revolutionise import (
+from tournamentcontrol.competition.upstream.backends.revolutionise import (
     LadderRow,
     RevolutioniseClient,
-    RevolutioniseProvider,
+    RevolutioniseBackend,
     RevolutioniseURL,
     infer_ladder_template,
 )
@@ -119,46 +119,46 @@ class URLTests(TestCase):
 
 
 class RegistryTests(TestCase):
-    def test_provider_for_url(self):
-        self.assertEqual(provider_for_url(CCHA_URL).key, "revolutionise")
+    def test_get_backend_for_url(self):
+        self.assertEqual(get_backend_for_url(CCHA_URL).key, "revolutionise")
         self.assertEqual(
-            provider_for_url(
+            get_backend_for_url(
                 "https://tfa.mysideline.com.au/competitions/association/6338"
             ).key,
             "mysideline",
         )
         with self.assertRaises(UpstreamURLError):
-            provider_for_url("https://example.com/ccha/games")
+            get_backend_for_url("https://example.com/ccha/games")
 
     def test_identifiers(self):
-        provider = RevolutioniseProvider()
-        self.assertEqual(provider.identifier("25527/3741"), MENS_DIV_1)
-        self.assertEqual(provider.remote_id(MENS_DIV_1), "25527/3741")
+        backend = RevolutioniseBackend()
+        self.assertEqual(backend.identifier("25527/3741"), MENS_DIV_1)
+        self.assertEqual(backend.remote_id(MENS_DIV_1), "25527/3741")
         self.assertIs(
-            provider_for_identifier(MENS_DIV_1).__class__, RevolutioniseProvider
+            get_backend_for_identifier(MENS_DIV_1).__class__, RevolutioniseBackend
         )
-        self.assertEqual(provider_for_identifier("mysideline:1").key, "mysideline")
-        self.assertEqual(provider_for_identifier("other:1"), None)
-        self.assertEqual(provider_for_identifier(None), None)
+        self.assertEqual(get_backend_for_identifier("mysideline:1").key, "mysideline")
+        self.assertEqual(get_backend_for_identifier("other:1"), None)
+        self.assertEqual(get_backend_for_identifier(None), None)
         self.assertEqual(
-            sorted(p.key for p in PROVIDERS), ["mysideline", "revolutionise"]
+            sorted(b.key for b in get_backends()), ["mysideline", "revolutionise"]
         )
 
     def test_season_url_belongs_to_the_organisation(self):
-        provider = RevolutioniseProvider()
+        backend = RevolutioniseBackend()
         self.assertEqual(
-            provider.parse_competition_url("https://www.revolutionise.com.au/ccha"),
+            backend.parse_competition_url("https://www.revolutionise.com.au/ccha"),
             CCHA_URL,
         )
         self.assertEqual(
-            provider.parse_season_url(
+            backend.parse_season_url(
                 "https://www.revolutionise.com.au/ccha/games/25527/3741", CCHA_URL
             ),
             CCHA_MENS_URL,
         )
-        self.assertEqual(provider.parse_season_url(CCHA_URL, CCHA_URL), CCHA_URL)
+        self.assertEqual(backend.parse_season_url(CCHA_URL, CCHA_URL), CCHA_URL)
         with self.assertRaises(UpstreamURLError):
-            provider.parse_season_url(
+            backend.parse_season_url(
                 "https://www.revolutionise.com.au/other/games/1", CCHA_URL
             )
 
@@ -483,7 +483,7 @@ class SyncTests(TestCase):
             ],
         )
         division = self.season.divisions.get(upstream_id=MENS_DIV_1)
-        self.assertEqual(division.upstream_provider.name, "revolutioniseSPORT")
+        self.assertEqual(division.upstream_backend.name, "revolutioniseSPORT")
         self.assertEqual(division.upstream_title, "Mens Division 1")
         # The points scheme was inferred from the ladder, the forfeit score
         # from the forfeit that was played with one.

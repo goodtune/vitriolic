@@ -1,28 +1,38 @@
 """
-The pieces every upstream provider shares: the error hierarchy, the HTTP
-transport and the :class:`UpstreamProvider` interface that the reconciler
-in :mod:`.sync` and the admin forms program against.
+The upstream backend API.
 
-A provider is a stateless object that knows three things:
+Vitriolic can mirror a season from any competition management platform for
+which a *backend* exists, in the same way Django's authentication, e-mail,
+cache and storage layers are pluggable. A backend is a subclass of
+:class:`BaseUpstreamBackend`; the backends in use are named by the
+``UPSTREAM_BACKENDS`` setting (see :mod:`tournamentcontrol.competition.upstream`)
+and the rest of the application only ever talks to the base class API:
 
-* which URLs belong to it, and what the organisation and season pages on
-  its site look like (:meth:`~UpstreamProvider.parse_competition_url`,
-  :meth:`~UpstreamProvider.parse_season_url`);
-* how to turn its own identifiers into the qualified ``upstream_id`` stored
-  on a division, team or match (:meth:`~UpstreamProvider.identifier`);
+* which URLs belong to the backend, and what the organisation and season
+  pages on its site look like (:meth:`~BaseUpstreamBackend.matches`,
+  :meth:`~BaseUpstreamBackend.parse_competition_url`,
+  :meth:`~BaseUpstreamBackend.parse_season_url`);
+* how its own identifiers become the qualified ``upstream_id`` stored on a
+  division, team or match (:meth:`~BaseUpstreamBackend.identifier` and its
+  inverse, inherited and rarely overridden);
 * how to fetch the complete snapshot of a season
-  (:meth:`~UpstreamProvider.fetch_snapshot`) as the provider-neutral types
-  in :mod:`.types`.
+  (:meth:`~BaseUpstreamBackend.fetch_snapshot`) as the backend-neutral types
+  in :mod:`.types`, with :meth:`~BaseUpstreamBackend.new_client` giving the
+  transport the tests replace.
 
 Nothing here imports the ORM, so :mod:`tournamentcontrol.competition.models`
-can import the registry to validate URLs and to name the provider a record
-belongs to.
+can import the registry to validate URLs and to name the backend a record
+belongs to. This module also provides the error hierarchy every backend
+raises and the HTTP transport they share.
 """
 
 import logging
+import re
+from abc import ABC, abstractmethod
 from typing import Optional
 
 import requests
+from django.core.exceptions import ImproperlyConfigured
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -31,13 +41,17 @@ logger = logging.getLogger(__name__)
 USER_AGENT = "vitriolic-upstream-sync (+https://github.com/goodtune/vitriolic)"
 DEFAULT_TIMEOUT = (5, 30)  # connect, read
 
+# A backend key prefixes every upstream_id, so it must be URL-safe, lower
+# case and free of the ":" that separates it from the remote identifier.
+KEY_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
+
 
 class UpstreamError(Exception):
     """Base class for all upstream integration errors."""
 
 
 class UpstreamURLError(UpstreamError, ValueError):
-    """The configured URL is not one a provider recognises."""
+    """The configured URL is not one a backend recognises."""
 
 
 class UpstreamTransportError(UpstreamError):
@@ -66,7 +80,7 @@ def new_session() -> requests.Session:
 
 class HttpClient:
     """
-    Shared transport for provider clients.
+    Shared transport for backend clients.
 
     :meth:`request` raises :class:`UpstreamTransportError` when the network
     or HTTP layer fails; subclasses raise :class:`UpstreamResponseError` when
@@ -100,13 +114,27 @@ class HttpClient:
         return response
 
 
-class UpstreamProvider:
+class BaseUpstreamBackend(ABC):
     """
-    Interface implemented by each provider module.
+    The interface every upstream backend implements.
 
-    ``key`` prefixes every ``upstream_id`` the provider's records carry and
-    must never change once data has been synchronised; ``name`` is what the
-    admin shows to people.
+    Subclasses set the class attributes and implement the abstract methods;
+    the concrete methods on identifiers should not need overriding. A
+    backend is stateless: one instance serves every request, and anything
+    per-synchronisation lives in the client :meth:`new_client` returns or in
+    :meth:`fetch_snapshot`.
+
+    ``key``
+        Prefixes every ``upstream_id`` the backend's records carry
+        (``"mysideline"`` gives ``mysideline:69295321``). It must never change
+        once data has been synchronised, and must be unique among the
+        configured backends.
+
+    ``name``
+        What the admin shows to people ("MySideline").
+
+    ``competition_url_example``, ``season_url_example``
+        Shown in help and error text.
     """
 
     key: str = ""
@@ -117,34 +145,53 @@ class UpstreamProvider:
     def __str__(self):
         return self.name
 
+    def __repr__(self):
+        return "<%s: %s>" % (type(self).__name__, self.key)
+
+    @classmethod
+    def check(cls) -> None:
+        """
+        Validate the class attributes. Called when the backend is loaded
+        from ``UPSTREAM_BACKENDS``; raises
+        :class:`~django.core.exceptions.ImproperlyConfigured`.
+        """
+        if not cls.key or not KEY_RE.match(cls.key):
+            raise ImproperlyConfigured(
+                "%s.key must be a lower-case identifier such as 'mysideline', "
+                "got %r" % (cls.__name__, cls.key)
+            )
+        if not cls.name:
+            raise ImproperlyConfigured("%s.name must be set" % cls.__name__)
+
     # -- identifiers ---------------------------------------------------------
 
     def identifier(self, remote_id) -> str:
-        """The ``upstream_id`` for one of this provider's own identifiers."""
+        """The ``upstream_id`` for one of this backend's own identifiers."""
         return "%s:%s" % (self.key, remote_id)
 
     def owns_identifier(self, upstream_id: str) -> bool:
         return bool(upstream_id) and upstream_id.startswith(self.key + ":")
 
     def remote_id(self, upstream_id: str) -> str:
-        """The provider's own identifier from an ``upstream_id`` it owns."""
+        """The backend's own identifier from an ``upstream_id`` it owns."""
         if not self.owns_identifier(upstream_id):
             raise ValueError("%r does not belong to %s" % (upstream_id, self.name))
         return upstream_id[len(self.key) + 1 :]
 
     # -- URLs ----------------------------------------------------------------
 
+    @abstractmethod
     def matches(self, url: str) -> bool:
-        """Whether ``url`` is on this provider's site."""
-        raise NotImplementedError
+        """Whether ``url`` is on this backend's site."""
 
+    @abstractmethod
     def parse_competition_url(self, url: str) -> str:
         """
         Validate and canonicalise the URL that links a ``Competition`` to an
         organisation on the provider. Raises :class:`UpstreamURLError`.
         """
-        raise NotImplementedError
 
+    @abstractmethod
     def parse_season_url(self, url: str, competition_url: str) -> str:
         """
         Validate and canonicalise the URL that selects a ``Season``'s draws
@@ -152,18 +199,22 @@ class UpstreamProvider:
         :class:`UpstreamURLError` when the URL is not understood or belongs
         to a different organisation.
         """
-        raise NotImplementedError
 
     # -- data ----------------------------------------------------------------
 
+    @abstractmethod
     def new_client(self, session: Optional[requests.Session] = None) -> HttpClient:
-        raise NotImplementedError
+        """
+        The client :meth:`fetch_snapshot` uses when none is given. ``session``
+        lets the tests substitute a canned ``requests.Session``.
+        """
 
+    @abstractmethod
     def fetch_snapshot(self, season, client: Optional[HttpClient] = None) -> list:
         """
         Fetch the complete remote snapshot for ``season`` -- a list of
         :class:`~tournamentcontrol.competition.upstream.types.RemoteCompetition`
         -- without touching the database. Any transport or parsing error
-        propagates; a partial snapshot is never returned.
+        propagates as an :class:`UpstreamError`; a partial snapshot is never
+        returned.
         """
-        raise NotImplementedError

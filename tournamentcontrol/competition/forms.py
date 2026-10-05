@@ -101,7 +101,7 @@ from tournamentcontrol.competition.models import (
 from tournamentcontrol.competition.signals.custom import score_updated
 from tournamentcontrol.competition.upstream import (
     UpstreamURLError,
-    provider_for_url,
+    get_backend_for_url,
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
@@ -636,8 +636,8 @@ class UpstreamTitleMixin:
         self.upstream_unacknowledged = self.instance.upstream_title_changed
         if not self.instance.upstream_reconciled:
             return
-        provider = self.instance.upstream_provider
-        provider_name = provider.name if provider else _("The upstream provider")
+        backend = self.instance.upstream_backend
+        provider_name = backend.name if backend else _("The upstream provider")
         remote = self.instance.upstream_title
         if self.instance.upstream_title_changed:
             self.fields["title"].help_text = _(
@@ -712,7 +712,7 @@ class CompetitionForm(SuperUserSlugMixin, ModelForm):
         if not url:
             return url
         try:
-            return provider_for_url(url).parse_competition_url(url)
+            return get_backend_for_url(url).parse_competition_url(url)
         except UpstreamURLError as exc:
             raise forms.ValidationError(str(exc))
 
@@ -778,13 +778,13 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
                 _("Set the upstream URL on the competition first.")
             )
         try:
-            provider = provider_for_url(competition_url)
-            if not provider.matches(url):
+            backend = get_backend_for_url(competition_url)
+            if not backend.matches(url):
                 raise UpstreamURLError(
                     _("Enter a URL on %(provider)s, the competition's provider.")
-                    % {"provider": provider.name}
+                    % {"provider": backend.name}
                 )
-            return provider.parse_season_url(url, competition_url)
+            return backend.parse_season_url(url, competition_url)
         except UpstreamURLError as exc:
             raise forms.ValidationError(str(exc))
 

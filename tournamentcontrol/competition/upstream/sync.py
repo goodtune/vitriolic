@@ -1,7 +1,7 @@
 """
-Reconcile a Season with the competitions its upstream provider publishes.
+Reconcile a Season with the competitions its upstream backend publishes.
 
-The provider is authoritative. Each synchronisation fetches a complete
+The backend is authoritative. Each synchronisation fetches a complete
 snapshot of every relevant competition *before* touching the database, then
 converges the local models onto that snapshot inside a single transaction:
 
@@ -11,21 +11,21 @@ converges the local models onto that snapshot inside a single transaction:
   including renames, rescheduling, pool membership and results;
 * local entities that carry an ``upstream_id`` but no longer exist remotely
   are removed. Where a removal is blocked because native Vitriolic data
-  depends on the record, the record is detached from the provider (its
+  depends on the record, the record is detached from the backend (its
   identifier cleared, or the division marked as draft) instead of failing
   the whole synchronisation.
 
 Anything that does not carry an ``upstream_id`` is never touched, so native
 divisions, teams and matches can coexist with synchronised ones.
 
-The one thing the provider is *not* authoritative for is the name of a
+The one thing the backend is *not* authoritative for is the name of a
 division or team. Upstream naming is often unwieldy -- "Born 2014 & 2013 u14
 Boys" for what is better published as "14 Boys" -- so a title changed by an
 administrator is kept, while the remote name continues to be recorded so
 that a later upstream rename is reported rather than silently discarded. See
 :class:`~tournamentcontrol.competition.models.UpstreamMixin`.
 
-Mapping of the provider-neutral snapshot onto Vitriolic models:
+Mapping of the backend-neutral snapshot onto Vitriolic models:
 
 =================  ======================================================
 Snapshot           Vitriolic
@@ -67,7 +67,7 @@ from tournamentcontrol.competition.models import (
 )
 from tournamentcontrol.competition.upstream.base import (
     HttpClient,
-    UpstreamProvider,
+    BaseUpstreamBackend,
 )
 from tournamentcontrol.competition.upstream.types import (
     STATUS_FINAL,
@@ -83,7 +83,7 @@ FINALS_STAGE_TITLE = "Finals"
 TBA_LABEL = "TBA"
 
 # Applied when a division is *created* by the synchronisation, from the
-# competition's ladder template when the provider could supply one and
+# competition's ladder template when the backend could supply one and
 # otherwise from the "TFA Standard Ladder" defaults. Ladder configuration
 # is not overwritten on later syncs, so administrators may change it.
 DEFAULT_LADDER_TEMPLATE = RemoteLadderTemplate()
@@ -132,18 +132,18 @@ class SyncResult:
         )
 
 
-def _provider(season: Season) -> UpstreamProvider:
+def _backend(season: Season) -> BaseUpstreamBackend:
     if not season.competition.upstream_url:
         raise ValueError("Competition %r has no upstream_url" % season.competition)
     if not season.upstream_url:
         raise ValueError("Season %r has no upstream_url" % season)
-    provider = season.upstream_provider
-    if provider is None:
+    backend = season.upstream_backend
+    if backend is None:
         raise ValueError(
-            "Competition %r upstream_url is not on a supported provider"
+            "Competition %r upstream_url is not on a supported backend"
             % season.competition
         )
-    return provider
+    return backend
 
 
 def fetch_snapshot(
@@ -154,23 +154,23 @@ def fetch_snapshot(
     database. Any transport or parsing error propagates; a partial snapshot
     is never returned.
     """
-    return _provider(season).fetch_snapshot(season, client)
+    return _backend(season).fetch_snapshot(season, client)
 
 
 def synchronise_season(
     season: Season, client: Optional[HttpClient] = None
 ) -> SyncResult:
     """
-    Synchronise ``season`` with its upstream provider.
+    Synchronise ``season`` with its upstream backend.
 
     Raises :class:`~tournamentcontrol.competition.upstream.base.UpstreamError`
     (or a subclass) if the remote data cannot be obtained; in that case the
     local data is left untouched.
     """
-    provider = _provider(season)
-    snapshots = provider.fetch_snapshot(season, client)
+    backend = _backend(season)
+    snapshots = backend.fetch_snapshot(season, client)
     result = apply_snapshot(season, snapshots)
-    logger.info("%s sync of %r: %s", provider.name, season, result.summary())
+    logger.info("%s sync of %r: %s", backend.name, season, result.summary())
     return result
 
 
@@ -183,7 +183,7 @@ def apply_snapshot(season: Season, snapshots: list[RemoteCompetition]) -> SyncRe
     be exercised (and tested) independently of the HTTP layer.
     """
     result = SyncResult()
-    reconciler = _SeasonReconciler(season, _provider(season), result)
+    reconciler = _SeasonReconciler(season, _backend(season), result)
     reconciler.apply(snapshots)
     return result
 
@@ -232,7 +232,7 @@ def _slug_attrs(obj, title: str, siblings) -> dict:
 
 def _title_attrs(obj, remote_name: str, siblings, result: SyncResult) -> dict:
     """
-    Reconcile ``obj.title`` with the name the provider currently publishes.
+    Reconcile ``obj.title`` with the name the backend currently publishes.
 
     The remote name is always recorded in ``upstream_title``, whether or not
     we use it. It is *applied* only while our title still matches the remote
@@ -329,9 +329,11 @@ def _remove_team(team: Team, result: SyncResult) -> bool:
 
 
 class _SeasonReconciler:
-    def __init__(self, season: Season, provider: UpstreamProvider, result: SyncResult):
+    def __init__(
+        self, season: Season, backend: BaseUpstreamBackend, result: SyncResult
+    ):
         self.season = season
-        self.provider = provider
+        self.backend = backend
         self.result = result
 
     # -- season ------------------------------------------------------------
@@ -342,7 +344,7 @@ class _SeasonReconciler:
             for division in self.season.divisions.filter(upstream_id__isnull=False)
         }
         for snapshot in snapshots:
-            upstream_id = self.provider.identifier(snapshot.id)
+            upstream_id = self.backend.identifier(snapshot.id)
             division = existing.pop(upstream_id, None)
             if division is None:
                 division = self._adopt_or_create_division(snapshot, upstream_id)
@@ -355,7 +357,7 @@ class _SeasonReconciler:
     ) -> Division:
         # A division created by hand with the same title is adopted rather
         # than duplicated; this lets an administrator pre-configure ladder
-        # settings before linking a season to the provider.
+        # settings before linking a season to the backend.
         division = self.season.divisions.filter(
             upstream_id__isnull=True, title__iexact=snapshot.name
         ).first()
@@ -397,7 +399,7 @@ class _SeasonReconciler:
     def _remove_division(self, division: Division) -> None:
         """
         The competition no longer exists upstream. Remove everything the
-        provider owned within the division and then the division itself; if
+        backend owned within the division and then the division itself; if
         native data protects any of it, keep the division but mark it as
         draft so it is hidden from the public site.
         """
@@ -433,7 +435,7 @@ class _DivisionReconciler:
         self, parent: _SeasonReconciler, division: Division, snapshot: RemoteCompetition
     ):
         self.season = parent.season
-        self.provider = parent.provider
+        self.backend = parent.backend
         self.result = parent.result
         self.division = division
         self.snapshot = snapshot
@@ -517,7 +519,7 @@ class _DivisionReconciler:
         }
         for remote in self.snapshot.teams:
             pool = self.pools.get(remote.pool) if remote.pool else None
-            upstream_id = self.provider.identifier(remote.id)
+            upstream_id = self.backend.identifier(remote.id)
             team = local.pop(upstream_id, None)
             if team is None:
                 team = self._adopt_or_create_team(upstream_id, remote.name, pool)
@@ -569,7 +571,7 @@ class _DivisionReconciler:
         return team
 
     def _remove_team(self, team: Team) -> None:
-        # Matches owned by the provider that reference the team are removed
+        # Matches owned by the backend that reference the team are removed
         # first (they cannot exist remotely if the team does not). Native
         # matches referencing it will block the delete; detach instead.
         for match in Match.objects.filter(
@@ -583,7 +585,7 @@ class _DivisionReconciler:
             "native matches; detached from %s.",
             team.title,
             self.division.title,
-            self.provider.name,
+            self.backend.name,
         )
         _set_attrs(team, self.result, upstream_id=None)
         self.result.add_detached(team)
@@ -603,7 +605,7 @@ class _DivisionReconciler:
             )
         }
         for remote in self.snapshot.matches:
-            upstream_id = self.provider.identifier(remote.id)
+            upstream_id = self.backend.identifier(remote.id)
             match = local.pop(upstream_id, None)
             if match is None:
                 match = Match.objects.filter(upstream_id=upstream_id).first()
@@ -789,7 +791,7 @@ class _DivisionReconciler:
 
 
 def linked_seasons():
-    """Enabled, incomplete seasons linked to an upstream provider."""
+    """Enabled, incomplete seasons linked to an upstream backend."""
     return (
         Season.objects.filter(
             enabled=True,
@@ -808,29 +810,29 @@ def synchronise_all(clients: Optional[dict] = None) -> dict[int, SyncResult]:
     Synchronise every enabled, incomplete season that names an upstream URL
     within a competition that has one.
 
-    ``clients`` optionally maps a provider key to the client to use for that
-    provider (the tests pass canned sessions this way). Failures are
+    ``clients`` optionally maps a backend key to the client to use for that
+    backend (the tests pass canned sessions this way). Failures are
     isolated per season: a season whose remote data cannot be fetched is
     logged and skipped, the others still synchronise.
     """
     clients = dict(clients or {})
     results = {}
     for season in linked_seasons():
-        provider = season.upstream_provider
-        if provider is None:
+        backend = season.upstream_backend
+        if backend is None:
             logger.warning(
                 "Season %r is linked to an unsupported upstream URL %r",
                 season,
                 season.competition.upstream_url,
             )
             continue
-        client = clients.get(provider.key)
+        client = clients.get(backend.key)
         if client is None:
-            client = clients[provider.key] = provider.new_client()
+            client = clients[backend.key] = backend.new_client()
         try:
             results[season.pk] = synchronise_season(season, client)
         except Exception:
-            logger.exception("%s sync of %r failed", provider.name, season)
+            logger.exception("%s sync of %r failed", backend.name, season)
     return results
 
 
