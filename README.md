@@ -16,15 +16,17 @@ This project will now forever remind me of the day that America shat the bed.
 
 ## Supported Django versions
 
-The aim is to only support LTS versions of Django. I don't work on this project all the time, so I need it to be as
-stable as possible for as long as possible.
+The aim is to support the current Django LTS release plus the feature releases that follow it. I don't work on this
+project all the time, so I need it to be as stable as possible for as long as possible.
 
-As of this release, we target and test against:
-- Django 4.2 and 5.2 (LTS releases) with Python 3.11, 3.12, and 3.13
-- Django 5.2 (latest patch releases) with Python 3.14 (when available)
-- Django 6.0 with Python 3.12, 3.13, and 3.14 (when available)
+Django 5.2 is the minimum supported version. As of this release, we target and test against:
 
-**Note**: Testing dimensions for Python 3.14 are configured but will be skipped if the version
-is not yet available (`skip_missing_interpreters = true` in tox.ini).
+| Django | Python                 | PostgreSQL | Upstream support ends |
+|--------|------------------------|------------|-----------------------|
+| 5.2    | 3.11, 3.12, 3.13, 3.14 | 14+        | April 2028 (LTS)      |
+| 6.0    | 3.12, 3.13, 3.14       | 14+        | April 2027            |
+| 6.1    | 3.12, 3.13, 3.14       | 15+        | December 2027         |
+
+The test suite runs against PostgreSQL 15, the oldest release supported by every Django version above.
 
 [wiktionary word of the day]: https://en.wiktionary.org/wiki/Wiktionary:Word_of_the_day
