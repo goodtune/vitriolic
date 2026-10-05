@@ -134,6 +134,7 @@ class FauxQueryset(list):
         self.team = team
         self.model = model
         self.ordered = True
+        self.totally_ordered = True
         self.db = None
         self._prefetch_related_lookups = True  # ModelChoiceIterator
 
