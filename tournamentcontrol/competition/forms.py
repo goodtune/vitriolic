@@ -98,11 +98,11 @@ from tournamentcontrol.competition.models import (
     Venue,
     stage_group_position_re,
 )
-from tournamentcontrol.competition.mysideline.client import (
-    MySidelineURL,
-    MySidelineURLError,
-)
 from tournamentcontrol.competition.signals.custom import score_updated
+from tournamentcontrol.competition.upstream import (
+    UpstreamURLError,
+    provider_for_url,
+)
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
     ThumbnailPreview,
@@ -612,67 +612,73 @@ class PersonMergeForm(PersonEditForm):
         )
 
 
-class MySidelineTitleMixin:
+class UpstreamTitleMixin:
     """
-    Surface the MySideline name of a record which mirrors one, and let an
-    administrator choose between it and a local name.
+    Surface the upstream name of a record which mirrors one on a provider,
+    and let an administrator choose between it and a local name.
 
-    MySideline is authoritative for the draw and results but its naming is
+    The provider is authoritative for the draw and results but its naming is
     often unwieldy, so the ``title`` of a linked division or team may be
     changed here; the synchronisation will then leave it alone. See
-    :class:`~tournamentcontrol.competition.models.MySidelineMixin`.
+    :class:`~tournamentcontrol.competition.models.UpstreamMixin`.
 
-    Saving the form reconciles the record with the name MySideline currently
-    publishes, which is shown on the form: an upstream rename is reported by
-    each synchronisation until then, and is not reported again afterwards.
-    Ticking *Use the MySideline name* discards the local name, after which
-    upstream renames are applied automatically again.
+    Saving the form reconciles the record with the name the provider
+    currently publishes, which is shown on the form: an upstream rename is
+    reported by each synchronisation until then, and is not reported again
+    afterwards. Ticking *Use the <provider> name* discards the local name,
+    after which upstream renames are applied automatically again.
     """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Whether MySideline has renamed the record since it was last
+        # Whether the provider has renamed the record since it was last
         # reconciled, noted before ``_post_clean`` acknowledges it.
-        self.mysideline_unacknowledged = self.instance.mysideline_title_changed
-        if not self.instance.mysideline_reconciled:
+        self.upstream_unacknowledged = self.instance.upstream_title_changed
+        if not self.instance.upstream_reconciled:
             return
-        remote = self.instance.mysideline_title
-        if self.instance.mysideline_title_changed:
+        provider = self.instance.upstream_provider
+        provider_name = provider.name if provider else _("The upstream provider")
+        remote = self.instance.upstream_title
+        if self.instance.upstream_title_changed:
             self.fields["title"].help_text = _(
-                "MySideline has renamed this from “%(was)s” to “%(now)s”."
-            ) % {"was": self.instance.mysideline_title_synced, "now": remote}
-        else:
-            self.fields["title"].help_text = _("MySideline calls this “%(now)s”.") % {
-                "now": remote
+                "%(provider)s has renamed this from “%(was)s” to “%(now)s”."
+            ) % {
+                "provider": provider_name,
+                "was": self.instance.upstream_title_synced,
+                "now": remote,
             }
+        else:
+            self.fields["title"].help_text = _(
+                "%(provider)s calls this “%(now)s”."
+            ) % {"provider": provider_name, "now": remote}
         if self.instance.title != remote:
-            self.fields["mysideline_title_reset"] = forms.BooleanField(
+            self.fields["upstream_title_reset"] = forms.BooleanField(
                 required=False,
-                label=_("Use the MySideline name"),
+                label=_("Use the %(provider)s name") % {"provider": provider_name},
                 help_text=_(
                     "Replace the name above with “%(now)s” and follow any "
-                    "future MySideline renames."
+                    "future %(provider)s renames."
                 )
-                % {"now": remote},
+                % {"now": remote, "provider": provider_name},
             )
             # Beside the name it replaces, rather than at the end of a long
             # form where it reads as unrelated.
             order = list(self.fields)
-            order.remove("mysideline_title_reset")
-            order.insert(order.index("title") + 1, "mysideline_title_reset")
+            order.remove("upstream_title_reset")
+            order.insert(order.index("title") + 1, "upstream_title_reset")
             self.order_fields(order)
 
     def has_changed(self):
         # Acknowledging an upstream rename is itself a change worth saving,
         # even when no field on the form was edited -- the admin skips the
         # save entirely for a form which reports no change.
-        return super().has_changed() or self.mysideline_unacknowledged
+        return super().has_changed() or self.upstream_unacknowledged
 
     def clean(self):
         # Not every form in the chain returns the cleaned data.
         cleaned_data = super().clean() or self.cleaned_data
-        if cleaned_data.get("mysideline_title_reset"):
-            cleaned_data["title"] = self.instance.mysideline_title
+        if cleaned_data.get("upstream_title_reset"):
+            cleaned_data["title"] = self.instance.upstream_title
         return cleaned_data
 
     def _post_clean(self):
@@ -680,8 +686,8 @@ class MySidelineTitleMixin:
         # Whatever name was chosen, it was chosen against the remote name
         # the form displayed; record that so the synchronisation does not
         # keep reporting a rename which has been seen and dealt with.
-        if self.instance.mysideline_id:
-            self.instance.mysideline_title_synced = self.instance.mysideline_title
+        if self.instance.upstream_id:
+            self.instance.upstream_title_synced = self.instance.upstream_title
 
 
 class CompetitionForm(SuperUserSlugMixin, ModelForm):
@@ -695,28 +701,20 @@ class CompetitionForm(SuperUserSlugMixin, ModelForm):
             "slug",
             "slug_locked",
             "clubs",
-            "mysideline_url",
+            "upstream_url",
         )
         labels = {
             "copy": _("Description"),
         }
 
-    def clean_mysideline_url(self):
-        url = self.cleaned_data.get("mysideline_url")
+    def clean_upstream_url(self):
+        url = self.cleaned_data.get("upstream_url")
         if not url:
             return url
         try:
-            parsed = MySidelineURL(url)
-        except MySidelineURLError as exc:
+            return provider_for_url(url).parse_competition_url(url)
+        except UpstreamURLError as exc:
             raise forms.ValidationError(str(exc))
-        if parsed.association_id is None:
-            raise forms.ValidationError(
-                _(
-                    "Enter the MySideline association URL, for example "
-                    "https://tfa.mysideline.com.au/competitions/association/6338"
-                )
-            )
-        return parsed.canonical
 
 
 class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
@@ -742,8 +740,7 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
             "statistics",
             "mvp_results_public",
             "enable_experimental_views",
-            "mysideline_season",
-            "mysideline_season_tag",
+            "upstream_url",
             "slug",
             "slug_locked",
         )
@@ -771,13 +768,25 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
         self.fields["live_stream_client_secret"].widget.attrs["class"] = "form-control"
         self.fields["live_stream_client_secret"].widget.attrs["placeholder"] = "*" * 10
 
-    def clean_mysideline_season(self):
-        year = self.cleaned_data.get("mysideline_season")
-        if year and not self.instance.competition.mysideline_url:
+    def clean_upstream_url(self):
+        url = self.cleaned_data.get("upstream_url")
+        if not url:
+            return url
+        competition_url = self.instance.competition.upstream_url
+        if not competition_url:
             raise forms.ValidationError(
-                _("Set the MySideline URL on the competition first.")
+                _("Set the upstream URL on the competition first.")
             )
-        return year
+        try:
+            provider = provider_for_url(competition_url)
+            if not provider.matches(url):
+                raise UpstreamURLError(
+                    _("Enter a URL on %(provider)s, the competition's provider.")
+                    % {"provider": provider.name}
+                )
+            return provider.parse_season_url(url, competition_url)
+        except UpstreamURLError as exc:
+            raise forms.ValidationError(str(exc))
 
     def clean_live_stream_client_secret(self):
         project_id = self.cleaned_data.get("live_stream_project_id")
@@ -841,7 +850,7 @@ class GroundFormSet(BaseGroundFormSet):
         return super(GroundFormSet, self)._construct_form(i, **kwargs)
 
 
-class DivisionForm(MySidelineTitleMixin, SuperUserSlugMixin, ModelForm):
+class DivisionForm(UpstreamTitleMixin, SuperUserSlugMixin, ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance.season.mode != DAILY:
@@ -1169,7 +1178,7 @@ class UndecidedTeamForm(UserMixin, ModelForm):
         return label
 
 
-class TeamForm(MySidelineTitleMixin, SuperUserSlugMixin, ModelForm):
+class TeamForm(UpstreamTitleMixin, SuperUserSlugMixin, ModelForm):
     def __init__(self, division, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not division.season.competition.clubs.count():

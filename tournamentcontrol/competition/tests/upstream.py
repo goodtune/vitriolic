@@ -1,21 +1,32 @@
 """
-Test doubles for the MySideline HTTP boundary.
+Test doubles for the HTTP boundary of the upstream providers.
 
 Shared by the unit tests and the end-to-end tests so that both can drive
-the real client and reconciler against captured responses without
-touching the live site.
+the real clients and reconciler against captured responses without
+touching the live sites.
 """
 
 import json
 import os
+import re
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures", "mysideline")
+REVOLUTIONISE_FIXTURES = os.path.join(
+    os.path.dirname(__file__), "fixtures", "revolutionise"
+)
 
 # Association 299999 is the NSW State Cup; its 2025 competitions were
 # captured in full (21 competitions, ~950 matches) as a representative
 # sample of a complete, pooled, finals-bearing tournament.
 STATE_CUP_URL = "https://tfa.mysideline.com.au/competitions/association/299999"
 STATE_CUP_SEASON = 2025
+STATE_CUP_SEASON_URL = "%s?season=%d" % (STATE_CUP_URL, STATE_CUP_SEASON)
+
+# Central Coast Hockey Association on revolutioniseSPORT; its 2026 Mens
+# competition (three grades, 23 rounds including finals, byes and a forfeit)
+# was captured in full from the public pages.
+CCHA_URL = "https://www.revolutionise.com.au/ccha/games"
+CCHA_MENS_URL = "https://www.revolutionise.com.au/ccha/games/25527"
 
 
 class FakeResponse:
@@ -74,7 +85,7 @@ def state_cup_session(renames=None):
     replaced in their JSON-quoted form, so a name which happens to be a
     substring of another value is not touched.
     """
-    from tournamentcontrol.competition.mysideline.client import GRAPHQL_ENDPOINT
+    from tournamentcontrol.competition.upstream.mysideline import GRAPHQL_ENDPOINT
 
     def rename(text):
         for before, after in (renames or {}).items():
@@ -118,4 +129,46 @@ def state_cup_session(renames=None):
         )
 
     session.handlers[GRAPHQL_ENDPOINT] = graphql
+    return session
+
+
+def ccha_session(renames=None):
+    """
+    A :class:`FakeSession` serving the captured Central Coast Hockey pages.
+
+    Every page under ``fixtures/revolutionise`` is served at the URL its
+    file name encodes; see ``capture.txt`` there for the mapping. ``renames``
+    substitutes names in the served HTML, as :func:`state_cup_session` does,
+    to play back an upstream rename.
+    """
+
+    def rename(text):
+        for before, after in (renames or {}).items():
+            text = re.sub(r"(?<!\w)%s(?!\w)" % re.escape(before), after, text)
+        return text
+
+    session = FakeSession()
+    with open(os.path.join(REVOLUTIONISE_FIXTURES, "capture.txt")) as fp:
+        for line in fp:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            name, url = line.split(None, 1)
+            with open(os.path.join(REVOLUTIONISE_FIXTURES, name)) as page:
+                text = page.read()
+            content_type = (
+                "text/calendar; charset=utf-8"
+                if name.endswith(".ics")
+                else "text/html; charset=utf-8"
+            )
+            session.handlers[url] = (
+                lambda method, url, kwargs, text=text, content_type=content_type: (
+                    FakeResponse(text=rename(text), content_type=content_type)
+                )
+            )
+
+    def missing(method, url, kwargs):
+        return FakeResponse(status_code=404, text="", content_type="text/html")
+
+    session.default = missing
     return session

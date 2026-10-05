@@ -1,0 +1,222 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:spatie/icalendar-generator
+BEGIN:VEVENT
+UID:bb563abe400d7a05f2bfb9cb49e06004-drawrevolutionise.com.au
+DTSTAMP:20260320T200000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 1 - Erina vs Crushers
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Elaine Johnston Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260320T200000
+DTEND;TZID=Australia/Sydney:20260320T213000
+END:VEVENT
+BEGIN:VEVENT
+UID:6af89146e815c0ce4ada5cd79461e016-drawrevolutionise.com.au
+DTSTAMP:20260328T153000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 2 - The Entrance vs Eri
+ na
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Elaine Johnston Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260328T153000
+DTEND;TZID=Australia/Sydney:20260328T170000
+END:VEVENT
+BEGIN:VEVENT
+UID:13041cec006c72061b1105cb493cce32-drawrevolutionise.com.au
+DTSTAMP:20260410T200000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 3 - Erina vs Gosford
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Elaine Johnston Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260410T200000
+DTEND;TZID=Australia/Sydney:20260410T213000
+END:VEVENT
+BEGIN:VEVENT
+UID:ee383876dd2aba7046b452c3e836461a-drawrevolutionise.com.au
+DTSTAMP:20260418T153000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 4 - Erina vs Crushers
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Elaine Johnston Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260418T153000
+DTEND;TZID=Australia/Sydney:20260418T170000
+END:VEVENT
+BEGIN:VEVENT
+UID:8fbdeff90cf544dc7091558032d97dc0-drawrevolutionise.com.au
+DTSTAMP:20260502T170000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 5 - The Entrance vs Eri
+ na
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Garry Denson Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260502T170000
+DTEND;TZID=Australia/Sydney:20260502T183000
+END:VEVENT
+BEGIN:VEVENT
+UID:4707996521dc383931ead8b2388c6012-drawrevolutionise.com.au
+DTSTAMP:20260509T140000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 6 - Erina vs Gosford
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Elaine Johnston Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260509T140000
+DTEND;TZID=Australia/Sydney:20260509T153000
+END:VEVENT
+BEGIN:VEVENT
+UID:dc30150103661e5c0cb773fadf131a93-drawrevolutionise.com.au
+DTSTAMP:20260522T183000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 8 - Crushers vs Erina
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Garry Denson Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260522T183000
+DTEND;TZID=Australia/Sydney:20260522T200000
+END:VEVENT
+BEGIN:VEVENT
+UID:f9eb0eb8cd6305b1f08b234a4b36eb88-drawrevolutionise.com.au
+DTSTAMP:20260530T123000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 9 - Erina vs The Entran
+ ce
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Garry Denson Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260530T123000
+DTEND;TZID=Australia/Sydney:20260530T140000
+END:VEVENT
+BEGIN:VEVENT
+UID:38965d50e852bb874ca4565878feddfe-drawrevolutionise.com.au
+DTSTAMP:20260612T200000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 10 - Gosford vs Erina
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Elaine Johnston Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260612T200000
+DTEND;TZID=Australia/Sydney:20260612T213000
+END:VEVENT
+BEGIN:VEVENT
+UID:6e640ebe7d133f926171f302dead9266-drawrevolutionise.com.au
+DTSTAMP:20260620T123000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 11 - Crushers vs Erina
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Garry Denson Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260620T123000
+DTEND;TZID=Australia/Sydney:20260620T140000
+END:VEVENT
+BEGIN:VEVENT
+UID:3345828cf0d8452dffb1ca250ccd6663-drawrevolutionise.com.au
+DTSTAMP:20260627T183000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 12 - Erina vs The Entra
+ nce
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Elaine Johnston Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260627T183000
+DTEND;TZID=Australia/Sydney:20260627T200000
+END:VEVENT
+BEGIN:VEVENT
+UID:9f4da17cce72aeb64fc79733b95fbfc9-drawrevolutionise.com.au
+DTSTAMP:20260704T140000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 13 - Erina vs Gosford
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Elaine Johnston Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260704T140000
+DTEND;TZID=Australia/Sydney:20260704T153000
+END:VEVENT
+BEGIN:VEVENT
+UID:2c1b585efac959f09ddc6caafdb8f25e-drawrevolutionise.com.au
+DTSTAMP:20260711T103000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 14 - Crushers vs Erina
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Elaine Johnston Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260711T103000
+DTEND;TZID=Australia/Sydney:20260711T120000
+END:VEVENT
+BEGIN:VEVENT
+UID:af0789ec396ef447f89d61c5351087fa-drawrevolutionise.com.au
+DTSTAMP:20260725T170000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 16 - Erina vs The Entra
+ nce
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Elaine Johnston Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260725T170000
+DTEND;TZID=Australia/Sydney:20260725T183000
+END:VEVENT
+BEGIN:VEVENT
+UID:edc3772145c9763207cf1bf395cca09c-drawrevolutionise.com.au
+DTSTAMP:20260801T140000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 17 - Erina vs Gosford
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Elaine Johnston Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260801T140000
+DTEND;TZID=Australia/Sydney:20260801T153000
+END:VEVENT
+BEGIN:VEVENT
+UID:e92fe0bb9845fdd3bc993918a1e0d603-drawrevolutionise.com.au
+DTSTAMP:20260807T200000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 18 - Erina vs Crushers
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Elaine Johnston Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260807T200000
+DTEND;TZID=Australia/Sydney:20260807T213000
+END:VEVENT
+BEGIN:VEVENT
+UID:7b40de6bde2420ebe69256bfca7aabb7-drawrevolutionise.com.au
+DTSTAMP:20260815T123000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 19 - Erina vs The Entra
+ nce
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Elaine Johnston Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260815T123000
+DTEND;TZID=Australia/Sydney:20260815T140000
+END:VEVENT
+BEGIN:VEVENT
+UID:fa0b216d9d5745657380f0280d0c7f1d-drawrevolutionise.com.au
+DTSTAMP:20260821T183000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Round 20 - Erina vs Gosford
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Elaine Johnston Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260821T183000
+DTEND;TZID=Australia/Sydney:20260821T200000
+END:VEVENT
+BEGIN:VEVENT
+UID:5abb68f78f195cd2786d99f00a2989b7-drawrevolutionise.com.au
+DTSTAMP:20260829T183000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Semi Finals - Crushers vs Eri
+ na
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Elaine Johnston Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260829T183000
+DTEND;TZID=Australia/Sydney:20260829T200000
+END:VEVENT
+BEGIN:VEVENT
+UID:ae39fc18464d43303927e620f8b287c3-drawrevolutionise.com.au
+DTSTAMP:20260905T170000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Finals - Gosford vs Erina
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Elaine Johnston Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260905T170000
+DTEND;TZID=Australia/Sydney:20260905T183000
+END:VEVENT
+BEGIN:VEVENT
+UID:a113deb99422dab668d311bde4523f02-drawrevolutionise.com.au
+DTSTAMP:20260912T180000Z
+SUMMARY:CCHA Mens Competition Mens Division 1 Grand Finals - Crushers vs Er
+ ina
+DESCRIPTION:See https://www.revolutionise.com.au/ccha for more.
+LOCATION:Central Coast Hockey Park - Elaine Johnston Pitch
+URL:https://www.revolutionise.com.au/ccha
+DTSTART;TZID=Australia/Sydney:20260912T180000
+DTEND;TZID=Australia/Sydney:20260912T193000
+END:VEVENT
+END:VCALENDAR

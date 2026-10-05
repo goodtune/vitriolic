@@ -23,16 +23,17 @@ from playwright.sync_api import Page, expect
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.content.models import Placeholder
 from tournamentcontrol.competition.models import Competition, Season, Team
-from tournamentcontrol.competition.mysideline.client import MySidelineClient
-from tournamentcontrol.competition.mysideline.sync import synchronise_season
-from tournamentcontrol.competition.tests.mysideline import (
+from tournamentcontrol.competition.tests.upstream import (
     STATE_CUP_SEASON,
+    STATE_CUP_SEASON_URL,
     STATE_CUP_URL,
     state_cup_session,
 )
+from tournamentcontrol.competition.upstream.mysideline import MySidelineClient
+from tournamentcontrol.competition.upstream.sync import synchronise_season
 
-MENS_OPEN_A = 65396575
-DOYALSON = 65576405
+MENS_OPEN_A = "mysideline:65396575"
+DOYALSON = "mysideline:65576405"
 
 # What MySideline publishes for them, and what a Vitriolic administrator
 # would rather see on the site: the season prefix and the grade suffix are
@@ -66,7 +67,7 @@ def state_cup(db):
         title="NSW State Cup",
         slug="nsw-state-cup",
         order=1,
-        mysideline_url=STATE_CUP_URL,
+        upstream_url=STATE_CUP_URL,
     )
     season = Season.objects.create(
         competition=competition,
@@ -74,7 +75,7 @@ def state_cup(db):
         slug=str(STATE_CUP_SEASON),
         order=1,
         timezone=ZoneInfo("Australia/Sydney"),
-        mysideline_season=STATE_CUP_SEASON,
+        upstream_url=STATE_CUP_SEASON_URL,
     )
     if os.environ.get("MYSIDELINE_LIVE"):
         client = MySidelineClient()
@@ -104,7 +105,7 @@ class TestMySidelineImportRenders:
         Screenshots of each page are saved as evidence.
         """
         season = state_cup
-        division = season.divisions.get(mysideline_id=MENS_OPEN_A)
+        division = season.divisions.get(upstream_id=MENS_OPEN_A)
         base = f"{live_server.url}/competitions/{season.competition.slug}/{season.slug}"
 
         # Season: every division is listed.
@@ -187,12 +188,12 @@ class TestMySidelineNameDeviations:
         """
         page = authenticated_page
         season = state_cup
-        division = season.divisions.get(mysideline_id=MENS_OPEN_A)
-        team = Team.objects.get(mysideline_id=DOYALSON)
+        division = season.divisions.get(upstream_id=MENS_OPEN_A)
+        team = Team.objects.get(upstream_id=DOYALSON)
         assert (division.title, team.title) == (REMOTE_DIVISION, REMOTE_TEAM)
 
         sync_url = live_server.url + reverse(
-            "admin:fixja:competition:season:mysideline-sync",
+            "admin:fixja:competition:season:upstream-sync",
             args=[season.competition_id, season.pk],
         )
         division_url = f"{live_server.url}{division.urls['edit']}"
@@ -206,9 +207,9 @@ class TestMySidelineNameDeviations:
         assert (division.title, team.title) == (LOCAL_DIVISION, LOCAL_TEAM)
         assert (division.slug, team.slug) == ("mens-open-a", "doyalson")
         # The remote names are still recorded, ours is only a variation.
-        assert division.mysideline_title == REMOTE_DIVISION
-        assert division.mysideline_title_overridden
-        assert not division.mysideline_title_changed
+        assert division.upstream_title == REMOTE_DIVISION
+        assert division.upstream_title_overridden
+        assert not division.upstream_title_changed
 
         # The form says what MySideline calls it, and offers to hand the
         # name back.
@@ -216,7 +217,7 @@ class TestMySidelineNameDeviations:
         expect(self._help(page, "MySideline calls this")).to_have_text(
             "MySideline calls this “%s”." % REMOTE_DIVISION
         )
-        expect(page.locator('input[name="mysideline_title_reset"]')).to_be_visible()
+        expect(page.locator('input[name="upstream_title_reset"]')).to_be_visible()
         page.screenshot(
             path=str(screenshot_dir / "mysideline_admin_division_local_name.png"),
             full_page=True,
@@ -239,12 +240,12 @@ class TestMySidelineNameDeviations:
         division.refresh_from_db()
         team.refresh_from_db()
         assert (division.title, team.title) == (LOCAL_DIVISION, LOCAL_TEAM)
-        assert division.mysideline_title == RENAMED_DIVISION
-        assert division.mysideline_title_changed
+        assert division.upstream_title == RENAMED_DIVISION
+        assert division.upstream_title_changed
 
         # The season's MySideline page lists what is waiting on a decision.
         page.goto(sync_url)
-        alert = page.locator(".mysideline-renamed")
+        alert = page.locator(".upstream-renamed")
         expect(
             alert.get_by_role("link", name=LOCAL_DIVISION, exact=True)
         ).to_be_visible()
@@ -278,20 +279,20 @@ class TestMySidelineNameDeviations:
 
         # Hand the division's name back to MySideline, and keep ours for
         # the team by saving it as it stands.
-        self._save(page, division_url, mysideline_title_reset=True)
+        self._save(page, division_url, upstream_title_reset=True)
         self._save(page, team_url)
         division.refresh_from_db()
         team.refresh_from_db()
         assert division.title == RENAMED_DIVISION
         assert division.slug == "2025-sc-mens-open-a-grade"
-        assert not division.mysideline_title_overridden
+        assert not division.upstream_title_overridden
         assert team.title == LOCAL_TEAM
-        assert team.mysideline_title_overridden
-        assert not team.mysideline_title_changed
+        assert team.upstream_title_overridden
+        assert not team.upstream_title_changed
 
         # Nothing is waiting on a decision any more ...
         page.goto(sync_url)
-        expect(page.locator(".mysideline-renamed")).to_have_count(0)
+        expect(page.locator(".upstream-renamed")).to_have_count(0)
         page.screenshot(
             path=str(screenshot_dir / "mysideline_admin_sync_resolved.png"),
             full_page=True,
@@ -309,13 +310,13 @@ class TestMySidelineNameDeviations:
         """The form help text which begins with ``starts_with``."""
         return page.locator("p.help-block", has_text=starts_with).first
 
-    def _save(self, page: Page, url, title=None, mysideline_title_reset=False):
+    def _save(self, page: Page, url, title=None, upstream_title_reset=False):
         """Open an admin edit form, optionally change it, and save it."""
         page.goto(url)
         if title is not None:
             page.fill('input[name="title"]', title)
-        if mysideline_title_reset:
-            page.check('input[name="mysideline_title_reset"]')
+        if upstream_title_reset:
+            page.check('input[name="upstream_title_reset"]')
         # Wait for the POST itself, not just for a page to be loaded: the
         # test reads the database as soon as this returns. Not the first
         # submit button on the page either -- the related tabs carry their

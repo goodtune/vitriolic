@@ -111,7 +111,7 @@ from tournamentcontrol.competition.models import (
     TeamRole,
     UndecidedTeam,
     Venue,
-    mysideline_renamed,
+    upstream_renamed,
 )
 from tournamentcontrol.competition.sites import CompetitionAdminMixin
 from tournamentcontrol.competition.tasks import (
@@ -120,7 +120,7 @@ from tournamentcontrol.competition.tasks import (
     generate_pdf_scorecards,
     sync_live_stream,
     sync_live_stream_event,
-    synchronise_mysideline_season,
+    synchronise_upstream_season,
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
@@ -458,9 +458,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     "<int:season_id>/authorize", self.oauth_authorize, name="authorize"
                 ),
                 path(
-                    "<int:season_id>/mysideline/",
-                    self.mysideline_sync,
-                    name="mysideline-sync",
+                    "<int:season_id>/upstream/",
+                    self.upstream_sync,
+                    name="upstream-sync",
                 ),
                 path("<int:season_id>/delete/", self.delete_season, name="delete"),
                 path(
@@ -955,17 +955,18 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
-    def mysideline_sync(self, request, competition, season, extra_context, **kwargs):
+    def upstream_sync(self, request, competition, season, extra_context, **kwargs):
         """
-        Queue a synchronisation of the season with MySideline.
+        Queue a synchronisation of the season with its upstream provider.
 
         The work happens in a background task so that a slow or unavailable
         remote does not tie up the request; the outcome is written to the
         task log.
         """
-        if not season.mysideline_enabled:
+        provider = season.upstream_provider
+        if not season.upstream_enabled or provider is None:
             raise Http404(
-                "Competition.mysideline_url and Season.mysideline_season must be set."
+                "Competition.upstream_url and Season.upstream_url must be set."
             )
 
         redirect_url = request.GET.get("next") or season.urls["edit"]
@@ -978,20 +979,25 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 extra_context or {},
                 competition=competition,
                 season=season,
+                provider=provider,
                 cancel_url=redirect_url,
-                renamed_divisions=mysideline_renamed(season.divisions),
-                renamed_teams=mysideline_renamed(
+                renamed_divisions=upstream_renamed(season.divisions),
+                renamed_teams=upstream_renamed(
                     Team.objects.filter(division__season=season)
                 ).select_related("division"),
             )
             return self.render(
                 request,
-                self.template_path("season/mysideline_sync.html"),
+                self.template_path("season/upstream_sync.html"),
                 context,
             )
 
-        synchronise_mysideline_season.delay(season.pk)
-        messages.info(request, _("Synchronisation with MySideline has been queued."))
+        synchronise_upstream_season.delay(season.pk)
+        messages.info(
+            request,
+            _("Synchronisation with %(provider)s has been queued.")
+            % {"provider": provider.name},
+        )
         return self.redirect(redirect_url)
 
     @competition_by_pk_m

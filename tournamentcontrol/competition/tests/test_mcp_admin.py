@@ -1554,10 +1554,10 @@ class ResultTests(AdminFixtureMixin, TestCase):
         res = admin.list_matches_awaiting_results(date=datetime.date(2026, 7, 14))
         self.assertEqual([m["id"] for m in res["matches"]], [self.eng_v_fra.pk])
 
-    def test_awaiting_results_excludes_mysideline(self):
+    def test_awaiting_results_excludes_upstream(self):
         admin = self.admin()
         Match.objects.filter(pk=self.eng_v_fra.pk).update(
-            home_team_score=None, away_team_score=None, mysideline_id=12345
+            home_team_score=None, away_team_score=None, upstream_id="mysideline:12345"
         )
         res = admin.list_matches_awaiting_results(season_id=self.season.pk)
         self.assertEqual(res["matches"], [])
