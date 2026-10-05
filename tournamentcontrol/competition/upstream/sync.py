@@ -122,26 +122,24 @@ class SyncResult:
 
     def summary(self) -> str:
         def fmt(bucket):
-            return ", ".join("%s=%d" % kv for kv in sorted(bucket.items())) or "-"
+            return ", ".join(f"{k}={v}" for k, v in sorted(bucket.items())) or "-"
 
-        return "created: %s; updated: %s; deleted: %s; detached: %s" % (
-            fmt(self.created),
-            fmt(self.updated),
-            fmt(self.deleted),
-            fmt(self.detached),
+        return (
+            f"created: {fmt(self.created)}; updated: {fmt(self.updated)}; "
+            f"deleted: {fmt(self.deleted)}; detached: {fmt(self.detached)}"
         )
 
 
 def _backend(season: Season) -> BaseUpstreamBackend:
     if not season.competition.upstream_url:
-        raise ValueError("Competition %r has no upstream_url" % season.competition)
+        raise ValueError(f"Competition {season.competition!r} has no upstream_url")
     if not season.upstream_url:
-        raise ValueError("Season %r has no upstream_url" % season)
+        raise ValueError(f"Season {season!r} has no upstream_url")
     backend = season.upstream_backend
     if backend is None:
         raise ValueError(
-            "Competition %r upstream_url is not on a supported backend"
-            % season.competition
+            f"Competition {season.competition!r} upstream_url is not on a "
+            "supported backend"
         )
     return backend
 
@@ -203,7 +201,7 @@ def _unique_slug(queryset, title: str, exclude_pk=None) -> str:
         queryset = queryset.exclude(pk=exclude_pk)
     slug, suffix = base, 2
     while queryset.filter(slug=slug).exists():
-        slug = "%s-%d" % (base, suffix)
+        slug = f"{base}-{suffix}"
         suffix += 1
     return slug
 
@@ -747,7 +745,7 @@ class _DivisionReconciler:
         if venue is None:
             latlng = ""
             if remote.venue.latitude is not None and remote.venue.longitude is not None:
-                latlng = "%s,%s,15" % (remote.venue.latitude, remote.venue.longitude)
+                latlng = f"{remote.venue.latitude},{remote.venue.longitude},15"
             venue = Venue(
                 season=self.season,
                 title=remote.venue.name,
@@ -762,7 +760,7 @@ class _DivisionReconciler:
         return venue
 
     def _ground(self, venue: Venue, field_no: str) -> Ground:
-        title = field_no if not field_no.isdigit() else "Field %s" % field_no
+        title = field_no if not field_no.isdigit() else f"Field {field_no}"
         key = (venue.pk, title.lower())
         ground = self._grounds.get(key)
         if ground is None:

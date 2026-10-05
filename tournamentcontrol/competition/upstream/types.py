@@ -147,7 +147,10 @@ class RemoteLadderTemplate(BaseModel):
             (self.points_forfeit_for, "forfeit_for"),
             (self.points_forfeit_against, "forfeit_against"),
         ]
-        return " + ".join("%d*%s" % term for term in terms if term[0]) or "0*win"
+        return (
+            " + ".join(f"{points}*{term}" for points, term in terms if points)
+            or "0*win"
+        )
 
 
 class RemoteCompetition(BaseModel):

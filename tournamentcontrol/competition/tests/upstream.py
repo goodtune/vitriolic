@@ -1,5 +1,5 @@
 """
-Test doubles for the HTTP boundary of the upstream providers.
+Test doubles for the HTTP boundary of the upstream backends.
 
 Shared by the unit tests and the end-to-end tests so that both can drive
 the real clients and reconciler against captured responses without
@@ -7,20 +7,25 @@ touching the live sites.
 """
 
 import json
-import os
 import re
+from pathlib import Path
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
-FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures", "mysideline")
-REVOLUTIONISE_FIXTURES = os.path.join(
-    os.path.dirname(__file__), "fixtures", "revolutionise"
+from tournamentcontrol.competition.upstream.backends.mysideline import (
+    GRAPHQL_ENDPOINT,
 )
+
+FIXTURES = Path(__file__).parent / "fixtures" / "mysideline"
+REVOLUTIONISE_FIXTURES = Path(__file__).parent / "fixtures" / "revolutionise"
 
 # Association 299999 is the NSW State Cup; its 2025 competitions were
 # captured in full (21 competitions, ~950 matches) as a representative
 # sample of a complete, pooled, finals-bearing tournament.
 STATE_CUP_URL = "https://tfa.mysideline.com.au/competitions/association/299999"
 STATE_CUP_SEASON = 2025
-STATE_CUP_SEASON_URL = "%s?season=%d" % (STATE_CUP_URL, STATE_CUP_SEASON)
+STATE_CUP_SEASON_URL = urlunsplit(
+    urlsplit(STATE_CUP_URL)._replace(query=urlencode({"season": STATE_CUP_SEASON}))
+)
 
 # Central Coast Hockey Association on revolutioniseSPORT; its 2026 Mens
 # competition (three grades, 23 rounds including finals, byes and a forfeit)
@@ -66,13 +71,13 @@ class FakeSession:
 
 
 def fixture(*parts):
-    with open(os.path.join(FIXTURES, *parts)) as fp:
-        return fp.read()
+    return FIXTURES.joinpath(*parts).read_text()
 
 
 def rsc_line(payload) -> str:
     """Render ``payload`` as one line of a React Server Component payload."""
-    return '1:"$Sreact.fragment"\n7:%s\n' % json.dumps(["$", "$L13", None, payload])
+    body = json.dumps(["$", "$L13", None, payload])
+    return f'1:"$Sreact.fragment"\n7:{body}\n'
 
 
 def state_cup_session(renames=None):
@@ -85,7 +90,6 @@ def state_cup_session(renames=None):
     replaced in their JSON-quoted form, so a name which happens to be a
     substring of another value is not touched.
     """
-    from tournamentcontrol.competition.upstream.backends.mysideline import GRAPHQL_ENDPOINT
 
     def rename(text):
         for before, after in (renames or {}).items():
@@ -102,19 +106,20 @@ def state_cup_session(renames=None):
         # The captured page payload is reduced to the settings the client
         # reads from it (see ``competition_65396575.rsc`` for a full page).
         settings = json.loads(
-            fixture("state_cup_2025", "competition_%d_settings.json" % competition_id)
+            fixture("state_cup_2025", f"competition_{competition_id}_settings.json")
         )
         return lambda method, url, kwargs: FakeResponse(
             text=rsc_line({"data": {"competition": settings}}),
             content_type="text/x-component",
         )
 
-    for name in os.listdir(os.path.join(FIXTURES, "state_cup_2025")):
-        if name.endswith("_settings.json"):
-            competition_id = int(name.split("_")[1])
-            session.handlers[
-                "https://tfa.mysideline.com.au/competitions/%d" % competition_id
-            ] = competition_page(competition_id)
+    for path in (FIXTURES / "state_cup_2025").glob("competition_*_settings.json"):
+        competition_id = int(path.name.split("_")[1])
+        session.handlers[
+            urlunsplit(
+                urlsplit(STATE_CUP_URL)._replace(path=f"/competitions/{competition_id}")
+            )
+        ] = competition_page(competition_id)
 
     def graphql(method, url, kwargs):
         body = kwargs["json"]
@@ -122,9 +127,7 @@ def state_cup_session(renames=None):
         kind = "matches" if "competitionMatches" in body["query"] else "teams"
         return FakeResponse(
             text=rename(
-                fixture(
-                    "state_cup_2025", "competition_%d_%s.json" % (competition_id, kind)
-                )
+                fixture("state_cup_2025", f"competition_{competition_id}_{kind}.json")
             )
         )
 
@@ -144,28 +147,26 @@ def ccha_session(renames=None):
 
     def rename(text):
         for before, after in (renames or {}).items():
-            text = re.sub(r"(?<!\w)%s(?!\w)" % re.escape(before), after, text)
+            text = re.sub(rf"(?<!\w){re.escape(before)}(?!\w)", after, text)
         return text
 
     session = FakeSession()
-    with open(os.path.join(REVOLUTIONISE_FIXTURES, "capture.txt")) as fp:
-        for line in fp:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            name, url = line.split(None, 1)
-            with open(os.path.join(REVOLUTIONISE_FIXTURES, name)) as page:
-                text = page.read()
-            content_type = (
-                "text/calendar; charset=utf-8"
-                if name.endswith(".ics")
-                else "text/html; charset=utf-8"
+    for line in (REVOLUTIONISE_FIXTURES / "capture.txt").read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        name, url = line.split(None, 1)
+        text = (REVOLUTIONISE_FIXTURES / name).read_text()
+        content_type = (
+            "text/calendar; charset=utf-8"
+            if name.endswith(".ics")
+            else "text/html; charset=utf-8"
+        )
+        session.handlers[url] = (
+            lambda method, url, kwargs, text=text, content_type=content_type: (
+                FakeResponse(text=rename(text), content_type=content_type)
             )
-            session.handlers[url] = (
-                lambda method, url, kwargs, text=text, content_type=content_type: (
-                    FakeResponse(text=rename(text), content_type=content_type)
-                )
-            )
+        )
 
     def missing(method, url, kwargs):
         return FakeResponse(status_code=404, text="", content_type="text/html")

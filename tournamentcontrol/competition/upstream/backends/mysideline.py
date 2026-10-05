@@ -30,7 +30,7 @@ import logging
 import re
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 import requests
 from pydantic import BaseModel, ConfigDict, Field
@@ -132,12 +132,12 @@ class MySidelineURL:
     """
 
     def __init__(self, url: str):
-        parsed = urlparse(url)
+        parsed = urlsplit(url)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            raise UpstreamURLError("Not an absolute http(s) URL: %r" % url)
+            raise UpstreamURLError(f"Not an absolute http(s) URL: {url!r}")
         host = parsed.netloc.lower()
         if not host.endswith(".mysideline.com.au"):
-            raise UpstreamURLError("Not a mysideline.com.au URL: %r" % url)
+            raise UpstreamURLError(f"Not a mysideline.com.au URL: {url!r}")
 
         self.host = host
         self.association_id: Optional[int] = None
@@ -160,7 +160,7 @@ class MySidelineURL:
         raise UpstreamURLError(
             "Expected an association or competition URL such as "
             "https://tfa.mysideline.com.au/competitions/association/6338, "
-            "got %r" % url
+            f"got {url!r}"
         )
 
     @property
@@ -168,15 +168,15 @@ class MySidelineURL:
         prefix = self.host.split(".", 1)[0]
         return NATIONAL_ID_BY_HOST_PREFIX.get(prefix, "PRL")
 
+    def _build(self, path: str, params: Optional[dict] = None) -> str:
+        return urlunsplit(("https", self.host, path, urlencode(params or {}), ""))
+
     @property
     def canonical(self) -> str:
         """The association or competition page, without any filter."""
         if self.association_id is not None:
-            return "https://%s/competitions/association/%d" % (
-                self.host,
-                self.association_id,
-            )
-        return "https://%s/competitions/%d" % (self.host, self.competition_id)
+            return self._build(f"/competitions/association/{self.association_id}")
+        return self.competition_url(self.competition_id)
 
     @property
     def season_url(self) -> str:
@@ -186,12 +186,14 @@ class MySidelineURL:
             params["season"] = self.season
         if self.season_tag is not None:
             params["seasonTag"] = self.season_tag
-        if params:
-            return "%s?%s" % (self.canonical, urlencode(params))
-        return self.canonical
+        if self.association_id is not None:
+            return self._build(
+                f"/competitions/association/{self.association_id}", params
+            )
+        return self._build(f"/competitions/{self.competition_id}", params)
 
     def competition_url(self, competition_id: int) -> str:
-        return "https://%s/competitions/%d" % (self.host, competition_id)
+        return self._build(f"/competitions/{competition_id}")
 
 
 def _int(value: Any) -> Optional[int]:
@@ -256,7 +258,7 @@ class MySidelineClient(HttpClient):
                 for error in payload["errors"]
                 if isinstance(error, dict)
             ]
-            raise UpstreamResponseError("GraphQL errors: %s" % "; ".join(messages))
+            raise UpstreamResponseError(f"GraphQL errors: {'; '.join(messages)}")
         data = payload.get("data")
         if not isinstance(data, dict):
             raise UpstreamResponseError("GraphQL response has no data")
@@ -266,7 +268,7 @@ class MySidelineClient(HttpClient):
 
     def get_association(self, url: MySidelineURL) -> RemoteAssociation:
         if url.association_id is None:
-            raise UpstreamURLError("Not an association URL: %s" % url.canonical)
+            raise UpstreamURLError(f"Not an association URL: {url.canonical}")
         response = self.request(
             "GET",
             url.canonical,
@@ -292,7 +294,7 @@ class MySidelineClient(HttpClient):
             season = _int(raw.get("season"))
             if competition_id is None or name is None or season is None:
                 raise UpstreamResponseError(
-                    "Competition entry missing id, name or season: %r" % raw
+                    f"Competition entry missing id, name or season: {raw!r}"
                 )
             competitions.append(
                 RemoteCompetitionSummary(
@@ -437,7 +439,7 @@ def _parse_match(raw: Any) -> RemoteMatch:
         raise UpstreamResponseError("Match entry is not an object")
     match_id = _int(raw.get("_id"))
     if match_id is None:
-        raise UpstreamResponseError("Match entry missing id: %r" % raw)
+        raise UpstreamResponseError(f"Match entry missing id: {raw!r}")
     round_ = raw.get("round") or {}
     if not isinstance(round_, dict):
         raise UpstreamResponseError("Match round is not an object")
@@ -445,7 +447,7 @@ def _parse_match(raw: Any) -> RemoteMatch:
     round_type = _str(round_.get("type"))
     round_name = _str(round_.get("displayName"))
     if round_number is None or round_type is None:
-        raise UpstreamResponseError("Match %d has no round detail" % match_id)
+        raise UpstreamResponseError(f"Match {match_id} has no round detail")
 
     meta = raw.get("meta") or {}
     scores = raw.get("scores") or {}
@@ -473,7 +475,7 @@ def _parse_match(raw: Any) -> RemoteMatch:
         id=match_id,
         round_number=round_number,
         round_type=round_type,
-        round_name=round_name or "Round %d" % round_number,
+        round_name=round_name or f"Round {round_number}",
         start=_epoch_ms(raw.get("dateTime")),
         status=status,
         home_team_id=_int(home.get("_id")),
@@ -512,7 +514,7 @@ def _flight_lines_from_html(html: str) -> list[str]:
     line-oriented payload that an ``RSC: 1`` request returns directly.
     """
     chunks = NEXT_FLIGHT_PUSH_RE.findall(html)
-    text = "".join(json.loads('"%s"' % chunk) for chunk in chunks)
+    text = "".join(json.loads(f'"{chunk}"') for chunk in chunks)
     return text.splitlines()
 
 
@@ -593,15 +595,15 @@ class MySidelineBackend(BaseUpstreamBackend):
     )
 
     def matches(self, url: str) -> bool:
-        host = urlparse(url).netloc.lower()
+        host = urlsplit(url).netloc.lower()
         return host == "mysideline.com.au" or host.endswith(".mysideline.com.au")
 
     def parse_competition_url(self, url: str) -> str:
         parsed = MySidelineURL(url)
         if parsed.association_id is None:
             raise UpstreamURLError(
-                "Enter the MySideline association URL, for example %s"
-                % self.competition_url_example
+                "Enter the MySideline association URL, for example "
+                f"{self.competition_url_example}"
             )
         return parsed.canonical
 
@@ -614,13 +616,13 @@ class MySidelineBackend(BaseUpstreamBackend):
         ):
             raise UpstreamURLError(
                 "Enter the competition's association page filtered to the "
-                "season, for example %s" % self.season_url_example
+                f"season, for example {self.season_url_example}"
             )
         if parsed.season is None:
             raise UpstreamURLError(
                 "The URL must select a season: pick the year from the Year "
                 "drop-down on the association page and copy the address, for "
-                "example %s" % self.season_url_example
+                f"example {self.season_url_example}"
             )
         if parsed.season_tag is not None and parsed.season_tag not in SEASON_TAGS:
             raise UpstreamURLError(

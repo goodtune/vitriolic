@@ -5,7 +5,7 @@
 # updated earlier in the same transaction while deferred constraint triggers
 # are pending.
 
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 from django.db import migrations, models
 from django.db.models import Value
@@ -27,7 +27,7 @@ def forwards(apps, schema_editor):
         if season.mysideline_season_tag is not None:
             params["seasonTag"] = season.mysideline_season_tag
         Season.objects.filter(pk=season.pk).update(
-            upstream_url="%s?%s" % (url, urlencode(params))
+            upstream_url=urlunsplit(urlsplit(url)._replace(query=urlencode(params)))
         )
 
     for model_name in ("Division", "Team", "Match"):
@@ -43,7 +43,7 @@ def forwards(apps, schema_editor):
 def backwards(apps, schema_editor):
     Season = apps.get_model("competition", "Season")
     for season in Season.objects.filter(upstream_url__isnull=False):
-        query = parse_qs(urlparse(season.upstream_url).query)
+        query = parse_qs(urlsplit(season.upstream_url).query)
         try:
             year = int(query["season"][0])
         except (KeyError, IndexError, ValueError):

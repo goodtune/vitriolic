@@ -75,11 +75,11 @@ def load_backend(path: str) -> BaseUpstreamBackend:
         cls = import_string(path)
     except ImportError as exc:
         raise ImproperlyConfigured(
-            "UPSTREAM_BACKENDS entry %r could not be imported: %s" % (path, exc)
+            f"UPSTREAM_BACKENDS entry {path!r} could not be imported: {exc}"
         ) from exc
     if not (isinstance(cls, type) and issubclass(cls, BaseUpstreamBackend)):
         raise ImproperlyConfigured(
-            "UPSTREAM_BACKENDS entry %r is not a BaseUpstreamBackend subclass" % path
+            f"UPSTREAM_BACKENDS entry {path!r} is not a BaseUpstreamBackend subclass"
         )
     cls.check()
     try:
@@ -87,7 +87,7 @@ def load_backend(path: str) -> BaseUpstreamBackend:
     except TypeError as exc:
         # An abstract method left unimplemented.
         raise ImproperlyConfigured(
-            "UPSTREAM_BACKENDS entry %r cannot be instantiated: %s" % (path, exc)
+            f"UPSTREAM_BACKENDS entry {path!r} cannot be instantiated: {exc}"
         ) from exc
 
 
@@ -101,7 +101,7 @@ def _load_backends() -> tuple[BaseUpstreamBackend, ...]:
         backend = load_backend(path)
         if any(other.key == backend.key for other in backends):
             raise ImproperlyConfigured(
-                "UPSTREAM_BACKENDS names two backends with the key %r" % backend.key
+                f"UPSTREAM_BACKENDS names two backends with the key {backend.key!r}"
             )
         backends.append(backend)
     return tuple(backends)
@@ -123,10 +123,8 @@ def get_backend_for_url(url: str) -> BaseUpstreamBackend:
     for backend in get_backends():
         if backend.matches(url):
             return backend
-    raise UpstreamURLError(
-        "Not a URL on a supported provider (%s): %r"
-        % (", ".join(backend.name for backend in get_backends()), url)
-    )
+    names = ", ".join(backend.name for backend in get_backends())
+    raise UpstreamURLError(f"Not a URL on a supported provider ({names}): {url!r}")
 
 
 def get_backend_by_key(key: str) -> BaseUpstreamBackend:

@@ -215,7 +215,7 @@ class TestMySidelineNameDeviations:
         # name back.
         page.goto(division_url)
         expect(self._help(page, "MySideline calls this")).to_have_text(
-            "MySideline calls this “%s”." % REMOTE_DIVISION
+            f"MySideline calls this “{REMOTE_DIVISION}”."
         )
         expect(page.locator('input[name="upstream_title_reset"]')).to_be_visible()
         page.screenshot(
@@ -260,8 +260,7 @@ class TestMySidelineNameDeviations:
         # Each edit form names the old and the new remote name.
         page.goto(division_url)
         expect(self._help(page, "MySideline has renamed this")).to_have_text(
-            "MySideline has renamed this from “%s” to “%s”."
-            % (REMOTE_DIVISION, RENAMED_DIVISION)
+            f"MySideline has renamed this from “{REMOTE_DIVISION}” to “{RENAMED_DIVISION}”."
         )
         page.screenshot(
             path=str(screenshot_dir / "mysideline_admin_division_renamed.png"),
@@ -269,8 +268,7 @@ class TestMySidelineNameDeviations:
         )
         page.goto(team_url)
         expect(self._help(page, "MySideline has renamed this")).to_have_text(
-            "MySideline has renamed this from “%s” to “%s”."
-            % (REMOTE_TEAM, RENAMED_TEAM)
+            f"MySideline has renamed this from “{REMOTE_TEAM}” to “{RENAMED_TEAM}”."
         )
         page.screenshot(
             path=str(screenshot_dir / "mysideline_admin_team_renamed.png"),

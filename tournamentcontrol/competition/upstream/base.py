@@ -108,9 +108,7 @@ class HttpClient:
                 url,
                 response.status_code,
             )
-            raise UpstreamTransportError(
-                "HTTP %d from %s" % (response.status_code, url)
-            )
+            raise UpstreamTransportError(f"HTTP {response.status_code} from {url}")
         return response
 
 
@@ -146,7 +144,7 @@ class BaseUpstreamBackend(ABC):
         return self.name
 
     def __repr__(self):
-        return "<%s: %s>" % (type(self).__name__, self.key)
+        return f"<{type(self).__name__}: {self.key}>"
 
     @classmethod
     def check(cls) -> None:
@@ -157,17 +155,17 @@ class BaseUpstreamBackend(ABC):
         """
         if not cls.key or not KEY_RE.match(cls.key):
             raise ImproperlyConfigured(
-                "%s.key must be a lower-case identifier such as 'mysideline', "
-                "got %r" % (cls.__name__, cls.key)
+                f"{cls.__name__}.key must be a lower-case identifier such as "
+                f"'mysideline', got {cls.key!r}"
             )
         if not cls.name:
-            raise ImproperlyConfigured("%s.name must be set" % cls.__name__)
+            raise ImproperlyConfigured(f"{cls.__name__}.name must be set")
 
     # -- identifiers ---------------------------------------------------------
 
     def identifier(self, remote_id) -> str:
         """The ``upstream_id`` for one of this backend's own identifiers."""
-        return "%s:%s" % (self.key, remote_id)
+        return f"{self.key}:{remote_id}"
 
     def owns_identifier(self, upstream_id: str) -> bool:
         return bool(upstream_id) and upstream_id.startswith(self.key + ":")
@@ -175,7 +173,7 @@ class BaseUpstreamBackend(ABC):
     def remote_id(self, upstream_id: str) -> str:
         """The backend's own identifier from an ``upstream_id`` it owns."""
         if not self.owns_identifier(upstream_id):
-            raise ValueError("%r does not belong to %s" % (upstream_id, self.name))
+            raise ValueError(f"{upstream_id!r} does not belong to {self.name}")
         return upstream_id[len(self.key) + 1 :]
 
     # -- URLs ----------------------------------------------------------------

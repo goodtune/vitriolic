@@ -148,7 +148,7 @@ class RemoteWorld:
             "round": {
                 "number": round_number,
                 "type": round_type,
-                "displayName": round_name or "Round %d" % round_number,
+                "displayName": round_name or f"Round {round_number}",
             },
             "homeTeam": self._team_ref(competition_id, home),
             "awayTeam": self._team_ref(competition_id, away),
@@ -290,8 +290,8 @@ class ClientTests(TestCase):
         )
 
     def install_competition(self, competition_id):
-        teams = fixture("competition_%d_teams.json" % competition_id)
-        matches = fixture("competition_%d_matches.json" % competition_id)
+        teams = fixture(f"competition_{competition_id}_teams.json")
+        matches = fixture(f"competition_{competition_id}_matches.json")
 
         def handler(method, url, kwargs):
             if "competitionMatches" in kwargs["json"]["query"]:
@@ -1732,8 +1732,8 @@ class InvocationTests(SyncTestCase):
         call_command("synchronise_upstream", self.season.pk, stdout=stdout)
         self.assertEqual(
             stdout.getvalue(),
-            "season %d: created: division=1, stage=1; updated: -; deleted: -; "
-            "detached: -\n" % self.season.pk,
+            f"season {self.season.pk}: created: division=1, stage=1; updated: -; "
+            "deleted: -; detached: -\n",
         )
         self.assertEqual(
             self.season.divisions.get(upstream_id="mysideline:100").title, "Mens Div 1"

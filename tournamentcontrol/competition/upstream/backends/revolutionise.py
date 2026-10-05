@@ -46,7 +46,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import urlsplit, urlunsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
@@ -75,7 +75,8 @@ from tournamentcontrol.competition.upstream.types import (
 logger = logging.getLogger(__name__)
 
 HOSTS = ("www.revolutionise.com.au", "revolutionise.com.au")
-BASE = "https://www.revolutionise.com.au"
+SCHEME, HOST = "https", "www.revolutionise.com.au"
+BASE = urlunsplit((SCHEME, HOST, "", "", ""))
 
 GRADE_PATH_RE = re.compile(r"/games/(?P<competition>\d+)/(?P<grade>\d+)/?$")
 ROUND_PATH_RE = re.compile(r"/games/\d+/\d+/round/(?P<number>\d+)/?$")
@@ -120,17 +121,17 @@ class RevolutioniseURL:
     """
 
     def __init__(self, url: str):
-        parsed = urlparse(url)
+        parsed = urlsplit(url)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            raise UpstreamURLError("Not an absolute http(s) URL: %r" % url)
+            raise UpstreamURLError(f"Not an absolute http(s) URL: {url!r}")
         host = parsed.netloc.lower()
         if host not in HOSTS:
-            raise UpstreamURLError("Not a revolutionise.com.au URL: %r" % url)
+            raise UpstreamURLError(f"Not a revolutionise.com.au URL: {url!r}")
         parts = [part for part in parsed.path.split("/") if part]
         if not parts or not re.match(r"^[A-Za-z0-9_-]+$", parts[0]):
             raise UpstreamURLError(
                 "Expected an organisation's draws page such as "
-                "%s/ccha/games, got %r" % (BASE, url)
+                f"{BASE}/ccha/games, got {url!r}"
             )
         self.slug = parts[0]
         self.competition_id: Optional[int] = None
@@ -146,19 +147,23 @@ class RevolutioniseURL:
             if len(rest) > 3 and not (
                 rest[0] == "games" and rest[3] == "round" and len(rest) == 5
             ):
-                raise UpstreamURLError("Not a draws URL: %r" % url)
+                raise UpstreamURLError(f"Not a draws URL: {url!r}")
             return
         if rest == ["pointscores"] or rest == ["games"]:
             return
         raise UpstreamURLError(
-            "Expected a draws page such as %s/ccha/games or "
-            "%s/ccha/games/25527, got %r" % (BASE, BASE, url)
+            f"Expected a draws page such as {BASE}/ccha/games or "
+            f"{BASE}/ccha/games/25527, got {url!r}"
         )
+
+    def _build(self, *segments) -> str:
+        path = "/".join(str(segment) for segment in (self.slug, *segments))
+        return urlunsplit((SCHEME, HOST, f"/{path}", "", ""))
 
     @property
     def canonical(self) -> str:
         """The organisation's draws index."""
-        return "%s/%s/games" % (BASE, self.slug)
+        return self._build("games")
 
     @property
     def season_url(self) -> str:
@@ -168,27 +173,22 @@ class RevolutioniseURL:
         return self.competition_url(self.competition_id)
 
     def competition_url(self, competition_id: int) -> str:
-        return "%s/%s/games/%d" % (BASE, self.slug, competition_id)
+        return self._build("games", competition_id)
 
     def grade_url(self, competition_id: int, grade_id: int) -> str:
-        return "%s/%s/games/%d/%d" % (BASE, self.slug, competition_id, grade_id)
+        return self._build("games", competition_id, grade_id)
 
     def round_url(self, competition_id: int, grade_id: int, number: int) -> str:
-        return "%s/round/%d" % (self.grade_url(competition_id, grade_id), number)
+        return self._build("games", competition_id, grade_id, "round", number)
 
     def ladder_url(self, competition_id: int, grade_id: int) -> str:
-        return "%s/%s/pointscore/%d/%d" % (BASE, self.slug, competition_id, grade_id)
+        return self._build("pointscore", competition_id, grade_id)
 
     def team_ical_url(self, competition_id: int, team_id: int) -> str:
-        return "%s/%s/games/team/export/ical/%d/%d" % (
-            BASE,
-            self.slug,
-            competition_id,
-            team_id,
-        )
+        return self._build("games", "team", "export", "ical", competition_id, team_id)
 
     def game_url(self, game_id: int) -> str:
-        return "%s/%s/game/%d" % (BASE, self.slug, game_id)
+        return self._build("game", game_id)
 
 
 # -- parsed pages ------------------------------------------------------------
@@ -317,7 +317,7 @@ def _parse_time(text: str) -> Optional[time]:
 
 
 def _path(href: Optional[str]) -> str:
-    return urlparse(href or "").path
+    return urlsplit(href or "").path
 
 
 def _content_card(soup: BeautifulSoup):
@@ -371,7 +371,7 @@ class RevolutioniseClient(HttpClient):
             name = _text(anchor)
             if not name:
                 raise UpstreamResponseError(
-                    "Grade %d/%d is listed without a name" % (competition_id, grade_id)
+                    f"Grade {competition_id}/{grade_id} is listed without a name"
                 )
             grades.append(
                 GradeSummary(
@@ -383,7 +383,7 @@ class RevolutioniseClient(HttpClient):
             )
         if not grades and NO_DRAWS_TEXT not in _text(card) and not card.find("h2"):
             raise UpstreamResponseError(
-                "Draws index %s did not contain a competition listing" % url.canonical
+                f"Draws index {url.canonical} did not contain a competition listing"
             )
         return grades
 
@@ -414,8 +414,8 @@ class RevolutioniseClient(HttpClient):
         )
         if not rounds and NO_DRAWS_TEXT not in _text(card):
             raise UpstreamResponseError(
-                "Grade page %s did not list any rounds"
-                % url.grade_url(competition_id, grade_id)
+                f"Grade page {url.grade_url(competition_id, grade_id)} "
+                "did not list any rounds"
             )
         return GradeDetail(
             competition_name=competition_name,
@@ -455,7 +455,7 @@ class RevolutioniseClient(HttpClient):
                     )
 
         if not fixtures and not byes and NO_DRAWS_TEXT not in _text(card):
-            raise UpstreamResponseError("Round page %s listed no fixtures" % page_url)
+            raise UpstreamResponseError(f"Round page {page_url} listed no fixtures")
         return RoundDetail(dates=dates, fixtures=tuple(fixtures), byes=tuple(byes))
 
     # -- ladder --------------------------------------------------------------
@@ -470,7 +470,7 @@ class RevolutioniseClient(HttpClient):
         if table is None:
             if "no ladder" in _text(card).lower() or NO_DRAWS_TEXT in _text(card):
                 return []
-            raise UpstreamResponseError("Ladder page %s has no table" % page_url)
+            raise UpstreamResponseError(f"Ladder page {page_url} has no table")
         headers = [
             re.sub(r"[^a-z]", "", _text(th).lower()) for th in table.find_all("th")
         ]
@@ -523,7 +523,7 @@ class RevolutioniseClient(HttpClient):
         try:
             ZoneInfo(tzid)
         except (ZoneInfoNotFoundError, ValueError):
-            raise UpstreamResponseError("Unknown time zone %r in iCalendar" % tzid)
+            raise UpstreamResponseError(f"Unknown time zone {tzid!r} in iCalendar")
         return tzid
 
     def get_venue_detail(self, url: RevolutioniseURL, game_id: int) -> VenueDetail:
@@ -565,7 +565,7 @@ def _parse_fixture(node, page_url: str) -> Fixture:
             game_id = int(match.group("game"))
             break
     if game_id is None:
-        raise UpstreamResponseError("A fixture on %s has no game link" % page_url)
+        raise UpstreamResponseError(f"A fixture on {page_url} has no game link")
 
     venue_id = venue_name = field_name = None
     for anchor in anchors:
@@ -592,7 +592,7 @@ def _parse_fixture(node, page_url: str) -> Fixture:
         column = placeholder.parent if placeholder is not None else None
     if column is None:
         raise UpstreamResponseError(
-            "Fixture %d on %s does not name its teams" % (game_id, page_url)
+            f"Fixture {game_id} on {page_url} does not name its teams"
         )
     for child in column.children:
         name = getattr(child, "name", None)
@@ -614,7 +614,7 @@ def _parse_fixture(node, page_url: str) -> Fixture:
                 score_text = _text(child)
     if len(teams) != 2:
         raise UpstreamResponseError(
-            "Fixture %d on %s does not name two teams" % (game_id, page_url)
+            f"Fixture {game_id} on {page_url} does not name two teams"
         )
     (home_id, home_name), (away_id, away_name) = teams
     home_score = away_score = None
@@ -699,9 +699,7 @@ def infer_ladder_template(
         return None, []
     if "draws" not in values:
         values["draws"] = DEFAULT_DRAW_POINTS
-        notes.append(
-            "no draws yet; %d point(s) assumed for a draw" % DEFAULT_DRAW_POINTS
-        )
+        notes.append(f"no draws yet; {DEFAULT_DRAW_POINTS} point(s) assumed for a draw")
     template = RemoteLadderTemplate(
         name="Inferred from the revolutioniseSPORT ladder",
         points_win=values["wins"],
@@ -726,7 +724,7 @@ class RevolutioniseBackend(BaseUpstreamBackend):
     season_url_example = "https://www.revolutionise.com.au/ccha/games/25527"
 
     def matches(self, url: str) -> bool:
-        return urlparse(url).netloc.lower() in HOSTS
+        return urlsplit(url).netloc.lower() in HOSTS
 
     def parse_competition_url(self, url: str) -> str:
         return RevolutioniseURL(url).canonical
@@ -736,8 +734,8 @@ class RevolutioniseBackend(BaseUpstreamBackend):
         organisation = RevolutioniseURL(competition_url)
         if parsed.slug != organisation.slug:
             raise UpstreamURLError(
-                "Enter a draws page of %s, for example %s"
-                % (organisation.canonical, organisation.canonical + "/25527")
+                f"Enter a draws page of {organisation.canonical}, for example "
+                f"{organisation.competition_url(25527)}"
             )
         return parsed.season_url
 
@@ -753,8 +751,7 @@ class RevolutioniseBackend(BaseUpstreamBackend):
             grades = [g for g in grades if g.competition_id == url.competition_id]
             if not grades:
                 raise UpstreamResponseError(
-                    "Competition %d is not listed on %s"
-                    % (url.competition_id, url.canonical)
+                    f"Competition {url.competition_id} is not listed on {url.canonical}"
                 )
         # The same grade name can appear in two competitions synchronised
         # into one season; qualify such names with the competition.
@@ -765,7 +762,7 @@ class RevolutioniseBackend(BaseUpstreamBackend):
         for grade in grades:
             name = grade.grade_name
             if name_counts[name] > 1:
-                name = "%s (%s)" % (grade.grade_name, grade.competition_name)
+                name = f"{grade.grade_name} ({grade.competition_name})"
             snapshots.append(builder.build(grade, name))
         return snapshots
 
@@ -858,8 +855,7 @@ class _SnapshotBuilder:
             for bye in round_detail.byes:
                 matches.append(
                     RemoteMatch(
-                        id="bye/%d/%d/%d"
-                        % (grade.grade_id, summary.number, bye.team_id),
+                        id=f"bye/{grade.grade_id}/{summary.number}/{bye.team_id}",
                         round_number=summary.number,
                         round_type=round_type,
                         round_name=summary.name,
@@ -893,7 +889,7 @@ class _SnapshotBuilder:
                 )
 
         return RemoteCompetition(
-            id="%d/%d" % (grade.competition_id, grade.grade_id),
+            id=f"{grade.competition_id}/{grade.grade_id}",
             name=name,
             teams=tuple(RemoteTeam(id=tid, name=tname) for tid, tname in teams.items()),
             matches=tuple(matches),

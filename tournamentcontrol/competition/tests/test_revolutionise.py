@@ -735,8 +735,8 @@ class AdminTests(TestCase):
             )
             self.assertResponseContains("<h3>Synchronise with revolutioniseSPORT</h3>")
             self.assertResponseContains(
-                '<a href="%s" target="_blank" rel="noopener">%s</a>'
-                % (CCHA_MENS_URL, CCHA_MENS_URL)
+                f'<a href="{CCHA_MENS_URL}" target="_blank" rel="noopener">'
+                f"{CCHA_MENS_URL}</a>"
             )
             self.post("admin:fixja:competition:season:upstream-sync", *self.args)
             self.response_302()
