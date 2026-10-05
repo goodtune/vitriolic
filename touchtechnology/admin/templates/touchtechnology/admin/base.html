@@ -181,6 +181,10 @@
 <!-- Framework JS -->
 <script src="{{ STATIC_URL }}touchtechnology/admin/js/modal_delete.js"></script>
 
+<!-- HTMX -->
+{% load common %}
+<script src="{% htmx_script %}"></script>
+
 {% block extrajs %}{% endblock %}
 </body>
 </html>

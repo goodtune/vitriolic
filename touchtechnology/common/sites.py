@@ -29,6 +29,7 @@ from guardian.shortcuts import get_objects_for_user
 from guardian.utils import get_40x_or_None
 from modelforms.forms import ModelForm
 
+from touchtechnology.admin.templatetags.mvp_tags import related as related_filter
 from touchtechnology.common.decorators import (
     login_required_m,
     node2extracontext,
@@ -46,6 +47,10 @@ from touchtechnology.common.utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+# How many objects a related tab lists at a time when loaded through HTMX, unless
+# TOUCHTECHNOLOGY_HTMX_ADMIN_TAB_PAGINATE_BY says otherwise.
+HTMX_ADMIN_TAB_PAGINATE_BY = 25
 
 
 class AlreadyRegistered(Exception):
@@ -393,6 +398,59 @@ class Application(object):
 
         return self.render(request, templates, context)
 
+    def _is_htmx_request(self, request):
+        """Check if the request is an HTMX request."""
+        return (
+            getattr(request, "htmx", False)
+            or request.META.get("HTTP_HX_REQUEST") == "true"
+        )
+
+    def _render_htmx_tab_content(
+        self, request, model, manager, tab_name, instance, related, extra_context
+    ):
+        """
+        Render partial HTML content for a specific tab pane via HTMX.
+        Returns a TemplateResponse with just the tab's content fragment.
+        """
+        context = {
+            "model": manager.none(),
+            "object": instance,
+            "related": related,
+            "htmx_admin_tabs": True,
+            "tab_paginate_by": int(
+                getattr(
+                    settings,
+                    "TOUCHTECHNOLOGY_HTMX_ADMIN_TAB_PAGINATE_BY",
+                    HTMX_ADMIN_TAB_PAGINATE_BY,
+                )
+            ),
+        }
+        context.update(extra_context or {})
+
+        if instance and instance.pk and related:
+            for mgr, name in related_filter(instance, related):
+                if name == tab_name:
+                    context.update(
+                        {
+                            "tab_manager": mgr,
+                            "tab_name": name,
+                        }
+                    )
+                    templates = [
+                        "touchtechnology/admin/_htmx_tab_related.html",
+                    ]
+                    response = self.render(request, templates, context)
+                    # The links to the other pages of a tab are boosted, which
+                    # htmx records in the history unless the server says not to
+                    # (``hx-push-url="false"`` is ignored for boosted links).
+                    response["HX-Push-Url"] = "false"
+                    return response
+
+        # Tab not found - return empty content
+        return TemplateResponse(
+            request, "touchtechnology/admin/_htmx_tab_empty.html", context
+        )
+
     def generic_edit(
         self,
         request,
@@ -471,6 +529,15 @@ class Application(object):
             # thrown an exception by now.
             if has_permission is not None:
                 return has_permission
+
+        # Handle HTMX tab content requests - return partial HTML for a
+        # specific tab pane when the _htmx_tab query parameter is present.
+        htmx_tab = request.GET.get("_htmx_tab")
+        htmx_admin_tabs = getattr(settings, "TOUCHTECHNOLOGY_HTMX_ADMIN_TABS", False)
+        if htmx_tab and htmx_admin_tabs and self._is_htmx_request(request):
+            return self._render_htmx_tab_content(
+                request, model, manager, htmx_tab, instance, related, extra_context
+            )
 
         # If the developer has not provided a custom form, then dynamically
         # construct a default ModelForm for them.
