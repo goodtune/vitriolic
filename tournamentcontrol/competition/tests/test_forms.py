@@ -3,12 +3,13 @@ from test_plus import TestCase
 
 from tournamentcontrol.competition.admin import next_related_factory
 from tournamentcontrol.competition.forms import (
+    ClubEditForm,
     DivisionForm,
     DrawFormatForm,
     MatchEditForm,
     TeamForm,
 )
-from tournamentcontrol.competition.models import Team
+from tournamentcontrol.competition.models import Club, Team
 from tournamentcontrol.competition.tests import factories
 
 
@@ -80,6 +81,57 @@ class DivisionFormTests(TestCase):
             form,
             "bonus_points_formula",
             ["Syntax of this points formula is invalid."],
+        )
+
+
+class ClubEditFormTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.club = factories.ClubFactory.create()
+        cls.members = factories.PersonFactory.create_batch(3, club=cls.club)
+        cls.outsider = factories.PersonFactory.create()
+
+    def _data(self, **data):
+        defaults = {
+            "title": self.club.title,
+            "slug": self.club.slug,
+            "status": self.club.status,
+        }
+        defaults.update(data)
+        return defaults
+
+    def test_primary_offers_only_the_clubs_people(self):
+        form = ClubEditForm(instance=self.club)
+        self.assertCountEqual(form.fields["primary"].queryset, self.members)
+
+    def test_primary_still_offers_the_current_primary(self):
+        "A primary contact who has since moved on is not rejected."
+        self.club.primary = self.outsider
+        self.club.save()
+        form = ClubEditForm(instance=self.club)
+        self.assertCountEqual(
+            form.fields["primary"].queryset, [*self.members, self.outsider]
+        )
+
+    def test_new_club_offers_nobody(self):
+        form = ClubEditForm(instance=Club())
+        self.assertQuerySetEqual(form.fields["primary"].queryset, [])
+
+    def test_member_can_be_the_primary(self):
+        form = ClubEditForm(
+            instance=self.club, data=self._data(primary=self.members[0].pk)
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.save().primary, self.members[0])
+
+    def test_outsider_cannot_be_the_primary(self):
+        form = ClubEditForm(
+            instance=self.club, data=self._data(primary=self.outsider.pk)
+        )
+        self.assertFormError(
+            form,
+            "primary",
+            ["Select a valid choice. That choice is not one of the available choices."],
         )
 
 
