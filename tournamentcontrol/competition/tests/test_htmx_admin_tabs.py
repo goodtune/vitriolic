@@ -1,4 +1,5 @@
 from django.test import override_settings
+from django.urls import reverse
 from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
@@ -172,3 +173,91 @@ class HtmxSeasonTabTests(TestCase):
             extra={"HTTP_HX_REQUEST": "true"},
         )
         self.response_302()
+
+
+@override_settings(
+    TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True,
+    TOUCHTECHNOLOGY_HTMX_ADMIN_TAB_PAGINATE_BY=2,
+)
+class HtmxTabPaginationTests(TestCase):
+    """Related tabs show one page of their objects at a time."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = UserFactory.create(is_staff=True, is_superuser=True)
+        cls.club = factories.ClubFactory.create()
+        # Not using the PersonFactory, the members are listed by last name.
+        cls.members = [
+            cls.club.members.create(first_name="Alice", last_name=f"Member{n}")
+            for n in range(1, 6)
+        ]
+        cls.season = factories.SeasonFactory.create()
+        cls.divisions = factories.DivisionFactory.create_batch(3, season=cls.season)
+
+    def _member_link(self, member):
+        url = reverse("admin:fixja:club:person:edit", args=[self.club.pk, member.pk])
+        return f'<a href="{url}">{member}</a>'
+
+    def _get_club_tab(self, **data):
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:club:edit",
+                self.club.pk,
+                data={"_htmx_tab": "members", **data},
+                extra={"HTTP_HX_REQUEST": "true"},
+            )
+        self.response_200()
+
+    def test_first_page_of_members(self):
+        self._get_club_tab()
+        self.assertResponseContains(self._member_link(self.members[0]), html=True)
+        self.assertResponseContains(self._member_link(self.members[1]), html=True)
+        self.assertResponseNotContains(self._member_link(self.members[2]), html=True)
+
+    def test_second_page_of_members(self):
+        self._get_club_tab(page=2)
+        self.assertResponseContains(self._member_link(self.members[2]), html=True)
+        self.assertResponseContains(self._member_link(self.members[3]), html=True)
+        self.assertResponseNotContains(self._member_link(self.members[1]), html=True)
+
+    def test_page_beyond_the_last_is_the_last(self):
+        self._get_club_tab(page=99)
+        self.assertResponseContains(self._member_link(self.members[4]), html=True)
+        self.assertResponseNotContains(self._member_link(self.members[3]), html=True)
+
+    def test_members_link_to_the_other_pages_of_the_tab(self):
+        self._get_club_tab()
+        self.assertResponseContains(
+            '<a href="?_htmx_tab=members&page=2">2</a>', html=True
+        )
+        self.assertResponseContains(
+            '<a href="?_htmx_tab=members&page=3">3</a>', html=True
+        )
+
+    def test_pages_replace_the_tab_pane(self):
+        "The links to the other pages are boosted into the pane they are in."
+        self._get_club_tab()
+        self.assertResponseContains(
+            '<div hx-boost="true" hx-target="#members-tab" hx-swap="innerHTML" '
+            'hx-push-url="false">',
+            html=False,
+        )
+
+    def test_queryset_tab_is_paginated(self):
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:competition:season:edit",
+                self.season.competition.pk,
+                self.season.pk,
+                data={"_htmx_tab": "divisions", "page": 2},
+                extra={"HTTP_HX_REQUEST": "true"},
+            )
+        self.response_200()
+        self.assertEqual(len(self.get_context("object_list")), 1)
+        self.assertEqual(self.get_context("paginator").count, 3)
+        self.assertEqual(self.get_context("page"), 2)
+
+    def test_page_size_is_a_setting(self):
+        with override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TAB_PAGINATE_BY=4):
+            self._get_club_tab()
+        self.assertEqual(len(self.get_context("object_list")), 4)

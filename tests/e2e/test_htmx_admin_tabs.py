@@ -197,32 +197,32 @@ class TestHtmxTabMode:
     def test_season_edit_has_htmx_attributes(
         self, authenticated_page: Page, live_server, competition_data
     ):
-        """Season edit page has HTMX attributes on tab links."""
+        """Season edit page has HTMX attributes on the related tab panes."""
         season = competition_data["season"]
         competition = competition_data["competition"]
         authenticated_page.goto(
             season_edit_url(live_server, competition, season)
         )
 
-        # Related tab links should have hx-get attributes
-        htmx_links = authenticated_page.locator("a.htmx-tab-link[hx-get]")
-        assert htmx_links.count() > 0
+        # Related tab panes should have hx-get attributes
+        htmx_panes = authenticated_page.locator(".tab-pane[hx-get]")
+        assert htmx_panes.count() > 0
 
-    def test_season_edit_preload_attributes(
+    def test_season_edit_lazy_load_attributes(
         self, authenticated_page: Page, live_server, competition_data
     ):
-        """Related tab panes have hx-trigger for pre-loading."""
+        """Related tab panes load when first shown, not with the page."""
         season = competition_data["season"]
         competition = competition_data["competition"]
         authenticated_page.goto(
             season_edit_url(live_server, competition, season)
         )
 
-        # Tab panes should have hx-trigger="load delay:100ms"
-        preload_panes = authenticated_page.locator(
-            '.tab-pane[hx-trigger="load delay:100ms"]'
+        # Tab panes should have hx-trigger="intersect once"
+        lazy_panes = authenticated_page.locator(
+            '.tab-pane[hx-trigger="intersect once"]'
         )
-        assert preload_panes.count() > 0
+        assert lazy_panes.count() > 0
 
     def test_season_edit_form_inside_tab(
         self, authenticated_page: Page, live_server, competition_data
@@ -279,23 +279,18 @@ class TestHtmxTabMode:
         # Wait for HTMX to be ready
         authenticated_page.wait_for_load_state("networkidle")
 
-        # The pre-loaded tab panes should eventually have content
-        # (hx-trigger="load delay:100ms" fires on page load)
-        authenticated_page.wait_for_timeout(500)
+        # Nothing is fetched until a tab is shown, so every related pane is
+        # still waiting behind its spinner.
+        related_panes = authenticated_page.locator(".tab-pane[hx-get]")
+        assert related_panes.count() > 0
+        first_pane = related_panes.first
+        expect(first_pane.locator(".fa-spinner")).to_have_count(1)
 
-        # Check that at least one related tab pane got content loaded
-        # The loading spinner should be replaced with actual content
-        related_panes = authenticated_page.locator(
-            ".tab-pane[hx-get]"
-        )
-        if related_panes.count() > 0:
-            # After pre-loading, the panes should have content
-            first_pane = related_panes.first
-            # Wait for the pane to have some content from HTMX
-            authenticated_page.wait_for_timeout(1000)
-            inner = first_pane.inner_html()
-            # The spinner should be replaced or augmented
-            assert len(inner) > 0
+        # Showing the tab loads its content in place of the spinner.
+        tab_id = first_pane.get_attribute("id")
+        authenticated_page.locator(f'a[href="#{tab_id}"]').click()
+        expect(first_pane).to_be_visible()
+        expect(first_pane.locator(".fa-spinner")).to_have_count(0)
 
     def test_competition_edit_page_loads(
         self, authenticated_page: Page, live_server, competition_data
@@ -326,17 +321,18 @@ class TestHtmxTabMode:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Find a related tab link and click it
-        htmx_tabs = authenticated_page.locator("a.htmx-tab-link[hx-get]")
+        htmx_tabs = authenticated_page.locator(
+            "#myTab li:not(.active) a.htmx-tab-link"
+        )
 
         if htmx_tabs.count() > 0:
             first_htmx_tab = htmx_tabs.first
             tab_id = first_htmx_tab.get_attribute("data-tab-id")
             first_htmx_tab.click()
 
-            # Wait for HTMX to load the content
-            authenticated_page.wait_for_timeout(500)
-
-            # The target tab pane should now be visible
+            # The target tab pane should now be visible, with its content
+            # loaded in place of the spinner.
             if tab_id:
                 target_pane = authenticated_page.locator(f"#{tab_id}")
                 expect(target_pane).to_be_visible()
+                expect(target_pane.locator(".fa-spinner")).to_have_count(0)

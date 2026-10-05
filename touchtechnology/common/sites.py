@@ -47,6 +47,10 @@ from touchtechnology.common.utils import (
 
 logger = logging.getLogger(__name__)
 
+# How many objects a related tab lists at a time when loaded through HTMX, unless
+# TOUCHTECHNOLOGY_HTMX_ADMIN_TAB_PAGINATE_BY says otherwise.
+HTMX_ADMIN_TAB_PAGINATE_BY = 25
+
 
 class AlreadyRegistered(Exception):
     pass
@@ -415,6 +419,13 @@ class Application(object):
             "object": instance,
             "related": related,
             "htmx_admin_tabs": True,
+            "tab_paginate_by": int(
+                getattr(
+                    settings,
+                    "TOUCHTECHNOLOGY_HTMX_ADMIN_TAB_PAGINATE_BY",
+                    HTMX_ADMIN_TAB_PAGINATE_BY,
+                )
+            ),
         }
         context.update(extra_context or {})
 

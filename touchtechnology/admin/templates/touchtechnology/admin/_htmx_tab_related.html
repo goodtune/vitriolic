@@ -6,6 +6,12 @@ This is loaded dynamically when HTMX admin tabs mode is enabled.
 <div class="heading-block">
 	<h3>{{ tab_manager.all|types|capfirst }}</h3>
 </div>
-{% with table=templates|default:None %}
-	{% mvp_list tab_manager.all template=tab_manager|mvp_list_template:table %}
-{% endwith %}
+{% comment %}
+The list is paginated, and the links to the other pages are boosted so that
+each page replaces this tab pane rather than the whole screen.
+{% endcomment %}
+<div hx-boost="true" hx-target="#{{ tab_name }}-tab" hx-swap="innerHTML" hx-push-url="false">
+	{% with table=templates|default:None %}
+		{% mvp_list tab_manager.all template=tab_manager|mvp_list_template:table paginate_by=tab_paginate_by %}
+	{% endwith %}
+</div>
