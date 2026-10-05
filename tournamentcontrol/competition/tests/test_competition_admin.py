@@ -847,6 +847,23 @@ class GoodViewTests(TestCase):
                 "admin:fixja:club:person:edit", person.club.pk, person.pk
             )
 
+    def test_edit_club_primary_contact_choices(self):
+        "A club's primary contact is chosen from its own people, not the site's."
+        club = factories.ClubFactory.create()
+        member = factories.PersonFactory.create(club=club)
+        outsider = factories.PersonFactory.create()
+
+        with self.login(self.superuser):
+            self.get("admin:fixja:club:edit", club.pk)
+            self.response_200()
+
+        self.assertResponseContains(
+            f'<option value="{member.pk}">{member}</option>', html=True
+        )
+        self.assertResponseNotContains(
+            f'<option value="{outsider.pk}">{outsider}</option>', html=True
+        )
+
     def test_merge_person(self):
         "Create two people, destructively merge second into the first."
         club = factories.ClubFactory.create()
