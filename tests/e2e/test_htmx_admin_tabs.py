@@ -12,6 +12,8 @@ import pytest
 from django.urls import reverse
 from playwright.sync_api import Page, expect
 
+from tournamentcontrol.competition.tests import factories
+
 
 def shoot(page: Page, screenshot_dir, name: str):
     """Save a full page screenshot as ``<name>.png``."""
@@ -21,17 +23,10 @@ def shoot(page: Page, screenshot_dir, name: str):
 @pytest.fixture
 def competition_data(db):
     """Create test competition data for tab testing."""
-    from tournamentcontrol.competition.tests.factories import (
-        CompetitionFactory,
-        DivisionFactory,
-        SeasonFactory,
-        VenueFactory,
-    )
-
-    competition = CompetitionFactory.create()
-    season = SeasonFactory.create(competition=competition)
-    division = DivisionFactory.create(season=season)
-    venue = VenueFactory.create(season=season)
+    competition = factories.CompetitionFactory.create()
+    season = factories.SeasonFactory.create(competition=competition)
+    division = factories.DivisionFactory.create(season=season)
+    venue = factories.VenueFactory.create(season=season)
     return {
         "competition": competition,
         "season": season,
@@ -46,22 +41,15 @@ def club_data(db):
     A club with more people and teams than fit on one page of a tab, and a
     person at another club who must not be offered as its primary contact.
     """
-    from tournamentcontrol.competition.tests.factories import (
-        ClubFactory,
-        DivisionFactory,
-        PersonFactory,
-        TeamFactory,
-    )
-
-    club = ClubFactory.create()
+    club = factories.ClubFactory.create()
     members = [
         club.members.create(first_name="Alice", last_name=f"Member{n:02d}")
         for n in range(1, 26)
     ]
-    division = DivisionFactory.create()
+    division = factories.DivisionFactory.create()
     division.season.competition.clubs.add(club)
-    teams = TeamFactory.create_batch(12, club=club, division=division)
-    outsider = PersonFactory.create(first_name="Olivia", last_name="Outsider")
+    teams = factories.TeamFactory.create_batch(12, club=club, division=division)
+    outsider = factories.PersonFactory.create(first_name="Olivia", last_name="Outsider")
     return {
         "club": club,
         "members": members,

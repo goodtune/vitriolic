@@ -29,6 +29,7 @@ from guardian.shortcuts import get_objects_for_user
 from guardian.utils import get_40x_or_None
 from modelforms.forms import ModelForm
 
+from touchtechnology.admin.templatetags.mvp_tags import related as related_filter
 from touchtechnology.common.decorators import (
     login_required_m,
     node2extracontext,
@@ -411,12 +412,6 @@ class Application(object):
         Render partial HTML content for a specific tab pane via HTMX.
         Returns a TemplateResponse with just the tab's content fragment.
         """
-        # Avoid circular import: touchtechnology.admin imports from
-        # touchtechnology.common.sites (Application base class).
-        from touchtechnology.admin.templatetags.mvp_tags import (
-            related as related_filter,
-        )
-
         context = {
             "model": manager.none(),
             "object": instance,
