@@ -9,8 +9,16 @@
 	<script type="text/javascript" src="{{ STATIC_URL }}/DataTables-1.10.12/js/jquery.dataTables.min.js"></script>
 	<script type="text/javascript" src="{{ STATIC_URL }}/DataTables-1.10.12/js/dataTables.bootstrap.min.js"></script>
 	<script>
+		// Lists in tabs fetched when they are first shown (HTMX admin tabs)
+		// arrive after the page has loaded, so set them up as they do.
+		function prepareTables(root) {
+			$(root).find('table.table').not('.dataTable').DataTable();
+		}
 		$(document).ready(function() {
-			$('table.table').DataTable();
+			prepareTables(document);
+		});
+		document.addEventListener('htmx:load', function(event) {
+			prepareTables(event.target);
 		});
 	</script>
 	{{ block.super }}

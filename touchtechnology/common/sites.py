@@ -427,7 +427,9 @@ class Application(object):
         }
         context.update(extra_context or {})
 
-        if instance and instance.pk and related:
+        # A view that names no relations (``related=None``) has a tab for each
+        # of them, exactly as the page lists them.
+        if instance and instance.pk:
             for mgr, name in related_filter(instance, related):
                 if name == tab_name:
                     context.update(
