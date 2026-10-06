@@ -43,16 +43,26 @@ def row_links(pane):
     )
 
 
+def row_texts(pane):
+    """What the rows of the list in a tab say, cell by cell."""
+    return pane.locator("tbody tr").evaluate_all(
+        """rows => rows.map(tr => Array.from(tr.cells).map(
+            td => td.innerText.replace(/\\s+/g, ' ').trim()
+        ))"""
+    )
+
+
 class Tabs:
     """Everything a person sees in the tabs of one edit page."""
 
-    def __init__(self, ids, links, errors):
+    def __init__(self, ids, links, rows, errors):
         self.ids = ids
         self.links = links
+        self.rows = rows
         self.errors = errors
 
     def __repr__(self):
-        return f"Tabs(ids={self.ids!r}, links={self.links!r})"
+        return f"Tabs(ids={self.ids!r}, links={self.links!r}, rows={self.rows!r})"
 
 
 def read_tabs(page: Page, url):
@@ -71,13 +81,14 @@ def read_tabs(page: Page, url):
     page.goto(url)
     expect(page.locator("#myTab")).to_have_count(1)
     ids = tab_ids(page)
-    links = {}
+    links, rows = {}, {}
     for tab_id in ids[1:]:
         pane = show_tab(page, tab_id)
         expect(pane).not_to_contain_text(EMPTY_TAB)
         links[tab_id] = row_links(pane)
+        rows[tab_id] = row_texts(pane)
     page.remove_listener("pageerror", record)
-    return Tabs(ids, links, errors)
+    return Tabs(ids, links, rows, errors)
 
 
 def read_tabs_in_both_modes(page: Page, settings, url):
@@ -96,4 +107,5 @@ def assert_same_in_both_modes(page: Page, settings, url):
     assert lazy.errors == [], lazy.errors
     assert lazy.ids == plain.ids
     assert lazy.links == plain.links
+    assert lazy.rows == plain.rows
     return plain
