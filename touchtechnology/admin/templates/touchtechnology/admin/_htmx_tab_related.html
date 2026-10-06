@@ -7,10 +7,11 @@ This is loaded dynamically when HTMX admin tabs mode is enabled.
 	<h3>{{ tab_manager.all|types|capfirst }}</h3>
 </div>
 {% comment %}
-The list is paginated, and the links to the other pages are boosted so that
-each page replaces this tab pane rather than the whole screen.
+The list is paginated, and the links to the other pages replace this tab pane
+rather than the whole screen (see the pagination template). Every other link in
+the list, to edit or delete an object, is a plain link that leaves the page.
 {% endcomment %}
-<div hx-boost="true" hx-target="#{{ tab_name }}-tab" hx-swap="innerHTML">
+<div>
 	{% with table=templates|default:None %}
 		{% mvp_list tab_manager.all template=tab_manager|mvp_list_template:table paginate_by=tab_paginate_by %}
 	{% endwith %}
