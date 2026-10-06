@@ -16,6 +16,8 @@ import pytest
 from playwright.sync_api import Page, expect
 
 from tests.e2e.admin_tabs import assert_same_in_both_modes, set_mode, show_tab
+from touchtechnology.common.models import SitemapNode
+from touchtechnology.content.models import Placeholder
 from touchtechnology.content.tests.factories import RedirectFactory
 from touchtechnology.news.tests.factories import (
     ArticleFactory,
@@ -55,13 +57,12 @@ def site(db):
 
     club = factories.ClubFactory.create(title="Eagles")
     other_club = factories.ClubFactory.create(title="Hawks")
+    competition.clubs.add(club, other_club)
     person = factories.PersonFactory.create(
         club=club, first_name="Alex", last_name="Smith"
     )
     factories.PersonFactory.create(club=club, first_name="Sam", last_name="Jones")
-    club_association = factories.ClubAssociationFactory.create(
-        club=club, person=person
-    )
+    club_association = factories.ClubAssociationFactory.create(club=club, person=person)
     club_association.roles.add(club_role)
     season_referee = factories.SeasonRefereeFactory.create(
         season=season, club=club, person=person
@@ -77,9 +78,7 @@ def site(db):
     away = factories.TeamFactory.create(
         division=division, club=other_club, title="Hawks"
     )
-    team_association = factories.TeamAssociationFactory.create(
-        team=home, person=person
-    )
+    team_association = factories.TeamAssociationFactory.create(team=home, person=person)
     team_association.roles.add(team_role)
 
     stage = factories.StageFactory.create(division=division, title="Pool Stage")
@@ -108,6 +107,11 @@ def site(db):
 
     draw_format = factories.DrawFormatFactory.create(teams=4)
 
+    # The article's tabs link to it on the web, so publish the news site.
+    placeholder, _ = Placeholder.objects.get_or_create(
+        path="touchtechnology.news.sites.NewsSite", namespace="news"
+    )
+    SitemapNode.objects.create(title="News", slug="news", object=placeholder)
     category = CategoryFactory.create(title="Results")
     article = ArticleFactory.create(headline="Eagles win the Spec Cup")
     article.categories.add(category)
@@ -238,3 +242,16 @@ def test_a_tab_list_can_be_searched_and_sorted(
     page.goto(edit_url(live_server, site[name]))
     pane = show_tab(page, tab_id)
     expect(pane.locator(".dataTables_filter input")).to_be_visible()
+
+
+def test_choosing_a_club_names_the_team(
+    authenticated_page: Page, live_server, settings, site
+):
+    """The team page names a team after the club chosen for it."""
+    page = authenticated_page
+    errors = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto(edit_url(live_server, site["team"]))
+    page.locator("#id_club").select_option(label="Hawks", force=True)
+    expect(page.locator("#id_title")).to_have_value("Hawks")
+    assert errors == []
