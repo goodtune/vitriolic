@@ -440,9 +440,8 @@ class Application(object):
                         "touchtechnology/admin/_htmx_tab_related.html",
                     ]
                     response = self.render(request, templates, context)
-                    # The links to the other pages of a tab are boosted, which
-                    # htmx records in the history unless the server says not to
-                    # (``hx-push-url="false"`` is ignored for boosted links).
+                    # A page of a tab is not a page of its own, so tell htmx not
+                    # to record it in the history.
                     response["HX-Push-Url"] = "false"
                     return response
 

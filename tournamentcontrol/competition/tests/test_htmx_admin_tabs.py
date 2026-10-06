@@ -227,23 +227,26 @@ class HtmxTabPaginationTests(TestCase):
 
     def test_members_link_to_the_other_pages_of_the_tab(self):
         self._get_club_tab()
-        self.assertResponseContains(
-            '<a href="?_htmx_tab=members&page=2">2</a>', html=True
-        )
-        self.assertResponseContains(
-            '<a href="?_htmx_tab=members&page=3">3</a>', html=True
-        )
+        for number in (2, 3):
+            href = f"?_htmx_tab=members&page={number}"
+            self.assertResponseContains(
+                f'<a href="{href}" hx-get="{href}" hx-target="#members-tab" '
+                f'hx-swap="innerHTML" hx-push-url="false">{number}</a>',
+                html=True,
+            )
 
-    def test_pages_replace_the_tab_pane(self):
-        "The links to the other pages are boosted into the pane they are in."
+    def test_only_the_links_to_other_pages_replace_the_tab_pane(self):
+        """
+        The link to a member, or anything else in the list, leaves the page as
+        it would anywhere else; boosting it loaded the page it leads to into the
+        tab pane.
+        """
         self._get_club_tab()
-        self.assertResponseContains(
-            '<div hx-boost="true" hx-target="#members-tab" hx-swap="innerHTML">',
-            html=False,
-        )
+        self.assertResponseNotContains("hx-boost")
+        self.assertResponseContains(self._member_link(self.members[0]), html=True)
 
     def test_pages_are_not_pushed_onto_the_history(self):
-        "Boosted links are pushed to the history unless the response says not."
+        "The pages of a tab are not recorded in the history."
         self._get_club_tab()
         self.assertEqual(self.last_response["HX-Push-Url"], "false")
 
