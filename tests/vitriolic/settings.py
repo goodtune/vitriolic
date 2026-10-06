@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "bootstrap3",
     "django_gravatar",
     "embed_video",
+    "mathfilters",
     "django_htmx",
     "rest_framework",
     "oauth2_provider",
