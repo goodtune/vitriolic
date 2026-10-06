@@ -3352,3 +3352,42 @@ class BulkCreateTeamTests(MessagesTestMixin, TestCase):
             self.post(self.viewname, *self.args, data=data)
             self.response_302()
         self.assertEqual(self.division.teams.get().title, "Bravo")
+
+
+class SeasonEditForfeitNotificationsTests(TestCase):
+    """
+    The season page lists every user on the site in its "forfeit
+    notifications" box, which made one of the most visited pages of the
+    event admin slow to load. The box is left off the page; the people
+    already chosen keep being notified.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create(timezone="Australia/Sydney")
+        cls.recipients = factories.UserFactory.create_batch(3)
+        cls.season.forfeit_notifications.set(cls.recipients)
+
+    def test_season_page_has_no_forfeit_notifications(self):
+        with self.login(self.superuser):
+            self.get("admin:fixja:competition:season:edit", *self.season._get_url_args())
+            self.response_200()
+            self.assertNotIn("forfeit_notifications", self.get_context("form").fields)
+
+    def test_saving_the_season_keeps_its_forfeit_notifications(self):
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:edit",
+                *self.season._get_url_args(),
+                data={
+                    "title": "Renamed",
+                    "slug": self.season.slug,
+                    "mode": self.season.mode,
+                    "timezone": "Australia/Sydney",
+                    "live_stream_privacy": "public",
+                },
+            )
+            self.response_302()
+        self.season.refresh_from_db()
+        self.assertEqual(self.season.title, "Renamed")
+        self.assertCountEqual(self.season.forfeit_notifications.all(), self.recipients)

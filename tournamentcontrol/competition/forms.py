@@ -737,7 +737,6 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
             "timezone",
             "start_date",
             "mode",
-            "forfeit_notifications",
             "complete",
             "statistics",
             "mvp_results_public",
