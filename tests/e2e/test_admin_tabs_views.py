@@ -60,8 +60,9 @@ def site(db):
     )
     factories.PersonFactory.create(club=club, first_name="Sam", last_name="Jones")
     club_association = factories.ClubAssociationFactory.create(
-        club=club, person=person, role=club_role
+        club=club, person=person
     )
+    club_association.roles.add(club_role)
     season_referee = factories.SeasonRefereeFactory.create(
         season=season, club=club, person=person
     )
@@ -77,8 +78,9 @@ def site(db):
         division=division, club=other_club, title="Hawks"
     )
     team_association = factories.TeamAssociationFactory.create(
-        team=home, person=person, roles=[team_role]
+        team=home, person=person
     )
+    team_association.roles.add(team_role)
 
     stage = factories.StageFactory.create(division=division, title="Pool Stage")
     factories.StageFactory.create(division=division, title="Finals")
