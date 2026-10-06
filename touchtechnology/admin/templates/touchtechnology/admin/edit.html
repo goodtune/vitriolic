@@ -157,19 +157,45 @@
 
 			/* determine which tab should be active */
 
+			// Remember the tab last shown on this page, for when the person
+			// comes back to it from one of the objects it lists.
+			var tab_key = 'admin-tab:' + document.location.pathname
+			$('#myTab a[data-toggle="tab"]').on('shown.bs.tab', function(e) {
+				try { sessionStorage.setItem(tab_key, $(e.target).attr('href')) }
+				catch (err) {}
+			})
+
 			var uri = URI(document.location)
 			if (uri.hash()) {
-				$('a[href="' + uri.hash() + '"').tab('show')
+				$('a[href="' + uri.hash() + '"]').tab('show')
 			}
-			else {
+			else if (document.referrer) {
+				// Coming back from an object listed in a tab shows that tab again.
 				var referrer = URI(document.referrer)
+				var found = false
 				$('a[role=button]').each(function(i, a) {
 					var rel = new URI(a.href)
 					if (rel.relativeTo(referrer).pathname() == "") {
 						var last_tab = $(a).closest('.tab-pane').attr('id')
-						$('a[href="#' + last_tab + '"').tab('show')
+						if (last_tab) {
+							$('a[href="#' + last_tab + '"]').tab('show')
+							found = true
+						}
 					}
 				})
+				// A tab fetched when it is shown (HTMX admin tabs) is not in the
+				// page yet, so fall back to the tab last shown here when the
+				// referrer is one of this page's own objects.
+				var here = uri.pathname()
+				var there = referrer.pathname()
+				if (!found && there != here && there.indexOf(here) == 0) {
+					var last_shown = null
+					try { last_shown = sessionStorage.getItem(tab_key) }
+					catch (err) {}
+					if (last_shown) {
+						$('#myTab a[href="' + last_shown + '"]').tab('show')
+					}
+				}
 			}
 
 			/* activate Select2 */
