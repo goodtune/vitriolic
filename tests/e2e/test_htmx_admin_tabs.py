@@ -482,6 +482,31 @@ class TestHtmxTabPagination:
         expect(page.locator("#teams-tab ul.pagination li.current")).to_have_text("2")
         shoot(page, screenshot_dir, "club_teams_page_2")
 
+    def test_a_team_link_leaves_the_club_page(
+        self, authenticated_page: Page, live_server, club_data, screenshot_dir
+    ):
+        """
+        Following the link to a team goes to the team, rather than loading the
+        team's page into the tab the link was in.
+        """
+        page = authenticated_page
+        page.goto(club_edit_url(live_server, club_data["club"]))
+
+        page.locator('a[href="#teams-tab"]').click()
+        rows = page.locator("#teams-tab tbody tr")
+        expect(rows).to_have_count(10)
+        history_length = page.evaluate("history.length")
+
+        rows.first.locator("button.dropdown-toggle").click()
+        rows.first.get_by_role("button", name="Edit").click()
+        page.wait_for_url("**/teams/*/")
+
+        # The club page is gone: the team's own page has replaced it, in full.
+        assert page.evaluate("history.length") == history_length + 1
+        expect(page.locator("#teams-tab")).to_have_count(0)
+        expect(page.locator("#people-tab")).to_have_count(1)
+        shoot(page, screenshot_dir, "club_team_link_leaves_the_page")
+
     def test_pages_are_independent_between_tabs(
         self, authenticated_page: Page, live_server, club_data, screenshot_dir
     ):

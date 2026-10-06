@@ -427,7 +427,9 @@ class Application(object):
         }
         context.update(extra_context or {})
 
-        if instance and instance.pk and related:
+        # A view that names no relations (``related=None``) has a tab for each
+        # of them, exactly as the page lists them.
+        if instance and instance.pk:
             for mgr, name in related_filter(instance, related):
                 if name == tab_name:
                     context.update(
@@ -440,9 +442,8 @@ class Application(object):
                         "touchtechnology/admin/_htmx_tab_related.html",
                     ]
                     response = self.render(request, templates, context)
-                    # The links to the other pages of a tab are boosted, which
-                    # htmx records in the history unless the server says not to
-                    # (``hx-push-url="false"`` is ignored for boosted links).
+                    # A page of a tab is not a page of its own, so tell htmx not
+                    # to record it in the history.
                     response["HX-Push-Url"] = "false"
                     return response
 
