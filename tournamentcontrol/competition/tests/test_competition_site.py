@@ -16,6 +16,7 @@ from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.draw import schemas
 from tournamentcontrol.competition.draw.builders import build
 from tournamentcontrol.competition.models import Match
+from tournamentcontrol.competition.sites import competition as competition_site
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin_format
 
@@ -1335,6 +1336,119 @@ class DivisionFinalsQueryTests(TestCase):
             self.season.slug,
             self.many_finals.slug,
             test_query_count=17,
+        )
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class SeasonThumbnailTests(TestCase):
+    """
+    A live-streamed season keeps the image it uploads to YouTube as its
+    video thumbnail in the database. Every public page used to read it, for
+    the season being viewed and for every season of every competition in
+    the navigation, which slowed the whole site down. Only the thumbnail
+    views need it.
+    """
+
+    THUMBNAIL = '"competition_season"."live_stream_thumbnail_image"'
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create(
+            live_stream_thumbnail_image=b"\x89PNG" + b"\x00" * 1024
+        )
+        factories.SeasonFactory.create(
+            competition=cls.season.competition,
+            live_stream_thumbnail_image=b"\x89PNG" + b"\x00" * 1024,
+        )
+        cls.competition = cls.season.competition
+        cls.division = factories.DivisionFactory.create(season=cls.season)
+        cls.stage = factories.StageFactory.create(division=cls.division)
+        cls.pool = factories.StageGroupFactory.create(stage=cls.stage)
+        cls.team = factories.TeamFactory.create(division=cls.division)
+        cls.match = factories.MatchFactory.create(
+            stage=cls.stage, home_team=cls.team
+        )
+
+    def assertThumbnailNotRead(self, *args):
+        with CaptureQueriesContext(connection) as queries:
+            self.assertGoodView(*args)
+        self.assertEqual(
+            [q["sql"] for q in queries if self.THUMBNAIL in q["sql"]], []
+        )
+
+    def test_navigation(self):
+        with CaptureQueriesContext(connection) as queries:
+            seasons = [
+                season.title
+                for competition in competition_site.competitions
+                for season in competition.seasons.all()
+            ]
+        self.assertEqual(len(seasons), 2)
+        self.assertEqual(
+            [q["sql"] for q in queries if self.THUMBNAIL in q["sql"]], []
+        )
+
+    def test_navigation_thumbnail_on_demand(self):
+        competition = competition_site.competitions.get(pk=self.competition.pk)
+        season = competition.seasons.get(pk=self.season.pk)
+        self.assertEqual(
+            bytes(season.live_stream_thumbnail_image), b"\x89PNG" + b"\x00" * 1024
+        )
+
+    def test_index(self):
+        self.assertThumbnailNotRead("competition:index")
+
+    def test_competition(self):
+        self.assertThumbnailNotRead("competition:competition", self.competition.slug)
+
+    def test_season(self):
+        self.assertThumbnailNotRead(
+            "competition:season", self.competition.slug, self.season.slug
+        )
+
+    def test_division(self):
+        self.assertThumbnailNotRead(
+            "competition:division",
+            self.competition.slug,
+            self.season.slug,
+            self.division.slug,
+        )
+
+    def test_stage(self):
+        self.assertThumbnailNotRead(
+            "competition:stage",
+            self.competition.slug,
+            self.season.slug,
+            self.division.slug,
+            self.stage.slug,
+        )
+
+    def test_pool(self):
+        self.assertThumbnailNotRead(
+            "competition:pool",
+            self.competition.slug,
+            self.season.slug,
+            self.division.slug,
+            self.stage.slug,
+            self.pool.slug,
+        )
+
+    def test_team(self):
+        self.assertThumbnailNotRead(
+            "competition:team",
+            self.competition.slug,
+            self.season.slug,
+            self.division.slug,
+            self.team.slug,
+        )
+
+    def test_match(self):
+        self.assertThumbnailNotRead(
+            "competition:match",
+            self.competition.slug,
+            self.season.slug,
+            self.division.slug,
+            self.match.pk,
         )
 
 
