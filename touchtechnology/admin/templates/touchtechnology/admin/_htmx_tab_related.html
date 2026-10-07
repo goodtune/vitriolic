@@ -2,17 +2,17 @@
 {% comment %}
 HTMX partial template for rendering a related objects tab pane.
 This is loaded dynamically when HTMX admin tabs mode is enabled.
+
+The list draws its own heading, with the link to add another object, when it is
+given the manager, just as the tab panes rendered with the page do.
 {% endcomment %}
-<div class="heading-block">
-	<h3>{{ tab_manager.all|types|capfirst }}</h3>
-</div>
 {% comment %}
 The list is paginated, and the links to the other pages replace this tab pane
 rather than the whole screen (see the pagination template). Every other link in
 the list, to edit or delete an object, is a plain link that leaves the page.
 {% endcomment %}
 <div>
-	{% with table=templates|default:None %}
+	{% with table=templates|default:None manager=tab_manager %}
 		{% mvp_list tab_manager.all template=tab_manager|mvp_list_template:table paginate_by=tab_paginate_by %}
 	{% endwith %}
 </div>

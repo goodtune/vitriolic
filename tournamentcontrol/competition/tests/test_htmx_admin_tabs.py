@@ -268,3 +268,74 @@ class HtmxTabPaginationTests(TestCase):
         with override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TAB_PAGINATE_BY=4):
             self._get_club_tab()
         self.assertEqual(len(self.get_context("object_list")), 4)
+
+
+class HtmxTabAddLinkTests(TestCase):
+    """
+    A related tab offers a link to add another of its objects, whichever the
+    tab mode.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = UserFactory.create(is_staff=True, is_superuser=True)
+        cls.club = factories.ClubFactory.create()
+        factories.PersonFactory.create(club=cls.club)
+        cls.season = factories.SeasonFactory.create()
+        factories.DivisionFactory.create(season=cls.season)
+
+    def _add_link(self, url_name, *args, type_name):
+        url = reverse(url_name, args=args)
+        return (
+            f'<a href="{url}" title="Add {type_name}" role="button">'
+            '<i class="fa fa-plus-square"></i></a>'
+        )
+
+    def test_club_people_tab_traditional_mode(self):
+        with self.login(self.superuser):
+            self.get("admin:fixja:club:edit", self.club.pk)
+        self.response_200()
+        self.assertResponseContains(
+            self._add_link(
+                "admin:fixja:club:person:add", self.club.pk, type_name="person"
+            ),
+            html=True,
+        )
+
+    @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
+    def test_club_people_tab_htmx_mode(self):
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:club:edit",
+                self.club.pk,
+                data={"_htmx_tab": "members"},
+                extra={"HTTP_HX_REQUEST": "true"},
+            )
+        self.response_200()
+        self.assertResponseContains(
+            self._add_link(
+                "admin:fixja:club:person:add", self.club.pk, type_name="person"
+            ),
+            html=True,
+        )
+
+    @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
+    def test_season_divisions_tab_htmx_mode(self):
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:competition:season:edit",
+                self.season.competition.pk,
+                self.season.pk,
+                data={"_htmx_tab": "divisions"},
+                extra={"HTTP_HX_REQUEST": "true"},
+            )
+        self.response_200()
+        self.assertResponseContains(
+            self._add_link(
+                "admin:fixja:competition:season:division:add",
+                self.season.competition.pk,
+                self.season.pk,
+                type_name="division",
+            ),
+            html=True,
+        )
