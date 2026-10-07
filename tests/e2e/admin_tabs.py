@@ -7,6 +7,8 @@ time it is shown. Whichever the mode, showing a tab must list the same objects,
 so the helpers here read every tab of a page and the tests compare the modes.
 """
 
+import re
+
 from playwright.sync_api import Page, expect
 
 # What a tab says when the server could not work out what to put in it.
@@ -33,6 +35,10 @@ def show_tab(page: Page, tab_id):
     expect(pane).to_be_visible()
     # A lazily loaded tab shows a spinner until its content arrives.
     expect(pane.locator(".fa-spinner")).to_have_count(0)
+    # htmx settles new content a moment after swapping it in, and only then
+    # fires htmx:load, which the page's scripts use to prepare the new links.
+    expect(pane).not_to_have_class(re.compile(r"\bhtmx-(request|swapping|settling)\b"))
+    expect(pane.locator(".htmx-added")).to_have_count(0)
     return pane
 
 
@@ -105,7 +111,7 @@ def assert_same_in_both_modes(page: Page, settings, url):
     plain, lazy = read_tabs_in_both_modes(page, settings, url)
     assert plain.errors == [], plain.errors
     assert lazy.errors == [], lazy.errors
-    assert lazy.ids == plain.ids
-    assert lazy.links == plain.links
-    assert lazy.rows == plain.rows
+    assert lazy.ids == plain.ids, (plain.ids, lazy.ids)
+    assert lazy.links == plain.links, (plain.links, lazy.links)
+    assert lazy.rows == plain.rows, (plain.rows, lazy.rows)
     return plain
