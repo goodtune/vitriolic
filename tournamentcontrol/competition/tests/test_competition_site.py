@@ -1379,11 +1379,13 @@ class SeasonThumbnailTests(TestCase):
     def test_navigation(self):
         with CaptureQueriesContext(connection) as queries:
             seasons = [
-                season.title
+                (season.short_title or season.title, season.slug)
                 for competition in competition_site.competitions
                 for season in competition.seasons.all()
             ]
         self.assertEqual(len(seasons), 2)
+        # competitions, then their seasons
+        self.assertEqual(len(queries), 2)
         self.assertEqual(
             [q["sql"] for q in queries if self.THUMBNAIL in q["sql"]], []
         )

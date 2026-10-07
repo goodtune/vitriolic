@@ -632,9 +632,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
     @property
     def competitions(self):
-        # Every page lists every season in its navigation; live-stream
-        # thumbnail blobs are only needed by the thumbnail views.
-        seasons = Season.objects.defer("live_stream_thumbnail_image")
+        seasons = Season.objects.navigation()
         return self._competitions.prefetch_related(Prefetch("seasons", seasons))
 
     def index(self, request, **kwargs):

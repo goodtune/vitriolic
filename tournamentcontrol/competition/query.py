@@ -20,6 +20,16 @@ from django.utils import timezone
 from tournamentcontrol.competition.utils import team_title_case_clause
 
 
+class SeasonQuerySet(QuerySet):
+    def navigation(self):
+        """
+        Only what a link to each season needs. Every public page lists every
+        season of every competition, so nothing else is read, including any
+        field added to the model later.
+        """
+        return self.only("competition", "title", "short_title", "slug")
+
+
 class DivisionQuerySet(QuerySet):
     """
     QuerySet to allow divisions to be easily filtered by their draft status.

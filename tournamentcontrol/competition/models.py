@@ -85,6 +85,7 @@ from tournamentcontrol.competition.managers import (
 from tournamentcontrol.competition.mixins import ModelDiffMixin
 from tournamentcontrol.competition.query import (
     DivisionQuerySet,
+    SeasonQuerySet,
     StageQuerySet,
     StatisticQuerySet,
     TeamAssociationQuerySet,
@@ -575,6 +576,8 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
             "opposition team plus these people."
         ),
     )
+
+    objects = SeasonQuerySet.as_manager()
 
     class Meta(OrderedSitemapNode.Meta):
         constraints = [

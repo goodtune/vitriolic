@@ -388,10 +388,7 @@ def competition_by_slug(f, *a, **kw):
             else:
                 competition = get_object_or_404(
                     manager.prefetch_related(
-                        Prefetch(
-                            "seasons",
-                            Season.objects.defer("live_stream_thumbnail_image"),
-                        )
+                        Prefetch("seasons", Season.objects.navigation())
                     ),
                     slug=competition_slug,
                 )
@@ -407,16 +404,14 @@ def competition_by_slug(f, *a, **kw):
                 ).distinct()
 
                 # We should deprecate this if it is unused in templates.
-                kwargs["other_seasons"] = competition.seasons.defer(
-                    "live_stream_thumbnail_image"
-                ).exclude(slug=season_slug)
+                kwargs["other_seasons"] = competition.seasons.navigation().exclude(
+                    slug=season_slug
+                )
 
                 # So we can build a navigation hierarchy, select extra column
                 # which tells us if the season in a list of seasons is the
                 # current scope.
-                kwargs["seasons"] = competition.seasons.defer(
-                    "live_stream_thumbnail_image"
-                ).extra(
+                kwargs["seasons"] = competition.seasons.navigation().extra(
                     select={"current": "id = %s"},
                     select_params=(season.pk,),
                 )
