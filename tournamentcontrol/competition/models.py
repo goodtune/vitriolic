@@ -1086,7 +1086,11 @@ class Division(
             )
         )
         res = collections.OrderedDict()
+        stages = {}
         for match in matches:
+            # One ``Stage`` for every match of a stage, so naming undecided
+            # teams looks each stage's neighbours up once.
+            match.stage = stages.setdefault(match.stage_id, match.stage)
             res.setdefault(
                 match.stage, collections.OrderedDict()
             ).setdefault(match.get_date(tzinfo), []).append(match)
@@ -1470,10 +1474,33 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
     def comes_after(self):
         if self.follows:
             return self.follows
-        after = self.division.stages.filter(order__lt=self.order)
-        if after:
-            return after.latest("order")
+        after = (
+            self.division.stages.filter(order__lt=self.order)
+            .order_by("-order")
+            .first()
+        )
+        if after is not None:
+            return after
         raise Stage.DoesNotExist
+
+    # A page listing matches names every team still to be decided, and each
+    # name needs the stage before this one, its pools and how many stages
+    # follow it. These remember the answers for this instance, so a list whose
+    # matches share one ``Stage`` asks once per stage rather than once per
+    # team. Only for naming teams: anything that changes stages uses the
+    # attributes above.
+
+    @cached_property
+    def _title_comes_after(self):
+        return self.comes_after
+
+    @cached_property
+    def _title_pools(self):
+        return list(self.pools.all())
+
+    @cached_property
+    def _title_preceeds_count(self):
+        return self.preceeds.count()
 
     def ladders(self):
         res = collections.OrderedDict()
@@ -1508,6 +1535,9 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
             )
             .order_by("datetime", "date", "time", "round")
         ):
+            # One ``Stage`` for every match, so naming undecided teams looks
+            # the stage's neighbours up once (see ``Stage._title_comes_after``).
+            match.stage = self
             res.setdefault(self, collections.OrderedDict()).setdefault(
                 match.get_date(tzinfo), []
             ).append(match)
@@ -1923,6 +1953,7 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
                 "stage": stage,
                 "group": group,
                 "position": position,
+                "preceeds_count": stage.preceeds.count() if stage else 0,
             }
 
             return stage_group_position_tpl.render(c).strip()
@@ -2463,7 +2494,7 @@ class Match(AdminUrlMixin, models.Model):
                 return {"title": title}
             stage = group = position = None
         else:
-            stage = self.stage.comes_after
+            stage = self.stage._title_comes_after
 
         if team_undecided and stage is None:
             if plain:
@@ -2479,12 +2510,18 @@ class Match(AdminUrlMixin, models.Model):
             context = {
                 "position": position,
                 "stage": stage,
+                "preceeds_count": stage._title_preceeds_count,
             }
             template = stage_group_position_tpl
             if group is not None:
-                if stage.pools.count():
+                pools = stage._title_pools
+                if pools:
                     try:
-                        context["group"] = stage.pools.all()[int(group) - 1]
+                        index = int(group) - 1
+                        if index < 0:
+                            # G0 has no pool (a list would give the last)
+                            raise IndexError(group)
+                        context["group"] = pools[index]
                     except (IndexError, ValueError):
                         # If there are ANY issues in evaluating a formula
                         # (a group beyond the stage's pools, or G0 which
