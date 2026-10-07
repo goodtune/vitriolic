@@ -1072,10 +1072,19 @@ class Division(
                 "home_team__division",
                 "away_team__club",
                 "away_team__division",
+                # named in place of a team until it is decided
+                "home_team_undecided",
+                "away_team_undecided",
+                "home_team_eval_related",
+                "away_team_eval_related",
             )
             # live-stream thumbnail blobs are only needed by the thumbnail
             # endpoints and YouTube sync — never in a match listing
-            .defer("live_stream_thumbnail_image")
+            .defer(
+                "live_stream_thumbnail_image",
+                "home_team_eval_related__live_stream_thumbnail_image",
+                "away_team_eval_related__live_stream_thumbnail_image",
+            )
             .annotate(
                 statistics_count=Count("statistics"),
                 videos_count=Count("videos"),
@@ -1524,10 +1533,19 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
                 "home_team__division",
                 "away_team__club",
                 "away_team__division",
+                # named in place of a team until it is decided
+                "home_team_undecided",
+                "away_team_undecided",
+                "home_team_eval_related",
+                "away_team_eval_related",
             )
             # live-stream thumbnail blobs are only needed by the thumbnail
             # endpoints and YouTube sync — never in a match listing
-            .defer("live_stream_thumbnail_image")
+            .defer(
+                "live_stream_thumbnail_image",
+                "home_team_eval_related__live_stream_thumbnail_image",
+                "away_team_eval_related__live_stream_thumbnail_image",
+            )
             .annotate(
                 statistics_count=Count("statistics"),
                 videos_count=Count("videos"),
@@ -1610,10 +1628,19 @@ class StageGroup(AdminUrlMixin, OrderedSitemapNode):
                 "home_team__division",
                 "away_team__club",
                 "away_team__division",
+                # named in place of a team until it is decided
+                "home_team_undecided",
+                "away_team_undecided",
+                "home_team_eval_related",
+                "away_team_eval_related",
             )
             # live-stream thumbnail blobs are only needed by the thumbnail
             # endpoints and YouTube sync — never in a match listing
-            .defer("live_stream_thumbnail_image")
+            .defer(
+                "live_stream_thumbnail_image",
+                "home_team_eval_related__live_stream_thumbnail_image",
+                "away_team_eval_related__live_stream_thumbnail_image",
+            )
             .order_by(
                 "date",
                 "stage",
@@ -1845,10 +1872,19 @@ class Team(AdminUrlMixin, MySidelineMixin, OrderedSitemapNode):
                 "home_team__division",
                 "away_team__club",
                 "away_team__division",
+                # named in place of a team until it is decided
+                "home_team_undecided",
+                "away_team_undecided",
+                "home_team_eval_related",
+                "away_team_eval_related",
             )
             # live-stream thumbnail blobs are only needed by the thumbnail
             # endpoints and YouTube sync — never in a match listing
-            .defer("live_stream_thumbnail_image")
+            .defer(
+                "live_stream_thumbnail_image",
+                "home_team_eval_related__live_stream_thumbnail_image",
+                "away_team_eval_related__live_stream_thumbnail_image",
+            )
             .order_by(
                 "date",
                 "stage",

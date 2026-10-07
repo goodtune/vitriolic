@@ -1250,17 +1250,36 @@ class DivisionFinalsQueryTests(TestCase):
         finals_stage = factories.StageFactory.create(
             division=division, title="Finals", order=2
         )
-        for number in range(finals):
+        finals_day = kickoff + timedelta(days=1)
+        played = [
             factories.MatchFactory.create(
                 stage=finals_stage,
                 home_team=None,
                 away_team=None,
                 home_team_eval=f"G1P{number % 4 + 1}",
                 away_team_eval=f"G2P{number % 4 + 1}",
-                datetime=kickoff + timedelta(days=1),
-                date=(kickoff + timedelta(days=1)).date(),
+                datetime=finals_day,
+                date=finals_day.date(),
                 time=kickoff.time(),
                 label=f"Final {number + 1}",
+            )
+            for number in range(finals)
+        ]
+        # The winners of each pair of finals meet in a later round.
+        later = finals_day + timedelta(hours=2)
+        for number, (home, away) in enumerate(zip(played[::2], played[1::2]), 1):
+            factories.MatchFactory.create(
+                stage=finals_stage,
+                home_team=None,
+                away_team=None,
+                home_team_eval="W",
+                home_team_eval_related=home,
+                away_team_eval="W",
+                away_team_eval_related=away,
+                datetime=later,
+                date=later.date(),
+                time=later.time(),
+                label=f"Decider {number}",
             )
         return division
 
@@ -1275,6 +1294,9 @@ class DivisionFinalsQueryTests(TestCase):
         final = self.few_finals.matches.get(label="Final 1")
         self.assertEqual(final.get_home_team(), {"title": "1st Pool 1"})
         self.assertEqual(final.get_away_team(), {"title": "1st Pool 2"})
+        decider = self.few_finals.matches.get(label="Decider 1")
+        self.assertEqual(decider.get_home_team(), {"title": "Winner Final 1"})
+        self.assertEqual(decider.get_away_team(), {"title": "Winner Final 2"})
 
     def test_few_finals_query_count(self):
         self.assertGoodView(
