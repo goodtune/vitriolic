@@ -1281,6 +1281,24 @@ class DivisionFinalsQueryTests(TestCase):
                 time=later.time(),
                 label=f"Decider {number}",
             )
+        # Playoffs between undecided teams: one named by a formula, one by
+        # a label alone.
+        for number in range(finals):
+            factories.MatchFactory.create(
+                stage=finals_stage,
+                home_team=None,
+                away_team=None,
+                home_team_undecided=factories.UndecidedTeamFactory.create(
+                    stage=finals_stage, formula=f"G1P{number % 4 + 1}", label=""
+                ),
+                away_team_undecided=factories.UndecidedTeamFactory.create(
+                    stage=finals_stage, formula="", label="Host nation"
+                ),
+                datetime=later,
+                date=later.date(),
+                time=later.time(),
+                label=f"Playoff {number + 1}",
+            )
         return division
 
     @classmethod
@@ -1297,6 +1315,9 @@ class DivisionFinalsQueryTests(TestCase):
         decider = self.few_finals.matches.get(label="Decider 1")
         self.assertEqual(decider.get_home_team(), {"title": "Winner Final 1"})
         self.assertEqual(decider.get_away_team(), {"title": "Winner Final 2"})
+        playoff = self.few_finals.matches.get(label="Playoff 1")
+        self.assertEqual(playoff.get_home_team(), {"title": "1st Pool 1"})
+        self.assertEqual(playoff.get_away_team(), {"title": "Host nation"})
 
     def test_few_finals_query_count(self):
         self.assertGoodView(
