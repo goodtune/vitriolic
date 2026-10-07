@@ -1216,6 +1216,129 @@ class DivisionViewQueryTests(TestCase):
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class DivisionFinalsQueryTests(TestCase):
+    """
+    Until a pool stage is over, its finals show placeholders such as
+    "1st Pool A" in place of teams. Working one out used to look up the
+    stage before, its pools and the stages after it, for every team of every
+    final, which made the busiest public page of an event the slowest. The
+    same query budget holds however many finals the division has.
+    """
+
+    @classmethod
+    def _division(cls, title, finals):
+        division = factories.DivisionFactory.create(season=cls.season, title=title)
+        teams = factories.TeamFactory.create_batch(8, division=division)
+        pools_stage = factories.StageFactory.create(
+            division=division, title="Pools", order=1
+        )
+        kickoff = datetime(2026, 10, 6, 9, 0, tzinfo=ZoneInfo("UTC"))
+        for number, members in enumerate((teams[:4], teams[4:]), start=1):
+            pool = factories.StageGroupFactory.create(
+                stage=pools_stage, title=f"Pool {number}"
+            )
+            for home, away in ((0, 1), (2, 3), (0, 2), (1, 3)):
+                factories.MatchFactory.create(
+                    stage=pools_stage,
+                    stage_group=pool,
+                    home_team=members[home],
+                    away_team=members[away],
+                    datetime=kickoff,
+                    date=kickoff.date(),
+                    time=kickoff.time(),
+                )
+        finals_stage = factories.StageFactory.create(
+            division=division, title="Finals", order=2
+        )
+        finals_day = kickoff + timedelta(days=1)
+        played = [
+            factories.MatchFactory.create(
+                stage=finals_stage,
+                home_team=None,
+                away_team=None,
+                home_team_eval=f"G1P{number % 4 + 1}",
+                away_team_eval=f"G2P{number % 4 + 1}",
+                datetime=finals_day,
+                date=finals_day.date(),
+                time=kickoff.time(),
+                label=f"Final {number + 1}",
+            )
+            for number in range(finals)
+        ]
+        # The winners of each pair of finals meet in a later round.
+        later = finals_day + timedelta(hours=2)
+        for number, (home, away) in enumerate(zip(played[::2], played[1::2]), 1):
+            factories.MatchFactory.create(
+                stage=finals_stage,
+                home_team=None,
+                away_team=None,
+                home_team_eval="W",
+                home_team_eval_related=home,
+                away_team_eval="W",
+                away_team_eval_related=away,
+                datetime=later,
+                date=later.date(),
+                time=later.time(),
+                label=f"Decider {number}",
+            )
+        # Playoffs between undecided teams: one named by a formula, one by
+        # a label alone.
+        for number in range(finals):
+            factories.MatchFactory.create(
+                stage=finals_stage,
+                home_team=None,
+                away_team=None,
+                home_team_undecided=factories.UndecidedTeamFactory.create(
+                    stage=finals_stage, formula=f"G1P{number % 4 + 1}", label=""
+                ),
+                away_team_undecided=factories.UndecidedTeamFactory.create(
+                    stage=finals_stage, formula="", label="Host nation"
+                ),
+                datetime=later,
+                date=later.date(),
+                time=later.time(),
+                label=f"Playoff {number + 1}",
+            )
+        return division
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create()
+        cls.competition = cls.season.competition
+        cls.few_finals = cls._division("Few Finals", finals=2)
+        cls.many_finals = cls._division("Many Finals", finals=8)
+
+    def test_placeholder_titles(self):
+        final = self.few_finals.matches.get(label="Final 1")
+        self.assertEqual(final.get_home_team(), {"title": "1st Pool 1"})
+        self.assertEqual(final.get_away_team(), {"title": "1st Pool 2"})
+        decider = self.few_finals.matches.get(label="Decider 1")
+        self.assertEqual(decider.get_home_team(), {"title": "Winner Final 1"})
+        self.assertEqual(decider.get_away_team(), {"title": "Winner Final 2"})
+        playoff = self.few_finals.matches.get(label="Playoff 1")
+        self.assertEqual(playoff.get_home_team(), {"title": "1st Pool 1"})
+        self.assertEqual(playoff.get_away_team(), {"title": "Host nation"})
+
+    def test_few_finals_query_count(self):
+        self.assertGoodView(
+            "competition:division",
+            self.competition.slug,
+            self.season.slug,
+            self.few_finals.slug,
+            test_query_count=17,
+        )
+
+    def test_many_finals_query_count(self):
+        self.assertGoodView(
+            "competition:division",
+            self.competition.slug,
+            self.season.slug,
+            self.many_finals.slug,
+            test_query_count=17,
+        )
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
 class MatchDetailViewQueryTests(TestCase):
     """
     The public match detail page renders the ``preview`` template tag,
