@@ -50,6 +50,7 @@ from tournamentcontrol.competition.models import (
     Ground,
     Match,
     Person,
+    Season,
     SimpleScoreMatchStatistic,
     Stage,
     Team,
@@ -631,12 +632,13 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
     @property
     def competitions(self):
-        return self._competitions.prefetch_related("seasons")
+        seasons = Season.objects.navigation()
+        return self._competitions.prefetch_related(Prefetch("seasons", seasons))
 
     def index(self, request, **kwargs):
         return self.generic_list(
             request,
-            self._competitions,
+            self.competitions,
             templates=self.template_path("index.html"),
             paginate_by=self._competitions.count(),
             extra_context=kwargs,
@@ -680,7 +682,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         )
         return self.generic_detail(
             request,
-            competition.seasons,
+            competition.seasons.defer("live_stream_thumbnail_image"),
             slug=season.slug,
             templates=templates,
             extra_context=extra_context,
