@@ -590,6 +590,9 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
                 name="competition_season_unique_slug_competition",
             ),
         ]
+        permissions = [
+            ("stream_season", "Can start and stop live streams for the season"),
+        ]
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season"
@@ -2192,7 +2195,86 @@ class SeasonAssociation(AdminUrlMixin, models.Model):
         ]
 
 
-class Match(AdminUrlMixin, models.Model):
+class LiveStreamTransitionMixin:
+    """
+    Shared YouTube broadcast transition for matches and season events.
+
+    Subclasses provide ``external_identifier`` and ``_live_stream_season()``.
+    """
+
+    VALID_TRANSITIONS = {"testing": ["live"], "live": ["complete"], "complete": []}
+
+    def _live_stream_season(self):
+        raise NotImplementedError
+
+    def transition_live_stream(self, status, youtube_service=None):
+        """
+        Transition the live stream status of this object.
+
+        Args:
+            status (str): The target broadcast status ('testing', 'live', 'complete')
+            youtube_service: Optional YouTube API service instance. If None, will use
+                           season's YouTube service.
+
+        Returns:
+            dict: Response from YouTube API
+
+        Raises:
+            LiveStreamIdentifierMissing: If there is no external_identifier
+            InvalidLiveStreamTransition: If the transition is invalid
+            LiveStreamTransitionWarning: Warning for potentially invalid transitions
+        """
+        if not self.external_identifier:
+            raise LiveStreamIdentifierMissing(
+                f"{self} does not have a live stream identifier"
+            )
+
+        current_status = None
+        if youtube_service:
+            try:
+                response = (
+                    youtube_service.liveBroadcasts()
+                    .list(part="status", id=self.external_identifier)
+                    .execute()
+                )
+                if response.get("items"):
+                    current_status = response["items"][0]["status"]["lifeCycleStatus"]
+            except Exception:
+                # If we can't get current status, proceed anyway
+                pass
+
+        if current_status:
+            valid_next_states = self.VALID_TRANSITIONS.get(current_status, [])
+            if status not in valid_next_states and status != current_status:
+                if current_status == "complete":
+                    raise InvalidLiveStreamTransition(
+                        f"Cannot transition from '{current_status}' to '{status}' "
+                        f"for {self}"
+                    )
+                warnings.warn(
+                    f"Potentially invalid transition from '{current_status}' to "
+                    f"'{status}' for {self}",
+                    LiveStreamTransitionWarning,
+                )
+
+        service = youtube_service or self._live_stream_season().youtube
+        response = (
+            service.liveBroadcasts()
+            .transition(
+                broadcastStatus=status,
+                id=self.external_identifier,
+                part="snippet,status",
+            )
+            .execute()
+        )
+
+        self.live_stream_status = status
+        self.live_stream_status_at = timezone.now()
+        self.save(update_fields=["live_stream_status", "live_stream_status_at"])
+        return response
+
+
+class Match(LiveStreamTransitionMixin, AdminUrlMixin, models.Model):
     uuid = models.UUIDField(
         primary_key=False,
         default=uuid.uuid4,
@@ -2327,6 +2409,10 @@ class Match(AdminUrlMixin, models.Model):
     live_stream_bind = models.CharField(
         max_length=50, blank=True, null=True, db_index=True
     )
+    live_stream_status = models.CharField(
+        max_length=10, blank=True, null=True, db_index=True
+    )
+    live_stream_status_at = DateTimeField(blank=True, null=True)
     live_stream_thumbnail = models.URLField(blank=True, null=True)
     live_stream_thumbnail_image = models.BinaryField(
         blank=True,
@@ -2727,80 +2813,8 @@ class Match(AdminUrlMixin, models.Model):
             res[index] = team
         return tuple(res)
 
-    def transition_live_stream(self, status, youtube_service=None):
-        """
-        Transition the live stream status of this match.
-
-        Args:
-            status (str): The target broadcast status ('testing', 'live', 'complete')
-            youtube_service: Optional YouTube API service instance. If None, will use
-                           season's YouTube service.
-
-        Returns:
-            dict: Response from YouTube API
-
-        Raises:
-            LiveStreamIdentifierMissing: If the match has no external_identifier
-            InvalidLiveStreamTransition: If the transition is invalid
-            LiveStreamTransitionWarning: Warning for potentially invalid transitions
-        """
-        # Check if match has live stream identifier
-        if not self.external_identifier:
-            raise LiveStreamIdentifierMissing(
-                f"Match {self} does not have a live stream identifier"
-            )
-
-        # Define valid transitions
-        valid_transitions = {"testing": ["live"], "live": ["complete"], "complete": []}
-
-        # Get current broadcast status from YouTube if available
-        current_status = None
-        if youtube_service:
-            try:
-                response = (
-                    youtube_service.liveBroadcasts()
-                    .list(part="status", id=self.external_identifier)
-                    .execute()
-                )
-                if response.get("items"):
-                    current_status = response["items"][0]["status"]["lifeCycleStatus"]
-            except Exception:
-                # If we can't get current status, proceed anyway
-                pass
-
-        # Check for invalid transitions based on known current status
-        if current_status:
-            valid_next_states = valid_transitions.get(current_status, [])
-            if status not in valid_next_states and status != current_status:
-                if current_status == "complete":
-                    # Can't transition from complete to anything
-                    raise InvalidLiveStreamTransition(
-                        f"Cannot transition from '{current_status}' to '{status}' "
-                        f"for match {self}"
-                    )
-                else:
-                    # Issue warning for potentially invalid transitions
-                    warnings.warn(
-                        f"Potentially invalid transition from '{current_status}' to '{status}' "
-                        f"for match {self}",
-                        LiveStreamTransitionWarning,
-                    )
-
-        # Use provided service or get from season
-        service = youtube_service or self.stage.division.season.youtube
-
-        # Make the API call to transition the broadcast
-        response = (
-            service.liveBroadcasts()
-            .transition(
-                broadcastStatus=status,
-                id=self.external_identifier,
-                part="snippet,status",
-            )
-            .execute()
-        )
-
-        return response
+    def _live_stream_season(self):
+        return self.stage.division.season
 
     def __str__(self):
         return self.title
@@ -3088,7 +3102,7 @@ class LiveStreamKey(AdminUrlMixin, models.Model):
         return ["add", "edit", "delete"]
 
 
-class LiveStreamEvent(AdminUrlMixin, models.Model):
+class LiveStreamEvent(LiveStreamTransitionMixin, AdminUrlMixin, models.Model):
     """
     An adhoc live stream event associated with a Season.
 
@@ -3149,6 +3163,10 @@ class LiveStreamEvent(AdminUrlMixin, models.Model):
     live_stream_bind = models.CharField(
         max_length=50, blank=True, null=True, db_index=True
     )
+    live_stream_status = models.CharField(
+        max_length=10, blank=True, null=True, db_index=True
+    )
+    live_stream_status_at = DateTimeField(blank=True, null=True)
     live_stream_thumbnail_image = models.BinaryField(
         blank=True,
         null=True,
@@ -3162,6 +3180,9 @@ class LiveStreamEvent(AdminUrlMixin, models.Model):
 
     def __str__(self):
         return self.title
+
+    def _live_stream_season(self):
+        return self.season
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:livestreamevent"

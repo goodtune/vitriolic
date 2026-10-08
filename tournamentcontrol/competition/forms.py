@@ -102,7 +102,10 @@ from tournamentcontrol.competition.mysideline.client import (
     MySidelineURL,
     MySidelineURLError,
 )
-from tournamentcontrol.competition.signals.custom import score_updated
+from tournamentcontrol.competition.signals.custom import (
+    score_updated,
+    statistics_updated,
+)
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
     ThumbnailPreview,
@@ -2550,6 +2553,9 @@ class MatchStatisticFormset(BaseMatchStatisticFormset):
         stats = []
         for form in self.forms:
             stats.append(form.save())
+        if self.forms:
+            match = self.forms[0].instance.match
+            statistics_updated.send_robust(sender=self, match=match)
         return stats
 
 
