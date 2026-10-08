@@ -276,6 +276,17 @@ class TeamAssociationFactory(DjangoModelFactory):
     person = factory.SubFactory(PersonFactory)
 
 
+class SimpleScoreMatchStatisticFactory(DjangoModelFactory):
+    class Meta:
+        model = models.SimpleScoreMatchStatistic
+
+    match = factory.SubFactory(MatchFactory)
+    player = factory.SubFactory(PersonFactory)
+    number = 1
+    played = 1
+    points = 0
+
+
 class SeasonRefereeFactory(DjangoModelFactory):
     class Meta:
         model = models.SeasonReferee
