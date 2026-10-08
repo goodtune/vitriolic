@@ -36,15 +36,29 @@ class MemoryBackend:
         ring.appendleft(event)
         while len(ring) > _activity_length():
             ring.pop()
-        for loop, queue in list(self._subscribers[season_id]):
-            loop.call_soon_threadsafe(queue.put_nowait, event)
+        for key in list(self._subscribers[season_id]):
+            loop, queue = key
+            try:
+                loop.call_soon_threadsafe(queue.put_nowait, event)
+            except RuntimeError as exc:
+                # The subscriber's loop has closed without unsubscribing; drop
+                # it so one dead subscriber never blocks the others.
+                logger.warning(
+                    "dropping stale ops subscriber for season %s: %s", season_id, exc
+                )
+                self._subscribers[season_id].discard(key)
 
     async def subscribe(self, season_id, idle):
+        """
+        Yield ``None`` once as soon as the subscription is registered, then an
+        event dict per event, or ``None`` after ``idle`` seconds without one.
+        """
         loop = asyncio.get_running_loop()
         queue = asyncio.Queue()
         key = (loop, queue)
         self._subscribers[season_id].add(key)
         try:
+            yield None
             while True:
                 try:
                     yield await asyncio.wait_for(queue.get(), idle)
@@ -82,9 +96,14 @@ class RedisBackend:
         pipe.execute()
 
     async def subscribe(self, season_id, idle):
+        """
+        Yield ``None`` once as soon as the subscription is registered, then an
+        event dict per event, or ``None`` after ``idle`` seconds without one.
+        """
         pubsub = self.async_client.pubsub()
         await pubsub.subscribe(self._channel(season_id))
         try:
+            yield None
             while True:
                 message = await pubsub.get_message(
                     ignore_subscribe_messages=True, timeout=idle
@@ -94,8 +113,10 @@ class RedisBackend:
                 elif message["type"] == "message":
                     yield json.loads(message["data"])
         finally:
-            await pubsub.unsubscribe(self._channel(season_id))
-            await pubsub.aclose()
+            try:
+                await pubsub.unsubscribe(self._channel(season_id))
+            finally:
+                await pubsub.aclose()
 
     def recent(self, season_id):
         raw = self.sync.lrange(self._ring(season_id), 0, _activity_length() - 1)
@@ -136,7 +157,9 @@ def publish(season_id, type, actor=None, summary="", **data):
         **data,
     }
     logger.debug("ops event %s for season %s: %s", type, season_id, summary)
-    transaction.on_commit(lambda: get_backend().publish(season_id, event))
+    transaction.on_commit(
+        lambda: get_backend().publish(season_id, event), robust=True
+    )
 
 
 def subscribe(season_id, idle):
