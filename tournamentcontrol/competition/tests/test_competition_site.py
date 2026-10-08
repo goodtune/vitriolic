@@ -1390,6 +1390,35 @@ class SeasonThumbnailTests(TestCase):
             [q["sql"] for q in queries if self.THUMBNAIL in q["sql"]], []
         )
 
+    def test_navigation_carries_what_a_menu_needs(self):
+        """
+        A list of seasons links to each one, hides those that are disabled,
+        shows when they run, and puts them in order, so none of that costs a
+        query for every season. Everything else stays out.
+        """
+        navigation = {
+            "competition_id",
+            "title",
+            "short_title",
+            "slug",
+            "enabled",
+            "start_date",
+            "order",
+            "complete",
+        }
+        competition = competition_site.competitions.get(pk=self.competition.pk)
+        seasons = list(competition.seasons.all())
+        self.assertEqual(len(seasons), 2)
+        with self.assertNumQueries(0):
+            for season in seasons:
+                for name in navigation:
+                    getattr(season, name)
+        for season in seasons:
+            deferred = season.get_deferred_fields()
+            self.assertEqual(deferred & navigation, set())
+            self.assertIn("live_stream_thumbnail_image", deferred)
+            self.assertIn("copy", deferred)
+
     def test_navigation_thumbnail_on_demand(self):
         competition = competition_site.competitions.get(pk=self.competition.pk)
         season = competition.seasons.get(pk=self.season.pk)
