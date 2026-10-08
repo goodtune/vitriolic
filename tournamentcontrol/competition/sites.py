@@ -11,7 +11,6 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.sitemaps import views as sitemaps_views
 from django.core.cache import cache
-from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Case, Count, F, Max, Prefetch, Q, Sum, When
 from django.http import Http404, HttpResponse, HttpResponseGone
 from django.shortcuts import get_object_or_404
@@ -193,10 +192,28 @@ class CompetitionAdminMixin(object):
         time=None,
         **kwargs,
     ):
-        matches = Match.objects.filter(
-            stage__division__season=season,
-            stage__division__season__competition=competition,
-            date=date,
+        matches = (
+            Match.objects.filter(
+                stage__division__season=season,
+                stage__division__season__competition=competition,
+                date=date,
+            )
+            # everything each match's form and row reads, in the one query
+            .select_related(
+                "home_team",
+                "away_team",
+                "home_team_undecided",
+                "away_team_undecided",
+                "home_team_eval_related",
+                "away_team_eval_related",
+                "play_at",
+                "stage__division",
+            )
+            .defer(
+                "live_stream_thumbnail_image",
+                "home_team_eval_related__live_stream_thumbnail_image",
+                "away_team_eval_related__live_stream_thumbnail_image",
+            )
         )
 
         if division is not None:
@@ -312,19 +329,27 @@ class CompetitionAdminMixin(object):
             match = get_object_or_404(stage.matches, pk=match.pk, **conditions)
 
         def team_faux_queryset(team):
+            # The team's players and their statistics for the match, in two
+            # queries rather than two for every player.
             stats = FauxQueryset(SimpleScoreMatchStatistic, team=team)
-            for player in team.people.filter(is_player=True):
-                try:
-                    statistic = SimpleScoreMatchStatistic.objects.get(
-                        match=match, player=player.person
-                    )
-                except ObjectDoesNotExist:
+            players = list(team.people.filter(is_player=True).select_related("person"))
+            entered = {
+                statistic.player_id: statistic
+                for statistic in SimpleScoreMatchStatistic.objects.filter(
+                    match=match, player__in=[player.person_id for player in players]
+                )
+            }
+            for player in players:
+                statistic = entered.get(player.person_id)
+                if statistic is None:
                     statistic = SimpleScoreMatchStatistic(
                         match=match,
                         player=player.person,
                         number=player.number,
                         played=1,
                     )
+                else:
+                    statistic.player = player.person
                 stats.append(statistic)
             return stats
 
