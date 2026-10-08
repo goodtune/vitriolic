@@ -104,6 +104,15 @@ class DayResultsTests(DayFixture):
         self.assertFalse(queries.editable(pending))
         self.assertTrue(queries.editable(plain))
 
+    def test_editable_costs_no_query_for_day_matches(self):
+        undecided = factories.UndecidedTeamFactory.create(stage=self.stage)
+        self.match(8, home_team=None, home_team_undecided=undecided)
+        self.match(9)
+        matches = list(queries.day_matches(self.season, DAY))
+        with self.assertNumQueries(0):
+            results = [queries.editable(m) for m in matches]
+        self.assertEqual(results, [False, True])
+
     def test_slot_for(self):
         self.match(8)
         self.assertEqual(queries.slot_for(self.season, DAY, "0800").key, "0800")
@@ -178,6 +187,16 @@ class DayStreamsTests(DayFixture):
 
 
 class GroundDayTests(DayFixture):
+    def _on(self, day, hour):
+        when = at(hour) + (day - DAY)
+        return factories.MatchFactory.create(
+            stage=self.stage,
+            play_at=self.field1,
+            date=day,
+            time=datetime.time(hour),
+            datetime=when,
+        )
+
     def test_previous_current_next(self):
         a = self.match(8, ground=self.field1)
         b = self.match(9, ground=self.field1)
@@ -201,3 +220,29 @@ class GroundDayTests(DayFixture):
         now = datetime.datetime(2026, 10, 7, 23, 30, tzinfo=ZoneInfo("UTC"))
         self.assertEqual(queries.local_today(self.field1, now), DAY)
         self.assertEqual(queries.local_today(self.season, now), DAY)
+
+    def test_future_day_has_no_current_match(self):
+        tomorrow = DAY + datetime.timedelta(days=1)
+        first = self._on(tomorrow, 8)
+        self._on(tomorrow, 10)
+        self.assertEqual(
+            queries.ground_day(self.field1, tomorrow, at(9, 30)), (None, None, first)
+        )
+
+    def test_past_day_current_is_the_last_match(self):
+        yesterday = DAY - datetime.timedelta(days=1)
+        first = self._on(yesterday, 8)
+        last = self._on(yesterday, 10)
+        self.assertEqual(
+            queries.ground_day(self.field1, yesterday, at(9, 30)), (first, last, None)
+        )
+
+    def test_local_today_falls_back_to_venue_then_season_zone(self):
+        now = datetime.datetime(2026, 10, 7, 23, 30, tzinfo=ZoneInfo("UTC"))
+        self.field1.timezone = None
+        self.field1.save()
+        self.assertEqual(queries.local_today(self.field1, now), DAY)
+        self.venue.timezone = None
+        self.venue.save()
+        self.field1.refresh_from_db()
+        self.assertEqual(queries.local_today(self.field1, now), DAY)

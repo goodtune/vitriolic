@@ -6,7 +6,7 @@ request objects, no rendering.
 import dataclasses
 import datetime
 
-from django.db.models import F, OuterRef, Q, Subquery, Sum
+from django.db.models import Exists, F, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
@@ -63,14 +63,21 @@ def editable(match):
         return False
     if match.is_bye:
         return True
-    needs_progressing = Match.objects.filter(team_needs_progressing, pk=match.pk)
-    return not needs_progressing.exists()
+    needs = getattr(match, "needs_progressing", None)
+    if needs is None:
+        needs = Match.objects.filter(team_needs_progressing, pk=match.pk).exists()
+    return not needs
 
 
 def day_matches(season, day):
     return (
         Match.objects.filter(stage__division__season=season, date=day)
         .select_related(*SELECT_RELATED)
+        .annotate(
+            needs_progressing=Exists(
+                Match.objects.filter(team_needs_progressing, pk=OuterRef("pk"))
+            )
+        )
         .order_by("time", "play_at__order", "pk")
     )
 
@@ -165,12 +172,20 @@ def out_of_balance(match):
     )
 
 
+def _tzinfo(ground):
+    return (
+        ground.timezone
+        or ground.venue.timezone
+        or ground.venue.season.timezone
+        or timezone.get_current_timezone()
+    )
+
+
 def local_today(place_or_season, now):
-    tzinfo = getattr(place_or_season, "timezone", None)
-    if tzinfo is None and isinstance(place_or_season, Ground):
-        tzinfo = place_or_season.venue.timezone or place_or_season.venue.season.timezone
-    if tzinfo is None:
-        tzinfo = timezone.get_current_timezone()
+    if isinstance(place_or_season, Ground):
+        tzinfo = _tzinfo(place_or_season)
+    else:
+        tzinfo = place_or_season.timezone or timezone.get_current_timezone()
     return timezone.localtime(now, tzinfo).date()
 
 
@@ -178,16 +193,16 @@ def _ground_matches(ground, day):
     return (
         Match.objects.filter(play_at=ground, date=day, is_bye=False)
         .exclude(time=None)
+        .exclude(datetime=None)
         .select_related(*SELECT_RELATED)
         .order_by("time", "pk")
     )
 
 
 def ground_day(ground, day, now):
-    local = timezone.localtime(now, ground.timezone or ground.venue.timezone).time()
     matches = list(_ground_matches(ground, day))
-    started = [m for m in matches if m.time <= local]
-    upcoming = [m for m in matches if m.time > local]
+    started = [m for m in matches if m.datetime <= now]
+    upcoming = [m for m in matches if m.datetime > now]
     current = started[-1] if started else None
     previous = started[-2] if len(started) > 1 else None
     following = upcoming[0] if upcoming else None
