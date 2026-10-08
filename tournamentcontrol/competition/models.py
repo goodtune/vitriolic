@@ -2268,10 +2268,21 @@ class LiveStreamTransitionMixin:
             .execute()
         )
 
-        self.live_stream_status = status
-        self.live_stream_status_at = timezone.now()
-        self.save(update_fields=["live_stream_status", "live_stream_status_at"])
+        self._store_live_stream_status(status, timezone.now())
         return response
+
+    def _store_live_stream_status(self, status, at):
+        """
+        Record the broadcast status without sending model signals.
+
+        A plain ``save()`` would fire ``post_save`` for a match, which rebuilds
+        its ladder entries; broadcast state has no bearing on standings.
+        """
+        type(self)._default_manager.filter(pk=self.pk).update(
+            live_stream_status=status, live_stream_status_at=at
+        )
+        self.live_stream_status = status
+        self.live_stream_status_at = at
 
 
 class Match(LiveStreamTransitionMixin, AdminUrlMixin, models.Model):

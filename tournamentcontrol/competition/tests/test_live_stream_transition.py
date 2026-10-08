@@ -55,6 +55,24 @@ class MatchTransitionTests(TestCase):
         self.match.refresh_from_db()
         self.assertIsNone(self.match.live_stream_status)
 
+    def test_transition_does_not_rebuild_ladder_entries(self):
+        match = factories.MatchFactory.create(
+            stage__division__season=self.season,
+            external_identifier="yt2",
+            home_team_score=2,
+            away_team_score=1,
+        )
+        before = set(match.ladder_entries.values_list("pk", flat=True))
+        self.assertEqual(len(before), 2)
+
+        match.transition_live_stream("live", youtube_mock("testing"))
+
+        match.refresh_from_db()
+        self.assertEqual(match.live_stream_status, "live")
+        self.assertEqual(
+            set(match.ladder_entries.values_list("pk", flat=True)), before
+        )
+
 
 class LiveStreamEventTransitionTests(TestCase):
     def setUp(self):
