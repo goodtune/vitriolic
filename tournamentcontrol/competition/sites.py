@@ -869,6 +869,10 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         templates = self.template_path(
             "club.html", competition.slug, season.slug, club.slug
         )
+        # each team's row shows its next match, or else its last one
+        extra_context["teams"] = Team.prefetch_next_and_last_match(
+            extra_context["teams"]
+        )
         return self.generic_detail(
             request,
             season.clubs,

@@ -15,7 +15,7 @@ from test_plus import TestCase
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.draw import schemas
 from tournamentcontrol.competition.draw.builders import build
-from tournamentcontrol.competition.models import Match
+from tournamentcontrol.competition.models import Match, Team
 from tournamentcontrol.competition.sites import competition as competition_site
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin_format
@@ -1451,6 +1451,98 @@ class SeasonThumbnailTests(TestCase):
             self.season.slug,
             self.division.slug,
             self.match.pk,
+        )
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+@freeze_time("2026-10-08 03:00:00")
+class ClubPageTests(TestCase):
+    """
+    A club's page lists its teams, each with its next match or, once it has
+    played them all, its last one. Looking those up cost four queries per
+    team, so the page slowed down with every team a nation entered. The same
+    query budget now holds however many teams the club has.
+    """
+
+    @classmethod
+    def _club(cls, title, teams):
+        club = factories.ClubFactory.create(title=title)
+        cls.competition.clubs.add(club)
+        for number in range(teams):
+            division = factories.DivisionFactory.create(season=cls.season)
+            stage = factories.StageFactory.create(division=division)
+            team = factories.TeamFactory.create(club=club, division=division)
+            opponent = factories.TeamFactory.create(
+                club=cls.opposition, division=division
+            )
+            days = (-2, -1, 1) if number else (-2, -1)  # the first has no more
+            for day in days:
+                when = datetime(2026, 10, 8, 9, 0, tzinfo=ZoneInfo("UTC"))
+                when += timedelta(days=day)
+                factories.MatchFactory.create(
+                    stage=stage,
+                    home_team=team,
+                    away_team=opponent,
+                    datetime=when,
+                    date=when.date(),
+                    time=when.time(),
+                )
+        return club
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create(timezone="UTC")
+        cls.competition = cls.season.competition
+        cls.opposition = factories.ClubFactory.create(title="Opposition")
+        cls.competition.clubs.add(cls.opposition)
+        cls.few = cls._club("Few", teams=2)
+        cls.many = cls._club("Many", teams=6)
+
+    def setUp(self):
+        cache.clear()
+
+    def assertNextOrLastMatch(self, teams):
+        for team in teams:
+            matches = team.matches.order_by("date", "time")
+            if team.future().exists():
+                expected = matches.filter(date=date(2026, 10, 9)).get()
+            else:
+                expected = matches.filter(date=date(2026, 10, 7)).get()
+            self.assertEqual(team.next_match() or team.last_match(), expected)
+
+    def test_next_or_last_match(self):
+        self.assertGoodView(
+            "competition:club",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            club=self.many.slug,
+        )
+        self.assertNextOrLastMatch(self.last_response.context["teams"])
+
+    def test_prefetch_matches_the_lookup_per_team(self):
+        teams = list(self.many.teams.all())
+        prefetched = Team.prefetch_next_and_last_match(self.many.teams.all())
+        self.assertEqual(
+            [(t.next_match(), t.last_match()) for t in prefetched],
+            [(t.next_match(), t.last_match()) for t in teams],
+        )
+
+    def test_few_teams_query_count(self):
+        self.assertGoodView(
+            "competition:club",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            club=self.few.slug,
+            test_query_count=12,
+        )
+
+    def test_many_teams_query_count(self):
+        self.assertGoodView(
+            "competition:club",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            club=self.many.slug,
+            test_query_count=12,
         )
 
 

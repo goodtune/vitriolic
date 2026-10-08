@@ -1815,33 +1815,89 @@ class Team(AdminUrlMixin, MySidelineMixin, OrderedSitemapNode):
         away = self.away_games.select_related(*related)
         return home | away
 
-    def future(self, offset=None):
+    @staticmethod
+    def _future_and_past(offset=None):
         if offset is None:
             offset = 15  # FIXME add a value on a season
         dt = timezone.now() - timedelta(minutes=offset)
         d, t = dt.date(), dt.time()
-        return self.matches.filter((Q(date__exact=d) & Q(time__gte=t)) | Q(date__gt=d))
+        future = (Q(date__exact=d) & Q(time__gte=t)) | Q(date__gt=d)
+        past = (Q(date__exact=d) & Q(time__lte=t)) | Q(date__lt=d)
+        return future, past
+
+    def future(self, offset=None):
+        future, _ = self._future_and_past(offset)
+        return self.matches.filter(future)
 
     def past(self, offset=None):
-        if offset is None:
-            offset = 15  # FIXME add a value on a season
-        dt = timezone.now() - timedelta(minutes=offset)
-        d, t = dt.date(), dt.time()
-        return self.matches.filter((Q(date__exact=d) & Q(time__lte=t)) | Q(date__lt=d))
+        _, past = self._future_and_past(offset)
+        return self.matches.filter(past)
+
+    @classmethod
+    def prefetch_next_and_last_match(cls, teams):
+        """
+        Find the next and last match of every team in two queries, for pages
+        that list many teams (such as a club's), instead of up to four
+        queries per team in ``next_match`` and ``last_match``.
+        """
+        teams = list(teams)
+        by_pk = {team.pk: team for team in teams}
+        for team in teams:
+            team._next_match = team._last_match = None
+        if not teams:
+            return teams
+
+        future, past = cls._future_and_past()
+        pks = list(by_pk)
+        matches = (
+            Match.objects.filter(Q(home_team__in=pks) | Q(away_team__in=pks))
+            .select_related(
+                "stage__division__season__competition",
+                "stage_group",
+                "home_team__club",
+                "home_team__division",
+                "away_team__club",
+                "away_team__division",
+                # named in place of a team until it is decided
+                "home_team_undecided",
+                "away_team_undecided",
+                "home_team_eval_related",
+                "away_team_eval_related",
+            )
+            .defer(
+                "live_stream_thumbnail_image",
+                "stage__division__season__live_stream_thumbnail_image",
+                "home_team_eval_related__live_stream_thumbnail_image",
+                "away_team_eval_related__live_stream_thumbnail_image",
+            )
+        )
+        for match in matches.filter(future):
+            for pk in (match.home_team_id, match.away_team_id):
+                if pk in by_pk and by_pk[pk]._next_match is None:
+                    by_pk[pk]._next_match = match
+        for match in matches.filter(past):
+            for pk in (match.home_team_id, match.away_team_id):
+                if pk in by_pk:
+                    by_pk[pk]._last_match = match
+        return teams
 
     def next_match(self):
-        matches = self.future()
-        if matches.count():
-            match = matches[0]
+        try:
+            match = self._next_match
+        except AttributeError:
+            match = self.future().first()
+        if match is not None:
             match.next = True
-            return match
+        return match
 
     def last_match(self):
-        matches = self.past()
-        if matches.count():
-            match = matches.reverse()[0]
+        try:
+            match = self._last_match
+        except AttributeError:
+            match = self.past().last()
+        if match is not None:
             match.last = True
-            return match
+        return match
 
     def ladders(self):
         res = collections.OrderedDict()
