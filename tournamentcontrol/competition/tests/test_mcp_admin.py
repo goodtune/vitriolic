@@ -2471,9 +2471,10 @@ class LiveStreamResyncTests(AdminFixtureMixin, TestCase):
         broadcasts = youtube.liveBroadcasts.return_value
         admin = self.admin()
 
-        # A title that is too long is retried with short titles by the task;
-        # when that is rejected too YouTube's own message is reported, not
-        # swallowed.
+        # A title that is too long is retried by the task in its shorter
+        # forms (short titles, then without the teams of a match that has a
+        # label); when the last is rejected too YouTube's own message is
+        # reported, not swallowed.
         broadcasts.insert.return_value.execute.side_effect = _http_error(
             400, b'{"error": {"message": "The request title is too long"}}'
         )
@@ -2482,7 +2483,21 @@ class LiveStreamResyncTests(AdminFixtureMixin, TestCase):
             admin.resync_match_live_stream,
             self.aus_v_eng.pk,
         )
-        self.assertEqual(broadcasts.insert.call_count, 2)
+        self.assertEqual(
+            [
+                call.kwargs["body"]["snippet"]["title"]
+                for call in broadcasts.insert.call_args_list
+            ],
+            [
+                (
+                    "Men's Open | Semi Final 1: Australia vs England | "
+                    "European Championships 2026"
+                ),
+                "Men's Open | Semi Final 1: Australia vs England | Euros 2026",
+                "Men's Open | Semi Final 1 | European Championships 2026",
+                "Men's Open | Semi Final 1 | Euros 2026",
+            ],
+        )
         self.aus_v_eng.refresh_from_db()
         self.assertEqual(self.aus_v_eng.external_identifier, None)
 

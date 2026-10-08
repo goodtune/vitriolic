@@ -61,13 +61,18 @@ class _ShortTitle:
         return getattr(self._obj, name)
 
 
-def build_live_stream_body(match, base_url=None, short=False):
+def build_live_stream_body(match, base_url=None, short=False, label_only=False):
     """Render title/description templates and build the YouTube broadcast body.
 
     Returns the body dict, or ``None`` if the match lacks a scheduled start time.
 
     When ``short`` is true, ``short_title`` is substituted for ``title`` on
     Competition/Season/Division/Stage in the rendered title and description.
+
+    ``label_only`` is passed to the templates, where a true value asks the
+    title of a match that has a label ("Gold Medal") to leave its teams out.
+    It makes no difference to a match without a label, whose title has
+    nothing but its teams to tell it apart.
     """
     stage = match.stage
     division = stage.division
@@ -110,6 +115,7 @@ def build_live_stream_body(match, base_url=None, short=False):
         "division": ctx_division,
         "stage": ctx_stage,
         "match_url": match_url,
+        "label_only": label_only,
     }
 
     title_templates = [
@@ -158,8 +164,25 @@ def build_live_stream_body(match, base_url=None, short=False):
     }
 
 
+# The forms a match's broadcast title is offered to YouTube in, from the most
+# to the least descriptive, as the ``short`` and ``label_only`` arguments of
+# ``build_live_stream_body``.
+_TITLE_FORMS = (
+    (False, False),
+    (True, False),
+    (False, True),
+    (True, True),
+)
+
+
 def _is_title_too_long(exc):
-    """Return True when an HttpError indicates an exceeded title length."""
+    """Return True when an HttpError indicates an exceeded title length.
+
+    YouTube reports a title over its limit as ``invalidTitle`` ("Title is
+    invalid") without saying that length was the reason, so any rejection of
+    the title counts; a shorter form of the title is the only remedy there
+    is to try.
+    """
     content = getattr(exc, "content", b"") or b""
     if isinstance(content, (bytes, bytearray)):
         content = bytes(content).decode("utf-8", errors="replace")
@@ -168,7 +191,13 @@ def _is_title_too_long(exc):
         return False
     return any(
         marker in needle
-        for marker in ("too long", "maxlength", "max length", "invalidvalue")
+        for marker in (
+            "too long",
+            "maxlength",
+            "max length",
+            "invalidvalue",
+            "invalidtitle",
+        )
     )
 
 
@@ -265,10 +294,14 @@ def sync_live_stream(match_pk, base_url=None):
     """Synchronize a match with its YouTube broadcast.
 
     Creates, updates, deletes, and binds the live broadcast as required by the
-    current state of the match. On a YouTube API title-length error, retries
-    once with shortened titles (using ``short_title`` on Division, Season,
-    Competition, and Stage where set) so a recoverable failure remains
-    non-fatal and the broadcast can still be created.
+    current state of the match. When YouTube rejects the title (it allows 100
+    characters) the next shorter form is tried, so a recoverable failure
+    remains non-fatal and the broadcast can still be created: first with
+    shortened titles (using ``short_title`` on Division, Season, Competition,
+    and Stage where set), then, for a match that has a label, without its
+    teams ("Men's 50 | Gold Medal | ..."), and last both together. Every
+    synchronisation starts again from the full title, so a later one (once
+    the teams of a final are known, say) restores the fullest form that fits.
 
     The match row is locked for the duration, so concurrent synchronisations
     (a queued run and a resync from the admin site or MCP server, say) are
@@ -328,21 +361,36 @@ def _sync_live_stream(match, base_url):
             logger.error("YouTube API error syncing match %s: %s", match_pk, exc)
             raise
 
-    for short in (False, True):
-        body = build_live_stream_body(match, base_url=base_url, short=short)
+    rejected = None
+    tried = set()
+    for short, label_only in _TITLE_FORMS:
+        body = build_live_stream_body(
+            match, base_url=base_url, short=short, label_only=label_only
+        )
         if body is None:
             return None  # No scheduled time
+        title = body["snippet"]["title"]
+        if title in tried:
+            # Nothing shorter in this form (no short titles are set, the
+            # match has no label, or a custom template ignores the form), so
+            # YouTube would only reject the same title again.
+            continue
+        tried.add(title)
         try:
             return _apply_sync(match, season, body)
         except HttpError as exc:
-            if not short and _is_title_too_long(exc):
-                logger.warning(
-                    "YouTube rejected match %s title length, retrying with short titles",
-                    match_pk,
-                )
-                continue
-            logger.error("YouTube API error syncing match %s: %s", match_pk, exc)
-            raise
+            if not _is_title_too_long(exc):
+                logger.error("YouTube API error syncing match %s: %s", match_pk, exc)
+                raise
+            logger.warning(
+                "YouTube rejected the title of match %s (%r), "
+                "trying its next shorter form",
+                match_pk,
+                title,
+            )
+            rejected = exc
+    logger.error("YouTube API error syncing match %s: %s", match_pk, rejected)
+    raise rejected
 
 
 def build_live_stream_event_body(event):

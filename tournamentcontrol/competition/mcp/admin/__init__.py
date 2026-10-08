@@ -4331,8 +4331,9 @@ class AdminToolset(CompetitionToolset):
         the match, now rather than queued: the broadcast is created when the
         match has none yet, otherwise its title, description, schedule and
         stream binding are updated (the synchronisation the admin's resync
-        action runs; a title YouTube finds too long is retried in its short
-        form). A match whose live stream was withdrawn but still has a
+        action runs; a title YouTube rejects as too long is retried with
+        short titles and then, for a match that has a label, without its
+        teams). A match whose live stream was withdrawn but still has a
         broadcast has it removed. Safe to repeat: an unchanged match is
         simply updated again. Reports the broadcast id and link and whether
         it was created, updated or removed; a rejection by YouTube is
