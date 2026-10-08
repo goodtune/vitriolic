@@ -56,6 +56,9 @@ def matches_require_basic_results(now=None, matches=None):
         "home_team__division",
         "away_team__club",
         "away_team__division",
+    ).defer(
+        "live_stream_thumbnail_image",
+        "stage__division__season__live_stream_thumbnail_image",
     )
 
 
@@ -93,6 +96,9 @@ def matches_require_details_results(matches=None, include_forfeits=False):
         "home_team__division",
         "away_team__club",
         "away_team__division",
+    ).defer(
+        "live_stream_thumbnail_image",
+        "stage__division__season__live_stream_thumbnail_image",
     )
 
 
@@ -107,6 +113,9 @@ def matches_require_progression():
         "home_team__division",
         "away_team__club",
         "away_team__division",
+    ).defer(
+        "live_stream_thumbnail_image",
+        "stage__division__season__live_stream_thumbnail_image",
     )
 
 
@@ -298,8 +307,12 @@ class ScoresheetWidget(DashboardWidget):
     template = "tournamentcontrol/competition/admin/widgets/scoresheets.html"
 
     def _get_context(self):
-        stages = Stage.objects.annotate(p=Count("matches_needing_printing")).filter(
-            p__gt=0
+        stages = (
+            Stage.objects.annotate(p=Count("matches_needing_printing"))
+            .filter(p__gt=0)
+            # each row links to its division, season and competition
+            .select_related("division__season__competition")
+            .defer("division__season__live_stream_thumbnail_image")
         )
         context = {"stages": stages}
         return context
