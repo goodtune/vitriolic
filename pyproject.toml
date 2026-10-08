@@ -51,6 +51,7 @@ test = [
     "django-environ",
     "django-test-plus",
     "factory_boy",
+    "fakeredis>=2.39",
     "freezegun",
     "mcp",
     "packaging>=25.0",
@@ -61,6 +62,7 @@ test = [
     "pytest",
     "requests",
     "tblib",
+    "uvicorn>=0.30",
     "whitenoise>=6.9.0",
 ]
 
@@ -94,6 +96,10 @@ competition = [
     "python-dateutil",
     "python-magic",
     "requests",
+]
+ops = [
+    "datastar-py>=1.0.3",
+    "redis>=5",
 ]
 # Deprecated optional dependencies
 redis = []
