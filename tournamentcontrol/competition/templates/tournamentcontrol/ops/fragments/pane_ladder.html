@@ -1,0 +1,11 @@
+<div id="pane" class="pane ladder">
+	<div class="card">
+		<h4>{{ ladder_title }}</h4>
+		<table>
+			<tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>F</th><th>A</th><th>Diff</th><th>Pts</th></tr>
+			{% for row in ladder %}
+				<tr{% if row.team_id == pane_match.home_team_id or row.team_id == pane_match.away_team_id %} class="now"{% endif %}><td class="n">{{ forloop.counter }}</td><td>{{ row.team.title }}</td><td class="num">{{ row.played }}</td><td class="num">{{ row.win }}</td><td class="num">{{ row.draw }}</td><td class="num">{{ row.loss }}</td><td class="num">{{ row.score_for }}</td><td class="num">{{ row.score_against }}</td><td class="num">{{ row.difference|floatformat:"0" }}</td><td class="num"><b>{{ row.points|floatformat:"-2" }}</b></td></tr>
+			{% empty %}<tr><td colspan="10" class="empty">No ladder for this stage.</td></tr>{% endfor %}
+		</table>
+	</div>
+</div>

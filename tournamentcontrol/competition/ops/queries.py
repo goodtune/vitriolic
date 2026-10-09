@@ -225,3 +225,55 @@ def day_streams(season, day, now):
         season=season, start__gte=start, start__lt=end
     ).order_by("start")
     return streams, events
+
+
+def team_results(team):
+    return (
+        Match.objects.filter(Q(home_team=team) | Q(away_team=team), is_bye=False)
+        .select_related(*SELECT_RELATED)
+        .order_by("datetime", "pk")
+    )
+
+
+def division_leaders(division, limit=10):
+    base = (
+        SimpleScoreMatchStatistic.objects.filter(
+            match__stage__division=division,
+            played=1,
+            player__teamassociation__team__division=division,
+        )
+        .values(
+            "player_id",
+            "player__first_name",
+            "player__last_name",
+            "player__teamassociation__team__title",
+        )
+        .annotate(points=Sum("points"), mvp=Sum("mvp"))
+    )
+
+    def rows(queryset):
+        return [
+            {
+                "name": "%s %s" % (r["player__first_name"], r["player__last_name"]),
+                "team": r["player__teamassociation__team__title"],
+                "points": r["points"] or 0,
+                "mvp": r["mvp"] or 0,
+            }
+            for r in queryset
+        ]
+
+    scorers = rows(
+        base.exclude(points=None)
+        .exclude(points=0)
+        .order_by("-points", "player__last_name")[:limit]
+    )
+    mvps = rows(
+        base.exclude(mvp=None)
+        .exclude(mvp=0)
+        .order_by("-mvp", "player__last_name")[:limit]
+    )
+    return scorers, mvps
+
+
+def ground_runsheet(ground, day):
+    return _ground_matches(ground, day)

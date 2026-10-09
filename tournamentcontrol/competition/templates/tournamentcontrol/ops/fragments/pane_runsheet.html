@@ -1,0 +1,10 @@
+<div id="pane" class="pane runsheet">
+	<div class="card">
+		<h4>{{ ground.title }} · {{ day|date:"D j M" }}</h4>
+		<table class="rs">
+			{% for m in runsheet %}
+				<tr{% if current and m.pk == current.pk %} class="now"{% endif %}><td class="n">{{ m.time|time:"H:i" }}</td><td>{{ m.stage.division.title }}</td><td>{{ m.get_home_team_plain }} v {{ m.get_away_team_plain }}</td><td class="num">{% if m.home_team_score is not None %}{{ m.home_team_score }} – {{ m.away_team_score }}{% endif %}</td>{% if m.live_stream_status == "live" %}<td class="onair">ON AIR</td>{% elif not m.external_identifier %}<td class="warn">no broadcast</td>{% else %}<td class="sub">{{ m.live_stream_status|default:"ready" }}</td>{% endif %}</tr>
+			{% empty %}<tr><td class="empty">No matches on this ground today.</td></tr>{% endfor %}
+		</table>
+	</div>
+</div>

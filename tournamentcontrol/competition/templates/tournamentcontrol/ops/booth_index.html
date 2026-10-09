@@ -1,0 +1,8 @@
+{% extends "tournamentcontrol/ops/base.html" %}
+{% block title %}Booth · {{ season }}{% endblock %}
+{% block body %}
+<main class="index">
+	<h1>Commentary booth · {{ season }}</h1>
+	<ul class="seasons">{% for ground in grounds %}<li><a href="{% url 'ops:booth' competition=season.competition.slug season=season.slug ground=ground.slug %}">{{ ground.title }}</a></li>{% empty %}<li class="empty">No streamed grounds.</li>{% endfor %}</ul>
+</main>
+{% endblock %}

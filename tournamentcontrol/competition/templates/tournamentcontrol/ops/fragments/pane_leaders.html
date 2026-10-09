@@ -1,0 +1,6 @@
+<div id="pane" class="pane leaders">
+	<div class="cols">
+		<div class="card"><h4>Top scorers · {{ pane_match.stage.division.title }}</h4><table>{% for row in scorers %}<tr><td class="n">{{ forloop.counter }}</td><td>{{ row.name }} · {{ row.team }}</td><td class="num">{{ row.points }}</td></tr>{% empty %}<tr><td class="empty">No points recorded yet.</td></tr>{% endfor %}</table></div>
+		<div class="card"><h4>MVP points · {{ pane_match.stage.division.title }}</h4><table>{% for row in mvps %}<tr><td class="n">{{ forloop.counter }}</td><td>{{ row.name }} · {{ row.team }}</td><td class="num">{{ row.mvp }}</td></tr>{% empty %}<tr><td class="empty">No MVP points recorded yet.</td></tr>{% endfor %}</table></div>
+	</div>
+</div>

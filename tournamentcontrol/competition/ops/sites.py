@@ -12,18 +12,21 @@ import logging
 from functools import wraps
 
 from django import forms
+from django.contrib.auth.views import redirect_to_login
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 
-from touchtechnology.common.decorators import require_POST_m
+from touchtechnology.common.decorators import login_required_m, require_POST_m
 from touchtechnology.common.sites import Application
 from tournamentcontrol.competition.forms import MatchResultForm, MatchStatisticFormset
 from tournamentcontrol.competition.models import (
+    Ground,
     Match,
     Season,
     SimpleScoreMatchStatistic,
+    Team,
 )
 from tournamentcontrol.competition.ops import events, queries, receivers, sse, streams
 from tournamentcontrol.competition.ops.fragments import (
@@ -45,6 +48,14 @@ from tournamentcontrol.competition.ops.responses import (
 from tournamentcontrol.competition.utils import FauxQueryset
 
 logger = logging.getLogger(__name__)
+
+PANES = ("sheets", "results", "ladder", "leaders")
+PANE_LABELS = [
+    ("sheets", "Team sheets"),
+    ("results", "Results so far"),
+    ("ladder", "Ladder"),
+    ("leaders", "Tournament leaders"),
+]
 
 
 def parse_day(datestr):
@@ -71,6 +82,47 @@ def season_view(view):
         )
         day = parse_day(datestr) if datestr else None
         return view(self, request, season, day, **kwargs)
+
+    return wrapper
+
+
+def booth_view(view):
+    """
+    Resolve the competition, season and (streamed) ground slugs before
+    calling the view as ``view(self, request, season, ground, **kwargs)``.
+    """
+
+    @wraps(view)
+    def wrapper(self, request, competition, season, ground, **kwargs):
+        season = get_object_or_404(
+            Season.objects.select_related("competition").defer(
+                "live_stream_thumbnail_image"
+            ),
+            slug=season,
+            competition__slug=competition,
+        )
+        ground = (
+            Ground.objects.filter(venue__season=season, slug=ground, live_stream=True)
+            .select_related("venue")
+            .order_by("venue__order", "order")
+            .first()
+        )
+        if ground is None:
+            raise Http404("No such streamed ground.")
+        return view(self, request, season, ground, **kwargs)
+
+    return wrapper
+
+
+def booth_required(view):
+    """Login plus ``stream_season``; the booth does not need ``is_staff``."""
+
+    @wraps(view)
+    def wrapper(self, request, season, ground, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path())
+        require(can_stream(request.user, season))
+        return view(self, request, season, ground, **kwargs)
 
     return wrapper
 
@@ -130,6 +182,35 @@ class OpsSite(Application):
             path("", self.season, name="season"),
             re_path(r"^(?P<datestr>\d{8})/$", self.day, name="day"),
             re_path(r"^(?P<datestr>\d{8})/", include(self.day_urls())),
+            path("booth/", include(self.booth_urls())),
+        ]
+
+    def booth_urls(self):
+        return [
+            path("", self.booth_index, name="booth-index"),
+            path("<slug:ground>/", self.booth, name="booth"),
+            path("<slug:ground>/lamp/", self.booth_lamp, name="booth-lamp"),
+            path("<slug:ground>/strip/", self.booth_strip, name="booth-strip"),
+            path(
+                "<slug:ground>/onair/<str:status>/",
+                self.booth_onair,
+                name="booth-onair",
+            ),
+            path("<slug:ground>/arm/", self.booth_arm, name="booth-arm"),
+            path("<slug:ground>/runsheet/", self.booth_runsheet, name="booth-runsheet"),
+            path(
+                "<slug:ground>/match/<int:match_pk>/teams/",
+                self.booth_teams,
+                name="booth-teams",
+            ),
+            path(
+                "<slug:ground>/match/<int:match_pk>/<str:pane>/",
+                self.booth_pane,
+                name="booth-pane",
+            ),
+            path(
+                "<slug:ground>/team/<int:team_pk>/", self.booth_team, name="booth-team"
+            ),
         ]
 
     def day_urls(self):
@@ -570,3 +651,248 @@ class OpsSite(Application):
                 if error:
                     errors.append(error)
         return self._stream_response(request, season, day, errors)
+
+    # --- booth ------------------------------------------------------
+
+    def booth_context(self, request, season, ground):
+        now = timezone.now()
+        day = queries.local_today(ground, now)
+        previous, current, following = queries.ground_day(ground, day, now)
+        status = current.live_stream_status if current else None
+        armable, reason = True, ""
+        if status == "live":
+            armable, reason = False, "End the current broadcast first."
+        elif following is None:
+            armable, reason = False, "No more broadcasts on %s today." % ground.title
+        elif not following.external_identifier:
+            armable, reason = False, "%s v %s has no YouTube broadcast." % (
+                following.get_home_team_plain(),
+                following.get_away_team_plain(),
+            )
+        elif following.live_stream_status in ("testing", "live", "complete"):
+            armable, reason = False, "Already armed."
+        return {
+            "season": season,
+            "ground": ground,
+            "day": day,
+            "daystr": day.strftime("%Y%m%d"),
+            "now": now,
+            "previous": previous,
+            "current": current,
+            "next": following,
+            "status": status,
+            "armable": armable,
+            "arm_reason": reason,
+            "can_stream": True,
+            "panes": PANE_LABELS,
+            "user": request.user,
+            "errors": [],
+        }
+
+    def _booth_match(self, ground, day, match_pk):
+        return get_object_or_404(queries.ground_runsheet(ground, day), pk=match_pk)
+
+    def _booth_fragments(self, request, season, ground, names, **extra):
+        context = self.booth_context(request, season, ground)
+        context.update(extra)
+        return [render_fragment(request, name, **context) for name in names]
+
+    def _booth_url(self, season, ground):
+        return reverse(
+            "ops:booth",
+            kwargs={
+                "competition": season.competition.slug,
+                "season": season.slug,
+                "ground": ground.slug,
+            },
+        )
+
+    @login_required_m
+    @season_view
+    def booth_index(self, request, season, day, **kwargs):
+        require(can_stream(request.user, season))
+        grounds = Ground.objects.filter(
+            venue__season=season, live_stream=True
+        ).order_by("venue__order", "order")
+        return self.render(
+            request,
+            self.template_path("booth_index.html"),
+            {"season": season, "grounds": grounds},
+        )
+
+    @booth_view
+    @booth_required
+    def booth(self, request, season, ground, **kwargs):
+        context = self.booth_context(request, season, ground)
+        if context["current"]:
+            context["pane"] = "sheets"
+            context["pane_match"] = context["current"]
+            context["pane_html"] = self._pane_html(
+                request, context, "sheets", context["current"]
+            )
+        return self.render(request, self.template_path("booth.html"), context)
+
+    @booth_view
+    @booth_required
+    def booth_lamp(self, request, season, ground, **kwargs):
+        (html,) = self._booth_fragments(request, season, ground, ("lamp",))
+        return fragment_response(request, html)
+
+    @booth_view
+    @booth_required
+    def booth_strip(self, request, season, ground, **kwargs):
+        (html,) = self._booth_fragments(request, season, ground, ("strip",))
+        return fragment_response(request, html)
+
+    @require_POST_m
+    @booth_view
+    @booth_required
+    def booth_onair(self, request, season, ground, status, **kwargs):
+        if status not in ("live", "complete"):
+            raise Http404("Unknown broadcast status.")
+        context = self.booth_context(request, season, ground)
+        errors = []
+        if context["current"] is None:
+            errors.append("Nothing is on this ground right now.")
+        else:
+            error = streams.transition(
+                context["current"], status, request.user.get_username()
+            )
+            if error:
+                errors.append(error)
+        fragments = self._booth_fragments(
+            request, season, ground, ("lamp", "strip"), errors=errors
+        )
+        return patches(request, fragments, redirect_to=self._booth_url(season, ground))
+
+    @require_POST_m
+    @booth_view
+    @booth_required
+    def booth_arm(self, request, season, ground, **kwargs):
+        context = self.booth_context(request, season, ground)
+        redirect_to = self._booth_url(season, ground)
+        if not context["armable"]:
+            html = render_fragment(
+                request, "lamp", **{**context, "errors": [context["arm_reason"]]}
+            )
+            response = patches(request, [html], redirect_to=redirect_to)
+            if is_datastar(request):
+                response.status_code = 409
+            return response
+        error = streams.transition(
+            context["next"], "testing", request.user.get_username()
+        )
+        fragments = self._booth_fragments(
+            request, season, ground, ("lamp", "strip"), errors=[error] if error else []
+        )
+        return patches(request, fragments, redirect_to=redirect_to)
+
+    def _pane_html(self, request, context, pane, match):
+        extra = {"pane": pane, "pane_match": match}
+        if pane == "sheets":
+            extra["rosters"] = [
+                (
+                    team,
+                    team.people.filter(is_player=True)
+                    .with_statistics(team)
+                    .select_related("person")
+                    .order_by("number"),
+                )
+                for team in (match.home_team, match.away_team)
+            ]
+        elif pane == "results":
+            extra["results"] = [
+                (team, queries.team_results(team))
+                for team in (match.home_team, match.away_team)
+            ]
+        elif pane == "ladder":
+            owner = match.stage_group or match.stage
+            extra["ladder"] = owner.ladder_summary.select_related("team__club")
+            extra["ladder_title"] = "%s · %s" % (
+                match.stage.division.title,
+                owner.title,
+            )
+        elif pane == "leaders":
+            extra["scorers"], extra["mvps"] = queries.division_leaders(
+                match.stage.division
+            )
+            extra["on_field"] = {match.home_team_id, match.away_team_id}
+        return render_fragment(request, "pane_%s" % pane, **{**context, **extra})
+
+    @booth_view
+    @booth_required
+    def booth_pane(self, request, season, ground, match_pk, pane, **kwargs):
+        if pane not in PANES:
+            raise Http404("No such pane.")
+        context = self.booth_context(request, season, ground)
+        match = self._booth_match(ground, context["day"], match_pk)
+        html = self._pane_html(request, context, pane, match)
+        if not is_datastar(request):
+            return HttpResponse(html)
+        return patches(request, [html], signals={"pane": pane, "match": match.pk})
+
+    @booth_view
+    @booth_required
+    def booth_runsheet(self, request, season, ground, **kwargs):
+        context = self.booth_context(request, season, ground)
+        html = render_fragment(
+            request,
+            "pane_runsheet",
+            runsheet=queries.ground_runsheet(ground, context["day"]),
+            **context,
+        )
+        if not is_datastar(request):
+            return HttpResponse(html)
+        return patches(request, [html], signals={"pane": "runsheet", "match": None})
+
+    @booth_view
+    @booth_required
+    def booth_teams(self, request, season, ground, match_pk, **kwargs):
+        context = self.booth_context(request, season, ground)
+        match = self._booth_match(ground, context["day"], match_pk)
+        division = match.stage.division
+        teams = (
+            Team.objects.filter(division=division)
+            .select_related("stage_group")
+            .order_by("stage_group__order", "order")
+        )
+        pools = {}
+        for team in teams:
+            pools.setdefault(
+                team.stage_group.title if team.stage_group else "", []
+            ).append(team)
+        html = render_fragment(
+            request,
+            "teams_modal",
+            division=division,
+            pools=pools,
+            on_field={match.home_team_id, match.away_team_id},
+            **context,
+        )
+        if not is_datastar(request):
+            return HttpResponse(html)
+        return patches(request, [html], signals={"modal": True})
+
+    @booth_view
+    @booth_required
+    def booth_team(self, request, season, ground, team_pk, **kwargs):
+        context = self.booth_context(request, season, ground)
+        team = get_object_or_404(
+            Team.objects.select_related("division", "stage_group", "club"),
+            pk=team_pk,
+            division__season=season,
+        )
+        html = render_fragment(
+            request,
+            "team_modal",
+            team=team,
+            squad=team.people.filter(is_player=True)
+            .with_statistics(team)
+            .select_related("person")
+            .order_by("number"),
+            results=queries.team_results(team),
+            **context,
+        )
+        if not is_datastar(request):
+            return HttpResponse(html)
+        return patches(request, [html], signals={"modal": True})

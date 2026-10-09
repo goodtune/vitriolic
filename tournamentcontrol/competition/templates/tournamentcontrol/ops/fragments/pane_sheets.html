@@ -1,0 +1,15 @@
+<div id="pane" class="pane sheets">
+	<div class="cols">
+		{% for team, roster in rosters %}
+			<div class="card">
+				<div class="teamhead"><h3>{{ team.title }}</h3><span class="pos">{{ team.division.title }}{% if team.stage_group %} · {{ team.stage_group.title }}{% endif %}</span></div>
+				<table>
+					<tr><th>#</th><th>Player</th><th>P</th><th>Pts</th><th>MVP</th></tr>
+					{% for player in roster %}
+						<tr{% if not player.stat_played %} class="out"{% endif %}><td class="n">{{ player.number|default_if_none:"—" }}</td><td class="name">{{ player.person.first_name }} {{ player.person.last_name }}</td><td class="num">{{ player.stat_played|default_if_none:"0" }}</td><td class="num">{{ player.stat_points|default_if_none:"—" }}</td><td class="num">{{ player.stat_mvp|default_if_none:"—" }}</td></tr>
+					{% empty %}<tr><td colspan="5" class="empty">No players on the team sheet.</td></tr>{% endfor %}
+				</table>
+			</div>
+		{% endfor %}
+	</div>
+</div>

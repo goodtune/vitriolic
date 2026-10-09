@@ -329,3 +329,13 @@ class DrawFormatFactory(DjangoModelFactory):
     text = factory.LazyAttribute(
         lambda a: utils.round_robin_format([t for t in range(1, a.teams + 1)])
     )
+
+
+class LadderSummaryFactory(DjangoModelFactory):
+    class Meta:
+        model = models.LadderSummary
+
+    stage = factory.SubFactory(StageFactory)
+    team = factory.SubFactory(
+        TeamFactory, division=factory.SelfAttribute("..stage.division")
+    )
