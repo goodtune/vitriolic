@@ -111,9 +111,15 @@ def tournament(transactional_db):
 
 
 def test_score_entered_on_one_page_appears_on_another(
-    ops_page, second_page, asgi_live_server, tournament
+    ops_page, second_page, asgi_live_server, tournament, screenshot_dir
 ):
     ops_page.goto(asgi_live_server.url + tournament["day_path"])
+    expect(
+        ops_page.locator(f"#stream-{tournament['ground'].pk} .badge").first
+    ).to_be_visible()
+    ops_page.screenshot(
+        path=str(screenshot_dir / "ops_dashboard_desktop.png"), full_page=True
+    )
     second_page.goto(asgi_live_server.url + tournament["day_path"])
     expect(second_page.locator(".sse")).not_to_have_class("down")
     row = ops_page.locator(f"#match-{tournament['match'].pk}")
@@ -129,10 +135,13 @@ def test_score_entered_on_one_page_appears_on_another(
     # Only the upcoming match is still waiting for a result.
     expect(second_page.locator("#results-count")).to_have_text("1")
     expect(second_page.locator("#activity li").first).to_contain_text("Score ·")
+    second_page.screenshot(
+        path=str(screenshot_dir / "ops_dashboard_score_pushed.png"), full_page=True
+    )
 
 
 def test_ending_the_broadcast_from_ops_darkens_the_booth_lamp(
-    ops_page, second_page, asgi_live_server, tournament
+    ops_page, second_page, asgi_live_server, tournament, screenshot_dir
 ):
     with mock.patch(
         "tournamentcontrol.competition.models.build", return_value=youtube_mock("live")
@@ -147,15 +156,25 @@ def test_ending_the_broadcast_from_ops_darkens_the_booth_lamp(
         expect(
             ops_page.locator(f"#stream-{tournament['ground'].pk} .badge").first
         ).to_have_text("complete")
+        ops_page.screenshot(
+            path=str(screenshot_dir / "ops_streams_ended.png"), full_page=True
+        )
         expect(second_page.locator("#lamp")).to_have_text("OFF AIR")
 
 
-def test_hold_button_needs_a_hold(ops_page, asgi_live_server, tournament):
+def test_hold_button_needs_a_hold(
+    ops_page, asgi_live_server, tournament, screenshot_dir
+):
     with mock.patch(
         "tournamentcontrol.competition.models.build", return_value=youtube_mock("live")
     ):
+        ops_page.set_viewport_size({"width": 1024, "height": 768})
         ops_page.goto(asgi_live_server.url + tournament["booth_path"])
         button = ops_page.locator("button[data-hold]")
+        expect(ops_page.locator("#lamp")).to_have_text("ON AIR")
+        ops_page.screenshot(
+            path=str(screenshot_dir / "ops_booth_on_air.png"), full_page=True
+        )
         button.click()
         ops_page.wait_for_timeout(500)
         expect(ops_page.locator("#lamp")).to_have_text("ON AIR")
@@ -165,6 +184,9 @@ def test_hold_button_needs_a_hold(ops_page, asgi_live_server, tournament):
         ops_page.wait_for_timeout(1700)
         ops_page.mouse.up()
         expect(ops_page.locator("#lamp")).to_have_text("OFF AIR")
+        ops_page.screenshot(
+            path=str(screenshot_dir / "ops_booth_off_air.png"), full_page=True
+        )
 
 
 def test_booth_opens_its_event_stream_once(ops_page, asgi_live_server, tournament):
@@ -179,13 +201,16 @@ def test_booth_opens_its_event_stream_once(ops_page, asgi_live_server, tournamen
     with mock.patch(
         "tournamentcontrol.competition.models.build", return_value=youtube_mock("live")
     ):
+        ops_page.set_viewport_size({"width": 1024, "height": 768})
         ops_page.goto(asgi_live_server.url + tournament["booth_path"])
         expect(ops_page.locator("#lamp")).to_have_text("ON AIR")
         ops_page.wait_for_timeout(2000)
     assert 1 <= len(requests) <= 2, requests
 
 
-def test_scorers_modal_opens_and_closes(ops_page, asgi_live_server, tournament):
+def test_scorers_modal_opens_and_closes(
+    ops_page, asgi_live_server, tournament, screenshot_dir
+):
     ops_page.goto(asgi_live_server.url + tournament["day_path"])
     expect(ops_page.locator("#modal")).to_be_hidden()
     ops_page.locator(
@@ -193,24 +218,33 @@ def test_scorers_modal_opens_and_closes(ops_page, asgi_live_server, tournament):
     ).click()
     expect(ops_page.locator("#modal")).to_be_visible()
     expect(ops_page.locator("#modal-body h3")).to_contain_text("1 – 0")
+    ops_page.screenshot(
+        path=str(screenshot_dir / "ops_scorers_modal.png"), full_page=True
+    )
     ops_page.locator("#modal-body button", has_text="Close").click()
     expect(ops_page.locator("#modal")).to_be_hidden()
 
 
-def test_booth_teams_picker_opens_and_closes(ops_page, asgi_live_server, tournament):
+def test_booth_teams_picker_opens_and_closes(
+    ops_page, asgi_live_server, tournament, screenshot_dir
+):
     with mock.patch(
         "tournamentcontrol.competition.models.build", return_value=youtube_mock("live")
     ):
+        ops_page.set_viewport_size({"width": 1024, "height": 768})
         ops_page.goto(asgi_live_server.url + tournament["booth_path"])
         expect(ops_page.locator("#modal")).to_be_hidden()
         ops_page.locator("button.teamsbtn").click()
         expect(ops_page.locator("#modal")).to_be_visible()
+        ops_page.screenshot(
+            path=str(screenshot_dir / "ops_booth_teams_picker.png"), full_page=True
+        )
         ops_page.locator("#modal-body button", has_text="Close").click()
         expect(ops_page.locator("#modal")).to_be_hidden()
 
 
 def test_collapsed_layout_puts_scorers_behind_a_tab(
-    ops_page, asgi_live_server, tournament
+    ops_page, asgi_live_server, tournament, screenshot_dir
 ):
     ops_page.set_viewport_size({"width": 1024, "height": 768})
     ops_page.goto(asgi_live_server.url + tournament["day_path"])
@@ -220,15 +254,21 @@ def test_collapsed_layout_puts_scorers_behind_a_tab(
     slot = ops_page.locator(f"#slot-{tournament['slot_key']}")
     slot.locator(".slot-h").click()
     expect(slot.locator(".rows")).to_be_hidden()
+    ops_page.screenshot(
+        path=str(screenshot_dir / "ops_dashboard_ipad_folded_slot.png"), full_page=True
+    )
     ops_page.locator(".rtabs a", has_text="Scorers").click()
     expect(ops_page.locator("#scorers")).to_be_visible()
     expect(ops_page.locator("#results")).to_be_hidden()
+    ops_page.screenshot(
+        path=str(screenshot_dir / "ops_dashboard_ipad_collapsed.png"), full_page=True
+    )
     ops_page.reload()
     expect(ops_page.locator("#main")).to_have_class("collapsed")
 
 
 def test_without_javascript_the_form_still_posts(
-    browser, asgi_live_server, ops_user, tournament
+    browser, asgi_live_server, ops_user, tournament, screenshot_dir
 ):
     context = browser.new_context(java_script_enabled=False)
     page = context.new_page()
@@ -244,4 +284,7 @@ def test_without_javascript_the_form_still_posts(
     row.locator('button[type="submit"]').click()
     expect(page).to_have_url(asgi_live_server.url + tournament["day_path"])
     expect(page.locator(f"#match-{tournament['match'].pk} .score")).to_have_text("2 – 2")
+    page.screenshot(
+        path=str(screenshot_dir / "ops_no_javascript.png"), full_page=True
+    )
     context.close()
