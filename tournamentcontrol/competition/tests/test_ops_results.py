@@ -7,7 +7,9 @@ from django.utils import timezone
 from freezegun import freeze_time
 from test_plus import TestCase
 
+from tournamentcontrol.competition.models import Match
 from tournamentcontrol.competition.ops import events
+from tournamentcontrol.competition.signals.custom import score_updated
 from tournamentcontrol.competition.tests import factories
 
 TZ = ZoneInfo("Australia/Brisbane")
@@ -68,6 +70,15 @@ class SlotFragmentTests(ResultsFixture):
             % self.match.home_team.title[:3].upper()
         )
 
+    def test_cancel_link_restores_the_pending_form(self):
+        with self.login(self.staff):
+            self.get("ops:match-result", match_pk=self.match.pk, **self.kw)
+        self.assertResponseContains(
+            '<input type="number" name="home_team_score" class="sc" '
+            'placeholder="%s" id="id_home_team_score">'
+            % self.match.home_team.title[:3].upper()
+        )
+
     def test_entered_row_renders_score_and_edit_link(self):
         done = self.make(8, home_team_score=3, away_team_score=1)
         with self.login(self.staff):
@@ -103,6 +114,17 @@ class SaveScoreTests(ResultsFixture):
         self.assertEqual(event["match"], self.match.pk)
         self.assertFalse(event["adjusted"])
         self.assertEqual(event["actor"], self.staff.get_username())
+
+    def test_score_is_saved_before_the_signal_is_sent(self):
+        seen = []
+
+        def receiver(sender, match, **kwargs):
+            seen.append(Match.objects.get(pk=match.pk).home_team_score)
+
+        score_updated.connect(receiver, weak=False, dispatch_uid="test-order")
+        self.addCleanup(score_updated.disconnect, dispatch_uid="test-order")
+        self.post_score(self.match, 5, 4)
+        self.assertEqual(seen, [5])
 
     def test_datastar_post_returns_slot_and_count_patches(self):
         response = self.post_score(self.match, 5, 4, datastar=True)

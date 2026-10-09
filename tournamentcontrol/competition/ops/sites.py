@@ -316,9 +316,10 @@ class OpsSite(Application):
     def match_result(self, request, season, day, match_pk, **kwargs):
         match = self._day_match(season, day, match_pk)
         if request.method != "POST":
-            html = render_fragment(
-                request, "match_row", **self._row_context(request, season, day, match)
-            )
+            context = self._row_context(request, season, day, match)
+            if context["editable"] and not context["entered"]:
+                context["form"] = style_result_form(MatchResultForm(instance=match))
+            html = render_fragment(request, "match_row", **context)
             return fragment_response(request, html)
 
         require(can_change_match(request.user, match))
