@@ -20,8 +20,12 @@ from django.utils import timezone
 from touchtechnology.common.decorators import require_POST_m
 from touchtechnology.common.sites import Application
 from tournamentcontrol.competition.forms import MatchResultForm, MatchStatisticFormset
-from tournamentcontrol.competition.models import Season, SimpleScoreMatchStatistic
-from tournamentcontrol.competition.ops import events, queries, receivers, streams
+from tournamentcontrol.competition.models import (
+    Match,
+    Season,
+    SimpleScoreMatchStatistic,
+)
+from tournamentcontrol.competition.ops import events, queries, receivers, sse, streams
 from tournamentcontrol.competition.ops.fragments import (
     render_counts,
     render_fragment,
@@ -106,6 +110,9 @@ def style_result_form(form):
 
 
 class OpsSite(Application):
+    # Exposed so ``sse`` need not import this module (which imports it).
+    parse_day = staticmethod(parse_day)
+
     def __init__(self, name="ops", app_name="ops", **kwargs):
         super().__init__(name=name, app_name=app_name, **kwargs)
         receivers.connect()
@@ -161,9 +168,7 @@ class OpsSite(Application):
                 self.slot_stream,
                 name="slot-stream",
             ),
-            # Placeholder so the day page can reverse its event stream; the
-            # SSE task replaces it with the long-lived stream view.
-            path("events/", self.events, name="events"),
+            path("events/", sse.ops_events(self), name="events"),
         ]
 
     # --- context ----------------------------------------------------
@@ -205,6 +210,35 @@ class OpsSite(Application):
             "user": request.user,
         }
 
+    def snapshot_fragments(self, request, season, day):
+        """Everything the day page shows that can change, freshly rendered."""
+        context = self.day_context(request, season, day)
+        fragments = [
+            render_fragment(request, name, **context)
+            for name in ("results", "scorers", "streams", "activity")
+        ]
+        fragments.extend(render_counts(request, **context))
+        return fragments
+
+    def event_fragments(self, request, season, day, event):
+        """The fragments to push to a subscriber for one bus ``event``."""
+        kind = event.get("type")
+        if kind in ("score-entered", "bye-processed"):
+            match = Match.objects.filter(pk=event.get("match")).first()
+            if match is None:
+                return []
+            return self.slot_patches(request, season, day, match)
+        if kind == "statistics-entered":
+            context = self.day_context(request, season, day)
+            return [
+                render_fragment(request, "scorers", **context),
+                render_fragment(request, "activity", **context),
+                *render_counts(request, **context),
+            ]
+        if kind == "stream-changed":
+            return self.stream_patches(request, season, day)
+        return []
+
     # --- pages ------------------------------------------------------
 
     @staff_required
@@ -243,11 +277,6 @@ class OpsSite(Application):
     def day(self, request, season, day, **kwargs):
         context = self.day_context(request, season, day)
         return self.render(request, self.template_path("day.html"), context)
-
-    @staff_required
-    @season_view
-    def events(self, request, season, day, **kwargs):
-        return HttpResponse(status=204)
 
     # --- fragments --------------------------------------------------
 
@@ -490,8 +519,8 @@ class OpsSite(Application):
         context["stream_errors"] = list(errors)
         return [
             render_fragment(request, "streams", **context),
-            render_fragment(request, "streams_count", **context),
             render_fragment(request, "activity", **context),
+            *render_counts(request, **context),
         ]
 
     def _stream_response(self, request, season, day, errors):
