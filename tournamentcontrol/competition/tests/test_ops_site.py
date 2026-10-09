@@ -1,11 +1,13 @@
 import datetime
 from zoneinfo import ZoneInfo
 
+from django.test import RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 from freezegun import freeze_time
 from test_plus import TestCase
 
+from tournamentcontrol.competition.ops.fragments import render_counts
 from tournamentcontrol.competition.tests import factories
 
 TZ = ZoneInfo("Australia/Brisbane")
@@ -115,3 +117,36 @@ class DayPageTests(OpsFixture):
         body = b"".join(streamed.streaming_content).decode()
         self.assertIn("event: datastar-patch-elements", body)
         self.assertIn('data: elements <ul id="activity"', body)
+
+    def test_count_ids_are_unique_on_the_page(self):
+        with self.login(self.staff):
+            response = self.get("ops:day", **self.day_kwargs)
+        self.response_200()
+        content = response.content.decode()
+        for name in (
+            "results-count",
+            "results-count-tab",
+            "scorers-count",
+            "scorers-count-tab",
+        ):
+            self.assertEqual(content.count(f'id="{name}"'), 1, name)
+        self.assertResponseContains(
+            '<span id="results-count-tab" class="count">1</span>'
+        )
+
+
+class RenderCountsTests(TestCase):
+    def test_returns_each_count_for_header_and_tab(self):
+        request = RequestFactory().get("/")
+        fragments = render_counts(
+            request, results_pending=2, scorers=["a"], live_count=0
+        )
+        self.assertEqual(
+            [f.strip() for f in fragments],
+            [
+                '<span id="results-count" class="count">2</span>',
+                '<span id="results-count-tab" class="count">2</span>',
+                '<span id="scorers-count" class="count">1</span>',
+                '<span id="scorers-count-tab" class="count">1</span>',
+            ],
+        )
