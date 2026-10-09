@@ -1761,7 +1761,7 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
                 except:  # noqa
                     logger.exception('Receiver "%s" did not complete.', receiver)
 
-        return super(MatchResultForm, self).save(*args, **kwargs)
+        return saved
 
     class Meta:
         model = Match

@@ -2,6 +2,7 @@ import datetime
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth.models import Permission
+from django.db.models.signals import post_save
 from django.urls import reverse
 from django.utils import timezone
 from freezegun import freeze_time
@@ -125,6 +126,17 @@ class SaveScoreTests(ResultsFixture):
         self.addCleanup(score_updated.disconnect, dispatch_uid="test-order")
         self.post_score(self.match, 5, 4)
         self.assertEqual(seen, [5])
+
+    def test_score_post_saves_the_match_once(self):
+        saves = []
+
+        def receiver(sender, instance, **kwargs):
+            saves.append(instance.pk)
+
+        post_save.connect(receiver, sender=Match, weak=False, dispatch_uid="test-once")
+        self.addCleanup(post_save.disconnect, sender=Match, dispatch_uid="test-once")
+        self.post_score(self.match, 5, 4)
+        self.assertEqual(saves, [self.match.pk])
 
     def test_datastar_post_returns_slot_and_count_patches(self):
         response = self.post_score(self.match, 5, 4, datastar=True)
