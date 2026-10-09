@@ -1,0 +1,10 @@
+{% extends "tournamentcontrol/competition/admin/base.html" %}
+{% load i18n %}
+
+{% block content %}
+	<h1>{% trans "Your PDF was not generated" %}</h1>
+
+	<fieldset>
+		<p><a href="{{ start_again }}">{% trans "Start again" %}</a></p>
+	</fieldset>
+{% endblock %}
