@@ -661,12 +661,13 @@ class OpsSite(Application):
         now = timezone.now()
         day = queries.local_today(ground, now)
         previous, current, following = queries.ground_day(ground, day, now)
+        runsheet = list(queries.ground_runsheet(ground, day))
         # The lamp follows the match actually on air, which can be one that
         # has overrun into the next kick-off; the strip follows the schedule.
         broadcast = next(
             (
                 m
-                for m in reversed(list(queries.ground_runsheet(ground, day)))
+                for m in reversed(runsheet)
                 if streams.effective_status(m.live_stream_status) == "live"
             ),
             current,
@@ -676,21 +677,18 @@ class OpsSite(Application):
             if broadcast
             else None
         )
+        armable_match = self._armable_match(runsheet, broadcast, now)
         armable, reason = True, ""
         if status == "live":
             armable, reason = False, "End the current broadcast first."
-        elif following is None:
+        elif armable_match is None:
             armable, reason = False, "No more broadcasts on %s today." % ground.title
-        elif not following.external_identifier:
+        elif not armable_match.external_identifier:
             armable, reason = False, "%s v %s has no YouTube broadcast." % (
-                following.get_home_team_plain(),
-                following.get_away_team_plain(),
+                armable_match.get_home_team_plain(),
+                armable_match.get_away_team_plain(),
             )
-        elif streams.effective_status(following.live_stream_status) in (
-            "testing",
-            "live",
-            "complete",
-        ):
+        elif streams.effective_status(armable_match.live_stream_status) == "testing":
             armable, reason = False, "Already armed."
         return {
             "season": season,
@@ -702,6 +700,7 @@ class OpsSite(Application):
             "current": current,
             "broadcast": broadcast,
             "next": following,
+            "armable_match": armable_match,
             "status": status,
             "armable": armable,
             "arm_reason": reason,
@@ -711,6 +710,37 @@ class OpsSite(Application):
             "user": request.user,
             "errors": [],
         }
+
+    @staticmethod
+    def _armable_match(runsheet, broadcast, now):
+        """
+        The match the booth arms next: the first on the ground from the
+        broadcast on air onwards (kicking off after ``now`` when nothing is
+        on) that is neither live nor complete. The broadcast itself qualifies
+        when it has a YouTube broadcast that has not gone live, as once the
+        overrunning match before it has been ended. A match already testing is
+        returned too, so the booth says it is armed rather than arming the
+        match after it.
+        """
+        if broadcast is not None:
+            position = next(
+                (i for i, m in enumerate(runsheet) if m.pk == broadcast.pk),
+                len(runsheet),
+            )
+            candidates = runsheet[position + 1 :]
+            if broadcast.external_identifier:
+                candidates.insert(0, broadcast)
+        else:
+            candidates = [m for m in runsheet if m.datetime > now]
+        return next(
+            (
+                m
+                for m in candidates
+                if streams.effective_status(m.live_stream_status)
+                not in ("live", "complete")
+            ),
+            None,
+        )
 
     def _booth_match(self, ground, day, match_pk):
         return get_object_or_404(queries.ground_runsheet(ground, day), pk=match_pk)
@@ -747,12 +777,13 @@ class OpsSite(Application):
     @booth_required
     def booth(self, request, season, ground, **kwargs):
         context = self.booth_context(request, season, ground)
-        if context["current"]:
+        # The panes open on the match on air, which can have overrun into the
+        # next kick-off, before the match the schedule says is on.
+        match = context["broadcast"] or context["current"]
+        if match:
             context["pane"] = "sheets"
-            context["pane_match"] = context["current"]
-            context["pane_html"] = self._pane_html(
-                request, context, "sheets", context["current"]
-            )
+            context["pane_match"] = match
+            context["pane_html"] = self._pane_html(request, context, "sheets", match)
         return self.render(request, self.template_path("booth.html"), context)
 
     @booth_view
@@ -802,7 +833,7 @@ class OpsSite(Application):
             # is answered 200 with the reason in the lamp.
             return patches(request, [html], redirect_to=redirect_to)
         error = streams.transition(
-            context["next"], "testing", request.user.get_username()
+            context["armable_match"], "testing", request.user.get_username()
         )
         fragments = self._booth_fragments(
             request, season, ground, ("lamp", "strip"), errors=[error] if error else []

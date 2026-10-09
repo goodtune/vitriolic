@@ -18,7 +18,7 @@
 			{% else %}<button class="bigbtn end" type="button" disabled>ENDED</button>{% endif %}
 		{% endif %}
 		<div class="nocontrol">
-			{% if next %}Next on {{ ground.title }} today: {{ next.time|time:"H:i" }} {{ next.get_home_team_plain }} v {{ next.get_away_team_plain }}{% else %}No more broadcasts on {{ ground.title }} today{% endif %}
+			{% if armable_match %}Next on {{ ground.title }} today: {{ armable_match.time|time:"H:i" }} {{ armable_match.get_home_team_plain }} v {{ armable_match.get_away_team_plain }}{% else %}No more broadcasts on {{ ground.title }} today{% endif %}
 			{% if armable %}{% url 'ops:booth-arm' competition=season.competition.slug season=season.slug ground=ground.slug as arm_url %} · <form class="inline" method="post" action="{{ arm_url }}" data-on:submit="@post('{{ arm_url }}', {contentType: 'form'})">{% csrf_token %}<button class="link" type="submit">arm now</button></form>{% elif arm_reason %} · {{ arm_reason }}{% endif %}
 		</div>
 	</div>

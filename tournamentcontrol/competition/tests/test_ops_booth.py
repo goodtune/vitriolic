@@ -296,6 +296,47 @@ class ArmTests(BoothFixture):
         self.following.refresh_from_db()
         self.assertEqual(self.following.live_stream_status, "testing")
 
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_arm_after_ending_an_overrun_arms_the_scheduled_match(self, build):
+        build.return_value = youtube_mock()
+        with (
+            freeze_time("2026-10-08 11:30 +10:00"),
+            self.login(self.commentator),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            self.client.post(
+                self.url("booth-onair", status="complete"),
+                headers={"Datastar-Request": "true"},
+            )
+            self.get("ops:booth-lamp", **self.kw)
+            self.assertIn(
+                "Next on Field 1 today: 11:20 Fiji v New Zealand",
+                self.last_response.content.decode(),
+            )
+            response = self.client.post(
+                self.url("booth-arm"), headers={"Datastar-Request": "true"}
+            )
+        self.assertEqual(response.status_code, 200)
+        self.current.refresh_from_db()
+        self.following.refresh_from_db()
+        self.assertEqual(self.current.live_stream_status, "complete")
+        self.assertEqual(self.following.live_stream_status, "testing")
+
+    def test_a_match_already_testing_is_not_armed_past(self):
+        self.current.live_stream_status = "complete"
+        self.current.save()
+        self.following.live_stream_status = "testing"
+        self.following.save()
+        later = self.make(12, 0, self.aus, self.fji, external_identifier="yt-later")
+        with self.login(self.commentator):
+            response = self.client.post(
+                self.url("booth-arm"), headers={"Datastar-Request": "true"}
+            )
+        body = b"".join(response.streaming_content).decode()
+        self.assertIn("Already armed.", body)
+        later.refresh_from_db()
+        self.assertIsNone(later.live_stream_status)
+
     def test_arm_without_broadcast_is_a_refusal_not_an_error(self):
         self.current.live_stream_status = "complete"
         self.current.save()
@@ -390,6 +431,24 @@ class PaneTests(BoothFixture):
         with self.login(self.commentator):
             self.get("ops:booth-pane", match_pk=elsewhere.pk, pane="sheets", **self.kw)
             self.response_404()
+
+    def test_tabs_follow_the_match_on_air_when_it_overruns(self):
+        with freeze_time("2026-10-08 11:30 +10:00"), self.login(self.commentator):
+            self.get("ops:booth", **self.kw)
+        body = self.last_response.content.decode()
+        for pane in ("sheets", "results", "ladder", "leaders"):
+            self.assertIn(
+                self.url("booth-pane", match_pk=self.current.pk, pane=pane), body
+            )
+            self.assertNotIn(
+                self.url("booth-pane", match_pk=self.following.pk, pane=pane), body
+            )
+        self.assertIn(self.url("booth-teams", match_pk=self.current.pk), body)
+        self.assertIn(
+            'data-signals__ifmissing="{pane: \'sheets\', match: %d, modal: false}"'
+            % self.current.pk,
+            body,
+        )
 
     def test_runsheet(self):
         with self.login(self.commentator):
