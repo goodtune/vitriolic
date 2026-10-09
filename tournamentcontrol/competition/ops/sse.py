@@ -24,12 +24,6 @@ SSE_HEADERS = {"Content-Type": "text/event-stream; charset=utf-8"}
 KEEPALIVE_LINE = ": ping\n\n"
 
 
-async def authenticate(request):
-    user = await request.auser()
-    request.user = user
-    return user
-
-
 async def get_season(competition, season):
     try:
         return await (
@@ -94,7 +88,9 @@ async def stream(season_id, snapshot, on_event):
 
 def ops_events(site):
     async def view(request, competition, season, datestr):
-        user = await authenticate(request)
+        # The lazy request.user would query the database on first use, which
+        # Django refuses on the event loop; auser() resolves it asynchronously.
+        user = await request.auser()
         if not user.is_authenticated:
             return redirect_to_login(request.get_full_path())
         if not user.is_staff:
@@ -117,7 +113,9 @@ def ops_events(site):
 
 def booth_events(site):
     async def view(request, competition, season, ground):
-        user = await authenticate(request)
+        # The lazy request.user would query the database on first use, which
+        # Django refuses on the event loop; auser() resolves it asynchronously.
+        user = await request.auser()
         if not user.is_authenticated:
             return redirect_to_login(request.get_full_path())
         season = await get_season(competition, season)
