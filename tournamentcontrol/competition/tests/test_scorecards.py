@@ -1,13 +1,19 @@
 import base64
 from datetime import date, datetime, time
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 from zoneinfo import ZoneInfo
 
+from celery import states
+from celery.result import AsyncResult
+from django.test import override_settings
 from django.urls import reverse
 from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
-from tournamentcontrol.competition.tasks import generate_pdf_scorecards
+from tournamentcontrol.competition.tasks import (
+    generate_pdf_grid,
+    generate_pdf_scorecards,
+)
 from tournamentcontrol.competition.tests import factories
 
 FAKE_PDF = b"%PDF-1.4 fake scorecards"
@@ -43,6 +49,11 @@ class ScorecardTestCase(TestCase):
         )
         self.prince = self.patcher.start()
         self.addCleanup(self.patcher.stop)
+
+    def start_patch(self, patcher):
+        mock = patcher.start()
+        self.addCleanup(patcher.stop)
+        return mock
 
     def assertRenderedPdf(self, **kwargs):
         """
@@ -191,35 +202,145 @@ class StageScorecardTests(ScorecardTestCase):
 
 
 class AsyncResultViewTests(ScorecardTestCase):
+    """
+    The polling views read the task state straight from the result backend.
+    They must never build an ``AsyncResult``: when one is ready, or garbage
+    collected, it unsubscribes from the Redis result channel, and if that
+    needs a reconnect redis-py deadlocks on its own pub/sub lock, hanging the
+    request until gunicorn kills the worker.
+    """
+
     url = "admin:fixja:competition:season:scorecards-async"
 
-    def test_ready(self):
-        with patch(
-            "tournamentcontrol.competition.admin.generate_pdf_scorecards.AsyncResult"
-        ) as AsyncResult:
-            AsyncResult.return_value.ready.return_value = True
-            AsyncResult.return_value.wait.return_value = base64.b64encode(
-                FAKE_PDF
-            ).decode("utf8")
-            with self.login(self.superuser):
-                self.get(self.url, self.competition.pk, self.season.pk, "abc-123")
+    def setUp(self):
+        super().setUp()
+        backend = generate_pdf_scorecards.backend
+        self.get_task_meta = self.start_patch(patch.object(backend, "get_task_meta"))
+        self.remove_pending_result = self.start_patch(
+            patch.object(backend, "remove_pending_result")
+        )
+        self.async_result_init = self.start_patch(
+            patch.object(AsyncResult, "__init__", autospec=True, return_value=None)
+        )
+
+    def poll(self, status, result=None):
+        self.get_task_meta.return_value = {"status": status, "result": result}
+        with self.login(self.superuser):
+            self.get(self.url, self.competition.pk, self.season.pk, "abc-123")
+
+    def assertNoAsyncResult(self):
+        self.get_task_meta.assert_called_once_with("abc-123")
+        self.async_result_init.assert_not_called()
+        self.remove_pending_result.assert_not_called()
+
+    def assertWaiting(self):
         self.response_200()
-        AsyncResult.assert_called_once_with("abc-123")
+        self.assertEqual(self.last_response["Refresh"], "5")
+        self.assertResponseContains(
+            "<p>Your scorecards will finish generating shortly.</p>"
+        )
+        self.assertNoAsyncResult()
+
+    def test_ready(self):
+        self.poll(states.SUCCESS, base64.b64encode(FAKE_PDF).decode("utf8"))
+        self.response_200()
         self.assertEqual(self.last_response["Content-Type"], "application/pdf")
         self.assertEqual(self.last_response.content, FAKE_PDF)
+        self.assertNoAsyncResult()
 
     def test_pending(self):
-        with patch(
-            "tournamentcontrol.competition.admin.generate_pdf_scorecards.AsyncResult"
-        ) as AsyncResult:
-            AsyncResult.return_value.ready.return_value = False
-            with self.login(self.superuser):
-                self.get(self.url, self.competition.pk, self.season.pk, "abc-123")
-        self.response_200()
-        self.assertTrue(self.last_response.has_header("Refresh"))
+        self.poll(states.PENDING)
+        self.assertWaiting()
+
+    def test_started(self):
+        self.poll(states.STARTED)
+        self.assertWaiting()
+
+    def test_failure(self):
+        with self.assertRaisesMessage(ValueError, "prince failed"):
+            self.poll(states.FAILURE, ValueError("prince failed"))
+        self.assertNoAsyncResult()
 
     def test_login_required(self):
         self.assertLoginRequired(self.url, self.competition.pk, self.season.pk, "abc")
+        self.get_task_meta.assert_not_called()
+
+
+class GridAsyncResultViewTests(AsyncResultViewTests):
+    url = "admin:fixja:competition:season:grid-async"
+
+
+@override_settings(
+    CELERY_TASK_ALWAYS_EAGER=False, TOURNAMENTCONTROL_ASYNC_PDF_GRID=True
+)
+class QueuePdfTaskTests(ScorecardTestCase):
+    """
+    Queueing a PDF task from a request must not subscribe the web process to
+    the task's Redis result channel (``RedisBackend.on_task_call``), so that
+    nothing in the web process ever needs to unsubscribe from it again.
+
+    Running eagerly skips publishing altogether, so eager mode is turned off
+    and the publish itself is replaced.
+    """
+
+    def setUp(self):
+        super().setUp()
+        app = generate_pdf_scorecards.app
+        self.send_task_message = self.start_patch(
+            patch.object(app.amqp, "send_task_message")
+        )
+        self.on_task_call = self.start_patch(patch.object(app.backend, "on_task_call"))
+
+    def assertQueuedWithoutSubscribing(self, task):
+        self.response_302()
+        self.send_task_message.assert_called_once()
+        self.assertEqual(self.send_task_message.call_args.args[1], task.name)
+        self.on_task_call.assert_not_called()
+
+    def test_scorecards(self):
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:scorecards",
+                self.competition.pk,
+                self.season.pk,
+                "20170213",
+                "pdf",
+            )
+        self.assertRedirectsToAsyncResult()
+        self.assertQueuedWithoutSubscribing(generate_pdf_scorecards)
+
+    def test_scorecard_report_wizard(self):
+        with self.login(self.superuser):
+            self.get("admin:fixja:scorecard-report")
+            self.response_200()
+            self.post(
+                "admin:fixja:scorecard-report",
+                data={
+                    "scorecard_wizard-current_step": "0",
+                    "0-season": self.season.pk,
+                },
+            )
+            self.response_200()
+            self.post(
+                "admin:fixja:scorecard-report",
+                data={
+                    "scorecard_wizard-current_step": "1",
+                    "1-template": "scorecards.html",
+                    "1-format": "pdf",
+                },
+            )
+        self.assertRedirectsToAsyncResult()
+        self.assertQueuedWithoutSubscribing(generate_pdf_scorecards)
+
+    def test_season_grid(self):
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:competition:season:match-grid",
+                self.competition.pk,
+                self.season.pk,
+                "pdf",
+            )
+        self.assertQueuedWithoutSubscribing(generate_pdf_grid)
 
 
 class GeneratePdfScorecardsTaskTests(ScorecardTestCase):
@@ -276,6 +397,43 @@ class GeneratePdfScorecardsTaskTests(ScorecardTestCase):
         )
         self.assertEqual(base64.b64decode(result.get()), FAKE_PDF)
         self.assertRenderedPdf()
+
+    def test_stores_result(self):
+        """
+        The task is queued with ``ignore_result=True``, so it stores its own
+        result for the admin to poll. ``apply_async`` runs eagerly here but
+        carries the same options as a queued message.
+        """
+        with patch.object(generate_pdf_scorecards.backend, "store_result") as store:
+            generate_pdf_scorecards.apply_async(
+                ([m.pk for m in self.matches], self.templates, {}),
+                task_id="abc-123",
+            )
+        store.assert_called_once_with(
+            "abc-123",
+            base64.b64encode(FAKE_PDF).decode("utf8"),
+            states.SUCCESS,
+            request=ANY,
+        )
+
+    @override_settings(CELERY_TASK_EAGER_PROPAGATES=False)
+    def test_stores_failure(self):
+        """
+        A worker does not propagate the exception, it stores it as the result
+        so the admin can raise it.
+        """
+        self.prince.side_effect = ValueError("prince failed")
+        with patch.object(generate_pdf_scorecards.backend, "store_result") as store:
+            result = generate_pdf_scorecards.apply_async(
+                ([m.pk for m in self.matches], self.templates, {}),
+                task_id="abc-123",
+            )
+        self.assertEqual(result.state, states.FAILURE)
+        store.assert_called_once()
+        task_id, exc, state = store.call_args.args
+        self.assertEqual(task_id, "abc-123")
+        self.assertEqual(str(exc), "prince failed")
+        self.assertEqual(state, states.FAILURE)
 
 
 class ScorecardReportWizardTests(ScorecardTestCase):

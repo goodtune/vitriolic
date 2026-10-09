@@ -5,6 +5,7 @@ import logging
 import operator
 from zoneinfo import ZoneInfo
 
+from celery import states
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
@@ -2269,10 +2270,16 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def grid_async(self, request, result_id, extra_context, **kwargs):
-        result = generate_pdf_grid.AsyncResult(result_id)
+        # Read the state straight from the result backend: an AsyncResult
+        # unsubscribes from the Redis result channel when it is ready or
+        # garbage collected, which can deadlock the request (PdfResultTask).
+        meta = generate_pdf_grid.backend.get_task_meta(result_id)
 
-        if result.ready():
-            data = result.wait()
+        if meta["status"] in states.PROPAGATE_STATES:
+            raise meta["result"]
+
+        if meta["status"] == states.SUCCESS:
+            data = meta["result"]
             return HttpResponse(base64.b64decode(data), content_type="application/pdf")
 
         templates = self.template_path("wait.html", "scorecards")
@@ -2838,10 +2845,16 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def scorecards_async(self, request, result_id, extra_context, **kwargs):
-        result = generate_pdf_scorecards.AsyncResult(result_id)
+        # Read the state straight from the result backend: an AsyncResult
+        # unsubscribes from the Redis result channel when it is ready or
+        # garbage collected, which can deadlock the request (PdfResultTask).
+        meta = generate_pdf_scorecards.backend.get_task_meta(result_id)
 
-        if result.ready():
-            data = result.wait()
+        if meta["status"] in states.PROPAGATE_STATES:
+            raise meta["result"]
+
+        if meta["status"] == states.SUCCESS:
+            data = meta["result"]
             return HttpResponse(base64.b64decode(data), content_type="application/pdf")
 
         templates = self.template_path("wait.html", "scorecards")
