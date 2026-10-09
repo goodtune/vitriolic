@@ -2,6 +2,7 @@ import base64
 import logging
 from zoneinfo import ZoneInfo
 
+import requests
 from celery import shared_task
 from dateutil.relativedelta import relativedelta
 from django.core.exceptions import ObjectDoesNotExist
@@ -32,6 +33,12 @@ logger = logging.getLogger(__name__)
 # trailing buffer; tighten or widen here if competitions need a different
 # default. Per-season overrides would belong on the Season model.
 LIVE_STREAM_DURATION_MINUTES = 50
+
+# The remote PDF service occasionally times out or answers with a 5xx. Retry
+# those renders a couple of times, waiting PDF_RENDER_RETRY_DELAY seconds
+# before the first retry and doubling the wait for each one after it.
+PDF_RENDER_MAX_RETRIES = 2
+PDF_RENDER_RETRY_DELAY = 3
 
 
 class _ShortTitle:
@@ -635,9 +642,29 @@ def delete_youtube_stream(season_pk, external_identifier):
         raise
 
 
-@shared_task
+def _is_transient_pdf_error(exc):
+    """
+    A timeout, a connection error or a 5xx from the PDF service is worth
+    retrying; a 4xx or anything else will fail the same way again.
+    """
+    if isinstance(exc, (requests.Timeout, requests.ConnectionError)):
+        return True
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        return exc.response.status_code >= 500
+    return False
+
+
+def _retry_transient_pdf_error(task, exc):
+    if not _is_transient_pdf_error(exc):
+        raise exc
+    countdown = PDF_RENDER_RETRY_DELAY * 2**task.request.retries
+    logger.warning("PDF service failed (%s), retrying in %ss.", exc, countdown)
+    raise task.retry(exc=exc, countdown=countdown)
+
+
+@shared_task(bind=True, max_retries=PDF_RENDER_MAX_RETRIES)
 def generate_pdf_scorecards(
-    match_pks, templates, extra_context, stage_pk=None, season_pk=None, **kwargs
+    self, match_pks, templates, extra_context, stage_pk=None, season_pk=None, **kwargs
 ):
     """
     Render scorecards for the given matches to PDF.
@@ -663,24 +690,30 @@ def generate_pdf_scorecards(
     if season is not None:
         extra_context["season"] = season
         extra_context["competition"] = season.competition
-    data = generate_scorecards(
-        matches, templates, "pdf", extra_context, stage, **kwargs
-    )
+    try:
+        data = generate_scorecards(
+            matches, templates, "pdf", extra_context, stage, **kwargs
+        )
+    except requests.RequestException as exc:
+        _retry_transient_pdf_error(self, exc)
     # We can't JSON encode bytes, so we need to base64 encode the
     # PDF document before handing it back to the result backend.
     return base64.b64encode(data).decode("utf8")
 
 
-@shared_task
-def generate_pdf_grid(season, extra_context, date=None):
+@shared_task(bind=True, max_retries=PDF_RENDER_MAX_RETRIES)
+def generate_pdf_grid(self, season, extra_context, date=None):
     dates = [date] if date is not None else None
-    data: bytes = generate_fixture_grid(
-        season,
-        dates=dates,
-        format="pdf",
-        extra_context=extra_context,
-        http_response=False,  # Get bytes back, not a response object
-    )
+    try:
+        data: bytes = generate_fixture_grid(
+            season,
+            dates=dates,
+            format="pdf",
+            extra_context=extra_context,
+            http_response=False,  # Get bytes back, not a response object
+        )
+    except requests.RequestException as exc:
+        _retry_transient_pdf_error(self, exc)
     # We can't JSON encode bytes, so we need to base64 encode the
     # PDF document before handing it back to the result backend.
     return base64.b64encode(data).decode("utf8")
