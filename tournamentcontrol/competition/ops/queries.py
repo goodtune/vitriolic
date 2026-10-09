@@ -146,23 +146,6 @@ def out_of_balance(match):
     )
 
 
-def _tzinfo(ground):
-    return (
-        ground.timezone
-        or ground.venue.timezone
-        or ground.venue.season.timezone
-        or timezone.get_current_timezone()
-    )
-
-
-def local_today(place_or_season, now):
-    if isinstance(place_or_season, Ground):
-        tzinfo = _tzinfo(place_or_season)
-    else:
-        tzinfo = place_or_season.timezone or timezone.get_current_timezone()
-    return timezone.localtime(now, tzinfo).date()
-
-
 def _ground_matches(ground, day):
     return (
         Match.objects.filter(play_at=ground, date=day, is_bye=False)
@@ -192,7 +175,7 @@ def day_streams(season, day, now):
         _, current, following = ground_day(ground, day, now)
         streams.append(GroundStreams(ground, current, following))
     start = timezone.make_aware(
-        datetime.datetime.combine(day, datetime.time.min), season.timezone
+        datetime.datetime.combine(day, datetime.time.min), season.get_tzinfo()
     )
     end = start + datetime.timedelta(days=1)
     events = LiveStreamEvent.objects.filter(

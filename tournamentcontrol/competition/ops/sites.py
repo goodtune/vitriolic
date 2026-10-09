@@ -399,7 +399,7 @@ class OpsSite(Application):
         )
 
     def _today_url(self, season):
-        today = queries.local_today(season, timezone.now())
+        today = season.local_date()
         return reverse("ops:day", kwargs=day_kwargs(season, today))
 
     @staff_required
@@ -757,7 +757,7 @@ class OpsSite(Application):
 
     def booth_context(self, request, season, ground):
         now = timezone.now()
-        day = queries.local_today(ground, now)
+        day = ground.local_date(now)
         previous, current, following = queries.ground_day(ground, day, now)
         runsheet = list(queries.ground_runsheet(ground, day))
         # The lamp follows the match actually on air, which can be one that
@@ -804,7 +804,7 @@ class OpsSite(Application):
             "arm_reason": reason,
             "can_stream": True,
             "panes": PANE_LABELS,
-            "tzinfo": queries._tzinfo(ground),
+            "tzinfo": ground.get_tzinfo(),
             "user": request.user,
             "errors": [],
         }

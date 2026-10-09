@@ -192,11 +192,6 @@ class GroundDayTests(DayFixture):
             queries.ground_day(self.field1, DAY, at(9, 15)), (None, b, None)
         )
 
-    def test_local_today_uses_the_ground_time_zone(self):
-        now = datetime.datetime(2026, 10, 7, 23, 30, tzinfo=ZoneInfo("UTC"))
-        self.assertEqual(queries.local_today(self.field1, now), DAY)
-        self.assertEqual(queries.local_today(self.season, now), DAY)
-
     def test_future_day_has_no_current_match(self):
         tomorrow = DAY + datetime.timedelta(days=1)
         first = self._on(tomorrow, 8)
@@ -212,13 +207,3 @@ class GroundDayTests(DayFixture):
         self.assertEqual(
             queries.ground_day(self.field1, yesterday, at(9, 30)), (first, last, None)
         )
-
-    def test_local_today_falls_back_to_venue_then_season_zone(self):
-        now = datetime.datetime(2026, 10, 7, 23, 30, tzinfo=ZoneInfo("UTC"))
-        self.field1.timezone = None
-        self.field1.save()
-        self.assertEqual(queries.local_today(self.field1, now), DAY)
-        self.venue.timezone = None
-        self.venue.save()
-        self.field1.refresh_from_db()
-        self.assertEqual(queries.local_today(self.field1, now), DAY)

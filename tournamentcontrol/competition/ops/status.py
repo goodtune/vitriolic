@@ -9,7 +9,7 @@ import logging
 from django.utils import timezone
 
 from tournamentcontrol.competition.models import LiveStreamEvent, Match
-from tournamentcontrol.competition.ops import queries, streams
+from tournamentcontrol.competition.ops import streams
 
 logger = logging.getLogger(__name__)
 
@@ -17,12 +17,12 @@ BATCH = 50
 
 
 def broadcasts_today(season, now):
-    day = queries.local_today(season, now)
+    day = season.local_date(now)
     matches = Match.objects.filter(
         stage__division__season=season, date=day, external_identifier__isnull=False
     ).select_related("stage__division__season", "play_at", "home_team", "away_team")
     start = timezone.make_aware(
-        datetime.datetime.combine(day, datetime.time.min), season.timezone
+        datetime.datetime.combine(day, datetime.time.min), season.get_tzinfo()
     )
     live_events = LiveStreamEvent.objects.filter(
         season=season, start__gte=start, start__lt=start + datetime.timedelta(days=1)

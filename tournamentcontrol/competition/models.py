@@ -719,6 +719,14 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
     def dates(self):
         return [dt.date() for dt in self.datetimes]
 
+    def get_tzinfo(self):
+        """The season's time zone, else the current time zone."""
+        return self.timezone or timezone.get_current_timezone()
+
+    def local_date(self, now=None):
+        """The date at ``now`` (default: the present) in the season's time zone."""
+        return timezone.localtime(now or timezone.now(), self.get_tzinfo()).date()
+
     @property
     def matches(self):
         return Match.objects.filter(stage__division__season=self).select_related(
@@ -818,6 +826,14 @@ class Place(AdminUrlMixin, OrderedSitemapNode):
     def zoom(self):
         return self.location and self.location[2]
 
+    def get_tzinfo(self):
+        """The place's time zone, else the current time zone."""
+        return self.timezone or timezone.get_current_timezone()
+
+    def local_date(self, now=None):
+        """The date at ``now`` (default: the present) in the place's time zone."""
+        return timezone.localtime(now or timezone.now(), self.get_tzinfo()).date()
+
 
 class Venue(Place):
     """
@@ -827,6 +843,10 @@ class Venue(Place):
     """
 
     season = ForeignKey(Season, related_name="venues", on_delete=PROTECT)
+
+    def get_tzinfo(self):
+        """The venue's time zone, else the season's, else the current one."""
+        return self.timezone or self.season.get_tzinfo()
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:venue"
@@ -849,6 +869,10 @@ class Ground(Place):
     stream_key = models.CharField(
         max_length=50, blank=True, null=True, unique=True, db_index=True
     )
+
+    def get_tzinfo(self):
+        """The ground's time zone, else the venue's, season's or current one."""
+        return self.timezone or self.venue.get_tzinfo()
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:venue:ground"
