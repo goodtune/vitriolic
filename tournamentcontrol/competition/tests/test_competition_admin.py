@@ -7,12 +7,15 @@ from zoneinfo import ZoneInfo
 from dateutil.rrule import DAILY
 from django.contrib import messages
 from django.contrib.messages.test import MessagesTestMixin
+from django.db import connection
 from django.template import Context, Template
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from guardian.shortcuts import assign_perm
 from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.common.tests.factories import UserFactory
+from tournamentcontrol.competition.dashboard import MostValuableWidget
 from tournamentcontrol.competition.draw.schemas import (
     DivisionStructure,
     StageFixture,
@@ -3600,3 +3603,113 @@ class DashboardQueryTests(TestCase):
     def test_many_stages_query_count(self):
         self._stages(8)
         self.get_dashboard(test_query_count=13)
+
+
+class MostValuableWidgetTests(TestCase):
+    """
+    The "Awaiting MVP Points" widget lists the matches where a team's
+    players have statistics but no MVP points. Each row it listed looked up
+    its teams, clubs, stage, division, season and competition on its own, so
+    the dashboard made more queries the more seasons were waiting. The same
+    query budget now holds however many seasons and matches are listed.
+    """
+
+    def _season(self, matches=2, divisions=2, **kwargs):
+        season = factories.SeasonFactory.create(**kwargs)
+        listed = []
+        for _ in range(divisions):
+            stage = factories.StageFactory.create(division__season=season)
+            for _ in range(matches):
+                listed.append(self._match(stage, home_mvp=0, away_mvp=1))
+        return listed
+
+    def _match(self, stage, home_mvp, away_mvp):
+        match = factories.MatchFactory.create(
+            stage=stage, home_team_score=3, away_team_score=1
+        )
+        for team, mvp in ((match.home_team, home_mvp), (match.away_team, away_mvp)):
+            association = factories.TeamAssociationFactory.create(
+                team=team, person__club=team.club, is_player=True
+            )
+            SimpleScoreMatchStatistic.objects.create(
+                match=match,
+                player=association.person,
+                number=1,
+                played=1,
+                points=0,
+                mvp=mvp,
+            )
+        return match
+
+    def get_dashboard(self, **kwargs):
+        with self.login(self.superuser):
+            self.assertGoodView("admin:index", **kwargs)
+
+    def dashboard_queries(self):
+        with self.login(self.superuser):
+            with CaptureQueriesContext(connection) as queries:
+                self.get("admin:index")
+            self.response_200()
+        return len(queries)
+
+    def test_few_seasons_query_count(self):
+        self._season()
+        self.get_dashboard(test_query_count=14)
+
+    def test_many_seasons_query_count(self):
+        for _ in range(6):
+            self._season(matches=4)
+        self.get_dashboard(test_query_count=14)
+
+    def test_query_count_does_not_grow(self):
+        self._season()
+        few = self.dashboard_queries()
+        for _ in range(5):
+            self._season(matches=4)
+        self.assertEqual(self.dashboard_queries(), few)
+
+    def test_matches_listed(self):
+        listed = self._season(matches=1, divisions=1)
+        # A completed season whose MVP results have no publish time is
+        # still listed, as it always has been.
+        listed += self._season(
+            matches=1, divisions=1, complete=True, mvp_results_public=None
+        )
+        # A completed season whose MVP results have a publish time is not.
+        self._season(
+            matches=1,
+            divisions=1,
+            complete=True,
+            mvp_results_public=datetime(2020, 1, 1, tzinfo=ZoneInfo("UTC")),
+        )
+        # Nor is a stage that does not keep MVP points, a match where both
+        # teams have MVP points, or one where none were entered at all.
+        season = factories.SeasonFactory.create()
+        self._match(
+            factories.StageFactory.create(division__season=season, keep_mvp=False),
+            home_mvp=0,
+            away_mvp=0,
+        )
+        stage = factories.StageFactory.create(division__season=season)
+        self._match(stage, home_mvp=1, away_mvp=2)
+        self._match(stage, home_mvp=None, away_mvp=None)
+
+        self.assertCountEqual(
+            [match.pk for match in MostValuableWidget().matches],
+            [match.pk for match in listed],
+        )
+
+    def test_listed_match_links_to_match(self):
+        (match,) = self._season(matches=1, divisions=1)
+        self.get_dashboard()
+        url = reverse(
+            "admin:fixja:competition:season:division:stage:match:detail",
+            args=(
+                match.stage.division.season.competition_id,
+                match.stage.division.season_id,
+                match.stage.division_id,
+                match.stage_id,
+                match.pk,
+            ),
+        )
+        self.assertResponseContains(f'<a href="{url}">Edit</a>')
