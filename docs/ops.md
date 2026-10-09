@@ -27,10 +27,13 @@ refusal that used an error status would never reach the page.
 | Page or action | Needs |
 | --- | --- |
 | Ops dashboard pages | login and `is_staff` |
-| Enter or edit a result | `competition.change_match` on the match (guardian object or global) |
-| Enter scorers | `competition.add_simplescorematchstatistic` and `change_simplescorematchstatistic` |
-| Start, test or stop a broadcast; whole-slot actions | `competition.stream_season` on the season |
+| Enter or edit a result | `is_staff` and `competition.change_match` on the match (guardian object or global) |
+| Enter scorers | `is_staff`, `competition.add_simplescorematchstatistic` and `change_simplescorematchstatistic` |
+| Start, test or stop a broadcast; whole-slot actions | `is_staff` and `competition.stream_season` on the season |
 | The booth | login and `competition.stream_season` on the season; staff status is not needed |
+
+Every dashboard action is part of the dashboard, so it needs `is_staff`
+as well as its own permission. Only the booth works without staff status.
 
 Grant a commentator pair one object permission on the season:
 
@@ -43,7 +46,7 @@ assign_perm("competition.stream_season", user, season)
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `OPS_EVENTS_BACKEND` | `"memory"` | `"memory"` works for one server process only; use `"redis"` with more than one worker |
+| `OPS_EVENTS_BACKEND` | `"memory"` | `"memory"` works for one server process only; use `"redis"` with more than one worker or with the Celery refresh task |
 | `OPS_EVENTS_REDIS_URL` | `None` | required with the Redis backend |
 | `OPS_EVENTS_KEEPALIVE` | `20` | seconds between SSE keep-alive comments |
 | `OPS_ACTIVITY_LENGTH` | `50` | events kept for the activity feed |
@@ -91,8 +94,18 @@ CELERY_BEAT_SCHEDULE = {
 }
 ```
 
-The refresh task isolates each season, so one season's expired credentials
-do not stop the others.
+The task checks each season with `live_stream=True` that has matches
+dated from yesterday to tomorrow (by the UTC date). For each such season,
+it checks the match broadcasts and season events dated today in the
+season's time zone.
+
+The task isolates each season, so one season's expired credentials do not
+stop the others.
+
+The task runs in a Celery worker, which is a different process from the web
+server. The `memory` backend cannot send events from one process to
+another, so the pages do not see the changes that the task finds. Use the
+`redis` backend when you schedule the task.
 
 ## Tests
 

@@ -99,7 +99,7 @@ competition = [
 ]
 ops = [
     "datastar-py>=1.0.3",
-    "redis>=5",
+    "redis>=5.0.1",
 ]
 # Deprecated optional dependencies
 redis = []
