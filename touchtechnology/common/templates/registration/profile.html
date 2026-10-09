@@ -1,6 +1,7 @@
 {% extends "registration/base.html" %}
 {% load i18n %}
 {% load common %}
+{% load static %}
 
 {% block content %}
 	{% block heading %}
@@ -37,7 +38,8 @@
 						</a>
 
 						{% block logout-button %}
-							<a class="btn btn-default" role="button" href="{% url 'accounts:logout' %}">
+							{# LogoutView only accepts POST since Django 5.0; logout.js posts this link. #}
+							<a class="btn btn-default" role="button" href="{% url 'accounts:logout' %}" data-logout="{{ csrf_token }}">
 								<i class="fa fa-sign-out"></i>
 								{% trans "Logout" %}
 							</a>
@@ -45,6 +47,8 @@
 					{% endblock %}
 				</div>
 			</form>
+
+			<script src="{% static 'touchtechnology/common/js/logout.js' %}"></script>
 		{% endblock %}
 	{% endblock %}
 
