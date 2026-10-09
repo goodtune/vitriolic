@@ -451,15 +451,28 @@ class OpsSite(Application):
         }
 
     def slot_patches(self, request, season, day, match):
-        """Every fragment a change to ``match`` can alter, re-rendered."""
+        """
+        Every fragment a change to ``match`` can alter, re-rendered: its row
+        and its slot's header, not the whole slot, so a score being typed
+        into another row of the slot survives the push.
+        """
         context = self.day_context(request, season, day)
-        slot = next(
-            (s for s in context["slots"] if any(m.pk == match.pk for m in s.matches)),
-            None,
+        slot, fresh = next(
+            (
+                (s, m)
+                for s in context["slots"]
+                for m in s.matches
+                if m.pk == match.pk
+            ),
+            (None, None),
         )
         fragments = []
         if slot is not None:
-            fragments.append(render_fragment(request, "slot", slot=slot, **context))
+            row = self._row_context(request, season, day, fresh, fresh.ops_form)
+            fragments.append(render_fragment(request, "match_row", **row))
+            fragments.append(
+                render_fragment(request, "slot_header", slot=slot, **context)
+            )
         fragments.extend(render_counts(request, **context))
         fragments.append(render_fragment(request, "scorers", **context))
         fragments.append(render_fragment(request, "activity", **context))

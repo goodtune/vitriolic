@@ -182,7 +182,9 @@ class OpsEventsTests(SseFixture, TestCase):
                 adjusted=False,
             )
             pushed = "".join(await reader.until(LAST_ACTIVITY))
-            self.assertIn('data: elements <div id="slot-0800"', pushed)
+            self.assertIn('data: elements <div id="match-%d"' % self.match.pk, pushed)
+            self.assertIn('data: elements <div id="slot-0800-h"', pushed)
+            self.assertNotIn('data: elements <div id="slot-0800" class="slot"', pushed)
             self.assertIn('data: elements <span id="results-count"', pushed)
             self.assertIn('data: elements <ul id="activity"', pushed)
         finally:
@@ -227,7 +229,7 @@ class OpsEventsTests(SseFixture, TestCase):
                 self.season.pk, "stream-changed", summary="x", kind="match", id=1
             )
             pushed = "".join(await reader.until(LAST_COUNT))
-            self.assertNotIn('id="slot-0800"', pushed)
+            self.assertNotIn('id="slot-0800-h"', pushed)
             self.assertIn('data: elements <div id="streams"', pushed)
         finally:
             await reader.close()
@@ -260,7 +262,7 @@ class OpsEventsTests(SseFixture, TestCase):
                     pushed = "".join(await reader.until(LAST_COUNT))
             self.assertEqual(patched.call_count, 2)
             self.assertIn('data: elements <div id="streams"', pushed)
-            self.assertNotIn('id="slot-0800"', pushed)
+            self.assertNotIn('id="slot-0800-h"', pushed)
         finally:
             await reader.close()
 
@@ -297,7 +299,8 @@ class OpsEventsTests(SseFixture, TestCase):
             )
             for reader in (first, second):
                 pushed = "".join(await reader.until(LAST_ACTIVITY))
-                self.assertIn('id="slot-0800"', pushed)
+                self.assertIn('id="match-%d"' % self.match.pk, pushed)
+                self.assertIn('id="slot-0800-h"', pushed)
         finally:
             await first.close()
             await second.close()

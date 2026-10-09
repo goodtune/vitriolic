@@ -138,15 +138,24 @@ class SaveScoreTests(ResultsFixture):
         self.post_score(self.match, 5, 4)
         self.assertEqual(saves, [self.match.pk])
 
-    def test_datastar_post_returns_slot_and_count_patches(self):
+    def test_datastar_post_returns_row_header_and_count_patches(self):
         response = self.post_score(self.match, 5, 4, datastar=True)
         self.assertEqual(response.status_code, 200)
         body = b"".join(response.streaming_content).decode()
-        self.assertIn('data: elements <div id="slot-0800"', body)
+        self.assertIn('data: elements <div id="match-%d"' % self.match.pk, body)
+        self.assertIn('data: elements <div id="slot-0800-h"', body)
+        self.assertNotIn('data: elements <div id="slot-0800" class="slot"', body)
         self.assertIn(
             'data: elements <span id="results-count" class="count zero">0</span>', body
         )
         self.assertIn('data: elements <ul id="activity"', body)
+
+    def test_datastar_post_leaves_the_other_rows_of_the_slot_alone(self):
+        pending = self.make(8)
+        response = self.post_score(self.match, 5, 4, datastar=True)
+        body = b"".join(response.streaming_content).decode()
+        self.assertNotIn('id="match-%d"' % pending.pk, body)
+        self.assertIn('<span class="when">1 of 2 entered</span>', body)
 
     def test_missing_away_score_re_renders_errors(self):
         response = self.post_score(self.match, 5, "", datastar=True)
