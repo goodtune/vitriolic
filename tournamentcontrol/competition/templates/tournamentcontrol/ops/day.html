@@ -12,7 +12,7 @@
 	<span class="who">{{ user.get_username }}</span>
 </header>
 {% include "tournamentcontrol/ops/fragments/main.html" %}
-<div id="modal" class="overlay" data-show="$modal" data-on:click="evt.target === el && ($modal = false)" data-on:keydown__window="evt.key === 'Escape' && ($modal = false)">
+<div id="modal" class="overlay" style="display:none" data-show="$modal" data-on:click="evt.target === el && ($modal = false)" data-on:keydown__window="evt.key === 'Escape' && ($modal = false)">
 	<div id="modal-body" class="modal"></div>
 </div>
 {% endtimezone %}

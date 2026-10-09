@@ -54,10 +54,26 @@ def tournament(transactional_db):
         external_identifier="yt-1",
         live_stream_status="live",
     )
+    field2 = GroundFactory.create(
+        venue=venue, title="Field 2", slug="field-2", slug_locked=True
+    )
+    scored_kickoff = timezone.make_aware(
+        datetime.datetime.combine(today, datetime.time(9)), TZ
+    )
+    scored = MatchFactory.create(
+        stage=stage,
+        datetime=scored_kickoff,
+        date=today,
+        time=scored_kickoff.time(),
+        play_at=field2,
+        home_team_score=1,
+        away_team_score=0,
+    )
     return {
         "season": season,
         "ground": field1,
         "match": match,
+        "scored": scored,
         "day_path": f"/ops/pacific-cup/pc26/{today:%Y%m%d}/",
         "booth_path": "/ops/pacific-cup/pc26/booth/field-1/",
     }
@@ -134,6 +150,30 @@ def test_booth_opens_its_event_stream_once(ops_page, asgi_live_server, tournamen
         expect(ops_page.locator("#lamp")).to_have_text("ON AIR")
         ops_page.wait_for_timeout(2000)
     assert 1 <= len(requests) <= 2, requests
+
+
+def test_scorers_modal_opens_and_closes(ops_page, asgi_live_server, tournament):
+    ops_page.goto(asgi_live_server.url + tournament["day_path"])
+    expect(ops_page.locator("#modal")).to_be_hidden()
+    ops_page.locator(
+        f"#scorers-{tournament['scored'].pk} a", has_text="Enter scorers"
+    ).click()
+    expect(ops_page.locator("#modal")).to_be_visible()
+    expect(ops_page.locator("#modal-body h3")).to_contain_text("1 – 0")
+    ops_page.locator("#modal-body button", has_text="Close").click()
+    expect(ops_page.locator("#modal")).to_be_hidden()
+
+
+def test_booth_teams_picker_opens_and_closes(ops_page, asgi_live_server, tournament):
+    with mock.patch(
+        "tournamentcontrol.competition.models.build", return_value=youtube_mock("live")
+    ):
+        ops_page.goto(asgi_live_server.url + tournament["booth_path"])
+        expect(ops_page.locator("#modal")).to_be_hidden()
+        ops_page.locator("button.teamsbtn").click()
+        expect(ops_page.locator("#modal")).to_be_visible()
+        ops_page.locator("#modal-body button", has_text="Close").click()
+        expect(ops_page.locator("#modal")).to_be_hidden()
 
 
 def test_collapsed_layout_puts_scorers_behind_a_tab(
