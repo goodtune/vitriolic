@@ -1,0 +1,41 @@
+{% load ops_tags %}
+<div id="modal-body" class="modal" data-signals="{home_total: {{ formsets.0.score }}, away_total: {{ formsets.1.score }}}">
+	<div class="modal-h">
+		<h3>{{ match.get_home_team_plain }} {{ match.home_team_score }} – {{ match.away_team_score }} {{ match.get_away_team_plain }}</h3>
+		<span class="sub">{{ match.stage.division.title }} · {{ match.time|time:"H:i" }} {{ match.play_at.title }}</span>
+		<button class="btn x" type="button" data-on:click="el.closest('.modal').classList.toggle('full')">Full screen</button>
+		<button class="btn" type="button" data-on:click="$modal = false">Close</button>
+	</div>
+	<form method="post" action="{% ops_url 'match-scorers' match_pk=match.pk %}" data-on:submit="@post('{% ops_url 'match-scorers' match_pk=match.pk %}', {contentType: 'form'})" data-on:input="$home_total = [...el.querySelectorAll('input[data-side=home]')].reduce((s, i) => s + (+i.value || 0), 0); $away_total = [...el.querySelectorAll('input[data-side=away]')].reduce((s, i) => s + (+i.value || 0), 0)">
+		{% csrf_token %}
+		<div class="modal-b">
+			<div class="cols">
+				{% for formset in formsets %}
+					{{ formset.management_form }}
+					<div>
+						<h4>{{ formset.queryset.team.title }} <span class="tot" data-class:bad="${{ forloop.first|yesno:'home,away' }}_total != {{ formset.score }}"><span data-text="${{ forloop.first|yesno:'home,away' }}_total">{{ formset.score }}</span> / {{ formset.score }} allocated</span></h4>
+						{% if formset.non_form_errors %}<ul class="errorlist">{% for error in formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+						<table class="st">
+							<tr><th>#</th><th>Player</th><th>Played</th><th>Points</th><th>MVP</th></tr>
+							{% for form in formset %}
+								<tr{% if form.errors %} class="error"{% endif %}>
+									<td>{{ form.number }}</td>
+									<td>{{ form.instance.player.first_name }} {{ form.instance.player.last_name }}{% if form.errors %}<ul class="errorlist">{% for field, errors in form.errors.items %}{% for error in errors %}<li>{{ error }}</li>{% endfor %}{% endfor %}</ul>{% endif %}</td>
+									<td>{{ form.played }}</td>
+									<td>{{ form.points }}</td>
+									<td>{{ form.mvp }}</td>
+								</tr>
+							{% endfor %}
+						</table>
+					</div>
+				{% endfor %}
+			</div>
+		</div>
+		<div class="modal-f">
+			<span class="sub">Points must sum to each team's score.</span>
+			<span class="spacer"></span>
+			<button class="btn" type="button" data-on:click="$modal = false">Cancel</button>
+			<button class="btn p" type="submit">Save scorers</button>
+		</div>
+	</form>
+</div>

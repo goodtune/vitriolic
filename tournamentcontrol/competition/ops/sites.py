@@ -18,8 +18,8 @@ from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 
 from touchtechnology.common.sites import Application
-from tournamentcontrol.competition.forms import MatchResultForm
-from tournamentcontrol.competition.models import Season
+from tournamentcontrol.competition.forms import MatchResultForm, MatchStatisticFormset
+from tournamentcontrol.competition.models import Season, SimpleScoreMatchStatistic
 from tournamentcontrol.competition.ops import events, queries, receivers
 from tournamentcontrol.competition.ops.fragments import (
     render_counts,
@@ -27,14 +27,17 @@ from tournamentcontrol.competition.ops.fragments import (
 )
 from tournamentcontrol.competition.ops.permissions import (
     can_change_match,
+    can_enter_statistics,
     can_stream,
     require,
     staff_required,
 )
 from tournamentcontrol.competition.ops.responses import (
     fragment_response,
+    is_datastar,
     patches,
 )
+from tournamentcontrol.competition.utils import FauxQueryset
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +139,11 @@ class OpsSite(Application):
                 self.match_result_edit,
                 name="match-result-edit",
             ),
+            path(
+                "scorers/match/<int:match_pk>/",
+                self.match_scorers,
+                name="match-scorers",
+            ),
             # Placeholder so the day page can reverse its event stream; the
             # SSE task replaces it with the long-lived stream view.
             path("events/", self.events, name="events"),
@@ -174,6 +182,7 @@ class OpsSite(Application):
             "activity": events.recent(season.pk),
             "collapsed": request.session.get("ops_collapsed", False),
             "can_stream": can_stream(request.user, season),
+            "can_statistics": can_enter_statistics(request.user),
             "user": request.user,
         }
 
@@ -346,3 +355,85 @@ class OpsSite(Application):
             **self._row_context(request, season, day, match, form),
         )
         return patches(request, [html], redirect_to=redirect_to)
+
+    # --- scorers ----------------------------------------------------
+
+    def statistic_formsets(self, request, match, data=None):
+        def roster(team):
+            stats = FauxQueryset(SimpleScoreMatchStatistic, team=team)
+            for player in team.people.filter(is_player=True).select_related("person"):
+                try:
+                    statistic = SimpleScoreMatchStatistic.objects.get(
+                        match=match, player=player.person
+                    )
+                except SimpleScoreMatchStatistic.DoesNotExist:
+                    statistic = SimpleScoreMatchStatistic(
+                        match=match,
+                        player=player.person,
+                        number=player.number,
+                        played=1,
+                    )
+                stats.append(statistic)
+            return stats
+
+        home = MatchStatisticFormset(
+            match.home_team_score,
+            data=data,
+            prefix="home",
+            queryset=roster(match.home_team),
+        )
+        away = MatchStatisticFormset(
+            match.away_team_score,
+            data=data,
+            prefix="away",
+            queryset=roster(match.away_team),
+        )
+        for formset, side in ((home, "home"), (away, "away")):
+            for form in formset.forms:
+                for name in ("number", "points", "mvp"):
+                    form.fields[name].widget.input_type = "number"
+                    form.fields[name].widget.attrs["class"] = "st-num"
+                form.fields["points"].widget.attrs["data-side"] = side
+        return home, away
+
+    @staff_required
+    @season_view
+    def match_scorers(self, request, season, day, match_pk, **kwargs):
+        match = get_object_or_404(queries.day_scorers(season, day), pk=match_pk)
+        require(can_enter_statistics(request.user))
+        day_url = reverse("ops:day", kwargs=day_kwargs(season, day))
+        if request.method == "POST":
+            home, away = self.statistic_formsets(request, match, data=request.POST)
+            if home.is_valid() and away.is_valid():
+                home.actor = away.actor = request.user.get_username()
+                home.save()
+                away.save()
+                logger.info(
+                    "ops statistics saved for match %s by %s", match.pk, home.actor
+                )
+                context = self.day_context(request, season, day)
+                return patches(
+                    request,
+                    [
+                        render_fragment(request, "scorers", **context),
+                        *render_counts(request, **context),
+                        render_fragment(request, "activity", **context),
+                    ],
+                    signals={"modal": False},
+                    redirect_to=day_url,
+                )
+        else:
+            home, away = self.statistic_formsets(request, match)
+        html = render_fragment(
+            request,
+            "scorers_modal",
+            season=season,
+            daystr=day.strftime("%Y%m%d"),
+            match=match,
+            formsets=(home, away),
+        )
+        if request.method == "POST":
+            return patches(request, [html], redirect_to=day_url)
+        if not is_datastar(request):
+            return HttpResponse(html)
+        return patches(request, [html], signals={"modal": True})
