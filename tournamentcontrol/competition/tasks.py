@@ -1,4 +1,5 @@
 import base64
+import datetime
 import logging
 from zoneinfo import ZoneInfo
 
@@ -9,6 +10,7 @@ from django.db import transaction
 from google.auth.exceptions import RefreshError
 from django.template.loader import render_to_string
 from django.urls import NoReverseMatch, reverse
+from django.utils import timezone
 from googleapiclient.errors import HttpError
 
 from tournamentcontrol.competition.models import (
@@ -21,6 +23,7 @@ from tournamentcontrol.competition.mysideline.sync import (
     synchronise_all as _mysideline_synchronise_all,
     synchronise_season as _mysideline_synchronise_season,
 )
+from tournamentcontrol.competition.ops.status import refresh_season_status
 from tournamentcontrol.competition.utils import (
     generate_fixture_grid,
     generate_scorecards,
@@ -694,3 +697,22 @@ def synchronise_mysideline():
     """
     results = _mysideline_synchronise_all()
     return {pk: result.summary() for pk, result in results.items()}
+
+
+@shared_task
+def refresh_live_stream_status(season_pk):
+    season = Season.objects.get(pk=season_pk)
+    return refresh_season_status(season)
+
+
+@shared_task
+def refresh_all_live_stream_status():
+    now = timezone.now()
+    window = (
+        now.date() - datetime.timedelta(days=1),
+        now.date() + datetime.timedelta(days=1),
+    )
+    seasons = Season.objects.filter(
+        live_stream=True, divisions__stages__matches__date__range=window
+    ).distinct()
+    return sum(refresh_season_status(season, now) for season in seasons)
