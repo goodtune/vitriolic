@@ -4,11 +4,13 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 import requests
+import responses
 from django.test import override_settings
 from django.urls import reverse
 from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
+from tournamentcontrol.competition.admin import SCORECARD_PDF_WAIT
 from tournamentcontrol.competition.tasks import (
     generate_pdf_grid,
     generate_pdf_scorecards,
@@ -221,7 +223,7 @@ class AsyncResultViewTests(ScorecardTestCase):
             with self.login(self.superuser):
                 self.get(self.url, self.competition.pk, self.season.pk, "abc-123")
         self.response_200()
-        self.assertTrue(self.last_response.has_header("Refresh"))
+        self.assertResponseHeaders({"Refresh": str(SCORECARD_PDF_WAIT)})
 
     def test_failed(self):
         """
@@ -239,7 +241,7 @@ class AsyncResultViewTests(ScorecardTestCase):
             with self.login(self.superuser):
                 self.get(self.url, self.competition.pk, self.season.pk, "abc-123")
         self.response_200()
-        self.assertFalse(self.last_response.has_header("Refresh"))
+        self.assertResponseHeaders({"Refresh": None})
         self.assertResponseContains(
             '<div class="alert alert-danger alert-dismissable">'
             '<button type="button" class="close" data-dismiss="alert" '
@@ -336,12 +338,7 @@ class GeneratePdfScorecardsTaskTests(ScorecardTestCase):
         self.assertRenderedPdf()
 
 
-def pdf_service_response(status_code, content=b""):
-    response = requests.Response()
-    response.status_code = status_code
-    response._content = content
-    response.url = "https://pdf.example.com/"
-    return response
+PDF_SERVICE = "https://pdf.example.com/"
 
 
 @override_settings(PRINCE_SERVER="pdf.example.com", CELERY_TASK_EAGER_PROPAGATES=False)
@@ -364,9 +361,22 @@ class PdfServiceRetryTests(TestCase):
         self.match = factories.MatchFactory.create(
             stage=self.stage, datetime=datetime(2017, 2, 13, 10, 0, tzinfo=UTC)
         )
-        patcher = patch("touchtechnology.common.prince.requests.post")
-        self.post = patcher.start()
-        self.addCleanup(patcher.stop)
+        self.pdf_service = responses.RequestsMock()
+        self.pdf_service.start()
+        self.addCleanup(self.pdf_service.reset)
+        self.addCleanup(self.pdf_service.stop)
+
+    def reply(self, *replies):
+        """
+        Queue the PDF service's answers to successive renders: an exception to
+        raise, or a status code (a 200 carries the PDF). The last one repeats.
+        """
+        for reply in replies:
+            if isinstance(reply, Exception):
+                self.pdf_service.post(PDF_SERVICE, body=reply)
+            else:
+                body = FAKE_PDF if reply == 200 else b""
+                self.pdf_service.post(PDF_SERVICE, status=reply, body=body)
 
     def generate_scorecards(self):
         return generate_pdf_scorecards.delay(
@@ -377,64 +387,52 @@ class PdfServiceRetryTests(TestCase):
         )
 
     def test_timeout_then_success(self):
-        self.post.side_effect = [
-            requests.Timeout("timed out"),
-            pdf_service_response(200, FAKE_PDF),
-        ]
+        self.reply(requests.Timeout("timed out"), 200)
         result = self.generate_scorecards()
         self.assertEqual(base64.b64decode(result.get()), FAKE_PDF)
-        self.assertEqual(self.post.call_count, 2)
+        self.assertEqual(len(self.pdf_service.calls), 2)
 
     def test_connection_error_then_success(self):
-        self.post.side_effect = [
-            requests.ConnectionError("connection refused"),
-            pdf_service_response(200, FAKE_PDF),
-        ]
+        self.reply(requests.ConnectionError("connection refused"), 200)
         result = self.generate_scorecards()
         self.assertEqual(base64.b64decode(result.get()), FAKE_PDF)
-        self.assertEqual(self.post.call_count, 2)
+        self.assertEqual(len(self.pdf_service.calls), 2)
 
     def test_server_error_then_success(self):
-        self.post.side_effect = [
-            pdf_service_response(504),
-            pdf_service_response(200, FAKE_PDF),
-        ]
+        self.reply(504, 200)
         result = self.generate_scorecards()
         self.assertEqual(base64.b64decode(result.get()), FAKE_PDF)
-        self.assertEqual(self.post.call_count, 2)
+        self.assertEqual(len(self.pdf_service.calls), 2)
 
     def test_server_error_gives_up_after_two_retries(self):
-        self.post.return_value = pdf_service_response(504)
+        self.reply(504)
         result = self.generate_scorecards()
         self.assertEqual(result.state, "FAILURE")
         self.assertIsInstance(result.result, requests.HTTPError)
-        self.assertEqual(self.post.call_count, 3)
+        self.assertEqual(len(self.pdf_service.calls), 3)
 
     def test_client_error_not_retried(self):
-        self.post.return_value = pdf_service_response(400)
+        self.reply(400)
         result = self.generate_scorecards()
         self.assertEqual(result.state, "FAILURE")
         self.assertIsInstance(result.result, requests.HTTPError)
-        self.post.assert_called_once()
+        self.assertEqual(len(self.pdf_service.calls), 1)
 
     # The grid task takes a Season instance, which the eager ``delay`` would
     # reject as not JSON serializable, so these call ``apply`` directly.
 
     def test_grid_server_error_then_success(self):
-        self.post.side_effect = [
-            pdf_service_response(503),
-            pdf_service_response(200, FAKE_PDF),
-        ]
+        self.reply(503, 200)
         result = generate_pdf_grid.apply(args=(self.season, {}))
         self.assertEqual(base64.b64decode(result.get()), FAKE_PDF)
-        self.assertEqual(self.post.call_count, 2)
+        self.assertEqual(len(self.pdf_service.calls), 2)
 
     def test_grid_client_error_not_retried(self):
-        self.post.return_value = pdf_service_response(404)
+        self.reply(404)
         result = generate_pdf_grid.apply(args=(self.season, {}))
         self.assertEqual(result.state, "FAILURE")
         self.assertIsInstance(result.result, requests.HTTPError)
-        self.post.assert_called_once()
+        self.assertEqual(len(self.pdf_service.calls), 1)
 
 
 class ScorecardReportWizardTests(ScorecardTestCase):
