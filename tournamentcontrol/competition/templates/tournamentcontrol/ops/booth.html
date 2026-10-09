@@ -2,7 +2,7 @@
 {% load static tz ops_tags %}
 {% block title %}Booth · {{ ground.title }}{% endblock %}
 {% block extracss %}<link rel="stylesheet" href="{% static 'tournamentcontrol/ops/booth.css' %}">{% endblock %}
-{% block body_attrs %}class="booth" data-signals__ifmissing="{pane: '{{ pane|default:'' }}', match: {{ pane_match.pk|default:'null' }}, modal: false}" data-indicator="connected"{% endblock %}
+{% block body_attrs %}class="booth" data-signals__ifmissing="{pane: '{{ pane|default:'' }}', match: {{ pane_match.pk|default:'null' }}, modal: false}" data-indicator="connected" data-effect="$pane; $match; @get('{% url 'ops:booth-events' competition=season.competition.slug season=season.slug ground=ground.slug %}', {retryMaxCount: 1000})"{% endblock %}
 {% block body %}{% timezone tzinfo %}
 <header>
 	<span class="brand">BOOTH</span>

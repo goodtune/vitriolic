@@ -117,6 +117,15 @@ class BoothAccessTests(BoothFixture):
         self.response_200()
         self.assertResponseContains('<div id="lamp" class="lamp live">ON AIR</div>')
 
+    def test_page_subscribes_to_the_booth_stream(self):
+        with self.login(self.commentator):
+            self.get("ops:booth", **self.kw)
+        self.assertIn(
+            "data-effect=\"$pane; $match; @get('%s', {retryMaxCount: 1000})\""
+            % self.url("booth-events"),
+            self.last_response.content.decode(),
+        )
+
     def test_index_lists_streamed_grounds(self):
         with self.login(self.commentator):
             self.get("ops:booth-index", competition="pacific-cup", season="pc26")

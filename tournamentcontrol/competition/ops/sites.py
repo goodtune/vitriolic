@@ -164,6 +164,7 @@ def style_result_form(form):
 class OpsSite(Application):
     # Exposed so ``sse`` need not import this module (which imports it).
     parse_day = staticmethod(parse_day)
+    can_stream = staticmethod(can_stream)
 
     def __init__(self, name="ops", app_name="ops", **kwargs):
         super().__init__(name=name, app_name=app_name, **kwargs)
@@ -191,6 +192,7 @@ class OpsSite(Application):
             path("<slug:ground>/", self.booth, name="booth"),
             path("<slug:ground>/lamp/", self.booth_lamp, name="booth-lamp"),
             path("<slug:ground>/strip/", self.booth_strip, name="booth-strip"),
+            path("<slug:ground>/events/", sse.booth_events(self), name="booth-events"),
             path(
                 "<slug:ground>/onair/<str:status>/",
                 self.booth_onair,
@@ -841,6 +843,68 @@ class OpsSite(Application):
         if not is_datastar(request):
             return HttpResponse(html)
         return patches(request, [html], signals={"pane": pane, "match": match.pk})
+
+    async def booth_ground(self, season, slug):
+        ground = await (
+            Ground.objects.filter(venue__season=season, slug=slug, live_stream=True)
+            .select_related("venue")
+            .order_by("venue__order", "order")
+            .afirst()
+        )
+        if ground is None:
+            raise Http404("No such streamed ground.")
+        return ground
+
+    def _booth_pane_fragment(self, request, context, pane, match_pk):
+        if pane == "runsheet":
+            return render_fragment(
+                request,
+                "pane_runsheet",
+                runsheet=queries.ground_runsheet(context["ground"], context["day"]),
+                **context,
+            )
+        # The pane and match come from the client's signals, so a stale or
+        # mangled value simply has no pane to show.
+        if pane in PANES and str(match_pk).isdigit():
+            match = (
+                queries.ground_runsheet(context["ground"], context["day"])
+                .filter(pk=match_pk)
+                .first()
+            )
+            if match is not None:
+                return self._pane_html(request, context, pane, match)
+        return None
+
+    def booth_snapshot(self, request, season, ground, pane, match_pk):
+        context = self.booth_context(request, season, ground)
+        fragments = [
+            render_fragment(request, "lamp", **context),
+            render_fragment(request, "strip", **context),
+        ]
+        pane_html = self._booth_pane_fragment(request, context, pane, match_pk)
+        if pane_html:
+            fragments.append(pane_html)
+        return fragments
+
+    def booth_event_fragments(self, request, season, ground, pane, match_pk, event):
+        kind = event.get("type")
+        context = self.booth_context(request, season, ground)
+        fragments = []
+        refresh_pane = False
+        if kind == "stream-changed":
+            fragments.append(render_fragment(request, "lamp", **context))
+            fragments.append(render_fragment(request, "strip", **context))
+            refresh_pane = pane == "runsheet"
+        elif kind in ("score-entered", "bye-processed"):
+            fragments.append(render_fragment(request, "strip", **context))
+            refresh_pane = pane in ("results", "ladder", "runsheet")
+        elif kind == "statistics-entered":
+            refresh_pane = pane in ("sheets", "leaders")
+        if refresh_pane:
+            pane_html = self._booth_pane_fragment(request, context, pane, match_pk)
+            if pane_html:
+                fragments.append(pane_html)
+        return fragments
 
     @booth_view
     @booth_required

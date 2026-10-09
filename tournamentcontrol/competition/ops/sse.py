@@ -9,6 +9,7 @@ from contextlib import aclosing
 from asgiref.sync import sync_to_async
 from datastar_py.django import DatastarResponse
 from datastar_py.django import ServerSentEventGenerator as SSE
+from datastar_py.django import read_signals
 from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
 from django.db import close_old_connections
@@ -108,6 +109,37 @@ def ops_events(site):
 
         def on_event(event):
             return site.event_fragments(request, season, day, event)
+
+        return DatastarResponse(
+            stream(season.pk, snapshot, on_event), headers=SSE_HEADERS
+        )
+
+    return view
+
+
+def booth_events(site):
+    async def view(request, competition, season, ground):
+        user = await authenticate(request)
+        if not user.is_authenticated:
+            return redirect_to_login(request.get_full_path())
+        season = await get_season(competition, season)
+        allowed = await sync_to_async(site.can_stream)(user, season)
+        if not allowed:
+            return HttpResponseForbidden()
+        ground = await site.booth_ground(season, ground)
+        # The booth re-issues this request whenever its pane or match
+        # changes, so the signals say which pane is open right now.
+        signals = read_signals(request) or {}
+        pane = signals.get("pane") or "sheets"
+        match_pk = signals.get("match")
+
+        def snapshot():
+            return site.booth_snapshot(request, season, ground, pane, match_pk)
+
+        def on_event(event):
+            return site.booth_event_fragments(
+                request, season, ground, pane, match_pk, event
+            )
 
         return DatastarResponse(
             stream(season.pk, snapshot, on_event), headers=SSE_HEADERS
