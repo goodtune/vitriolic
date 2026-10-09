@@ -13,6 +13,7 @@ from functools import wraps
 
 from django import forms
 from django.contrib.auth.views import redirect_to_login
+from django.db import transaction
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import include, path, re_path, reverse
@@ -587,8 +588,9 @@ class OpsSite(Application):
             home, away = self.statistic_formsets(request, match, data=request.POST)
             if home.is_valid() and away.is_valid():
                 home.actor = away.actor = request.user.get_username()
-                home.save()
-                away.save()
+                with transaction.atomic():
+                    home.save()
+                    away.save()
                 logger.info(
                     "ops statistics saved for match %s by %s", match.pk, home.actor
                 )

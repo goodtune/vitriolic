@@ -54,8 +54,9 @@ def on_score_updated(sender, match, **kwargs):
 
 
 def on_statistics_updated(sender, match, **kwargs):
-    # Each side's formset sends the signal; announce the save once.
-    if getattr(sender, "prefix", "home") != "home":
+    # Each side's formset sends the signal. The ops site saves the away side
+    # last, so announce on that one, once both sides are in the database.
+    if getattr(sender, "prefix", None) != "away":
         return
     events.publish(
         match.stage.division.season_id,

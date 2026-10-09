@@ -1,4 +1,5 @@
 import datetime
+from unittest import mock
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth.models import Permission
@@ -136,6 +137,34 @@ class ScorersModalTests(ScorersFixture):
         (event,) = events.recent(self.season.pk)
         self.assertEqual(event["type"], "statistics-entered")
         self.assertEqual(event["actor"], self.staff.get_username())
+
+    def test_one_event_is_published_after_both_sides_are_saved(self):
+        seen = []
+        publish = events.publish
+
+        def record(*args, **kwargs):
+            # Runs where the receiver calls it, at signal time.
+            seen.append(
+                SimpleScoreMatchStatistic.objects.filter(
+                    match=self.match, player=self.away[0]
+                ).exists()
+            )
+            return publish(*args, **kwargs)
+
+        with (
+            mock.patch.object(events, "publish", side_effect=record) as patched,
+            self.login(self.staff),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            self.client.post(
+                self.url,
+                self.payload([1, 1], [1]),
+                headers={"Datastar-Request": "true"},
+            )
+        self.assertEqual(patched.call_count, 1)
+        self.assertEqual(seen, [True])
+        (event,) = events.recent(self.season.pk)
+        self.assertEqual(event["type"], "statistics-entered")
 
     def test_points_that_do_not_sum_re_render_the_modal(self):
         with self.login(self.staff):
