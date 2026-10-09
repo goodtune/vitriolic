@@ -1,10 +1,18 @@
 from django.template.loader import render_to_string
+from django.utils import timezone
 
 
 def render_fragment(request, name, **context):
-    return render_to_string(
-        f"tournamentcontrol/ops/fragments/{name}.html", context, request=request
-    )
+    def render():
+        return render_to_string(
+            f"tournamentcontrol/ops/fragments/{name}.html", context, request=request
+        )
+
+    season = context.get("season")
+    if season is not None and season.timezone:
+        with timezone.override(season.timezone):
+            return render()
+    return render()
 
 
 def render_counts(request, **context):

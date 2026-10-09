@@ -17,10 +17,11 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 
+from touchtechnology.common.decorators import require_POST_m
 from touchtechnology.common.sites import Application
 from tournamentcontrol.competition.forms import MatchResultForm, MatchStatisticFormset
 from tournamentcontrol.competition.models import Season, SimpleScoreMatchStatistic
-from tournamentcontrol.competition.ops import events, queries, receivers
+from tournamentcontrol.competition.ops import events, queries, receivers, streams
 from tournamentcontrol.competition.ops.fragments import (
     render_counts,
     render_fragment,
@@ -144,6 +145,21 @@ class OpsSite(Application):
                 self.match_scorers,
                 name="match-scorers",
             ),
+            path(
+                "streams/match/<int:match_pk>/<str:status>/",
+                self.match_stream,
+                name="match-stream",
+            ),
+            path(
+                "streams/event/<str:event_pk>/<str:status>/",
+                self.event_stream,
+                name="event-stream",
+            ),
+            path(
+                "streams/slot/<str:slot_key>/<str:status>/",
+                self.slot_stream,
+                name="slot-stream",
+            ),
             # Placeholder so the day page can reverse its event stream; the
             # SSE task replaces it with the long-lived stream view.
             path("events/", self.events, name="events"),
@@ -153,7 +169,7 @@ class OpsSite(Application):
 
     def day_context(self, request, season, day):
         now = timezone.now()
-        streams, stream_events = queries.day_streams(season, day, now)
+        ground_streams, stream_events = queries.day_streams(season, day, now)
         slots = queries.day_results(season, day)
         for slot in slots:
             for match in slot.matches:
@@ -172,10 +188,12 @@ class OpsSite(Application):
             "slots": slots,
             "results_pending": sum(s.total - s.entered for s in slots if not s.is_byes),
             "scorers": scorers,
-            "streams": streams,
+            "streams": ground_streams,
+            "stream_errors": [],
+            "current_slot": next((s for s in slots if s.open), None),
             "live_count": sum(
                 1
-                for s in streams
+                for s in ground_streams
                 if s.current and s.current.live_stream_status == "live"
             ),
             "events": stream_events,
@@ -449,3 +467,62 @@ class OpsSite(Application):
         if not is_datastar(request):
             return HttpResponse(html)
         return patches(request, [html], signals={"modal": True})
+
+    # --- streams ----------------------------------------------------
+
+    def stream_patches(self, request, season, day, errors=()):
+        context = self.day_context(request, season, day)
+        context["stream_errors"] = list(errors)
+        return [
+            render_fragment(request, "streams", **context),
+            render_fragment(request, "streams_count", **context),
+            render_fragment(request, "activity", **context),
+        ]
+
+    def _stream_response(self, request, season, day, errors):
+        return patches(
+            request,
+            self.stream_patches(request, season, day, errors),
+            redirect_to=reverse("ops:day", kwargs=day_kwargs(season, day)),
+        )
+
+    def _check_status(self, status):
+        if status not in streams.STATUSES:
+            raise Http404("Unknown broadcast status.")
+
+    @require_POST_m
+    @staff_required
+    @season_view
+    def match_stream(self, request, season, day, match_pk, status, **kwargs):
+        self._check_status(status)
+        require(can_stream(request.user, season))
+        match = self._day_match(season, day, match_pk)
+        error = streams.transition(match, status, request.user.get_username())
+        return self._stream_response(request, season, day, [error] if error else [])
+
+    @require_POST_m
+    @staff_required
+    @season_view
+    def event_stream(self, request, season, day, event_pk, status, **kwargs):
+        self._check_status(status)
+        require(can_stream(request.user, season))
+        event = get_object_or_404(season.live_stream_events, pk=event_pk)
+        error = streams.transition(event, status, request.user.get_username())
+        return self._stream_response(request, season, day, [error] if error else [])
+
+    @require_POST_m
+    @staff_required
+    @season_view
+    def slot_stream(self, request, season, day, slot_key, status, **kwargs):
+        self._check_status(status)
+        require(can_stream(request.user, season))
+        slot = queries.slot_for(season, day, slot_key)
+        if slot is None:
+            raise Http404("No such slot.")
+        errors = []
+        for match in slot.matches:
+            if match.external_identifier:
+                error = streams.transition(match, status, request.user.get_username())
+                if error:
+                    errors.append(error)
+        return self._stream_response(request, season, day, errors)

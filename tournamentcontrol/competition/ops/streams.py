@@ -1,0 +1,63 @@
+"""
+Start, test and stop YouTube broadcasts from the ops site, and tell every
+open page about it.
+"""
+
+import logging
+
+from googleapiclient.errors import HttpError
+
+from tournamentcontrol.competition.exceptions import LiveStreamError
+from tournamentcontrol.competition.models import Match
+from tournamentcontrol.competition.ops import events
+
+logger = logging.getLogger(__name__)
+
+STATUSES = ("testing", "live", "complete")
+
+
+def describe(obj):
+    if isinstance(obj, Match):
+        ground = obj.play_at.title if obj.play_at else "No ground"
+        return "%s · %s v %s" % (
+            ground,
+            obj.get_home_team_plain(),
+            obj.get_away_team_plain(),
+        )
+    return obj.title
+
+
+def season_of(obj):
+    if isinstance(obj, Match):
+        return obj.stage.division.season
+    return obj.season
+
+
+def publish_change(obj, status, actor):
+    kind = "match" if isinstance(obj, Match) else "event"
+    events.publish(
+        season_of(obj).pk,
+        "stream-changed",
+        actor=actor,
+        summary="%s → %s" % (describe(obj), status),
+        kind=kind,
+        id=obj.pk,
+        status=status,
+    )
+
+
+def transition(obj, status, actor):
+    """
+    Transition ``obj`` (a Match or LiveStreamEvent) and publish the change.
+    Returns an error message for the page when the transition fails.
+    """
+    try:
+        obj.transition_live_stream(status)
+    except LiveStreamError as exc:
+        logger.warning("ops stream transition refused for %s: %s", obj, exc)
+        return "%s: %s" % (describe(obj), exc)
+    except HttpError as exc:
+        logger.warning("ops stream transition failed for %s: %s", obj, exc.reason)
+        return "%s: %s" % (describe(obj), exc.reason)
+    publish_change(obj, status, actor)
+    return None
