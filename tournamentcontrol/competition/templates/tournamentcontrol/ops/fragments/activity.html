@@ -1,6 +1,7 @@
+{% load ops_tags %}
 <ul id="activity" class="feed">
 	{% for event in activity %}
-		<li class="{{ event.type }}"><time>{{ event.at|slice:"11:19" }}</time><span>{{ event.summary }}{% if event.actor %} · {{ event.actor }}{% endif %}</span></li>
+		<li class="{{ event.type }}"><time>{{ event.at|event_time|time:"H:i:s" }}</time><span>{{ event.summary }}{% if event.actor %} · {{ event.actor }}{% endif %}</span></li>
 	{% empty %}
 		<li id="activity-empty" class="empty">Nothing has happened yet today.</li>
 	{% endfor %}

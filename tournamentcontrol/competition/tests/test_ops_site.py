@@ -7,6 +7,7 @@ from django.utils import timezone
 from freezegun import freeze_time
 from test_plus import TestCase
 
+from tournamentcontrol.competition.ops import events
 from tournamentcontrol.competition.ops.fragments import render_counts
 from tournamentcontrol.competition.tests import factories
 
@@ -117,6 +118,23 @@ class DayPageTests(OpsFixture):
         body = b"".join(streamed.streaming_content).decode()
         self.assertIn("event: datastar-patch-elements", body)
         self.assertIn('data: elements <ul id="activity"', body)
+
+    def test_activity_times_are_shown_in_the_season_time_zone(self):
+        events.reset_backend()
+        self.addCleanup(events.reset_backend)
+        with (
+            freeze_time("2026-10-07 23:15:30+00:00"),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            events.publish(
+                self.season.pk, "score-entered", actor="priya", summary="Score · x"
+            )
+        with self.login(self.staff):
+            self.get("ops:activity", **self.day_kwargs)
+        self.assertResponseContains(
+            '<li class="score-entered"><time>09:15:30</time>'
+            "<span>Score · x · priya</span></li>"
+        )
 
     def test_count_ids_are_unique_on_the_page(self):
         with self.login(self.staff):
