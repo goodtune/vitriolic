@@ -3,11 +3,18 @@ from datetime import date, datetime, time
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
+import requests
+import responses
+from django.test import override_settings
 from django.urls import reverse
 from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
-from tournamentcontrol.competition.tasks import generate_pdf_scorecards
+from tournamentcontrol.competition.admin import SCORECARD_PDF_WAIT
+from tournamentcontrol.competition.tasks import (
+    generate_pdf_grid,
+    generate_pdf_scorecards,
+)
 from tournamentcontrol.competition.tests import factories
 
 FAKE_PDF = b"%PDF-1.4 fake scorecards"
@@ -216,10 +223,63 @@ class AsyncResultViewTests(ScorecardTestCase):
             with self.login(self.superuser):
                 self.get(self.url, self.competition.pk, self.season.pk, "abc-123")
         self.response_200()
-        self.assertTrue(self.last_response.has_header("Refresh"))
+        self.assertResponseHeaders({"Refresh": str(SCORECARD_PDF_WAIT)})
+
+    def test_failed(self):
+        """
+        A render that failed for good shows a plain message and a way to start
+        again, rather than re-raising the background error as a server error.
+        """
+        with patch(
+            "tournamentcontrol.competition.admin.generate_pdf_scorecards.AsyncResult"
+        ) as AsyncResult:
+            AsyncResult.return_value.ready.return_value = True
+            AsyncResult.return_value.state = "FAILURE"
+            AsyncResult.return_value.wait.side_effect = requests.HTTPError(
+                "504 Server Error: Gateway Time-out"
+            )
+            with self.login(self.superuser):
+                self.get(self.url, self.competition.pk, self.season.pk, "abc-123")
+        self.response_200()
+        self.assertResponseHeaders({"Refresh": None})
+        self.assertResponseContains(
+            '<div class="alert alert-danger alert-dismissable">'
+            '<button type="button" class="close" data-dismiss="alert" '
+            'aria-hidden="true">&#215;</button>'
+            "The PDF service didn&#x27;t respond, so your PDF could not be "
+            "generated. Please try again.</div>"
+        )
+        self.assertResponseContains(
+            f'<a href="{reverse("admin:fixja:scorecard-report")}">Start again</a>'
+        )
 
     def test_login_required(self):
         self.assertLoginRequired(self.url, self.competition.pk, self.season.pk, "abc")
+
+
+class GridAsyncResultViewTests(ScorecardTestCase):
+    url = "admin:fixja:competition:season:grid-async"
+
+    def test_failed(self):
+        with patch(
+            "tournamentcontrol.competition.admin.generate_pdf_grid.AsyncResult"
+        ) as AsyncResult:
+            AsyncResult.return_value.ready.return_value = True
+            AsyncResult.return_value.state = "FAILURE"
+            AsyncResult.return_value.wait.side_effect = requests.Timeout()
+            with self.login(self.superuser):
+                self.get(self.url, self.competition.pk, self.season.pk, "abc-123")
+        self.response_200()
+        self.assertResponseContains(
+            '<div class="alert alert-danger alert-dismissable">'
+            '<button type="button" class="close" data-dismiss="alert" '
+            'aria-hidden="true">&#215;</button>'
+            "The PDF service didn&#x27;t respond, so your PDF could not be "
+            "generated. Please try again.</div>"
+        )
+        self.assertResponseContains(
+            f'<a href="{self.season.urls["edit"]}">Start again</a>'
+        )
 
 
 class GeneratePdfScorecardsTaskTests(ScorecardTestCase):
@@ -276,6 +336,103 @@ class GeneratePdfScorecardsTaskTests(ScorecardTestCase):
         )
         self.assertEqual(base64.b64decode(result.get()), FAKE_PDF)
         self.assertRenderedPdf()
+
+
+PDF_SERVICE = "https://pdf.example.com/"
+
+
+@override_settings(PRINCE_SERVER="pdf.example.com", CELERY_TASK_EAGER_PROPAGATES=False)
+class PdfServiceRetryTests(TestCase):
+    """
+    The PDF tasks retry a render that the remote PDF service failed with a
+    timeout, a connection error or a 5xx, but not a 4xx.
+
+    Eager tasks retry inline, without waiting for the countdown, but only when
+    eager errors are not propagated; otherwise ``Retry`` itself is raised. So
+    these tests turn propagation off and inspect the final result instead.
+    """
+
+    templates = ("tournamentcontrol/competition/admin/scorecards.html",)
+
+    def setUp(self):
+        super().setUp()
+        self.stage = factories.StageFactory.create()
+        self.season = self.stage.division.season
+        self.match = factories.MatchFactory.create(
+            stage=self.stage, datetime=datetime(2017, 2, 13, 10, 0, tzinfo=UTC)
+        )
+        self.pdf_service = responses.RequestsMock()
+        self.pdf_service.start()
+        self.addCleanup(self.pdf_service.reset)
+        self.addCleanup(self.pdf_service.stop)
+
+    def reply(self, *replies):
+        """
+        Queue the PDF service's answers to successive renders: an exception to
+        raise, or a status code (a 200 carries the PDF). The last one repeats.
+        """
+        for reply in replies:
+            if isinstance(reply, Exception):
+                self.pdf_service.post(PDF_SERVICE, body=reply)
+            else:
+                body = FAKE_PDF if reply == 200 else b""
+                self.pdf_service.post(PDF_SERVICE, status=reply, body=body)
+
+    def generate_scorecards(self):
+        return generate_pdf_scorecards.delay(
+            match_pks=[self.match.pk],
+            templates=self.templates,
+            extra_context={},
+            season_pk=self.season.pk,
+        )
+
+    def test_timeout_then_success(self):
+        self.reply(requests.Timeout("timed out"), 200)
+        result = self.generate_scorecards()
+        self.assertEqual(base64.b64decode(result.get()), FAKE_PDF)
+        self.assertEqual(len(self.pdf_service.calls), 2)
+
+    def test_connection_error_then_success(self):
+        self.reply(requests.ConnectionError("connection refused"), 200)
+        result = self.generate_scorecards()
+        self.assertEqual(base64.b64decode(result.get()), FAKE_PDF)
+        self.assertEqual(len(self.pdf_service.calls), 2)
+
+    def test_server_error_then_success(self):
+        self.reply(504, 200)
+        result = self.generate_scorecards()
+        self.assertEqual(base64.b64decode(result.get()), FAKE_PDF)
+        self.assertEqual(len(self.pdf_service.calls), 2)
+
+    def test_server_error_gives_up_after_two_retries(self):
+        self.reply(504)
+        result = self.generate_scorecards()
+        self.assertEqual(result.state, "FAILURE")
+        self.assertIsInstance(result.result, requests.HTTPError)
+        self.assertEqual(len(self.pdf_service.calls), 3)
+
+    def test_client_error_not_retried(self):
+        self.reply(400)
+        result = self.generate_scorecards()
+        self.assertEqual(result.state, "FAILURE")
+        self.assertIsInstance(result.result, requests.HTTPError)
+        self.assertEqual(len(self.pdf_service.calls), 1)
+
+    # The grid task takes a Season instance, which the eager ``delay`` would
+    # reject as not JSON serializable, so these call ``apply`` directly.
+
+    def test_grid_server_error_then_success(self):
+        self.reply(503, 200)
+        result = generate_pdf_grid.apply(args=(self.season, {}))
+        self.assertEqual(base64.b64decode(result.get()), FAKE_PDF)
+        self.assertEqual(len(self.pdf_service.calls), 2)
+
+    def test_grid_client_error_not_retried(self):
+        self.reply(404)
+        result = generate_pdf_grid.apply(args=(self.season, {}))
+        self.assertEqual(result.state, "FAILURE")
+        self.assertIsInstance(result.result, requests.HTTPError)
+        self.assertEqual(len(self.pdf_service.calls), 1)
 
 
 class ScorecardReportWizardTests(ScorecardTestCase):
