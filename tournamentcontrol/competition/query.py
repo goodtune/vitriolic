@@ -160,6 +160,18 @@ class StatisticQuerySet(QuerySet):
     def played(self):
         return self.exclude(played=0)
 
+    def for_division(self, division):
+        return self.filter(match__stage__division=division)
+
+    def totals(self, *group_fields):
+        """
+        Sum ``played``, ``points`` and ``mvp`` for each distinct combination
+        of ``group_fields``, as dictionaries.
+        """
+        return self.values(*group_fields).annotate(
+            played=Sum("played"), points=Sum("points"), mvp=Sum("mvp")
+        )
+
 
 class TeamAssociationQuerySet(QuerySet):
     def with_statistics(self, team):

@@ -186,7 +186,7 @@ def day_streams(season, day, now):
 
 def team_results(team):
     return (
-        Match.objects.filter(Q(home_team=team) | Q(away_team=team), is_bye=False)
+        team.matches.filter(is_bye=False)
         .select_related(*SELECT_RELATED)
         .order_by("datetime", "pk")
     )
@@ -194,18 +194,14 @@ def team_results(team):
 
 def division_leaders(division, limit=10):
     base = (
-        SimpleScoreMatchStatistic.objects.filter(
-            match__stage__division=division,
-            played=1,
-            player__teamassociation__team__division=division,
-        )
-        .values(
+        SimpleScoreMatchStatistic.objects.for_division(division)
+        .filter(played=1, player__teamassociation__team__division=division)
+        .totals(
             "player_id",
             "player__first_name",
             "player__last_name",
             "player__teamassociation__team__title",
         )
-        .annotate(points=Sum("points"), mvp=Sum("mvp"))
     )
 
     def rows(queryset):
