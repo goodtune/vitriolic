@@ -31,7 +31,6 @@ TZ = ZoneInfo("Australia/Brisbane")
 
 DAY_TEMPLATE = "tournamentcontrol/ops/day.html"
 BOOTH_TEMPLATE = "tournamentcontrol/ops/booth.html"
-MODAL_TEMPLATE = "tournamentcontrol/ops/fragments/scorers_modal.html"
 SCORERS_TEMPLATE = "tournamentcontrol/ops/scorers.html"
 
 
@@ -267,7 +266,11 @@ class ScorersFormTests(FormsFixture):
         response = self.post(self.payload([1, 0], [1]))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, SCORERS_TEMPLATE)
-        self.assertTemplateUsed(response, MODAL_TEMPLATE)
+        # The modal is a partial of the day page; Django 5.2 records no
+        # template for it, so look for its Save button instead.
+        self.assertResponseContains(
+            '<button class="btn p" type="submit">Save scorers</button>'
+        )
         self.assertTemplateNotUsed(response, DAY_TEMPLATE)
         self.assertResponseContains(
             "<li>Total number of points (1) does not equal total number of "
