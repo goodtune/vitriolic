@@ -8,7 +8,12 @@ from django.test import RequestFactory, override_settings
 from test_plus import TestCase
 
 from touchtechnology.common.context_processors import htmx_admin_tabs
-from touchtechnology.common.default_settings import HTMX_ADMIN_TABS, LazySetting, S
+from touchtechnology.common.default_settings import (
+    HTMX_ADMIN_TABS,
+    LazySetting,
+    S,
+    lazy_setting,
+)
 from touchtechnology.common.templatetags.common import htmx_script
 from touchtechnology.common.tests import factories
 
@@ -54,6 +59,27 @@ class LazySettingsHelperTests(TestCase):
     def test_s_float_coercion(self):
         result = S("NONEXISTENT_FLOAT", 3.14)
         self.assertAlmostEqual(float(result), 3.14)
+
+    def test_evaluated_setting_follows_override(self):
+        result = S("LAZY_OVERRIDE_TEST", "original")
+        self.assertEqual(result, "original")
+        with override_settings(TOUCHTECHNOLOGY_LAZY_OVERRIDE_TEST="overridden"):
+            self.assertEqual(result, "overridden")
+        self.assertEqual(result, "original")
+
+    def test_evaluated_int_setting_follows_override(self):
+        result = S("LAZY_OVERRIDE_INT", 5)
+        self.assertEqual(int(result), 5)
+        with override_settings(TOUCHTECHNOLOGY_LAZY_OVERRIDE_INT=7):
+            self.assertEqual(int(result), 7)
+        self.assertEqual(int(result), 5)
+
+    def test_lazy_setting_reads_full_name(self):
+        result = lazy_setting("LAZY_FULL_NAME_TEST", "fallback")
+        self.assertEqual(result, "fallback")
+        with override_settings(LAZY_FULL_NAME_TEST="named"):
+            self.assertEqual(result, "named")
+        self.assertEqual(result, "fallback")
 
 
 class HtmxAdminTabsFeatureFlagTests(TestCase):

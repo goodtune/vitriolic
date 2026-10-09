@@ -10,22 +10,18 @@ from asgiref.sync import sync_to_async
 from datastar_py.django import DatastarResponse
 from datastar_py.django import ServerSentEventGenerator as SSE
 from datastar_py.django import read_signals
-from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
 from django.db import close_old_connections
 from django.http import Http404, HttpResponseForbidden
 
 from tournamentcontrol.competition.models import Season
 from tournamentcontrol.competition.ops import events
+from tournamentcontrol.competition.ops.default_settings import EVENTS_KEEPALIVE
 
 logger = logging.getLogger(__name__)
 
 SSE_HEADERS = {"Content-Type": "text/event-stream; charset=utf-8"}
 KEEPALIVE_LINE = ": ping\n\n"
-
-
-def keepalive():
-    return getattr(settings, "OPS_EVENTS_KEEPALIVE", 20)
 
 
 async def authenticate(request):
@@ -74,7 +70,9 @@ async def stream(season_id, snapshot, on_event):
     """
     ready = False
     try:
-        async with aclosing(events.subscribe(season_id, idle=keepalive())) as feed:
+        async with aclosing(
+            events.subscribe(season_id, idle=float(EVENTS_KEEPALIVE))
+        ) as feed:
             async for event in feed:
                 if not ready:
                     ready = True

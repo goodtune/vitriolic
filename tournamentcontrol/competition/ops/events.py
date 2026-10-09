@@ -16,14 +16,12 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from tournamentcontrol.competition.ops.default_settings import ACTIVITY_LENGTH
+
 logger = logging.getLogger(__name__)
 
 _backend = None
 _lock = threading.Lock()
-
-
-def _activity_length():
-    return getattr(settings, "OPS_ACTIVITY_LENGTH", 50)
 
 
 class MemoryBackend:
@@ -34,7 +32,7 @@ class MemoryBackend:
     def publish(self, season_id, event):
         ring = self._recent[season_id]
         ring.appendleft(event)
-        while len(ring) > _activity_length():
+        while len(ring) > int(ACTIVITY_LENGTH):
             ring.pop()
         for key in list(self._subscribers[season_id]):
             loop, queue = key
@@ -68,7 +66,7 @@ class MemoryBackend:
             self._subscribers[season_id].discard(key)
 
     def recent(self, season_id):
-        return list(self._recent[season_id])[: _activity_length()]
+        return list(self._recent[season_id])[: int(ACTIVITY_LENGTH)]
 
 
 class RedisBackend:
@@ -92,7 +90,7 @@ class RedisBackend:
         pipe = self.sync.pipeline()
         pipe.publish(self._channel(season_id), payload)
         pipe.lpush(self._ring(season_id), payload)
-        pipe.ltrim(self._ring(season_id), 0, _activity_length() - 1)
+        pipe.ltrim(self._ring(season_id), 0, int(ACTIVITY_LENGTH) - 1)
         pipe.execute()
 
     async def subscribe(self, season_id, idle):
@@ -119,7 +117,7 @@ class RedisBackend:
                 await pubsub.aclose()
 
     def recent(self, season_id):
-        raw = self.sync.lrange(self._ring(season_id), 0, _activity_length() - 1)
+        raw = self.sync.lrange(self._ring(season_id), 0, int(ACTIVITY_LENGTH) - 1)
         return [json.loads(item) for item in raw]
 
 

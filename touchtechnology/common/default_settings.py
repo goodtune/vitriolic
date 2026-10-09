@@ -1,4 +1,8 @@
+import collections
+
 from django.conf import settings
+from django.core.signals import setting_changed
+from django.dispatch import receiver
 from django.utils.functional import SimpleLazyObject, empty
 
 __all__ = (
@@ -30,12 +34,34 @@ class LazySetting(SimpleLazyObject):
         return float(self._wrapped)
 
 
+# Every LazySetting created by lazy_setting(), keyed by the full setting name,
+# so a changed setting can drop the values that were read from it.
+_registry = collections.defaultdict(list)
+
+
+def lazy_setting(full_name, default):
+    """
+    Return a LazySetting that reads ``settings.<full_name>`` (or ``default``)
+    on first use. The cached value is dropped whenever the setting changes,
+    so ``override_settings`` in tests is honoured.
+    """
+    value = LazySetting(lambda: getattr(settings, full_name, default))
+    _registry[full_name].append(value)
+    return value
+
+
+@receiver(setting_changed)
+def _reset_lazy_settings(*, setting, **kwargs):
+    for value in _registry.get(setting, ()):
+        value._wrapped = empty
+
+
 def A(n, d):
-    return LazySetting(lambda: getattr(settings, "AUTHENTICATION_" + n, d))
+    return lazy_setting("AUTHENTICATION_" + n, d)
 
 
 def S(n, d=None):
-    return LazySetting(lambda: getattr(settings, "TOUCHTECHNOLOGY_" + n, d))
+    return lazy_setting("TOUCHTECHNOLOGY_" + n, d)
 
 
 APP_ROUTING = S("APP_ROUTING", ())
