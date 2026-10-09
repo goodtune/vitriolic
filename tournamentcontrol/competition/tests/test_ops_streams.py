@@ -76,6 +76,16 @@ class StreamsFragmentTests(StreamsFixture):
             '<button class="btn g sm" type="submit">Go live</button>'
         )
 
+    def test_live_starting_counts_as_live(self):
+        self.current.live_stream_status = "liveStarting"
+        self.current.save()
+        with self.login(self.streamer):
+            self.get("ops:day", **self.kw)
+        self.assertResponseContains('<span id="streams-count" class="count">1</span>')
+        self.assertResponseContains(
+            '<button class="btn r sm" type="submit">End</button>'
+        )
+
     def test_without_permission_no_buttons(self):
         with self.login(self.staff):
             self.get("ops:streams", **self.kw)

@@ -151,6 +151,25 @@ class StripAndLampTests(BoothFixture):
             '<div class="teams">Fiji <small>v</small> New Zealand</div>'
         )
 
+    def test_live_starting_lights_the_lamp(self):
+        self.current.live_stream_status = "liveStarting"
+        self.current.save()
+        with self.login(self.commentator):
+            self.get("ops:booth-lamp", **self.kw)
+        self.assertResponseContains('<div id="lamp" class="lamp live">ON AIR</div>')
+        self.assertResponseContains(
+            '<button class="bigbtn end" type="submit" data-hold="1500">HOLD TO END BROADCAST</button>'
+        )
+
+    def test_test_starting_is_standby(self):
+        self.current.live_stream_status = "testStarting"
+        self.current.save()
+        with self.login(self.commentator):
+            self.get("ops:booth-lamp", **self.kw)
+        self.assertResponseContains(
+            '<div id="lamp" class="lamp testing">STANDBY</div>'
+        )
+
     def test_lamp_offers_end_while_live(self):
         with self.login(self.commentator):
             self.get("ops:booth-lamp", **self.kw)

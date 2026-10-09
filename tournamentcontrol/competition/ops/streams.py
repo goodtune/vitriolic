@@ -16,6 +16,15 @@ logger = logging.getLogger(__name__)
 
 STATUSES = ("testing", "live", "complete")
 
+# YouTube reports these while a transition is under way; the broadcast is, for
+# every purpose of the ops site, already in the state it is moving to.
+TRANSIENT = {"liveStarting": "live", "testStarting": "testing"}
+
+
+def effective_status(status):
+    """The status to act and render on, mapping YouTube's transient ones."""
+    return TRANSIENT.get(status, status)
+
 
 def describe(obj):
     if isinstance(obj, Match):

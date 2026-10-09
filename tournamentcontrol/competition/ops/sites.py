@@ -283,7 +283,8 @@ class OpsSite(Application):
             "live_count": sum(
                 1
                 for s in ground_streams
-                if s.current and s.current.live_stream_status == "live"
+                if s.current
+                and streams.effective_status(s.current.live_stream_status) == "live"
             ),
             "events": stream_events,
             "activity": events.recent(season.pk),
@@ -666,11 +667,15 @@ class OpsSite(Application):
             (
                 m
                 for m in reversed(list(queries.ground_runsheet(ground, day)))
-                if m.live_stream_status == "live"
+                if streams.effective_status(m.live_stream_status) == "live"
             ),
             current,
         )
-        status = broadcast.live_stream_status if broadcast else None
+        status = (
+            streams.effective_status(broadcast.live_stream_status)
+            if broadcast
+            else None
+        )
         armable, reason = True, ""
         if status == "live":
             armable, reason = False, "End the current broadcast first."
@@ -681,7 +686,11 @@ class OpsSite(Application):
                 following.get_home_team_plain(),
                 following.get_away_team_plain(),
             )
-        elif following.live_stream_status in ("testing", "live", "complete"):
+        elif streams.effective_status(following.live_stream_status) in (
+            "testing",
+            "live",
+            "complete",
+        ):
             armable, reason = False, "Already armed."
         return {
             "season": season,

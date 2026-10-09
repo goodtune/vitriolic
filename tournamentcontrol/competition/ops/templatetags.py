@@ -1,7 +1,11 @@
 from django import template
 from django.urls import reverse
 
+from tournamentcontrol.competition.ops.streams import effective_status
+
 register = template.Library()
+
+register.filter("effective_status", effective_status)
 
 
 @register.simple_tag(takes_context=True)
