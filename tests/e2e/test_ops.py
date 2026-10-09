@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 import pytest
+from django.urls import reverse
 from django.utils import timezone
 from faker import Faker
 from playwright.sync_api import expect
@@ -179,8 +180,18 @@ def tournament(transactional_db):
         "scored": scored,
         "upcoming": upcoming,
         "slot_key": live_kickoff["time"].strftime("%H%M"),
-        "day_path": f"/ops/pacific-cup/pc26/{today:%Y%m%d}/",
-        "booth_path": "/ops/pacific-cup/pc26/booth/field-1/",
+        "day_path": reverse(
+            "ops:day",
+            kwargs={
+                "competition": "pacific-cup",
+                "season": "pc26",
+                "datestr": today.strftime("%Y%m%d"),
+            },
+        ),
+        "booth_path": reverse(
+            "ops:booth",
+            kwargs={"competition": "pacific-cup", "season": "pc26", "ground": "field-1"},
+        ),
     }
 
 
@@ -264,7 +275,10 @@ def test_hold_button_needs_a_hold(
 
 
 def test_booth_opens_its_event_stream_once(ops_page, asgi_live_server, tournament):
-    events_url = tournament["booth_path"] + "events/"
+    events_url = reverse(
+        "ops:booth-events",
+        kwargs={"competition": "pacific-cup", "season": "pc26", "ground": "field-1"},
+    )
     requests = []
     ops_page.on(
         "request",
