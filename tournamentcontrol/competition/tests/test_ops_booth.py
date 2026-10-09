@@ -167,6 +167,73 @@ class OnAirTests(BoothFixture):
         (event,) = events.recent(self.season.pk)
         self.assertEqual(event["status"], "complete")
 
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_lamp_follows_the_live_match_when_it_overruns(self, build):
+        build.return_value = youtube_mock("live")
+        untouched = self.following.live_stream_status
+        with freeze_time("2026-10-08 11:30 +10:00"):
+            with self.login(self.commentator):
+                self.get("ops:booth-lamp", **self.kw)
+                self.response_200()
+                self.assertResponseContains(
+                    '<div id="lamp" class="lamp live">ON AIR</div>'
+                )
+                end_url = self.url("booth-onair", status="complete")
+                self.assertIn(
+                    'action="%s"' % end_url, self.last_response.content.decode()
+                )
+                self.assertResponseContains(
+                    '<button class="bigbtn end" type="submit" data-hold="1500">HOLD TO END BROADCAST</button>'
+                )
+            with (
+                self.login(self.commentator),
+                self.captureOnCommitCallbacks(execute=True),
+            ):
+                self.client.post(end_url, headers={"Datastar-Request": "true"})
+        self.current.refresh_from_db()
+        self.following.refresh_from_db()
+        self.assertEqual(self.current.live_stream_status, "complete")
+        self.assertEqual(self.following.live_stream_status, untouched)
+
+    def test_nothing_on_the_ground_is_a_refusal_not_an_error(self):
+        self.current.delete()
+        self.previous.delete()
+        with self.login(self.commentator):
+            response = self.client.post(
+                self.url("booth-onair", status="complete"),
+                headers={"Datastar-Request": "true"},
+            )
+        self.assertEqual(response.status_code, 200)
+        body = b"".join(response.streaming_content).decode()
+        self.assertIn("Nothing is on this ground right now.", body)
+
+    def test_times_follow_the_ground_zone(self):
+        auckland = factories.GroundFactory.create(
+            venue=self.field1.venue,
+            title="Field 3",
+            slug="field-3",
+            slug_locked=True,
+            live_stream=True,
+            timezone="Pacific/Auckland",
+        )
+        self.make(
+            10,
+            40,
+            self.aus,
+            self.nzl,
+            ground=auckland,
+            external_identifier="yt-akl",
+            live_stream_status="live",
+            live_stream_status_at=datetime.datetime(
+                2026, 10, 8, 0, 30, tzinfo=datetime.timezone.utc
+            ),
+        )
+        with self.login(self.commentator):
+            self.get("ops:booth-lamp", **{**self.kw, "ground": "field-3"})
+        body = self.last_response.content.decode()
+        self.assertIn("live since 13:30", body)
+        self.assertNotIn("live since 10:30", body)
+
     def test_only_live_and_complete_are_accepted(self):
         with self.login(self.commentator):
             response = self.client.post(self.url("booth-onair", status="testing"))
@@ -184,7 +251,7 @@ class ArmTests(BoothFixture):
             response = self.client.post(
                 self.url("booth-arm"), headers={"Datastar-Request": "true"}
             )
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 200)
         body = b"".join(response.streaming_content).decode()
         self.assertIn("End the current broadcast first", body)
 
@@ -201,7 +268,7 @@ class ArmTests(BoothFixture):
         self.following.refresh_from_db()
         self.assertEqual(self.following.live_stream_status, "testing")
 
-    def test_arm_without_broadcast_is_409_not_an_error(self):
+    def test_arm_without_broadcast_is_a_refusal_not_an_error(self):
         self.current.live_stream_status = "complete"
         self.current.save()
         self.following.external_identifier = None
@@ -210,11 +277,11 @@ class ArmTests(BoothFixture):
             response = self.client.post(
                 self.url("booth-arm"), headers={"Datastar-Request": "true"}
             )
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 200)
         body = b"".join(response.streaming_content).decode()
         self.assertIn("has no YouTube broadcast", body)
 
-    def test_no_next_match_today_is_409(self):
+    def test_no_next_match_today_is_a_refusal(self):
         self.current.live_stream_status = "complete"
         self.current.save()
         self.following.delete()
@@ -222,7 +289,7 @@ class ArmTests(BoothFixture):
             response = self.client.post(
                 self.url("booth-arm"), headers={"Datastar-Request": "true"}
             )
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 200)
         body = b"".join(response.streaming_content).decode()
         self.assertIn("No more broadcasts on Field 1 today", body)
 

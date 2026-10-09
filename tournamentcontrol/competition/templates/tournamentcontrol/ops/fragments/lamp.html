@@ -2,13 +2,13 @@
 <section id="onair" class="onair">
 	{% if status == "live" %}<div id="lamp" class="lamp live">ON AIR</div>{% elif status == "testing" %}<div id="lamp" class="lamp testing">STANDBY</div>{% else %}<div id="lamp" class="lamp">OFF AIR</div>{% endif %}
 	<div class="status">
-		{% if current %}<b>{% if status == "live" %}Broadcasting{% elif status == "testing" %}Standby{% else %}Off air{% endif %} · {{ current.get_home_team_plain }} v {{ current.get_away_team_plain }}</b>
-			<span>{{ current.stage.division.title }} · kick-off {{ current.time|time:"H:i" }}{% if current.live_stream_status_at %} · {{ status }} since {{ current.live_stream_status_at|time:"H:i" }}{% endif %}{% if not current.external_identifier %} · no YouTube broadcast{% endif %}</span>
+		{% if broadcast %}<b>{% if status == "live" %}Broadcasting{% elif status == "testing" %}Standby{% else %}Off air{% endif %} · {{ broadcast.get_home_team_plain }} v {{ broadcast.get_away_team_plain }}</b>
+			<span>{{ broadcast.stage.division.title }} · kick-off {{ broadcast.time|time:"H:i" }}{% if broadcast.live_stream_status_at %} · {{ status }} since {{ broadcast.live_stream_status_at|time:"H:i" }}{% endif %}{% if not broadcast.external_identifier %} · no YouTube broadcast{% endif %}</span>
 		{% else %}<b>Nothing on {{ ground.title }} right now</b>{% endif %}
 		{% for error in errors %}<span class="warn">{{ error }}</span>{% endfor %}
 	</div>
 	<div class="controls">
-		{% if current and current.external_identifier %}
+		{% if broadcast and broadcast.external_identifier %}
 			{% if status == "live" %}
 				{% url 'ops:booth-onair' competition=season.competition.slug season=season.slug ground=ground.slug status='complete' as end_url %}
 				<form method="post" action="{{ end_url }}" data-on:submit="@post('{{ end_url }}', {contentType: 'form'})">{% csrf_token %}<button class="bigbtn end" type="submit" data-hold="1500">HOLD TO END BROADCAST</button></form>

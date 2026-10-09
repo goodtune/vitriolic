@@ -658,7 +658,17 @@ class OpsSite(Application):
         now = timezone.now()
         day = queries.local_today(ground, now)
         previous, current, following = queries.ground_day(ground, day, now)
-        status = current.live_stream_status if current else None
+        # The lamp follows the match actually on air, which can be one that
+        # has overrun into the next kick-off; the strip follows the schedule.
+        broadcast = next(
+            (
+                m
+                for m in reversed(list(queries.ground_runsheet(ground, day)))
+                if m.live_stream_status == "live"
+            ),
+            current,
+        )
+        status = broadcast.live_stream_status if broadcast else None
         armable, reason = True, ""
         if status == "live":
             armable, reason = False, "End the current broadcast first."
@@ -679,12 +689,14 @@ class OpsSite(Application):
             "now": now,
             "previous": previous,
             "current": current,
+            "broadcast": broadcast,
             "next": following,
             "status": status,
             "armable": armable,
             "arm_reason": reason,
             "can_stream": True,
             "panes": PANE_LABELS,
+            "tzinfo": queries._tzinfo(ground),
             "user": request.user,
             "errors": [],
         }
@@ -752,11 +764,11 @@ class OpsSite(Application):
             raise Http404("Unknown broadcast status.")
         context = self.booth_context(request, season, ground)
         errors = []
-        if context["current"] is None:
+        if context["broadcast"] is None:
             errors.append("Nothing is on this ground right now.")
         else:
             error = streams.transition(
-                context["current"], status, request.user.get_username()
+                context["broadcast"], status, request.user.get_username()
             )
             if error:
                 errors.append(error)
@@ -775,10 +787,9 @@ class OpsSite(Application):
             html = render_fragment(
                 request, "lamp", **{**context, "errors": [context["arm_reason"]]}
             )
-            response = patches(request, [html], redirect_to=redirect_to)
-            if is_datastar(request):
-                response.status_code = 409
-            return response
+            # Datastar discards the body of a non-200 response, so a refusal
+            # is answered 200 with the reason in the lamp.
+            return patches(request, [html], redirect_to=redirect_to)
         error = streams.transition(
             context["next"], "testing", request.user.get_username()
         )

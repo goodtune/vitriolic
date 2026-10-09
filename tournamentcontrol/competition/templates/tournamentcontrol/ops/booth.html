@@ -3,7 +3,7 @@
 {% block title %}Booth · {{ ground.title }}{% endblock %}
 {% block extracss %}<link rel="stylesheet" href="{% static 'tournamentcontrol/ops/booth.css' %}">{% endblock %}
 {% block body_attrs %}class="booth" data-signals__ifmissing="{pane: '{{ pane|default:'' }}', match: {{ pane_match.pk|default:'null' }}, modal: false}" data-indicator="connected"{% endblock %}
-{% block body %}{% timezone ground.timezone|default:season.timezone %}
+{% block body %}{% timezone tzinfo %}
 <header>
 	<span class="brand">BOOTH</span>
 	<span class="ground">{{ ground.title }}</span>

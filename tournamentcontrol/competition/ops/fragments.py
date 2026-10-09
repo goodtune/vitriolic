@@ -1,6 +1,8 @@
 from django.template.loader import render_to_string
 from django.utils import timezone
 
+from tournamentcontrol.competition.ops import queries
+
 
 def render_fragment(request, name, **context):
     def render():
@@ -8,6 +10,10 @@ def render_fragment(request, name, **context):
             f"tournamentcontrol/ops/fragments/{name}.html", context, request=request
         )
 
+    ground = context.get("ground")
+    if ground is not None:
+        with timezone.override(queries._tzinfo(ground)):
+            return render()
     season = context.get("season")
     if season is not None and season.timezone:
         with timezone.override(season.timezone):

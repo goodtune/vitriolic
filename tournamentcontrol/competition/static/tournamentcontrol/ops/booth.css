@@ -22,7 +22,7 @@ body.booth .brand{font-size:18px;letter-spacing:.04em}body.booth .ground{font-si
 .card h4{margin:0 0 6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .tabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--line);background:#121820;align-items:center}
 .tabs a{padding:14px 16px;min-height:44px;display:inline-flex;align-items:center;color:var(--muted);border-bottom:2px solid transparent;font-weight:600;font-size:13px;cursor:pointer}.tabs a.active{color:#fff;border-bottom-color:var(--red)}.tabs .right{margin-left:auto}
-.teamsbtn{background:var(--panel);border:1px solid var(--line);color:#fff;border-radius:4px;padding:0 14px;height:40px;font:600 13px inherit;cursor:pointer}
+.teamsbtn{background:var(--panel);border:1px solid var(--line);color:#fff;border-radius:4px;padding:0 14px;height:40px;font-weight:600;font-size:13px;cursor:pointer}
 .pane{padding:14px 16px}.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 body.booth table{width:100%;border-collapse:collapse;font-size:13px}body.booth th{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:left;padding:4px 8px;border-bottom:1px solid var(--line)}body.booth td{padding:5px 8px;border-bottom:1px solid #27303c}
 td.n{color:var(--muted);width:34px}td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}tr.out td{color:#55606e}tr.now td{background:#263241}td.onair{color:#ff8a8a;font-weight:700;font-size:11px}td.warn{color:var(--amber);font-size:11px}td.sub{color:var(--muted);font-size:11px}
