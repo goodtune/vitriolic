@@ -21,18 +21,49 @@ from tournamentcontrol.competition.tests.test_live_stream_transition import (
     youtube_mock,
 )
 
-TZ = ZoneInfo("Australia/Brisbane")
+
+def midday_zone(now):
+    """Return the name of a whole-hour zone in which `now` is at midday.
+
+    The ops site decides which match is a ground's current and next one by
+    comparing kick-offs with the clock, and groups the day by the local date.
+    Fixed kick-off times would therefore pass or fail depending on when the
+    suite runs, and a run near local midnight would straddle two days. Placing
+    the season in the zone where it is now 12:00 keeps every kick-off within
+    an hour or so of midday, on the same local date, whatever the time of day.
+
+    The `Etc/GMT` zones have an inverted sign: `Etc/GMT-10` is UTC+10.
+    """
+    offset = 12 - now.astimezone(datetime.UTC).hour
+    if offset > 0:
+        return f"Etc/GMT-{offset}"
+    if offset < 0:
+        return f"Etc/GMT+{-offset}"
+    return "Etc/GMT"
 
 
 @pytest.fixture
 def tournament(transactional_db):
-    today = timezone.localtime(timezone.now(), TZ).date()
+    now = timezone.now().replace(second=0, microsecond=0)
+    zone_name = midday_zone(now)
+    zone = ZoneInfo(zone_name)
+
+    def kickoff_at(delta):
+        kickoff = now + delta
+        local = kickoff.astimezone(zone)
+        return {"datetime": kickoff, "date": local.date(), "time": local.time()}
+
+    live_kickoff = kickoff_at(datetime.timedelta(minutes=-20))
+    scored_kickoff = kickoff_at(datetime.timedelta(minutes=-60))
+    next_kickoff = kickoff_at(datetime.timedelta(minutes=40))
+    today = live_kickoff["date"]
+
     season = SeasonFactory.create(
         slug="pc26",
         slug_locked=True,
         competition__slug="pacific-cup",
         competition__slug_locked=True,
-        timezone="Australia/Brisbane",
+        timezone=zone_name,
         **YOUTUBE_SEASON,
     )
     venue = VenueFactory.create(season=season)
@@ -43,37 +74,37 @@ def tournament(transactional_db):
         slug_locked=True,
         live_stream=True,
     )
-    stage = StageFactory.create(division__season=season)
-    kickoff = timezone.make_aware(datetime.datetime.combine(today, datetime.time(8)), TZ)
-    match = MatchFactory.create(
-        stage=stage,
-        datetime=kickoff,
-        date=today,
-        time=kickoff.time(),
-        play_at=field1,
-        external_identifier="yt-1",
-        live_stream_status="live",
-    )
     field2 = GroundFactory.create(
         venue=venue, title="Field 2", slug="field-2", slug_locked=True
     )
-    scored_kickoff = timezone.make_aware(
-        datetime.datetime.combine(today, datetime.time(9)), TZ
+    stage = StageFactory.create(division__season=season)
+    match = MatchFactory.create(
+        stage=stage,
+        play_at=field1,
+        external_identifier="yt-1",
+        live_stream_status="live",
+        **live_kickoff,
     )
     scored = MatchFactory.create(
         stage=stage,
-        datetime=scored_kickoff,
-        date=today,
-        time=scored_kickoff.time(),
         play_at=field2,
         home_team_score=1,
         away_team_score=0,
+        **scored_kickoff,
+    )
+    upcoming = MatchFactory.create(
+        stage=stage,
+        play_at=field1,
+        external_identifier="yt-2",
+        **next_kickoff,
     )
     return {
         "season": season,
         "ground": field1,
         "match": match,
         "scored": scored,
+        "upcoming": upcoming,
+        "slot_key": live_kickoff["time"].strftime("%H%M"),
         "day_path": f"/ops/pacific-cup/pc26/{today:%Y%m%d}/",
         "booth_path": "/ops/pacific-cup/pc26/booth/field-1/",
     }
@@ -95,7 +126,8 @@ def test_score_entered_on_one_page_appears_on_another(
     expect(second_page.locator(f"#match-{tournament['match'].pk} .score")).to_have_text(
         "5 – 4"
     )
-    expect(second_page.locator("#results-count")).to_have_text("0")
+    # Only the upcoming match is still waiting for a result.
+    expect(second_page.locator("#results-count")).to_have_text("1")
     expect(second_page.locator("#activity li").first).to_contain_text("Score ·")
 
 
@@ -111,8 +143,9 @@ def test_ending_the_broadcast_from_ops_darkens_the_booth_lamp(
         ops_page.locator(
             f"#stream-{tournament['ground'].pk} button", has_text="End"
         ).click()
+        # The first badge is the current match, the second is the next one.
         expect(
-            ops_page.locator(f"#stream-{tournament['ground'].pk} .badge")
+            ops_page.locator(f"#stream-{tournament['ground'].pk} .badge").first
         ).to_have_text("complete")
         expect(second_page.locator("#lamp")).to_have_text("OFF AIR")
 
@@ -184,8 +217,9 @@ def test_collapsed_layout_puts_scorers_behind_a_tab(
     ops_page.locator('button[title="collapse"]').click()
     expect(ops_page.locator("#main")).to_have_class("collapsed")
     expect(ops_page.locator(".rtabs")).to_be_visible()
-    ops_page.locator("#slot-0800 .slot-h").click()
-    expect(ops_page.locator("#slot-0800 .rows")).to_be_hidden()
+    slot = ops_page.locator(f"#slot-{tournament['slot_key']}")
+    slot.locator(".slot-h").click()
+    expect(slot.locator(".rows")).to_be_hidden()
     ops_page.locator(".rtabs a", has_text="Scorers").click()
     expect(ops_page.locator("#scorers")).to_be_visible()
     expect(ops_page.locator("#results")).to_be_hidden()
