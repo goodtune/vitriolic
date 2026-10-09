@@ -20,9 +20,22 @@ def fragment_response(request, html):
     return HttpResponse(html)
 
 
-def patches(request, fragments, signals=None, redirect_to=""):
+def patches(request, fragments, signals=None, redirect_to="", page=None):
+    """
+    Answer a change either as Datastar patches or, for a plain browser, with
+    a redirect to ``redirect_to``.
+
+    A refusal the user must read cannot be redirected away from, so the view
+    passes ``page``: a callable returning the full page (status 200) to send
+    a plain browser instead. ``fragments`` may also be a callable, so a plain
+    browser's request does not render what only Datastar would use.
+    """
     if not is_datastar(request):
+        if page is not None:
+            return page()
         return redirect(redirect_to)
+    if callable(fragments):
+        fragments = fragments()
     events = [SSE.patch_elements(html) for html in fragments]
     if signals:
         events.append(SSE.patch_signals(signals))

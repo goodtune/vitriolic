@@ -258,7 +258,13 @@ class OpsSite(Application):
 
     # --- context ----------------------------------------------------
 
-    def day_context(self, request, season, day):
+    def day_context(self, request, season, day, bound_forms=None, stream_errors=()):
+        """
+        The context for the day page and its fragments. ``bound_forms`` maps
+        a match's pk to a submitted result form to show in place of its own,
+        with its errors; ``stream_errors`` are the messages for the streams.
+        """
+        bound_forms = bound_forms or {}
         now = timezone.now()
         ground_streams, stream_events = queries.day_streams(season, day, now)
         slots = queries.day_results(season, day)
@@ -269,7 +275,11 @@ class OpsSite(Application):
                     request.user, match
                 )
                 match.ops_form = None
-                if match.ops_editable and not match.ops_entered:
+                match.ops_editing = False
+                if match.pk in bound_forms:
+                    match.ops_form = bound_forms[match.pk]
+                    match.ops_editing = match.ops_entered
+                elif match.ops_editable and not match.ops_entered:
                     match.ops_form = style_result_form(MatchResultForm(instance=match))
         scorers = list(queries.day_scorers(season, day))
         current_slot, next_slot = self._stream_slots(slots, ground_streams)
@@ -281,7 +291,7 @@ class OpsSite(Application):
             "results_pending": sum(s.total - s.entered for s in slots if not s.is_byes),
             "scorers": scorers,
             "streams": ground_streams,
-            "stream_errors": [],
+            "stream_errors": list(stream_errors),
             "current_slot": current_slot,
             "next_slot": next_slot,
             "live_count": sum(
@@ -384,7 +394,11 @@ class OpsSite(Application):
     @staff_required
     @season_view
     def day(self, request, season, day, **kwargs):
-        context = self.day_context(request, season, day)
+        return self.day_page(request, season, day)
+
+    def day_page(self, request, season, day, **overrides):
+        """The whole day page, as a plain browser gets it."""
+        context = self.day_context(request, season, day, **overrides)
         return self.render(request, self.template_path("day.html"), context)
 
     # --- fragments --------------------------------------------------
@@ -532,13 +546,21 @@ class OpsSite(Application):
                 self.slot_patches(request, season, day, match),
                 redirect_to=redirect_to,
             )
-        html = render_fragment(
+        return patches(
             request,
-            "match_row",
-            editing=True,
-            **self._row_context(request, season, day, match, form),
+            lambda: [
+                render_fragment(
+                    request,
+                    "match_row",
+                    editing=form.adjusted,
+                    **self._row_context(request, season, day, match, form),
+                )
+            ],
+            redirect_to=redirect_to,
+            page=lambda: self.day_page(
+                request, season, day, bound_forms={match.pk: form}
+            ),
         )
-        return patches(request, [html], redirect_to=redirect_to)
 
     # --- scorers ----------------------------------------------------
 
@@ -629,17 +651,18 @@ class OpsSite(Application):
             match=match,
             formsets=(home, away),
         )
-        if request.method == "POST":
-            return patches(request, [html], redirect_to=day_url)
-        if not is_datastar(request):
-            return HttpResponse(html)
-        return patches(request, [html], signals={"modal": True})
+        return patches(
+            request,
+            [html],
+            signals=None if request.method == "POST" else {"modal": True},
+            redirect_to=day_url,
+            page=lambda: HttpResponse(html),
+        )
 
     # --- streams ----------------------------------------------------
 
     def stream_patches(self, request, season, day, errors=()):
-        context = self.day_context(request, season, day)
-        context["stream_errors"] = list(errors)
+        context = self.day_context(request, season, day, stream_errors=errors)
         return [
             render_fragment(request, "streams", **context),
             render_fragment(request, "activity", **context),
@@ -649,8 +672,13 @@ class OpsSite(Application):
     def _stream_response(self, request, season, day, errors):
         return patches(
             request,
-            self.stream_patches(request, season, day, errors),
+            lambda: self.stream_patches(request, season, day, errors),
             redirect_to=reverse("ops:day", kwargs=day_kwargs(season, day)),
+            page=(
+                (lambda: self.day_page(request, season, day, stream_errors=errors))
+                if errors
+                else None
+            ),
         )
 
     def _check_status(self, status):
@@ -815,7 +843,12 @@ class OpsSite(Application):
     @booth_view
     @booth_required
     def booth(self, request, season, ground, **kwargs):
+        return self.booth_page(request, season, ground)
+
+    def booth_page(self, request, season, ground, **overrides):
+        """The whole booth page, as a plain browser gets it."""
         context = self.booth_context(request, season, ground)
+        context.update(overrides)
         # The panes open on the match on air, which can have overrun into the
         # next kick-off, before the match the schedule says is on.
         match = context["broadcast"] or context["current"]
@@ -853,10 +886,20 @@ class OpsSite(Application):
             )
             if error:
                 errors.append(error)
-        fragments = self._booth_fragments(
-            request, season, ground, ("lamp", "strip"), errors=errors
+        return patches(
+            request,
+            lambda: self._booth_fragments(
+                request, season, ground, ("lamp", "strip"), errors=errors
+            ),
+            redirect_to=self._booth_url(season, ground),
+            page=self._booth_refusal(request, season, ground, errors),
         )
-        return patches(request, fragments, redirect_to=self._booth_url(season, ground))
+
+    def _booth_refusal(self, request, season, ground, errors):
+        """The booth page with ``errors`` in its lamp; None when there are none."""
+        if not errors:
+            return None
+        return lambda: self.booth_page(request, season, ground, errors=errors)
 
     @require_POST_m
     @booth_view
@@ -865,19 +908,29 @@ class OpsSite(Application):
         context = self.booth_context(request, season, ground)
         redirect_to = self._booth_url(season, ground)
         if not context["armable"]:
-            html = render_fragment(
-                request, "lamp", **{**context, "errors": [context["arm_reason"]]}
-            )
+            errors = [context["arm_reason"]]
             # Datastar discards the body of a non-200 response, so a refusal
             # is answered 200 with the reason in the lamp.
-            return patches(request, [html], redirect_to=redirect_to)
+            return patches(
+                request,
+                lambda: [
+                    render_fragment(request, "lamp", **{**context, "errors": errors})
+                ],
+                redirect_to=redirect_to,
+                page=self._booth_refusal(request, season, ground, errors),
+            )
         error = streams.transition(
             context["armable_match"], "testing", request.user.get_username()
         )
-        fragments = self._booth_fragments(
-            request, season, ground, ("lamp", "strip"), errors=[error] if error else []
+        errors = [error] if error else []
+        return patches(
+            request,
+            lambda: self._booth_fragments(
+                request, season, ground, ("lamp", "strip"), errors=errors
+            ),
+            redirect_to=redirect_to,
+            page=self._booth_refusal(request, season, ground, errors),
         )
-        return patches(request, fragments, redirect_to=redirect_to)
 
     def _pane_html(self, request, context, pane, match):
         extra = {"pane": pane, "pane_match": match}

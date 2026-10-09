@@ -3,7 +3,7 @@
 	{% include "tournamentcontrol/ops/fragments/slot_header.html" %}
 	<div class="rows" data-show="$slot_{{ slot.key }}">
 		{% for match in slot.matches %}
-			{% include "tournamentcontrol/ops/fragments/match_row.html" with match=match form=match.ops_form editable=match.ops_editable entered=match.ops_entered editing=False %}
+			{% include "tournamentcontrol/ops/fragments/match_row.html" with match=match form=match.ops_form editable=match.ops_editable entered=match.ops_entered editing=match.ops_editing %}
 		{% endfor %}
 	</div>
 </div>
