@@ -21,6 +21,7 @@ This is a Django-based repository providing reusable applications for sporting c
 - Content management (`touchtechnology/content`)
 - News system (`touchtechnology/news`)
 - Competition management (`tournamentcontrol/competition`)
+- Tournament Ops site (`tournamentcontrol/competition/ops`, see `docs/ops.md`)
 
 ## Test Structure
 

@@ -15,6 +15,7 @@ This is a Python based repository, it provides a Django reusable application tha
 - `touchtechnology/content`: content management features
 - `touchtechnology/news`: news articles
 - `tournamentcontrol/competition`: sporting competition management
+- Tournament Ops site (`tournamentcontrol/competition/ops`, see `docs/ops.md`)
 - `tests`: test project and infrastructure to validate the reusable applications
     - **Unit tests**: Each module above has their own set of tests using Django test framework with `django-test-plus`
     - **E2E tests**: Located in `tests/e2e/` using Playwright with `pytest-django` for browser automation and admin workflow testing
