@@ -182,7 +182,7 @@ class ResultFormTests(FormsFixture):
         self.assertResponseContains("<li>Both scores are required.</li>")
         self.assertResponseContains(
             '<input type="number" name="home_team_score" value="5" class="sc" '
-            'id="m%d_home_team_score">' % self.match.pk
+            'data-preserve-attr="value" id="m%d_home_team_score">' % self.match.pk
         )
         self.match.refresh_from_db()
         self.assertIsNone(self.match.home_team_score)

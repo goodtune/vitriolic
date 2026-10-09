@@ -145,8 +145,9 @@ def style_result_form(form):
             widget.attrs["class"] = "sc"
             # The form hints with the team's name, which the row now shows.
             widget.attrs.pop("placeholder", None)
-            if form.instance.home_team_score is not None:
-                widget.attrs["data-preserve-attr"] = "value"
+            # A morph from the event stream must not reset a score being
+            # typed, or one a refused post sent back.
+            widget.attrs["data-preserve-attr"] = "value"
     # The model form renders these as Yes/No selects; a row wants a checkbox.
     for name in ("is_forfeit", "bye_processed"):
         if name in form.fields:

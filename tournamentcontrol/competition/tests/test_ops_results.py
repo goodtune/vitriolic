@@ -74,7 +74,7 @@ class SlotFragmentTests(ResultsFixture):
         self.response_200()
         self.assertResponseContains(
             '<input type="number" name="home_team_score" class="sc" '
-            'id="m%d_home_team_score">' % self.match.pk
+            'data-preserve-attr="value" id="m%d_home_team_score">' % self.match.pk
         )
 
     def test_pending_row_reads_home_score_v_score_away(self):
@@ -98,7 +98,7 @@ class SlotFragmentTests(ResultsFixture):
             self.get("ops:match-result", match_pk=self.match.pk, **self.kw)
         self.assertResponseContains(
             '<input type="number" name="home_team_score" class="sc" '
-            'id="m%d_home_team_score">' % self.match.pk
+            'data-preserve-attr="value" id="m%d_home_team_score">' % self.match.pk
         )
 
     def test_entered_row_renders_score_and_edit_link(self):

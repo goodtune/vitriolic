@@ -8,8 +8,10 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from django.utils import timezone
+from faker import Faker
 from playwright.sync_api import expect
 
+from tournamentcontrol.competition.models import TeamAssociation
 from tournamentcontrol.competition.ops import events
 from tournamentcontrol.competition.tests.factories import (
     GroundFactory,
@@ -18,6 +20,7 @@ from tournamentcontrol.competition.tests.factories import (
     SeasonFactory,
     StageFactory,
     TeamAssociationFactory,
+    TeamFactory,
     VenueFactory,
 )
 from tournamentcontrol.competition.tests.test_live_stream_transition import (
@@ -28,10 +31,15 @@ from tournamentcontrol.competition.tests.test_live_stream_transition import (
 
 SQUAD = 16
 
+# The screenshots go on the pull request, so the fixture reads like a real
+# tournament: a nation for each club and team, and a squad of made-up names.
+NATIONS = ("Australia", "New Zealand", "Fiji", "Samoa", "Japan", "Singapore")
+
 
 def player_name(team, number):
     """The name of the player wearing ``number`` for ``team``, as the pages show it."""
-    return f"Player{number:02d} {team.title}"
+    person = TeamAssociation.objects.get(team=team, number=number).person
+    return f"{person.first_name} {person.last_name}"
 
 
 def wait_for_snapshot(page, season):
@@ -111,9 +119,15 @@ def tournament(transactional_db):
     field2 = GroundFactory.create(
         venue=venue, title="Field 2", slug="field-2", slug_locked=True
     )
-    stage = StageFactory.create(division__season=season)
+    stage = StageFactory.create(division__season=season, division__title="Men's Open")
+    home, away, fiji, samoa, japan, singapore = (
+        TeamFactory.create(title=nation, club__title=nation, division=stage.division)
+        for nation in NATIONS
+    )
     match = MatchFactory.create(
         stage=stage,
+        home_team=home,
+        away_team=away,
         play_at=field1,
         external_identifier="yt-1",
         live_stream_status="live",
@@ -121,6 +135,8 @@ def tournament(transactional_db):
     )
     scored = MatchFactory.create(
         stage=stage,
+        home_team=fiji,
+        away_team=samoa,
         play_at=field2,
         home_team_score=1,
         away_team_score=0,
@@ -128,11 +144,16 @@ def tournament(transactional_db):
     )
     upcoming = MatchFactory.create(
         stage=stage,
+        home_team=japan,
+        away_team=singapore,
         play_at=field1,
         external_identifier="yt-2",
         **next_kickoff,
     )
-    # A squad of 16 for every team, as a real tournament has.
+    # A squad of 16 for every team, as a real tournament has. The names are
+    # seeded so that every run, and every screenshot, shows the same people.
+    fake = Faker()
+    fake.seed_instance(2026)
     teams = []
     for fixture in (match, scored, upcoming):
         for team in (fixture.home_team, fixture.away_team):
@@ -141,8 +162,8 @@ def tournament(transactional_db):
     for team in teams:
         for number in range(1, SQUAD + 1):
             person = PersonFactory.create(
-                first_name=f"Player{number:02d}",
-                last_name=team.title,
+                first_name=fake.first_name_male(),
+                last_name=fake.last_name(),
                 club=team.club,
                 gender="M",
                 user=None,
@@ -380,7 +401,6 @@ def test_a_single_score_is_refused_in_its_row(
     ops_page, asgi_live_server, tournament, screenshot_dir
 ):
     ops_page.goto(asgi_live_server.url + tournament["day_path"])
-    wait_for_snapshot(ops_page, tournament["season"])
     row = ops_page.locator(f"#match-{tournament['match'].pk}")
     row.locator('input[name="home_team_score"]').fill("3")
     row.locator('button[type="submit"]').click()
