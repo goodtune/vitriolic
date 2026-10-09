@@ -97,7 +97,7 @@ competition = [
     "python-magic",
     "requests",
 ]
-ops = [
+async = [
     "datastar-py>=1.0.3",
     "redis>=5.0.1",
 ]

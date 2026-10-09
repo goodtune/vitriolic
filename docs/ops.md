@@ -15,7 +15,7 @@ from tournamentcontrol.competition.ops.sites import OpsSite
 urlpatterns += [path("ops/", OpsSite().urls)]
 ```
 
-Install the extra: `pip install vitriolic[ops]` (adds `datastar-py` and
+Install the extra: `pip install vitriolic[async]` (adds `datastar-py` and
 `redis`). Nothing happens unless the site is mounted.
 
 The booth refuses an action with a normal 200 response that carries the
