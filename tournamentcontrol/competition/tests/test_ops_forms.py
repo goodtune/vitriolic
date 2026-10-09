@@ -32,6 +32,7 @@ TZ = ZoneInfo("Australia/Brisbane")
 DAY_TEMPLATE = "tournamentcontrol/ops/day.html"
 BOOTH_TEMPLATE = "tournamentcontrol/ops/booth.html"
 MODAL_TEMPLATE = "tournamentcontrol/ops/fragments/scorers_modal.html"
+SCORERS_TEMPLATE = "tournamentcontrol/ops/scorers.html"
 
 
 @freeze_time("2026-10-08 10:50 +10:00")
@@ -265,6 +266,7 @@ class ScorersFormTests(FormsFixture):
     def test_points_that_do_not_sum_show_the_formset_error_in_the_modal(self):
         response = self.post(self.payload([1, 0], [1]))
         self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, SCORERS_TEMPLATE)
         self.assertTemplateUsed(response, MODAL_TEMPLATE)
         self.assertTemplateNotUsed(response, DAY_TEMPLATE)
         self.assertResponseContains(
@@ -274,6 +276,29 @@ class ScorersFormTests(FormsFixture):
         self.assertFalse(
             SimpleScoreMatchStatistic.objects.filter(match=self.match).exists()
         )
+
+    def test_the_error_page_works_without_javascript(self):
+        response = self.post(self.payload([1, 0], [1]))
+        body = response.content.decode()
+        self.assertTrue(body.lstrip().lower().startswith("<!doctype html>"))
+        # The form posts on its own, with its token, and Save submits it.
+        self.assertIn('<form method="post" action="%s"' % self.scorers_url, body)
+        self.assertResponseContains(
+            '<button class="btn p" type="submit">Save scorers</button>'
+        )
+        # Leaving is a link to the day, not a button that needs a script.
+        self.assertResponseContains('<a class="btn" href="%s">Cancel</a>' % self.day_url)
+        self.assertResponseContains(
+            '<a class="back" href="%s">Back to the day</a>' % self.day_url
+        )
+        self.assertNotIn("$modal = false", body)
+
+    def test_the_plain_get_is_the_same_page(self):
+        with self.login(self.operator):
+            self.last_response = self.client.get(self.scorers_url)
+        self.assertEqual(self.last_response.status_code, 200)
+        self.assertTemplateUsed(self.last_response, SCORERS_TEMPLATE)
+        self.assertResponseContains('<a class="btn" href="%s">Cancel</a>' % self.day_url)
 
 
 class StreamFormTests(FormsFixture):

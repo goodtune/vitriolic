@@ -3,10 +3,10 @@
 	<div class="modal-h">
 		<h3>{{ match.get_home_team_plain }} {{ match.home_team_score }} – {{ match.away_team_score }} {{ match.get_away_team_plain }}</h3>
 		<span class="sub">{{ match.stage.division.title }} · {{ match.time|time:"H:i" }} {{ match.play_at.title }}</span>
-		<button class="btn x" type="button" data-on:click="el.closest('.modal').classList.toggle('full')">Full screen</button>
-		<button class="btn" type="button" data-on:click="$modal = false">Close</button>
+		{% if not standalone %}<button class="btn x" type="button" data-on:click="el.closest('.modal').classList.toggle('full')">Full screen</button>{% endif %}
+		{% if standalone %}<a class="btn" href="{% ops_url 'day' %}">Close</a>{% else %}<button class="btn" type="button" data-on:click="$modal = false">Close</button>{% endif %}
 	</div>
-	<form method="post" action="{% ops_url 'match-scorers' match_pk=match.pk %}" data-on:submit="@post('{% ops_url 'match-scorers' match_pk=match.pk %}', {contentType: 'form'})" data-on:input="$home_total = [...el.querySelectorAll('input[data-side=home]')].reduce((s, i) => s + (+i.value || 0), 0); $away_total = [...el.querySelectorAll('input[data-side=away]')].reduce((s, i) => s + (+i.value || 0), 0)">
+	<form method="post" action="{% ops_url 'match-scorers' match_pk=match.pk %}"{% if not standalone %} data-on:submit="@post('{% ops_url 'match-scorers' match_pk=match.pk %}', {contentType: 'form'})"{% endif %} data-on:input="$home_total = [...el.querySelectorAll('input[data-side=home]')].reduce((s, i) => s + (+i.value || 0), 0); $away_total = [...el.querySelectorAll('input[data-side=away]')].reduce((s, i) => s + (+i.value || 0), 0)">
 		{% csrf_token %}
 		<div class="modal-b">
 			<div class="cols">
@@ -34,7 +34,7 @@
 		<div class="modal-f">
 			<span class="sub">Points must sum to each team's score.</span>
 			<span class="spacer"></span>
-			<button class="btn" type="button" data-on:click="$modal = false">Cancel</button>
+			{% if standalone %}<a class="btn" href="{% ops_url 'day' %}">Cancel</a>{% else %}<button class="btn" type="button" data-on:click="$modal = false">Cancel</button>{% endif %}
 			<button class="btn p" type="submit">Save scorers</button>
 		</div>
 	</form>

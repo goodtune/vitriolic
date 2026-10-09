@@ -643,20 +643,35 @@ class OpsSite(Application):
                 )
         else:
             home, away = self.statistic_formsets(request, match)
-        html = render_fragment(
-            request,
-            "scorers_modal",
-            season=season,
-            daystr=day.strftime("%Y%m%d"),
-            match=match,
-            formsets=(home, away),
-        )
+        def modal(**extra):
+            return render_fragment(
+                request,
+                "scorers_modal",
+                season=season,
+                daystr=day.strftime("%Y%m%d"),
+                match=match,
+                formsets=(home, away),
+                **extra,
+            )
+
+        def page():
+            # No JavaScript here: the modal's buttons become links to the day.
+            context = {
+                "season": season,
+                "day": day,
+                "daystr": day.strftime("%Y%m%d"),
+                "match": match,
+                "modal": modal(standalone=True),
+                "user": request.user,
+            }
+            return self.render(request, self.template_path("scorers.html"), context)
+
         return patches(
             request,
-            [html],
+            lambda: [modal()],
             signals=None if request.method == "POST" else {"modal": True},
             redirect_to=day_url,
-            page=lambda: HttpResponse(html),
+            page=page,
         )
 
     # --- streams ----------------------------------------------------

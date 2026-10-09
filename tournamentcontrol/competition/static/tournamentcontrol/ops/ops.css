@@ -59,6 +59,7 @@ select.ff{height:34px;border:1px solid #ddd;border-radius:3px;font-size:11px;bac
 .cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 table.st{width:100%;border-collapse:collapse;font-size:13px}table.st th{font-size:10px;text-transform:uppercase;color:var(--muted);text-align:left;padding:4px 6px;border-bottom:1px solid var(--line)}table.st td{padding:4px 6px;border-bottom:1px solid #f0f0f0;height:42px}
 table.st input[type=number]{width:52px;height:34px;text-align:center;border:1px solid #ccc;border-radius:3px}
+.standalone{flex:1;min-height:0;display:flex;justify-content:center;padding:10px 12px}.standalone .modal{height:100%;box-shadow:none;border:1px solid var(--line)}.topbar .back{color:#fff;border:1px solid #4a5868;border-radius:3px;padding:3px 10px;font-size:12px}
 .tot{margin-left:auto;font-size:13px;font-weight:600}.tot.bad{color:#a33}
 main.index{padding:24px}
 @media (max-width:900px){body{overflow:auto}main#main{display:flex;flex-direction:column}.results{grid-template-rows:none}main#main.collapsed{grid-template-columns:1fr}.cols{grid-template-columns:1fr}}

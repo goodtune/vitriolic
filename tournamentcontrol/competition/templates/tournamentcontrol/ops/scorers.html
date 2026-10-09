@@ -1,0 +1,16 @@
+{% extends "tournamentcontrol/ops/base.html" %}
+{% load ops_tags tz %}
+{% block title %}Scorers · {{ season }} · {{ day|date:"D j M" }} · Ops{% endblock %}
+{% block body_attrs %}class="ops"{% endblock %}
+{% block body %}
+{% timezone season.timezone %}
+<header class="topbar">
+	<span class="brand">TOURNAMENT OPS</span>
+	<span class="season">{{ season }} · {{ day|date:"l j F" }}</span>
+	<span class="spacer"></span>
+	<a class="back" href="{% ops_url 'day' %}">Back to the day</a>
+	<span class="who">{{ user.get_username }}</span>
+</header>
+<div class="standalone">{{ modal|safe }}</div>
+{% endtimezone %}
+{% endblock %}

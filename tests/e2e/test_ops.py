@@ -10,6 +10,7 @@ import pytest
 from django.utils import timezone
 from playwright.sync_api import expect
 
+from tournamentcontrol.competition.ops import events
 from tournamentcontrol.competition.tests.factories import (
     GroundFactory,
     MatchFactory,
@@ -31,6 +32,27 @@ SQUAD = 16
 def player_name(team, number):
     """The name of the player wearing ``number`` for ``team``, as the pages show it."""
     return f"Player{number:02d} {team.title}"
+
+
+def wait_for_snapshot(page, season):
+    """
+    Wait until the day page has been brought up to date by its event stream.
+
+    The stream's first push re-renders the lists, wiping a score typed before
+    it lands. Pages cannot tell when that is, so publish an event and wait for
+    it to show in the activity feed: the push carrying it follows the snapshot.
+    """
+    expect(page.locator(".sse")).not_to_have_class("down")
+    events.publish(
+        season.pk,
+        "stream-changed",
+        actor="e2e",
+        summary="Page connected",
+        kind="match",
+        id=0,
+        status="live",
+    )
+    expect(page.locator("#activity li", has_text="Page connected")).to_have_count(1)
 
 
 def midday_zone(now):
@@ -327,7 +349,7 @@ def test_scorers_are_validated_then_saved(
 ):
     scored = tournament["scored"]
     ops_page.goto(asgi_live_server.url + tournament["day_path"])
-    expect(ops_page.locator(".sse")).not_to_have_class("down")
+    wait_for_snapshot(ops_page, tournament["season"])
     ops_page.locator(f"#scorers-{scored.pk} a", has_text="Enter scorers").click()
     modal = ops_page.locator("#modal-body")
     expect(modal.locator("tr")).to_have_count(2 * (SQUAD + 1))
@@ -358,8 +380,7 @@ def test_a_single_score_is_refused_in_its_row(
     ops_page, asgi_live_server, tournament, screenshot_dir
 ):
     ops_page.goto(asgi_live_server.url + tournament["day_path"])
-    # The first push after connecting re-renders the page, so let it land.
-    expect(ops_page.locator(".sse")).not_to_have_class("down")
+    wait_for_snapshot(ops_page, tournament["season"])
     row = ops_page.locator(f"#match-{tournament['match'].pk}")
     row.locator('input[name="home_team_score"]').fill("3")
     row.locator('button[type="submit"]').click()
@@ -426,4 +447,21 @@ def test_without_javascript_the_form_still_posts(
     page.screenshot(
         path=str(screenshot_dir / "ops_no_javascript.png"), full_page=True
     )
+    # Scorers: a refused save comes back as a page, and Cancel leaves it.
+    scored = tournament["scored"]
+    page.locator(f"#scorers-{scored.pk} a", has_text="Enter scorers").click()
+    page.locator('input[name="home-0-points"]').fill("2")
+    with page.expect_response(lambda r: r.request.method == "POST") as posted:
+        page.locator("button", has_text="Save scorers").click()
+    assert posted.value.status == 200
+    # Both squads are checked on the page; the home side is the first.
+    expect(page.locator(".errorlist li").first).to_have_text(
+        "Total number of points (2) does not equal total number of scores (1) "
+        "for this team."
+    )
+    page.screenshot(
+        path=str(screenshot_dir / "ops_no_javascript_scorers.png"), full_page=True
+    )
+    page.locator("a", has_text="Cancel").click()
+    expect(page).to_have_url(asgi_live_server.url + tournament["day_path"])
     context.close()
