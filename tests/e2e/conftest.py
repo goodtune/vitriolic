@@ -115,6 +115,7 @@ class AsgiLiveServer:
             port=self.port,
             log_level="warning",
             lifespan="off",
+            timeout_graceful_shutdown=1,
         )
         self.server = uvicorn.Server(config)
         self.thread = threading.Thread(target=self.server.run, daemon=True)
@@ -134,6 +135,7 @@ class AsgiLiveServer:
     def stop(self):
         self.server.should_exit = True
         self.thread.join(5)
+        assert not self.thread.is_alive(), "ASGI live server did not stop"
 
 
 @pytest.fixture

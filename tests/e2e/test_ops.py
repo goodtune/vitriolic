@@ -202,6 +202,7 @@ def test_without_javascript_the_form_still_posts(
     page.fill('input[name="username"]', "ops")
     page.fill('input[name="password"]', "password")
     page.click("button")
+    page.wait_for_load_state("networkidle")
     page.goto(asgi_live_server.url + tournament["day_path"])
     row = page.locator(f"#match-{tournament['match'].pk}")
     row.locator('input[name="home_team_score"]').fill("2")
