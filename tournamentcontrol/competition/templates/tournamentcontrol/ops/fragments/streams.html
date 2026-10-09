@@ -25,7 +25,13 @@
 					{% ops_url 'match-stream' match_pk=item.current.pk status='live' as live_url %}
 					{% ops_url 'match-stream' match_pk=item.current.pk status='testing' as test_url %}
 					{% ops_url 'match-stream' match_pk=item.current.pk status='complete' as end_url %}
-					{% include "tournamentcontrol/ops/fragments/_stream_buttons.html" with obj=item.current %}
+					<div class="ctl">{% include "tournamentcontrol/ops/fragments/_stream_buttons.html" with obj=item.current %}</div>
+				{% endif %}
+				{% if item.next %}
+					{% ops_url 'match-stream' match_pk=item.next.pk status='live' as next_live_url %}
+					{% ops_url 'match-stream' match_pk=item.next.pk status='testing' as next_test_url %}
+					{% ops_url 'match-stream' match_pk=item.next.pk status='complete' as next_end_url %}
+					<div class="ctl next">{% include "tournamentcontrol/ops/fragments/_stream_buttons.html" with obj=item.next live_url=next_live_url test_url=next_test_url end_url=next_end_url %}</div>
 				{% endif %}
 			</div>
 		</div>
@@ -48,11 +54,19 @@
 		{% endfor %}
 	{% endif %}
 	{% if can_stream and current_slot %}
-		<div class="sect">Whole slot
+		<div id="slot-actions-current" class="sect">Whole slot
 			{% ops_url 'slot-stream' slot_key=current_slot.key status='live' as slot_live %}
 			{% ops_url 'slot-stream' slot_key=current_slot.key status='complete' as slot_end %}
 			<form method="post" action="{{ slot_live }}" data-on:submit="@post('{{ slot_live }}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit">Go live: all {{ current_slot.label }}</button></form>
 			<form method="post" action="{{ slot_end }}" data-on:submit="@post('{{ slot_end }}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit">End: all {{ current_slot.label }}</button></form>
+		</div>
+	{% endif %}
+	{% if can_stream and next_slot %}
+		<div id="slot-actions-next" class="sect">Next slot
+			{% ops_url 'slot-stream' slot_key=next_slot.key status='testing' as slot_test %}
+			{% ops_url 'slot-stream' slot_key=next_slot.key status='live' as slot_live %}
+			<form method="post" action="{{ slot_test }}" data-on:submit="@post('{{ slot_test }}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit">Test: all {{ next_slot.label }}</button></form>
+			<form method="post" action="{{ slot_live }}" data-on:submit="@post('{{ slot_live }}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit">Go live: all {{ next_slot.label }}</button></form>
 		</div>
 	{% endif %}
 </div>

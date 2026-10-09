@@ -270,6 +270,7 @@ class OpsSite(Application):
                 if match.ops_editable and not match.ops_entered:
                     match.ops_form = style_result_form(MatchResultForm(instance=match))
         scorers = list(queries.day_scorers(season, day))
+        current_slot, next_slot = self._stream_slots(slots, ground_streams)
         return {
             "season": season,
             "day": day,
@@ -279,7 +280,8 @@ class OpsSite(Application):
             "scorers": scorers,
             "streams": ground_streams,
             "stream_errors": [],
-            "current_slot": next((s for s in slots if s.open), None),
+            "current_slot": current_slot,
+            "next_slot": next_slot,
             "live_count": sum(
                 1
                 for s in ground_streams
@@ -293,6 +295,27 @@ class OpsSite(Application):
             "can_statistics": can_enter_statistics(request.user),
             "user": request.user,
         }
+
+    @staticmethod
+    def _stream_slots(slots, ground_streams):
+        """
+        The slots for the whole-slot stream actions, chosen by the clock: the
+        latest kick-off on air on any streamed ground and the earliest one to
+        come.
+        """
+        by_key = {s.key: s for s in slots if s.time is not None}
+
+        def slot_of(matches, pick):
+            times = [m.time for m in matches if m is not None and m.time]
+            if not times:
+                return None
+            return by_key.get(pick(times).strftime("%H%M"))
+
+        current_slot = slot_of([s.current for s in ground_streams], max)
+        next_slot = slot_of([s.next for s in ground_streams], min)
+        if next_slot is current_slot:
+            next_slot = None
+        return current_slot, next_slot
 
     def snapshot_fragments(self, request, season, day):
         """Everything the day page shows that can change, freshly rendered."""

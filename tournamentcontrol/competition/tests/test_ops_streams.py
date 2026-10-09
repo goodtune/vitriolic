@@ -86,6 +86,52 @@ class StreamsFragmentTests(StreamsFixture):
             '<button class="btn r sm" type="submit">End</button>'
         )
 
+    def test_whole_slot_actions_follow_the_clock(self):
+        with self.login(self.streamer):
+            self.get("ops:streams", **self.kw)
+        for label in (
+            "Go live: all 10:40",
+            "End: all 10:40",
+            "Test: all 11:20",
+            "Go live: all 11:20",
+        ):
+            self.assertResponseContains(
+                '<button class="btn sm" type="submit">%s</button>' % label
+            )
+        body = self.last_response.content.decode()
+        for key, status in (
+            ("1040", "live"),
+            ("1040", "complete"),
+            ("1120", "testing"),
+            ("1120", "live"),
+        ):
+            self.assertIn(
+                'action="%s"' % self.url("slot-stream", slot_key=key, status=status),
+                body,
+            )
+
+    def test_whole_slot_actions_ignore_unentered_results(self):
+        # An earlier slot still waiting on results is not the slot on air.
+        self.make(self.current.stage, 9, 20)
+        with self.login(self.streamer):
+            self.get("ops:streams", **self.kw)
+        self.assertResponseContains(
+            '<button class="btn sm" type="submit">Go live: all 10:40</button>'
+        )
+        self.assertResponseNotContains(
+            '<button class="btn sm" type="submit">Go live: all 09:20</button>'
+        )
+
+    def test_next_match_has_its_own_buttons(self):
+        with self.login(self.streamer):
+            self.get("ops:streams", **self.kw)
+        self.assertResponseContains('<button class="btn sm" type="submit">Test</button>')
+        self.assertIn(
+            'action="%s"'
+            % self.url("match-stream", match_pk=self.following.pk, status="testing"),
+            self.last_response.content.decode(),
+        )
+
     def test_without_permission_no_buttons(self):
         with self.login(self.staff):
             self.get("ops:streams", **self.kw)
