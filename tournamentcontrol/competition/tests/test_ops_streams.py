@@ -6,6 +6,8 @@ from django.contrib.auth.models import Permission
 from django.urls import reverse
 from django.utils import timezone
 from freezegun import freeze_time
+from google.auth.exceptions import RefreshError
+from googleapiclient.errors import HttpError
 from test_plus import TestCase
 
 from tournamentcontrol.competition.ops import events
@@ -156,6 +158,37 @@ class MatchTransitionTests(StreamsFixture):
             )
         body = b"".join(response.streaming_content).decode()
         self.assertIn("does not have a live stream identifier", body)
+        self.assertEqual(events.recent(self.season.pk), [])
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_expired_credentials_report_an_error_and_publish_nothing(self, build):
+        build.side_effect = RefreshError("expired")
+        with self.login(self.streamer), self.captureOnCommitCallbacks(execute=True):
+            with self.assertLogs("tournamentcontrol.competition.ops.streams"):
+                response = self.client.post(
+                    self.url("match-stream", match_pk=self.current.pk, status="live"),
+                    headers={"Datastar-Request": "true"},
+                )
+        self.assertEqual(response.status_code, 200)
+        body = b"".join(response.streaming_content).decode()
+        self.assertIn("expired", body)
+        self.assertEqual(events.recent(self.season.pk), [])
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_youtube_api_error_reports_the_reason_and_publishes_nothing(self, build):
+        service = youtube_mock("testing")
+        service.liveBroadcasts.return_value.transition.return_value.execute.side_effect = HttpError(
+            resp=mock.Mock(status=403, reason="quota"), content=b"quota"
+        )
+        build.return_value = service
+        with self.login(self.streamer), self.captureOnCommitCallbacks(execute=True):
+            with self.assertLogs("tournamentcontrol.competition.ops.streams"):
+                response = self.client.post(
+                    self.url("match-stream", match_pk=self.current.pk, status="live"),
+                    headers={"Datastar-Request": "true"},
+                )
+        body = b"".join(response.streaming_content).decode()
+        self.assertIn("quota", body)
         self.assertEqual(events.recent(self.season.pk), [])
 
 

@@ -5,6 +5,7 @@ open page about it.
 
 import logging
 
+from google.auth.exceptions import RefreshError, TransportError
 from googleapiclient.errors import HttpError
 
 from tournamentcontrol.competition.exceptions import LiveStreamError
@@ -59,5 +60,8 @@ def transition(obj, status, actor):
     except HttpError as exc:
         logger.warning("ops stream transition failed for %s: %s", obj, exc.reason)
         return "%s: %s" % (describe(obj), exc.reason)
+    except (RefreshError, TransportError) as exc:
+        logger.exception("ops stream transition failed for %s", obj)
+        return "%s: %s" % (describe(obj), exc)
     publish_change(obj, status, actor)
     return None
