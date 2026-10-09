@@ -49,6 +49,7 @@ from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.utils import (
     get_all_perms_for_model_cached,
     model_and_manager,
+    month_slug,
     tree_for_node,
 )
 from tournamentcontrol.competition.utils import FauxQueryset
@@ -157,6 +158,19 @@ def twittify(s):
             s,
         )
     )
+
+
+@register.filter(name="month_slug", expects_localtime=True)
+def month_slug_filter(value):
+    """
+    The month of a date or datetime as a date URL spells it, such as "jun".
+
+    Use this rather than ``date:"b"`` when building a URL: that follows the
+    active language, so a visitor reading in Czech would be given "čec".
+    """
+    if not value:
+        return ""
+    return month_slug(value)
 
 
 @register.filter
