@@ -476,8 +476,7 @@ class OpsSite(Application):
             "daystr": day.strftime("%Y%m%d"),
             "match": match,
             "form": form,
-            "editable": match.result_editable
-            and can_change_match(request.user, match),
+            "editable": match.result_editable and can_change_match(request.user, match),
             "entered": match.has_result,
         }
 

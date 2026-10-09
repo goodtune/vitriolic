@@ -1,12 +1,28 @@
 """
-Read-side helpers for the ops site. Pure functions over the ORM; no
-request objects, no rendering.
+The ops site's day-shaped reads: the day's matches grouped into result
+slots, the scored matches whose statistics do not yet balance, and the
+current and next match on each streamed ground. Pure functions over the
+ORM; no request objects, no rendering.
+
+The state of a match's result lives on ``MatchQuerySet.with_result_state()``
+and time zones on the models (``get_tzinfo()`` and ``local_date()``).
 """
 
 import dataclasses
 import datetime
 
-from django.db.models import F, OuterRef, Q, Subquery, Sum
+from django.db.models import (
+    BooleanField,
+    Case,
+    Exists,
+    F,
+    OuterRef,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+    When,
+)
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
@@ -117,6 +133,11 @@ def _team_points(side):
 
 
 def day_scorers(season, day):
+    """
+    The day's scored matches still wanting scorers: those with no statistics
+    recorded, and those annotated ``out_of_balance`` because the points
+    recorded for a side differ from its score.
+    """
     if not season.statistics:
         return Match.objects.none()
     return (
@@ -130,19 +151,26 @@ def day_scorers(season, day):
             home_team_score__isnull=False,
             away_team_score__isnull=False,
         )
-        .annotate(home_points=_team_points("home"), away_points=_team_points("away"))
-        .filter(
-            Q(statistics__isnull=True)
-            | ~Q(home_points=F("home_team_score"))
-            | ~Q(away_points=F("away_team_score"))
+        .annotate(
+            home_points=_team_points("home"),
+            away_points=_team_points("away"),
+            recorded=Exists(
+                SimpleScoreMatchStatistic.objects.filter(match=OuterRef("pk"))
+            ),
         )
-        .distinct()
-    )
-
-
-def out_of_balance(match):
-    return match.home_points != match.home_team_score or (
-        match.away_points != match.away_team_score
+        .annotate(
+            out_of_balance=Case(
+                When(recorded=False, then=Value(False)),
+                When(
+                    home_points=F("home_team_score"),
+                    away_points=F("away_team_score"),
+                    then=Value(False),
+                ),
+                default=Value(True),
+                output_field=BooleanField(),
+            )
+        )
+        .filter(Q(recorded=False) | Q(out_of_balance=True))
     )
 
 

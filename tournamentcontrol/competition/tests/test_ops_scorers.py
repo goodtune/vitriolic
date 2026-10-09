@@ -99,6 +99,14 @@ class ScorersListTests(ScorersFixture):
             % (self.url, self.url)
         )
 
+    def test_unbalanced_match_is_marked(self):
+        SimpleScoreMatchStatistic.objects.create(
+            match=self.match, player=self.home[0], number=1, played=1, points=1
+        )
+        with self.login(self.staff):
+            self.get("ops:scorers", **self.kw)
+        self.assertResponseContains('<span class="pill warn">out of balance</span>')
+
     def test_user_without_statistics_permission_sees_no_button(self):
         with self.login(self.nostats):
             self.get("ops:scorers", **self.kw)

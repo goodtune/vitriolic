@@ -7,7 +7,7 @@
 			<span class="score">{{ match.home_team_score }} – {{ match.away_team_score }}</span>
 			<span class="team away">{{ match.get_away_team_plain }}</span>
 			<span class="acts">
-				{% if match.home_points or match.away_points %}<span class="pill warn">out of balance</span>{% endif %}
+				{% if match.out_of_balance %}<span class="pill warn">out of balance</span>{% endif %}
 				{% if can_statistics %}<a class="btn" href="{% ops_url 'match-scorers' match_pk=match.pk %}" data-on:click__prevent="@get('{% ops_url 'match-scorers' match_pk=match.pk %}')">Enter scorers</a>{% endif %}
 			</span>
 		</div>

@@ -111,7 +111,8 @@ class DayScorersTests(DayFixture):
     def test_scored_match_without_statistics_is_listed(self):
         scored = self.match(8, home_team_score=3, away_team_score=1)
         self.match(8)
-        self.assertEqual(list(queries.day_scorers(self.season, DAY)), [scored])
+        (match,) = queries.day_scorers(self.season, DAY)
+        self.assertEqual((match, match.out_of_balance), (scored, False))
 
     def test_balanced_match_is_not_listed(self):
         scored = self.match(8, home_team_score=1, away_team_score=0)
@@ -122,8 +123,19 @@ class DayScorersTests(DayFixture):
         scored = self.match(8, home_team_score=2, away_team_score=0)
         self._stat(scored, scored.home_team, 1)
         (match,) = queries.day_scorers(self.season, DAY)
-        self.assertEqual(match, scored)
-        self.assertTrue(queries.out_of_balance(match))
+        self.assertEqual((match, match.out_of_balance), (scored, True))
+
+    def test_statistics_without_points_are_out_of_balance(self):
+        scored = self.match(8, home_team_score=1, away_team_score=0)
+        self._stat(scored, scored.home_team, None)
+        (match,) = queries.day_scorers(self.season, DAY)
+        self.assertEqual((match, match.out_of_balance), (scored, True))
+
+    def test_match_with_many_statistics_is_listed_once(self):
+        scored = self.match(8, home_team_score=3, away_team_score=0)
+        self._stat(scored, scored.home_team, 1)
+        self._stat(scored, scored.home_team, 1)
+        self.assertEqual(list(queries.day_scorers(self.season, DAY)), [scored])
 
     def test_season_without_statistics_lists_nothing(self):
         self.season.statistics = False
