@@ -46,8 +46,8 @@ assign_perm("competition.stream_season", user, season)
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `OPS_EVENTS_BACKEND` | `"memory"` | `"memory"` works for one server process only; use `"redis"` with more than one worker or with the Celery refresh task |
-| `OPS_EVENTS_REDIS_URL` | `None` | required with the Redis backend |
+| `OPS_EVENTS_BACKEND` | `"tournamentcontrol.competition.ops.events.memory.MemoryBackend"` | dotted path to the event bus class; the memory backend works for one server process only, so use `"tournamentcontrol.competition.ops.events.redis.RedisBackend"` with more than one worker or with the Celery refresh task |
+| `OPS_EVENTS_OPTIONS` | `{}` | keyword arguments for the backend class; the Redis backend needs `{"url": "redis://localhost:6379/0"}` |
 | `OPS_EVENTS_KEEPALIVE` | `20` | seconds between SSE keep-alive comments |
 | `OPS_ACTIVITY_LENGTH` | `50` | events kept for the activity feed |
 
@@ -103,9 +103,9 @@ The task isolates each season, so one season's expired credentials do not
 stop the others.
 
 The task runs in a Celery worker, which is a different process from the web
-server. The `memory` backend cannot send events from one process to
-another, so the pages do not see the changes that the task finds. Use the
-`redis` backend when you schedule the task.
+server. The memory backend (`MemoryBackend`) cannot send events from one
+process to another, so the pages do not see the changes that the task
+finds. Use the Redis backend (`RedisBackend`) when you schedule the task.
 
 ## Tests
 

@@ -4,6 +4,7 @@ from unittest import mock
 
 import fakeredis
 from asgiref.sync import sync_to_async
+from django.core.exceptions import ImproperlyConfigured
 from django.test import override_settings
 from test_plus import TestCase
 
@@ -206,14 +207,34 @@ class BackendSelectionTests(TestCase):
         self.assertIsInstance(events.get_backend(), events.MemoryBackend)
 
     @override_settings(
-        OPS_EVENTS_BACKEND="redis", OPS_EVENTS_REDIS_URL="redis://localhost/0"
+        OPS_EVENTS_BACKEND="tournamentcontrol.competition.ops.events.redis.RedisBackend",
+        OPS_EVENTS_OPTIONS={"url": "redis://localhost/0"},
     )
     def test_redis_selected_by_setting(self):
         events.reset_backend()
         self.assertIsInstance(events.get_backend(), events.RedisBackend)
 
-    @override_settings(OPS_EVENTS_BACKEND="redis", OPS_EVENTS_REDIS_URL=None)
+    @override_settings(
+        OPS_EVENTS_BACKEND="tournamentcontrol.competition.ops.events.redis.RedisBackend",
+        OPS_EVENTS_OPTIONS={},
+    )
     def test_redis_without_url_is_an_error(self):
         events.reset_backend()
-        with self.assertRaises(ValueError):
+        with self.assertRaisesMessage(
+            ImproperlyConfigured,
+            "OPS_EVENTS_OPTIONS do not suit "
+            "tournamentcontrol.competition.ops.events.redis.RedisBackend",
+        ):
+            events.get_backend()
+
+    @override_settings(
+        OPS_EVENTS_BACKEND="tournamentcontrol.competition.ops.nope.Backend"
+    )
+    def test_unknown_backend_is_an_error(self):
+        events.reset_backend()
+        with self.assertRaisesMessage(
+            ImproperlyConfigured,
+            "OPS_EVENTS_BACKEND 'tournamentcontrol.competition.ops.nope.Backend' "
+            "cannot be imported",
+        ):
             events.get_backend()
