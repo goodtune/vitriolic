@@ -6,18 +6,18 @@
 			<a data-class:active="$tab == 'scorers'" data-on:click="$tab = 'scorers'">Scorers {% include "tournamentcontrol/ops/fragments/scorers_count.html" with count_suffix="-tab" %}</a>
 		</div>
 		<section class="portlet" data-class:hidden-tab="$tab != 'results'">
-			<div class="portlet-header"><h4>Results</h4>{% include "tournamentcontrol/ops/fragments/results_count.html" %}<span class="meta">earliest incomplete slot is open</span></div>
+			<div class="portlet-header"><h4>Results</h4>{% include "tournamentcontrol/ops/fragments/results_count.html" %}</div>
 			{% include "tournamentcontrol/ops/fragments/results.html" %}
 		</section>
 		<section class="portlet" data-class:hidden-tab="$tab != 'scorers'">
-			<div class="portlet-header"><h4>Awaiting scorers</h4>{% include "tournamentcontrol/ops/fragments/scorers_count.html" %}<span class="meta">score in, no player statistics yet</span></div>
+			<div class="portlet-header"><h4>Awaiting scorers</h4>{% include "tournamentcontrol/ops/fragments/scorers_count.html" %}</div>
 			{% include "tournamentcontrol/ops/fragments/scorers.html" %}
 		</section>
 	</div>
 	<aside class="side">
 		<section class="portlet">
 			<div class="portlet-header"><h4>Live streams</h4>{% include "tournamentcontrol/ops/fragments/streams_count.html" %}
-				<form method="post" action="{% ops_url 'layout' %}" data-on:submit="@post('{% ops_url 'layout' %}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit" title="collapse">⟩</button></form>
+				<form method="post" action="{% ops_url 'layout' %}" data-on:submit="@post('{% ops_url 'layout' %}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm icon" type="submit" title="collapse" aria-label="Collapse the streams column"></button></form>
 			</div>
 			{% include "tournamentcontrol/ops/fragments/streams.html" %}
 		</section>
@@ -26,5 +26,5 @@
 			{% include "tournamentcontrol/ops/fragments/activity.html" %}
 		</section>
 	</aside>
-	<form class="rail" method="post" action="{% ops_url 'layout' %}" data-on:submit="@post('{% ops_url 'layout' %}', {contentType: 'form'})">{% csrf_token %}<button type="submit">⟨ Streams {% include "tournamentcontrol/ops/fragments/streams_count.html" with count_suffix="-rail" %}</button></form>
+	<form class="rail" method="post" action="{% ops_url 'layout' %}" data-on:submit="@post('{% ops_url 'layout' %}', {contentType: 'form'})">{% csrf_token %}<button type="submit" title="expand"><span class="rail-l">Streams {% include "tournamentcontrol/ops/fragments/streams_count.html" with count_suffix="-rail" %}</span></button></form>
 </main>

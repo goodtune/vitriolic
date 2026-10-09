@@ -86,7 +86,7 @@ class SlotFragmentTests(ResultsFixture):
             for needle in (
                 '<span class="team home">%s</span>' % self.match.home_team.title,
                 'name="home_team_score"',
-                '<span class="vs">v</span>',
+                '<span class="vs">–</span>',
                 'name="away_team_score"',
                 '<span class="team away">%s</span>' % self.match.away_team.title,
             )

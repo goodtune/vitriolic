@@ -1,30 +1,32 @@
 {% load ops_tags %}
 <div id="match-{{ match.pk }}" class="row{% if not editable %} readonly{% endif %}">
-	<div class="g">{{ match.play_at.title|default:"—" }}</div>
-	<div class="m">
-		{% if editable and form %}
-			<form class="s" method="post" action="{% ops_url 'match-result' match_pk=match.pk %}" data-on:submit="@post('{% ops_url 'match-result' match_pk=match.pk %}', {contentType: 'form'})">
-				{% csrf_token %}
-				{% if match.is_bye %}
-					<span class="pair"><span class="team">{{ match.get_home_team_plain }}</span></span>
-					<span class="opts"><label>{{ form.bye_processed }} processed</label></span>
-				{% else %}
-					<span class="pair"><span class="team home">{{ match.get_home_team_plain }}</span>{{ form.home_team_score }}<span class="vs">v</span>{{ form.away_team_score }}<span class="team away">{{ match.get_away_team_plain }}</span></span>
-					{% if form.is_forfeit %}<span class="opts"><label class="ff-label">{{ form.is_forfeit }} forfeit</label> {{ form.forfeit_winner }}</span>{% endif %}
-				{% endif %}
-				<span class="opts"><button class="btn p" type="submit">Save</button>{% if editing %}<a class="btn" href="{% ops_url 'match-result' match_pk=match.pk %}" data-on:click__prevent="@get('{% ops_url 'match-result' match_pk=match.pk %}')">✕</a>{% endif %}</span>
-			</form>
-			{% if form.errors %}<ul class="errorlist">{% for field, errors in form.errors.items %}{% for error in errors %}<li>{{ error }}</li>{% endfor %}{% endfor %}</ul>{% endif %}
-		{% elif entered %}
-			<div class="s">
-				<span class="team home">{{ match.get_home_team_plain }}</span>
-				<span class="score">{% if match.is_bye %}processed{% elif match.is_forfeit %}forfeit → {{ match.forfeit_winner.title|default:"double" }}{% elif match.is_washout %}washout{% else %}{{ match.home_team_score }} – {{ match.away_team_score }}{% endif %}</span>
+	<div class="g"><b>{{ match.play_at.title|default:"—" }}</b><span>{{ match.stage.division.title }}{% if match.stage_group %} · {{ match.stage_group.title }}{% endif %}</span></div>
+	{% if editable and form %}
+		<form class="s" method="post" action="{% ops_url 'match-result' match_pk=match.pk %}" data-on:submit="@post('{% ops_url 'match-result' match_pk=match.pk %}', {contentType: 'form'})">
+			{% csrf_token %}
+			<span class="team home">{{ match.get_home_team_plain }}</span>
+			{% if match.is_bye %}
+				<span class="pair"><label class="opt">{{ form.bye_processed }} processed</label></span>
+				<span class="team away"></span>
+			{% else %}
+				<span class="pair">{{ form.home_team_score }}<span class="vs">–</span>{{ form.away_team_score }}</span>
 				<span class="team away">{{ match.get_away_team_plain }}</span>
-				{% if editable %}<a class="btn sm" href="{% ops_url 'match-result-edit' match_pk=match.pk %}" data-on:click__prevent="@get('{% ops_url 'match-result-edit' match_pk=match.pk %}')">Edit</a>{% endif %}
-			</div>
-		{% else %}
-			<div class="s"><span class="team home">{{ match.get_home_team_plain }}</span><span class="vs">v</span><span class="team away">{{ match.get_away_team_plain }}</span><span class="score muted">{% if match.mysideline_id %}from MySideline{% elif match.home_team and match.away_team %}not entered{% else %}awaiting progression{% endif %}</span></div>
-		{% endif %}
-		<div class="div">{{ match.stage.division.title }}{% if match.stage_group %} · {{ match.stage_group.title }}{% endif %}</div>
-	</div>
+			{% endif %}
+			<span class="acts">
+				{% if form.is_forfeit %}<details class="ff-d"{% if form.is_forfeit.value or form.forfeit_winner.errors %} open{% endif %}><summary>Forfeit</summary><span class="ff-body"><label class="ff-label">{{ form.is_forfeit }} forfeit</label> {{ form.forfeit_winner }}</span></details>{% endif %}
+				<button class="btn p" type="submit">Save</button>{% if editing %}<a class="btn" href="{% ops_url 'match-result' match_pk=match.pk %}" data-on:click__prevent="@get('{% ops_url 'match-result' match_pk=match.pk %}')">✕</a>{% endif %}
+			</span>
+		</form>
+		{% if form.errors %}<ul class="errorlist">{% for field, errors in form.errors.items %}{% for error in errors %}<li>{{ error }}</li>{% endfor %}{% endfor %}</ul>{% endif %}
+	{% elif entered %}
+		<span class="team home">{{ match.get_home_team_plain }}</span>
+		<span class="score">{% if match.is_bye %}processed{% elif match.is_forfeit %}forfeit → {{ match.forfeit_winner.title|default:"double" }}{% elif match.is_washout %}washout{% else %}{{ match.home_team_score }} – {{ match.away_team_score }}{% endif %}</span>
+		<span class="team away">{{ match.get_away_team_plain }}</span>
+		<span class="acts">{% if editable %}<a class="btn sm" href="{% ops_url 'match-result-edit' match_pk=match.pk %}" data-on:click__prevent="@get('{% ops_url 'match-result-edit' match_pk=match.pk %}')">Edit</a>{% endif %}</span>
+	{% else %}
+		<span class="team home">{{ match.get_home_team_plain }}</span>
+		<span class="vs">v</span>
+		<span class="team away">{{ match.get_away_team_plain }}</span>
+		<span class="acts"><span class="score muted">{% if match.mysideline_id %}from MySideline{% elif match.home_team and match.away_team %}not entered{% else %}awaiting progression{% endif %}</span></span>
+	{% endif %}
 </div>

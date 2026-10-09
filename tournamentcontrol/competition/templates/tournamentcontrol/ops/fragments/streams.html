@@ -4,69 +4,82 @@
 	{% for error in stream_errors %}<p class="warn">{{ error }}</p>{% endfor %}
 	{% for item in streams %}
 		<div id="stream-{{ item.ground.pk }}" class="stream">
-			<div><div class="ground">{{ item.ground.title }}</div>
-{% if item.current %}
-<span class="badge {{ item.current.live_stream_status|default:'none' }}">{{ item.current.live_stream_status|default:"no status" }}</span>
-{% endif %}
+			<div class="stream-h">
+				<div class="ground">{{ item.ground.title }}</div>
+				{% if item.current %}<span class="badge {{ item.current.live_stream_status|default:'none' }}">{{ item.current.live_stream_status|default:"no status" }}</span>{% endif %}
 			</div>
-			<div>
+			<div class="line now">
+				<div class="lab">Now{% if item.current %}<b>{{ item.current.time|time:"H:i" }}</b>{% endif %}</div>
 				{% if item.current %}
-					<div class="match">{{ item.current.time|time:"H:i" }} {{ item.current.get_home_team_plain }} v {{ item.current.get_away_team_plain }}</div>
-					<div class="sub">{{ item.current.stage.division.title }}{% if not item.current.external_identifier %} · <span class="warn">no YouTube broadcast</span>{% endif %}{% if item.current.live_stream_status_at %} · since {{ item.current.live_stream_status_at|time:"H:i" }}{% endif %}</div>
-				{% else %}
-					<div class="sub">Nothing on this ground yet</div>
-				{% endif %}
-				{% if item.next %}
-					<div class="sub">next {{ item.next.time|time:"H:i" }} {{ item.next.get_home_team_plain }} v {{ item.next.get_away_team_plain }} · <span class="badge {{ item.next.live_stream_status|default:'none' }}">{{ item.next.live_stream_status|default:"no status" }}</span></div>
-				{% endif %}
-			</div>
-			<div>
-				{% if item.current %}
+					<div>
+						<div class="match">{{ item.current.get_home_team_plain }} v {{ item.current.get_away_team_plain }}</div>
+						<div class="sub">{{ item.current.stage.division.title }}{% if item.current.live_stream_status_at %} · since {{ item.current.live_stream_status_at|time:"H:i" }}{% endif %}{% if not item.current.external_identifier %} <span class="pill warn">no YouTube broadcast</span>{% endif %}</div>
+					</div>
 					{% ops_url 'match-stream' match_pk=item.current.pk status='live' as live_url %}
 					{% ops_url 'match-stream' match_pk=item.current.pk status='testing' as test_url %}
 					{% ops_url 'match-stream' match_pk=item.current.pk status='complete' as end_url %}
 					<div class="ctl">{% include "tournamentcontrol/ops/fragments/_stream_buttons.html" with obj=item.current %}</div>
+				{% else %}
+					<div class="sub">Nothing on this ground yet</div>
 				{% endif %}
-				{% if item.next %}
+			</div>
+			{% if item.next %}
+				<div class="line next">
+					<div class="lab">Next<b>{{ item.next.time|time:"H:i" }}</b></div>
+					<div>
+						<div class="match">{{ item.next.get_home_team_plain }} v {{ item.next.get_away_team_plain }}</div>
+						<div class="sub">{{ item.next.stage.division.title }} <span class="badge {{ item.next.live_stream_status|default:'none' }}">{{ item.next.live_stream_status|default:"no status" }}</span></div>
+					</div>
 					{% ops_url 'match-stream' match_pk=item.next.pk status='live' as next_live_url %}
 					{% ops_url 'match-stream' match_pk=item.next.pk status='testing' as next_test_url %}
 					{% ops_url 'match-stream' match_pk=item.next.pk status='complete' as next_end_url %}
-					<div class="ctl next">{% include "tournamentcontrol/ops/fragments/_stream_buttons.html" with obj=item.next live_url=next_live_url test_url=next_test_url end_url=next_end_url %}</div>
-				{% endif %}
-			</div>
+					<div class="ctl">{% include "tournamentcontrol/ops/fragments/_stream_buttons.html" with obj=item.next live_url=next_live_url test_url=next_test_url end_url=next_end_url %}</div>
+				</div>
+			{% endif %}
 		</div>
 	{% empty %}
 		<p id="streams-empty" class="empty">No streamed grounds in this season.</p>
 	{% endfor %}
 	{% if events %}
-		<div class="sect">Season events</div>
+		<div class="sect-h">Season events</div>
 		{% for event in events %}
 			<div id="event-{{ event.pk }}" class="stream">
-				<div><div class="ground">{{ event.start|time:"H:i" }}</div><span class="badge {{ event.live_stream_status|default:'none' }}">{{ event.live_stream_status|default:"no status" }}</span></div>
-				<div><div class="match">{{ event.title }}</div><div class="sub">{{ event.start|time:"H:i" }}–{{ event.stop|time:"H:i" }}</div></div>
-				<div>
+				<div class="line">
+					<div class="lab">Event<div class="ground">{{ event.start|time:"H:i" }}</div></div>
+					<div>
+						<div class="match">{{ event.title }}</div>
+						<div class="sub">{{ event.start|time:"H:i" }}–{{ event.stop|time:"H:i" }} <span class="badge {{ event.live_stream_status|default:'none' }}">{{ event.live_stream_status|default:"no status" }}</span></div>
+					</div>
 					{% ops_url 'event-stream' event_pk=event.pk status='live' as live_url %}
 					{% ops_url 'event-stream' event_pk=event.pk status='testing' as test_url %}
 					{% ops_url 'event-stream' event_pk=event.pk status='complete' as end_url %}
-					{% include "tournamentcontrol/ops/fragments/_stream_buttons.html" with obj=event %}
+					<div class="ctl">{% include "tournamentcontrol/ops/fragments/_stream_buttons.html" with obj=event %}</div>
 				</div>
 			</div>
 		{% endfor %}
 	{% endif %}
-	{% if can_stream and current_slot %}
-		<div id="slot-actions-current" class="sect">Whole slot
-			{% ops_url 'slot-stream' slot_key=current_slot.key status='live' as slot_live %}
-			{% ops_url 'slot-stream' slot_key=current_slot.key status='complete' as slot_end %}
-			<form method="post" action="{{ slot_live }}" data-on:submit="@post('{{ slot_live }}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit">Go live: all {{ current_slot.label }}</button></form>
-			<form method="post" action="{{ slot_end }}" data-on:submit="@post('{{ slot_end }}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit">End: all {{ current_slot.label }}</button></form>
-		</div>
-	{% endif %}
-	{% if can_stream and next_slot %}
-		<div id="slot-actions-next" class="sect">Next slot
-			{% ops_url 'slot-stream' slot_key=next_slot.key status='testing' as slot_test %}
-			{% ops_url 'slot-stream' slot_key=next_slot.key status='live' as slot_live %}
-			<form method="post" action="{{ slot_test }}" data-on:submit="@post('{{ slot_test }}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit">Test: all {{ next_slot.label }}</button></form>
-			<form method="post" action="{{ slot_live }}" data-on:submit="@post('{{ slot_live }}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit">Go live: all {{ next_slot.label }}</button></form>
+	{% if can_stream and current_slot or can_stream and next_slot %}
+		<div class="slot-actions">
+			{% if current_slot %}
+				<div id="slot-actions-current" class="sect"><span>Whole slot</span>
+					{% ops_url 'slot-stream' slot_key=current_slot.key status='live' as slot_live %}
+					{% ops_url 'slot-stream' slot_key=current_slot.key status='complete' as slot_end %}
+					<span class="ctl">
+						<form method="post" action="{{ slot_live }}" data-on:submit="@post('{{ slot_live }}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit">Go live: all {{ current_slot.label }}</button></form>
+						<form method="post" action="{{ slot_end }}" data-on:submit="@post('{{ slot_end }}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit">End: all {{ current_slot.label }}</button></form>
+					</span>
+				</div>
+			{% endif %}
+			{% if next_slot %}
+				<div id="slot-actions-next" class="sect"><span>Next slot</span>
+					{% ops_url 'slot-stream' slot_key=next_slot.key status='testing' as slot_test %}
+					{% ops_url 'slot-stream' slot_key=next_slot.key status='live' as slot_live %}
+					<span class="ctl">
+						<form method="post" action="{{ slot_test }}" data-on:submit="@post('{{ slot_test }}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit">Test: all {{ next_slot.label }}</button></form>
+						<form method="post" action="{{ slot_live }}" data-on:submit="@post('{{ slot_live }}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit">Go live: all {{ next_slot.label }}</button></form>
+					</span>
+				</div>
+			{% endif %}
 		</div>
 	{% endif %}
 </div>

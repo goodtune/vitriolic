@@ -213,5 +213,6 @@ class LayoutTests(OpsFixture):
             session.save()
             self.get("ops:day", **self.day_kwargs)
         self.assertResponseContains(
-            '<button type="submit">⟨ Streams <span id="streams-count-rail" class="count zero">0</span></button>'
+            '<button type="submit" title="expand"><span class="rail-l">Streams '
+            '<span id="streams-count-rail" class="count zero">0</span></span></button>'
         )

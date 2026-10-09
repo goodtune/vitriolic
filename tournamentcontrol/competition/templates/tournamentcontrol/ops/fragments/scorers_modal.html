@@ -16,7 +16,8 @@
 						<h4>{{ formset.queryset.team.title }} <span class="tot" data-class:bad="${{ forloop.first|yesno:'home,away' }}_total != {{ formset.score }}"><span data-text="${{ forloop.first|yesno:'home,away' }}_total">{{ formset.allocated }}</span> / {{ formset.score }} allocated</span></h4>
 						{% if formset.non_form_errors %}<ul class="errorlist">{% for error in formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
 						<table class="st">
-							<tr><th>#</th><th>Player</th><th>Played</th><th>Points</th><th>MVP</th></tr>
+							<thead><tr><th>#</th><th>Player</th><th>Played</th><th>Points</th><th>MVP</th></tr></thead>
+							<tbody>
 							{% for form in formset %}
 								<tr{% if form.errors %} class="error"{% endif %}>
 									<td>{{ form.number }}</td>
@@ -26,6 +27,7 @@
 									<td>{{ form.mvp }}</td>
 								</tr>
 							{% endfor %}
+							</tbody>
 						</table>
 					</div>
 				{% endfor %}

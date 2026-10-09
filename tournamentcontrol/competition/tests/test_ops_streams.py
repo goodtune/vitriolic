@@ -159,7 +159,7 @@ class MatchTransitionTests(StreamsFixture):
                 headers={"Datastar-Request": "true"},
             )
         body = b"".join(response.streaming_content).decode()
-        self.assertIn('data: elements <span class="badge live">live</span>', body)
+        self.assertIn('<span class="badge live">live</span>', body)
         self.current.refresh_from_db()
         self.assertEqual(self.current.live_stream_status, "live")
         (event,) = events.recent(self.season.pk)
