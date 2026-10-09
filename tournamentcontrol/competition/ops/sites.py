@@ -163,6 +163,17 @@ def style_result_form(form):
     return form
 
 
+def result_form(match, data=None):
+    """
+    A styled ``MatchResultForm`` for ``match``. Its ids carry the match's pk:
+    a page holds a form per pending match, and Datastar morphs by id, so
+    duplicate ids would pair a typed input with another row's.
+    """
+    return style_result_form(
+        MatchResultForm(data=data, instance=match, auto_id="m%d_%%s" % match.pk)
+    )
+
+
 class OpsSite(Application):
     # Exposed so ``sse`` need not import this module (which imports it).
     parse_day = staticmethod(parse_day)
@@ -280,7 +291,7 @@ class OpsSite(Application):
                     match.ops_form = bound_forms[match.pk]
                     match.ops_editing = match.ops_entered
                 elif match.ops_editable and not match.ops_entered:
-                    match.ops_form = style_result_form(MatchResultForm(instance=match))
+                    match.ops_form = result_form(match)
         scorers = list(queries.day_scorers(season, day))
         current_slot, next_slot = self._stream_slots(slots, ground_streams)
         return {
@@ -509,7 +520,7 @@ class OpsSite(Application):
     def match_result_edit(self, request, season, day, match_pk, **kwargs):
         match = self._day_match(season, day, match_pk)
         require(can_change_match(request.user, match))
-        form = style_result_form(MatchResultForm(instance=match))
+        form = result_form(match)
         html = render_fragment(
             request,
             "match_row",
@@ -525,7 +536,7 @@ class OpsSite(Application):
         if request.method != "POST":
             context = self._row_context(request, season, day, match)
             if context["editable"] and not context["entered"]:
-                context["form"] = style_result_form(MatchResultForm(instance=match))
+                context["form"] = result_form(match)
             html = render_fragment(request, "match_row", **context)
             return fragment_response(request, html)
 
@@ -533,7 +544,7 @@ class OpsSite(Application):
         if not queries.editable(match):
             return HttpResponseBadRequest("This match cannot be entered here.")
 
-        form = style_result_form(MatchResultForm(data=request.POST, instance=match))
+        form = result_form(match, data=request.POST)
         form.actor = request.user.get_username()
         form.adjusted = queries.has_result(match)
         redirect_to = reverse("ops:day", kwargs=day_kwargs(season, day))

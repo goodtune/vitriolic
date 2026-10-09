@@ -182,7 +182,7 @@ class ResultFormTests(FormsFixture):
         self.assertResponseContains("<li>Both scores are required.</li>")
         self.assertResponseContains(
             '<input type="number" name="home_team_score" value="5" class="sc" '
-            'id="id_home_team_score">'
+            'id="m%d_home_team_score">' % self.match.pk
         )
         self.match.refresh_from_db()
         self.assertIsNone(self.match.home_team_score)
@@ -194,7 +194,7 @@ class ResultFormTests(FormsFixture):
         self.assertResponseContains("<li>Both scores are required.</li>")
         self.assertResponseContains(
             '<input type="number" name="home_team_score" value="4" class="sc" '
-            'data-preserve-attr="value" id="id_home_team_score">'
+            'data-preserve-attr="value" id="m%d_home_team_score">' % done.pk
         )
         # The cancel link only shows on a row being edited.
         self.assertResponseContains(

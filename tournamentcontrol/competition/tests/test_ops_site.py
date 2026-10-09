@@ -1,6 +1,8 @@
 import datetime
+import re
 from zoneinfo import ZoneInfo
 
+from django.contrib.auth.models import Permission
 from django.test import RequestFactory
 from django.urls import reverse
 from django.utils import timezone
@@ -72,6 +74,21 @@ class IndexTests(OpsFixture):
 
 @freeze_time("2026-10-08 00:00 +10:00")
 class DayPageTests(OpsFixture):
+    def test_pending_forms_share_no_ids(self):
+        # Datastar morphs by id, so two forms must not both claim one.
+        when = timezone.make_aware(datetime.datetime(2026, 10, 8, 8, 0), TZ)
+        other = factories.MatchFactory.create(
+            stage=self.stage, datetime=when, date=when.date(), time=when.time()
+        )
+        self.staff.user_permissions.add(Permission.objects.get(codename="change_match"))
+        with self.login(self.staff):
+            self.get("ops:day", **self.day_kwargs)
+        body = self.last_response.content.decode()
+        ids = re.findall(r'\bid="([^"]*)"', body)
+        self.assertIn("m%d_home_team_score" % self.match.pk, ids)
+        self.assertIn("m%d_home_team_score" % other.pk, ids)
+        self.assertEqual(sorted(ids), sorted(set(ids)))
+
     def test_season_redirects_to_today_in_season_time_zone(self):
         with self.login(self.staff):
             response = self.get("ops:season", competition="pacific-cup", season="pc26")

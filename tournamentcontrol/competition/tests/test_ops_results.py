@@ -74,7 +74,7 @@ class SlotFragmentTests(ResultsFixture):
         self.response_200()
         self.assertResponseContains(
             '<input type="number" name="home_team_score" class="sc" '
-            'id="id_home_team_score">'
+            'id="m%d_home_team_score">' % self.match.pk
         )
 
     def test_pending_row_reads_home_score_v_score_away(self):
@@ -98,7 +98,7 @@ class SlotFragmentTests(ResultsFixture):
             self.get("ops:match-result", match_pk=self.match.pk, **self.kw)
         self.assertResponseContains(
             '<input type="number" name="home_team_score" class="sc" '
-            'id="id_home_team_score">'
+            'id="m%d_home_team_score">' % self.match.pk
         )
 
     def test_entered_row_renders_score_and_edit_link(self):
@@ -259,7 +259,7 @@ class EditScoreTests(ResultsFixture):
             self.get("ops:match-result-edit", match_pk=done.pk, **self.kw)
         self.assertResponseContains(
             '<input type="number" name="home_team_score" value="3" class="sc" '
-            'data-preserve-attr="value" id="id_home_team_score">'
+            'data-preserve-attr="value" id="m%d_home_team_score">' % done.pk
         )
 
     def test_adjusting_publishes_adjusted_event(self):
@@ -288,7 +288,8 @@ class ByeTests(ResultsFixture):
         with self.login(self.staff):
             self.get("ops:slot", slot_key="byes", **self.kw)
         self.assertResponseContains(
-            '<input type="checkbox" name="bye_processed" class="bye" id="id_bye_processed">'
+            '<input type="checkbox" name="bye_processed" class="bye" '
+            'id="m%d_bye_processed">' % bye.pk
         )
         with self.captureOnCommitCallbacks(execute=True):
             self.post_score(bye, "", "", bye_processed="on")
