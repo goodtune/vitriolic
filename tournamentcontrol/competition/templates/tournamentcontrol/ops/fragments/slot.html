@@ -1,1 +1,14 @@
-<div id="slot-{{ slot.key }}" class="slot"></div>
+{% load ops_tags %}
+<div id="slot-{{ slot.key }}" class="slot" data-signals__ifmissing="{slot_{{ slot.key }}: {{ slot.open|yesno:'true,false' }}}">
+	<div class="slot-h" data-on:click="$slot_{{ slot.key }} = !$slot_{{ slot.key }}">
+		<span class="car" data-text="$slot_{{ slot.key }} ? '▼' : '▶'">▼</span>
+		{{ slot.label }}
+		<span class="when">{{ slot.entered }} of {{ slot.total }} entered</span>
+		<span class="state {{ slot.state }}">{{ slot.state|cut:"_"|title }}</span>
+	</div>
+	<div class="rows" data-show="$slot_{{ slot.key }}">
+		{% for match in slot.matches %}
+			{% include "tournamentcontrol/ops/fragments/match_row.html" with match=match form=match.ops_form editable=match.ops_editable entered=match.ops_entered editing=False %}
+		{% endfor %}
+	</div>
+</div>

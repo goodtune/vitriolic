@@ -11,20 +11,30 @@ import datetime
 import logging
 from functools import wraps
 
-from django.http import Http404, HttpResponse
+from django import forms
+from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 
 from touchtechnology.common.sites import Application
+from tournamentcontrol.competition.forms import MatchResultForm
 from tournamentcontrol.competition.models import Season
 from tournamentcontrol.competition.ops import events, queries, receivers
-from tournamentcontrol.competition.ops.fragments import render_fragment
+from tournamentcontrol.competition.ops.fragments import (
+    render_counts,
+    render_fragment,
+)
 from tournamentcontrol.competition.ops.permissions import (
+    can_change_match,
     can_stream,
+    require,
     staff_required,
 )
-from tournamentcontrol.competition.ops.responses import fragment_response
+from tournamentcontrol.competition.ops.responses import (
+    fragment_response,
+    patches,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +75,32 @@ def day_kwargs(season, day):
     }
 
 
+def style_result_form(form):
+    """Give a ``MatchResultForm``'s widgets the ops markup."""
+    for side in ("home_team_score", "away_team_score"):
+        if side in form.fields:
+            team = getattr(form.instance, side.replace("_score", ""))
+            widget = form.fields[side].widget
+            widget.input_type = "number"
+            widget.attrs.update({"class": "sc", "placeholder": team.title[:3].upper()})
+            if form.instance.home_team_score is not None:
+                widget.attrs["data-preserve-attr"] = "value"
+    # The model form renders these as Yes/No selects; a row wants a checkbox.
+    for name in ("is_forfeit", "bye_processed"):
+        if name in form.fields:
+            form.fields[name] = forms.BooleanField(
+                required=False, label=form.fields[name].label
+            )
+    for name, css in (
+        ("forfeit_winner", "ff"),
+        ("is_forfeit", "ff-check"),
+        ("bye_processed", "bye"),
+    ):
+        if name in form.fields:
+            form.fields[name].widget.attrs["class"] = css
+    return form
+
+
 class OpsSite(Application):
     def __init__(self, name="ops", app_name="ops", **kwargs):
         super().__init__(name=name, app_name=app_name, **kwargs)
@@ -91,6 +127,15 @@ class OpsSite(Application):
             path("scorers/", self.scorers, name="scorers"),
             path("streams/", self.streams, name="streams"),
             path("activity/", self.activity, name="activity"),
+            path("results/<str:slot_key>/", self.slot, name="slot"),
+            path(
+                "results/match/<int:match_pk>/", self.match_result, name="match-result"
+            ),
+            path(
+                "results/match/<int:match_pk>/edit/",
+                self.match_result_edit,
+                name="match-result-edit",
+            ),
             # Placeholder so the day page can reverse its event stream; the
             # SSE task replaces it with the long-lived stream view.
             path("events/", self.events, name="events"),
@@ -102,6 +147,15 @@ class OpsSite(Application):
         now = timezone.now()
         streams, stream_events = queries.day_streams(season, day, now)
         slots = queries.day_results(season, day)
+        for slot in slots:
+            for match in slot.matches:
+                match.ops_entered = queries.has_result(match)
+                match.ops_editable = queries.editable(match) and can_change_match(
+                    request.user, match
+                )
+                match.ops_form = None
+                if match.ops_editable and not match.ops_entered:
+                    match.ops_form = style_result_form(MatchResultForm(instance=match))
         scorers = list(queries.day_scorers(season, day))
         return {
             "season": season,
@@ -200,3 +254,94 @@ class OpsSite(Application):
         return fragment_response(
             request, render_fragment(request, "activity", **context)
         )
+
+    # --- results ----------------------------------------------------
+
+    def _day_match(self, season, day, match_pk):
+        return get_object_or_404(queries.day_matches(season, day), pk=match_pk)
+
+    def _row_context(self, request, season, day, match, form=None):
+        return {
+            "season": season,
+            "daystr": day.strftime("%Y%m%d"),
+            "match": match,
+            "form": form,
+            "editable": queries.editable(match)
+            and can_change_match(request.user, match),
+            "entered": queries.has_result(match),
+        }
+
+    def slot_patches(self, request, season, day, match):
+        """Every fragment a change to ``match`` can alter, re-rendered."""
+        context = self.day_context(request, season, day)
+        slot = next(
+            (s for s in context["slots"] if any(m.pk == match.pk for m in s.matches)),
+            None,
+        )
+        fragments = []
+        if slot is not None:
+            fragments.append(render_fragment(request, "slot", slot=slot, **context))
+        fragments.extend(render_counts(request, **context))
+        fragments.append(render_fragment(request, "scorers", **context))
+        fragments.append(render_fragment(request, "activity", **context))
+        return fragments
+
+    @staff_required
+    @season_view
+    def slot(self, request, season, day, slot_key, **kwargs):
+        context = self.day_context(request, season, day)
+        slot = next((s for s in context["slots"] if s.key == slot_key), None)
+        if slot is None:
+            raise Http404("No such slot.")
+        return fragment_response(
+            request, render_fragment(request, "slot", slot=slot, **context)
+        )
+
+    @staff_required
+    @season_view
+    def match_result_edit(self, request, season, day, match_pk, **kwargs):
+        match = self._day_match(season, day, match_pk)
+        require(can_change_match(request.user, match))
+        form = style_result_form(MatchResultForm(instance=match))
+        html = render_fragment(
+            request,
+            "match_row",
+            editing=True,
+            **self._row_context(request, season, day, match, form),
+        )
+        return fragment_response(request, html)
+
+    @staff_required
+    @season_view
+    def match_result(self, request, season, day, match_pk, **kwargs):
+        match = self._day_match(season, day, match_pk)
+        if request.method != "POST":
+            html = render_fragment(
+                request, "match_row", **self._row_context(request, season, day, match)
+            )
+            return fragment_response(request, html)
+
+        require(can_change_match(request.user, match))
+        if not queries.editable(match):
+            return HttpResponseBadRequest("This match cannot be entered here.")
+
+        form = style_result_form(MatchResultForm(data=request.POST, instance=match))
+        form.actor = request.user.get_username()
+        form.adjusted = queries.has_result(match)
+        redirect_to = reverse("ops:day", kwargs=day_kwargs(season, day))
+        if form.is_valid():
+            form.save()
+            logger.info("ops result saved for match %s by %s", match.pk, form.actor)
+            match.refresh_from_db()
+            return patches(
+                request,
+                self.slot_patches(request, season, day, match),
+                redirect_to=redirect_to,
+            )
+        html = render_fragment(
+            request,
+            "match_row",
+            editing=True,
+            **self._row_context(request, season, day, match, form),
+        )
+        return patches(request, [html], redirect_to=redirect_to)

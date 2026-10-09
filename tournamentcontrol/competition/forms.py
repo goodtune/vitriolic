@@ -1745,7 +1745,9 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
             '", "'.join(SCORE_FIELDS.intersection(self.changed_data)),
         )
 
-        if SCORE_FIELDS.intersection(self.changed_data):
+        if SCORE_FIELDS.union({"is_forfeit", "bye_processed"}).intersection(
+            self.changed_data
+        ):
             for rec, res in score_updated.send_robust(sender=self, match=self.instance):
                 receiver = "%s.%s" % (rec.__module__, rec.__name__)
                 try:
