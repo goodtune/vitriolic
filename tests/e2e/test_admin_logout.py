@@ -15,7 +15,7 @@ def test_logout_from_the_profile_menu(
     page = authenticated_page
 
     page.locator(".navbar-profile .dropdown-toggle").click()
-    logout = page.get_by_role("button", name="Logout")
+    logout = page.get_by_role("link", name="Logout")
     expect(logout).to_be_visible()
     page.screenshot(path=screenshot_dir / "admin_logout_menu.png")
 
