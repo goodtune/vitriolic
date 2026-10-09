@@ -74,6 +74,26 @@ class PasswordResetTests(TestCase):
             self.post("accounts:logout")
         self.response_200()
 
+    def test_profile_logout_is_a_post_form(self):
+        """
+        LogoutView refuses GET since Django 5.0. The profile form can't hold
+        a second form, so its Logout button submits a separate one.
+        """
+        with self.login(self.regular):
+            self.get("accounts:profile")
+        self.response_200()
+        token = self.get_context("csrf_token")
+        self.assertResponseContains(
+            '<button type="submit" class="btn btn-default" form="logout-form">'
+            '<i class="fa fa-sign-out"></i> Logout</button>'
+        )
+        self.assertResponseContains(
+            '<form id="logout-form" method="post" '
+            f'action="{self.reverse("accounts:logout")}">'
+            f'<input type="hidden" name="csrfmiddlewaretoken" value="{token}">'
+            "</form>"
+        )
+
     def test_password_change(self):
         with self.login(self.regular):
             self.assertGoodView("accounts:password_change")

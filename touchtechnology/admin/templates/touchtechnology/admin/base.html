@@ -32,6 +32,32 @@
 	<!-- App CSS -->
 	<link rel="stylesheet" href="{{ STATIC_URL }}css/mvpready-admin.css">
 	<link rel="stylesheet" href="{{ STATIC_URL }}css/custom.css">
+	<style>
+		/* The logout entry is a form button; make it look like the menu links. */
+		.dropdown-menu .dropdown-logout {
+			margin: 0;
+		}
+
+		.dropdown-menu .dropdown-logout button {
+			display: block;
+			width: 100%;
+			padding: 6px 12px;
+			border: 0;
+			background: none;
+			color: #333;
+			font: inherit;
+			font-size: 13px;
+			line-height: 1.42857143;
+			text-align: left;
+			white-space: nowrap;
+		}
+
+		.dropdown-menu .dropdown-logout button:hover,
+		.dropdown-menu .dropdown-logout button:focus {
+			color: #262626;
+			background-color: #f5f5f5;
+		}
+	</style>
 
 	<!-- Favicon -->
 	<link rel="shortcut icon" href="{{ STATIC_URL }}favicon.ico">
@@ -81,7 +107,13 @@
 								<li><a href="#fixme"><i class="fa fa-fw fa-dollar"></i>&nbsp;&nbsp;{% trans "Plans & Billing" %}</a></li>
 								<li><a href="{% url 'admin:settings:index' %}"><i class="fa fa-fw fa-cogs"></i>&nbsp;&nbsp;{% trans "Settings" %}</a></li>
 								<li class="divider"></li>
-								<li><a href="{% url 'accounts:logout' %}"><i class="fa fa-fw fa-sign-out"></i>&nbsp;&nbsp;{% trans "Logout" %}</a></li>
+								<li>
+									{# LogoutView only accepts POST since Django 5.0. #}
+									<form class="dropdown-logout" method="post" action="{% url 'accounts:logout' %}">
+										{% csrf_token %}
+										<button type="submit"><i class="fa fa-fw fa-sign-out"></i>&nbsp;&nbsp;{% trans "Logout" %}</button>
+									</form>
+								</li>
 							</ul>
 
 						</li>
