@@ -1,5 +1,5 @@
 {% load ops_tags %}
-<div id="modal-body" class="modal" data-signals="{home_total: {{ formsets.0.score }}, away_total: {{ formsets.1.score }}}">
+<div id="modal-body" class="modal" data-signals="{home_total: {{ formsets.0.allocated }}, away_total: {{ formsets.1.allocated }}}">
 	<div class="modal-h">
 		<h3>{{ match.get_home_team_plain }} {{ match.home_team_score }} – {{ match.away_team_score }} {{ match.get_away_team_plain }}</h3>
 		<span class="sub">{{ match.stage.division.title }} · {{ match.time|time:"H:i" }} {{ match.play_at.title }}</span>
@@ -13,7 +13,7 @@
 				{% for formset in formsets %}
 					{{ formset.management_form }}
 					<div>
-						<h4>{{ formset.queryset.team.title }} <span class="tot" data-class:bad="${{ forloop.first|yesno:'home,away' }}_total != {{ formset.score }}"><span data-text="${{ forloop.first|yesno:'home,away' }}_total">{{ formset.score }}</span> / {{ formset.score }} allocated</span></h4>
+						<h4>{{ formset.queryset.team.title }} <span class="tot" data-class:bad="${{ forloop.first|yesno:'home,away' }}_total != {{ formset.score }}"><span data-text="${{ forloop.first|yesno:'home,away' }}_total">{{ formset.allocated }}</span> / {{ formset.score }} allocated</span></h4>
 						{% if formset.non_form_errors %}<ul class="errorlist">{% for error in formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
 						<table class="st">
 							<tr><th>#</th><th>Player</th><th>Played</th><th>Points</th><th>MVP</th></tr>

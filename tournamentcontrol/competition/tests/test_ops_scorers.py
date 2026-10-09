@@ -114,6 +114,9 @@ class ScorersModalTests(ScorersFixture):
         self.assertIn('name="away-TOTAL_FORMS" value="1"', body)
         self.assertIn("event: datastar-patch-signals", body)
         self.assertIn('data: signals {"modal":true}', body)
+        self.assertIn('data-signals="{home_total: 0, away_total: 0}"', body)
+        self.assertIn('<span data-text="$home_total">0</span>', body)
+        self.assertIn('<span data-text="$away_total">0</span>', body)
 
     def test_valid_post_saves_and_closes(self):
         with self.login(self.staff), self.captureOnCommitCallbacks(execute=True):
@@ -144,6 +147,8 @@ class ScorersModalTests(ScorersFixture):
         body = b"".join(response.streaming_content).decode()
         self.assertIn('data: elements <div id="modal-body" class="modal"', body)
         self.assertIn("does not equal", body.lower())
+        self.assertIn('data-signals="{home_total: 1, away_total: 1}"', body)
+        self.assertIn('<span data-text="$home_total">1</span>', body)
         self.assertEqual(
             SimpleScoreMatchStatistic.objects.filter(match=self.match).count(), 0
         )

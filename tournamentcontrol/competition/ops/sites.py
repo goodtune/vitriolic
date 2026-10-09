@@ -394,7 +394,19 @@ class OpsSite(Application):
                     form.fields[name].widget.input_type = "number"
                     form.fields[name].widget.attrs["class"] = "st-num"
                 form.fields["points"].widget.attrs["data-side"] = side
+            formset.allocated = sum(self._allocated(form) for form in formset.forms)
         return home, away
+
+    @staticmethod
+    def _allocated(form):
+        """The points a roster row currently holds, bound or saved."""
+        if form.is_bound:
+            value = form["points"].value()
+            try:
+                return int(value) if value not in (None, "") else 0
+            except (TypeError, ValueError):
+                return 0
+        return form.instance.points or 0
 
     @staff_required
     @season_view
