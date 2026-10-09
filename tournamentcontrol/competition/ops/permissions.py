@@ -23,12 +23,16 @@ def staff_required(view):
     return wrapper
 
 
+# The global permission is checked first: Django caches it on the user, while
+# every object check is a guardian query, once per row on the results panel.
+
+
 def can_stream(user, season):
-    return user.has_perm(STREAM, season) or user.has_perm(STREAM)
+    return user.has_perm(STREAM) or user.has_perm(STREAM, season)
 
 
 def can_change_match(user, match):
-    return user.has_perm(CHANGE_MATCH, match) or user.has_perm(CHANGE_MATCH)
+    return user.has_perm(CHANGE_MATCH) or user.has_perm(CHANGE_MATCH, match)
 
 
 def can_enter_statistics(user):

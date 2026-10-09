@@ -2,14 +2,21 @@ import datetime
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth.models import Permission
+from django.db import connection
 from django.db.models.signals import post_save
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from freezegun import freeze_time
+from guardian.shortcuts import assign_perm
 from test_plus import TestCase
 
 from tournamentcontrol.competition.models import Match
 from tournamentcontrol.competition.ops import events
+from tournamentcontrol.competition.ops.permissions import (
+    can_change_match,
+    can_stream,
+)
 from tournamentcontrol.competition.signals.custom import score_updated
 from tournamentcontrol.competition.tests import factories
 
@@ -264,3 +271,31 @@ class ByeTests(ResultsFixture):
         self.assertTrue(bye.bye_processed)
         (event,) = events.recent(self.season.pk)
         self.assertEqual(event["type"], "bye-processed")
+
+
+class PermissionOrderTests(ResultsFixture):
+    def fresh(self, user):
+        # A fresh instance has no permission cache; warming the global one
+        # leaves any later query to the guardian object check.
+        user = type(user).objects.get(pk=user.pk)
+        user.has_perm("competition.change_match")
+        return user
+
+    def test_global_permission_needs_no_object_query(self):
+        user = self.fresh(self.staff)
+        with self.assertNumQueries(0):
+            self.assertTrue(can_change_match(user, self.match))
+
+    def test_object_permission_is_still_honoured(self):
+        assign_perm("competition.change_match", self.readonly, self.match)
+        user = self.fresh(self.readonly)
+        with CaptureQueriesContext(connection) as queries:
+            self.assertTrue(can_change_match(user, self.match))
+        # Without the global permission, the object check goes to guardian.
+        self.assertGreater(len(queries), 0)
+
+    def test_global_stream_permission_needs_no_object_query(self):
+        self.staff.user_permissions.add(Permission.objects.get(codename="stream_season"))
+        user = self.fresh(self.staff)
+        with self.assertNumQueries(0):
+            self.assertTrue(can_stream(user, self.season))
