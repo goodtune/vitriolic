@@ -1,0 +1,27 @@
+{% load ops_tags %}
+<main id="main" class="{% if collapsed %}collapsed{% endif %}">
+	<div class="results">
+		<div class="rtabs">
+			<a data-class:active="$tab == 'results'" data-on:click="$tab = 'results'">Results {% include "tournamentcontrol/ops/fragments/results_count.html" %}</a>
+			<a data-class:active="$tab == 'scorers'" data-on:click="$tab = 'scorers'">Scorers {% include "tournamentcontrol/ops/fragments/scorers_count.html" %}</a>
+		</div>
+		<section class="portlet" data-class:hidden-tab="$tab != 'results'">
+			<div class="portlet-header"><h4>Results</h4>{% include "tournamentcontrol/ops/fragments/results_count.html" %}<span class="meta">earliest incomplete slot is open</span></div>
+			{% include "tournamentcontrol/ops/fragments/results.html" %}
+		</section>
+		<section class="portlet" data-class:hidden-tab="$tab != 'scorers'">
+			<div class="portlet-header"><h4>Awaiting scorers</h4>{% include "tournamentcontrol/ops/fragments/scorers_count.html" %}<span class="meta">score in, no player statistics yet</span></div>
+			{% include "tournamentcontrol/ops/fragments/scorers.html" %}
+		</section>
+	</div>
+	<aside class="side">
+		<section class="portlet">
+			<div class="portlet-header"><h4>Live streams</h4>{% include "tournamentcontrol/ops/fragments/streams_count.html" %}</div>
+			{% include "tournamentcontrol/ops/fragments/streams.html" %}
+		</section>
+		<section class="portlet">
+			<div class="portlet-header"><h4>Activity</h4></div>
+			{% include "tournamentcontrol/ops/fragments/activity.html" %}
+		</section>
+	</aside>
+</main>

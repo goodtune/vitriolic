@@ -1,0 +1,117 @@
+import datetime
+from zoneinfo import ZoneInfo
+
+from django.urls import reverse
+from django.utils import timezone
+from freezegun import freeze_time
+from test_plus import TestCase
+
+from tournamentcontrol.competition.tests import factories
+
+TZ = ZoneInfo("Australia/Brisbane")
+
+
+class OpsFixture(TestCase):
+    def setUp(self):
+        self.staff = factories.UserFactory.create(is_staff=True)
+        self.user = factories.UserFactory.create()
+        self.season = factories.SeasonFactory.create(
+            slug="pc26",
+            slug_locked=True,
+            competition__slug="pacific-cup",
+            competition__slug_locked=True,
+            timezone="Australia/Brisbane",
+        )
+        self.stage = factories.StageFactory.create(division__season=self.season)
+        when = timezone.make_aware(datetime.datetime(2026, 10, 8, 8, 0), TZ)
+        self.match = factories.MatchFactory.create(
+            stage=self.stage, datetime=when, date=when.date(), time=when.time()
+        )
+        self.day_kwargs = {
+            "competition": "pacific-cup",
+            "season": "pc26",
+            "datestr": "20261008",
+        }
+
+
+@freeze_time("2026-10-08 00:00 +10:00")
+class IndexTests(OpsFixture):
+    def test_login_required(self):
+        self.assertLoginRequired("ops:index")
+
+    def test_staff_required(self):
+        with self.login(self.user):
+            self.get("ops:index")
+            self.response_403()
+
+    def test_single_active_season_redirects_to_today(self):
+        with self.login(self.staff):
+            response = self.get("ops:index")
+        self.assertRedirects(
+            response,
+            reverse("ops:day", kwargs=self.day_kwargs),
+            fetch_redirect_response=False,
+        )
+
+    def test_two_active_seasons_are_listed(self):
+        other = factories.SeasonFactory.create(timezone="Australia/Brisbane")
+        factories.MatchFactory.create(
+            stage__division__season=other, date=datetime.date(2026, 10, 8)
+        )
+        with self.login(self.staff):
+            self.get("ops:index")
+        self.response_200()
+        url = reverse(
+            "ops:season", kwargs={"competition": "pacific-cup", "season": "pc26"}
+        )
+        self.assertResponseContains(f'<a href="{url}">{self.season}</a>')
+
+
+@freeze_time("2026-10-08 00:00 +10:00")
+class DayPageTests(OpsFixture):
+    def test_season_redirects_to_today_in_season_time_zone(self):
+        with self.login(self.staff):
+            response = self.get("ops:season", competition="pacific-cup", season="pc26")
+        self.assertRedirects(
+            response,
+            reverse("ops:day", kwargs=self.day_kwargs),
+            fetch_redirect_response=False,
+        )
+
+    def test_day_page_renders_every_panel(self):
+        with self.login(self.staff):
+            self.get("ops:day", **self.day_kwargs)
+        self.response_200()
+        self.assertResponseContains('<span id="results-count" class="count">1</span>')
+        self.assertResponseContains(
+            '<span id="scorers-count" class="count zero">0</span>'
+        )
+        self.assertResponseContains(
+            '<span id="streams-count" class="count zero">0</span>'
+        )
+        self.assertResponseContains(
+            '<li id="activity-empty" class="empty">Nothing has happened yet today.</li>'
+        )
+
+    def test_invalid_day_is_404(self):
+        with self.login(self.staff):
+            self.get(
+                "ops:day", competition="pacific-cup", season="pc26", datestr="20261399"
+            )
+        self.response_404()
+
+    def test_fragment_plain_and_datastar(self):
+        with self.login(self.staff):
+            plain = self.get("ops:activity", **self.day_kwargs)
+            self.assertEqual(plain["Content-Type"], "text/html; charset=utf-8")
+            self.assertResponseContains(
+                '<li id="activity-empty" class="empty">Nothing has happened yet today.</li>'
+            )
+            streamed = self.client.get(
+                reverse("ops:activity", kwargs=self.day_kwargs),
+                headers={"Datastar-Request": "true"},
+            )
+        self.assertEqual(streamed["Content-Type"], "text/event-stream")
+        body = b"".join(streamed.streaming_content).decode()
+        self.assertIn("event: datastar-patch-elements", body)
+        self.assertIn('data: elements <ul id="activity"', body)

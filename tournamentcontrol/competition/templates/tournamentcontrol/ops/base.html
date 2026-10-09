@@ -1,0 +1,15 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+	<title>{% block title %}Tournament Ops{% endblock %}</title>
+	<link rel="stylesheet" href="{% static 'tournamentcontrol/ops/ops.css' %}">
+	{% block extracss %}{% endblock %}
+	<script type="module" src="{% static 'tournamentcontrol/ops/datastar-1.0.4.js' %}"></script>
+</head>
+<body {% block body_attrs %}{% endblock %}>
+	{% block body %}{% endblock %}
+	{% block extrajs %}{% endblock %}
+</body>
+</html>

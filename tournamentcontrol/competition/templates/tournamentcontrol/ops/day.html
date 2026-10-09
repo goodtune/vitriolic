@@ -1,0 +1,17 @@
+{% extends "tournamentcontrol/ops/base.html" %}
+{% load ops_tags %}
+{% block title %}{{ season }} · {{ day|date:"D j M" }} · Ops{% endblock %}
+{% block body_attrs %}class="ops" data-signals__ifmissing="{tab: 'results', modal: false}" data-indicator="connected" data-init="@get('{% ops_url 'events' %}', {retryMaxCount: 1000})"{% endblock %}
+{% block body %}
+<header class="topbar">
+	<span class="brand">TOURNAMENT OPS</span>
+	<span class="season">{{ season }} · {{ day|date:"l j F" }}</span>
+	<span class="spacer"></span>
+	<span class="sse" data-class:down="!$connected"><i></i> <span data-text="$connected ? 'live updates' : 'reconnecting'">live updates</span></span>
+	<span class="who">{{ user.get_username }}</span>
+</header>
+{% include "tournamentcontrol/ops/fragments/main.html" %}
+<div id="modal" class="overlay" data-show="$modal" data-on:click="evt.target === el && ($modal = false)" data-on:keydown__window="evt.key === 'Escape' && ($modal = false)">
+	<div id="modal-body" class="modal"></div>
+</div>
+{% endblock %}
