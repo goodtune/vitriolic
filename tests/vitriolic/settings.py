@@ -5,6 +5,7 @@ Django settings for vitriolic project.
 import os
 import time
 
+import django
 import environ
 from django.urls import reverse_lazy
 
@@ -63,6 +64,21 @@ INSTALLED_APPS = [
     "example_app",
 ]
 
+# Template partials are part of Django from 6.0; before that they come from
+# django-template-partials. Its tags are made builtins, so the templates are
+# the same on every version and never {% load partials %}.
+TEMPLATE_BUILTINS = []
+TEMPLATE_LOADERS = [
+    "django.template.loaders.filesystem.Loader",
+    "django.template.loaders.app_directories.Loader",
+]
+if django.VERSION < (6, 0):
+    INSTALLED_APPS.append("template_partials")
+    TEMPLATE_BUILTINS.append("template_partials.templatetags.partials")
+    # Wrapped already, so the app keeps these loaders instead of replacing
+    # them with its own cached ones.
+    TEMPLATE_LOADERS = [("template_partials.loader.Loader", TEMPLATE_LOADERS)]
+
 MIDDLEWARE = [
     "django.contrib.sites.middleware.CurrentSiteMiddleware",
     "django.middleware.security.SecurityMiddleware",
@@ -104,10 +120,8 @@ TEMPLATES = [
                 # Static files context processor
                 "django.template.context_processors.static",
             ],
-            "loaders": [
-                "django.template.loaders.filesystem.Loader",
-                "django.template.loaders.app_directories.Loader",
-            ],
+            "builtins": TEMPLATE_BUILTINS,
+            "loaders": TEMPLATE_LOADERS,
         },
     },
 ]

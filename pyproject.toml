@@ -99,6 +99,7 @@ competition = [
 ]
 async = [
     "datastar-py>=1.0.3",
+    "django-template-partials>=25.3",
     "redis>=5.0.1",
 ]
 # Deprecated optional dependencies

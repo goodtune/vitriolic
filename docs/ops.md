@@ -15,12 +15,22 @@ from tournamentcontrol.competition.ops.sites import OpsSite
 urlpatterns += [path("ops/", OpsSite().urls)]
 ```
 
-Install the extra: `pip install vitriolic[async]` (adds `datastar-py` and
-`redis`). Nothing happens unless the site is mounted.
+Install the extra: `pip install vitriolic[async]` (adds `datastar-py`,
+`redis` and `django-template-partials`, which only Django 5.2 uses).
+Nothing happens unless the site is mounted.
 
 Add `"touchtechnology.common.middleware.DatastarMiddleware"` to
 `MIDDLEWARE`; it sets `request.datastar`, and `OpsSite()` raises
 `ImproperlyConfigured` without it.
+
+The templates use template partials (`{% partialdef %}` and `{% partial %}`)
+without `{% load %}`. Django 6.0 and later need nothing. On Django 5.2 the
+partials come from `django-template-partials`, which the extra installs: add
+`"template_partials"` to `INSTALLED_APPS` and
+`"template_partials.templatetags.partials"` to the `builtins` in the template
+`OPTIONS`. The app wraps the template loaders for you; if you set `loaders`
+yourself, it replaces them with its own cached list unless you wrap them in
+`("template_partials.loader.Loader", [...])` first.
 
 The booth refuses an action with a normal 200 response that carries the
 reason in the lamp. Datastar drops the body of non-200 responses, so a
