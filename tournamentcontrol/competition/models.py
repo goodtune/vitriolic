@@ -2421,7 +2421,7 @@ class Match(LiveStreamTransitionMixin, AdminUrlMixin, models.Model):
         max_length=50, blank=True, null=True, db_index=True
     )
     live_stream_status = models.CharField(
-        max_length=10, blank=True, null=True, db_index=True
+        max_length=20, blank=True, null=True, db_index=True
     )
     live_stream_status_at = DateTimeField(blank=True, null=True)
     live_stream_thumbnail = models.URLField(blank=True, null=True)
@@ -3175,7 +3175,7 @@ class LiveStreamEvent(LiveStreamTransitionMixin, AdminUrlMixin, models.Model):
         max_length=50, blank=True, null=True, db_index=True
     )
     live_stream_status = models.CharField(
-        max_length=10, blank=True, null=True, db_index=True
+        max_length=20, blank=True, null=True, db_index=True
     )
     live_stream_status_at = DateTimeField(blank=True, null=True)
     live_stream_thumbnail_image = models.BinaryField(

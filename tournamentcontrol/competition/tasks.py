@@ -715,4 +715,12 @@ def refresh_all_live_stream_status():
     seasons = Season.objects.filter(
         live_stream=True, divisions__stages__matches__date__range=window
     ).distinct()
-    return sum(refresh_season_status(season, now) for season in seasons)
+    changed = 0
+    for season in seasons:
+        try:
+            changed += refresh_season_status(season, now)
+        except Exception:
+            logger.exception(
+                "live stream status refresh failed for season %s", season.pk
+            )
+    return changed

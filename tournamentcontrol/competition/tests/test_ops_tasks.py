@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 from django.db.models.signals import post_save
 from django.utils import timezone
 from freezegun import freeze_time
+from google.auth.exceptions import RefreshError
 from test_plus import TestCase
 
 from tournamentcontrol.competition.models import Match
@@ -110,3 +111,36 @@ class RefreshStatusTests(TestCase):
             refresh_all_live_stream_status()
         self.match.refresh_from_db()
         self.assertEqual(self.match.live_stream_status, "live")
+
+    def test_mid_transition_status_fits_the_column(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            status.refresh_season_status(
+                self.season, youtube=listing(yt1="liveStarting")
+            )
+        self.match.refresh_from_db()
+        self.assertEqual(self.match.live_stream_status, "liveStarting")
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_refresh_all_isolates_a_failing_season(self, build):
+        other = factories.SeasonFactory.create(
+            timezone="Australia/Brisbane", **YOUTUBE_SEASON
+        )
+        when = timezone.make_aware(datetime.datetime(2026, 10, 8, 10, 40), TZ)
+        other_match = factories.MatchFactory.create(
+            stage=factories.StageFactory.create(division__season=other),
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            external_identifier="yt2",
+            live_stream_status="testing",
+        )
+        # Whichever season is refreshed first fails; the other must still run.
+        build.side_effect = [RefreshError("expired"), listing(yt1="live", yt2="live")]
+        with self.assertLogs("tournamentcontrol.competition.tasks", level="ERROR"):
+            with self.captureOnCommitCallbacks(execute=True):
+                changed = refresh_all_live_stream_status()
+        self.assertEqual(changed, 1)
+        self.match.refresh_from_db()
+        other_match.refresh_from_db()
+        statuses = {self.match.live_stream_status, other_match.live_stream_status}
+        self.assertEqual(statuses, {"testing", "live"})

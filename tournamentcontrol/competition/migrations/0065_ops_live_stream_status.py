@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="match",
             name="live_stream_status",
-            field=models.CharField(blank=True, db_index=True, max_length=10, null=True),
+            field=models.CharField(blank=True, db_index=True, max_length=20, null=True),
         ),
         migrations.AddField(
             model_name="match",
@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="livestreamevent",
             name="live_stream_status",
-            field=models.CharField(blank=True, db_index=True, max_length=10, null=True),
+            field=models.CharField(blank=True, db_index=True, max_length=20, null=True),
         ),
         migrations.AddField(
             model_name="livestreamevent",
