@@ -1,6 +1,7 @@
 """End-to-end tests for the Tournament Ops site under an ASGI server."""
 
 import datetime
+import re
 from unittest import mock
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
@@ -12,14 +13,24 @@ from playwright.sync_api import expect
 from tournamentcontrol.competition.tests.factories import (
     GroundFactory,
     MatchFactory,
+    PersonFactory,
     SeasonFactory,
     StageFactory,
+    TeamAssociationFactory,
     VenueFactory,
 )
 from tournamentcontrol.competition.tests.test_live_stream_transition import (
     YOUTUBE_SEASON,
     youtube_mock,
 )
+
+
+SQUAD = 16
+
+
+def player_name(team, number):
+    """The name of the player wearing ``number`` for ``team``, as the pages show it."""
+    return f"Player{number:02d} {team.title}"
 
 
 def midday_zone(now):
@@ -64,6 +75,7 @@ def tournament(transactional_db):
         competition__slug="pacific-cup",
         competition__slug_locked=True,
         timezone=zone_name,
+        statistics=True,
         **YOUTUBE_SEASON,
     )
     venue = VenueFactory.create(season=season)
@@ -98,8 +110,27 @@ def tournament(transactional_db):
         external_identifier="yt-2",
         **next_kickoff,
     )
+    # A squad of 16 for every team, as a real tournament has.
+    teams = []
+    for fixture in (match, scored, upcoming):
+        for team in (fixture.home_team, fixture.away_team):
+            if team not in teams:
+                teams.append(team)
+    for team in teams:
+        for number in range(1, SQUAD + 1):
+            person = PersonFactory.create(
+                first_name=f"Player{number:02d}",
+                last_name=team.title,
+                club=team.club,
+                gender="M",
+                user=None,
+            )
+            TeamAssociationFactory.create(
+                team=team, person=person, number=number, is_player=True
+            )
     return {
         "season": season,
+        "teams": teams,
         "ground": field1,
         "match": match,
         "scored": scored,
@@ -243,6 +274,102 @@ def test_booth_teams_picker_opens_and_closes(
         expect(ops_page.locator("#modal")).to_be_hidden()
 
 
+def test_booth_team_sheets_list_both_squads(
+    ops_page, asgi_live_server, tournament, screenshot_dir
+):
+    home = tournament["match"].home_team
+    away = tournament["match"].away_team
+    with mock.patch(
+        "tournamentcontrol.competition.models.build", return_value=youtube_mock("live")
+    ):
+        ops_page.set_viewport_size({"width": 1024, "height": 768})
+        ops_page.goto(asgi_live_server.url + tournament["booth_path"])
+        expect(ops_page.locator("#lamp")).to_have_text("ON AIR")
+        tables = ops_page.locator("#pane table")
+        expect(tables).to_have_count(2)
+        # The header row, then one for each of the squad.
+        for index in (0, 1):
+            expect(tables.nth(index).locator("tr")).to_have_count(SQUAD + 1)
+        expect(tables.nth(0)).to_contain_text(player_name(home, 1))
+        expect(tables.nth(0)).to_contain_text(player_name(home, SQUAD))
+        expect(tables.nth(1)).to_contain_text(player_name(away, SQUAD))
+        ops_page.screenshot(
+            path=str(screenshot_dir / "ops_booth_team_sheets.png"), full_page=True
+        )
+
+
+def test_booth_team_modal_shows_the_squad(
+    ops_page, asgi_live_server, tournament, screenshot_dir
+):
+    home = tournament["match"].home_team
+    with mock.patch(
+        "tournamentcontrol.competition.models.build", return_value=youtube_mock("live")
+    ):
+        ops_page.set_viewport_size({"width": 1024, "height": 768})
+        ops_page.goto(asgi_live_server.url + tournament["booth_path"])
+        ops_page.locator("button.teamsbtn").click()
+        expect(ops_page.locator("#modal")).to_be_visible()
+        ops_page.locator("#modal-body .tile").filter(
+            has=ops_page.get_by_text(home.title, exact=True)
+        ).click()
+        expect(ops_page.locator("#modal-body h3")).to_have_text(home.title)
+        squad = ops_page.locator("#modal-body table").first
+        expect(squad.locator("tr")).to_have_count(SQUAD + 1)
+        expect(squad).to_contain_text(player_name(home, 1))
+        expect(squad).to_contain_text(player_name(home, SQUAD))
+        ops_page.screenshot(
+            path=str(screenshot_dir / "ops_booth_team_modal.png"), full_page=True
+        )
+
+
+def test_scorers_are_validated_then_saved(
+    ops_page, asgi_live_server, tournament, screenshot_dir
+):
+    scored = tournament["scored"]
+    ops_page.goto(asgi_live_server.url + tournament["day_path"])
+    expect(ops_page.locator(".sse")).not_to_have_class("down")
+    ops_page.locator(f"#scorers-{scored.pk} a", has_text="Enter scorers").click()
+    modal = ops_page.locator("#modal-body")
+    expect(modal.locator("tr")).to_have_count(2 * (SQUAD + 1))
+    # A team may field 14, so stand two of each squad down.
+    for side in ("home", "away"):
+        for index in (SQUAD - 2, SQUAD - 1):
+            modal.locator(f'select[name="{side}-{index}-played"]').select_option("0")
+    # The score is 1 – 0 and the first home player is given 2.
+    modal.locator('input[name="home-0-points"]').fill("2")
+    modal.locator("button", has_text="Save scorers").click()
+    error = modal.locator(".errorlist li")
+    expect(error).to_have_text(
+        "Total number of points (2) does not equal total number of scores (1) "
+        "for this team."
+    )
+    expect(ops_page.locator("#modal")).to_be_visible()
+    expect(modal.locator(".tot").first).to_have_class(re.compile(r"\bbad\b"))
+    ops_page.screenshot(path=str(screenshot_dir / "ops_scorers_error.png"))
+    modal.locator('input[name="home-0-points"]').fill("1")
+    modal.locator("button", has_text="Save scorers").click()
+    expect(ops_page.locator("#modal")).to_be_hidden()
+    expect(ops_page.locator(f"#scorers-{scored.pk}")).to_have_count(0)
+    expect(ops_page.locator("#activity li").first).to_contain_text("Scorers")
+    ops_page.screenshot(path=str(screenshot_dir / "ops_scorers_saved.png"))
+
+
+def test_a_single_score_is_refused_in_its_row(
+    ops_page, asgi_live_server, tournament, screenshot_dir
+):
+    ops_page.goto(asgi_live_server.url + tournament["day_path"])
+    # The first push after connecting re-renders the page, so let it land.
+    expect(ops_page.locator(".sse")).not_to_have_class("down")
+    row = ops_page.locator(f"#match-{tournament['match'].pk}")
+    row.locator('input[name="home_team_score"]').fill("3")
+    row.locator('button[type="submit"]').click()
+    expect(row.locator(".errorlist li")).to_have_text("Both scores are required.")
+    expect(row.locator('input[name="home_team_score"]')).to_have_value("3")
+    ops_page.screenshot(
+        path=str(screenshot_dir / "ops_result_validation.png"), full_page=True
+    )
+
+
 def test_collapsed_layout_puts_scorers_behind_a_tab(
     ops_page, asgi_live_server, tournament, screenshot_dir
 ):
@@ -279,7 +406,19 @@ def test_without_javascript_the_form_still_posts(
     page.wait_for_load_state("networkidle")
     page.goto(asgi_live_server.url + tournament["day_path"])
     row = page.locator(f"#match-{tournament['match'].pk}")
+    # One score only: the whole page comes back, with the error in the row.
     row.locator('input[name="home_team_score"]').fill("2")
+    with page.expect_response(lambda r: r.request.method == "POST") as posted:
+        row.locator('button[type="submit"]').click()
+    assert posted.value.status == 200
+    assert posted.value.url != asgi_live_server.url + tournament["day_path"]
+    row = page.locator(f"#match-{tournament['match'].pk}")
+    expect(row.locator(".errorlist li")).to_have_text("Both scores are required.")
+    expect(row.locator('input[name="home_team_score"]')).to_have_value("2")
+    expect(page.locator(".topbar .brand")).to_have_text("TOURNAMENT OPS")
+    page.screenshot(
+        path=str(screenshot_dir / "ops_no_javascript_validation.png"), full_page=True
+    )
     row.locator('input[name="away_team_score"]').fill("2")
     row.locator('button[type="submit"]').click()
     expect(page).to_have_url(asgi_live_server.url + tournament["day_path"])
