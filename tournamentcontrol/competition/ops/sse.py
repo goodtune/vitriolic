@@ -11,6 +11,7 @@ from datastar_py.django import DatastarResponse
 from datastar_py.django import ServerSentEventGenerator as SSE
 from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
+from django.db import close_old_connections
 from django.http import Http404, HttpResponseForbidden
 
 from tournamentcontrol.competition.models import Season
@@ -43,6 +44,19 @@ async def get_season(competition, season):
         raise Http404("No such season.")
 
 
+def render(func, *args):
+    """
+    Run a sync render on the worker thread with a healthy connection. That
+    thread can sit idle for hours between pushes, long enough for the server
+    to drop its connection, so validate (or replace) it either side.
+    """
+    close_old_connections()
+    try:
+        return func(*args)
+    finally:
+        close_old_connections()
+
+
 async def stream(season_id, snapshot, on_event):
     """
     Yield the snapshot, then a patch for every event, with keep-alive
@@ -53,6 +67,9 @@ async def stream(season_id, snapshot, on_event):
     The subscription is registered before the snapshot is rendered, and
     yields a ready tick as soon as it is, so an event published while the
     snapshot renders is queued rather than lost.
+
+    A push that fails to render is logged and skipped so one bad event does
+    not end every open stream; the snapshot is left to fail loudly.
     """
     ready = False
     try:
@@ -60,12 +77,17 @@ async def stream(season_id, snapshot, on_event):
             async for event in feed:
                 if not ready:
                     ready = True
-                    for html in await sync_to_async(snapshot)():
+                    for html in await sync_to_async(render)(snapshot):
                         yield SSE.patch_elements(html)
                 elif event is None:
                     yield KEEPALIVE_LINE
                 else:
-                    for html in await sync_to_async(on_event)(event):
+                    try:
+                        fragments = await sync_to_async(render)(on_event, event)
+                    except Exception:
+                        logger.exception("ops push failed for season %s", season_id)
+                        continue
+                    for html in fragments:
                         yield SSE.patch_elements(html)
     finally:
         logger.debug("ops stream for season %s closed", season_id)

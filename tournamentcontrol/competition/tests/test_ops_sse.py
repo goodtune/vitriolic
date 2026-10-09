@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+from unittest import mock
 from zoneinfo import ZoneInfo
 
 from asgiref.sync import sync_to_async
@@ -15,6 +16,7 @@ from test_plus import TestCase
 from test_plus.test import BaseTestCase
 
 from tournamentcontrol.competition.ops import events
+from tournamentcontrol.competition.ops.sites import OpsSite
 from tournamentcontrol.competition.tests import factories
 
 TZ = ZoneInfo("Australia/Brisbane")
@@ -100,6 +102,14 @@ class SseFixture:
             "datestr": "20261008",
         }
         self.url = reverse("ops:events", kwargs=self.kw)
+        # The stream validates its connections around each render. Inside a
+        # test's wrapping transaction that would close the test connection, so
+        # the real thing is replaced here and asserted on where it matters.
+        patcher = mock.patch(
+            "tournamentcontrol.competition.ops.sse.close_old_connections"
+        )
+        self.close_old_connections = patcher.start()
+        self.addCleanup(patcher.stop)
 
     def publish_committed(self, *args, **kwargs):
         # ``publish`` defers to ``transaction.on_commit``, which touches the
@@ -217,6 +227,50 @@ class OpsEventsTests(SseFixture, TestCase):
             pushed = "".join(await reader.until(LAST_COUNT))
             self.assertNotIn('id="slot-0800"', pushed)
             self.assertIn('data: elements <div id="streams"', pushed)
+        finally:
+            await reader.close()
+
+    async def test_failed_push_is_logged_and_the_stream_survives(self):
+        original = OpsSite.event_fragments
+        outcomes = [RuntimeError("boom")]
+
+        def flaky(site, *args, **kwargs):
+            # The stream only renders while a reader pulls from it, so the
+            # first push fails and every later one is the real thing.
+            if outcomes:
+                raise outcomes.pop()
+            return original(site, *args, **kwargs)
+
+        reader, _ = await self.connect()
+        try:
+            with mock.patch.object(
+                OpsSite, "event_fragments", autospec=True, side_effect=flaky
+            ) as patched:
+                await self.publish(
+                    self.season.pk, "score-entered", summary="x", match=self.match.pk
+                )
+                await self.publish(
+                    self.season.pk, "stream-changed", summary="x", kind="match", id=1
+                )
+                with self.assertLogs(
+                    "tournamentcontrol.competition.ops.sse", level="ERROR"
+                ):
+                    pushed = "".join(await reader.until(LAST_COUNT))
+            self.assertEqual(patched.call_count, 2)
+            self.assertIn('data: elements <div id="streams"', pushed)
+            self.assertNotIn('id="slot-0800"', pushed)
+        finally:
+            await reader.close()
+
+    async def test_connections_are_validated_around_a_push(self):
+        reader, _ = await self.connect()
+        try:
+            before = self.close_old_connections.call_count
+            await self.publish(
+                self.season.pk, "stream-changed", summary="x", kind="match", id=1
+            )
+            await reader.until(LAST_COUNT)
+            self.assertGreaterEqual(self.close_old_connections.call_count - before, 2)
         finally:
             await reader.close()
 
