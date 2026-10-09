@@ -286,8 +286,8 @@ class OpsSite(Application):
         slots = queries.day_results(season, day)
         for slot in slots:
             for match in slot.matches:
-                match.ops_entered = queries.has_result(match)
-                match.ops_editable = queries.editable(match) and can_change_match(
+                match.ops_entered = match.has_result
+                match.ops_editable = match.result_editable and can_change_match(
                     request.user, match
                 )
                 match.ops_form = None
@@ -476,9 +476,9 @@ class OpsSite(Application):
             "daystr": day.strftime("%Y%m%d"),
             "match": match,
             "form": form,
-            "editable": queries.editable(match)
+            "editable": match.result_editable
             and can_change_match(request.user, match),
-            "entered": queries.has_result(match),
+            "entered": match.has_result,
         }
 
     def slot_patches(self, request, season, day, match):
@@ -546,12 +546,12 @@ class OpsSite(Application):
             return fragment_response(request, html)
 
         require(can_change_match(request.user, match))
-        if not queries.editable(match):
+        if not match.result_editable:
             return HttpResponseBadRequest("This match cannot be entered here.")
 
         form = result_form(match, data=request.POST)
         form.actor = request.user.get_username()
-        form.adjusted = queries.has_result(match)
+        form.adjusted = match.has_result
         redirect_to = reverse("ops:day", kwargs=day_kwargs(season, day))
         if form.is_valid():
             form.save()

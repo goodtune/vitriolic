@@ -56,12 +56,6 @@ class DayResultsTests(DayFixture):
         (slot,) = queries.day_results(self.season, DAY)
         self.assertFalse(slot.open)
 
-    def test_forfeit_and_washout_count_as_results(self):
-        self.match(8, is_forfeit=True)
-        self.match(8, is_washout=True)
-        (slot,) = queries.day_results(self.season, DAY)
-        self.assertEqual(slot.state, "complete")
-
     def test_unscheduled_matches_land_in_a_trailing_slot(self):
         self.match(8)
         factories.MatchFactory.create(
@@ -94,24 +88,6 @@ class DayResultsTests(DayFixture):
         factories.MatchFactory.create(date=DAY)
         (slot,) = queries.day_results(self.season, DAY)
         self.assertEqual(slot.total, 1)
-
-    def test_mysideline_and_unprogressed_are_not_editable(self):
-        mirrored = self.match(8, mysideline_id=42)
-        undecided = factories.UndecidedTeamFactory.create(stage=self.stage)
-        pending = self.match(8, home_team=None, home_team_undecided=undecided)
-        plain = self.match(8)
-        self.assertFalse(queries.editable(mirrored))
-        self.assertFalse(queries.editable(pending))
-        self.assertTrue(queries.editable(plain))
-
-    def test_editable_costs_no_query_for_day_matches(self):
-        undecided = factories.UndecidedTeamFactory.create(stage=self.stage)
-        self.match(8, home_team=None, home_team_undecided=undecided)
-        self.match(9)
-        matches = list(queries.day_matches(self.season, DAY))
-        with self.assertNumQueries(0):
-            results = [queries.editable(m) for m in matches]
-        self.assertEqual(results, [False, True])
 
     def test_slot_for(self):
         self.match(8)

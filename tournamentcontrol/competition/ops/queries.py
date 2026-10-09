@@ -6,7 +6,7 @@ request objects, no rendering.
 import dataclasses
 import datetime
 
-from django.db.models import Exists, F, OuterRef, Q, Subquery, Sum
+from django.db.models import F, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
@@ -16,7 +16,6 @@ from tournamentcontrol.competition.models import (
     Match,
     SimpleScoreMatchStatistic,
 )
-from tournamentcontrol.competition.utils import team_needs_progressing
 
 SELECT_RELATED = (
     "stage__division__season",
@@ -48,42 +47,17 @@ class GroundStreams:
     next: Match | None
 
 
-def has_result(match):
-    if match.is_bye:
-        return match.bye_processed
-    return (
-        (match.home_team_score is not None and match.away_team_score is not None)
-        or match.is_forfeit
-        or match.is_washout
-    )
-
-
-def editable(match):
-    if match.mysideline_id is not None:
-        return False
-    if match.is_bye:
-        return True
-    needs = getattr(match, "needs_progressing", None)
-    if needs is None:
-        needs = Match.objects.filter(team_needs_progressing, pk=match.pk).exists()
-    return not needs
-
-
 def day_matches(season, day):
     return (
         Match.objects.filter(stage__division__season=season, date=day)
         .select_related(*SELECT_RELATED)
-        .annotate(
-            needs_progressing=Exists(
-                Match.objects.filter(team_needs_progressing, pk=OuterRef("pk"))
-            )
-        )
+        .with_result_state()
         .order_by("time", "play_at__order", "pk")
     )
 
 
 def _slot_state(matches):
-    entered = sum(1 for m in matches if has_result(m))
+    entered = sum(1 for m in matches if m.has_result)
     if entered == len(matches):
         return "complete", entered
     if entered:
