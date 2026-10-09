@@ -2,8 +2,10 @@ import datetime
 import re
 from zoneinfo import ZoneInfo
 
+from django.conf import settings
 from django.contrib.auth.models import Permission
-from django.test import RequestFactory
+from django.core.exceptions import ImproperlyConfigured
+from django.test import RequestFactory, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from freezegun import freeze_time
@@ -11,6 +13,7 @@ from test_plus import TestCase
 
 from tournamentcontrol.competition.ops import events
 from tournamentcontrol.competition.ops.fragments import render_counts
+from tournamentcontrol.competition.ops.sites import OpsSite
 from tournamentcontrol.competition.tests import factories
 
 TZ = ZoneInfo("Australia/Brisbane")
@@ -216,3 +219,20 @@ class LayoutTests(OpsFixture):
             '<button type="submit" title="expand"><span class="rail-l">Streams '
             '<span id="streams-count-rail" class="count zero">0</span></span></button>'
         )
+
+
+class MiddlewareRequiredTests(TestCase):
+    def test_site_without_the_datastar_middleware_is_refused(self):
+        middleware = [
+            path
+            for path in settings.MIDDLEWARE
+            if path != "touchtechnology.common.middleware.DatastarMiddleware"
+        ]
+        with override_settings(MIDDLEWARE=middleware):
+            with self.assertRaisesMessage(
+                ImproperlyConfigured,
+                "OpsSite needs "
+                "'touchtechnology.common.middleware.DatastarMiddleware' "
+                "in MIDDLEWARE.",
+            ):
+                OpsSite()

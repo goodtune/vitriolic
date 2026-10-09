@@ -12,7 +12,9 @@ import logging
 from functools import wraps
 
 from django import forms
+from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
+from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect
@@ -41,14 +43,12 @@ from tournamentcontrol.competition.ops.permissions import (
     require,
     staff_required,
 )
-from tournamentcontrol.competition.ops.responses import (
-    fragment_response,
-    is_datastar,
-    patches,
-)
+from tournamentcontrol.competition.ops.responses import fragment_response, patches
 from tournamentcontrol.competition.utils import FauxQueryset
 
 logger = logging.getLogger(__name__)
+
+DATASTAR_MIDDLEWARE = "touchtechnology.common.middleware.DatastarMiddleware"
 
 PANES = ("sheets", "results", "ladder", "leaders")
 PANE_LABELS = [
@@ -182,6 +182,10 @@ class OpsSite(Application):
 
     def __init__(self, name="ops", app_name="ops", **kwargs):
         super().__init__(name=name, app_name=app_name, **kwargs)
+        if DATASTAR_MIDDLEWARE not in settings.MIDDLEWARE:
+            raise ImproperlyConfigured(
+                "OpsSite needs %r in MIDDLEWARE." % DATASTAR_MIDDLEWARE
+            )
         receivers.connect()
 
     # --- urls -------------------------------------------------------
@@ -999,7 +1003,7 @@ class OpsSite(Application):
         context = self.booth_context(request, season, ground)
         match = self._booth_match(ground, context["day"], match_pk)
         html = self._pane_html(request, context, pane, match)
-        if not is_datastar(request):
+        if not request.datastar:
             return HttpResponse(html)
         return patches(request, [html], signals={"pane": pane, "match": match.pk})
 
@@ -1075,7 +1079,7 @@ class OpsSite(Application):
             runsheet=queries.ground_runsheet(ground, context["day"]),
             **context,
         )
-        if not is_datastar(request):
+        if not request.datastar:
             return HttpResponse(html)
         return patches(request, [html], signals={"pane": "runsheet", "match": None})
 
@@ -1103,7 +1107,7 @@ class OpsSite(Application):
             on_field={match.home_team_id, match.away_team_id},
             **context,
         )
-        if not is_datastar(request):
+        if not request.datastar:
             return HttpResponse(html)
         return patches(request, [html], signals={"modal": True})
 
@@ -1127,6 +1131,6 @@ class OpsSite(Application):
             results=queries.team_results(team),
             **context,
         )
-        if not is_datastar(request):
+        if not request.datastar:
             return HttpResponse(html)
         return patches(request, [html], signals={"modal": True})

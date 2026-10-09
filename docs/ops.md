@@ -18,6 +18,10 @@ urlpatterns += [path("ops/", OpsSite().urls)]
 Install the extra: `pip install vitriolic[async]` (adds `datastar-py` and
 `redis`). Nothing happens unless the site is mounted.
 
+Add `"touchtechnology.common.middleware.DatastarMiddleware"` to
+`MIDDLEWARE`; it sets `request.datastar`, and `OpsSite()` raises
+`ImproperlyConfigured` without it.
+
 The booth refuses an action with a normal 200 response that carries the
 reason in the lamp. Datastar drops the body of non-200 responses, so a
 refusal that used an error status would never reach the page.

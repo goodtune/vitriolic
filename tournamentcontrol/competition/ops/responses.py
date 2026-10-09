@@ -10,12 +10,8 @@ from django.http import HttpResponse
 from django.shortcuts import redirect
 
 
-def is_datastar(request):
-    return request.headers.get("Datastar-Request") == "true"
-
-
 def fragment_response(request, html):
-    if is_datastar(request):
+    if request.datastar:
         return DatastarResponse(SSE.patch_elements(html))
     return HttpResponse(html)
 
@@ -30,7 +26,7 @@ def patches(request, fragments, signals=None, redirect_to="", page=None):
     a plain browser instead. ``fragments`` may also be a callable, so a plain
     browser's request does not render what only Datastar would use.
     """
-    if not is_datastar(request):
+    if not request.datastar:
         if page is not None:
             return page()
         return redirect(redirect_to)
