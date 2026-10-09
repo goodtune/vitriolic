@@ -16,11 +16,15 @@ def render_fragment(request, name, **context):
 
 
 def render_counts(request, **context):
-    """The results and scorers counts, for the panel headers and the tab bar."""
+    """The counts, for the panel headers, the tab bar and the collapsed rail."""
     fragments = []
     for name in ("results_count", "scorers_count"):
         for suffix in ("", "-tab"):
             fragments.append(
                 render_fragment(request, name, count_suffix=suffix, **context)
             )
+    for suffix in ("", "-rail"):
+        fragments.append(
+            render_fragment(request, "streams_count", count_suffix=suffix, **context)
+        )
     return fragments

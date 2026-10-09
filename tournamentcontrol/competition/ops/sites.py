@@ -131,6 +131,7 @@ class OpsSite(Application):
             path("scorers/", self.scorers, name="scorers"),
             path("streams/", self.streams, name="streams"),
             path("activity/", self.activity, name="activity"),
+            path("layout/", self.layout, name="layout"),
             path("results/<str:slot_key>/", self.slot, name="slot"),
             path(
                 "results/match/<int:match_pk>/", self.match_result, name="match-result"
@@ -280,6 +281,20 @@ class OpsSite(Application):
         context = self.day_context(request, season, day)
         return fragment_response(
             request, render_fragment(request, "activity", **context)
+        )
+
+    @require_POST_m
+    @staff_required
+    @season_view
+    def layout(self, request, season, day, **kwargs):
+        request.session["ops_collapsed"] = not request.session.get(
+            "ops_collapsed", False
+        )
+        context = self.day_context(request, season, day)
+        return patches(
+            request,
+            [render_fragment(request, "main", **context)],
+            redirect_to=reverse("ops:day", kwargs=day_kwargs(season, day)),
         )
 
     # --- results ----------------------------------------------------

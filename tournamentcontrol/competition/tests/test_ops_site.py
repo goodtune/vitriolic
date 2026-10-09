@@ -148,5 +148,35 @@ class RenderCountsTests(TestCase):
                 '<span id="results-count-tab" class="count">2</span>',
                 '<span id="scorers-count" class="count">1</span>',
                 '<span id="scorers-count-tab" class="count">1</span>',
+                '<span id="streams-count" class="count zero">0</span>',
+                '<span id="streams-count-rail" class="count zero">0</span>',
             ],
+        )
+
+
+@freeze_time("2026-10-08 00:00 +10:00")
+class LayoutTests(OpsFixture):
+    def test_toggle_collapses_then_expands(self):
+        url = reverse("ops:layout", kwargs=self.day_kwargs)
+        with self.login(self.staff):
+            response = self.client.post(url, headers={"Datastar-Request": "true"})
+            body = b"".join(response.streaming_content).decode()
+            self.assertIn('data: elements <main id="main" class="collapsed">', body)
+            self.assertTrue(self.client.session["ops_collapsed"])
+            response = self.client.post(url)
+            self.assertRedirects(
+                response,
+                reverse("ops:day", kwargs=self.day_kwargs),
+                fetch_redirect_response=False,
+            )
+            self.assertFalse(self.client.session["ops_collapsed"])
+
+    def test_day_page_honours_the_session(self):
+        with self.login(self.staff):
+            session = self.client.session
+            session["ops_collapsed"] = True
+            session.save()
+            self.get("ops:day", **self.day_kwargs)
+        self.assertResponseContains(
+            '<button type="submit">⟨ Streams <span id="streams-count-rail" class="count zero">0</span></button>'
         )
