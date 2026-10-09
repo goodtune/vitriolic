@@ -74,17 +74,31 @@ class SlotFragmentTests(ResultsFixture):
         self.response_200()
         self.assertResponseContains(
             '<input type="number" name="home_team_score" class="sc" '
-            'placeholder="%s" id="id_home_team_score">'
-            % self.match.home_team.title[:3].upper()
+            'id="id_home_team_score">'
         )
+
+    def test_pending_row_reads_home_score_v_score_away(self):
+        with self.login(self.staff):
+            self.get("ops:slot", slot_key="0800", **self.kw)
+        body = self.last_response.content.decode()
+        positions = [
+            body.index(needle)
+            for needle in (
+                '<span class="team home">%s</span>' % self.match.home_team.title,
+                'name="home_team_score"',
+                '<span class="vs">v</span>',
+                'name="away_team_score"',
+                '<span class="team away">%s</span>' % self.match.away_team.title,
+            )
+        ]
+        self.assertEqual(positions, sorted(positions))
 
     def test_cancel_link_restores_the_pending_form(self):
         with self.login(self.staff):
             self.get("ops:match-result", match_pk=self.match.pk, **self.kw)
         self.assertResponseContains(
             '<input type="number" name="home_team_score" class="sc" '
-            'placeholder="%s" id="id_home_team_score">'
-            % self.match.home_team.title[:3].upper()
+            'id="id_home_team_score">'
         )
 
     def test_entered_row_renders_score_and_edit_link(self):
@@ -95,6 +109,18 @@ class SlotFragmentTests(ResultsFixture):
         self.assertResponseContains(
             '<a class="btn sm" href="%s" data-on:click__prevent="@get(\'%s\')">Edit</a>'
             % ((self.url("match-result-edit", match_pk=done.pk),) * 2)
+        )
+
+    def test_entered_row_shows_the_names_either_side_of_the_score(self):
+        done = self.make(8, home_team_score=5, away_team_score=4)
+        with self.login(self.staff):
+            self.get("ops:slot", slot_key="0800", **self.kw)
+        self.assertResponseContains(
+            '<span class="team home">%s</span>' % done.home_team.title
+        )
+        self.assertResponseContains('<span class="score">5 – 4</span>')
+        self.assertResponseContains(
+            '<span class="team away">%s</span>' % done.away_team.title
         )
 
     def test_readonly_user_sees_no_form(self):
@@ -233,8 +259,7 @@ class EditScoreTests(ResultsFixture):
             self.get("ops:match-result-edit", match_pk=done.pk, **self.kw)
         self.assertResponseContains(
             '<input type="number" name="home_team_score" value="3" class="sc" '
-            'placeholder="%s" data-preserve-attr="value" id="id_home_team_score">'
-            % done.home_team.title[:3].upper()
+            'data-preserve-attr="value" id="id_home_team_score">'
         )
 
     def test_adjusting_publishes_adjusted_event(self):

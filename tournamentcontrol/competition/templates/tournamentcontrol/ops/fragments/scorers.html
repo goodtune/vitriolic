@@ -3,12 +3,15 @@
 	{% for match in scorers %}
 		<div id="scorers-{{ match.pk }}" class="row">
 			<div class="g">{{ match.time|time:"H:i" }} · {{ match.play_at.title|default:"—" }}</div>
-			<div class="t">
-				<div class="teams">{{ match.get_home_team_plain }} <span class="vs">v</span> {{ match.get_away_team_plain }} <span class="score">{{ match.home_team_score }} – {{ match.away_team_score }}</span>{% if match.home_points or match.away_points %} <span class="badge testing">out of balance</span>{% endif %}</div>
+			<div class="m">
+				<div class="s">
+					<span class="team home">{{ match.get_home_team_plain }}</span>
+					<span class="score">{{ match.home_team_score }} – {{ match.away_team_score }}</span>
+					<span class="team away">{{ match.get_away_team_plain }}</span>
+					{% if match.home_points or match.away_points %}<span class="badge testing">out of balance</span>{% endif %}
+					{% if can_statistics %}<a class="btn" href="{% ops_url 'match-scorers' match_pk=match.pk %}" data-on:click__prevent="@get('{% ops_url 'match-scorers' match_pk=match.pk %}')">Enter scorers</a>{% endif %}
+				</div>
 				<div class="div">{{ match.stage.division.title }}</div>
-			</div>
-			<div class="s">
-				{% if can_statistics %}<a class="btn" href="{% ops_url 'match-scorers' match_pk=match.pk %}" data-on:click__prevent="@get('{% ops_url 'match-scorers' match_pk=match.pk %}')">Enter scorers</a>{% endif %}
 			</div>
 		</div>
 	{% empty %}

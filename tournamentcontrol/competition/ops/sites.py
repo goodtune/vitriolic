@@ -140,10 +140,11 @@ def style_result_form(form):
     """Give a ``MatchResultForm``'s widgets the ops markup."""
     for side in ("home_team_score", "away_team_score"):
         if side in form.fields:
-            team = getattr(form.instance, side.replace("_score", ""))
             widget = form.fields[side].widget
             widget.input_type = "number"
-            widget.attrs.update({"class": "sc", "placeholder": team.title[:3].upper()})
+            widget.attrs["class"] = "sc"
+            # The form hints with the team's name, which the row now shows.
+            widget.attrs.pop("placeholder", None)
             if form.instance.home_team_score is not None:
                 widget.attrs["data-preserve-attr"] = "value"
     # The model form renders these as Yes/No selects; a row wants a checkbox.
