@@ -280,6 +280,55 @@ def test_hold_button_needs_a_hold(
         )
 
 
+def test_hold_button_can_be_held_from_the_keyboard(
+    compops_page, asgi_live_server, tournament
+):
+    """
+    Holding Space on the focused hold button ends the broadcast.
+
+    The booth is on air, so its hold button is "HOLD TO END BROADCAST". The
+    button is focused without the pointer, Space is held past the 1.5s hold
+    and released, and the lamp must go off air just as a pointer hold does.
+    """
+    with mock.patch(
+        "tournamentcontrol.competition.models.build", return_value=youtube_mock("live")
+    ):
+        compops_page.set_viewport_size({"width": 1024, "height": 768})
+        compops_page.goto(asgi_live_server.url + tournament["booth_path"])
+        button = compops_page.locator("button[data-hold]")
+        expect(compops_page.locator("#lamp")).to_have_text("ON AIR")
+        button.focus()
+        compops_page.keyboard.down("Space")
+        expect(button).to_have_class(re.compile(r"\bpressing\b"))
+        compops_page.wait_for_timeout(1700)
+        compops_page.keyboard.up("Space")
+        expect(compops_page.locator("#lamp")).to_have_text("OFF AIR")
+
+
+def test_hold_button_ignores_a_tap_of_the_space_bar(
+    compops_page, asgi_live_server, tournament
+):
+    """
+    A short tap of Space on the focused hold button does nothing.
+
+    The key is released well inside the hold time, which cancels the hold;
+    waiting past the hold time afterwards proves no submit was left pending,
+    and the native click a Space press makes on a button never submits.
+    """
+    with mock.patch(
+        "tournamentcontrol.competition.models.build", return_value=youtube_mock("live")
+    ):
+        compops_page.set_viewport_size({"width": 1024, "height": 768})
+        compops_page.goto(asgi_live_server.url + tournament["booth_path"])
+        button = compops_page.locator("button[data-hold]")
+        expect(compops_page.locator("#lamp")).to_have_text("ON AIR")
+        button.focus()
+        compops_page.keyboard.press("Space")
+        compops_page.wait_for_timeout(2000)
+        expect(button).to_have_class("bigbtn end")
+        expect(compops_page.locator("#lamp")).to_have_text("ON AIR")
+
+
 def test_booth_opens_its_event_stream_once(compops_page, asgi_live_server, tournament):
     events_url = reverse(
         "compops:booth-events",
