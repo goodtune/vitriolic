@@ -8,6 +8,7 @@ from celery import Task, shared_task, states
 from dateutil.relativedelta import relativedelta
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
+from django.db.models import Q
 from google.auth.exceptions import RefreshError
 from django.template.loader import render_to_string
 from django.urls import NoReverseMatch, reverse
@@ -818,9 +819,27 @@ def refresh_all_live_stream_status():
         now.date() - datetime.timedelta(days=1),
         now.date() + datetime.timedelta(days=1),
     )
-    seasons = Season.objects.filter(
-        live_stream=True, divisions__stages__matches__date__range=window
-    ).distinct()
+    # Events are matched on their aware start. The bounds are the window's
+    # dates taken in UTC, from the start of the first day to the end of the
+    # last; the window already reaches a day either side of today, so every
+    # season's local today falls inside them whatever its time zone.
+    event_window = (
+        datetime.datetime.combine(window[0], datetime.time.min, datetime.UTC),
+        datetime.datetime.combine(
+            window[1] + datetime.timedelta(days=1), datetime.time.min, datetime.UTC
+        ),
+    )
+    seasons = (
+        Season.objects.filter(live_stream=True)
+        .filter(
+            Q(divisions__stages__matches__date__range=window)
+            | Q(
+                live_stream_events__start__range=event_window,
+                live_stream_events__live_stream=True,
+            )
+        )
+        .distinct()
+    )
     changed = 0
     for season in seasons:
         try:

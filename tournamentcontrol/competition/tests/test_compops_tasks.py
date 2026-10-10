@@ -131,6 +131,26 @@ class RefreshStatusTests(TestCase):
         self.match.refresh_from_db()
         self.assertEqual(self.match.live_stream_status, "live")
 
+    @mock.patch(
+        "tournamentcontrol.competition.tasks.refresh_season_status", return_value=0
+    )
+    def test_refresh_all_covers_seasons_with_only_events_today(self, refresh):
+        start = timezone.make_aware(datetime.datetime(2026, 10, 8, 17, 30), TZ)
+        events_only = factories.SeasonFactory.create(
+            timezone="Australia/Brisbane", **YOUTUBE_SEASON
+        )
+        factories.LiveStreamEventFactory.create(season=events_only, start=start)
+        removed_only = factories.SeasonFactory.create(
+            timezone="Australia/Brisbane", **YOUTUBE_SEASON
+        )
+        factories.LiveStreamEventFactory.create(
+            season=removed_only, start=start, live_stream=False
+        )
+        refresh_all_live_stream_status()
+        self.assertCountEqual(
+            [c.args[0] for c in refresh.call_args_list], [self.season, events_only]
+        )
+
     def test_mid_transition_status_fits_the_column(self):
         with self.captureOnCommitCallbacks(execute=True):
             status.refresh_season_status(
