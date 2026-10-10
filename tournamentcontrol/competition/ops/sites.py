@@ -11,7 +11,9 @@ import datetime
 import logging
 from functools import wraps
 
+import django
 from django import forms
+from django.apps import apps
 from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import ImproperlyConfigured
@@ -50,6 +52,16 @@ from tournamentcontrol.competition.utils import FauxQueryset
 logger = logging.getLogger(__name__)
 
 DATASTAR_MIDDLEWARE = "touchtechnology.common.middleware.DatastarMiddleware"
+TEMPLATE_PARTIALS = "template_partials"
+
+
+def partials_available():
+    """
+    Template partials are built into Django from 6.0. Before that they come
+    from django-template-partials, which must be installed as an app.
+    """
+    return django.VERSION >= (6, 0) or apps.is_installed(TEMPLATE_PARTIALS)
+
 
 PANES = ("sheets", "results", "ladder", "leaders")
 PANE_LABELS = [
@@ -168,6 +180,11 @@ class OpsSite(Application):
         if DATASTAR_MIDDLEWARE not in settings.MIDDLEWARE:
             raise ImproperlyConfigured(
                 f"OpsSite needs {DATASTAR_MIDDLEWARE!r} in MIDDLEWARE."
+            )
+        if not partials_available():
+            raise ImproperlyConfigured(
+                f"OpsSite needs django-template-partials and {TEMPLATE_PARTIALS!r} "
+                "in INSTALLED_APPS before Django 6.0."
             )
         receivers.connect()
 
@@ -471,7 +488,12 @@ class OpsSite(Application):
         """
         context = self.day_context(request, season, day)
         slot, fresh = next(
-            ((s, m) for s in context["slots"] for m in s.matches if m.pk == match.pk),
+            (
+                (s, m)
+                for s in context["slots"]
+                for m in s.matches
+                if m.pk == match.pk
+            ),
             (None, None),
         )
         fragments = []

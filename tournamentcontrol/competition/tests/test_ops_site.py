@@ -1,5 +1,6 @@
 import datetime
 import re
+from unittest import mock
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
@@ -13,6 +14,7 @@ from test_plus import TestCase
 
 from tournamentcontrol.competition.ops import events
 from tournamentcontrol.competition.ops.fragments import render_counts
+from tournamentcontrol.competition.ops import sites
 from tournamentcontrol.competition.ops.sites import OpsSite
 from tournamentcontrol.competition.tests import factories
 
@@ -236,3 +238,18 @@ class MiddlewareRequiredTests(TestCase):
                 "in MIDDLEWARE.",
             ):
                 OpsSite()
+
+    def test_site_without_template_partials_before_django_6_is_refused(self):
+        with mock.patch.object(sites.django, "VERSION", (5, 2, 0)):
+            with mock.patch.object(sites.apps, "is_installed", return_value=False):
+                with self.assertRaisesMessage(
+                    ImproperlyConfigured,
+                    "OpsSite needs django-template-partials and "
+                    "'template_partials' in INSTALLED_APPS before Django 6.0.",
+                ):
+                    OpsSite()
+
+    def test_site_without_template_partials_on_django_6_mounts(self):
+        with mock.patch.object(sites.django, "VERSION", (6, 0, 0)):
+            with mock.patch.object(sites.apps, "is_installed", return_value=False):
+                self.assertIsInstance(OpsSite(), OpsSite)
