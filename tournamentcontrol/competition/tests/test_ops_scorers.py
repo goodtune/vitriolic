@@ -95,8 +95,8 @@ class ScorersListTests(ScorersFixture):
             self.get("ops:scorers", **self.kw)
         self.assertResponseContains('<span class="score">2 – 1</span>')
         self.assertResponseContains(
-            '<a class="btn" href="%s" data-on:click__prevent="@get(\'%s\')">Enter scorers</a>'
-            % (self.url, self.url)
+            f'<a class="btn" href="{self.url}" '
+            f"data-on:click__prevent=\"@get('{self.url}')\">Enter scorers</a>"
         )
 
     def test_unbalanced_match_is_marked(self):

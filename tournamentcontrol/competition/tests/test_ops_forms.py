@@ -181,7 +181,7 @@ class ResultFormTests(FormsFixture):
         self.assertResponseContains("<li>Both scores are required.</li>")
         self.assertResponseContains(
             '<input type="number" name="home_team_score" value="5" class="sc" '
-            'data-preserve-attr="value" id="m%d_home_team_score">' % self.match.pk
+            f'data-preserve-attr="value" id="m{self.match.pk}_home_team_score">'
         )
         self.match.refresh_from_db()
         self.assertIsNone(self.match.home_team_score)
@@ -193,12 +193,13 @@ class ResultFormTests(FormsFixture):
         self.assertResponseContains("<li>Both scores are required.</li>")
         self.assertResponseContains(
             '<input type="number" name="home_team_score" value="4" class="sc" '
-            'data-preserve-attr="value" id="m%d_home_team_score">' % done.pk
+            f'data-preserve-attr="value" id="m{done.pk}_home_team_score">'
         )
         # The cancel link only shows on a row being edited.
+        url = self.url("match-result", match_pk=done.pk)
         self.assertResponseContains(
-            '<a class="btn" href="%s" data-on:click__prevent="@get(\'%s\')">✕</a>'
-            % ((self.url("match-result", match_pk=done.pk),) * 2)
+            f'<a class="btn" href="{url}" '
+            f"data-on:click__prevent=\"@get('{url}')\">✕</a>"
         )
         done.refresh_from_db()
         self.assertEqual((done.home_team_score, done.away_team_score), (3, 1))
@@ -208,7 +209,7 @@ class ResultFormTests(FormsFixture):
         response = self.post(self.match, {"home_team_score": 5, "away_team_score": ""})
         self.assertDayPage(response)
         self.assertEqual(response.content.decode().count("<li>Both scores"), 1)
-        self.assertIn('id="match-%d"' % other.pk, response.content.decode())
+        self.assertIn(f'id="match-{other.pk}"', response.content.decode())
 
 
 class ScorersFormTests(FormsFixture):
@@ -285,14 +286,14 @@ class ScorersFormTests(FormsFixture):
         body = response.content.decode()
         self.assertTrue(body.lstrip().lower().startswith("<!doctype html>"))
         # The form posts on its own, with its token, and Save submits it.
-        self.assertIn('<form method="post" action="%s"' % self.scorers_url, body)
+        self.assertIn(f'<form method="post" action="{self.scorers_url}"', body)
         self.assertResponseContains(
             '<button class="btn p" type="submit">Save scorers</button>'
         )
         # Leaving is a link to the day, not a button that needs a script.
-        self.assertResponseContains('<a class="btn" href="%s">Cancel</a>' % self.day_url)
+        self.assertResponseContains(f'<a class="btn" href="{self.day_url}">Cancel</a>')
         self.assertResponseContains(
-            '<a class="back" href="%s">Back to the day</a>' % self.day_url
+            f'<a class="back" href="{self.day_url}">Back to the day</a>'
         )
         self.assertNotIn("$modal = false", body)
 
@@ -301,7 +302,7 @@ class ScorersFormTests(FormsFixture):
             self.last_response = self.client.get(self.scorers_url)
         self.assertEqual(self.last_response.status_code, 200)
         self.assertTemplateUsed(self.last_response, SCORERS_TEMPLATE)
-        self.assertResponseContains('<a class="btn" href="%s">Cancel</a>' % self.day_url)
+        self.assertResponseContains(f'<a class="btn" href="{self.day_url}">Cancel</a>')
 
 
 class StreamFormTests(FormsFixture):
@@ -336,11 +337,10 @@ class StreamFormTests(FormsFixture):
         orphan = self.make(12, play_at=self.field1)
         response = self.post("match-stream", match_pk=orphan.pk, status="live")
         self.assertDayPage(response)
-        message = "%s: %s does not have a live stream identifier" % (
-            streams.describe(orphan),
-            orphan,
+        message = (
+            f"{streams.describe(orphan)}: {orphan} does not have a live stream identifier"
         )
-        self.assertResponseContains('<p class="warn">%s</p>' % escape(message))
+        self.assertResponseContains(f'<p class="warn">{escape(message)}</p>')
         self.assertEqual(events.recent(self.season.pk), [])
 
     @mock.patch("tournamentcontrol.competition.models.build")
@@ -357,8 +357,8 @@ class StreamFormTests(FormsFixture):
         with self.assertLogs("tournamentcontrol.competition.ops.streams"):
             response = self.post("slot-stream", slot_key="1040", status="live")
         self.assertDayPage(response)
-        message = "%s: expired" % streams.describe(self.current)
-        self.assertResponseContains('<p class="warn">%s</p>' % escape(message))
+        message = f"{streams.describe(self.current)}: expired"
+        self.assertResponseContains(f'<p class="warn">{escape(message)}</p>')
         self.current.refresh_from_db()
         self.assertEqual(self.current.live_stream_status, "testing")
 
@@ -378,8 +378,8 @@ class StreamFormTests(FormsFixture):
                 "event-stream", event_pk=self.event.pk, status="testing"
             )
         self.assertDayPage(response)
-        message = "%s: expired" % streams.describe(self.event)
-        self.assertResponseContains('<p class="warn">%s</p>' % escape(message))
+        message = f"{streams.describe(self.event)}: expired"
+        self.assertResponseContains(f'<p class="warn">{escape(message)}</p>')
 
 
 class LayoutFormTests(FormsFixture):
@@ -467,9 +467,9 @@ class BoothFormTests(FormsFixture):
         with self.assertLogs("tournamentcontrol.competition.ops.streams"):
             response = self.post("booth-onair", status="complete")
         self.assertBoothPage(response)
-        message = "%s: expired" % streams.describe(self.current)
+        message = f"{streams.describe(self.current)}: expired"
         self.assertIn(
-            '<span class="warn">%s</span>' % escape(message), self.onair(response)
+            f'<span class="warn">{escape(message)}</span>', self.onair(response)
         )
         self.current.refresh_from_db()
         self.assertEqual(self.current.live_stream_status, "live")

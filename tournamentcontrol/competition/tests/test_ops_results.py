@@ -74,7 +74,7 @@ class SlotFragmentTests(ResultsFixture):
         self.response_200()
         self.assertResponseContains(
             '<input type="number" name="home_team_score" class="sc" '
-            'data-preserve-attr="value" id="m%d_home_team_score">' % self.match.pk
+            f'data-preserve-attr="value" id="m{self.match.pk}_home_team_score">'
         )
 
     def test_pending_row_reads_home_score_v_score_away(self):
@@ -84,11 +84,11 @@ class SlotFragmentTests(ResultsFixture):
         positions = [
             body.index(needle)
             for needle in (
-                '<span class="team home">%s</span>' % self.match.home_team.title,
+                f'<span class="team home">{self.match.home_team.title}</span>',
                 'name="home_team_score"',
                 '<span class="vs">–</span>',
                 'name="away_team_score"',
-                '<span class="team away">%s</span>' % self.match.away_team.title,
+                f'<span class="team away">{self.match.away_team.title}</span>',
             )
         ]
         self.assertEqual(positions, sorted(positions))
@@ -98,7 +98,7 @@ class SlotFragmentTests(ResultsFixture):
             self.get("ops:match-result", match_pk=self.match.pk, **self.kw)
         self.assertResponseContains(
             '<input type="number" name="home_team_score" class="sc" '
-            'data-preserve-attr="value" id="m%d_home_team_score">' % self.match.pk
+            f'data-preserve-attr="value" id="m{self.match.pk}_home_team_score">'
         )
 
     def test_entered_row_renders_score_and_edit_link(self):
@@ -106,9 +106,10 @@ class SlotFragmentTests(ResultsFixture):
         with self.login(self.staff):
             self.get("ops:slot", slot_key="0800", **self.kw)
         self.assertResponseContains('<span class="score">3 – 1</span>')
+        url = self.url("match-result-edit", match_pk=done.pk)
         self.assertResponseContains(
-            '<a class="btn sm" href="%s" data-on:click__prevent="@get(\'%s\')">Edit</a>'
-            % ((self.url("match-result-edit", match_pk=done.pk),) * 2)
+            f'<a class="btn sm" href="{url}" '
+            f"data-on:click__prevent=\"@get('{url}')\">Edit</a>"
         )
 
     def test_entered_row_shows_the_names_either_side_of_the_score(self):
@@ -116,11 +117,11 @@ class SlotFragmentTests(ResultsFixture):
         with self.login(self.staff):
             self.get("ops:slot", slot_key="0800", **self.kw)
         self.assertResponseContains(
-            '<span class="team home">%s</span>' % done.home_team.title
+            f'<span class="team home">{done.home_team.title}</span>'
         )
         self.assertResponseContains('<span class="score">5 – 4</span>')
         self.assertResponseContains(
-            '<span class="team away">%s</span>' % done.away_team.title
+            f'<span class="team away">{done.away_team.title}</span>'
         )
 
     def test_readonly_user_sees_no_form(self):
@@ -175,7 +176,7 @@ class SaveScoreTests(ResultsFixture):
         response = self.post_score(self.match, 5, 4, datastar=True)
         self.assertEqual(response.status_code, 200)
         body = b"".join(response.streaming_content).decode()
-        self.assertIn('data: elements <div id="match-%d"' % self.match.pk, body)
+        self.assertIn(f'data: elements <div id="match-{self.match.pk}"', body)
         self.assertIn('data: elements <div id="slot-0800-h"', body)
         self.assertNotIn('data: elements <div id="slot-0800" class="slot"', body)
         self.assertIn(
@@ -187,7 +188,7 @@ class SaveScoreTests(ResultsFixture):
         pending = self.make(8)
         response = self.post_score(self.match, 5, 4, datastar=True)
         body = b"".join(response.streaming_content).decode()
-        self.assertNotIn('id="match-%d"' % pending.pk, body)
+        self.assertNotIn(f'id="match-{pending.pk}"', body)
         self.assertIn('<span class="when">1 of 2 entered</span>', body)
 
     def test_missing_away_score_re_renders_errors(self):
@@ -213,13 +214,9 @@ class SaveScoreTests(ResultsFixture):
         self.assertEqual(event["type"], "score-entered")
         self.assertEqual(
             event["summary"],
-            "Forfeit · %s · %s v %s → %s"
-            % (
-                self.stage.division.title,
-                self.match.home_team.title,
-                self.match.away_team.title,
-                self.match.home_team.title,
-            ),
+            f"Forfeit · {self.stage.division.title} · "
+            f"{self.match.home_team.title} v {self.match.away_team.title} → "
+            f"{self.match.home_team.title}",
         )
 
     def test_without_change_match_is_403(self):
@@ -259,7 +256,7 @@ class EditScoreTests(ResultsFixture):
             self.get("ops:match-result-edit", match_pk=done.pk, **self.kw)
         self.assertResponseContains(
             '<input type="number" name="home_team_score" value="3" class="sc" '
-            'data-preserve-attr="value" id="m%d_home_team_score">' % done.pk
+            f'data-preserve-attr="value" id="m{done.pk}_home_team_score">'
         )
 
     def test_adjusting_publishes_adjusted_event(self):
@@ -270,8 +267,8 @@ class EditScoreTests(ResultsFixture):
         self.assertTrue(event["adjusted"])
         self.assertEqual(
             event["summary"],
-            "Score · %s · %s 3–2 %s"
-            % (done.stage.division.title, done.home_team.title, done.away_team.title),
+            f"Score · {done.stage.division.title} · {done.home_team.title} "
+            f"3–2 {done.away_team.title}",
         )
 
 
@@ -289,7 +286,7 @@ class ByeTests(ResultsFixture):
             self.get("ops:slot", slot_key="byes", **self.kw)
         self.assertResponseContains(
             '<input type="checkbox" name="bye_processed" class="bye" '
-            'id="m%d_bye_processed">' % bye.pk
+            f'id="m{bye.pk}_bye_processed">'
         )
         with self.captureOnCommitCallbacks(execute=True):
             self.post_score(bye, "", "", bye_processed="on")

@@ -157,7 +157,7 @@ def result_form(match, data=None):
     duplicate ids would pair a typed input with another row's.
     """
     return style_result_form(
-        MatchResultForm(data=data, instance=match, auto_id="m%d_%%s" % match.pk)
+        MatchResultForm(data=data, instance=match, auto_id=f"m{match.pk}_%s")
     )
 
 
@@ -167,7 +167,7 @@ class OpsSite(Application):
         super().__init__(name=name, app_name=app_name, **kwargs)
         if DATASTAR_MIDDLEWARE not in settings.MIDDLEWARE:
             raise ImproperlyConfigured(
-                "OpsSite needs %r in MIDDLEWARE." % DATASTAR_MIDDLEWARE
+                f"OpsSite needs {DATASTAR_MIDDLEWARE!r} in MIDDLEWARE."
             )
         receivers.connect()
 
@@ -471,12 +471,7 @@ class OpsSite(Application):
         """
         context = self.day_context(request, season, day)
         slot, fresh = next(
-            (
-                (s, m)
-                for s in context["slots"]
-                for m in s.matches
-                if m.pk == match.pk
-            ),
+            ((s, m) for s in context["slots"] for m in s.matches if m.pk == match.pk),
             (None, None),
         )
         fragments = []
@@ -763,12 +758,13 @@ class OpsSite(Application):
         if status == "live":
             armable, reason = False, "End the current broadcast first."
         elif armable_match is None:
-            armable, reason = False, "No more broadcasts on %s today." % ground.title
+            armable, reason = False, f"No more broadcasts on {ground.title} today."
         elif not armable_match.external_identifier:
-            armable, reason = False, "%s v %s has no YouTube broadcast." % (
+            home, away = (
                 armable_match.get_home_team_plain(),
                 armable_match.get_away_team_plain(),
             )
+            armable, reason = False, f"{home} v {away} has no YouTube broadcast."
         elif streams.effective_status(armable_match.live_stream_status) == "testing":
             armable, reason = False, "Already armed."
         return {
@@ -967,16 +963,13 @@ class OpsSite(Application):
         elif pane == "ladder":
             owner = match.stage_group or match.stage
             extra["ladder"] = owner.ladder_summary.select_related("team__club")
-            extra["ladder_title"] = "%s · %s" % (
-                match.stage.division.title,
-                owner.title,
-            )
+            extra["ladder_title"] = f"{match.stage.division.title} · {owner.title}"
         elif pane == "leaders":
             extra["scorers"], extra["mvps"] = queries.division_leaders(
                 match.stage.division
             )
             extra["on_field"] = {match.home_team_id, match.away_team_id}
-        return render_fragment(request, "pane_%s" % pane, **{**context, **extra})
+        return render_fragment(request, f"pane_{pane}", **{**context, **extra})
 
     @booth_view
     @booth_required

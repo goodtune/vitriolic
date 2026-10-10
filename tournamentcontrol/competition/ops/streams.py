@@ -29,11 +29,7 @@ def effective_status(status):
 def describe(obj):
     if isinstance(obj, Match):
         ground = obj.play_at.title if obj.play_at else "No ground"
-        return "%s · %s v %s" % (
-            ground,
-            obj.get_home_team_plain(),
-            obj.get_away_team_plain(),
-        )
+        return f"{ground} · {obj.get_home_team_plain()} v {obj.get_away_team_plain()}"
     return obj.title
 
 
@@ -49,7 +45,7 @@ def publish_change(obj, status, actor):
         season_of(obj).pk,
         "stream-changed",
         actor=actor,
-        summary="%s → %s" % (describe(obj), status),
+        summary=f"{describe(obj)} → {status}",
         kind=kind,
         id=obj.pk,
         status=status,
@@ -65,12 +61,12 @@ def transition(obj, status, actor):
         obj.transition_live_stream(status)
     except LiveStreamError as exc:
         logger.warning("ops stream transition refused for %s: %s", obj, exc)
-        return "%s: %s" % (describe(obj), exc)
+        return f"{describe(obj)}: {exc}"
     except HttpError as exc:
         logger.warning("ops stream transition failed for %s: %s", obj, exc.reason)
-        return "%s: %s" % (describe(obj), exc.reason)
+        return f"{describe(obj)}: {exc.reason}"
     except (RefreshError, TransportError) as exc:
         logger.exception("ops stream transition failed for %s", obj)
-        return "%s: %s" % (describe(obj), exc)
+        return f"{describe(obj)}: {exc}"
     publish_change(obj, status, actor)
     return None

@@ -235,7 +235,7 @@ def division_leaders(division, limit=10):
     def rows(queryset):
         return [
             {
-                "name": "%s %s" % (r["player__first_name"], r["player__last_name"]),
+                "name": f"{r['player__first_name']} {r['player__last_name']}",
                 "team": r["player__teamassociation__team__title"],
                 "points": r["points"] or 0,
                 "mvp": r["mvp"] or 0,

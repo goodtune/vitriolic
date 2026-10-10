@@ -11,35 +11,21 @@ from tournamentcontrol.competition.signals.custom import (
 
 
 def describe(match):
-    return "%s · %s v %s" % (
-        match.stage.division.title,
-        match.get_home_team_plain(),
-        match.get_away_team_plain(),
-    )
+    division = match.stage.division.title
+    return f"{division} · {match.get_home_team_plain()} v {match.get_away_team_plain()}"
 
 
 def score_summary(match):
     division = match.stage.division.title
     if match.is_bye:
-        return "Bye · %s · %s" % (
-            division,
-            match.get_home_team_plain() or match.get_away_team_plain(),
-        )
+        team = match.get_home_team_plain() or match.get_away_team_plain()
+        return f"Bye · {division} · {team}"
     if match.is_forfeit:
         winner = match.forfeit_winner.title if match.forfeit_winner else "double"
-        return "Forfeit · %s · %s v %s → %s" % (
-            division,
-            match.get_home_team_plain(),
-            match.get_away_team_plain(),
-            winner,
-        )
-    return "Score · %s · %s %s–%s %s" % (
-        division,
-        match.get_home_team_plain(),
-        match.home_team_score,
-        match.away_team_score,
-        match.get_away_team_plain(),
-    )
+        home, away = match.get_home_team_plain(), match.get_away_team_plain()
+        return f"Forfeit · {division} · {home} v {away} → {winner}"
+    home, away = match.get_home_team_plain(), match.get_away_team_plain()
+    return f"Score · {division} · {home} {match.home_team_score}–{match.away_team_score} {away}"
 
 
 def on_score_updated(sender, match, **kwargs):

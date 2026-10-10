@@ -171,7 +171,7 @@ class OpsEventsTests(SseFixture, TestCase):
         try:
             self.assertEqual(len(snapshot), len(SNAPSHOT_IDS))
             for chunk, element in zip(snapshot, SNAPSHOT_IDS):
-                self.assertIn('id="%s"' % element, chunk)
+                self.assertIn(f'id="{element}"', chunk)
 
             await self.publish(
                 self.season.pk,
@@ -182,7 +182,7 @@ class OpsEventsTests(SseFixture, TestCase):
                 adjusted=False,
             )
             pushed = "".join(await reader.until(LAST_ACTIVITY))
-            self.assertIn('data: elements <div id="match-%d"' % self.match.pk, pushed)
+            self.assertIn(f'data: elements <div id="match-{self.match.pk}"', pushed)
             self.assertIn('data: elements <div id="slot-0800-h"', pushed)
             self.assertNotIn('data: elements <div id="slot-0800" class="slot"', pushed)
             self.assertIn('data: elements <span id="results-count"', pushed)
@@ -299,7 +299,7 @@ class OpsEventsTests(SseFixture, TestCase):
             )
             for reader in (first, second):
                 pushed = "".join(await reader.until(LAST_ACTIVITY))
-                self.assertIn('id="match-%d"' % self.match.pk, pushed)
+                self.assertIn(f'id="match-{self.match.pk}"', pushed)
                 self.assertIn('id="slot-0800-h"', pushed)
         finally:
             await first.close()
@@ -335,7 +335,7 @@ class OpsEventsTests(SseFixture, TestCase):
 class OpsEventsDisconnectTests(SseFixture, TransactionTestCase):
     async def test_disconnect_unsubscribes(self):
         await self.async_client.aforce_login(self.staff)
-        cookie = "sessionid=%s" % self.async_client.cookies["sessionid"].value
+        cookie = f"sessionid={self.async_client.cookies['sessionid'].value}"
         scope = {
             "type": "http",
             "http_version": "1.1",

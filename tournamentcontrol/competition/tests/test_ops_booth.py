@@ -120,16 +120,16 @@ class BoothAccessTests(BoothFixture):
     def test_page_subscribes_to_the_booth_stream(self):
         with self.login(self.commentator):
             self.get("ops:booth", **self.kw)
+        url = self.url("booth-events")
         self.assertIn(
-            "data-effect=\"$pane; $match; @get('%s', {retryMaxCount: 1000})\""
-            % self.url("booth-events"),
+            f"data-effect=\"$pane; $match; @get('{url}', {{retryMaxCount: 1000}})\"",
             self.last_response.content.decode(),
         )
 
     def test_index_lists_streamed_grounds(self):
         with self.login(self.commentator):
             self.get("ops:booth-index", competition="pacific-cup", season="pc26")
-        self.assertResponseContains('<a href="%s">Field 1</a>' % self.url("booth"))
+        self.assertResponseContains(f'<a href="{self.url("booth")}">Field 1</a>')
 
     def test_unknown_ground_is_404(self):
         with self.login(self.commentator):
@@ -208,7 +208,7 @@ class OnAirTests(BoothFixture):
                 )
                 end_url = self.url("booth-onair", status="complete")
                 self.assertIn(
-                    'action="%s"' % end_url, self.last_response.content.decode()
+                    f'action="{end_url}"', self.last_response.content.decode()
                 )
                 self.assertResponseContains(
                     '<button class="bigbtn end" type="submit" data-hold="1500">HOLD TO END BROADCAST</button>'
@@ -386,7 +386,7 @@ class PaneTests(BoothFixture):
         self.assertIn('data: elements <div id="pane" class="pane sheets">', body)
         self.assertIn("Liam Thompson", body)
         self.assertIn(
-            'data: signals {"pane":"sheets","match":%d}' % self.current.pk, body
+            f'data: signals {{"pane":"sheets","match":{self.current.pk}}}', body
         )
 
     def test_results_pane_lists_each_team_this_season(self):
@@ -445,8 +445,8 @@ class PaneTests(BoothFixture):
             )
         self.assertIn(self.url("booth-teams", match_pk=self.current.pk), body)
         self.assertIn(
-            'data-signals__ifmissing="{pane: \'sheets\', match: %d, modal: false}"'
-            % self.current.pk,
+            f"data-signals__ifmissing=\"{{pane: 'sheets', "
+            f'match: {self.current.pk}, modal: false}}"',
             body,
         )
 

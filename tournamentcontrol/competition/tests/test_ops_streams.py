@@ -96,7 +96,7 @@ class StreamsFragmentTests(StreamsFixture):
             "Go live: all 11:20",
         ):
             self.assertResponseContains(
-                '<button class="btn sm" type="submit">%s</button>' % label
+                f'<button class="btn sm" type="submit">{label}</button>'
             )
         body = self.last_response.content.decode()
         for key, status in (
@@ -106,7 +106,7 @@ class StreamsFragmentTests(StreamsFixture):
             ("1120", "live"),
         ):
             self.assertIn(
-                'action="%s"' % self.url("slot-stream", slot_key=key, status=status),
+                f'action="{self.url("slot-stream", slot_key=key, status=status)}"',
                 body,
             )
 
@@ -126,11 +126,8 @@ class StreamsFragmentTests(StreamsFixture):
         with self.login(self.streamer):
             self.get("ops:streams", **self.kw)
         self.assertResponseContains('<button class="btn sm" type="submit">Test</button>')
-        self.assertIn(
-            'action="%s"'
-            % self.url("match-stream", match_pk=self.following.pk, status="testing"),
-            self.last_response.content.decode(),
-        )
+        url = self.url("match-stream", match_pk=self.following.pk, status="testing")
+        self.assertIn(f'action="{url}"', self.last_response.content.decode())
 
     def test_without_permission_no_buttons(self):
         with self.login(self.staff):
@@ -141,7 +138,7 @@ class StreamsFragmentTests(StreamsFixture):
         with self.login(self.streamer):
             self.get("ops:streams", **self.kw)
         self.assertResponseContains('<span class="badge none">no status</span>')
-        self.assertResponseContains('<div class="match">%s</div>' % self.event.title)
+        self.assertResponseContains(f'<div class="match">{self.event.title}</div>')
 
     def test_event_time_is_shown_in_the_season_timezone(self):
         with self.login(self.streamer):
@@ -167,8 +164,8 @@ class MatchTransitionTests(StreamsFixture):
         self.assertEqual(event["status"], "live")
         self.assertEqual(
             event["summary"],
-            "Field 1 · %s v %s → live"
-            % (self.current.home_team.title, self.current.away_team.title),
+            f"Field 1 · {self.current.home_team.title} v "
+            f"{self.current.away_team.title} → live",
         )
 
     @mock.patch("tournamentcontrol.competition.models.build")

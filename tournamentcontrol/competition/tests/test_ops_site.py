@@ -88,8 +88,8 @@ class DayPageTests(OpsFixture):
             self.get("ops:day", **self.day_kwargs)
         body = self.last_response.content.decode()
         ids = re.findall(r'\bid="([^"]*)"', body)
-        self.assertIn("m%d_home_team_score" % self.match.pk, ids)
-        self.assertIn("m%d_home_team_score" % other.pk, ids)
+        self.assertIn(f"m{self.match.pk}_home_team_score", ids)
+        self.assertIn(f"m{other.pk}_home_team_score", ids)
         self.assertEqual(sorted(ids), sorted(set(ids)))
 
     def test_season_redirects_to_today_in_season_time_zone(self):
