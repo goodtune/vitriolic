@@ -173,6 +173,30 @@ class DayStreamsTests(DayFixture):
         _, events = queries.day_streams(self.season, DAY, at(9))
         self.assertEqual(list(events), [today])
 
+    def test_streamed_grounds_cost_one_query_for_their_matches(self):
+        field3 = factories.GroundFactory.create(
+            venue=self.venue, title="Field 3", live_stream=True
+        )
+        field4 = factories.GroundFactory.create(
+            venue=self.venue, title="Field 4", live_stream=True
+        )
+        for ground in (self.field1, field3, field4):
+            self.match(8, ground=ground)
+            self.match(9, ground=ground)
+        factories.LiveStreamEventFactory.create(season=self.season, start=at(17))
+        # The grounds, their matches, and the day's events.
+        with self.assertNumQueries(3):
+            grounds, events = queries.day_streams(self.season, DAY, at(8, 30))
+            list(events)
+        self.assertEqual(
+            [(gs.ground, gs.current.time, gs.next.time) for gs in grounds],
+            [
+                (self.field1, datetime.time(8), datetime.time(9)),
+                (field3, datetime.time(8), datetime.time(9)),
+                (field4, datetime.time(8), datetime.time(9)),
+            ],
+        )
+
 
 class GroundDayTests(DayFixture):
     def _on(self, day, hour):

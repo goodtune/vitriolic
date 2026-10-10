@@ -184,8 +184,11 @@ def _ground_matches(ground, day):
     )
 
 
-def ground_day(ground, day, now):
-    matches = list(_ground_matches(ground, day))
+def _split_day(matches, now):
+    """
+    The previous, current and next match of one ground's day, from its
+    matches in kick-off order.
+    """
     started = [m for m in matches if m.datetime <= now]
     upcoming = [m for m in matches if m.datetime > now]
     current = started[-1] if started else None
@@ -194,13 +197,31 @@ def ground_day(ground, day, now):
     return previous, current, following
 
 
+def ground_day(ground, day, now):
+    return _split_day(list(_ground_matches(ground, day)), now)
+
+
 def day_streams(season, day, now):
-    grounds = Ground.objects.filter(venue__season=season, live_stream=True).order_by(
-        "venue__order", "order"
+    grounds = list(
+        Ground.objects.filter(venue__season=season, live_stream=True).order_by(
+            "venue__order", "order"
+        )
     )
+    # One query for every streamed ground's matches, grouped here, rather
+    # than one per ground on each render and push.
+    matches = (
+        Match.objects.filter(play_at__in=grounds, date=day, is_bye=False)
+        .exclude(time=None)
+        .exclude(datetime=None)
+        .select_related(*SELECT_RELATED)
+        .order_by("play_at_id", "time", "pk")
+    )
+    by_ground = {}
+    for match in matches:
+        by_ground.setdefault(match.play_at_id, []).append(match)
     streams = []
     for ground in grounds:
-        _, current, following = ground_day(ground, day, now)
+        _, current, following = _split_day(by_ground.get(ground.pk, []), now)
         streams.append(GroundStreams(ground, current, following))
     start = timezone.make_aware(
         datetime.datetime.combine(day, datetime.time.min), season.get_tzinfo()
