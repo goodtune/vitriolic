@@ -129,17 +129,21 @@ TEMPLATES = [
 WSGI_APPLICATION = "vitriolic.wsgi.application"
 ASGI_APPLICATION = "vitriolic.asgi.application"
 
-# Tournament Ops event bus. OPS_EVENTS_BACKEND in the environment may be a
+# Tournament Ops event bus. COMPOPS_EVENTS_BACKEND in the environment may be a
 # dotted path or one of the short names below. tox-docker exposes the redis
 # service through REDIS_HOST and REDIS_6379_TCP_PORT, the same way it does
 # for postgres.
-OPS_EVENTS_BACKEND = "tournamentcontrol.competition.ops.events.memory.MemoryBackend"
-OPS_EVENTS_OPTIONS = {}
-if env("OPS_EVENTS_BACKEND", default="memory") == "redis":
+COMPOPS_EVENTS_BACKEND = (
+    "tournamentcontrol.competition.compops.events.memory.MemoryBackend"
+)
+COMPOPS_EVENTS_OPTIONS = {}
+if env("COMPOPS_EVENTS_BACKEND", default="memory") == "redis":
     REDIS_HOST = env("REDIS_HOST", default="localhost")
     REDIS_PORT = env.int("REDIS_6379_TCP_PORT", default=6379)
-    OPS_EVENTS_BACKEND = "tournamentcontrol.competition.ops.events.redis.RedisBackend"
-    OPS_EVENTS_OPTIONS = {"url": f"redis://{REDIS_HOST}:{REDIS_PORT}/0"}
+    COMPOPS_EVENTS_BACKEND = (
+        "tournamentcontrol.competition.compops.events.redis.RedisBackend"
+    )
+    COMPOPS_EVENTS_OPTIONS = {"url": f"redis://{REDIS_HOST}:{REDIS_PORT}/0"}
 
 
 # Database

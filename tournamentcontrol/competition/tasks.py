@@ -14,6 +14,7 @@ from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 from googleapiclient.errors import HttpError
 
+from tournamentcontrol.competition.compops.status import refresh_season_status
 from tournamentcontrol.competition.models import (
     LiveStreamEvent,
     Match,
@@ -24,7 +25,6 @@ from tournamentcontrol.competition.mysideline.sync import (
     synchronise_all as _mysideline_synchronise_all,
     synchronise_season as _mysideline_synchronise_season,
 )
-from tournamentcontrol.competition.ops.status import refresh_season_status
 from tournamentcontrol.competition.utils import (
     generate_fixture_grid,
     generate_scorecards,

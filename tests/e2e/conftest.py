@@ -40,7 +40,7 @@ def browser_type_launch_args(browser_type_launch_args):
 def screenshot_dir():
     """
     Create and return the directory for storing test screenshots.
-    
+
     Returns:
         Path: Directory path for screenshots
     """
@@ -148,9 +148,9 @@ def asgi_live_server(transactional_db, settings):
 
 
 @pytest.fixture
-def ops_user(django_user_model, transactional_db):
+def compops_user(django_user_model, transactional_db):
     user = django_user_model.objects.create_user(
-        username="ops", password="password", email="ops@test.com", is_staff=True
+        username="compops", password="password", email="compops@test.com", is_staff=True
     )
     user.user_permissions.add(
         *Permission.objects.filter(
@@ -174,15 +174,15 @@ def _login(page, base_url, username):
 
 
 @pytest.fixture
-def ops_page(page, asgi_live_server, ops_user):
-    _login(page, asgi_live_server.url, "ops")
+def compops_page(page, asgi_live_server, compops_user):
+    _login(page, asgi_live_server.url, "compops")
     return page
 
 
 @pytest.fixture
-def second_page(browser, asgi_live_server, ops_user):
+def second_page(browser, asgi_live_server, compops_user):
     context = browser.new_context()
     page = context.new_page()
-    _login(page, asgi_live_server.url, "ops")
+    _login(page, asgi_live_server.url, "compops")
     yield page
     context.close()
