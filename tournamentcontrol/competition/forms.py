@@ -1750,9 +1750,9 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
         return self.cleaned_data
 
     def save(self, *args, **kwargs):
-        changed = SCORE_FIELDS.union({"is_forfeit", "bye_processed"}).intersection(
-            self.changed_data
-        )
+        changed = SCORE_FIELDS.union(
+            {"is_forfeit", "forfeit_winner", "bye_processed"}
+        ).intersection(self.changed_data)
         logger.debug(
             'MatchResultForm.save: updated fields "%s"', '", "'.join(sorted(changed))
         )

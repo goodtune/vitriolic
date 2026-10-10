@@ -271,6 +271,25 @@ class EditScoreTests(ResultsFixture):
             f"3–2 {done.away_team.title}",
         )
 
+    def test_changing_the_forfeit_winner_publishes_the_result(self):
+        forfeit = self.make(8, is_forfeit=True)
+        forfeit.forfeit_winner = forfeit.home_team
+        forfeit.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.post_score(
+                forfeit, "", "", is_forfeit="on", forfeit_winner=forfeit.away_team.pk
+            )
+        forfeit.refresh_from_db()
+        self.assertEqual(forfeit.forfeit_winner, forfeit.away_team)
+        (event,) = events.recent(self.season.pk)
+        self.assertEqual(event["type"], "score-entered")
+        self.assertEqual(
+            event["summary"],
+            f"Forfeit · {self.stage.division.title} · "
+            f"{forfeit.home_team.title} v {forfeit.away_team.title} → "
+            f"{forfeit.away_team.title}",
+        )
+
 
 class ByeTests(ResultsFixture):
     def test_bye_row_processes(self):
