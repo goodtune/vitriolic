@@ -46,7 +46,7 @@ dev = [
     "ruff>=0.12.8",
 ]
 test = [
-    "babel==2.17.0",
+    "babel==2.18.0",
     "coverage",
     "django-environ",
     "django-test-plus",
