@@ -56,10 +56,10 @@
 <nav class="tabs">{% with focus=broadcast|default:current %}
 	{% if focus %}
 		{% for name, label in panes %}
-			<a data-class:active="$pane == '{{ name }}'" data-on:click="@get('{% url 'compops:booth-pane' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=focus.pk pane=name %}')">{{ label }}</a>
+			<button type="button" data-class:active="$pane == '{{ name }}'" data-attr:aria-pressed="$pane == '{{ name }}' ? 'true' : 'false'" data-on:click="@get('{% url 'compops:booth-pane' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=focus.pk pane=name %}')">{{ label }}</button>
 		{% endfor %}
 	{% endif %}
-	<a data-class:active="$pane == 'runsheet'" data-on:click="@get('{% url 'compops:booth-runsheet' competition=season.competition.slug season=season.slug ground=ground.slug %}')">{{ ground.title }} runsheet</a>
+	<button type="button" data-class:active="$pane == 'runsheet'" data-attr:aria-pressed="$pane == 'runsheet' ? 'true' : 'false'" data-on:click="@get('{% url 'compops:booth-runsheet' competition=season.competition.slug season=season.slug ground=ground.slug %}')">{{ ground.title }} runsheet</button>
 	{% if focus %}<span class="right"><button class="teamsbtn" type="button" data-on:click="@get('{% url 'compops:booth-teams' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=focus.pk %}')">Teams · {{ focus.stage.division.title }}</button></span>{% endif %}
 {% endwith %}</nav>
 {% if pane_html %}{{ pane_html|safe }}{% else %}<div id="pane" class="pane"><p class="empty">Nothing on {{ ground.title }} right now.</p></div>{% endif %}

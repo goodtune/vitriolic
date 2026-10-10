@@ -15,8 +15,8 @@
 <main id="main" class="{% if collapsed %}collapsed{% endif %}">
 	<div class="results">
 		<div class="rtabs">
-			<a data-class:active="$tab == 'results'" data-on:click="$tab = 'results'">Results {% with count_suffix="-tab" %}{% partialdef results_count inline %}<span id="results-count{{ count_suffix }}" class="count{% if not results_pending %} zero{% endif %}">{{ results_pending }}</span>{% endpartialdef %}{% endwith %}</a>
-			<a data-class:active="$tab == 'scorers'" data-on:click="$tab = 'scorers'">Scorers {% with count_suffix="-tab" %}{% partialdef scorers_count inline %}<span id="scorers-count{{ count_suffix }}" class="count{% if not scorers %} zero{% endif %}">{{ scorers|length }}</span>{% endpartialdef %}{% endwith %}</a>
+			<button type="button" data-class:active="$tab == 'results'" data-attr:aria-pressed="$tab == 'results' ? 'true' : 'false'" data-on:click="$tab = 'results'">Results {% with count_suffix="-tab" %}{% partialdef results_count inline %}<span id="results-count{{ count_suffix }}" class="count{% if not results_pending %} zero{% endif %}">{{ results_pending }}</span>{% endpartialdef %}{% endwith %}</button>
+			<button type="button" data-class:active="$tab == 'scorers'" data-attr:aria-pressed="$tab == 'scorers' ? 'true' : 'false'" data-on:click="$tab = 'scorers'">Scorers {% with count_suffix="-tab" %}{% partialdef scorers_count inline %}<span id="scorers-count{{ count_suffix }}" class="count{% if not scorers %} zero{% endif %}">{{ scorers|length }}</span>{% endpartialdef %}{% endwith %}</button>
 		</div>
 		<section class="portlet" data-class:hidden-tab="$tab != 'results'">
 			<div class="portlet-header"><h4>Results</h4>{% partial results_count %}</div>

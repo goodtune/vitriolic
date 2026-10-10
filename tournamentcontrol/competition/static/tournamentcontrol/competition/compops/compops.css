@@ -40,8 +40,8 @@ main#main.collapsed .rtabs{display:flex;gap:4px;padding:0 8px;border-bottom:1px 
 main#main.collapsed .results .portlet{border:0;border-radius:0;flex:1}
 main#main.collapsed .results .portlet-header{display:none}
 main#main.collapsed .results .portlet.hidden-tab{display:none}
-.rtabs a{height:44px;padding:0 12px;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;font-weight:600;display:inline-flex;gap:8px;align-items:center}
-.rtabs a.active{color:var(--ink);border-bottom-color:var(--accent)}
+.rtabs>button{height:44px;padding:0 12px;color:var(--muted);background:none;border:0;border-bottom:2px solid transparent;border-radius:0;font:inherit;cursor:pointer;font-weight:600;display:inline-flex;gap:8px;align-items:center}
+.rtabs>button.active{color:var(--ink);border-bottom-color:var(--accent)}
 
 /* Collapsed rail: one vertical label holding the word and its count */
 .rail button{width:44px;height:100%;display:flex;align-items:center;justify-content:center;background:var(--panel);border:0;border-left:1px solid var(--line);border-radius:0;cursor:pointer;color:var(--ink);padding:0}

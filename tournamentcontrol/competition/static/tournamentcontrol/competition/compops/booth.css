@@ -50,8 +50,8 @@ body.booth .clock{font:600 22px/1 var(--display)}
 
 /* Tabs */
 .tabs{display:flex;align-items:center;gap:4px;padding:0 16px;background:var(--deep);border-bottom:1px solid var(--line)}
-.tabs a{display:inline-flex;align-items:center;height:44px;padding:0 14px;border-bottom:2px solid transparent;color:var(--muted);font-weight:600;font-size:14px;cursor:pointer}
-.tabs a.active{color:var(--ink);border-bottom-color:var(--lamp)}
+.tabs>button{display:inline-flex;align-items:center;height:44px;padding:0 14px;background:none;border:0;border-bottom:2px solid transparent;border-radius:0;font:inherit;color:var(--muted);font-weight:600;font-size:14px;cursor:pointer}
+.tabs>button.active{color:var(--ink);border-bottom-color:var(--lamp)}
 .tabs .right{margin-left:auto}
 .teamsbtn{height:36px;padding:0 14px;border:1px solid var(--line-strong);border-radius:var(--r);background:var(--panel);color:var(--ink);font:600 13px/1 var(--font);cursor:pointer}
 

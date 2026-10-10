@@ -448,7 +448,7 @@ def test_collapsed_layout_puts_scorers_behind_a_tab(
         path=str(screenshot_dir / "compops_dashboard_ipad_folded_slot.png"),
         full_page=True,
     )
-    compops_page.locator(".rtabs a", has_text="Scorers").click()
+    compops_page.locator(".rtabs button", has_text="Scorers").click()
     expect(compops_page.locator("#scorers")).to_be_visible()
     expect(compops_page.locator("#results")).to_be_hidden()
     compops_page.screenshot(
