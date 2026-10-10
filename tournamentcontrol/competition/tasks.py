@@ -3,7 +3,7 @@ import logging
 from zoneinfo import ZoneInfo
 
 import requests
-from celery import shared_task
+from celery import Task, shared_task, states
 from dateutil.relativedelta import relativedelta
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
@@ -662,7 +662,32 @@ def _retry_transient_pdf_error(task, exc):
     raise task.retry(exc=exc, countdown=countdown)
 
 
-@shared_task(bind=True, max_retries=PDF_RENDER_MAX_RETRIES)
+class PdfResultTask(Task):
+    """
+    A PDF render whose result the admin polls for, without the web process
+    ever subscribing to it.
+
+    Queueing a task whose result is kept makes Celery's Redis backend
+    subscribe the web process to the task's result channel
+    (``RedisBackend.on_task_call``), and the ``AsyncResult`` unsubscribes again
+    when it is read or garbage collected. If that pub/sub connection has
+    dropped, redis-py reconnects and re-subscribes while holding its own
+    pub/sub lock, and the request hangs until gunicorn kills the worker.
+
+    So the task is queued with ``ignore_result=True`` and stores its own
+    result once it succeeds; failures, and the retries before a failure, are
+    kept by ``store_errors_even_if_ignored``. The admin reads the state
+    straight from the backend.
+    """
+
+    ignore_result = True
+    store_errors_even_if_ignored = True
+
+    def on_success(self, retval, task_id, args, kwargs):
+        self.backend.store_result(task_id, retval, states.SUCCESS, request=self.request)
+
+
+@shared_task(base=PdfResultTask, bind=True, max_retries=PDF_RENDER_MAX_RETRIES)
 def generate_pdf_scorecards(
     self, match_pks, templates, extra_context, stage_pk=None, season_pk=None, **kwargs
 ):
@@ -701,7 +726,7 @@ def generate_pdf_scorecards(
     return base64.b64encode(data).decode("utf8")
 
 
-@shared_task(bind=True, max_retries=PDF_RENDER_MAX_RETRIES)
+@shared_task(base=PdfResultTask, bind=True, max_retries=PDF_RENDER_MAX_RETRIES)
 def generate_pdf_grid(self, season, extra_context, date=None):
     dates = [date] if date is not None else None
     try:
