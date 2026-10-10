@@ -1576,6 +1576,86 @@ class ClubPageTests(TestCase):
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class NextAndLastMatchTimeZoneTests(TestCase):
+    """
+    A team's next and last match are judged by kick-off instant, not by the
+    venue's local date and time against the clock in UTC.
+
+    On the finals day of an event in Japan (UTC+9), Australia played a semi
+    final at 11:40 and the gold medal match at 16:20. At 19:05 in Japan,
+    10:05 UTC, both still counted as to come, because 11:40 and 16:20 are
+    later than 10:05, and the club page showed the semi final as the next
+    match instead of the gold medal match as the last.
+    """
+
+    tokyo = ZoneInfo("Asia/Tokyo")
+
+    @classmethod
+    def _match(cls, stage, round, hour, minute, **kwargs):
+        when = datetime(2026, 10, 10, hour, minute, tzinfo=cls.tokyo)
+        return factories.MatchFactory.create(
+            stage=stage,
+            round=round,
+            home_team=cls.team,
+            away_team=cls.opponent,
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            **kwargs,
+        )
+
+    @classmethod
+    def setUpTestData(cls):
+        season = factories.SeasonFactory.create(timezone="Asia/Tokyo")
+        division = factories.DivisionFactory.create(season=season)
+        stage = factories.StageFactory.create(division=division)
+        cls.team = factories.TeamFactory.create(division=division)
+        cls.opponent = factories.TeamFactory.create(division=division)
+        cls.semi_final = cls._match(stage, 7, 11, 40)
+        cls.final = cls._match(stage, 8, 16, 20)
+
+    def assertNextAndLast(self, next_match, last_match):
+        self.assertEqual(
+            (self.team.next_match(), self.team.last_match()),
+            (next_match, last_match),
+        )
+        (prefetched,) = Team.prefetch_next_and_last_match([self.team])
+        self.assertEqual(
+            (prefetched.next_match(), prefetched.last_match()),
+            (next_match, last_match),
+        )
+
+    @freeze_time("2026-10-10 10:05:00")  # 19:05 in Japan
+    def test_after_the_final(self):
+        self.assertNextAndLast(None, self.final)
+
+    @freeze_time("2026-10-10 05:00:00")  # 14:00 in Japan
+    def test_between_the_semi_final_and_the_final(self):
+        self.assertNextAndLast(self.final, self.semi_final)
+
+    @freeze_time("2026-10-10 02:30:00")  # 11:30 in Japan
+    def test_before_the_semi_final(self):
+        self.assertNextAndLast(self.semi_final, None)
+
+    @freeze_time("2026-10-10 02:50:00")  # 11:50 in Japan
+    def test_still_next_until_fifteen_minutes_after_kick_off(self):
+        self.assertNextAndLast(self.semi_final, None)
+
+    @freeze_time("2026-10-10 10:05:00")  # 19:05 in Japan
+    def test_kick_off_order_not_stage_order(self):
+        # Match's default ordering puts stage ahead of time, so the earlier
+        # semi final, in a stage ordered after the final's, would be taken
+        # as the last match played.
+        self.final.stage.order = 1
+        self.final.stage.save()
+        self.semi_final.stage = factories.StageFactory.create(
+            division=self.team.division, order=2
+        )
+        self.semi_final.save()
+        self.assertNextAndLast(None, self.final)
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
 class MatchDetailViewQueryTests(TestCase):
     """
     The public match detail page renders the ``preview`` template tag,
