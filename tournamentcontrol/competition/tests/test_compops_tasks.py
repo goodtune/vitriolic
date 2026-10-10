@@ -77,6 +77,25 @@ class RefreshStatusTests(TestCase):
             part="status", id="yt1,ev1", maxResults=50
         )
 
+    def test_removed_event_is_left_alone(self):
+        removed = factories.LiveStreamEventFactory.create(
+            season=self.season,
+            start=self.event.start,
+            external_identifier="ev2",
+            live_stream=False,
+            live_stream_status="ready",
+        )
+        service = listing(yt1="testing", ev2="live")
+        with self.captureOnCommitCallbacks(execute=True):
+            changed = status.refresh_season_status(self.season, youtube=service)
+        self.assertEqual(changed, 0)
+        removed.refresh_from_db()
+        self.assertEqual(removed.live_stream_status, "ready")
+        self.assertEqual(events.recent(self.season.pk), [])
+        service.liveBroadcasts.return_value.list.assert_called_once_with(
+            part="status", id="yt1,ev1", maxResults=50
+        )
+
     def test_refresh_does_not_send_match_post_save(self):
         receiver = mock.Mock()
         post_save.connect(receiver, sender=Match, weak=False)

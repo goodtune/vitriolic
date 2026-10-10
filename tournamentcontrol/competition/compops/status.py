@@ -24,8 +24,12 @@ def broadcasts_today(season, now):
     start = timezone.make_aware(
         datetime.datetime.combine(day, datetime.time.min), season.get_tzinfo()
     )
+    # A removed event (``live_stream=False``) has no broadcast left to poll.
     live_events = LiveStreamEvent.objects.filter(
-        season=season, start__gte=start, start__lt=start + datetime.timedelta(days=1)
+        season=season,
+        live_stream=True,
+        start__gte=start,
+        start__lt=start + datetime.timedelta(days=1),
     ).select_related("season")
     return list(matches) + list(live_events)
 
