@@ -270,6 +270,48 @@ class EventAndSlotTransitionTests(StreamsFixture):
         (event,) = events.recent(self.season.pk)
         self.assertEqual(event["kind"], "event")
 
+    def test_removed_event_is_not_listed(self):
+        removed = factories.LiveStreamEventFactory.create(
+            season=self.season,
+            title="Removed Ceremony",
+            start=timezone.make_aware(datetime.datetime(2026, 10, 8, 18, 0), TZ),
+            live_stream=False,
+        )
+        with self.login(self.streamer):
+            self.get("compops:streams", **self.kw)
+        self.assertResponseContains(f'<div class="match">{self.event.title}</div>')
+        self.assertResponseNotContains(f'<div class="match">{removed.title}</div>')
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_removed_event_transition_is_404(self, build):
+        build.return_value = youtube_mock("ready")
+        self.event.live_stream = False
+        self.event.save()
+        with self.login(self.streamer):
+            response = self.client.post(
+                self.url("event-stream", event_pk=self.event.pk, status="testing")
+            )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(build.call_count, 0)
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.live_stream_status, None)
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_event_on_another_day_is_404(self, build):
+        build.return_value = youtube_mock("ready")
+        tomorrow = factories.LiveStreamEventFactory.create(
+            season=self.season,
+            start=timezone.make_aware(datetime.datetime(2026, 10, 9, 17, 30), TZ),
+        )
+        with self.login(self.streamer):
+            response = self.client.post(
+                self.url("event-stream", event_pk=tomorrow.pk, status="testing")
+            )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(build.call_count, 0)
+        tomorrow.refresh_from_db()
+        self.assertEqual(tomorrow.live_stream_status, None)
+
     @mock.patch("tournamentcontrol.competition.models.build")
     def test_slot_transition_hits_every_broadcast_in_the_slot(self, build):
         service = youtube_mock("testing")

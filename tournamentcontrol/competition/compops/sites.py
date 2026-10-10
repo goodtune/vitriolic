@@ -739,7 +739,7 @@ class CompOpsSite(Application):
     def event_stream(self, request, season, day, event_pk, status, **kwargs):
         self._check_status(status)
         require(can_stream(request.user, season))
-        event = get_object_or_404(season.live_stream_events, pk=event_pk)
+        event = get_object_or_404(queries.day_events(season, day), pk=event_pk)
         error = streams.transition(event, status, request.user.get_username())
         return self._stream_response(request, season, day, [error] if error else [])
 

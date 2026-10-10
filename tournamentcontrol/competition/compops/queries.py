@@ -223,14 +223,21 @@ def day_streams(season, day, now):
     for ground in grounds:
         _, current, following = _split_day(by_ground.get(ground.pk, []), now)
         streams.append(GroundStreams(ground, current, following))
+    return streams, day_events(season, day)
+
+
+def day_events(season, day):
+    """
+    The season's events starting on the day whose broadcast is still on
+    YouTube; ``live_stream=False`` means it was removed for good.
+    """
     start = timezone.make_aware(
         datetime.datetime.combine(day, datetime.time.min), season.get_tzinfo()
     )
     end = start + datetime.timedelta(days=1)
-    events = LiveStreamEvent.objects.filter(
-        season=season, start__gte=start, start__lt=end
+    return LiveStreamEvent.objects.filter(
+        season=season, live_stream=True, start__gte=start, start__lt=end
     ).order_by("start")
-    return streams, events
 
 
 def team_results(team):
