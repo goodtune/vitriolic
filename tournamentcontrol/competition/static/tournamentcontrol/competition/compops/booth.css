@@ -46,7 +46,7 @@ body.booth .clock{font:600 22px/1 var(--display)}
 .card.now{border-color:var(--primary);box-shadow:inset 3px 0 0 var(--primary)}
 .card.now .teams{font-size:30px}
 .card .prep{margin-top:6px;font-size:12px}
-.card .prep a{display:inline-flex;align-items:center;height:28px;padding:0 10px;border:1px solid var(--line-strong);border-radius:var(--r);color:var(--ink);cursor:pointer}
+.card .prep button{display:inline-flex;align-items:center;height:28px;padding:0 10px;background:none;border:1px solid var(--line-strong);border-radius:var(--r);font:inherit;font-size:12px;color:var(--ink);cursor:pointer}
 
 /* Tabs */
 .tabs{display:flex;align-items:center;gap:4px;padding:0 16px;background:var(--deep);border-bottom:1px solid var(--line)}

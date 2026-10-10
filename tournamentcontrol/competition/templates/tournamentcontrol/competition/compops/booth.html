@@ -49,7 +49,7 @@
 	</div>
 	<div class="card">
 		<div class="lab">Next on {{ ground.title }}</div>
-		{% if next %}<div class="teams">{{ next.get_home_team_plain }} <small>v</small> {{ next.get_away_team_plain }}</div><div class="sub">{{ next.time|time:"H:i" }} · {{ next.stage.division.title }}</div><div class="prep"><a data-on:click="@get('{% url 'compops:booth-pane' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=next.pk pane='sheets' %}')">prep team sheets →</a></div>{% else %}<div class="sub">No more today</div>{% endif %}
+		{% if next %}<div class="teams">{{ next.get_home_team_plain }} <small>v</small> {{ next.get_away_team_plain }}</div><div class="sub">{{ next.time|time:"H:i" }} · {{ next.stage.division.title }}</div><div class="prep"><button type="button" data-on:click="@get('{% url 'compops:booth-pane' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=next.pk pane='sheets' %}')">prep team sheets →</button></div>{% else %}<div class="sub">No more today</div>{% endif %}
 	</div>
 </section>
 {% endpartialdef %}
