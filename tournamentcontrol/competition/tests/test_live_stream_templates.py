@@ -137,6 +137,37 @@ class LiveStreamTemplateTest(TestCase):
         )
         self.assertEqual(title, expected_title)
 
+    def test_live_stream_title_label_only(self):
+        """``label_only`` leaves the teams out of the title of a labelled match."""
+        context = self._get_template_context(self.match_with_label)
+        context["label_only"] = True
+
+        title = render_to_string(
+            "tournamentcontrol/competition/match/live_stream/title.txt", context
+        ).strip()
+
+        self.assertEqual(
+            title,
+            f"{self.division.title} | Semi Final | "
+            f"{self.competition.title} {self.season.title}",
+        )
+
+    def test_live_stream_title_label_only_without_label(self):
+        """A match without a label keeps its teams: it has no other name."""
+        context = self._get_template_context(self.match_without_label)
+        context["label_only"] = True
+
+        title = render_to_string(
+            "tournamentcontrol/competition/match/live_stream/title.txt", context
+        ).strip()
+
+        self.assertEqual(
+            title,
+            f"{self.division.title} | "
+            f"{self.match_without_label.get_home_team_plain()} vs {self.match_without_label.get_away_team_plain()} | "
+            f"{self.competition.title} {self.season.title}",
+        )
+
     def test_custom_template_hierarchy_override(self):
         """Test that custom templates in the hierarchy work correctly."""
         context = self._get_template_context(self.custom_match)

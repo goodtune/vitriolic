@@ -1708,10 +1708,20 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
                 self.fields["home_team_score"].widget.attrs["placeholder"] = home_team
                 self.fields["away_team_score"].label = str(away_team)
                 self.fields["away_team_score"].widget.attrs["placeholder"] = away_team
-                self.fields["forfeit_winner"] = ModelChoiceField(
-                    queryset=Team.objects.filter(id__in=[home_team.pk, away_team.pk]),
-                    label_from_instance=lambda team: team.title,
-                    empty_label=_("Double forfeit"),
+                # The choices are the two teams already loaded with the match,
+                # instead of a query for each match on the page.
+                teams = {str(team.pk): team for team in (home_team, away_team)}
+                self.fields["forfeit_winner"] = forms.TypedChoiceField(
+                    choices=[("", _("Double forfeit"))]
+                    + [(pk, team.title) for pk, team in teams.items()],
+                    coerce=lambda pk: teams.get(str(pk)),
+                    empty_value=None,
+                    error_messages={
+                        "invalid_choice": ModelChoiceField.default_error_messages[
+                            "invalid_choice"
+                        ]
+                    },
+                    label=_("Forfeit winner"),
                     help_text=_("Select the winning team."),
                     required=False,
                 )

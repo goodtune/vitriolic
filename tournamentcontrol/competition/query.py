@@ -29,11 +29,25 @@ from tournamentcontrol.competition.utils import (
 class SeasonQuerySet(QuerySet):
     def navigation(self):
         """
-        Only what a link to each season needs. Every public page lists every
-        season of every competition, so nothing else is read, including any
-        field added to the model later.
+        Only what a list of seasons needs to link to, order and filter each
+        one: where it lives (``competition`` and ``slug``), what to call it
+        (``title`` and ``short_title``), whether to offer it (``enabled``),
+        when it runs (``start_date``), where it sits (``order``) and whether
+        it is over (``complete``). Every public page lists every season of
+        every competition, so nothing else is read, including any field added
+        to the model later. A template that asks for anything else costs a
+        query for each season.
         """
-        return self.only("competition", "title", "short_title", "slug")
+        return self.only(
+            "competition",
+            "title",
+            "short_title",
+            "slug",
+            "enabled",
+            "start_date",
+            "order",
+            "complete",
+        )
 
 
 class DivisionQuerySet(QuerySet):

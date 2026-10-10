@@ -3,7 +3,8 @@ import datetime
 import logging
 from zoneinfo import ZoneInfo
 
-from celery import shared_task
+import requests
+from celery import Task, shared_task, states
 from dateutil.relativedelta import relativedelta
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
@@ -36,6 +37,12 @@ logger = logging.getLogger(__name__)
 # default. Per-season overrides would belong on the Season model.
 LIVE_STREAM_DURATION_MINUTES = 50
 
+# The remote PDF service occasionally times out or answers with a 5xx. Retry
+# those renders a couple of times, waiting PDF_RENDER_RETRY_DELAY seconds
+# before the first retry and doubling the wait for each one after it.
+PDF_RENDER_MAX_RETRIES = 2
+PDF_RENDER_RETRY_DELAY = 3
+
 
 class _ShortTitle:
     """Substitute ``short_title`` for the rendered name of a SitemapNodeBase.
@@ -64,13 +71,18 @@ class _ShortTitle:
         return getattr(self._obj, name)
 
 
-def build_live_stream_body(match, base_url=None, short=False):
+def build_live_stream_body(match, base_url=None, short=False, label_only=False):
     """Render title/description templates and build the YouTube broadcast body.
 
     Returns the body dict, or ``None`` if the match lacks a scheduled start time.
 
     When ``short`` is true, ``short_title`` is substituted for ``title`` on
     Competition/Season/Division/Stage in the rendered title and description.
+
+    ``label_only`` is passed to the templates, where a true value asks the
+    title of a match that has a label ("Gold Medal") to leave its teams out.
+    It makes no difference to a match without a label, whose title has
+    nothing but its teams to tell it apart.
     """
     stage = match.stage
     division = stage.division
@@ -113,6 +125,7 @@ def build_live_stream_body(match, base_url=None, short=False):
         "division": ctx_division,
         "stage": ctx_stage,
         "match_url": match_url,
+        "label_only": label_only,
     }
 
     title_templates = [
@@ -161,8 +174,25 @@ def build_live_stream_body(match, base_url=None, short=False):
     }
 
 
+# The forms a match's broadcast title is offered to YouTube in, from the most
+# to the least descriptive, as the ``short`` and ``label_only`` arguments of
+# ``build_live_stream_body``.
+_TITLE_FORMS = (
+    (False, False),
+    (True, False),
+    (False, True),
+    (True, True),
+)
+
+
 def _is_title_too_long(exc):
-    """Return True when an HttpError indicates an exceeded title length."""
+    """Return True when an HttpError indicates an exceeded title length.
+
+    YouTube reports a title over its limit as ``invalidTitle`` ("Title is
+    invalid") without saying that length was the reason, so any rejection of
+    the title counts; a shorter form of the title is the only remedy there
+    is to try.
+    """
     content = getattr(exc, "content", b"") or b""
     if isinstance(content, (bytes, bytearray)):
         content = bytes(content).decode("utf-8", errors="replace")
@@ -171,7 +201,13 @@ def _is_title_too_long(exc):
         return False
     return any(
         marker in needle
-        for marker in ("too long", "maxlength", "max length", "invalidvalue")
+        for marker in (
+            "too long",
+            "maxlength",
+            "max length",
+            "invalidvalue",
+            "invalidtitle",
+        )
     )
 
 
@@ -268,10 +304,14 @@ def sync_live_stream(match_pk, base_url=None):
     """Synchronize a match with its YouTube broadcast.
 
     Creates, updates, deletes, and binds the live broadcast as required by the
-    current state of the match. On a YouTube API title-length error, retries
-    once with shortened titles (using ``short_title`` on Division, Season,
-    Competition, and Stage where set) so a recoverable failure remains
-    non-fatal and the broadcast can still be created.
+    current state of the match. When YouTube rejects the title (it allows 100
+    characters) the next shorter form is tried, so a recoverable failure
+    remains non-fatal and the broadcast can still be created: first with
+    shortened titles (using ``short_title`` on Division, Season, Competition,
+    and Stage where set), then, for a match that has a label, without its
+    teams ("Men's 50 | Gold Medal | ..."), and last both together. Every
+    synchronisation starts again from the full title, so a later one (once
+    the teams of a final are known, say) restores the fullest form that fits.
 
     The match row is locked for the duration, so concurrent synchronisations
     (a queued run and a resync from the admin site or MCP server, say) are
@@ -331,21 +371,36 @@ def _sync_live_stream(match, base_url):
             logger.error("YouTube API error syncing match %s: %s", match_pk, exc)
             raise
 
-    for short in (False, True):
-        body = build_live_stream_body(match, base_url=base_url, short=short)
+    rejected = None
+    tried = set()
+    for short, label_only in _TITLE_FORMS:
+        body = build_live_stream_body(
+            match, base_url=base_url, short=short, label_only=label_only
+        )
         if body is None:
             return None  # No scheduled time
+        title = body["snippet"]["title"]
+        if title in tried:
+            # Nothing shorter in this form (no short titles are set, the
+            # match has no label, or a custom template ignores the form), so
+            # YouTube would only reject the same title again.
+            continue
+        tried.add(title)
         try:
             return _apply_sync(match, season, body)
         except HttpError as exc:
-            if not short and _is_title_too_long(exc):
-                logger.warning(
-                    "YouTube rejected match %s title length, retrying with short titles",
-                    match_pk,
-                )
-                continue
-            logger.error("YouTube API error syncing match %s: %s", match_pk, exc)
-            raise
+            if not _is_title_too_long(exc):
+                logger.error("YouTube API error syncing match %s: %s", match_pk, exc)
+                raise
+            logger.warning(
+                "YouTube rejected the title of match %s (%r), "
+                "trying its next shorter form",
+                match_pk,
+                title,
+            )
+            rejected = exc
+    logger.error("YouTube API error syncing match %s: %s", match_pk, rejected)
+    raise rejected
 
 
 def build_live_stream_event_body(event):
@@ -590,9 +645,54 @@ def delete_youtube_stream(season_pk, external_identifier):
         raise
 
 
-@shared_task
+def _is_transient_pdf_error(exc):
+    """
+    A timeout, a connection error or a 5xx from the PDF service is worth
+    retrying; a 4xx or anything else will fail the same way again.
+    """
+    if isinstance(exc, (requests.Timeout, requests.ConnectionError)):
+        return True
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        return exc.response.status_code >= 500
+    return False
+
+
+def _retry_transient_pdf_error(task, exc):
+    if not _is_transient_pdf_error(exc):
+        raise exc
+    countdown = PDF_RENDER_RETRY_DELAY * 2**task.request.retries
+    logger.warning("PDF service failed (%s), retrying in %ss.", exc, countdown)
+    raise task.retry(exc=exc, countdown=countdown)
+
+
+class PdfResultTask(Task):
+    """
+    A PDF render whose result the admin polls for, without the web process
+    ever subscribing to it.
+
+    Queueing a task whose result is kept makes Celery's Redis backend
+    subscribe the web process to the task's result channel
+    (``RedisBackend.on_task_call``), and the ``AsyncResult`` unsubscribes again
+    when it is read or garbage collected. If that pub/sub connection has
+    dropped, redis-py reconnects and re-subscribes while holding its own
+    pub/sub lock, and the request hangs until gunicorn kills the worker.
+
+    So the task is queued with ``ignore_result=True`` and stores its own
+    result once it succeeds; failures, and the retries before a failure, are
+    kept by ``store_errors_even_if_ignored``. The admin reads the state
+    straight from the backend.
+    """
+
+    ignore_result = True
+    store_errors_even_if_ignored = True
+
+    def on_success(self, retval, task_id, args, kwargs):
+        self.backend.store_result(task_id, retval, states.SUCCESS, request=self.request)
+
+
+@shared_task(base=PdfResultTask, bind=True, max_retries=PDF_RENDER_MAX_RETRIES)
 def generate_pdf_scorecards(
-    match_pks, templates, extra_context, stage_pk=None, season_pk=None, **kwargs
+    self, match_pks, templates, extra_context, stage_pk=None, season_pk=None, **kwargs
 ):
     """
     Render scorecards for the given matches to PDF.
@@ -618,24 +718,30 @@ def generate_pdf_scorecards(
     if season is not None:
         extra_context["season"] = season
         extra_context["competition"] = season.competition
-    data = generate_scorecards(
-        matches, templates, "pdf", extra_context, stage, **kwargs
-    )
+    try:
+        data = generate_scorecards(
+            matches, templates, "pdf", extra_context, stage, **kwargs
+        )
+    except requests.RequestException as exc:
+        _retry_transient_pdf_error(self, exc)
     # We can't JSON encode bytes, so we need to base64 encode the
     # PDF document before handing it back to the result backend.
     return base64.b64encode(data).decode("utf8")
 
 
-@shared_task
-def generate_pdf_grid(season, extra_context, date=None):
+@shared_task(base=PdfResultTask, bind=True, max_retries=PDF_RENDER_MAX_RETRIES)
+def generate_pdf_grid(self, season, extra_context, date=None):
     dates = [date] if date is not None else None
-    data: bytes = generate_fixture_grid(
-        season,
-        dates=dates,
-        format="pdf",
-        extra_context=extra_context,
-        http_response=False,  # Get bytes back, not a response object
-    )
+    try:
+        data: bytes = generate_fixture_grid(
+            season,
+            dates=dates,
+            format="pdf",
+            extra_context=extra_context,
+            http_response=False,  # Get bytes back, not a response object
+        )
+    except requests.RequestException as exc:
+        _retry_transient_pdf_error(self, exc)
     # We can't JSON encode bytes, so we need to base64 encode the
     # PDF document before handing it back to the result backend.
     return base64.b64encode(data).decode("utf8")

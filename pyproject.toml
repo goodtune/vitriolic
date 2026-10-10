@@ -61,6 +61,7 @@ test = [
     "pytest-playwright",
     "pytest",
     "requests",
+    "responses",
     "tblib",
     "uvicorn>=0.30",
     "whitenoise>=6.9.0",

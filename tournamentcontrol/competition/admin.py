@@ -5,6 +5,7 @@ import logging
 import operator
 from zoneinfo import ZoneInfo
 
+from celery import states
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
@@ -132,6 +133,11 @@ from tournamentcontrol.competition.utils import (
 from tournamentcontrol.competition.wizards import DrawGenerationWizard
 
 SCORECARD_PDF_WAIT = getattr(settings, "TOURNAMENTCONTROL_SCORECARD_PDF_WAIT", 5)
+
+PDF_FAILED_MESSAGE = _(
+    "The PDF service didn't respond, so your PDF could not be generated. "
+    "Please try again."
+)
 
 # Shown when the season's stored OAuth2 refresh token is expired or revoked
 # and the YouTube platform can no longer be reached on its behalf.
@@ -2266,13 +2272,33 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             dates=[date],
         )
 
+    def pdf_failed(self, request, start_again, extra_context):
+        """
+        The background PDF render failed for good; the error has already been
+        reported by the task, so explain it plainly instead of re-raising.
+        """
+        messages.error(request, PDF_FAILED_MESSAGE)
+        context = dict(extra_context, start_again=start_again)
+        templates = self.template_path("pdf_failed.html")
+        return self.render(request, templates, context)
+
     @competition_by_pk_m
     @staff_login_required_m
     def grid_async(self, request, result_id, extra_context, **kwargs):
-        result = generate_pdf_grid.AsyncResult(result_id)
+        # Read the state straight from the result backend: an AsyncResult
+        # unsubscribes from the Redis result channel when it is ready or
+        # garbage collected, which can deadlock the request (PdfResultTask).
+        meta = generate_pdf_grid.backend.get_task_meta(result_id)
 
-        if result.ready():
-            data = result.wait()
+        if meta["status"] == states.FAILURE:
+            start_again = kwargs["season"].urls["edit"]
+            return self.pdf_failed(request, start_again, extra_context)
+
+        if meta["status"] in states.PROPAGATE_STATES:
+            raise meta["result"]
+
+        if meta["status"] == states.SUCCESS:
+            data = meta["result"]
             return HttpResponse(base64.b64decode(data), content_type="application/pdf")
 
         templates = self.template_path("wait.html", "scorecards")
@@ -2838,10 +2864,20 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def scorecards_async(self, request, result_id, extra_context, **kwargs):
-        result = generate_pdf_scorecards.AsyncResult(result_id)
+        # Read the state straight from the result backend: an AsyncResult
+        # unsubscribes from the Redis result channel when it is ready or
+        # garbage collected, which can deadlock the request (PdfResultTask).
+        meta = generate_pdf_scorecards.backend.get_task_meta(result_id)
 
-        if result.ready():
-            data = result.wait()
+        if meta["status"] == states.FAILURE:
+            start_again = self.reverse("scorecard-report")
+            return self.pdf_failed(request, start_again, extra_context)
+
+        if meta["status"] in states.PROPAGATE_STATES:
+            raise meta["result"]
+
+        if meta["status"] == states.SUCCESS:
+            data = meta["result"]
             return HttpResponse(base64.b64decode(data), content_type="application/pdf")
 
         templates = self.template_path("wait.html", "scorecards")

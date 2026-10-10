@@ -2,6 +2,7 @@ import collections
 import logging
 
 from django.db.models import Count, Q
+from django.db.models.expressions import RawSQL
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -56,6 +57,9 @@ def matches_require_basic_results(now=None, matches=None):
         "home_team__division",
         "away_team__club",
         "away_team__division",
+    ).defer(
+        "live_stream_thumbnail_image",
+        "stage__division__season__live_stream_thumbnail_image",
     )
 
 
@@ -93,6 +97,9 @@ def matches_require_details_results(matches=None, include_forfeits=False):
         "home_team__division",
         "away_team__club",
         "away_team__division",
+    ).defer(
+        "live_stream_thumbnail_image",
+        "stage__division__season__live_stream_thumbnail_image",
     )
 
 
@@ -107,6 +114,9 @@ def matches_require_progression():
         "home_team__division",
         "away_team__club",
         "away_team__division",
+    ).defer(
+        "live_stream_thumbnail_image",
+        "stage__division__season__live_stream_thumbnail_image",
     )
 
 
@@ -249,30 +259,41 @@ class MostValuableWidget(DashboardWidget):
 
     @property
     def matches(self):
+        """
+        Matches where one team's players have statistics but their MVP
+        points total less than one.
+
+        The raw SQL only picks the matches; the rows are then fetched with
+        their teams, clubs, stage, division, season and competition, which
+        the template shows for each row. Fetching them from the raw query
+        cost the template several queries for every row.
+
+        The query starts from the matches in stages that keep MVP points in
+        seasons this widget lists, and joins each statistic to the
+        association of its player with the home or away team of its match,
+        so the database can find that association by team and person rather
+        than reading every team its player has ever been part of.
+        """
         sql = """
-            SELECT DISTINCT
-                m.id, m.home_team_id, m.away_team_id, m.stage_id, m.date,
-                m.datetime, m.label, m.round
+            SELECT
+                m.id
             FROM
-                competition_simplescorematchstatistic s
+                competition_season se
             JOIN
-                competition_teamassociation t ON (s.player_id = t.person_id)
+                competition_division d ON (d.season_id = se.id)
             JOIN
-                  competition_match m
+                competition_stage g ON (g.division_id = d.id)
+            JOIN
+                competition_match m ON (m.stage_id = g.id)
+            JOIN
+                competition_simplescorematchstatistic s ON (s.match_id = m.id)
+            JOIN
+                competition_teamassociation t
                 ON (
-                    m.id = s.match_id
-                  AND (
-                      m.home_team_id = t.team_id
-                    OR
-                      m.away_team_id = t.team_id
-                  )
+                    t.person_id = s.player_id
+                  AND
+                    t.team_id IN (m.home_team_id, m.away_team_id)
                 )
-            JOIN
-                competition_stage g ON (m.stage_id = g.id)
-            JOIN
-                competition_division d ON (g.division_id = d.id)
-            JOIN
-                competition_season se ON (d.season_id = se.id)
             WHERE
                   t.is_player
                 AND
@@ -280,13 +301,23 @@ class MostValuableWidget(DashboardWidget):
                 AND
                   (NOT se.complete OR se.mvp_results_public IS NULL)
             GROUP BY
-                m.id, team_id, m.home_team_id, m.away_team_id, m.stage_id,
-                m.date, m.datetime, m.label, m.round
+                m.id, t.team_id
             HAVING
-                SUM(mvp) < %s
+                SUM(s.mvp) < %s
         """
         # FIXME should not be a static value
-        return Match.objects.raw(sql, params=(1,))
+        return (
+            Match.objects.filter(pk__in=RawSQL(sql, (1,)))
+            .select_related(
+                "stage__division__season__competition",
+                "home_team__club",
+                "away_team__club",
+            )
+            .defer(
+                "live_stream_thumbnail_image",
+                "stage__division__season__live_stream_thumbnail_image",
+            )
+        )
 
     def _get_context(self):
         context = {"matches": self.matches}
@@ -298,8 +329,12 @@ class ScoresheetWidget(DashboardWidget):
     template = "tournamentcontrol/competition/admin/widgets/scoresheets.html"
 
     def _get_context(self):
-        stages = Stage.objects.annotate(p=Count("matches_needing_printing")).filter(
-            p__gt=0
+        stages = (
+            Stage.objects.annotate(p=Count("matches_needing_printing"))
+            .filter(p__gt=0)
+            # each row links to its division, season and competition
+            .select_related("division__season__competition")
+            .defer("division__season__live_stream_thumbnail_image")
         )
         context = {"stages": stages}
         return context
