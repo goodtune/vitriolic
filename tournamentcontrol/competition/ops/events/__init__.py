@@ -20,14 +20,8 @@ from tournamentcontrol.competition.ops.default_settings import (
     EVENTS_BACKEND,
     EVENTS_OPTIONS,
 )
-from tournamentcontrol.competition.ops.events.base import Backend
-from tournamentcontrol.competition.ops.events.memory import MemoryBackend
-from tournamentcontrol.competition.ops.events.redis import RedisBackend
 
 __all__ = (
-    "Backend",
-    "MemoryBackend",
-    "RedisBackend",
     "get_backend",
     "publish",
     "recent",
@@ -50,13 +44,13 @@ def get_backend():
                 backend_class = import_string(path)
             except ImportError as exc:
                 raise ImproperlyConfigured(
-                    "OPS_EVENTS_BACKEND %r cannot be imported: %s" % (path, exc)
+                    f"OPS_EVENTS_BACKEND {path!r} cannot be imported: {exc}"
                 ) from exc
             try:
                 _backend = backend_class(**dict(EVENTS_OPTIONS))
             except TypeError as exc:
                 raise ImproperlyConfigured(
-                    "OPS_EVENTS_OPTIONS do not suit %s: %s" % (path, exc)
+                    f"OPS_EVENTS_OPTIONS do not suit {path}: {exc}"
                 ) from exc
         return _backend
 
@@ -77,9 +71,7 @@ def publish(season_id, type, actor=None, summary="", **data):
         **data,
     }
     logger.debug("ops event %s for season %s: %s", type, season_id, summary)
-    transaction.on_commit(
-        lambda: get_backend().publish(season_id, event), robust=True
-    )
+    transaction.on_commit(lambda: get_backend().publish(season_id, event), robust=True)
 
 
 def subscribe(season_id, idle):

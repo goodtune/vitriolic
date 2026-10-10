@@ -9,6 +9,8 @@ from django.test import override_settings
 from test_plus import TestCase
 
 from tournamentcontrol.competition.ops import events
+from tournamentcontrol.competition.ops.events.memory import MemoryBackend
+from tournamentcontrol.competition.ops.events.redis import RedisBackend
 
 
 class MemoryBackendTests(TestCase):
@@ -123,7 +125,7 @@ class MemoryBackendTests(TestCase):
 class RedisBackendTests(TestCase):
     def setUp(self):
         self.server = fakeredis.FakeServer()
-        self.backend = events.RedisBackend(
+        self.backend = RedisBackend(
             "redis://unused",
             sync_client=fakeredis.FakeRedis(server=self.server),
             async_client=fakeredis.FakeAsyncRedis(server=self.server),
@@ -204,7 +206,7 @@ class BackendSelectionTests(TestCase):
 
     def test_default_is_memory(self):
         events.reset_backend()
-        self.assertIsInstance(events.get_backend(), events.MemoryBackend)
+        self.assertIsInstance(events.get_backend(), MemoryBackend)
 
     @override_settings(
         OPS_EVENTS_BACKEND="tournamentcontrol.competition.ops.events.redis.RedisBackend",
@@ -212,7 +214,7 @@ class BackendSelectionTests(TestCase):
     )
     def test_redis_selected_by_setting(self):
         events.reset_backend()
-        self.assertIsInstance(events.get_backend(), events.RedisBackend)
+        self.assertIsInstance(events.get_backend(), RedisBackend)
 
     @override_settings(
         OPS_EVENTS_BACKEND="tournamentcontrol.competition.ops.events.redis.RedisBackend",

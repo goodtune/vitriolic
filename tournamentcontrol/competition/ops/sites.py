@@ -32,6 +32,7 @@ from tournamentcontrol.competition.models import (
     Team,
 )
 from tournamentcontrol.competition.ops import events, queries, receivers, sse, streams
+from tournamentcontrol.competition.ops.days import day_kwargs, parse_day
 from tournamentcontrol.competition.ops.fragments import (
     render_counts,
     render_fragment,
@@ -57,13 +58,6 @@ PANE_LABELS = [
     ("ladder", "Ladder"),
     ("leaders", "Tournament leaders"),
 ]
-
-
-def parse_day(datestr):
-    try:
-        return datetime.datetime.strptime(datestr, "%Y%m%d").date()
-    except ValueError:
-        raise Http404("Invalid date.")
 
 
 def season_view(view):
@@ -128,14 +122,6 @@ def booth_required(view):
     return wrapper
 
 
-def day_kwargs(season, day):
-    return {
-        "competition": season.competition.slug,
-        "season": season.slug,
-        "datestr": day.strftime("%Y%m%d"),
-    }
-
-
 def style_result_form(form):
     """Give a ``MatchResultForm``'s widgets the ops markup."""
     for side in ("home_team_score", "away_team_score"):
@@ -176,9 +162,6 @@ def result_form(match, data=None):
 
 
 class OpsSite(Application):
-    # Exposed so ``sse`` need not import this module (which imports it).
-    parse_day = staticmethod(parse_day)
-    can_stream = staticmethod(can_stream)
 
     def __init__(self, name="ops", app_name="ops", **kwargs):
         super().__init__(name=name, app_name=app_name, **kwargs)
@@ -658,6 +641,7 @@ class OpsSite(Application):
                 )
         else:
             home, away = self.statistic_formsets(request, match)
+
         def modal(**extra):
             return render_fragment(
                 request,

@@ -16,7 +16,9 @@ from django.http import Http404, HttpResponseForbidden
 
 from tournamentcontrol.competition.models import Season
 from tournamentcontrol.competition.ops import events
+from tournamentcontrol.competition.ops.days import parse_day
 from tournamentcontrol.competition.ops.default_settings import EVENTS_KEEPALIVE
+from tournamentcontrol.competition.ops.permissions import can_stream
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +98,7 @@ def ops_events(site):
         if not user.is_staff:
             return HttpResponseForbidden()
         season = await get_season(competition, season)
-        day = site.parse_day(datestr)
+        day = parse_day(datestr)
 
         def snapshot():
             return site.snapshot_fragments(request, season, day)
@@ -119,7 +121,7 @@ def booth_events(site):
         if not user.is_authenticated:
             return redirect_to_login(request.get_full_path())
         season = await get_season(competition, season)
-        allowed = await sync_to_async(site.can_stream)(user, season)
+        allowed = await sync_to_async(can_stream)(user, season)
         if not allowed:
             return HttpResponseForbidden()
         ground = await site.booth_ground(season, ground)
