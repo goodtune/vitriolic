@@ -44,7 +44,9 @@ def render_fragment(request, name, **context):
 
     def render():
         return render_to_string(
-            f"tournamentcontrol/ops/{PAGES[name]}.html#{name}", context, request=request
+            f"tournamentcontrol/competition/ops/{PAGES[name]}.html#{name}",
+            context,
+            request=request,
         )
 
     ground = context.get("ground")

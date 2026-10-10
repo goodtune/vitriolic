@@ -29,9 +29,9 @@ from tournamentcontrol.competition.tests.test_live_stream_transition import (
 
 TZ = ZoneInfo("Australia/Brisbane")
 
-DAY_TEMPLATE = "tournamentcontrol/ops/day.html"
-BOOTH_TEMPLATE = "tournamentcontrol/ops/booth.html"
-SCORERS_TEMPLATE = "tournamentcontrol/ops/scorers.html"
+DAY_TEMPLATE = "tournamentcontrol/competition/ops/day.html"
+BOOTH_TEMPLATE = "tournamentcontrol/competition/ops/booth.html"
+SCORERS_TEMPLATE = "tournamentcontrol/competition/ops/scorers.html"
 
 
 @freeze_time("2026-10-08 10:50 +10:00")

@@ -1,7 +1,7 @@
-{% extends "tournamentcontrol/ops/base.html" %}
+{% extends "tournamentcontrol/competition/ops/base.html" %}
 {% load static tz ops_tags %}
 {% block title %}Booth · {{ ground.title }}{% endblock %}
-{% block extracss %}<link rel="stylesheet" href="{% static 'tournamentcontrol/ops/booth.css' %}">{% endblock %}
+{% block extracss %}<link rel="stylesheet" href="{% static 'tournamentcontrol/competition/ops/booth.css' %}">{% endblock %}
 {% block body_attrs %}class="booth" data-signals__ifmissing="{pane: '{{ pane|default:'' }}', match: {{ pane_match.pk|default:'null' }}, modal: false}" data-indicator="connected" data-effect="$pane; $match; @get('{% url 'ops:booth-events' competition=season.competition.slug season=season.slug ground=ground.slug %}', {retryMaxCount: 1000})"{% endblock %}
 {% block body %}{% timezone tzinfo %}
 <header>
@@ -65,7 +65,7 @@
 {% if pane_html %}{{ pane_html|safe }}{% else %}<div id="pane" class="pane"><p class="empty">Nothing on {{ ground.title }} right now.</p></div>{% endif %}
 <div id="modal" class="overlay" style="display:none" data-show="$modal" data-on:click="evt.target === el && ($modal = false)" data-on:keydown__window="evt.key === 'Escape' && ($modal = false)"><div id="modal-body" class="sheet"></div></div>
 {% endtimezone %}{% endblock %}
-{% block extrajs %}<script src="{% static 'tournamentcontrol/ops/hold-button.js' %}"></script>{% endblock %}
+{% block extrajs %}<script src="{% static 'tournamentcontrol/competition/ops/hold-button.js' %}"></script>{% endblock %}
 
 {# Partials the page does not show where they are defined. #}
 {% partialdef pane_sheets %}

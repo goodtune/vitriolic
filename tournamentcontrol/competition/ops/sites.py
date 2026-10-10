@@ -188,6 +188,12 @@ class OpsSite(Application):
             )
         receivers.connect()
 
+    @property
+    def template_base(self):
+        # A module of the competition app, so its templates live under the
+        # app's directory rather than under the namespace alone.
+        return "tournamentcontrol/competition/ops"
+
     # --- urls -------------------------------------------------------
 
     def get_urls(self):

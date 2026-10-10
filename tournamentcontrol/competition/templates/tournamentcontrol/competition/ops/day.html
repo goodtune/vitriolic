@@ -1,4 +1,4 @@
-{% extends "tournamentcontrol/ops/base.html" %}
+{% extends "tournamentcontrol/competition/ops/base.html" %}
 {% load ops_tags tz %}
 {% block title %}{{ season }} · {{ day|date:"D j M" }} · Ops{% endblock %}
 {% block body_attrs %}class="ops" data-signals__ifmissing="{tab: 'results', modal: false}" data-indicator="connected" data-init="@get('{% ops_url 'events' %}', {retryMaxCount: 1000})"{% endblock %}
