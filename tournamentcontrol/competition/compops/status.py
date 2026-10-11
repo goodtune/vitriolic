@@ -20,8 +20,13 @@ BATCH = 50
 
 def broadcasts_today(season, now):
     day = season.local_date(now)
+    # A match turned off for streaming can keep its identifier until the
+    # broadcast is removed; it is no longer one of the day's broadcasts.
     matches = Match.objects.filter(
-        stage__division__season=season, date=day, external_identifier__isnull=False
+        stage__division__season=season,
+        date=day,
+        live_stream=True,
+        external_identifier__isnull=False,
     ).select_related("stage__division__season", "play_at", "home_team", "away_team")
     start = timezone.make_aware(
         datetime.datetime.combine(day, datetime.time.min), season.get_tzinfo()

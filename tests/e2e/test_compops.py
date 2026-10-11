@@ -130,6 +130,7 @@ def tournament(transactional_db):
         home_team=home,
         away_team=away,
         play_at=field1,
+        live_stream=True,
         external_identifier="yt-1",
         live_stream_status="live",
         **live_kickoff,
@@ -148,6 +149,7 @@ def tournament(transactional_db):
         home_team=japan,
         away_team=singapore,
         play_at=field1,
+        live_stream=True,
         external_identifier="yt-2",
         **next_kickoff,
     )

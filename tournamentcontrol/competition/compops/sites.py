@@ -752,9 +752,21 @@ class CompOpsSite(Application):
         slot = queries.slot_for(season, day, slot_key)
         if slot is None:
             raise Http404("No such slot.")
+        # ``play_at`` is a Place; the grounds streamed are looked up once.
+        streamed_grounds = set(
+            Ground.objects.filter(venue__season=season, live_stream=True).values_list(
+                "pk", flat=True
+            )
+        )
         errors = []
         for match in slot.matches:
-            if match.external_identifier:
+            # A stale identifier on a match no longer streamed, or not on a
+            # streamed ground, must never reach YouTube.
+            if (
+                match.external_identifier
+                and match.live_stream
+                and match.play_at_id in streamed_grounds
+            ):
                 error = streams.transition(match, status, request.user.get_username())
                 if error:
                     errors.append(error)

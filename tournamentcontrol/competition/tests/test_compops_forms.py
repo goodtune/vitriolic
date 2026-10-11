@@ -314,11 +314,12 @@ class StreamFormTests(FormsFixture):
             10,
             40,
             play_at=self.field1,
+            live_stream=True,
             external_identifier="yt-now",
             live_stream_status="testing",
         )
         self.following = self.make(
-            11, 20, play_at=self.field1, external_identifier="yt-next"
+            11, 20, play_at=self.field1, live_stream=True, external_identifier="yt-next"
         )
         self.event = factories.LiveStreamEventFactory.create(
             season=self.season,
@@ -404,6 +405,7 @@ class BoothFormTests(FormsFixture):
             play_at=self.field1,
             home_team_score=3,
             away_team_score=7,
+            live_stream=True,
             external_identifier="yt-prev",
             live_stream_status="complete",
         )
@@ -411,11 +413,12 @@ class BoothFormTests(FormsFixture):
             10,
             40,
             play_at=self.field1,
+            live_stream=True,
             external_identifier="yt-now",
             live_stream_status="live",
         )
         self.following = self.make(
-            11, 20, play_at=self.field1, external_identifier="yt-next"
+            11, 20, play_at=self.field1, live_stream=True, external_identifier="yt-next"
         )
 
     def post(self, name, **extra):

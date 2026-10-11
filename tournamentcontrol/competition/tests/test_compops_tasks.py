@@ -45,6 +45,7 @@ class RefreshStatusTests(TestCase):
             datetime=when,
             date=when.date(),
             time=when.time(),
+            live_stream=True,
             external_identifier="yt1",
             live_stream_status="testing",
         )
@@ -54,6 +55,7 @@ class RefreshStatusTests(TestCase):
         factories.MatchFactory.create(
             stage=stage,
             date=datetime.date(2026, 10, 9),
+            live_stream=True,
             external_identifier="tomorrow",
         )
 
@@ -63,6 +65,25 @@ class RefreshStatusTests(TestCase):
             for o in status.broadcasts_today(self.season, timezone.now())
         ]
         self.assertCountEqual(ids, ["yt1", "ev1"])
+
+    def test_match_not_streamed_is_not_polled(self):
+        # A stale identifier outlives the opt-in until the broadcast is gone.
+        stale = factories.MatchFactory.create(
+            stage=self.match.stage,
+            datetime=self.match.datetime,
+            date=self.match.date,
+            time=self.match.time,
+            external_identifier="stale",
+        )
+        service = listing(yt1="testing", stale="live")
+        with self.captureOnCommitCallbacks(execute=True):
+            changed = status.refresh_season_status(self.season, youtube=service)
+        self.assertEqual(changed, 0)
+        service.liveBroadcasts.return_value.list.assert_called_once_with(
+            part="status", id="yt1,ev1", maxResults=50
+        )
+        stale.refresh_from_db()
+        self.assertEqual(stale.live_stream_status, None)
 
     def test_changed_status_is_stored_and_published(self):
         service = listing(yt1="live", ev1="ready")
@@ -250,6 +271,7 @@ class RefreshStatusTests(TestCase):
             datetime=when,
             date=when.date(),
             time=when.time(),
+            live_stream=True,
             external_identifier="yt2",
             live_stream_status="testing",
         )

@@ -68,6 +68,7 @@ class BoothFixture(TestCase):
             self.aus,
             home_team_score=3,
             away_team_score=7,
+            live_stream=True,
             external_identifier="yt-prev",
             live_stream_status="complete",
         )
@@ -76,11 +77,12 @@ class BoothFixture(TestCase):
             40,
             self.aus,
             self.nzl,
+            live_stream=True,
             external_identifier="yt-now",
             live_stream_status="live",
         )
         self.following = self.make(
-            11, 20, self.fji, self.nzl, external_identifier="yt-next"
+            11, 20, self.fji, self.nzl, live_stream=True, external_identifier="yt-next"
         )
         self.kw = {"competition": "pacific-cup", "season": "pc26", "ground": "field-1"}
 
@@ -251,6 +253,7 @@ class OnAirTests(BoothFixture):
             self.aus,
             self.nzl,
             ground=auckland,
+            live_stream=True,
             external_identifier="yt-akl",
             live_stream_status="live",
             live_stream_status_at=datetime.datetime(
@@ -328,7 +331,9 @@ class ArmTests(BoothFixture):
         self.current.save()
         self.following.live_stream_status = "testing"
         self.following.save()
-        later = self.make(12, 0, self.aus, self.fji, external_identifier="yt-later")
+        later = self.make(
+            12, 0, self.aus, self.fji, live_stream=True, external_identifier="yt-later"
+        )
         with self.login(self.commentator):
             response = self.client.post(
                 self.url("booth-arm"), headers={"Datastar-Request": "true"}

@@ -49,10 +49,13 @@ class StreamsFixture(TestCase):
             stage,
             10,
             40,
+            live_stream=True,
             external_identifier="yt-current",
             live_stream_status="testing",
         )
-        self.following = self.make(stage, 11, 20, external_identifier="yt-next")
+        self.following = self.make(
+            stage, 11, 20, live_stream=True, external_identifier="yt-next"
+        )
         self.event = factories.LiveStreamEventFactory.create(
             season=self.season,
             start=timezone.make_aware(datetime.datetime(2026, 10, 8, 17, 30), TZ),
@@ -63,14 +66,14 @@ class StreamsFixture(TestCase):
             "datestr": "20261008",
         }
 
-    def make(self, stage, hour, minute, **kwargs):
+    def make(self, stage, hour, minute, play_at=None, **kwargs):
         when = timezone.make_aware(datetime.datetime(2026, 10, 8, hour, minute), TZ)
         return factories.MatchFactory.create(
             stage=stage,
             datetime=when,
             date=when.date(),
             time=when.time(),
-            play_at=self.field1,
+            play_at=play_at or self.field1,
             **kwargs,
         )
 
@@ -123,7 +126,7 @@ class StreamsFragmentTests(StreamsFixture):
 
     def test_whole_slot_actions_ignore_unentered_results(self):
         # An earlier slot still waiting on results is not the slot on air.
-        self.make(self.current.stage, 9, 20)
+        self.make(self.current.stage, 9, 20, live_stream=True)
         with self.login(self.streamer):
             self.get("compops:streams", **self.kw)
         self.assertResponseContains(
@@ -366,10 +369,41 @@ class EventAndSlotTransitionTests(StreamsFixture):
         self.assertEqual(tomorrow.live_stream_status, None)
 
     @mock.patch("tournamentcontrol.competition.models.build")
+    def test_slot_transition_skips_matches_not_streamed(self, build):
+        service = youtube_mock("testing")
+        build.return_value = service
+        # A stale identifier on a match turned off for streaming, and one on
+        # a ground that is not streamed.
+        turned_off = self.make(
+            self.current.stage, 10, 40, external_identifier="yt-turned-off"
+        )
+        field2 = factories.GroundFactory.create(venue=self.field1.venue)
+        unstreamed_ground = self.make(
+            self.current.stage,
+            10,
+            40,
+            play_at=field2,
+            live_stream=True,
+            external_identifier="yt-field-2",
+        )
+        with self.login(self.streamer), self.captureOnCommitCallbacks(execute=True):
+            self.client.post(self.url("slot-stream", slot_key="1040", status="live"))
+        service.liveBroadcasts.return_value.transition.assert_called_once_with(
+            broadcastStatus="live", id="yt-current", part="snippet,status"
+        )
+        turned_off.refresh_from_db()
+        unstreamed_ground.refresh_from_db()
+        self.assertEqual(turned_off.live_stream_status, None)
+        self.assertEqual(unstreamed_ground.live_stream_status, None)
+        self.assertEqual(len(events.recent(self.season.pk)), 1)
+
+    @mock.patch("tournamentcontrol.competition.models.build")
     def test_slot_transition_hits_every_broadcast_in_the_slot(self, build):
         service = youtube_mock("testing")
         build.return_value = service
-        other = self.make(self.current.stage, 10, 40, external_identifier="yt-other")
+        other = self.make(
+            self.current.stage, 10, 40, live_stream=True, external_identifier="yt-other"
+        )
         with self.login(self.streamer), self.captureOnCommitCallbacks(execute=True):
             self.client.post(self.url("slot-stream", slot_key="1040", status="live"))
         self.assertEqual(service.liveBroadcasts.return_value.transition.call_count, 2)

@@ -383,6 +383,7 @@ class BoothEventsTests(SseFixture, TestCase):
             date=when.date(),
             time=when.time(),
             play_at=self.field1,
+            live_stream=True,
             external_identifier="yt",
             live_stream_status="live",
         )

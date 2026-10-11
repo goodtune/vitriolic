@@ -174,14 +174,25 @@ def day_scorers(season, day):
     )
 
 
-def _ground_matches(ground, day):
+def _scheduled_matches(day, **filters):
     return (
-        Match.objects.filter(play_at=ground, date=day, is_bye=False)
+        Match.objects.filter(date=day, is_bye=False, **filters)
         .exclude(time=None)
         .exclude(datetime=None)
         .select_related(*SELECT_RELATED)
-        .order_by("time", "pk")
     )
+
+
+def _ground_matches(ground, day):
+    return _scheduled_matches(day, play_at=ground).order_by("time", "pk")
+
+
+def _streamed_matches(day, **filters):
+    """
+    The scheduled matches opted into streaming. ``external_identifier`` alone
+    does not say so: it can outlive the opt-in until the broadcast is removed.
+    """
+    return _scheduled_matches(day, live_stream=True, **filters)
 
 
 def _split_day(matches, now):
@@ -198,7 +209,8 @@ def _split_day(matches, now):
 
 
 def ground_day(ground, day, now):
-    return _split_day(list(_ground_matches(ground, day)), now)
+    matches = _streamed_matches(day, play_at=ground).order_by("time", "pk")
+    return _split_day(list(matches), now)
 
 
 def day_streams(season, day, now):
@@ -209,12 +221,8 @@ def day_streams(season, day, now):
     )
     # One query for every streamed ground's matches, grouped here, rather
     # than one per ground on each render and push.
-    matches = (
-        Match.objects.filter(play_at__in=grounds, date=day, is_bye=False)
-        .exclude(time=None)
-        .exclude(datetime=None)
-        .select_related(*SELECT_RELATED)
-        .order_by("play_at_id", "time", "pk")
+    matches = _streamed_matches(day, play_at__in=grounds).order_by(
+        "play_at_id", "time", "pk"
     )
     by_ground = {}
     for match in matches:
@@ -285,4 +293,5 @@ def division_leaders(division, limit=10):
 
 
 def ground_runsheet(ground, day):
+    """Every scheduled match on the ground, streamed or not."""
     return _ground_matches(ground, day)

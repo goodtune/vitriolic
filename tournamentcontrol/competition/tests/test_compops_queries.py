@@ -146,9 +146,13 @@ class DayScorersTests(DayFixture):
 
 class DayStreamsTests(DayFixture):
     def test_current_and_next_per_streamed_ground(self):
-        early = self.match(8, ground=self.field1, external_identifier="a")
-        current = self.match(9, ground=self.field1, external_identifier="b")
-        following = self.match(10, ground=self.field1)
+        early = self.match(
+            8, ground=self.field1, live_stream=True, external_identifier="a"
+        )
+        current = self.match(
+            9, ground=self.field1, live_stream=True, external_identifier="b"
+        )
+        following = self.match(10, ground=self.field1, live_stream=True)
         self.match(9, ground=self.field2)
         grounds, _ = queries.day_streams(self.season, DAY, at(9, 30))
         (gs,) = grounds
@@ -158,7 +162,7 @@ class DayStreamsTests(DayFixture):
         self.assertNotEqual(gs.current, early)
 
     def test_before_first_match_there_is_no_current(self):
-        first = self.match(9, ground=self.field1)
+        first = self.match(9, ground=self.field1, live_stream=True)
         (gs,), _ = queries.day_streams(self.season, DAY, at(7))
         self.assertIsNone(gs.current)
         self.assertEqual(gs.next, first)
@@ -181,8 +185,8 @@ class DayStreamsTests(DayFixture):
             venue=self.venue, title="Field 4", live_stream=True
         )
         for ground in (self.field1, field3, field4):
-            self.match(8, ground=ground)
-            self.match(9, ground=ground)
+            self.match(8, ground=ground, live_stream=True)
+            self.match(9, ground=ground, live_stream=True)
         factories.LiveStreamEventFactory.create(season=self.season, start=at(17))
         # The grounds, their matches, and the day's events.
         with self.assertNumQueries(3):
@@ -204,22 +208,36 @@ class GroundDayTests(DayFixture):
         return factories.MatchFactory.create(
             stage=self.stage,
             play_at=self.field1,
+            live_stream=True,
             date=day,
             time=datetime.time(hour),
             datetime=when,
         )
 
     def test_previous_current_next(self):
-        a = self.match(8, ground=self.field1)
-        b = self.match(9, ground=self.field1)
-        c = self.match(10, ground=self.field1)
+        a = self.match(8, ground=self.field1, live_stream=True)
+        b = self.match(9, ground=self.field1, live_stream=True)
+        c = self.match(10, ground=self.field1, live_stream=True)
         self.assertEqual(queries.ground_day(self.field1, DAY, at(9, 15)), (a, b, c))
 
+    def test_match_not_streamed_is_skipped_but_stays_on_the_runsheet(self):
+        # A stale identifier outlives the opt-in until the broadcast is gone.
+        a = self.match(8, ground=self.field1, live_stream=True)
+        unstreamed = self.match(9, ground=self.field1, external_identifier="old")
+        c = self.match(10, ground=self.field1, live_stream=True)
+        self.assertEqual(queries.ground_day(self.field1, DAY, at(9, 15)), (None, a, c))
+        (gs,), _ = queries.day_streams(self.season, DAY, at(9, 15))
+        self.assertEqual((gs.current, gs.next), (a, c))
+        self.assertEqual(
+            list(queries.ground_runsheet(self.field1, DAY)), [a, unstreamed, c]
+        )
+
     def test_next_never_crosses_the_day(self):
-        b = self.match(9, ground=self.field1)
+        b = self.match(9, ground=self.field1, live_stream=True)
         factories.MatchFactory.create(
             stage=self.stage,
             play_at=self.field1,
+            live_stream=True,
             date=DAY + datetime.timedelta(days=1),
             time=datetime.time(8),
             datetime=at(8) + datetime.timedelta(days=1),
