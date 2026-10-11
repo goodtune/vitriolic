@@ -211,6 +211,26 @@ class RefreshStatusTests(TestCase):
             [c.args[0] for c in refresh.call_args_list], [self.season, events_only]
         )
 
+    @mock.patch(
+        "tournamentcontrol.competition.tasks.refresh_season_status", return_value=0
+    )
+    def test_refresh_all_covers_event_only_seasons_far_west_of_utc(self, refresh):
+        far_west = factories.SeasonFactory.create(
+            timezone="Etc/GMT+12", **YOUTUBE_SEASON
+        )
+        # Noon on the season's today, 2026-10-08, which is 00:00 UTC on the 9th.
+        factories.LiveStreamEventFactory.create(
+            season=far_west,
+            start=timezone.make_aware(
+                datetime.datetime(2026, 10, 8, 12, 0), ZoneInfo("Etc/GMT+12")
+            ),
+        )
+        with freeze_time("2026-10-09 02:00 +00:00"):
+            refresh_all_live_stream_status()
+        self.assertCountEqual(
+            [c.args[0] for c in refresh.call_args_list], [self.season, far_west]
+        )
+
     def test_mid_transition_status_fits_the_column(self):
         with self.captureOnCommitCallbacks(execute=True):
             status.refresh_season_status(

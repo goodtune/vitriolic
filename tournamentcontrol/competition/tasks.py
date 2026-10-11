@@ -456,9 +456,7 @@ def _apply_event_sync(event, season):
         except HttpError as exc:
             if not _is_not_found(exc):
                 raise
-            logger.info(
-                "YouTube video %r already deleted", event.external_identifier
-            )
+            logger.info("YouTube video %r already deleted", event.external_identifier)
         if event.live_stream_bind:
             event.live_stream_bind = None
             event.save(update_fields=["live_stream_bind"])
@@ -819,14 +817,18 @@ def refresh_all_live_stream_status():
         now.date() - datetime.timedelta(days=1),
         now.date() + datetime.timedelta(days=1),
     )
-    # Events are matched on their aware start. The bounds are the window's
-    # dates taken in UTC, from the start of the first day to the end of the
-    # last; the window already reaches a day either side of today, so every
-    # season's local today falls inside them whatever its time zone.
+    # Events are matched on their aware start. A season's local today is one
+    # of the window's dates, and in UTC a local day can begin up to 14 hours
+    # before that date's midnight (UTC+14) and end up to 12 hours after the
+    # next (UTC-12). The bounds reach a whole UTC day beyond the window on
+    # each side, so every season's local today lies inside them;
+    # ``refresh_season_status`` then narrows each season to its own day.
     event_window = (
-        datetime.datetime.combine(window[0], datetime.time.min, datetime.UTC),
         datetime.datetime.combine(
-            window[1] + datetime.timedelta(days=1), datetime.time.min, datetime.UTC
+            window[0] - datetime.timedelta(days=1), datetime.time.min, datetime.UTC
+        ),
+        datetime.datetime.combine(
+            window[1] + datetime.timedelta(days=2), datetime.time.min, datetime.UTC
         ),
     )
     seasons = (
