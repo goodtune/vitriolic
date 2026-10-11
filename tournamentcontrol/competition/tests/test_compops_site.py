@@ -180,6 +180,61 @@ class DayPageTests(CompOpsFixture):
         )
 
 
+@freeze_time("2026-10-08 00:00 +13:00")
+class SeasonWithoutTimeZoneTests(CompOpsFixture):
+    """
+    A season without a time zone shows times in the current one, as its
+    models do, rather than in the server default.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.season.timezone = None
+        self.season.statistics = True
+        self.season.save()
+        events.reset_backend()
+        self.addCleanup(events.reset_backend)
+
+    def test_day_page_shows_activity_in_the_current_time_zone(self):
+        with (
+            freeze_time("2026-10-07 23:15:30+00:00"),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            events.publish(
+                self.season.pk, "score-entered", actor="priya", summary="Score · x"
+            )
+        with timezone.override("Pacific/Auckland"), self.login(self.staff):
+            self.get("compops:day", **self.day_kwargs)
+        self.response_200()
+        self.assertResponseContains(
+            '<li class="score-entered"><time>12:15:30</time>'
+            "<span>Score · x · priya</span></li>"
+        )
+
+    def test_scorers_page_renders_the_day(self):
+        self.staff.user_permissions.add(
+            *Permission.objects.filter(
+                codename__in=[
+                    "add_simplescorematchstatistic",
+                    "change_simplescorematchstatistic",
+                ]
+            )
+        )
+        self.match.home_team_score = 2
+        self.match.away_team_score = 1
+        self.match.save()
+        url = reverse(
+            "compops:match-scorers",
+            kwargs={**self.day_kwargs, "match_pk": self.match.pk},
+        )
+        with timezone.override("Pacific/Auckland"), self.login(self.staff):
+            self.last_response = self.client.get(url)
+        self.response_200()
+        self.assertResponseContains(
+            f'<span class="season">{self.season} · Thursday 8 October</span>'
+        )
+
+
 class RenderCountsTests(TestCase):
     def test_returns_each_count_for_header_and_tab(self):
         request = RequestFactory().get("/")

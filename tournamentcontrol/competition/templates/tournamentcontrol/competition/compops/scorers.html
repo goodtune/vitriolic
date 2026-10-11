@@ -3,7 +3,7 @@
 {% block title %}Scorers · {{ season }} · {{ day|date:"D j M" }} · Ops{% endblock %}
 {% block body_attrs %}class="compops"{% endblock %}
 {% block body %}
-{% timezone season.timezone %}
+{% timezone season.get_tzinfo %}
 <header class="topbar">
 	<span class="brand">TOURNAMENT OPS</span>
 	<span class="season">{{ season }} · {{ day|date:"l j F" }}</span>
