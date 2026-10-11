@@ -1842,23 +1842,38 @@ class Team(AdminUrlMixin, MySidelineMixin, OrderedSitemapNode):
         away = self.away_games.select_related(*related)
         return home | away
 
+    # Kick-off order. A match's date and time are local to its venue, so
+    # within one team's matches they sort the same as ``datetime``; the
+    # default ordering puts stage and round ahead of time instead.
+    _kick_off = ("date", "time", "pk")
+
     @staticmethod
     def _future_and_past(offset=None):
+        """
+        A match is still to come until ``offset`` minutes after it kicks off.
+
+        Kick-off is compared as an instant: ``Match.datetime`` is aware, in
+        the venue's (or season's) time zone. The local ``date`` and ``time``
+        must not be compared with the clock in UTC, which put every match
+        later in the day than the current UTC time still to come at a venue
+        ahead of UTC. A match without a time falls back to its date.
+        """
         if offset is None:
             offset = 15  # FIXME add a value on a season
-        dt = timezone.now() - timedelta(minutes=offset)
-        d, t = dt.date(), dt.time()
-        future = (Q(date__exact=d) & Q(time__gte=t)) | Q(date__gt=d)
-        past = (Q(date__exact=d) & Q(time__lte=t)) | Q(date__lt=d)
+        now = timezone.now()
+        cutoff = now - timedelta(minutes=offset)
+        today = timezone.localdate(now)
+        future = Q(datetime__gte=cutoff) | Q(datetime__isnull=True, date__gte=today)
+        past = Q(datetime__lt=cutoff) | Q(datetime__isnull=True, date__lt=today)
         return future, past
 
     def future(self, offset=None):
         future, _ = self._future_and_past(offset)
-        return self.matches.filter(future)
+        return self.matches.filter(future).order_by(*self._kick_off)
 
     def past(self, offset=None):
         _, past = self._future_and_past(offset)
-        return self.matches.filter(past)
+        return self.matches.filter(past).order_by(*self._kick_off)
 
     @classmethod
     def prefetch_next_and_last_match(cls, teams):
@@ -1897,6 +1912,7 @@ class Team(AdminUrlMixin, MySidelineMixin, OrderedSitemapNode):
                 "home_team_eval_related__live_stream_thumbnail_image",
                 "away_team_eval_related__live_stream_thumbnail_image",
             )
+            .order_by(*cls._kick_off)
         )
         for match in matches.filter(future):
             for pk in (match.home_team_id, match.away_team_id):
