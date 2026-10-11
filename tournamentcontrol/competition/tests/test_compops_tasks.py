@@ -2,7 +2,9 @@ import datetime
 from unittest import mock
 from zoneinfo import ZoneInfo
 
+from django.db import connection
 from django.db.models.signals import post_save
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from freezegun import freeze_time
 from google.auth.exceptions import RefreshError
@@ -95,6 +97,64 @@ class RefreshStatusTests(TestCase):
         service.liveBroadcasts.return_value.list.assert_called_once_with(
             part="status", id="yt1,ev1", maxResults=50
         )
+
+    def test_status_changed_after_the_poll_began_is_left_alone(self):
+        service = listing(yt1="live")
+        polled = service.liveBroadcasts.return_value.list.return_value.execute
+
+        def transition_lands_during_the_poll():
+            # An operator ends the broadcast while YouTube is being asked.
+            Match.objects.filter(pk=self.match.pk).update(
+                live_stream_status="complete",
+                live_stream_status_at=timezone.now() + datetime.timedelta(seconds=1),
+            )
+            return polled.return_value
+
+        polled.side_effect = transition_lands_during_the_poll
+        with self.captureOnCommitCallbacks(execute=True):
+            changed = status.refresh_season_status(self.season, youtube=service)
+        self.assertEqual(changed, 0)
+        self.match.refresh_from_db()
+        self.assertEqual(self.match.live_stream_status, "complete")
+        self.assertEqual(events.recent(self.season.pk), [])
+
+    def test_row_already_at_the_polled_status_is_not_published_again(self):
+        service = listing(yt1="live")
+        polled = service.liveBroadcasts.return_value.list.return_value.execute
+        earlier = timezone.now() - datetime.timedelta(minutes=1)
+
+        def transition_lands_before_the_write():
+            # The same change, made from the ops page and already published.
+            Match.objects.filter(pk=self.match.pk).update(
+                live_stream_status="live", live_stream_status_at=earlier
+            )
+            return polled.return_value
+
+        polled.side_effect = transition_lands_before_the_write
+        with self.captureOnCommitCallbacks(execute=True):
+            changed = status.refresh_season_status(self.season, youtube=service)
+        self.assertEqual(changed, 0)
+        self.match.refresh_from_db()
+        self.assertEqual(self.match.live_stream_status_at, earlier)
+        self.assertEqual(events.recent(self.season.pk), [])
+
+    def test_write_is_made_under_a_row_lock(self):
+        earlier = timezone.now() - datetime.timedelta(minutes=1)
+        Match.objects.filter(pk=self.match.pk).update(live_stream_status_at=earlier)
+        with CaptureQueriesContext(connection) as queries:
+            with self.captureOnCommitCallbacks(execute=True):
+                changed = status.refresh_season_status(
+                    self.season, youtube=listing(yt1="live")
+                )
+        self.assertEqual(changed, 1)
+        locking = [q["sql"] for q in queries if "FOR UPDATE" in q["sql"]]
+        self.assertEqual(len(locking), 1)
+        self.assertIn('FOR UPDATE OF "competition_match"', locking[0])
+        self.match.refresh_from_db()
+        self.assertEqual(self.match.live_stream_status, "live")
+        self.assertEqual(self.match.live_stream_status_at, timezone.now())
+        (published,) = events.recent(self.season.pk)
+        self.assertEqual(published["status"], "live")
 
     def test_refresh_does_not_send_match_post_save(self):
         receiver = mock.Mock()

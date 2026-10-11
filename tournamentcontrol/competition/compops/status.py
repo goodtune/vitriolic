@@ -6,6 +6,8 @@ YouTube Studio reaches the ops page and the booth lamp.
 import datetime
 import logging
 
+from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
 from django.utils import timezone
 
 from tournamentcontrol.competition.compops import streams
@@ -34,6 +36,35 @@ def broadcasts_today(season, now):
     return list(matches) + list(live_events)
 
 
+def _store_if_current(obj, status, now):
+    """
+    Store the polled ``status`` of ``obj`` under a lock on its row, unless the
+    row already has it or was changed after the poll began at ``now`` (a
+    manual transition that landed meanwhile is newer than what was polled).
+    Returns whether the row was written.
+    """
+    # The default manager annotates team titles through outer joins that a
+    # row lock cannot be taken across.
+    manager = Match._base_manager if isinstance(obj, Match) else LiveStreamEvent.objects
+    with transaction.atomic():
+        try:
+            locked = (
+                manager.select_for_update(of=("self",))
+                .only("live_stream_status", "live_stream_status_at")
+                .get(pk=obj.pk)
+            )
+        except ObjectDoesNotExist:
+            return False
+        if locked.live_stream_status == status:
+            return False
+        if locked.live_stream_status_at and locked.live_stream_status_at > now:
+            return False
+        locked._store_live_stream_status(status, now)
+    obj.live_stream_status = locked.live_stream_status
+    obj.live_stream_status_at = locked.live_stream_status_at
+    return True
+
+
 def refresh_season_status(season, now=None, youtube=None):
     now = now or timezone.now()
     objects = broadcasts_today(season, now)
@@ -55,7 +86,8 @@ def refresh_season_status(season, now=None, youtube=None):
         new_status = statuses.get(obj.external_identifier)
         if not new_status or new_status == obj.live_stream_status:
             continue
-        obj._store_live_stream_status(new_status, now)
+        if not _store_if_current(obj, new_status, now):
+            continue
         streams.publish_change(obj, new_status, actor="youtube")
         changed += 1
     logger.info("refreshed %d broadcast statuses for season %s", changed, season.pk)
