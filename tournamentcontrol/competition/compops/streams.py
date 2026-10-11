@@ -5,12 +5,13 @@ open page about it.
 
 import logging
 
+from django.db import transaction
 from google.auth.exceptions import RefreshError, TransportError
 from googleapiclient.errors import HttpError
 
 from tournamentcontrol.competition.compops import events
 from tournamentcontrol.competition.exceptions import LiveStreamError
-from tournamentcontrol.competition.models import Match
+from tournamentcontrol.competition.models import LiveStreamEvent, Match
 
 logger = logging.getLogger(__name__)
 
@@ -52,13 +53,49 @@ def publish_change(obj, status, actor):
     )
 
 
+def _lock(obj):
+    """
+    Re-read ``obj`` (a Match or LiveStreamEvent) and lock its row until the
+    end of the current transaction. Must be called inside one.
+    """
+    if isinstance(obj, Match):
+        # The default manager annotates team titles through outer joins that
+        # a row lock cannot be taken across.
+        queryset = Match._base_manager.select_related(
+            "stage__division__season__competition",
+            "play_at",
+            "home_team",
+            "away_team",
+        )
+    else:
+        queryset = LiveStreamEvent.objects.select_related("season__competition")
+    return queryset.select_for_update(of=("self",)).get(pk=obj.pk)
+
+
+def _transition_locked(obj, status):
+    """
+    Transition the locked row of ``obj``, so two operators (or an operator
+    and the status refresh) acting on the same broadcast are serialised and
+    neither overwrites the other with a status read before it changed. The
+    caller's ``obj`` is brought up to date for rendering.
+    """
+    with transaction.atomic():
+        locked = _lock(obj)
+        locked.transition_live_stream(status)
+    obj.live_stream_status = locked.live_stream_status
+    obj.live_stream_status_at = locked.live_stream_status_at
+
+
 def transition(obj, status, actor):
     """
     Transition ``obj`` (a Match or LiveStreamEvent) and publish the change.
     Returns an error message for the page when the transition fails.
     """
     try:
-        obj.transition_live_stream(status)
+        _transition_locked(obj, status)
+    except type(obj).DoesNotExist:
+        logger.warning("compops stream transition for %s: row is gone", obj)
+        return f"{describe(obj)}: no longer exists"
     except LiveStreamError as exc:
         logger.warning("compops stream transition refused for %s: %s", obj, exc)
         return f"{describe(obj)}: {exc}"

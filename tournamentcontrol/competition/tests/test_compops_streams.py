@@ -3,6 +3,8 @@ from unittest import mock
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth.models import Permission
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from freezegun import freeze_time
@@ -10,7 +12,8 @@ from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from test_plus import TestCase
 
-from tournamentcontrol.competition.compops import events
+from tournamentcontrol.competition.compops import events, streams
+from tournamentcontrol.competition.models import LiveStreamEvent, Match
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.tests.test_live_stream_transition import (
     YOUTUBE_SEASON,
@@ -254,6 +257,56 @@ class MatchTransitionTests(StreamsFixture):
                 )
         body = b"".join(response.streaming_content).decode()
         self.assertIn("quota", body)
+        self.assertEqual(events.recent(self.season.pk), [])
+
+
+class LockedTransitionTests(StreamsFixture):
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_transition_locks_the_row(self, build):
+        build.return_value = youtube_mock("testing")
+        with CaptureQueriesContext(connection) as queries:
+            with self.captureOnCommitCallbacks(execute=True):
+                streams.transition(self.current, "live", "op")
+        locking = [q["sql"] for q in queries if "FOR UPDATE" in q["sql"]]
+        self.assertEqual(len(locking), 1)
+        self.assertIn('FOR UPDATE OF "competition_match"', locking[0])
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_stale_instance_carries_the_new_status(self, build):
+        build.return_value = youtube_mock("testing")
+        stale = Match.objects.get(pk=self.current.pk)
+        Match.objects.filter(pk=self.current.pk).update(live_stream_status="ready")
+        with self.captureOnCommitCallbacks(execute=True):
+            error = streams.transition(stale, "live", "op")
+        self.assertEqual(error, None)
+        self.assertEqual(stale.live_stream_status, "live")
+        self.assertEqual(stale.live_stream_status_at, timezone.now())
+        self.current.refresh_from_db()
+        self.assertEqual(self.current.live_stream_status, "live")
+        self.assertEqual(
+            build.return_value.liveBroadcasts.return_value.transition.call_count, 1
+        )
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_event_transition_locks_the_row(self, build):
+        build.return_value = youtube_mock("ready")
+        with CaptureQueriesContext(connection) as queries:
+            with self.captureOnCommitCallbacks(execute=True):
+                streams.transition(self.event, "testing", "op")
+        locking = [q["sql"] for q in queries if "FOR UPDATE" in q["sql"]]
+        self.assertEqual(len(locking), 1)
+        self.assertIn('FOR UPDATE OF "competition_livestreamevent"', locking[0])
+        self.assertEqual(self.event.live_stream_status, "testing")
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_deleted_row_reports_an_error_and_publishes_nothing(self, build):
+        build.return_value = youtube_mock("ready")
+        LiveStreamEvent.objects.filter(pk=self.event.pk).delete()
+        with self.assertLogs("tournamentcontrol.competition.compops.streams"):
+            with self.captureOnCommitCallbacks(execute=True):
+                error = streams.transition(self.event, "testing", "op")
+        self.assertEqual(error, f"{self.event.title}: no longer exists")
+        self.assertEqual(build.call_count, 0)
         self.assertEqual(events.recent(self.season.pk), [])
 
 
