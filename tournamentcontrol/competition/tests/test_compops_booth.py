@@ -357,11 +357,39 @@ class ArmTests(BoothFixture):
         self.assertIn("has no YouTube broadcast", body)
 
     @mock.patch("tournamentcontrol.competition.models.build")
-    def test_arm_refuses_a_match_not_streamed(self, build):
-        build.return_value = youtube_mock("ready")
+    def test_arm_skips_a_match_not_streamed(self, build):
+        service = youtube_mock("ready")
+        build.return_value = service
         self.current.live_stream_status = "complete"
         self.current.save()
         # A stale identifier outlives the opt-in until the broadcast is gone.
+        self.following.live_stream = False
+        self.following.save()
+        later = self.make(
+            12, 0, self.aus, self.fji, live_stream=True, external_identifier="yt-later"
+        )
+        with self.login(self.commentator), self.captureOnCommitCallbacks(execute=True):
+            # The lamp and the strip agree on what comes next.
+            self.get("compops:booth", **self.kw)
+            body = self.last_response.content.decode()
+            self.assertIn("Next on Field 1 today: 12:00 Australia v Fiji", body)
+            response = self.client.post(
+                self.url("booth-arm"), headers={"Datastar-Request": "true"}
+            )
+        self.assertEqual(response.status_code, 200)
+        service.liveBroadcasts.return_value.transition.assert_called_once_with(
+            broadcastStatus="testing", id="yt-later", part="snippet,status"
+        )
+        later.refresh_from_db()
+        self.following.refresh_from_db()
+        self.assertEqual(later.live_stream_status, "testing")
+        self.assertIsNone(self.following.live_stream_status)
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_arm_with_only_matches_not_streamed_left_is_a_refusal(self, build):
+        build.return_value = youtube_mock("ready")
+        self.current.live_stream_status = "complete"
+        self.current.save()
         self.following.live_stream = False
         self.following.save()
         with self.login(self.commentator):
@@ -371,17 +399,72 @@ class ArmTests(BoothFixture):
             self.assertEqual(response.status_code, 200)
             body = b"".join(response.streaming_content).decode()
             self.assertIn(
-                '<span class="warn">Fiji v New Zealand is not streamed.</span>', body
+                '<span class="warn">No more broadcasts on Field 1 today.</span>', body
             )
             # Without JavaScript the booth page carries the same refusal.
             self.last_response = self.client.post(self.url("booth-arm"))
         self.response_200()
         self.assertResponseContains(
-            '<span class="warn">Fiji v New Zealand is not streamed.</span>'
+            '<span class="warn">No more broadcasts on Field 1 today.</span>'
         )
         self.assertEqual(build.call_count, 0)
         self.following.refresh_from_db()
         self.assertIsNone(self.following.live_stream_status)
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_on_air_ignores_a_stale_live_match_not_streamed(self, build):
+        service = youtube_mock("live")
+        build.return_value = service
+        # Marked live before it was turned off, and after the current match.
+        stale = self.make(
+            10,
+            45,
+            self.fji,
+            self.aus,
+            external_identifier="yt-stale",
+            live_stream_status="live",
+        )
+        with self.login(self.commentator), self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                self.url("booth-onair", status="complete"),
+                headers={"Datastar-Request": "true"},
+            )
+        self.assertEqual(response.status_code, 200)
+        service.liveBroadcasts.return_value.transition.assert_called_once_with(
+            broadcastStatus="complete", id="yt-now", part="snippet,status"
+        )
+        stale.refresh_from_db()
+        self.assertEqual(stale.live_stream_status, "live")
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_on_air_without_broadcast_is_a_refusal(self, build):
+        build.return_value = youtube_mock("live")
+        self.current.external_identifier = None
+        self.current.save()
+        with self.login(self.commentator):
+            response = self.client.post(
+                self.url("booth-onair", status="complete"),
+                headers={"Datastar-Request": "true"},
+            )
+            self.assertEqual(response.status_code, 200)
+            body = b"".join(response.streaming_content).decode()
+            self.assertIn(
+                '<span class="warn">Australia v New Zealand has no YouTube'
+                " broadcast.</span>",
+                body,
+            )
+            # Without JavaScript the booth page carries the same refusal.
+            self.last_response = self.client.post(
+                self.url("booth-onair", status="complete")
+            )
+        self.response_200()
+        self.assertResponseContains(
+            '<span class="warn">Australia v New Zealand has no YouTube'
+            " broadcast.</span>"
+        )
+        self.assertEqual(build.call_count, 0)
+        self.current.refresh_from_db()
+        self.assertEqual(self.current.live_stream_status, "live")
 
     def test_no_next_match_today_is_a_refusal(self):
         self.current.live_stream_status = "complete"

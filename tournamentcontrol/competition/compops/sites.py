@@ -769,13 +769,20 @@ class CompOpsSite(Application):
         now = timezone.now()
         day = ground.local_date(now)
         previous, current, following = queries.ground_day(ground, day, now)
-        runsheet = list(queries.ground_runsheet(ground, day))
+        # The lamp and the arm follow only the matches opted into streaming,
+        # as the strip does; the runsheet itself lists every match.
+        ground_ids = self._booth_ground_ids(ground)
+        streamed = [
+            m
+            for m in queries.ground_runsheet(ground, day)
+            if streams.opted_in(m, ground_ids)
+        ]
         # The lamp follows the match actually on air, which can be one that
         # has overrun into the next kick-off; the strip follows the schedule.
         broadcast = next(
             (
                 m
-                for m in reversed(runsheet)
+                for m in reversed(streamed)
                 if streams.effective_status(m.live_stream_status) == "live"
             ),
             current,
@@ -785,16 +792,12 @@ class CompOpsSite(Application):
             if broadcast
             else None
         )
-        armable_match = self._armable_match(runsheet, broadcast, now)
+        armable_match = self._armable_match(streamed, broadcast, now)
         armable, reason = True, ""
         if status == "live":
             armable, reason = False, "End the current broadcast first."
         elif armable_match is None:
             armable, reason = False, f"No more broadcasts on {ground.title} today."
-        elif not streams.opted_in(
-            armable_match, {ground.pk} if ground.live_stream else set()
-        ):
-            armable, reason = False, f"{self._teams(armable_match)} is not streamed."
         elif not armable_match.external_identifier:
             armable, reason = (
                 False,
@@ -824,30 +827,36 @@ class CompOpsSite(Application):
         }
 
     @staticmethod
+    def _booth_ground_ids(ground):
+        """The booth's ground, as a set of streamed ground ids for ``streams``."""
+        return {ground.pk} if ground.live_stream else set()
+
+    @staticmethod
     def _teams(match):
         return f"{match.get_home_team_plain()} v {match.get_away_team_plain()}"
 
     @staticmethod
-    def _armable_match(runsheet, broadcast, now):
+    def _armable_match(streamed, broadcast, now):
         """
-        The match the booth arms next: the first on the ground from the
-        broadcast on air onwards (kicking off after ``now`` when nothing is
-        on) that is neither live nor complete. The broadcast itself qualifies
-        when it has a YouTube broadcast that has not gone live, as once the
-        overrunning match before it has been ended. A match already testing is
-        returned too, so the booth says it is armed rather than arming the
-        match after it.
+        The match the booth arms next, from the ground's matches opted into
+        streaming (``streamed``, in kick-off order), so one that is not never
+        holds the booth up: the first from the broadcast on air onwards
+        (kicking off after ``now`` when nothing is on) that is neither live
+        nor complete. The broadcast itself qualifies when it has a YouTube
+        broadcast that has not gone live, as once the overrunning match before
+        it has been ended. A match already testing is returned too, so the
+        booth says it is armed rather than arming the match after it.
         """
         if broadcast is not None:
             position = next(
-                (i for i, m in enumerate(runsheet) if m.pk == broadcast.pk),
-                len(runsheet),
+                (i for i, m in enumerate(streamed) if m.pk == broadcast.pk),
+                len(streamed),
             )
-            candidates = runsheet[position + 1 :]
+            candidates = streamed[position + 1 :]
             if broadcast.external_identifier:
                 candidates.insert(0, broadcast)
         else:
-            candidates = [m for m in runsheet if m.datetime > now]
+            candidates = [m for m in streamed if m.datetime > now]
         return next(
             (
                 m
@@ -927,12 +936,16 @@ class CompOpsSite(Application):
             raise Http404("Unknown broadcast status.")
         context = self.booth_context(request, season, ground)
         errors = []
-        if context["broadcast"] is None:
+        broadcast = context["broadcast"]
+        if broadcast is None:
             errors.append("Nothing is on this ground right now.")
+        elif not streams.opted_in(broadcast, self._booth_ground_ids(ground)):
+            # The lamp follows opted-in matches only; a guard all the same.
+            errors.append(f"{self._teams(broadcast)} is not streamed.")
+        elif not broadcast.external_identifier:
+            errors.append(f"{self._teams(broadcast)} has no YouTube broadcast.")
         else:
-            error = streams.transition(
-                context["broadcast"], status, request.user.get_username()
-            )
+            error = streams.transition(broadcast, status, request.user.get_username())
             if error:
                 errors.append(error)
         return patches(
