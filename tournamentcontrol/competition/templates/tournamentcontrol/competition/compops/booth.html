@@ -1,0 +1,183 @@
+{% extends "tournamentcontrol/competition/compops/base.html" %}
+{% load static tz compops_tags %}
+{% block title %}Booth · {{ ground.title }}{% endblock %}
+{% block extracss %}<link rel="stylesheet" href="{% static 'tournamentcontrol/competition/compops/booth.css' %}">{% endblock %}
+{% block body_attrs %}class="booth" data-signals__ifmissing="{pane: '{{ pane|default:'' }}', match: {{ pane_match.pk|default:'null' }}, modal: false}" data-indicator="connected" data-effect="$pane; $match; @get('{% url 'compops:booth-events' competition=season.competition.slug season=season.slug ground=ground.slug %}', {retryMaxCount: 1000})"{% endblock %}
+{% block body %}{% timezone tzinfo %}
+<header>
+	<span class="brand">BOOTH</span>
+	<span class="ground">{{ ground.title }}</span>
+	<span class="spacer"></span>
+	<span class="sse" data-class:down="!$connected"><i></i> <span data-text="$connected ? 'updates connected' : 'reconnecting'">updates connected</span></span>
+	<span class="clock">{{ now|time:"H:i" }}</span>
+</header>
+{% partialdef lamp inline %}
+<section id="onair" class="onair">
+	{% if status == "live" %}<div id="lamp" class="lamp live">ON AIR</div>{% elif status == "testing" %}<div id="lamp" class="lamp testing">STANDBY</div>{% else %}<div id="lamp" class="lamp">OFF AIR</div>{% endif %}
+	<div class="status">
+		{% if broadcast %}<b>{% if status == "live" %}Broadcasting{% elif status == "testing" %}Standby{% else %}Off air{% endif %} · {{ broadcast.get_home_team_plain }} v {{ broadcast.get_away_team_plain }}</b>
+			<span>{{ broadcast.stage.division.title }} · kick-off {{ broadcast.time|time:"H:i" }}{% if broadcast.live_stream_status_at %} · {{ status }} since {{ broadcast.live_stream_status_at|time:"H:i" }}{% endif %}{% if not broadcast.external_identifier %} · no YouTube broadcast{% endif %}</span>
+		{% else %}<b>Nothing on {{ ground.title }} right now</b>{% endif %}
+		{% for error in errors %}<span class="warn">{{ error }}</span>{% endfor %}
+	</div>
+	<div class="controls">
+		{% if broadcast and broadcast.external_identifier %}
+			{% if status == "live" %}
+				{% url 'compops:booth-onair' competition=season.competition.slug season=season.slug ground=ground.slug status='complete' as end_url %}
+				<form method="post" action="{{ end_url }}" data-on:submit="@post('{{ end_url }}', {contentType: 'form'})">{% csrf_token %}<button class="bigbtn end" type="submit" data-hold="1500">HOLD TO END BROADCAST</button></form>
+			{% elif status != "complete" %}
+				{% url 'compops:booth-onair' competition=season.competition.slug season=season.slug ground=ground.slug status='live' as live_url %}
+				<form method="post" action="{{ live_url }}" data-on:submit="@post('{{ live_url }}', {contentType: 'form'})">{% csrf_token %}<button class="bigbtn" type="submit" data-hold="1500">HOLD TO GO ON AIR</button></form>
+			{% else %}<button class="bigbtn end" type="button" disabled>ENDED</button>{% endif %}
+		{% endif %}
+		<div class="nocontrol">
+			{% if armable_match %}Next on {{ ground.title }} today: {{ armable_match.time|time:"H:i" }} {{ armable_match.get_home_team_plain }} v {{ armable_match.get_away_team_plain }}{% else %}No more broadcasts on {{ ground.title }} today{% endif %}
+			{% if armable %}{% url 'compops:booth-arm' competition=season.competition.slug season=season.slug ground=ground.slug as arm_url %} · <form class="inline" method="post" action="{{ arm_url }}" data-on:submit="@post('{{ arm_url }}', {contentType: 'form'})">{% csrf_token %}<button class="link" type="submit">arm now</button></form>{% elif arm_reason %} · {{ arm_reason }}{% endif %}
+		</div>
+	</div>
+</section>
+{% endpartialdef %}
+{% partialdef strip inline %}
+<section id="strip" class="strip">
+	<div class="card">
+		<div class="lab">Previous on {{ ground.title }}</div>
+		{% if previous %}<div class="teams">{{ previous.get_home_team_plain }} <small>v</small> {{ previous.get_away_team_plain }}</div><div class="res">{% if previous.is_forfeit %}forfeit{% else %}{{ previous.home_team_score|default_if_none:"–" }} – {{ previous.away_team_score|default_if_none:"–" }}{% endif %}</div><div class="sub">{{ previous.time|time:"H:i" }} · {{ previous.stage.division.title }}</div>{% else %}<div class="sub">—</div>{% endif %}
+	</div>
+	<div class="card now">
+		<div class="lab">Now{% if current %} · {{ current.time|time:"H:i" }} · {{ current.stage.division.title }}{% if current.stage_group %} · {{ current.stage_group.title }}{% endif %}{% endif %}</div>
+		{% if current %}<div class="teams">{{ current.get_home_team_plain }} <small>v</small> {{ current.get_away_team_plain }}</div>{% if current.home_team_score is not None %}<div class="res">{{ current.home_team_score }} – {{ current.away_team_score }}</div>{% endif %}<div class="sub">Kicked off {{ current.time|time:"H:i" }}</div>{% else %}<div class="sub">Nothing on this ground right now</div>{% endif %}
+	</div>
+	<div class="card">
+		<div class="lab">Next on {{ ground.title }}</div>
+		{% if next %}<div class="teams">{{ next.get_home_team_plain }} <small>v</small> {{ next.get_away_team_plain }}</div><div class="sub">{{ next.time|time:"H:i" }} · {{ next.stage.division.title }}</div><div class="prep"><button type="button" data-on:click="@get('{% url 'compops:booth-pane' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=next.pk pane='sheets' %}')">prep team sheets →</button></div>{% else %}<div class="sub">No more today</div>{% endif %}
+	</div>
+</section>
+{% endpartialdef %}
+<nav class="tabs">{% with focus=broadcast|default:current %}
+	{% if focus %}
+		{% for name, label in panes %}
+			<button type="button" data-class:active="$pane == '{{ name }}'" data-attr:aria-pressed="$pane == '{{ name }}' ? 'true' : 'false'" data-on:click="@get('{% url 'compops:booth-pane' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=focus.pk pane=name %}')">{{ label }}</button>
+		{% endfor %}
+	{% endif %}
+	<button type="button" data-class:active="$pane == 'runsheet'" data-attr:aria-pressed="$pane == 'runsheet' ? 'true' : 'false'" data-on:click="@get('{% url 'compops:booth-runsheet' competition=season.competition.slug season=season.slug ground=ground.slug %}')">{{ ground.title }} runsheet</button>
+	{% if focus %}<span class="right"><button class="teamsbtn" type="button" data-on:click="@get('{% url 'compops:booth-teams' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=focus.pk %}')">Teams · {{ focus.stage.division.title }}</button></span>{% endif %}
+{% endwith %}</nav>
+{% if pane_html %}{{ pane_html|safe }}{% else %}<div id="pane" class="pane"><p class="empty">Nothing on {{ ground.title }} right now.</p></div>{% endif %}
+<div id="modal" class="overlay" style="display:none" data-show="$modal" data-on:click="evt.target === el && ($modal = false)" data-on:keydown__window="evt.key === 'Escape' && ($modal = false)"><div id="modal-body" class="sheet"></div></div>
+{% endtimezone %}{% endblock %}
+{% block extrajs %}<script src="{% static 'tournamentcontrol/competition/compops/hold-button.js' %}"></script>{% endblock %}
+
+{# Partials the page does not show where they are defined. #}
+{% partialdef pane_sheets %}
+<div id="pane" class="pane sheets">
+	<div class="cols">
+		{% for team, roster in rosters %}
+			<div class="card">
+				<div class="teamhead"><h3>{{ team.title }}</h3><span class="pos">{{ team.division.title }}{% if team.stage_group %} · {{ team.stage_group.title }}{% endif %}</span></div>
+				<table>
+					<tr><th>#</th><th>Player</th><th>P</th><th>Pts</th><th>MVP</th></tr>
+					{% for player in roster %}
+						<tr{% if not player.stat_played %} class="out"{% endif %}><td class="n">{{ player.number|default_if_none:"—" }}</td><td class="name">{{ player.person.first_name }} {{ player.person.last_name }}</td><td class="num">{{ player.stat_played|default_if_none:"0" }}</td><td class="num">{{ player.stat_points|default_if_none:"—" }}</td><td class="num">{{ player.stat_mvp|default_if_none:"—" }}</td></tr>
+					{% empty %}<tr><td colspan="5" class="empty">No players on the team sheet.</td></tr>{% endfor %}
+				</table>
+			</div>
+		{% endfor %}
+	</div>
+</div>
+{% endpartialdef %}
+
+{% partialdef pane_results %}
+<div id="pane" class="pane results">
+	<div class="cols">
+		{% for team, matches in results %}
+			<div class="card">
+				<h4>{{ team.title }} · this tournament</h4>
+				<table>
+					{% for m in matches %}
+						<tr{% if m.pk == pane_match.pk %} class="now"{% endif %}>
+							<td class="n">{% if m.round %}R{{ m.round }}{% endif %}</td>
+							<td>{{ m.datetime|date:"D H:i" }} · {{ m.play_at.title|default:"—" }}</td>
+							<td>v {% if m.home_team_id == team.pk %}{{ m.get_away_team_plain }}{% else %}{{ m.get_home_team_plain }}{% endif %}</td>
+							<td class="num">{% if m.home_team_score is not None %}{% if m.home_team_id == team.pk %}{{ m.home_team_score }} – {{ m.away_team_score }}{% else %}{{ m.away_team_score }} – {{ m.home_team_score }}{% endif %}{% elif m.is_forfeit %}forfeit{% elif m.pk == pane_match.pk %}now{% endif %}</td>
+						</tr>
+					{% endfor %}
+				</table>
+			</div>
+		{% endfor %}
+	</div>
+</div>
+{% endpartialdef %}
+
+{% partialdef pane_ladder %}
+<div id="pane" class="pane ladder">
+	<div class="card">
+		<h4>{{ ladder_title }}</h4>
+		<table>
+			<tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>F</th><th>A</th><th>Diff</th><th>Pts</th></tr>
+			{% for row in ladder %}
+				<tr{% if row.team_id == pane_match.home_team_id or row.team_id == pane_match.away_team_id %} class="now"{% endif %}><td class="n">{{ forloop.counter }}</td><td>{{ row.team.title }}</td><td class="num">{{ row.played }}</td><td class="num">{{ row.win }}</td><td class="num">{{ row.draw }}</td><td class="num">{{ row.loss }}</td><td class="num">{{ row.score_for }}</td><td class="num">{{ row.score_against }}</td><td class="num">{{ row.difference|floatformat:"0" }}</td><td class="num"><b>{{ row.points|floatformat:"-2" }}</b></td></tr>
+			{% empty %}<tr><td colspan="10" class="empty">No ladder for this stage.</td></tr>{% endfor %}
+		</table>
+	</div>
+</div>
+{% endpartialdef %}
+
+{% partialdef pane_leaders %}
+<div id="pane" class="pane leaders">
+	<div class="cols">
+		<div class="card"><h4>Top scorers · {{ pane_match.stage.division.title }}</h4><table>{% for row in scorers %}<tr><td class="n">{{ forloop.counter }}</td><td>{{ row.name }} · {{ row.team }}</td><td class="num">{{ row.points }}</td></tr>{% empty %}<tr><td class="empty">No points recorded yet.</td></tr>{% endfor %}</table></div>
+		<div class="card"><h4>MVP points · {{ pane_match.stage.division.title }}</h4><table>{% for row in mvps %}<tr><td class="n">{{ forloop.counter }}</td><td>{{ row.name }} · {{ row.team }}</td><td class="num">{{ row.mvp }}</td></tr>{% empty %}<tr><td class="empty">No MVP points recorded yet.</td></tr>{% endfor %}</table></div>
+	</div>
+</div>
+{% endpartialdef %}
+
+{% partialdef pane_runsheet %}
+<div id="pane" class="pane runsheet">
+	<div class="card">
+		<h4>{{ ground.title }} · {{ day|date:"D j M" }}</h4>
+		<table class="rs">
+			{% for m in runsheet %}
+				<tr{% if current and m.pk == current.pk %} class="now"{% endif %}><td class="n">{{ m.time|time:"H:i" }}</td><td>{{ m.stage.division.title }}</td><td>{{ m.get_home_team_plain }} v {{ m.get_away_team_plain }}</td><td class="num">{% if m.home_team_score is not None %}{{ m.home_team_score }} – {{ m.away_team_score }}{% endif %}</td>{% if m.live_stream_status|effective_status == "live" %}<td class="onair">ON AIR</td>{% elif not m.external_identifier %}<td class="warn">no broadcast</td>{% else %}<td class="sub">{{ m.live_stream_status|default:"ready" }}</td>{% endif %}</tr>
+			{% empty %}<tr><td class="empty">No matches on this ground today.</td></tr>{% endfor %}
+		</table>
+	</div>
+</div>
+{% endpartialdef %}
+
+{% partialdef teams_modal %}
+<div id="modal-body" class="sheet">
+	<div class="sheet-h"><h3>{{ division.title }}</h3><span class="sub">tap a team for its tournament so far</span><button class="x" type="button" data-on:click="$modal = false">Close</button></div>
+	<div class="sheet-b">
+		{% for pool, teams in pools.items %}
+			{% if pool %}<h4>{{ pool }}</h4>{% endif %}
+			<div class="grid">
+				{% for team in teams %}
+					<div class="tile{% if team.pk in on_field %} onfield{% endif %}" data-on:click="@get('{% url 'compops:booth-team' competition=season.competition.slug season=season.slug ground=ground.slug team_pk=team.pk %}')"><b>{{ team.title }}</b>{% if team.pk in on_field %}<span>on this field now</span>{% endif %}</div>
+				{% endfor %}
+			</div>
+		{% endfor %}
+	</div>
+</div>
+{% endpartialdef %}
+
+{% partialdef team_modal %}
+<div id="modal-body" class="sheet">
+	<div class="sheet-h"><h3>{{ team.title }}</h3><span class="sub">{{ team.division.title }}{% if team.stage_group %} · {{ team.stage_group.title }}{% endif %}</span><button class="x" type="button" data-on:click="$modal = false">Close</button></div>
+	<div class="sheet-b">
+		<div class="cols">
+			<div class="card">
+				<h4>Squad · tournament totals</h4>
+				<table><tr><th>#</th><th>Player</th><th>P</th><th>Pts</th><th>MVP</th></tr>
+					{% for player in squad %}<tr><td class="n">{{ player.number|default_if_none:"—" }}</td><td class="name">{{ player.person.first_name }} {{ player.person.last_name }}</td><td class="num">{{ player.stat_played|default_if_none:"0" }}</td><td class="num">{{ player.stat_points|default_if_none:"—" }}</td><td class="num">{{ player.stat_mvp|default_if_none:"—" }}</td></tr>{% empty %}<tr><td colspan="5" class="empty">No players on the team sheet.</td></tr>{% endfor %}
+				</table>
+			</div>
+			<div class="card">
+				<h4>Results · this tournament</h4>
+				<table>
+					{% for m in results %}<tr><td class="n">{% if m.round %}R{{ m.round }}{% endif %}</td><td>{{ m.datetime|date:"D H:i" }} · {{ m.play_at.title|default:"—" }}</td><td>v {% if m.home_team_id == team.pk %}{{ m.get_away_team_plain }}{% else %}{{ m.get_home_team_plain }}{% endif %}</td><td class="num">{% if m.home_team_score is not None %}{% if m.home_team_id == team.pk %}{{ m.home_team_score }} – {{ m.away_team_score }}{% else %}{{ m.away_team_score }} – {{ m.home_team_score }}{% endif %}{% elif m.is_forfeit %}forfeit{% endif %}</td></tr>{% empty %}<tr><td class="empty">No matches yet.</td></tr>{% endfor %}
+				</table>
+			</div>
+		</div>
+	</div>
+</div>
+{% endpartialdef %}

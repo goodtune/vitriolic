@@ -1,4 +1,5 @@
 import base64
+import datetime
 import logging
 from zoneinfo import ZoneInfo
 
@@ -7,11 +8,14 @@ from celery import Task, shared_task, states
 from dateutil.relativedelta import relativedelta
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
+from django.db.models import Q
 from google.auth.exceptions import RefreshError
 from django.template.loader import render_to_string
 from django.urls import NoReverseMatch, reverse
+from django.utils import timezone
 from googleapiclient.errors import HttpError
 
+from tournamentcontrol.competition.compops.status import refresh_season_status
 from tournamentcontrol.competition.models import (
     LiveStreamEvent,
     Match,
@@ -800,3 +804,48 @@ def synchronise_mysideline():
     """
     results = _mysideline_synchronise_all()
     return {pk: result.summary() for pk, result in results.items()}
+
+
+@shared_task
+def refresh_live_stream_status(season_pk):
+    season = Season.objects.get(pk=season_pk)
+    return refresh_season_status(season)
+
+
+@shared_task
+def refresh_all_live_stream_status():
+    now = timezone.now()
+    window = (
+        now.date() - datetime.timedelta(days=1),
+        now.date() + datetime.timedelta(days=1),
+    )
+    # Events are matched on their aware start. The bounds are the window's
+    # dates taken in UTC, from the start of the first day to the end of the
+    # last; the window already reaches a day either side of today, so every
+    # season's local today falls inside them whatever its time zone.
+    event_window = (
+        datetime.datetime.combine(window[0], datetime.time.min, datetime.UTC),
+        datetime.datetime.combine(
+            window[1] + datetime.timedelta(days=1), datetime.time.min, datetime.UTC
+        ),
+    )
+    seasons = (
+        Season.objects.filter(live_stream=True)
+        .filter(
+            Q(divisions__stages__matches__date__range=window)
+            | Q(
+                live_stream_events__start__range=event_window,
+                live_stream_events__live_stream=True,
+            )
+        )
+        .distinct()
+    )
+    changed = 0
+    for season in seasons:
+        try:
+            changed += refresh_season_status(season, now)
+        except Exception:
+            logger.exception(
+                "live stream status refresh failed for season %s", season.pk
+            )
+    return changed

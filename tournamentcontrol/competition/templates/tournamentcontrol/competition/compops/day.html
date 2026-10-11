@@ -1,0 +1,272 @@
+{% extends "tournamentcontrol/competition/compops/base.html" %}
+{% load compops_tags tz %}
+{% block title %}{{ season }} · {{ day|date:"D j M" }} · Ops{% endblock %}
+{% block body_attrs %}class="compops" data-signals__ifmissing="{tab: 'results', modal: false}" data-indicator="connected" data-init="@get('{% compops_url 'events' %}', {retryMaxCount: 1000})"{% endblock %}
+{% block body %}
+{% timezone season.timezone %}
+<header class="topbar">
+	<span class="brand">TOURNAMENT OPS</span>
+	<span class="season">{{ season }} · {{ day|date:"l j F" }}</span>
+	<span class="spacer"></span>
+	<span class="sse" data-class:down="!$connected"><i></i> <span data-text="$connected ? 'live updates' : 'reconnecting'">live updates</span></span>
+	<span class="who">{{ user.get_username }}</span>
+</header>
+{% partialdef main inline %}
+<main id="main" class="{% if collapsed %}collapsed{% endif %}">
+	<div class="results">
+		<div class="rtabs">
+			<button type="button" data-class:active="$tab == 'results'" data-attr:aria-pressed="$tab == 'results' ? 'true' : 'false'" data-on:click="$tab = 'results'">Results {% with count_suffix="-tab" %}{% partialdef results_count inline %}<span id="results-count{{ count_suffix }}" class="count{% if not results_pending %} zero{% endif %}">{{ results_pending }}</span>{% endpartialdef %}{% endwith %}</button>
+			<button type="button" data-class:active="$tab == 'scorers'" data-attr:aria-pressed="$tab == 'scorers' ? 'true' : 'false'" data-on:click="$tab = 'scorers'">Scorers {% with count_suffix="-tab" %}{% partialdef scorers_count inline %}<span id="scorers-count{{ count_suffix }}" class="count{% if not scorers %} zero{% endif %}">{{ scorers|length }}</span>{% endpartialdef %}{% endwith %}</button>
+		</div>
+		<section class="portlet" data-class:hidden-tab="$tab != 'results'">
+			<div class="portlet-header"><h4>Results</h4>{% partial results_count %}</div>
+			{% partialdef results inline %}
+<div id="results" class="portlet-body">
+	{% for slot in slots %}{% partialdef slot inline %}
+<div id="slot-{{ slot.key }}" class="slot" data-signals__ifmissing="{slot_{{ slot.key }}: {{ slot.open|yesno:'true,false' }}}">
+	{% partialdef slot_header inline %}
+<div id="slot-{{ slot.key }}-h" class="slot-h" data-class:shut="!$slot_{{ slot.key }}" data-on:click="$slot_{{ slot.key }} = !$slot_{{ slot.key }}">
+	<span class="car"></span>
+	<span class="t">{{ slot.label }}</span>
+	<span class="when">{{ slot.entered }} of {{ slot.total }} entered</span>
+	<span class="state {{ slot.state }}">{{ slot.state|cut:"_"|title }}</span>
+</div>
+{% endpartialdef %}
+	<div class="rows" data-show="$slot_{{ slot.key }}">
+		{% for match in slot.matches %}
+			{% with form=match.compops_form editable=match.compops_editable entered=match.compops_entered editing=match.compops_editing %}{% partialdef match_row inline %}
+<div id="match-{{ match.pk }}" class="row{% if not editable %} readonly{% endif %}">
+	<div class="g"><b>{{ match.play_at.title|default:"—" }}</b><span>{{ match.stage.division.title }}{% if match.stage_group %} · {{ match.stage_group.title }}{% endif %}</span></div>
+	{% if editable and form %}
+		<form class="s" method="post" action="{% compops_url 'match-result' match_pk=match.pk %}" data-on:submit="@post('{% compops_url 'match-result' match_pk=match.pk %}', {contentType: 'form'})">
+			{% csrf_token %}
+			<span class="team home">{{ match.get_home_team_plain }}</span>
+			{% if match.is_bye %}
+				<span class="pair"><label class="opt">{{ form.bye_processed }} processed</label></span>
+				<span class="team away"></span>
+			{% else %}
+				<span class="pair">{{ form.home_team_score }}<span class="vs">–</span>{{ form.away_team_score }}</span>
+				<span class="team away">{{ match.get_away_team_plain }}</span>
+			{% endif %}
+			<span class="acts">
+				{% if form.is_forfeit %}<details class="ff-d"{% if form.is_forfeit.value or form.forfeit_winner.errors %} open{% endif %}><summary>Forfeit</summary><span class="ff-body"><label class="ff-label">{{ form.is_forfeit }} forfeit</label> {{ form.forfeit_winner }}</span></details>{% endif %}
+				<button class="btn p" type="submit">Save</button>{% if editing %}<a class="btn" href="{% compops_url 'match-result' match_pk=match.pk %}" data-on:click__prevent="@get('{% compops_url 'match-result' match_pk=match.pk %}')">✕</a>{% endif %}
+			</span>
+		</form>
+		{% if form.errors %}<ul class="errorlist">{% for field, errors in form.errors.items %}{% for error in errors %}<li>{{ error }}</li>{% endfor %}{% endfor %}</ul>{% endif %}
+	{% elif entered %}
+		<span class="team home">{{ match.get_home_team_plain }}</span>
+		<span class="score">{% if match.is_bye %}processed{% elif match.is_forfeit %}forfeit → {{ match.forfeit_winner.title|default:"double" }}{% elif match.is_washout %}washout{% else %}{{ match.home_team_score }} – {{ match.away_team_score }}{% endif %}</span>
+		<span class="team away">{{ match.get_away_team_plain }}</span>
+		<span class="acts">{% if editable %}<a class="btn sm" href="{% compops_url 'match-result-edit' match_pk=match.pk %}" data-on:click__prevent="@get('{% compops_url 'match-result-edit' match_pk=match.pk %}')">Edit</a>{% endif %}</span>
+	{% else %}
+		<span class="team home">{{ match.get_home_team_plain }}</span>
+		<span class="vs">v</span>
+		<span class="team away">{{ match.get_away_team_plain }}</span>
+		<span class="acts"><span class="score muted">{% if match.mysideline_id %}from MySideline{% elif match.home_team and match.away_team %}not entered{% else %}awaiting progression{% endif %}</span></span>
+	{% endif %}
+</div>
+{% endpartialdef %}{% endwith %}
+		{% endfor %}
+	</div>
+</div>
+{% endpartialdef %}{% empty %}
+		<p id="results-empty" class="empty">No matches on this day.</p>
+	{% endfor %}
+</div>
+{% endpartialdef %}
+		</section>
+		<section class="portlet" data-class:hidden-tab="$tab != 'scorers'">
+			<div class="portlet-header"><h4>Awaiting scorers</h4>{% partial scorers_count %}</div>
+			{% partialdef scorers inline %}
+<div id="scorers" class="portlet-body">
+	{% for match in scorers %}
+		<div id="scorers-{{ match.pk }}" class="row">
+			<div class="g"><b>{{ match.play_at.title|default:"—" }}</b><span>{{ match.time|time:"H:i" }} · {{ match.stage.division.title }}</span></div>
+			<span class="team home">{{ match.get_home_team_plain }}</span>
+			<span class="score">{{ match.home_team_score }} – {{ match.away_team_score }}</span>
+			<span class="team away">{{ match.get_away_team_plain }}</span>
+			<span class="acts">
+				{% if match.out_of_balance %}<span class="pill warn">out of balance</span>{% endif %}
+				{% if can_statistics %}<a class="btn" href="{% compops_url 'match-scorers' match_pk=match.pk %}" data-on:click__prevent="@get('{% compops_url 'match-scorers' match_pk=match.pk %}')">Enter scorers</a>{% endif %}
+			</span>
+		</div>
+	{% empty %}
+		<p id="scorers-empty" class="empty">No matches awaiting scorers.</p>
+	{% endfor %}
+</div>
+{% endpartialdef %}
+		</section>
+	</div>
+	<aside class="side">
+		<section class="portlet">
+			<div class="portlet-header"><h4>Live streams</h4>{% partialdef streams_count inline %}<span id="streams-count{{ count_suffix }}" class="count{% if not live_count %} zero{% endif %}">{{ live_count }}</span>{% endpartialdef %}
+				<form method="post" action="{% compops_url 'layout' %}" data-on:submit="@post('{% compops_url 'layout' %}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm icon" type="submit" title="collapse" aria-label="Collapse the streams column"></button></form>
+			</div>
+			{% partialdef streams inline %}
+<div id="streams" class="portlet-body">
+	{% for error in stream_errors %}<p class="warn">{{ error }}</p>{% endfor %}
+	{% for item in streams %}
+		<div id="stream-{{ item.ground.pk }}" class="stream">
+			<div class="stream-h">
+				<div class="ground">{{ item.ground.title }}</div>
+				{% if item.current %}<span class="badge {{ item.current.live_stream_status|default:'none' }}">{{ item.current.live_stream_status|default:"no status" }}</span>{% endif %}
+			</div>
+			<div class="line now">
+				<div class="lab">Now{% if item.current %}<b>{{ item.current.time|time:"H:i" }}</b>{% endif %}</div>
+				{% if item.current %}
+					<div>
+						<div class="match">{{ item.current.get_home_team_plain }} v {{ item.current.get_away_team_plain }}</div>
+						<div class="sub">{{ item.current.stage.division.title }}{% if item.current.live_stream_status_at %} · since {{ item.current.live_stream_status_at|time:"H:i" }}{% endif %}{% if not item.current.external_identifier %} <span class="pill warn">no YouTube broadcast</span>{% endif %}</div>
+					</div>
+					{% compops_url 'match-stream' match_pk=item.current.pk status='live' as live_url %}
+					{% compops_url 'match-stream' match_pk=item.current.pk status='testing' as test_url %}
+					{% compops_url 'match-stream' match_pk=item.current.pk status='complete' as end_url %}
+					<div class="ctl">{% with obj=item.current %}{% partial stream_buttons %}{% endwith %}</div>
+				{% else %}
+					<div class="sub">Nothing on this ground yet</div>
+				{% endif %}
+			</div>
+			{% if item.next %}
+				<div class="line next">
+					<div class="lab">Next<b>{{ item.next.time|time:"H:i" }}</b></div>
+					<div>
+						<div class="match">{{ item.next.get_home_team_plain }} v {{ item.next.get_away_team_plain }}</div>
+						<div class="sub">{{ item.next.stage.division.title }} <span class="badge {{ item.next.live_stream_status|default:'none' }}">{{ item.next.live_stream_status|default:"no status" }}</span></div>
+					</div>
+					{% compops_url 'match-stream' match_pk=item.next.pk status='live' as next_live_url %}
+					{% compops_url 'match-stream' match_pk=item.next.pk status='testing' as next_test_url %}
+					{% compops_url 'match-stream' match_pk=item.next.pk status='complete' as next_end_url %}
+					<div class="ctl">{% with obj=item.next live_url=next_live_url test_url=next_test_url end_url=next_end_url %}{% partial stream_buttons %}{% endwith %}</div>
+				</div>
+			{% endif %}
+		</div>
+	{% empty %}
+		<p id="streams-empty" class="empty">No streamed grounds in this season.</p>
+	{% endfor %}
+	{% if events %}
+		<div class="sect-h">Season events</div>
+		{% for event in events %}
+			<div id="event-{{ event.pk }}" class="stream">
+				<div class="line">
+					<div class="lab">Event<div class="ground">{{ event.start|time:"H:i" }}</div></div>
+					<div>
+						<div class="match">{{ event.title }}</div>
+						<div class="sub">{{ event.start|time:"H:i" }}–{{ event.stop|time:"H:i" }} <span class="badge {{ event.live_stream_status|default:'none' }}">{{ event.live_stream_status|default:"no status" }}</span></div>
+					</div>
+					{% compops_url 'event-stream' event_pk=event.pk status='live' as live_url %}
+					{% compops_url 'event-stream' event_pk=event.pk status='testing' as test_url %}
+					{% compops_url 'event-stream' event_pk=event.pk status='complete' as end_url %}
+					<div class="ctl">{% with obj=event %}{% partial stream_buttons %}{% endwith %}</div>
+				</div>
+			</div>
+		{% endfor %}
+	{% endif %}
+	{% if can_stream and current_slot or can_stream and next_slot %}
+		<div class="slot-actions">
+			{% if current_slot %}
+				<div id="slot-actions-current" class="sect"><span>Whole slot</span>
+					{% compops_url 'slot-stream' slot_key=current_slot.key status='live' as slot_live %}
+					{% compops_url 'slot-stream' slot_key=current_slot.key status='complete' as slot_end %}
+					<span class="ctl">
+						<form method="post" action="{{ slot_live }}" data-on:submit="@post('{{ slot_live }}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit">Go live: all {{ current_slot.label }}</button></form>
+						<form method="post" action="{{ slot_end }}" data-on:submit="@post('{{ slot_end }}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit">End: all {{ current_slot.label }}</button></form>
+					</span>
+				</div>
+			{% endif %}
+			{% if next_slot %}
+				<div id="slot-actions-next" class="sect"><span>Next slot</span>
+					{% compops_url 'slot-stream' slot_key=next_slot.key status='testing' as slot_test %}
+					{% compops_url 'slot-stream' slot_key=next_slot.key status='live' as slot_live %}
+					<span class="ctl">
+						<form method="post" action="{{ slot_test }}" data-on:submit="@post('{{ slot_test }}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit">Test: all {{ next_slot.label }}</button></form>
+						<form method="post" action="{{ slot_live }}" data-on:submit="@post('{{ slot_live }}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit">Go live: all {{ next_slot.label }}</button></form>
+					</span>
+				</div>
+			{% endif %}
+		</div>
+	{% endif %}
+</div>
+{% endpartialdef %}
+		</section>
+		<section class="portlet">
+			<div class="portlet-header"><h4>Activity</h4></div>
+			{% partialdef activity inline %}
+<ul id="activity" class="feed">
+	{% for event in activity %}
+		<li class="{{ event.type }}"><time>{{ event.at|event_time|time:"H:i:s" }}</time><span>{{ event.summary }}{% if event.actor %} · {{ event.actor }}{% endif %}</span></li>
+	{% empty %}
+		<li id="activity-empty" class="empty">Nothing has happened yet today.</li>
+	{% endfor %}
+</ul>
+{% endpartialdef %}
+		</section>
+	</aside>
+	<form class="rail" method="post" action="{% compops_url 'layout' %}" data-on:submit="@post('{% compops_url 'layout' %}', {contentType: 'form'})">{% csrf_token %}<button type="submit" title="expand"><span class="rail-l">Streams {% with count_suffix="-rail" %}{% partial streams_count %}{% endwith %}</span></button></form>
+</main>
+{% endpartialdef %}
+<div id="modal" class="overlay" style="display:none" data-show="$modal" data-on:click="evt.target === el && ($modal = false)" data-on:keydown__window="evt.key === 'Escape' && ($modal = false)">
+	<div id="modal-body" class="modal"></div>
+</div>
+{% endtimezone %}
+{% endblock %}
+
+{# Partials the page does not show where they are defined. #}
+{# stream_buttons reads obj, can_stream, live_url, test_url and end_url. #}
+{% partialdef stream_buttons %}
+{% if can_stream and obj.external_identifier %}{% with effective=obj.live_stream_status|effective_status %}
+	{% if effective == "live" %}
+		<form method="post" action="{{ end_url }}" data-on:submit="@post('{{ end_url }}', {contentType: 'form'})">{% csrf_token %}<button class="btn r sm" type="submit">End</button></form>
+	{% elif effective == "complete" %}
+		<button class="btn sm" type="button" disabled>Ended</button>
+	{% else %}
+		{% if effective != "testing" %}<form method="post" action="{{ test_url }}" data-on:submit="@post('{{ test_url }}', {contentType: 'form'})">{% csrf_token %}<button class="btn sm" type="submit">Test</button></form>{% endif %}
+		<form method="post" action="{{ live_url }}" data-on:submit="@post('{{ live_url }}', {contentType: 'form'})">{% csrf_token %}<button class="btn g sm" type="submit">Go live</button></form>
+	{% endif %}
+{% endwith %}{% endif %}
+{% endpartialdef %}
+
+{% partialdef scorers_modal %}
+<div id="modal-body" class="modal" data-signals="{home_total: {{ formsets.0.allocated }}, away_total: {{ formsets.1.allocated }}}">
+	<div class="modal-h">
+		<h3>{{ match.get_home_team_plain }} {{ match.home_team_score }} – {{ match.away_team_score }} {{ match.get_away_team_plain }}</h3>
+		<span class="sub">{{ match.stage.division.title }} · {{ match.time|time:"H:i" }} {{ match.play_at.title }}</span>
+		{% if not standalone %}<button class="btn x" type="button" data-on:click="el.closest('.modal').classList.toggle('full')">Full screen</button>{% endif %}
+		{% if standalone %}<a class="btn" href="{% compops_url 'day' %}">Close</a>{% else %}<button class="btn" type="button" data-on:click="$modal = false">Close</button>{% endif %}
+	</div>
+	<form method="post" action="{% compops_url 'match-scorers' match_pk=match.pk %}"{% if not standalone %} data-on:submit="@post('{% compops_url 'match-scorers' match_pk=match.pk %}', {contentType: 'form'})"{% endif %} data-on:input="$home_total = [...el.querySelectorAll('input[data-side=home]')].reduce((s, i) => s + (+i.value || 0), 0); $away_total = [...el.querySelectorAll('input[data-side=away]')].reduce((s, i) => s + (+i.value || 0), 0)">
+		{% csrf_token %}
+		<div class="modal-b">
+			<div class="cols">
+				{% for formset in formsets %}
+					{{ formset.management_form }}
+					<div>
+						<h4>{{ formset.queryset.team.title }} <span class="tot" data-class:bad="${{ forloop.first|yesno:'home,away' }}_total != {{ formset.score }}"><span data-text="${{ forloop.first|yesno:'home,away' }}_total">{{ formset.allocated }}</span> / {{ formset.score }} allocated</span></h4>
+						{% if formset.non_form_errors %}<ul class="errorlist">{% for error in formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+						<table class="st">
+							<thead><tr><th>#</th><th>Player</th><th>Played</th><th>Points</th><th>MVP</th></tr></thead>
+							<tbody>
+							{% for form in formset %}
+								<tr{% if form.errors %} class="error"{% endif %}>
+									<td>{{ form.number }}</td>
+									<td>{{ form.instance.player.first_name }} {{ form.instance.player.last_name }}{% if form.errors %}<ul class="errorlist">{% for field, errors in form.errors.items %}{% for error in errors %}<li>{{ error }}</li>{% endfor %}{% endfor %}</ul>{% endif %}</td>
+									<td>{{ form.played }}</td>
+									<td>{{ form.points }}</td>
+									<td>{{ form.mvp }}</td>
+								</tr>
+							{% endfor %}
+							</tbody>
+						</table>
+					</div>
+				{% endfor %}
+			</div>
+		</div>
+		<div class="modal-f">
+			<span class="sub">Points must sum to each team's score.</span>
+			<span class="spacer"></span>
+			{% if standalone %}<a class="btn" href="{% compops_url 'day' %}">Cancel</a>{% else %}<button class="btn" type="button" data-on:click="$modal = false">Cancel</button>{% endif %}
+			<button class="btn p" type="submit">Save scorers</button>
+		</div>
+	</form>
+</div>
+{% endpartialdef %}

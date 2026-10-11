@@ -1,6 +1,8 @@
 from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
+from django.utils import timezone
+
 from tournamentcontrol.competition.models import Match
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.tests.test_competition_admin import TestCase
@@ -177,3 +179,35 @@ class TimezoneAdjustmentTestCase(TestCase):
                     scenario["expected_utc_after"],
                     f"Updated datetime incorrect for {scenario['description']}",
                 )
+
+
+class LocalDateTests(TestCase):
+    """The date in a place's time zone falls back ground, venue, season."""
+
+    NOW = datetime(2026, 10, 7, 23, 30, tzinfo=ZoneInfo("UTC"))
+
+    def setUp(self):
+        self.season = factories.SeasonFactory.create(timezone="Australia/Brisbane")
+        self.venue = factories.VenueFactory.create(season=self.season)
+        self.ground = factories.GroundFactory.create(venue=self.venue)
+
+    def test_local_date_uses_the_ground_time_zone(self):
+        self.assertEqual(self.ground.local_date(self.NOW), date(2026, 10, 8))
+        self.assertEqual(self.season.local_date(self.NOW), date(2026, 10, 8))
+
+    def test_local_date_falls_back_to_venue_then_season_zone(self):
+        self.ground.timezone = None
+        self.ground.save()
+        self.assertEqual(self.ground.local_date(self.NOW), date(2026, 10, 8))
+        self.venue.timezone = None
+        self.venue.save()
+        self.ground.refresh_from_db()
+        self.assertEqual(self.ground.local_date(self.NOW), date(2026, 10, 8))
+        self.assertEqual(self.ground.get_tzinfo(), ZoneInfo("Australia/Brisbane"))
+
+    def test_season_without_a_time_zone_uses_the_current_one(self):
+        self.season.timezone = None
+        self.season.save()
+        with timezone.override("Pacific/Auckland"):
+            self.assertEqual(self.season.local_date(self.NOW), date(2026, 10, 8))
+        self.assertEqual(self.season.local_date(self.NOW), date(2026, 10, 7))

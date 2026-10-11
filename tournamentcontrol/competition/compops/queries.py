@@ -1,0 +1,288 @@
+"""
+The ops site's day-shaped reads: the day's matches grouped into result
+slots, the scored matches whose statistics do not yet balance, and the
+current and next match on each streamed ground. Pure functions over the
+ORM; no request objects, no rendering.
+
+The state of a match's result lives on ``MatchQuerySet.with_result_state()``
+and time zones on the models (``get_tzinfo()`` and ``local_date()``).
+"""
+
+import dataclasses
+import datetime
+
+from django.db.models import (
+    BooleanField,
+    Case,
+    Exists,
+    F,
+    OuterRef,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+    When,
+)
+from django.db.models.functions import Coalesce
+from django.utils import timezone
+
+from tournamentcontrol.competition.models import (
+    Ground,
+    LiveStreamEvent,
+    Match,
+    SimpleScoreMatchStatistic,
+)
+
+SELECT_RELATED = (
+    "stage__division__season",
+    "play_at",
+    "home_team__club",
+    "away_team__club",
+    "home_team_undecided",
+    "away_team_undecided",
+)
+
+
+@dataclasses.dataclass
+class Slot:
+    key: str
+    time: datetime.time | None
+    label: str
+    matches: list
+    state: str = "pending"
+    entered: int = 0
+    total: int = 0
+    open: bool = False
+    is_byes: bool = False
+
+
+@dataclasses.dataclass
+class GroundStreams:
+    ground: Ground
+    current: Match | None
+    next: Match | None
+
+
+def day_matches(season, day):
+    return (
+        Match.objects.filter(stage__division__season=season, date=day)
+        .select_related(*SELECT_RELATED)
+        .with_result_state()
+        .order_by("time", "play_at__order", "pk")
+    )
+
+
+def _slot_state(matches):
+    entered = sum(1 for m in matches if m.has_result)
+    if entered == len(matches):
+        return "complete", entered
+    if entered:
+        return "in_progress", entered
+    return "pending", entered
+
+
+def day_results(season, day):
+    timed = {}
+    unscheduled = []
+    byes = []
+    for match in day_matches(season, day):
+        if match.is_bye:
+            byes.append(match)
+        elif match.time is None:
+            unscheduled.append(match)
+        else:
+            timed.setdefault(match.time, []).append(match)
+
+    slots = []
+    for time, matches in sorted(timed.items()):
+        slots.append(Slot(time.strftime("%H%M"), time, time.strftime("%H:%M"), matches))
+    if unscheduled:
+        slots.append(Slot("unscheduled", None, "Unscheduled", unscheduled))
+    for slot in slots:
+        slot.state, slot.entered = _slot_state(slot.matches)
+        slot.total = len(slot.matches)
+    for slot in slots:
+        if slot.state != "complete":
+            slot.open = True
+            break
+    if byes:
+        state, entered = _slot_state(byes)
+        slots.append(
+            Slot("byes", None, "Byes", byes, state, entered, len(byes), False, True)
+        )
+    return slots
+
+
+def slot_for(season, day, slot_key):
+    for slot in day_results(season, day):
+        if slot.key == slot_key:
+            return slot
+    return None
+
+
+def _team_points(side):
+    """
+    Sum of recorded points for one side of the match, 0 when no statistic
+    rows exist for that side (NULL would make the balance test unknowable).
+    """
+    stats = SimpleScoreMatchStatistic.objects.filter(
+        match=OuterRef("pk"), player__teamassociation__team=OuterRef(f"{side}_team")
+    ).order_by()
+    total = stats.values("match").annotate(total=Sum("points")).values("total")
+    return Coalesce(Subquery(total), 0)
+
+
+def day_scorers(season, day):
+    """
+    The day's scored matches still wanting scorers: those with no statistics
+    recorded, and those annotated ``out_of_balance`` because the points
+    recorded for a side differ from its score.
+    """
+    if not season.statistics:
+        return Match.objects.none()
+    return (
+        day_matches(season, day)
+        .filter(
+            is_bye=False,
+            is_forfeit=False,
+            mysideline_id__isnull=True,
+            home_team__isnull=False,
+            away_team__isnull=False,
+            home_team_score__isnull=False,
+            away_team_score__isnull=False,
+        )
+        .annotate(
+            home_points=_team_points("home"),
+            away_points=_team_points("away"),
+            recorded=Exists(
+                SimpleScoreMatchStatistic.objects.filter(match=OuterRef("pk"))
+            ),
+        )
+        .annotate(
+            out_of_balance=Case(
+                When(recorded=False, then=Value(False)),
+                When(
+                    home_points=F("home_team_score"),
+                    away_points=F("away_team_score"),
+                    then=Value(False),
+                ),
+                default=Value(True),
+                output_field=BooleanField(),
+            )
+        )
+        .filter(Q(recorded=False) | Q(out_of_balance=True))
+    )
+
+
+def _ground_matches(ground, day):
+    return (
+        Match.objects.filter(play_at=ground, date=day, is_bye=False)
+        .exclude(time=None)
+        .exclude(datetime=None)
+        .select_related(*SELECT_RELATED)
+        .order_by("time", "pk")
+    )
+
+
+def _split_day(matches, now):
+    """
+    The previous, current and next match of one ground's day, from its
+    matches in kick-off order.
+    """
+    started = [m for m in matches if m.datetime <= now]
+    upcoming = [m for m in matches if m.datetime > now]
+    current = started[-1] if started else None
+    previous = started[-2] if len(started) > 1 else None
+    following = upcoming[0] if upcoming else None
+    return previous, current, following
+
+
+def ground_day(ground, day, now):
+    return _split_day(list(_ground_matches(ground, day)), now)
+
+
+def day_streams(season, day, now):
+    grounds = list(
+        Ground.objects.filter(venue__season=season, live_stream=True).order_by(
+            "venue__order", "order"
+        )
+    )
+    # One query for every streamed ground's matches, grouped here, rather
+    # than one per ground on each render and push.
+    matches = (
+        Match.objects.filter(play_at__in=grounds, date=day, is_bye=False)
+        .exclude(time=None)
+        .exclude(datetime=None)
+        .select_related(*SELECT_RELATED)
+        .order_by("play_at_id", "time", "pk")
+    )
+    by_ground = {}
+    for match in matches:
+        by_ground.setdefault(match.play_at_id, []).append(match)
+    streams = []
+    for ground in grounds:
+        _, current, following = _split_day(by_ground.get(ground.pk, []), now)
+        streams.append(GroundStreams(ground, current, following))
+    return streams, day_events(season, day)
+
+
+def day_events(season, day):
+    """
+    The season's events starting on the day whose broadcast is still on
+    YouTube; ``live_stream=False`` means it was removed for good.
+    """
+    start = timezone.make_aware(
+        datetime.datetime.combine(day, datetime.time.min), season.get_tzinfo()
+    )
+    end = start + datetime.timedelta(days=1)
+    return LiveStreamEvent.objects.filter(
+        season=season, live_stream=True, start__gte=start, start__lt=end
+    ).order_by("start")
+
+
+def team_results(team):
+    return (
+        team.matches.filter(is_bye=False)
+        .select_related(*SELECT_RELATED)
+        .order_by("datetime", "pk")
+    )
+
+
+def division_leaders(division, limit=10):
+    base = (
+        SimpleScoreMatchStatistic.objects.for_division(division)
+        .filter(played=1, player__teamassociation__team__division=division)
+        .totals(
+            "player_id",
+            "player__first_name",
+            "player__last_name",
+            "player__teamassociation__team__title",
+        )
+    )
+
+    def rows(queryset):
+        return [
+            {
+                "name": f"{r['player__first_name']} {r['player__last_name']}",
+                "team": r["player__teamassociation__team__title"],
+                "points": r["points"] or 0,
+                "mvp": r["mvp"] or 0,
+            }
+            for r in queryset
+        ]
+
+    scorers = rows(
+        base.exclude(points=None)
+        .exclude(points=0)
+        .order_by("-points", "player__last_name")[:limit]
+    )
+    mvps = rows(
+        base.exclude(mvp=None)
+        .exclude(mvp=0)
+        .order_by("-mvp", "player__last_name")[:limit]
+    )
+    return scorers, mvps
+
+
+def ground_runsheet(ground, day):
+    return _ground_matches(ground, day)

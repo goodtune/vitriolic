@@ -1,8 +1,15 @@
 """Pytest configuration and shared fixtures for E2E tests."""
 
 import os
+import socket
+import threading
 from pathlib import Path
+
 import pytest
+import uvicorn
+from django.contrib.auth.models import Permission
+from django.contrib.staticfiles.handlers import ASGIStaticFilesHandler
+from django.core.asgi import get_asgi_application
 from playwright.sync_api import Page
 
 
@@ -33,7 +40,7 @@ def browser_type_launch_args(browser_type_launch_args):
 def screenshot_dir():
     """
     Create and return the directory for storing test screenshots.
-    
+
     Returns:
         Path: Directory path for screenshots
     """
@@ -87,3 +94,95 @@ def authenticated_page(page: Page, live_server, admin_user):
     page.wait_for_url(f"{live_server.url}/admin/")
 
     return page
+
+
+class AsgiLiveServer:
+    """
+    uvicorn in a daemon thread, in this process, so the server shares the
+    test database and settings exactly as Django's thread-based live
+    server does. pytest-django's ``live_server`` is WSGI and would block
+    forever on the ops site's endless SSE responses.
+    """
+
+    def __init__(self):
+        sock = socket.socket()
+        sock.bind(("127.0.0.1", 0))
+        self.host, self.port = sock.getsockname()
+        sock.close()
+        config = uvicorn.Config(
+            ASGIStaticFilesHandler(get_asgi_application()),
+            host=self.host,
+            port=self.port,
+            log_level="warning",
+            lifespan="off",
+            timeout_graceful_shutdown=1,
+        )
+        self.server = uvicorn.Server(config)
+        self.thread = threading.Thread(target=self.server.run, daemon=True)
+
+    @property
+    def url(self):
+        return f"http://{self.host}:{self.port}"
+
+    def start(self):
+        self.thread.start()
+        for _ in range(100):
+            if self.server.started:
+                return
+            self.thread.join(0.1)
+        raise RuntimeError("ASGI live server did not start")
+
+    def stop(self):
+        self.server.should_exit = True
+        self.thread.join(5)
+        assert not self.thread.is_alive(), "ASGI live server did not stop"
+
+
+@pytest.fixture
+def asgi_live_server(transactional_db, settings):
+    settings.ALLOWED_HOSTS = ["*"]
+    server = AsgiLiveServer()
+    server.start()
+    yield server
+    server.stop()
+
+
+@pytest.fixture
+def compops_user(django_user_model, transactional_db):
+    user = django_user_model.objects.create_user(
+        username="compops", password="password", email="compops@test.com", is_staff=True
+    )
+    user.user_permissions.add(
+        *Permission.objects.filter(
+            codename__in=[
+                "change_match",
+                "add_simplescorematchstatistic",
+                "change_simplescorematchstatistic",
+                "stream_season",
+            ]
+        )
+    )
+    return user
+
+
+def _login(page, base_url, username):
+    page.goto(f"{base_url}/accounts/login/")
+    page.fill('input[name="username"]', username)
+    page.fill('input[name="password"]', "password")
+    page.click("button")
+    page.wait_for_load_state("networkidle")
+
+
+@pytest.fixture
+def compops_page(page, asgi_live_server, compops_user):
+    _login(page, asgi_live_server.url, "compops")
+    return page
+
+
+@pytest.fixture
+def second_page(browser, asgi_live_server, compops_user):
+    context = browser.new_context()
+    page = context.new_page()
+    _login(page, asgi_live_server.url, "compops")
+    yield page
+    context.close()

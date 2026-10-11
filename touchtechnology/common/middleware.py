@@ -3,7 +3,9 @@ import socket
 import sys
 
 import django
+from asgiref.sync import iscoroutinefunction, markcoroutinefunction
 from django.utils import timezone
+from django.utils.decorators import sync_and_async_middleware
 from django.utils.deprecation import MiddlewareMixin
 
 from touchtechnology.common.utils import get_timezone_from_request
@@ -14,6 +16,38 @@ logger = logging.getLogger(__name__)
 class AcceptsMiddleware(MiddlewareMixin):
     def process_request(self, request):
         request.accepts = set(request.META.get("HTTP_ACCEPT", "").split(","))
+
+
+@sync_and_async_middleware
+class DatastarMiddleware:
+    """
+    Datastar sends a ``Datastar-Request: true`` header on every request it
+    issues. Set ``request.datastar`` to whether this request carries it, so
+    a view can answer the page's JavaScript with patches and a plain browser
+    with a full page.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+        self.async_mode = iscoroutinefunction(get_response)
+        if self.async_mode:
+            # Mark the instance as a coroutine function, but switch to the
+            # async path inside __call__ instead of swapping dunder methods.
+            markcoroutinefunction(self)
+
+    def __call__(self, request):
+        if self.async_mode:
+            return self.__acall__(request)
+        request.datastar = self.is_datastar(request)
+        return self.get_response(request)
+
+    async def __acall__(self, request):
+        request.datastar = self.is_datastar(request)
+        return await self.get_response(request)
+
+    @staticmethod
+    def is_datastar(request):
+        return request.headers.get("Datastar-Request") == "true"
 
 
 def served_by_middleware(get_response):
