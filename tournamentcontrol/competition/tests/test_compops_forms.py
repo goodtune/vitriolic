@@ -340,7 +340,7 @@ class StreamFormTests(FormsFixture):
     @mock.patch("tournamentcontrol.competition.models.build")
     def test_a_match_without_a_broadcast_shows_the_error_in_the_day_page(self, build):
         build.return_value = youtube_mock()
-        orphan = self.make(12, play_at=self.field1)
+        orphan = self.make(12, play_at=self.field1, live_stream=True)
         response = self.post("match-stream", match_pk=orphan.pk, status="live")
         self.assertDayPage(response)
         message = f"{streams.describe(orphan)}: {orphan} does not have a live stream identifier"

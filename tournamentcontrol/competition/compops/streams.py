@@ -11,7 +11,7 @@ from googleapiclient.errors import HttpError
 
 from tournamentcontrol.competition.compops import events
 from tournamentcontrol.competition.exceptions import LiveStreamError
-from tournamentcontrol.competition.models import LiveStreamEvent, Match
+from tournamentcontrol.competition.models import Ground, LiveStreamEvent, Match
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,32 @@ def season_of(obj):
     if isinstance(obj, Match):
         return obj.stage.division.season
     return obj.season
+
+
+def streamed_ground_ids(season):
+    """
+    The primary keys of the season's streamed grounds. A match's ``play_at``
+    is a Place, so its ground is checked by id against these.
+    """
+    return set(
+        Ground.objects.filter(venue__season=season, live_stream=True).values_list(
+            "pk", flat=True
+        )
+    )
+
+
+def opted_in(match, ground_ids):
+    """
+    Whether ``match`` is opted into streaming on one of ``ground_ids``. Its
+    ``external_identifier`` alone does not say so: it can outlive the opt-in
+    until the broadcast is removed, and must then never reach YouTube.
+    """
+    return match.live_stream and match.play_at_id in ground_ids
+
+
+def streamable(match, ground_ids):
+    """Whether ``match`` may be sent to YouTube: opted in, with a broadcast."""
+    return bool(match.external_identifier) and opted_in(match, ground_ids)
 
 
 def publish_change(obj, status, actor):

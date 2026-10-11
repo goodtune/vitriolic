@@ -221,7 +221,7 @@ class MatchTransitionTests(StreamsFixture):
     @mock.patch("tournamentcontrol.competition.models.build")
     def test_missing_broadcast_reports_an_error_and_publishes_nothing(self, build):
         build.return_value = youtube_mock()
-        orphan = self.make(self.current.stage, 12, 0)
+        orphan = self.make(self.current.stage, 12, 0, live_stream=True)
         with self.login(self.streamer), self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(
                 self.url("match-stream", match_pk=orphan.pk, status="live"),
@@ -230,6 +230,48 @@ class MatchTransitionTests(StreamsFixture):
         body = b"".join(response.streaming_content).decode()
         self.assertIn("does not have a live stream identifier", body)
         self.assertEqual(events.recent(self.season.pk), [])
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_match_not_streamed_is_404_and_not_sent(self, build):
+        build.return_value = youtube_mock("ready")
+        # A stale identifier outlives the opt-in until the broadcast is gone.
+        turned_off = self.make(
+            self.current.stage,
+            12,
+            0,
+            external_identifier="yt-off",
+            live_stream_status="ready",
+        )
+        with self.login(self.streamer):
+            response = self.client.post(
+                self.url("match-stream", match_pk=turned_off.pk, status="live")
+            )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(build.call_count, 0)
+        turned_off.refresh_from_db()
+        self.assertEqual(turned_off.live_stream_status, "ready")
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_match_on_a_ground_not_streamed_is_404_and_not_sent(self, build):
+        build.return_value = youtube_mock("ready")
+        field2 = factories.GroundFactory.create(venue=self.field1.venue)
+        elsewhere = self.make(
+            self.current.stage,
+            12,
+            0,
+            play_at=field2,
+            live_stream=True,
+            external_identifier="yt-field-2",
+            live_stream_status="ready",
+        )
+        with self.login(self.streamer):
+            response = self.client.post(
+                self.url("match-stream", match_pk=elsewhere.pk, status="live")
+            )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(build.call_count, 0)
+        elsewhere.refresh_from_db()
+        self.assertEqual(elsewhere.live_stream_status, "ready")
 
     @mock.patch("tournamentcontrol.competition.models.build")
     def test_expired_credentials_report_an_error_and_publish_nothing(self, build):

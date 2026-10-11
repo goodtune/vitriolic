@@ -730,6 +730,8 @@ class CompOpsSite(Application):
         self._check_status(status)
         require(can_stream(request.user, season))
         match = self._day_match(season, day, match_pk)
+        if not streams.opted_in(match, streams.streamed_ground_ids(season)):
+            raise Http404("The match is not streamed.")
         error = streams.transition(match, status, request.user.get_username())
         return self._stream_response(request, season, day, [error] if error else [])
 
@@ -752,21 +754,10 @@ class CompOpsSite(Application):
         slot = queries.slot_for(season, day, slot_key)
         if slot is None:
             raise Http404("No such slot.")
-        # ``play_at`` is a Place; the grounds streamed are looked up once.
-        streamed_grounds = set(
-            Ground.objects.filter(venue__season=season, live_stream=True).values_list(
-                "pk", flat=True
-            )
-        )
+        ground_ids = streams.streamed_ground_ids(season)
         errors = []
         for match in slot.matches:
-            # A stale identifier on a match no longer streamed, or not on a
-            # streamed ground, must never reach YouTube.
-            if (
-                match.external_identifier
-                and match.live_stream
-                and match.play_at_id in streamed_grounds
-            ):
+            if streams.streamable(match, ground_ids):
                 error = streams.transition(match, status, request.user.get_username())
                 if error:
                     errors.append(error)
@@ -800,12 +791,15 @@ class CompOpsSite(Application):
             armable, reason = False, "End the current broadcast first."
         elif armable_match is None:
             armable, reason = False, f"No more broadcasts on {ground.title} today."
+        elif not streams.opted_in(
+            armable_match, {ground.pk} if ground.live_stream else set()
+        ):
+            armable, reason = False, f"{self._teams(armable_match)} is not streamed."
         elif not armable_match.external_identifier:
-            home, away = (
-                armable_match.get_home_team_plain(),
-                armable_match.get_away_team_plain(),
+            armable, reason = (
+                False,
+                f"{self._teams(armable_match)} has no YouTube broadcast.",
             )
-            armable, reason = False, f"{home} v {away} has no YouTube broadcast."
         elif streams.effective_status(armable_match.live_stream_status) == "testing":
             armable, reason = False, "Already armed."
         return {
@@ -828,6 +822,10 @@ class CompOpsSite(Application):
             "user": request.user,
             "errors": [],
         }
+
+    @staticmethod
+    def _teams(match):
+        return f"{match.get_home_team_plain()} v {match.get_away_team_plain()}"
 
     @staticmethod
     def _armable_match(runsheet, broadcast, now):
