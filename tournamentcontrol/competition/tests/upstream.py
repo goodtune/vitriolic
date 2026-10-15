@@ -8,6 +8,7 @@ touching the live sites.
 
 import json
 import re
+import zipfile
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
@@ -16,7 +17,12 @@ from tournamentcontrol.competition.upstream.backends.mysideline import (
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "mysideline"
-REVOLUTIONISE_FIXTURES = Path(__file__).parent / "fixtures" / "revolutionise"
+
+# The revolutioniseSPORT pages are kept in one dated archive, stored with Git
+# LFS, so that the capture is replaced as a whole rather than page by page.
+REVOLUTIONISE_CAPTURE = (
+    Path(__file__).parent / "fixtures" / "revolutionise-2026-10-05.zip"
+)
 
 # Association 299999 is the NSW State Cup; its 2025 competitions were
 # captured in full (21 competitions, ~950 matches) as a representative
@@ -139,10 +145,10 @@ def ccha_session(renames=None):
     """
     A :class:`FakeSession` serving the captured Central Coast Hockey pages.
 
-    Every page under ``fixtures/revolutionise`` is served at the URL its
-    file name encodes; see ``capture.txt`` there for the mapping. ``renames``
-    substitutes names in the served HTML, as :func:`state_cup_session` does,
-    to play back an upstream rename.
+    Every page in :data:`REVOLUTIONISE_CAPTURE` is served at the URL the
+    archive's ``capture.txt`` maps it to. ``renames`` substitutes names in
+    the served HTML, as :func:`state_cup_session` does, to play back an
+    upstream rename.
     """
 
     def rename(text):
@@ -150,23 +156,32 @@ def ccha_session(renames=None):
             text = re.sub(rf"(?<!\w){re.escape(before)}(?!\w)", after, text)
         return text
 
+    if not zipfile.is_zipfile(REVOLUTIONISE_CAPTURE):
+        # A Git LFS pointer file is what a checkout without LFS leaves here.
+        raise RuntimeError(
+            f"{REVOLUTIONISE_CAPTURE} is not a ZIP archive; run `git lfs pull` "
+            "to fetch the captured revolutioniseSPORT pages"
+        )
+
     session = FakeSession()
-    for line in (REVOLUTIONISE_FIXTURES / "capture.txt").read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        name, url = line.split(None, 1)
-        text = (REVOLUTIONISE_FIXTURES / name).read_text()
-        content_type = (
-            "text/calendar; charset=utf-8"
-            if name.endswith(".ics")
-            else "text/html; charset=utf-8"
-        )
-        session.handlers[url] = (
-            lambda method, url, kwargs, text=text, content_type=content_type: (
-                FakeResponse(text=rename(text), content_type=content_type)
+    with zipfile.ZipFile(REVOLUTIONISE_CAPTURE) as archive:
+        manifest = archive.read("capture.txt").decode("utf-8")
+        for line in manifest.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            name, url = line.split(None, 1)
+            text = archive.read(name).decode("utf-8")
+            content_type = (
+                "text/calendar; charset=utf-8"
+                if name.endswith(".ics")
+                else "text/html; charset=utf-8"
             )
-        )
+            session.handlers[url] = (
+                lambda method, url, kwargs, text=text, content_type=content_type: (
+                    FakeResponse(text=rename(text), content_type=content_type)
+                )
+            )
 
     def missing(method, url, kwargs):
         return FakeResponse(status_code=404, text="", content_type="text/html")

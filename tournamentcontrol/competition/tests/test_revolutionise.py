@@ -4,8 +4,8 @@ Tests for the revolutioniseSPORT provider.
 revolutioniseSPORT has no API, so the provider scrapes the public draws
 pages. The HTTP boundary is replaced with an in-memory ``requests.Session``
 stand-in that serves pages captured from Central Coast Hockey Association
-(``fixtures/revolutionise``; see ``capture.txt`` there for the URL of each),
-so that nothing here depends on the live site.
+(the dated archive ``fixtures/revolutionise-<date>.zip``; its ``capture.txt``
+gives the URL of each page), so that nothing here depends on the live site.
 """
 
 from datetime import date, time

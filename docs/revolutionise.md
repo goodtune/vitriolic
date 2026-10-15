@@ -177,17 +177,26 @@ between synchronisations.
 
 ## Test data
 
-`tournamentcontrol/competition/tests/fixtures/revolutionise/` holds the
-Central Coast Hockey Association's 2026 Mens competition (25527: three
-grades, 23 rounds each including finals, 170 fixtures with byes and a
+`tournamentcontrol/competition/tests/fixtures/revolutionise-2026-10-05.zip`
+holds the Central Coast Hockey Association's 2026 Mens competition (25527:
+three grades, 23 rounds each including finals, 170 fixtures with byes and a
 forfeit) as captured from the pages above on 5 October 2026, reduced to the
 page content the scraper reads, plus the draws and ladders indexes and
 single pages showing a forfeit without a score, a grade without a ladder, a
 competition without draws and fixtures yet to be played, and pages from
 Water Polo Australia (12-hour times, a ladder with bonus points, a venue
-without map coordinates) and QUT Netball (finalists to be determined).
-`capture.txt` maps each file to the URL it was served from. The unit tests
-(`tests/test_revolutionise.py`) import it through the real client and
-reconciler with the HTTP layer replaced by
-`tournamentcontrol.competition.tests.upstream.ccha_session`, which also
+without map coordinates) and QUT Netball (finalists to be determined). The
+archive's `capture.txt` maps each file to the URL it was served from. The
+unit tests (`tests/test_revolutionise.py`) read the pages straight from the
+archive through the real client and reconciler with the HTTP layer replaced
+by `tournamentcontrol.competition.tests.upstream.ccha_session`, which also
 accepts `renames={...}` to play back an upstream rename.
+
+The capture is one dated file so that it is replaced as a whole when the
+pages are captured again, rather than drifting page by page; a new capture
+is a new archive name, and `REVOLUTIONISE_CAPTURE` in
+`tournamentcontrol/competition/tests/upstream.py` follows it. The archive is
+stored with [Git LFS](https://git-lfs.com/) (see `.gitattributes`): run
+`git lfs install` once, and `git lfs pull` in a checkout made without it,
+otherwise `ccha_session()` finds the pointer file and says so. The CI
+workflows check out with `lfs: true`.
