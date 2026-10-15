@@ -102,7 +102,10 @@ from tournamentcontrol.competition.mysideline.client import (
     MySidelineURL,
     MySidelineURLError,
 )
-from tournamentcontrol.competition.signals.custom import score_updated
+from tournamentcontrol.competition.signals.custom import (
+    score_updated,
+    statistics_updated,
+)
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
     ThumbnailPreview,
@@ -1747,12 +1750,18 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
         return self.cleaned_data
 
     def save(self, *args, **kwargs):
+        changed = SCORE_FIELDS.union(
+            {"is_forfeit", "forfeit_winner", "bye_processed"}
+        ).intersection(self.changed_data)
         logger.debug(
-            'MatchResultForm.save: updated fields "%s"',
-            '", "'.join(SCORE_FIELDS.intersection(self.changed_data)),
+            'MatchResultForm.save: updated fields "%s"', '", "'.join(sorted(changed))
         )
 
-        if SCORE_FIELDS.intersection(self.changed_data):
+        saved = super(MatchResultForm, self).save(*args, **kwargs)
+
+        # Announce the result only once it is written, so receivers (and
+        # anything they notify) see the saved state.
+        if changed:
             for rec, res in score_updated.send_robust(sender=self, match=self.instance):
                 receiver = "%s.%s" % (rec.__module__, rec.__name__)
                 try:
@@ -1762,7 +1771,7 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
                 except:  # noqa
                     logger.exception('Receiver "%s" did not complete.', receiver)
 
-        return super(MatchResultForm, self).save(*args, **kwargs)
+        return saved
 
     class Meta:
         model = Match
@@ -2560,6 +2569,9 @@ class MatchStatisticFormset(BaseMatchStatisticFormset):
         stats = []
         for form in self.forms:
             stats.append(form.save())
+        if self.forms:
+            match = self.forms[0].instance.match
+            statistics_updated.send_robust(sender=self, match=match)
         return stats
 
 

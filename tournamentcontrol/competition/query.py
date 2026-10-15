@@ -1,8 +1,10 @@
 from django.apps import apps
 from django.conf import settings
 from django.db.models import (
+    BooleanField,
     Case,
     Count,
+    Exists,
     ExpressionWrapper,
     F,
     FloatField,
@@ -12,12 +14,16 @@ from django.db.models import (
     Q,
     Subquery,
     Sum,
+    Value,
     When,
 )
 from django.db.models.query import QuerySet
 from django.utils import timezone
 
-from tournamentcontrol.competition.utils import team_title_case_clause
+from tournamentcontrol.competition.utils import (
+    team_needs_progressing,
+    team_title_case_clause,
+)
 
 
 class SeasonQuerySet(QuerySet):
@@ -107,6 +113,46 @@ class MatchQuerySet(QuerySet):
             away_team_title=team_title_case_clause("away_team"),
         )
 
+    def with_result_state(self):
+        """
+        Annotate the state of each match's result, in the database:
+
+        ``has_result``
+            a bye has been processed, or both scores are in, or the match was
+            forfeited or washed out;
+
+        ``needs_progressing``
+            a team is still to be decided by progression;
+
+        ``result_editable``
+            the result may be entered by hand: never for a match mirrored from
+            MySideline, always for a bye, otherwise once both teams are known.
+        """
+        has_result = Case(
+            When(is_bye=True, then=F("bye_processed")),
+            When(
+                Q(home_team_score__isnull=False, away_team_score__isnull=False)
+                | Q(is_forfeit=True)
+                | Q(is_washout=True),
+                then=Value(True),
+            ),
+            default=Value(False),
+            output_field=BooleanField(),
+        )
+        needs_progressing = Exists(
+            self.model.objects.filter(team_needs_progressing, pk=OuterRef("pk"))
+        )
+        result_editable = Case(
+            When(mysideline_id__isnull=False, then=Value(False)),
+            When(is_bye=True, then=Value(True)),
+            When(needs_progressing=True, then=Value(False)),
+            default=Value(True),
+            output_field=BooleanField(),
+        )
+        return self.annotate(
+            has_result=has_result, needs_progressing=needs_progressing
+        ).annotate(result_editable=result_editable)
+
 
 class LadderEntryQuerySet(QuerySet):
     def _all(self):
@@ -127,6 +173,18 @@ class LadderEntryQuerySet(QuerySet):
 class StatisticQuerySet(QuerySet):
     def played(self):
         return self.exclude(played=0)
+
+    def for_division(self, division):
+        return self.filter(match__stage__division=division)
+
+    def totals(self, *group_fields):
+        """
+        Sum ``played``, ``points`` and ``mvp`` for each distinct combination
+        of ``group_fields``, as dictionaries.
+        """
+        return self.values(*group_fields).annotate(
+            played=Sum("played"), points=Sum("points"), mvp=Sum("mvp")
+        )
 
 
 class TeamAssociationQuerySet(QuerySet):

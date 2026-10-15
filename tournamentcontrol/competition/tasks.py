@@ -1,4 +1,5 @@
 import base64
+import datetime
 import logging
 from zoneinfo import ZoneInfo
 
@@ -7,11 +8,14 @@ from celery import Task, shared_task, states
 from dateutil.relativedelta import relativedelta
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
+from django.db.models import Q
 from google.auth.exceptions import RefreshError
 from django.template.loader import render_to_string
 from django.urls import NoReverseMatch, reverse
+from django.utils import timezone
 from googleapiclient.errors import HttpError
 
+from tournamentcontrol.competition.compops.status import refresh_season_status
 from tournamentcontrol.competition.models import (
     LiveStreamEvent,
     Match,
@@ -452,9 +456,7 @@ def _apply_event_sync(event, season):
         except HttpError as exc:
             if not _is_not_found(exc):
                 raise
-            logger.info(
-                "YouTube video %r already deleted", event.external_identifier
-            )
+            logger.info("YouTube video %r already deleted", event.external_identifier)
         if event.live_stream_bind:
             event.live_stream_bind = None
             event.save(update_fields=["live_stream_bind"])
@@ -800,3 +802,52 @@ def synchronise_mysideline():
     """
     results = _mysideline_synchronise_all()
     return {pk: result.summary() for pk, result in results.items()}
+
+
+@shared_task
+def refresh_live_stream_status(season_pk):
+    season = Season.objects.get(pk=season_pk)
+    return refresh_season_status(season)
+
+
+@shared_task
+def refresh_all_live_stream_status():
+    now = timezone.now()
+    window = (
+        now.date() - datetime.timedelta(days=1),
+        now.date() + datetime.timedelta(days=1),
+    )
+    # Events are matched on their aware start. A season's local today is one
+    # of the window's dates, and in UTC a local day can begin up to 14 hours
+    # before that date's midnight (UTC+14) and end up to 12 hours after the
+    # next (UTC-12). The bounds reach a whole UTC day beyond the window on
+    # each side, so every season's local today lies inside them;
+    # ``refresh_season_status`` then narrows each season to its own day.
+    event_window = (
+        datetime.datetime.combine(
+            window[0] - datetime.timedelta(days=1), datetime.time.min, datetime.UTC
+        ),
+        datetime.datetime.combine(
+            window[1] + datetime.timedelta(days=2), datetime.time.min, datetime.UTC
+        ),
+    )
+    seasons = (
+        Season.objects.filter(live_stream=True)
+        .filter(
+            Q(divisions__stages__matches__date__range=window)
+            | Q(
+                live_stream_events__start__range=event_window,
+                live_stream_events__live_stream=True,
+            )
+        )
+        .distinct()
+    )
+    changed = 0
+    for season in seasons:
+        try:
+            changed += refresh_season_status(season, now)
+        except Exception:
+            logger.exception(
+                "live stream status refresh failed for season %s", season.pk
+            )
+    return changed

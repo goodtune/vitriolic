@@ -1,0 +1,287 @@
+import datetime
+from unittest import mock
+from zoneinfo import ZoneInfo
+
+from django.db import connection
+from django.db.models.signals import post_save
+from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
+from freezegun import freeze_time
+from google.auth.exceptions import RefreshError
+from test_plus import TestCase
+
+from tournamentcontrol.competition.compops import events, status
+from tournamentcontrol.competition.models import Match
+from tournamentcontrol.competition.tasks import refresh_all_live_stream_status
+from tournamentcontrol.competition.tests import factories
+from tournamentcontrol.competition.tests.test_live_stream_transition import (
+    YOUTUBE_SEASON,
+)
+
+TZ = ZoneInfo("Australia/Brisbane")
+
+
+def listing(**statuses):
+    service = mock.Mock()
+    service.liveBroadcasts.return_value.list.return_value.execute.return_value = {
+        "items": [
+            {"id": k, "status": {"lifeCycleStatus": v}} for k, v in statuses.items()
+        ]
+    }
+    return service
+
+
+@freeze_time("2026-10-08 10:50 +10:00")
+class RefreshStatusTests(TestCase):
+    def setUp(self):
+        events.reset_backend()
+        self.season = factories.SeasonFactory.create(
+            timezone="Australia/Brisbane", **YOUTUBE_SEASON
+        )
+        stage = factories.StageFactory.create(division__season=self.season)
+        when = timezone.make_aware(datetime.datetime(2026, 10, 8, 10, 40), TZ)
+        self.match = factories.MatchFactory.create(
+            stage=stage,
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            live_stream=True,
+            external_identifier="yt1",
+            live_stream_status="testing",
+        )
+        self.event = factories.LiveStreamEventFactory.create(
+            season=self.season, start=when, external_identifier="ev1"
+        )
+        factories.MatchFactory.create(
+            stage=stage,
+            date=datetime.date(2026, 10, 9),
+            live_stream=True,
+            external_identifier="tomorrow",
+        )
+
+    def test_only_today_with_identifiers(self):
+        ids = [
+            o.external_identifier
+            for o in status.broadcasts_today(self.season, timezone.now())
+        ]
+        self.assertCountEqual(ids, ["yt1", "ev1"])
+
+    def test_match_not_streamed_is_not_polled(self):
+        # A stale identifier outlives the opt-in until the broadcast is gone.
+        stale = factories.MatchFactory.create(
+            stage=self.match.stage,
+            datetime=self.match.datetime,
+            date=self.match.date,
+            time=self.match.time,
+            external_identifier="stale",
+        )
+        service = listing(yt1="testing", stale="live")
+        with self.captureOnCommitCallbacks(execute=True):
+            changed = status.refresh_season_status(self.season, youtube=service)
+        self.assertEqual(changed, 0)
+        service.liveBroadcasts.return_value.list.assert_called_once_with(
+            part="status", id="yt1,ev1", maxResults=50
+        )
+        stale.refresh_from_db()
+        self.assertEqual(stale.live_stream_status, None)
+
+    def test_changed_status_is_stored_and_published(self):
+        service = listing(yt1="live", ev1="ready")
+        with self.captureOnCommitCallbacks(execute=True):
+            changed = status.refresh_season_status(self.season, youtube=service)
+        self.assertEqual(changed, 2)
+        self.match.refresh_from_db()
+        self.event.refresh_from_db()
+        self.assertEqual(self.match.live_stream_status, "live")
+        self.assertEqual(self.event.live_stream_status, "ready")
+        published = events.recent(self.season.pk)
+        self.assertEqual({e["actor"] for e in published}, {"youtube"})
+        service.liveBroadcasts.return_value.list.assert_called_once_with(
+            part="status", id="yt1,ev1", maxResults=50
+        )
+
+    def test_removed_event_is_left_alone(self):
+        removed = factories.LiveStreamEventFactory.create(
+            season=self.season,
+            start=self.event.start,
+            external_identifier="ev2",
+            live_stream=False,
+            live_stream_status="ready",
+        )
+        service = listing(yt1="testing", ev2="live")
+        with self.captureOnCommitCallbacks(execute=True):
+            changed = status.refresh_season_status(self.season, youtube=service)
+        self.assertEqual(changed, 0)
+        removed.refresh_from_db()
+        self.assertEqual(removed.live_stream_status, "ready")
+        self.assertEqual(events.recent(self.season.pk), [])
+        service.liveBroadcasts.return_value.list.assert_called_once_with(
+            part="status", id="yt1,ev1", maxResults=50
+        )
+
+    def test_status_changed_after_the_poll_began_is_left_alone(self):
+        service = listing(yt1="live")
+        polled = service.liveBroadcasts.return_value.list.return_value.execute
+
+        def transition_lands_during_the_poll():
+            # An operator ends the broadcast while YouTube is being asked.
+            Match.objects.filter(pk=self.match.pk).update(
+                live_stream_status="complete",
+                live_stream_status_at=timezone.now() + datetime.timedelta(seconds=1),
+            )
+            return polled.return_value
+
+        polled.side_effect = transition_lands_during_the_poll
+        with self.captureOnCommitCallbacks(execute=True):
+            changed = status.refresh_season_status(self.season, youtube=service)
+        self.assertEqual(changed, 0)
+        self.match.refresh_from_db()
+        self.assertEqual(self.match.live_stream_status, "complete")
+        self.assertEqual(events.recent(self.season.pk), [])
+
+    def test_row_already_at_the_polled_status_is_not_published_again(self):
+        service = listing(yt1="live")
+        polled = service.liveBroadcasts.return_value.list.return_value.execute
+        earlier = timezone.now() - datetime.timedelta(minutes=1)
+
+        def transition_lands_before_the_write():
+            # The same change, made from the ops page and already published.
+            Match.objects.filter(pk=self.match.pk).update(
+                live_stream_status="live", live_stream_status_at=earlier
+            )
+            return polled.return_value
+
+        polled.side_effect = transition_lands_before_the_write
+        with self.captureOnCommitCallbacks(execute=True):
+            changed = status.refresh_season_status(self.season, youtube=service)
+        self.assertEqual(changed, 0)
+        self.match.refresh_from_db()
+        self.assertEqual(self.match.live_stream_status_at, earlier)
+        self.assertEqual(events.recent(self.season.pk), [])
+
+    def test_write_is_made_under_a_row_lock(self):
+        earlier = timezone.now() - datetime.timedelta(minutes=1)
+        Match.objects.filter(pk=self.match.pk).update(live_stream_status_at=earlier)
+        with CaptureQueriesContext(connection) as queries:
+            with self.captureOnCommitCallbacks(execute=True):
+                changed = status.refresh_season_status(
+                    self.season, youtube=listing(yt1="live")
+                )
+        self.assertEqual(changed, 1)
+        locking = [q["sql"] for q in queries if "FOR UPDATE" in q["sql"]]
+        self.assertEqual(len(locking), 1)
+        self.assertIn('FOR UPDATE OF "competition_match"', locking[0])
+        self.match.refresh_from_db()
+        self.assertEqual(self.match.live_stream_status, "live")
+        self.assertEqual(self.match.live_stream_status_at, timezone.now())
+        (published,) = events.recent(self.season.pk)
+        self.assertEqual(published["status"], "live")
+
+    def test_refresh_does_not_send_match_post_save(self):
+        receiver = mock.Mock()
+        post_save.connect(receiver, sender=Match, weak=False)
+        self.addCleanup(post_save.disconnect, receiver, sender=Match)
+        with self.captureOnCommitCallbacks(execute=True):
+            changed = status.refresh_season_status(
+                self.season, youtube=listing(yt1="live")
+            )
+        self.assertEqual(changed, 1)
+        receiver.assert_not_called()
+
+    def test_unchanged_status_publishes_nothing(self):
+        service = listing(yt1="testing")
+        with self.captureOnCommitCallbacks(execute=True):
+            changed = status.refresh_season_status(self.season, youtube=service)
+        self.assertEqual(changed, 0)
+        self.assertEqual(events.recent(self.season.pk), [])
+
+    def test_no_broadcasts_makes_no_call(self):
+        other = factories.SeasonFactory.create(
+            timezone="Australia/Brisbane", **YOUTUBE_SEASON
+        )
+        service = listing()
+        self.assertEqual(status.refresh_season_status(other, youtube=service), 0)
+        service.liveBroadcasts.assert_not_called()
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_refresh_all_covers_live_stream_seasons_with_matches_today(self, build):
+        build.return_value = listing(yt1="live")
+        factories.SeasonFactory.create(live_stream=False)
+        with self.captureOnCommitCallbacks(execute=True):
+            refresh_all_live_stream_status()
+        self.match.refresh_from_db()
+        self.assertEqual(self.match.live_stream_status, "live")
+
+    @mock.patch(
+        "tournamentcontrol.competition.tasks.refresh_season_status", return_value=0
+    )
+    def test_refresh_all_covers_seasons_with_only_events_today(self, refresh):
+        start = timezone.make_aware(datetime.datetime(2026, 10, 8, 17, 30), TZ)
+        events_only = factories.SeasonFactory.create(
+            timezone="Australia/Brisbane", **YOUTUBE_SEASON
+        )
+        factories.LiveStreamEventFactory.create(season=events_only, start=start)
+        removed_only = factories.SeasonFactory.create(
+            timezone="Australia/Brisbane", **YOUTUBE_SEASON
+        )
+        factories.LiveStreamEventFactory.create(
+            season=removed_only, start=start, live_stream=False
+        )
+        refresh_all_live_stream_status()
+        self.assertCountEqual(
+            [c.args[0] for c in refresh.call_args_list], [self.season, events_only]
+        )
+
+    @mock.patch(
+        "tournamentcontrol.competition.tasks.refresh_season_status", return_value=0
+    )
+    def test_refresh_all_covers_event_only_seasons_far_west_of_utc(self, refresh):
+        far_west = factories.SeasonFactory.create(
+            timezone="Etc/GMT+12", **YOUTUBE_SEASON
+        )
+        # Noon on the season's today, 2026-10-08, which is 00:00 UTC on the 9th.
+        factories.LiveStreamEventFactory.create(
+            season=far_west,
+            start=timezone.make_aware(
+                datetime.datetime(2026, 10, 8, 12, 0), ZoneInfo("Etc/GMT+12")
+            ),
+        )
+        with freeze_time("2026-10-09 02:00 +00:00"):
+            refresh_all_live_stream_status()
+        self.assertCountEqual(
+            [c.args[0] for c in refresh.call_args_list], [self.season, far_west]
+        )
+
+    def test_mid_transition_status_fits_the_column(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            status.refresh_season_status(
+                self.season, youtube=listing(yt1="liveStarting")
+            )
+        self.match.refresh_from_db()
+        self.assertEqual(self.match.live_stream_status, "liveStarting")
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_refresh_all_isolates_a_failing_season(self, build):
+        other = factories.SeasonFactory.create(
+            timezone="Australia/Brisbane", **YOUTUBE_SEASON
+        )
+        when = timezone.make_aware(datetime.datetime(2026, 10, 8, 10, 40), TZ)
+        other_match = factories.MatchFactory.create(
+            stage=factories.StageFactory.create(division__season=other),
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            live_stream=True,
+            external_identifier="yt2",
+            live_stream_status="testing",
+        )
+        # Whichever season is refreshed first fails; the other must still run.
+        build.side_effect = [RefreshError("expired"), listing(yt1="live", yt2="live")]
+        with self.assertLogs("tournamentcontrol.competition.tasks", level="ERROR"):
+            with self.captureOnCommitCallbacks(execute=True):
+                changed = refresh_all_live_stream_status()
+        self.assertEqual(changed, 1)
+        self.match.refresh_from_db()
+        other_match.refresh_from_db()
+        statuses = {self.match.live_stream_status, other_match.live_stream_status}
+        self.assertEqual(statuses, {"testing", "live"})

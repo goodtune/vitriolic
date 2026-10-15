@@ -2891,8 +2891,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         # Get the statistics directly and group by person
         # This approach avoids GROUP BY issues by working with the statistics model directly
         statistics = (
-            SimpleScoreMatchStatistic.objects.filter(match__stage__division=division)
-            .values(
+            SimpleScoreMatchStatistic.objects.for_division(division)
+            .totals(
                 "player__uuid",
                 "player__first_name",
                 "player__last_name",
@@ -2903,9 +2903,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 first_name=F("player__first_name"),
                 last_name=F("player__last_name"),
                 club__title=F("player__club__title"),
-                played=Sum("played"),
-                points=Sum("points"),
-                mvp=Sum("mvp"),
             )
             .exclude(played__isnull=True)
             .exclude(played=0)
