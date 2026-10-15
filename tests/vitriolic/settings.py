@@ -5,6 +5,7 @@ Django settings for vitriolic project.
 import os
 import time
 
+import django
 import environ
 from django.urls import reverse_lazy
 
@@ -51,6 +52,7 @@ INSTALLED_APPS = [
     "bootstrap3",
     "django_gravatar",
     "embed_video",
+    "mathfilters",
     "django_htmx",
     "rest_framework",
     "oauth2_provider",
@@ -61,6 +63,21 @@ INSTALLED_APPS = [
     "tournamentcontrol.competition",
     "example_app",
 ]
+
+# Template partials are part of Django from 6.0; before that they come from
+# django-template-partials. Its tags are made builtins, so the templates are
+# the same on every version and never {% load partials %}.
+TEMPLATE_BUILTINS = []
+TEMPLATE_LOADERS = [
+    "django.template.loaders.filesystem.Loader",
+    "django.template.loaders.app_directories.Loader",
+]
+if django.VERSION < (6, 0):
+    INSTALLED_APPS.append("template_partials")
+    TEMPLATE_BUILTINS.append("template_partials.templatetags.partials")
+    # Wrapped already, so the app keeps these loaders instead of replacing
+    # them with its own cached ones.
+    TEMPLATE_LOADERS = [("template_partials.loader.Loader", TEMPLATE_LOADERS)]
 
 MIDDLEWARE = [
     "django.contrib.sites.middleware.CurrentSiteMiddleware",
@@ -73,6 +90,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
+    "touchtechnology.common.middleware.DatastarMiddleware",
     "touchtechnology.common.middleware.served_by_middleware",
     "touchtechnology.content.middleware.SitemapNodeMiddleware",
     "touchtechnology.content.middleware.redirect_middleware",
@@ -98,18 +116,34 @@ TEMPLATES = [
                 "touchtechnology.common.context_processors.query_string",
                 "touchtechnology.common.context_processors.site",
                 "touchtechnology.common.context_processors.tz",
+                "touchtechnology.common.context_processors.htmx_admin_tabs",
                 # Static files context processor
                 "django.template.context_processors.static",
             ],
-            "loaders": [
-                "django.template.loaders.filesystem.Loader",
-                "django.template.loaders.app_directories.Loader",
-            ],
+            "builtins": TEMPLATE_BUILTINS,
+            "loaders": TEMPLATE_LOADERS,
         },
     },
 ]
 
 WSGI_APPLICATION = "vitriolic.wsgi.application"
+ASGI_APPLICATION = "vitriolic.asgi.application"
+
+# Tournament Ops event bus. COMPOPS_EVENTS_BACKEND in the environment may be a
+# dotted path or one of the short names below. tox-docker exposes the redis
+# service through REDIS_HOST and REDIS_6379_TCP_PORT, the same way it does
+# for postgres.
+COMPOPS_EVENTS_BACKEND = (
+    "tournamentcontrol.competition.compops.events.memory.MemoryBackend"
+)
+COMPOPS_EVENTS_OPTIONS = {}
+if env("COMPOPS_EVENTS_BACKEND", default="memory") == "redis":
+    REDIS_HOST = env("REDIS_HOST", default="localhost")
+    REDIS_PORT = env.int("REDIS_6379_TCP_PORT", default=6379)
+    COMPOPS_EVENTS_BACKEND = (
+        "tournamentcontrol.competition.compops.events.redis.RedisBackend"
+    )
+    COMPOPS_EVENTS_OPTIONS = {"url": f"redis://{REDIS_HOST}:{REDIS_PORT}/0"}
 
 
 # Database

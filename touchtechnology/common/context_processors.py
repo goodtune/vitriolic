@@ -1,6 +1,7 @@
 import os
 import socket
 
+from django.conf import settings
 from django.utils import timezone
 
 from touchtechnology.common.forms.tz import SelectTimezoneForm
@@ -23,3 +24,7 @@ def tz(request):
         "select_timezone_form": SelectTimezoneForm(),
         "TIME_ZONE": timezone.get_current_timezone_name(),
     }
+
+
+def htmx_admin_tabs(request):
+    return {"htmx_admin_tabs": getattr(settings, "TOUCHTECHNOLOGY_HTMX_ADMIN_TABS", False)}

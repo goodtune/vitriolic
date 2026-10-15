@@ -16,6 +16,7 @@ except ImportError:
     sentry_sdk = None
 
 from django.conf import settings
+from django.contrib.staticfiles import finders
 from django.db.models import Exists, Model, OuterRef, Q
 from django.db.models.query import QuerySet
 from django.forms.boundfield import BoundField
@@ -31,6 +32,7 @@ from django.forms.widgets import (
 from django.template.base import Node
 from django.template.library import Library
 from django.template.loader import render_to_string
+from django.templatetags.static import static
 from django.urls import Resolver404, resolve, reverse
 from django.utils import timezone
 from django.utils.encoding import smart_str
@@ -47,6 +49,7 @@ from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.utils import (
     get_all_perms_for_model_cached,
     model_and_manager,
+    month_slug,
     tree_for_node,
 )
 from tournamentcontrol.competition.utils import FauxQueryset
@@ -155,6 +158,19 @@ def twittify(s):
             s,
         )
     )
+
+
+@register.filter(name="month_slug", expects_localtime=True)
+def month_slug_filter(value):
+    """
+    The month of a date or datetime as a date URL spells it, such as "jun".
+
+    Use this rather than ``date:"b"`` when building a URL: that follows the
+    active language, so a visitor reading in Czech would be given "čec".
+    """
+    if not value:
+        return ""
+    return month_slug(value)
 
 
 @register.filter
@@ -627,3 +643,16 @@ def hostname():
     hostname = socket.gethostname()
     host, domain = hostname.split(".", 1)
     return dict(hostname=hostname, host=host, domain=domain)
+
+
+@register.simple_tag
+def htmx_script():
+    """
+    The URL of the htmx library that ``django-htmx`` ships. Releases up to
+    1.27 bundle it as ``htmx.min.js``; from 1.28 each file carries the major
+    version of htmx it bundles, so the unversioned name is a 404.
+    """
+    for name in ("django_htmx/htmx.min.js", "django_htmx/htmx-2.min.js"):
+        if finders.find(name):
+            return static(name)
+    return static("django_htmx/htmx.min.js")

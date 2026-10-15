@@ -98,7 +98,10 @@ from tournamentcontrol.competition.models import (
     Venue,
     stage_group_position_re,
 )
-from tournamentcontrol.competition.signals.custom import score_updated
+from tournamentcontrol.competition.signals.custom import (
+    score_updated,
+    statistics_updated,
+)
 from tournamentcontrol.competition.upstream import (
     UpstreamURLError,
     get_backend_for_url,
@@ -735,7 +738,6 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
             "timezone",
             "start_date",
             "mode",
-            "forfeit_notifications",
             "complete",
             "statistics",
             "mvp_results_public",
@@ -1715,10 +1717,20 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
                 self.fields["home_team_score"].widget.attrs["placeholder"] = home_team
                 self.fields["away_team_score"].label = str(away_team)
                 self.fields["away_team_score"].widget.attrs["placeholder"] = away_team
-                self.fields["forfeit_winner"] = ModelChoiceField(
-                    queryset=Team.objects.filter(id__in=[home_team.pk, away_team.pk]),
-                    label_from_instance=lambda team: team.title,
-                    empty_label=_("Double forfeit"),
+                # The choices are the two teams already loaded with the match,
+                # instead of a query for each match on the page.
+                teams = {str(team.pk): team for team in (home_team, away_team)}
+                self.fields["forfeit_winner"] = forms.TypedChoiceField(
+                    choices=[("", _("Double forfeit"))]
+                    + [(pk, team.title) for pk, team in teams.items()],
+                    coerce=lambda pk: teams.get(str(pk)),
+                    empty_value=None,
+                    error_messages={
+                        "invalid_choice": ModelChoiceField.default_error_messages[
+                            "invalid_choice"
+                        ]
+                    },
+                    label=_("Forfeit winner"),
                     help_text=_("Select the winning team."),
                     required=False,
                 )
@@ -1747,12 +1759,18 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
         return self.cleaned_data
 
     def save(self, *args, **kwargs):
+        changed = SCORE_FIELDS.union(
+            {"is_forfeit", "forfeit_winner", "bye_processed"}
+        ).intersection(self.changed_data)
         logger.debug(
-            'MatchResultForm.save: updated fields "%s"',
-            '", "'.join(SCORE_FIELDS.intersection(self.changed_data)),
+            'MatchResultForm.save: updated fields "%s"', '", "'.join(sorted(changed))
         )
 
-        if SCORE_FIELDS.intersection(self.changed_data):
+        saved = super(MatchResultForm, self).save(*args, **kwargs)
+
+        # Announce the result only once it is written, so receivers (and
+        # anything they notify) see the saved state.
+        if changed:
             for rec, res in score_updated.send_robust(sender=self, match=self.instance):
                 receiver = "%s.%s" % (rec.__module__, rec.__name__)
                 try:
@@ -1762,7 +1780,7 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
                 except:  # noqa
                     logger.exception('Receiver "%s" did not complete.', receiver)
 
-        return super(MatchResultForm, self).save(*args, **kwargs)
+        return saved
 
     class Meta:
         model = Match
@@ -2560,6 +2578,9 @@ class MatchStatisticFormset(BaseMatchStatisticFormset):
         stats = []
         for form in self.forms:
             stats.append(form.save())
+        if self.forms:
+            match = self.forms[0].instance.match
+            statistics_updated.send_robust(sender=self, match=match)
         return stats
 
 

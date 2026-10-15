@@ -3,6 +3,7 @@ from collections import OrderedDict
 from itertools import zip_longest
 
 from django import template
+from django.core.paginator import Paginator
 from django.db import models
 from django.template import loader
 from django.urls import resolve, reverse_lazy
@@ -18,7 +19,7 @@ register = template.Library()
 
 
 @register.inclusion_tag("mvp/list.html", takes_context=True)
-def mvp_list(context, queryset, scope=None, template=None):
+def mvp_list(context, queryset, scope=None, template=None, paginate_by=None):
     model, manager = model_and_manager(queryset)
 
     request = context.get("request")
@@ -80,6 +81,22 @@ def mvp_list(context, queryset, scope=None, template=None):
             % (model._meta.app_label, model._meta.model_name),
         }
     )
+
+    # Show one page of the (already permission filtered) queryset at a time,
+    # which keeps the markup, and the work of rendering it, in proportion to
+    # what a person can read rather than to how many objects there are.
+    if paginate_by:
+        paginator = Paginator(queryset, paginate_by)
+        page = paginator.get_page(request.GET.get("page"))
+        context.update(
+            {
+                "object_list": page.object_list,
+                "is_paginated": paginator.num_pages > 1,
+                "paginator": paginator,
+                "page": page.number,
+            }
+        )
+
     return context
 
 

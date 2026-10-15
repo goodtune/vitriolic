@@ -2,6 +2,7 @@
 Tests for the asynchronous live stream synchronization task.
 """
 
+import json
 from datetime import date, datetime, time
 from unittest import mock
 from zoneinfo import ZoneInfo
@@ -38,8 +39,37 @@ def _http_error(status, message):
     return HttpError(resp=resp, content=content)
 
 
+def _invalid_title_error():
+    """The response YouTube gives a broadcast title of over 100 characters."""
+    resp = mock.Mock(status=400, reason="Bad Request")
+    content = json.dumps(
+        {
+            "error": {
+                "code": 400,
+                "message": "Title is invalid",
+                "errors": [
+                    {
+                        "message": "Title is invalid",
+                        "domain": "youtube.liveBroadcast",
+                        "reason": "invalidTitle",
+                        "extendedHelp": (
+                            "https://developers.google.com/youtube/v3/live/docs/"
+                            "liveBroadcasts#snippet.title"
+                        ),
+                    }
+                ],
+            }
+        }
+    ).encode()
+    return HttpError(resp=resp, content=content)
+
+
 class IsTitleTooLongTests(TestCase):
     """Detect title-length errors from a YouTube HttpError."""
+
+    def test_detects_invalid_title(self):
+        """What YouTube really answers when a title is over its limit."""
+        self.assertEqual(True, _is_title_too_long(_invalid_title_error()))
 
     def test_detects_title_max_length(self):
         exc = _http_error(400, "title is too long")
@@ -583,3 +613,245 @@ class SyncLiveStreamTaskTests(TestCase):
 
         self.match.refresh_from_db()
         self.assertEqual("stream-resource-1", self.match.live_stream_bind)
+
+
+class SyncLiveStreamTitleFormsTests(TestCase):
+    """
+    The forms a match's title is offered to YouTube in as each is rejected,
+    for the match whose title outgrows the 100 characters YouTube allows: a
+    final between two teams that are still to be decided.
+    """
+
+    FULL = (
+        "Men's 50 | Gold Medal: Winner Semi Final 1 vs Winner Semi Final 2 | "
+        "Asia Pacific Seniors Touch Cup 2026"
+    )
+    SHORT = (
+        "M50 | Gold Medal: Winner Semi Final 1 vs Winner Semi Final 2 | "
+        "Asia Pacific Seniors 2026"
+    )
+    LABEL_ONLY = "Men's 50 | Gold Medal | Asia Pacific Seniors Touch Cup 2026"
+    LABEL_ONLY_SHORT = "M50 | Gold Medal | Asia Pacific Seniors 2026"
+
+    def setUp(self):
+        self.competition = factories.CompetitionFactory.create(
+            title="Asia Pacific Seniors Touch Cup",
+            short_title="Asia Pacific Seniors",
+        )
+        self.season = factories.SeasonFactory.create(
+            competition=self.competition,
+            title="2026",
+            live_stream=True,
+            live_stream_project_id="test-project",
+            live_stream_client_id="test-client-id",
+            live_stream_client_secret="test-client-secret",
+            live_stream_privacy="unlisted",
+        )
+        self.division = factories.DivisionFactory.create(
+            season=self.season, title="Men's 50", short_title="M50"
+        )
+        self.stage = factories.StageFactory.create(
+            division=self.division, title="Final Series"
+        )
+        self.ground = factories.GroundFactory.create(
+            venue__season=self.season, external_identifier=None
+        )
+        self.semi_final_1 = factories.MatchFactory.create(
+            stage=self.stage, play_at=self.ground, label="Semi Final 1"
+        )
+        self.semi_final_2 = factories.MatchFactory.create(
+            stage=self.stage, play_at=self.ground, label="Semi Final 2"
+        )
+        self.match = factories.MatchFactory.create(
+            stage=self.stage,
+            play_at=self.ground,
+            label="Gold Medal",
+            home_team=None,
+            home_team_eval="W",
+            home_team_eval_related=self.semi_final_1,
+            away_team=None,
+            away_team_eval="W",
+            away_team_eval_related=self.semi_final_2,
+            live_stream=True,
+            external_identifier=None,
+            datetime=datetime(2026, 10, 10, 1, 10, tzinfo=ZoneInfo("UTC")),
+            date=date(2026, 10, 10),
+            time=time(10, 10),
+        )
+
+        thumbnail = mock.patch(
+            "tournamentcontrol.competition.tasks.set_youtube_thumbnail"
+        )
+        thumbnail.start()
+        self.addCleanup(thumbnail.stop)
+        youtube = mock.patch(
+            "tournamentcontrol.competition.models.Season.youtube",
+            new_callable=mock.PropertyMock,
+        )
+        self.broadcasts = youtube.start().return_value.liveBroadcasts.return_value
+        self.addCleanup(youtube.stop)
+
+    def _titles(self, method):
+        return [call.kwargs["body"]["snippet"]["title"] for call in method.call_args_list]
+
+    def test_forms_of_the_title(self):
+        """The four forms, the first of them over YouTube's 100 characters."""
+        self.assertEqual(103, len(self.FULL))
+        self.assertEqual(
+            [self.FULL, self.SHORT, self.LABEL_ONLY, self.LABEL_ONLY_SHORT],
+            [
+                build_live_stream_body(self.match, short=short, label_only=label_only)[
+                    "snippet"
+                ]["title"]
+                for short, label_only in (
+                    (False, False),
+                    (True, False),
+                    (False, True),
+                    (True, True),
+                )
+            ],
+        )
+
+    def test_invalid_title_is_retried_with_short_titles(self):
+        """YouTube's ``invalidTitle`` answer to a long title is retried."""
+        self.broadcasts.insert.return_value.execute.side_effect = [
+            _invalid_title_error(),
+            {"id": "yt-short"},
+        ]
+
+        self.assertEqual("created", sync_live_stream(self.match.pk))
+
+        self.assertEqual(
+            [self.FULL, self.SHORT], self._titles(self.broadcasts.insert)
+        )
+        self.match.refresh_from_db()
+        self.assertEqual("yt-short", self.match.external_identifier)
+
+    def test_label_only_once_short_titles_are_rejected(self):
+        """A match with a label drops its teams when short titles are too long."""
+        self.broadcasts.insert.return_value.execute.side_effect = [
+            _invalid_title_error(),
+            _invalid_title_error(),
+            {"id": "yt-label-only"},
+        ]
+
+        self.assertEqual("created", sync_live_stream(self.match.pk))
+
+        self.assertEqual(
+            [self.FULL, self.SHORT, self.LABEL_ONLY],
+            self._titles(self.broadcasts.insert),
+        )
+        self.match.refresh_from_db()
+        self.assertEqual("yt-label-only", self.match.external_identifier)
+
+    def test_label_only_with_short_titles_is_the_last_form(self):
+        self.broadcasts.insert.return_value.execute.side_effect = [
+            _invalid_title_error(),
+            _invalid_title_error(),
+            _invalid_title_error(),
+            {"id": "yt-label-only-short"},
+        ]
+
+        self.assertEqual("created", sync_live_stream(self.match.pk))
+
+        self.assertEqual(
+            [self.FULL, self.SHORT, self.LABEL_ONLY, self.LABEL_ONLY_SHORT],
+            self._titles(self.broadcasts.insert),
+        )
+        self.match.refresh_from_db()
+        self.assertEqual("yt-label-only-short", self.match.external_identifier)
+
+    def test_error_is_raised_when_every_form_is_rejected(self):
+        self.broadcasts.insert.return_value.execute.side_effect = _invalid_title_error()
+
+        with self.assertRaises(HttpError) as raised:
+            sync_live_stream(self.match.pk)
+
+        self.assertEqual("invalidTitle", raised.exception.error_details[0]["reason"])
+        self.assertEqual(
+            [self.FULL, self.SHORT, self.LABEL_ONLY, self.LABEL_ONLY_SHORT],
+            self._titles(self.broadcasts.insert),
+        )
+        self.match.refresh_from_db()
+        self.assertEqual(None, self.match.external_identifier)
+
+    def test_match_without_a_label_keeps_its_teams(self):
+        """Its teams are all that tell the match apart, so they are not dropped."""
+        self.match.label = None
+        self.match.save()
+        self.broadcasts.insert.return_value.execute.side_effect = _invalid_title_error()
+
+        with self.assertRaises(HttpError):
+            sync_live_stream(self.match.pk)
+
+        self.assertEqual(
+            [
+                (
+                    "Men's 50 | Winner Semi Final 1 vs Winner Semi Final 2 | "
+                    "Asia Pacific Seniors Touch Cup 2026"
+                ),
+                (
+                    "M50 | Winner Semi Final 1 vs Winner Semi Final 2 | "
+                    "Asia Pacific Seniors 2026"
+                ),
+            ],
+            self._titles(self.broadcasts.insert),
+        )
+
+    def test_form_that_changes_nothing_is_not_sent_again(self):
+        """Without short titles there is no short form to waste a request on."""
+        self.competition.short_title = ""
+        self.competition.save()
+        self.division.short_title = ""
+        self.division.save()
+        self.broadcasts.insert.return_value.execute.side_effect = _invalid_title_error()
+
+        with self.assertRaises(HttpError):
+            sync_live_stream(self.match.pk)
+
+        self.assertEqual(
+            [self.FULL, self.LABEL_ONLY], self._titles(self.broadcasts.insert)
+        )
+
+    def test_other_errors_are_not_retried_in_a_shorter_form(self):
+        """Only a rejected title has a shorter form to offer."""
+        self.broadcasts.insert.return_value.execute.side_effect = [
+            _invalid_title_error(),
+            _http_error(403, "quotaExceeded"),
+        ]
+
+        with self.assertRaises(HttpError) as raised:
+            sync_live_stream(self.match.pk)
+
+        self.assertEqual(403, raised.exception.status_code)
+        self.assertEqual(
+            [self.FULL, self.SHORT], self._titles(self.broadcasts.insert)
+        )
+
+    def test_resync_restores_the_teams_once_they_are_known(self):
+        """
+        A broadcast created without its teams gets them back: every
+        synchronisation starts from the full title, which fits once the
+        finalists replace "Winner Semi Final 1 vs Winner Semi Final 2".
+        """
+        self.match.external_identifier = "yt-label-only"
+        self.match.home_team = factories.TeamFactory.create(
+            division=self.division, title="Australia"
+        )
+        self.match.away_team = factories.TeamFactory.create(
+            division=self.division, title="New Zealand"
+        )
+        self.match.save()
+
+        self.assertEqual("updated", sync_live_stream(self.match.pk))
+
+        self.assertEqual(
+            [
+                (
+                    "Men's 50 | Gold Medal: Australia vs New Zealand | "
+                    "Asia Pacific Seniors Touch Cup 2026"
+                )
+            ],
+            self._titles(self.broadcasts.update),
+        )
+        self.broadcasts.insert.assert_not_called()

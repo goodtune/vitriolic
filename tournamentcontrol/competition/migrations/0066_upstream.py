@@ -1,6 +1,6 @@
 # Generalise the MySideline link into an "upstream" link that any competition
 # management provider can use. New columns are added and populated here; the
-# MySideline columns they replace are dropped by 0066_remove_mysideline, in a
+# MySideline columns they replace are dropped by 0067_remove_mysideline, in a
 # separate migration because PostgreSQL will not alter a table whose rows were
 # updated earlier in the same transaction while deferred constraint triggers
 # are pending.
@@ -70,7 +70,7 @@ def backwards(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("competition", "0064_mysideline_titles"),
+        ("competition", "0065_compops_live_stream_status"),
     ]
 
     operations = [

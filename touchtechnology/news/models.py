@@ -9,6 +9,7 @@ from imagekit.models import ImageSpecField
 
 from touchtechnology.admin.mixins import AdminUrlMixin
 from touchtechnology.common.db.models import BooleanField, HTMLField
+from touchtechnology.common.utils import month_slug
 from touchtechnology.news.app_settings import (
     DETAIL_IMAGE_KWARGS,
     DETAIL_IMAGE_PROCESSORS,
@@ -86,7 +87,7 @@ class Article(AdminUrlModel):
             "news:article",
             kwargs={
                 "year": self.published.year,
-                "month": self.published.strftime("%b").lower(),
+                "month": month_slug(self.published),
                 "day": self.published.day,
                 "slug": self.slug,
             },
@@ -125,7 +126,7 @@ class Translation(AdminUrlModel):
             "news:translation",
             kwargs={
                 "year": published.year,
-                "month": published.strftime("%b").lower(),
+                "month": month_slug(published),
                 "day": published.day,
                 "slug": self.article.slug,
                 "locale": self.locale,

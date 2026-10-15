@@ -801,8 +801,8 @@ class MigrationTests(TransactionTestCase):
     The MySideline link of existing data becomes the generic upstream link.
     """
 
-    migrate_from = [("competition", "0064_mysideline_titles")]
-    migrate_to = [("competition", "0066_remove_mysideline")]
+    migrate_from = [("competition", "0065_compops_live_stream_status")]
+    migrate_to = [("competition", "0067_remove_mysideline")]
 
     def test_mysideline_data_is_carried_over(self):
         executor = MigrationExecutor(connection)

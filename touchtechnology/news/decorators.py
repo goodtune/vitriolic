@@ -15,6 +15,8 @@ from touchtechnology.news.month_names import MONTH_NUMBERS
 
 logger = logging.getLogger(__name__)
 
+YEAR_DELTA = relativedelta(years=1)
+
 
 def parse_month_name(month_str):
     """
@@ -54,7 +56,7 @@ def parse_month_name(month_str):
     try:
         test_date = parse_datetime(f"2000-{month_str}-01")
         return test_date.month
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         pass
 
     raise ValueError(f"Unable to parse month name: {month_str}")
@@ -77,8 +79,14 @@ def date_view(f, *a, **kw):
                 datetime.datetime(int(year), month_num, int(day)),
                 datetime.timezone.utc,
             )
-        except (ValueError, TypeError) as exc:
-            logger.exception("invalid date value in path %s", args[0].path)
+
+            # The views query up to a year past the date, so that date must
+            # exist too; in the last year a datetime can hold it does not.
+            value + YEAR_DELTA
+        except (ValueError, TypeError, OverflowError) as exc:
+            # Any path the URL patterns let through can be requested, by bots
+            # most of all, so a date which does not exist is simply not found.
+            logger.debug("invalid date value in path %s: %s", args[0].path, exc)
             raise Http404(str(exc))
 
         kwargs["date"] = value

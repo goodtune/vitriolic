@@ -37,6 +37,9 @@ TZ = ZoneInfo("Australia/Sydney")
 WEDNESDAYS = [
     datetime.date(2026, 10, 7) + datetime.timedelta(weeks=n) for n in range(20)
 ]
+# The demo season starts on the first Wednesday; tests that expect its
+# matches to be upcoming run before it starts, whatever today's date is.
+BEFORE_THE_SEASON = datetime.date(2026, 10, 1)
 CHRISTMAS = [
     datetime.date(2026, 12, 23),
     datetime.date(2026, 12, 30),
@@ -318,6 +321,7 @@ class DrawFormatToolTests(DemoMixin, TestCase):
         )
 
 
+@freeze_time(BEFORE_THE_SEASON)
 class ExclusionDateToolTests(DemoMixin, TestCase):
     def test_christmas_break_in_one_call(self):
         admin = self.admin()
@@ -1608,6 +1612,7 @@ class MatchEvalTests(DemoMixin, TestCase):
         )
 
 
+@freeze_time(BEFORE_THE_SEASON)
 class ScheduleMatchesTests(DemoMixin, TestCase):
     """Item 7: batch scheduling."""
 
@@ -2420,6 +2425,7 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         )
 
 
+@freeze_time(BEFORE_THE_SEASON)
 class CompactResponseTests(DemoMixin, TestCase):
     def test_verbose_false(self):
         admin = self.admin()

@@ -6,7 +6,8 @@
     <title>{% load i18n %}{% load common %}{% trans "Visual Schedule" %} - {{ date|date }} - {{ season.title }}</title>
 {% load static %}
 <link rel="stylesheet" href="{% static 'tournamentcontrol/competition/css/visual_schedule.css' %}">
-<script src="{% static 'django_htmx/htmx.min.js' %}"></script>
+{% load common %}
+<script src="{% htmx_script %}"></script>
 <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js" defer></script>
 </head>
 <body>

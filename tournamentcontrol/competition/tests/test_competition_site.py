@@ -15,7 +15,8 @@ from test_plus import TestCase
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.draw import schemas
 from tournamentcontrol.competition.draw.builders import build
-from tournamentcontrol.competition.models import Match
+from tournamentcontrol.competition.models import Match, Team
+from tournamentcontrol.competition.sites import competition as competition_site
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin_format
 
@@ -1213,6 +1214,445 @@ class DivisionViewQueryTests(TestCase):
             self.large_division.slug,
             test_query_count=14,
         )
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class DivisionFinalsQueryTests(TestCase):
+    """
+    Until a pool stage is over, its finals show placeholders such as
+    "1st Pool A" in place of teams. Working one out used to look up the
+    stage before, its pools and the stages after it, for every team of every
+    final, which made the busiest public page of an event the slowest. The
+    same query budget holds however many finals the division has.
+    """
+
+    @classmethod
+    def _division(cls, title, finals):
+        division = factories.DivisionFactory.create(season=cls.season, title=title)
+        teams = factories.TeamFactory.create_batch(8, division=division)
+        pools_stage = factories.StageFactory.create(
+            division=division, title="Pools", order=1
+        )
+        kickoff = datetime(2026, 10, 6, 9, 0, tzinfo=ZoneInfo("UTC"))
+        for number, members in enumerate((teams[:4], teams[4:]), start=1):
+            pool = factories.StageGroupFactory.create(
+                stage=pools_stage, title=f"Pool {number}"
+            )
+            for home, away in ((0, 1), (2, 3), (0, 2), (1, 3)):
+                factories.MatchFactory.create(
+                    stage=pools_stage,
+                    stage_group=pool,
+                    home_team=members[home],
+                    away_team=members[away],
+                    datetime=kickoff,
+                    date=kickoff.date(),
+                    time=kickoff.time(),
+                )
+        finals_stage = factories.StageFactory.create(
+            division=division, title="Finals", order=2
+        )
+        finals_day = kickoff + timedelta(days=1)
+        played = [
+            factories.MatchFactory.create(
+                stage=finals_stage,
+                home_team=None,
+                away_team=None,
+                home_team_eval=f"G1P{number % 4 + 1}",
+                away_team_eval=f"G2P{number % 4 + 1}",
+                datetime=finals_day,
+                date=finals_day.date(),
+                time=kickoff.time(),
+                label=f"Final {number + 1}",
+            )
+            for number in range(finals)
+        ]
+        # The winners of each pair of finals meet in a later round.
+        later = finals_day + timedelta(hours=2)
+        for number, (home, away) in enumerate(zip(played[::2], played[1::2]), 1):
+            factories.MatchFactory.create(
+                stage=finals_stage,
+                home_team=None,
+                away_team=None,
+                home_team_eval="W",
+                home_team_eval_related=home,
+                away_team_eval="W",
+                away_team_eval_related=away,
+                datetime=later,
+                date=later.date(),
+                time=later.time(),
+                label=f"Decider {number}",
+            )
+        # Playoffs between undecided teams: one named by a formula, one by
+        # a label alone.
+        for number in range(finals):
+            factories.MatchFactory.create(
+                stage=finals_stage,
+                home_team=None,
+                away_team=None,
+                home_team_undecided=factories.UndecidedTeamFactory.create(
+                    stage=finals_stage, formula=f"G1P{number % 4 + 1}", label=""
+                ),
+                away_team_undecided=factories.UndecidedTeamFactory.create(
+                    stage=finals_stage, formula="", label="Host nation"
+                ),
+                datetime=later,
+                date=later.date(),
+                time=later.time(),
+                label=f"Playoff {number + 1}",
+            )
+        return division
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create()
+        cls.competition = cls.season.competition
+        cls.few_finals = cls._division("Few Finals", finals=2)
+        cls.many_finals = cls._division("Many Finals", finals=8)
+
+    def test_placeholder_titles(self):
+        final = self.few_finals.matches.get(label="Final 1")
+        self.assertEqual(final.get_home_team(), {"title": "1st Pool 1"})
+        self.assertEqual(final.get_away_team(), {"title": "1st Pool 2"})
+        decider = self.few_finals.matches.get(label="Decider 1")
+        self.assertEqual(decider.get_home_team(), {"title": "Winner Final 1"})
+        self.assertEqual(decider.get_away_team(), {"title": "Winner Final 2"})
+        playoff = self.few_finals.matches.get(label="Playoff 1")
+        self.assertEqual(playoff.get_home_team(), {"title": "1st Pool 1"})
+        self.assertEqual(playoff.get_away_team(), {"title": "Host nation"})
+
+    def test_few_finals_query_count(self):
+        self.assertGoodView(
+            "competition:division",
+            self.competition.slug,
+            self.season.slug,
+            self.few_finals.slug,
+            test_query_count=17,
+        )
+
+    def test_many_finals_query_count(self):
+        self.assertGoodView(
+            "competition:division",
+            self.competition.slug,
+            self.season.slug,
+            self.many_finals.slug,
+            test_query_count=17,
+        )
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class SeasonThumbnailTests(TestCase):
+    """
+    A live-streamed season keeps the image it uploads to YouTube as its
+    video thumbnail in the database. Every public page used to read it, for
+    the season being viewed and for every season of every competition in
+    the navigation, which slowed the whole site down. Only the thumbnail
+    views need it.
+    """
+
+    THUMBNAIL = '"competition_season"."live_stream_thumbnail_image"'
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create(
+            live_stream_thumbnail_image=b"\x89PNG" + b"\x00" * 1024
+        )
+        factories.SeasonFactory.create(
+            competition=cls.season.competition,
+            live_stream_thumbnail_image=b"\x89PNG" + b"\x00" * 1024,
+        )
+        cls.competition = cls.season.competition
+        cls.division = factories.DivisionFactory.create(season=cls.season)
+        cls.stage = factories.StageFactory.create(division=cls.division)
+        cls.pool = factories.StageGroupFactory.create(stage=cls.stage)
+        cls.team = factories.TeamFactory.create(division=cls.division)
+        cls.match = factories.MatchFactory.create(
+            stage=cls.stage, home_team=cls.team
+        )
+
+    def assertThumbnailNotRead(self, *args):
+        with CaptureQueriesContext(connection) as queries:
+            self.assertGoodView(*args)
+        self.assertEqual(
+            [q["sql"] for q in queries if self.THUMBNAIL in q["sql"]], []
+        )
+
+    def test_navigation(self):
+        with CaptureQueriesContext(connection) as queries:
+            seasons = [
+                (season.short_title or season.title, season.slug)
+                for competition in competition_site.competitions
+                for season in competition.seasons.all()
+            ]
+        self.assertEqual(len(seasons), 2)
+        # competitions, then their seasons
+        self.assertEqual(len(queries), 2)
+        self.assertEqual(
+            [q["sql"] for q in queries if self.THUMBNAIL in q["sql"]], []
+        )
+
+    def test_navigation_carries_what_a_menu_needs(self):
+        """
+        A list of seasons links to each one, hides those that are disabled,
+        shows when they run, and puts them in order, so none of that costs a
+        query for every season. Everything else stays out.
+        """
+        navigation = {
+            "competition_id",
+            "title",
+            "short_title",
+            "slug",
+            "enabled",
+            "start_date",
+            "order",
+            "complete",
+        }
+        competition = competition_site.competitions.get(pk=self.competition.pk)
+        seasons = list(competition.seasons.all())
+        self.assertEqual(len(seasons), 2)
+        with self.assertNumQueries(0):
+            for season in seasons:
+                for name in navigation:
+                    getattr(season, name)
+        for season in seasons:
+            deferred = season.get_deferred_fields()
+            self.assertEqual(deferred & navigation, set())
+            self.assertIn("live_stream_thumbnail_image", deferred)
+            self.assertIn("copy", deferred)
+
+    def test_navigation_thumbnail_on_demand(self):
+        competition = competition_site.competitions.get(pk=self.competition.pk)
+        season = competition.seasons.get(pk=self.season.pk)
+        self.assertEqual(
+            bytes(season.live_stream_thumbnail_image), b"\x89PNG" + b"\x00" * 1024
+        )
+
+    def test_index(self):
+        self.assertThumbnailNotRead("competition:index")
+
+    def test_competition(self):
+        self.assertThumbnailNotRead("competition:competition", self.competition.slug)
+
+    def test_season(self):
+        self.assertThumbnailNotRead(
+            "competition:season", self.competition.slug, self.season.slug
+        )
+
+    def test_division(self):
+        self.assertThumbnailNotRead(
+            "competition:division",
+            self.competition.slug,
+            self.season.slug,
+            self.division.slug,
+        )
+
+    def test_stage(self):
+        self.assertThumbnailNotRead(
+            "competition:stage",
+            self.competition.slug,
+            self.season.slug,
+            self.division.slug,
+            self.stage.slug,
+        )
+
+    def test_pool(self):
+        self.assertThumbnailNotRead(
+            "competition:pool",
+            self.competition.slug,
+            self.season.slug,
+            self.division.slug,
+            self.stage.slug,
+            self.pool.slug,
+        )
+
+    def test_team(self):
+        self.assertThumbnailNotRead(
+            "competition:team",
+            self.competition.slug,
+            self.season.slug,
+            self.division.slug,
+            self.team.slug,
+        )
+
+    def test_match(self):
+        self.assertThumbnailNotRead(
+            "competition:match",
+            self.competition.slug,
+            self.season.slug,
+            self.division.slug,
+            self.match.pk,
+        )
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+@freeze_time("2026-10-08 03:00:00")
+class ClubPageTests(TestCase):
+    """
+    A club's page lists its teams, each with its next match or, once it has
+    played them all, its last one. Looking those up cost four queries per
+    team, so the page slowed down with every team a nation entered. The same
+    query budget now holds however many teams the club has.
+    """
+
+    @classmethod
+    def _club(cls, title, teams):
+        club = factories.ClubFactory.create(title=title)
+        cls.competition.clubs.add(club)
+        for number in range(teams):
+            division = factories.DivisionFactory.create(season=cls.season)
+            stage = factories.StageFactory.create(division=division)
+            team = factories.TeamFactory.create(club=club, division=division)
+            opponent = factories.TeamFactory.create(
+                club=cls.opposition, division=division
+            )
+            days = (-2, -1, 1) if number else (-2, -1)  # the first has no more
+            for day in days:
+                when = datetime(2026, 10, 8, 9, 0, tzinfo=ZoneInfo("UTC"))
+                when += timedelta(days=day)
+                factories.MatchFactory.create(
+                    stage=stage,
+                    home_team=team,
+                    away_team=opponent,
+                    datetime=when,
+                    date=when.date(),
+                    time=when.time(),
+                )
+        return club
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create(timezone="UTC")
+        cls.competition = cls.season.competition
+        cls.opposition = factories.ClubFactory.create(title="Opposition")
+        cls.competition.clubs.add(cls.opposition)
+        cls.few = cls._club("Few", teams=2)
+        cls.many = cls._club("Many", teams=6)
+
+    def setUp(self):
+        cache.clear()
+
+    def assertNextOrLastMatch(self, teams):
+        for team in teams:
+            matches = team.matches.order_by("date", "time")
+            if team.future().exists():
+                expected = matches.filter(date=date(2026, 10, 9)).get()
+            else:
+                expected = matches.filter(date=date(2026, 10, 7)).get()
+            self.assertEqual(team.next_match() or team.last_match(), expected)
+
+    def test_next_or_last_match(self):
+        self.assertGoodView(
+            "competition:club",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            club=self.many.slug,
+        )
+        self.assertNextOrLastMatch(self.last_response.context["teams"])
+
+    def test_prefetch_matches_the_lookup_per_team(self):
+        teams = list(self.many.teams.all())
+        prefetched = Team.prefetch_next_and_last_match(self.many.teams.all())
+        self.assertEqual(
+            [(t.next_match(), t.last_match()) for t in prefetched],
+            [(t.next_match(), t.last_match()) for t in teams],
+        )
+
+    def test_few_teams_query_count(self):
+        self.assertGoodView(
+            "competition:club",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            club=self.few.slug,
+            test_query_count=12,
+        )
+
+    def test_many_teams_query_count(self):
+        self.assertGoodView(
+            "competition:club",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            club=self.many.slug,
+            test_query_count=12,
+        )
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class NextAndLastMatchTimeZoneTests(TestCase):
+    """
+    A team's next and last match are judged by kick-off instant, not by the
+    venue's local date and time against the clock in UTC.
+
+    On the finals day of an event in Japan (UTC+9), Australia played a semi
+    final at 11:40 and the gold medal match at 16:20. At 19:05 in Japan,
+    10:05 UTC, both still counted as to come, because 11:40 and 16:20 are
+    later than 10:05, and the club page showed the semi final as the next
+    match instead of the gold medal match as the last.
+    """
+
+    tokyo = ZoneInfo("Asia/Tokyo")
+
+    @classmethod
+    def _match(cls, stage, round, hour, minute, **kwargs):
+        when = datetime(2026, 10, 10, hour, minute, tzinfo=cls.tokyo)
+        return factories.MatchFactory.create(
+            stage=stage,
+            round=round,
+            home_team=cls.team,
+            away_team=cls.opponent,
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            **kwargs,
+        )
+
+    @classmethod
+    def setUpTestData(cls):
+        season = factories.SeasonFactory.create(timezone="Asia/Tokyo")
+        division = factories.DivisionFactory.create(season=season)
+        stage = factories.StageFactory.create(division=division)
+        cls.team = factories.TeamFactory.create(division=division)
+        cls.opponent = factories.TeamFactory.create(division=division)
+        cls.semi_final = cls._match(stage, 7, 11, 40)
+        cls.final = cls._match(stage, 8, 16, 20)
+
+    def assertNextAndLast(self, next_match, last_match):
+        self.assertEqual(
+            (self.team.next_match(), self.team.last_match()),
+            (next_match, last_match),
+        )
+        (prefetched,) = Team.prefetch_next_and_last_match([self.team])
+        self.assertEqual(
+            (prefetched.next_match(), prefetched.last_match()),
+            (next_match, last_match),
+        )
+
+    @freeze_time("2026-10-10 10:05:00")  # 19:05 in Japan
+    def test_after_the_final(self):
+        self.assertNextAndLast(None, self.final)
+
+    @freeze_time("2026-10-10 05:00:00")  # 14:00 in Japan
+    def test_between_the_semi_final_and_the_final(self):
+        self.assertNextAndLast(self.final, self.semi_final)
+
+    @freeze_time("2026-10-10 02:30:00")  # 11:30 in Japan
+    def test_before_the_semi_final(self):
+        self.assertNextAndLast(self.semi_final, None)
+
+    @freeze_time("2026-10-10 02:50:00")  # 11:50 in Japan
+    def test_still_next_until_fifteen_minutes_after_kick_off(self):
+        self.assertNextAndLast(self.semi_final, None)
+
+    @freeze_time("2026-10-10 10:05:00")  # 19:05 in Japan
+    def test_kick_off_order_not_stage_order(self):
+        # Match's default ordering puts stage ahead of time, so the earlier
+        # semi final, in a stage ordered after the final's, would be taken
+        # as the last match played.
+        self.final.stage.order = 1
+        self.final.stage.save()
+        self.semi_final.stage = factories.StageFactory.create(
+            division=self.team.division, order=2
+        )
+        self.semi_final.save()
+        self.assertNextAndLast(None, self.final)
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")

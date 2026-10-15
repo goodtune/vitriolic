@@ -1,8 +1,10 @@
 from django.apps import apps
 from django.conf import settings
 from django.db.models import (
+    BooleanField,
     Case,
     Count,
+    Exists,
     ExpressionWrapper,
     F,
     FloatField,
@@ -12,12 +14,40 @@ from django.db.models import (
     Q,
     Subquery,
     Sum,
+    Value,
     When,
 )
 from django.db.models.query import QuerySet
 from django.utils import timezone
 
-from tournamentcontrol.competition.utils import team_title_case_clause
+from tournamentcontrol.competition.utils import (
+    team_needs_progressing,
+    team_title_case_clause,
+)
+
+
+class SeasonQuerySet(QuerySet):
+    def navigation(self):
+        """
+        Only what a list of seasons needs to link to, order and filter each
+        one: where it lives (``competition`` and ``slug``), what to call it
+        (``title`` and ``short_title``), whether to offer it (``enabled``),
+        when it runs (``start_date``), where it sits (``order``) and whether
+        it is over (``complete``). Every public page lists every season of
+        every competition, so nothing else is read, including any field added
+        to the model later. A template that asks for anything else costs a
+        query for each season.
+        """
+        return self.only(
+            "competition",
+            "title",
+            "short_title",
+            "slug",
+            "enabled",
+            "start_date",
+            "order",
+            "complete",
+        )
 
 
 class DivisionQuerySet(QuerySet):
@@ -83,6 +113,47 @@ class MatchQuerySet(QuerySet):
             away_team_title=team_title_case_clause("away_team"),
         )
 
+    def with_result_state(self):
+        """
+        Annotate the state of each match's result, in the database:
+
+        ``has_result``
+            a bye has been processed, or both scores are in, or the match was
+            forfeited or washed out;
+
+        ``needs_progressing``
+            a team is still to be decided by progression;
+
+        ``result_editable``
+            the result may be entered by hand: never for a match mirrored from
+            an upstream provider, always for a bye, otherwise once both teams
+            are known.
+        """
+        has_result = Case(
+            When(is_bye=True, then=F("bye_processed")),
+            When(
+                Q(home_team_score__isnull=False, away_team_score__isnull=False)
+                | Q(is_forfeit=True)
+                | Q(is_washout=True),
+                then=Value(True),
+            ),
+            default=Value(False),
+            output_field=BooleanField(),
+        )
+        needs_progressing = Exists(
+            self.model.objects.filter(team_needs_progressing, pk=OuterRef("pk"))
+        )
+        result_editable = Case(
+            When(upstream_id__isnull=False, then=Value(False)),
+            When(is_bye=True, then=Value(True)),
+            When(needs_progressing=True, then=Value(False)),
+            default=Value(True),
+            output_field=BooleanField(),
+        )
+        return self.annotate(
+            has_result=has_result, needs_progressing=needs_progressing
+        ).annotate(result_editable=result_editable)
+
 
 class LadderEntryQuerySet(QuerySet):
     def _all(self):
@@ -103,6 +174,18 @@ class LadderEntryQuerySet(QuerySet):
 class StatisticQuerySet(QuerySet):
     def played(self):
         return self.exclude(played=0)
+
+    def for_division(self, division):
+        return self.filter(match__stage__division=division)
+
+    def totals(self, *group_fields):
+        """
+        Sum ``played``, ``points`` and ``mvp`` for each distinct combination
+        of ``group_fields``, as dictionaries.
+        """
+        return self.values(*group_fields).annotate(
+            played=Sum("played"), points=Sum("points"), mvp=Sum("mvp")
+        )
 
 
 class TeamAssociationQuerySet(QuerySet):

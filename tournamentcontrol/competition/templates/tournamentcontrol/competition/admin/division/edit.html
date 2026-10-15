@@ -43,7 +43,15 @@
 
 	<!-- "tournamentcontrol/competition/admin/division/edit.html" -->
 	<script type="text/javascript">
-		$('a[data-target^=#undoModal]').attr('href', '#')
+		// The stages may arrive after the page has loaded (with HTMX admin tabs),
+		// so prepare their undo links as they do.
+		function prepareUndoLinks(root) {
+			$(root).find('a[data-target^="#undoModal"]').attr('href', '#')
+		}
+		prepareUndoLinks(document)
+		document.addEventListener('htmx:load', function(event) {
+			prepareUndoLinks(event.target)
+		})
 
 		$('.modal.undo').on('show.bs.modal', function (event) {
 			var button = $(event.relatedTarget)

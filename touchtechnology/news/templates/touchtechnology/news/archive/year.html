@@ -1,5 +1,6 @@
 {% extends "touchtechnology/news/archive/base.html" %}
 {% load tz %}
+{% load common %}
 
 {% block page_title %}{{ block.super }}: {{ year }}{% endblock %}
 
@@ -8,7 +9,7 @@
 
 	<ul>
 		{% for month in date_list %}
-			<li><a href="{% timezone "UTC" %}{% url application.name|add:":month" year=month|date:"Y" month=month|date:"b" %}{% endtimezone %}">{{ month|date:"F Y" }}</a></li>
+			<li><a href="{% timezone "UTC" %}{% url application.name|add:":month" year=month|date:"Y" month=month|month_slug %}{% endtimezone %}">{{ month|date:"F Y" }}</a></li>
 		{% endfor %}
 	</ul>
 {% endblock %}

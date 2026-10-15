@@ -235,6 +235,33 @@ def get_timezone_from_request(request):
             return tzinfo
 
 
+# English month abbreviations, as date URLs spell them. Fixed here rather than
+# taken from ``strftime("%b")`` or the ``date:"b"`` template filter, both of
+# which follow the process locale or the active language.
+MONTH_SLUGS = (
+    "jan",
+    "feb",
+    "mar",
+    "apr",
+    "may",
+    "jun",
+    "jul",
+    "aug",
+    "sep",
+    "oct",
+    "nov",
+    "dec",
+)
+
+
+def month_slug(value):
+    """
+    Return the month of ``value`` as it appears in a date URL, such as "jun",
+    whatever language is active.
+    """
+    return MONTH_SLUGS[value.month - 1]
+
+
 def get_base_url(scheme="http"):
     """
     It is frustratingly difficult to obtain the appropriate base URL to use

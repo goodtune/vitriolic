@@ -109,6 +109,7 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1, min_per_d
     :returns: pools (list of lists) and draw_formats (list of dicts)
     :rtype: dict
     """
+    seeded_team_list = list(seeded_team_list)
     number_of_teams = len(seeded_team_list)
     number_of_pools = optimum_tournament_pool_count(
         number_of_teams,
@@ -147,6 +148,13 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1, min_per_d
     if number_of_pools is None:
         raise ValueError("Incompatible set of constraints")
 
+    # Team model instances have no ordering, so pools are ordered by the
+    # seeding position of their teams rather than by comparing teams.
+    seeding = {id(team): rank for rank, team in enumerate(seeded_team_list)}
+
+    def pool_seeding(pool):
+        return [seeding.get(id(team), len(seeding)) for team in pool]
+
     # split teams into number of pools, employing the "serpent" pattern
     pools = sorted(
         zip(
@@ -155,7 +163,7 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1, min_per_d
                 for i, g in enumerate(grouper(seeded_team_list, number_of_pools))
             ]
         ),
-        key=None,
+        key=pool_seeding,
     )
 
     # remove any None items from each pool

@@ -1,4 +1,4 @@
-# Drop the MySideline-specific columns that 0065_upstream replaced with
+# Drop the MySideline-specific columns that 0066_upstream replaced with
 # provider-neutral ones, and rename the remaining MySideline columns to match.
 
 from django.db import migrations, models
@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("competition", "0065_upstream"),
+        ("competition", "0066_upstream"),
     ]
 
     operations = [

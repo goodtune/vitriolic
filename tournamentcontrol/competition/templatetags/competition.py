@@ -58,6 +58,11 @@ def next_date(context, season, offset=0, datestr=None):
         "home_team__division__season__competition",
         "away_team__division__season__competition",
         "stage__division__season__competition",
+    ).defer(
+        "live_stream_thumbnail_image",
+        "home_team__division__season__live_stream_thumbnail_image",
+        "away_team__division__season__live_stream_thumbnail_image",
+        "stage__division__season__live_stream_thumbnail_image",
     )
 
     # restrict to matches starting after "now"

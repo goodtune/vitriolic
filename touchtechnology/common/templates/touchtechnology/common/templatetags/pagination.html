@@ -10,7 +10,12 @@
 							{% if page_number == page %}
 								<span>{{ page_number }}</span>
 							{% else %}
-								<a href="?{{ QUERY_STRING }}{{ QUERY_STRING|yesno:"&," }}page={{ page_number }}">{{ page_number }}</a>
+								{% if tab_name %}
+									{% comment %}Inside an HTMX admin tab the page replaces the pane.{% endcomment %}
+									<a href="?{{ QUERY_STRING }}{{ QUERY_STRING|yesno:"&," }}page={{ page_number }}" hx-get="?{{ QUERY_STRING }}{{ QUERY_STRING|yesno:"&," }}page={{ page_number }}" hx-target="#{{ tab_name }}-tab" hx-swap="innerHTML" hx-push-url="false">{{ page_number }}</a>
+								{% else %}
+									<a href="?{{ QUERY_STRING }}{{ QUERY_STRING|yesno:"&," }}page={{ page_number }}">{{ page_number }}</a>
+								{% endif %}
 							{% endif %}
 						</li>
 					{% endspaceless %}

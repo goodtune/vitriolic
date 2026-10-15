@@ -247,10 +247,10 @@ not synchronised by the periodic task.
 
 The MySideline integration (which replaced the SportingPulse scraper removed
 in 2017) was the first provider and gave the fields their original
-`mysideline_*` names. Migration `0065_upstream` adds the generic fields and
+`mysideline_*` names. Migration `0066_upstream` adds the generic fields and
 copies the MySideline link into them (`mysideline_id` 69295321 becomes
 `upstream_id` `mysideline:69295321`; a season's year and period become the
-filtered association URL), and `0066_remove_mysideline` drops the old
+filtered association URL), and `0067_remove_mysideline` drops the old
 columns.
 
 ## Test data
