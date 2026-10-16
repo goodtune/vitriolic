@@ -63,7 +63,7 @@
 		<span class="team home">{{ match.get_home_team_plain }}</span>
 		<span class="vs">v</span>
 		<span class="team away">{{ match.get_away_team_plain }}</span>
-		<span class="acts"><span class="score muted">{% if match.mysideline_id %}from MySideline{% elif match.home_team and match.away_team %}not entered{% else %}awaiting progression{% endif %}</span></span>
+		<span class="acts"><span class="score muted">{% if match.upstream_id %}from {{ match.upstream_backend.name|default:"upstream" }}{% elif match.home_team and match.away_team %}not entered{% else %}awaiting progression{% endif %}</span></span>
 	{% endif %}
 </div>
 {% endpartialdef %}{% endwith %}

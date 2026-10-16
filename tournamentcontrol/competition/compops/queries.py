@@ -145,7 +145,7 @@ def day_scorers(season, day):
         .filter(
             is_bye=False,
             is_forfeit=False,
-            mysideline_id__isnull=True,
+            upstream_id__isnull=True,
             home_team__isnull=False,
             away_team__isnull=False,
             home_team_score__isnull=False,

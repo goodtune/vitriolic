@@ -179,8 +179,8 @@ from the form, or a rule such as "the stream key is in use").
 | Tool | Does |
 | --- | --- |
 | `list_competitions()` | Every competition, enabled or not, with its seasons. |
-| `create_competition`, `update_competition(competition_id, …)`, `delete_competition(competition_id)` | Title, short title, enabled, notes, clubs, MySideline URL (`CompetitionForm`). |
-| `create_season(competition_id, title, …)`, `update_season(season_id, …)`, `delete_season(season_id)` | Time zone, start date, mode (season or tournament), hashtag, statistics, complete, live stream flag and privacy, YouTube credentials (`SeasonForm`). |
+| `create_competition`, `update_competition(competition_id, …)`, `delete_competition(competition_id)` | Title, short title, enabled, notes, clubs, upstream URL (the organisation's page on MySideline or revolutioniseSPORT; `CompetitionForm`). |
+| `create_season(competition_id, title, …)`, `update_season(season_id, …)`, `delete_season(season_id)` | Time zone, start date, mode (season or tournament), hashtag, statistics, complete, live stream flag and privacy, YouTube credentials, upstream URL (the page listing the season's draws on the competition's provider; see [upstream.md](upstream.md)) (`SeasonForm`). |
 | `list_venues(season_id)` | Venues and grounds with time zones and coordinates. |
 | `create_venue(season_id, title, latitude, longitude, zoom, …)`, `update_venue`, `delete_venue` | `VenueForm`. |
 | `create_ground(venue_id, title, …, live_stream)`, `update_ground`, `delete_ground` | `GroundForm`, with the YouTube stream kept in step as the admin's ground view does. |
@@ -293,7 +293,7 @@ grounds resynchronises its broadcast.
 
 | Tool | Does |
 | --- | --- |
-| `list_matches_awaiting_results(season_id, division_id, date)` | Matches that have kicked off without a result, as the admin dashboard lists them. Matches mirrored from MySideline are left out (their results come from MySideline). |
+| `list_matches_awaiting_results(season_id, division_id, date)` | Matches that have kicked off without a result, as the admin dashboard lists them. Matches mirrored from an upstream provider are left out (their results come from the provider). |
 | `record_match_result(match_id, home_team_score, away_team_score, is_forfeit, forfeit_winner_id, bye_processed)` | Enters or revises a result through `MatchResultForm`; the ladders are updated by the same signals as the admin. |
 | `list_season_referees(season_id)` | The referees registered for the season. |
 | `set_match_referees(match_id, referee_ids)` | Replaces the appointments through `MatchRefereeForm`. |

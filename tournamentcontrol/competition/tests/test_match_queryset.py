@@ -43,8 +43,8 @@ class WithResultStateTests(TestCase):
         washout = self.match(is_washout=True)
         self.assertEqual(self.state(washout), (True, False, True))
 
-    def test_mysideline_match_is_not_editable(self):
-        mirrored = self.match(mysideline_id=42)
+    def test_upstream_match_is_not_editable(self):
+        mirrored = self.match(upstream_id="mysideline:42")
         self.assertEqual(self.state(mirrored), (False, False, False))
 
     def test_match_awaiting_progression_is_not_editable(self):
@@ -63,7 +63,7 @@ class WithResultStateTests(TestCase):
     def test_state_costs_one_query(self):
         undecided = factories.UndecidedTeamFactory.create(stage=self.stage)
         self.match(home_team=None, home_team_undecided=undecided)
-        self.match(mysideline_id=42)
+        self.match(upstream_id="mysideline:42")
         self.match(home_team_score=1, away_team_score=0)
         with self.assertNumQueries(1):
             states = [

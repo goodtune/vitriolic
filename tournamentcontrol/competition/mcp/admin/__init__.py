@@ -1139,7 +1139,7 @@ class AdminToolset(CompetitionToolset):
         enabled: bool = True,
         copy: str | None = None,
         club_ids: list[int] | None = None,
-        mysideline_url: str | None = None,
+        upstream_url: str | None = None,
         slug: str | None = None,
     ) -> dict[str, Any]:
         """
@@ -1159,7 +1159,7 @@ class AdminToolset(CompetitionToolset):
                 "enabled": enabled,
                 "copy": copy,
                 "clubs": club_ids,
-                "mysideline_url": mysideline_url,
+                "upstream_url": upstream_url,
                 "slug": slug,
             },
             user=self._user(),
@@ -1175,7 +1175,7 @@ class AdminToolset(CompetitionToolset):
         enabled: bool | None = None,
         copy: str | None = None,
         club_ids: list[int] | None = None,
-        mysideline_url: str | None = None,
+        upstream_url: str | None = None,
         slug: str | None = None,
         slug_locked: bool | None = None,
     ) -> dict[str, Any]:
@@ -1194,7 +1194,7 @@ class AdminToolset(CompetitionToolset):
                 "enabled": enabled,
                 "copy": copy,
                 "clubs": club_ids,
-                "mysideline_url": mysideline_url,
+                "upstream_url": upstream_url,
                 "slug": slug,
                 "slug_locked": slug_locked,
             },
@@ -1230,6 +1230,7 @@ class AdminToolset(CompetitionToolset):
         live_stream: bool = False,
         live_stream_privacy: LiveStreamPrivacyName | None = None,
         copy: str | None = None,
+        upstream_url: str | None = None,
         slug: str | None = None,
     ) -> dict[str, Any]:
         """
@@ -1259,6 +1260,7 @@ class AdminToolset(CompetitionToolset):
                 "live_stream": live_stream,
                 "live_stream_privacy": live_stream_privacy,
                 "copy": copy,
+                "upstream_url": upstream_url,
                 "slug": slug,
             },
             user=self._user(),
@@ -1285,6 +1287,7 @@ class AdminToolset(CompetitionToolset):
         live_stream_client_id: str | None = None,
         live_stream_client_secret: str | None = None,
         copy: str | None = None,
+        upstream_url: str | None = None,
         slug: str | None = None,
         slug_locked: bool | None = None,
     ) -> dict[str, Any]:
@@ -1316,6 +1319,7 @@ class AdminToolset(CompetitionToolset):
                 "live_stream_client_id": live_stream_client_id,
                 "live_stream_client_secret": live_stream_client_secret,
                 "copy": copy,
+                "upstream_url": upstream_url,
                 "slug": slug,
                 "slug_locked": slug_locked,
             },
@@ -2933,8 +2937,9 @@ class AdminToolset(CompetitionToolset):
         Matches that have kicked off (and unprocessed byes) in seasons not
         yet complete that have no result recorded, as the admin dashboard
         lists them, oldest first; narrow by season, division or date.
-        Matches mirrored from MySideline are not listed: their results come
-        from MySideline and are never entered here.
+        Matches mirrored from an upstream provider (MySideline,
+        revolutioniseSPORT) are not listed: their results come from the
+        provider and are never entered here.
         """
         self._staff()
         matches = matches_require_basic_results()

@@ -1,49 +1,29 @@
-# MySideline synchronisation
+# MySideline
 
-Vitriolic can mirror the competitions that Touch Football Australia publishes
-on [MySideline](https://tfa.mysideline.com.au) into a `Season`. MySideline is
-authoritative for everything it manages: each synchronisation fetches a
-complete snapshot of the remote competitions and converges the local
-divisions, pools, teams, fixtures and results onto it.
-
-This replaces the SportingPulse scraper that was removed in 2017 (the
-`Division.sportingpulse_url` field it left behind is dropped by migration
-`0063_mysideline`). Division and team names are the one thing MySideline is
-not authoritative for; see [Naming](#naming).
+MySideline (`https://tfa.mysideline.com.au`) is the competition management
+platform used by Touch Football Australia and other NRL community sports. It
+is one of the [upstream providers](upstream.md) a `Season` can be
+synchronised from; this document describes the remote interface and what is
+specific to MySideline. The configuration, identifiers, naming rules and
+synchronisation semantics shared by every provider are in
+[upstream.md](upstream.md).
 
 ## Configuration
 
 A MySideline *association* corresponds to a Vitriolic `Competition`, and each
 "year" the association page lets you pick corresponds to a `Season`:
 
-1. On the competition edit form set **MySideline URL** to the association
-   page, for example
-   `https://tfa.mysideline.com.au/competitions/association/299999` (NSW
-   State Cup). The URL is validated and normalised; only the association id
-   is used internally. Query parameters such as `?season=2025&seasonTag=2`
-   copied from the site's filter link are accepted and dropped.
-2. On each season set **MySideline season** to the year shown in the
-   association page's *Year* drop-down (`season` in the remote data), eg.
-   `2025`. Optionally set **MySideline season period** -- MySideline's
-   `seasonTag`: `1` for the first half of the year (winter competitions),
-   `2` for the second half (summer/spring) -- when one Vitriolic season
-   should cover only part of a year.
-
-A season without a MySideline season is never synchronised. `Season.mysideline_url`
-gives the association page filtered to the season, which is what the site
-itself produces from its drop-downs.
-
-## Invocation
-
-* **Admin**: linked seasons show a *MySideline* button in the season list
-  which queues a synchronisation.
-* **Celery**: `tournamentcontrol.competition.tasks.synchronise_mysideline`
-  synchronises every enabled, incomplete linked season, isolating
-  failures per season; `synchronise_mysideline_season(season_pk)` does one.
-  Schedule the former with Celery beat in the deploying project, eg. every
-  15 minutes on match days.
-* **Management command**: `synchronise_mysideline [season_pk ...]`.
-* **Python**: `tournamentcontrol.competition.mysideline.sync.synchronise_season`.
+1. On the competition set **Upstream URL** to the association page, for
+   example `https://tfa.mysideline.com.au/competitions/association/299999`
+   (NSW State Cup). Query parameters copied from the site's filter link are
+   accepted and dropped.
+2. On each season set **Upstream URL** to the association page filtered to
+   the year, as the site's *Year* drop-down produces it:
+   `https://tfa.mysideline.com.au/competitions/association/299999?season=2025`.
+   Add the period drop-down's `seasonTag` -- `1` for the first half of the
+   year (winter competitions), `2` for the second half (summer/spring) --
+   when one Vitriolic season should cover only part of a year:
+   `...?season=2025&seasonTag=2`.
 
 ## Remote interface
 
@@ -87,10 +67,10 @@ first JSON object containing a `competitions` array. Each entry carries
 MySideline uses integer identifiers throughout, all stable across renames:
 
     association (6338)
-      competition (69295321)       -> Division.mysideline_id
-        team (69333380)            -> Team.mysideline_id
+      competition (69295321)       -> Division.upstream_id "mysideline:69295321"
+        team (69333380)            -> Team.upstream_id "mysideline:69333380"
         pool ("Pool A", by name)   -> StageGroup (title)
-        match (1388870728)         -> Match.mysideline_id
+        match (1388870728)         -> Match.upstream_id "mysideline:1388870728"
           round { number, type: Regular|Final, displayName }
           status: pre-game | final | forfeit
           venue { _id, name, venueTimezone }, meta.fieldNo
@@ -102,12 +82,17 @@ Pools have no identifier, only a name; they are matched by title.
 * The association page lists every competition the association has ever
   published; its *Year* / *Age* / period drop-downs are client-side filters
   mirrored into `?season=`, `?age=` and `?seasonTag=` query parameters, not
-  separate requests.
+  separate requests. The season URL's `season` and `seasonTag` select the
+  competitions the same way.
 * Match `status` values seen: `pre-game`, `final` (occasionally `Final` on
-  byes; statuses are lower-cased), `forfeit`. Scores for a `pre-game` match
-  are `0/0` and are ignored; only `final` supplies a result. `forfeit`
-  carries `meta.forfeitingTeam`. Any other status is treated as unplayed so
-  an unknown value never fabricates a result.
+  byes; statuses are lower-cased), `forfeit`. MySideline does not reliably
+  promote a played match to `final`: most keep `pre-game` while their score
+  is published, so a match that has started and carries a non-zero score is
+  taken as played whatever its status; an unplayed match always reports
+  `0/0`, `in-progress` is never a result, and a genuine 0-0 draw left at
+  `pre-game` cannot be told from an unplayed fixture. `forfeit` carries
+  `meta.forfeitingTeam`. Any other status is treated as unplayed so an
+  unknown value never fabricates a result.
 * Distinct competition or team names can slugify identically ("Men's 55s"
   and "Mens 55s"); slugs are suffixed (`-2`, ...) to keep them unique.
 * A bye is a match with `meta.isBye` and one side empty. Finals whose
@@ -133,119 +118,27 @@ Pools have no identifier, only a name; they are matched by title.
 
 | MySideline | Vitriolic |
 | --- | --- |
-| association | `Competition` (`mysideline_url`) |
-| year / period | `Season` (`mysideline_season`, `mysideline_season_tag`) |
-| competition | `Division` (`mysideline_id`); title and slug follow the remote name unless it has been changed locally (see [Naming](#naming)) |
-| `Regular` rounds | `Stage` "Regular Season" |
-| `Final` rounds | `Stage` "Finals" with `keep_ladder` off (created only when finals fixtures exist; `Match.label` carries the round's display name, eg. "Grand Final") |
-| pool | `StageGroup` on the regular stage; `Team.stage_group` and, for intra-pool matches, `Match.stage_group` |
-| team | `Team` (`mysideline_id`); title and slug follow the remote name unless it has been changed locally (see [Naming](#naming)) |
-| match | `Match` (`mysideline_id`): round number, date/time in the venue's timezone, `play_at`, teams, scores, bye, forfeit |
-| venue / field | `Venue` (matched by title within the season, created with the venue's coordinates and timezone when absent) and `Ground` "Field *n*" (created when absent) |
-| TBA participant | `UndecidedTeam` labelled "TBA" on the stage |
-
-A division is created with a points formula derived from the competition's
-MySideline ladder template (for example the NSW State Cup's "Events Ladder"
-gives `4*win + 2*draw + 4*forfeit_for`), or the TFA standard ladder
-(`3*win + 2*draw + 1*loss + 3*bye + 3*forfeit_for`) when the template cannot
-be read; the forfeit score defaults from the template too. Ladder
-configuration is not overwritten by later syncs and may be changed freely. A division or team created by hand with the same title as a
-remote one is *adopted* (linked) on the first synchronisation rather than
-duplicated, so ladder settings can be prepared before linking a season.
-
-## Naming
-
-MySideline is authoritative for everything *except* the names of divisions
-and teams. Upstream naming is frequently unwieldy -- Central Coast Touch
-publishes a division as "Born 2014 & 2013 u14 Boys" where "14 Boys" is what
-should appear on the website -- so the `title` of a linked `Division` or
-`Team` may be edited in the admin and the synchronisation will keep it.
-
-Because the local name may be ours or theirs, and either side can change it
-without telling the other, two copies of the remote name are kept beside our
-own (both non-editable, set only by the synchronisation and the admin form):
-
-| Field | Meaning |
-| --- | --- |
-| `title` | the name we publish |
-| `mysideline_title` | what MySideline calls the record right now, refreshed on every synchronisation whether or not we use it |
-| `mysideline_title_synced` | what MySideline called it when `title` was last reconciled with it: when the record was linked, when a remote rename was last applied, or when an administrator last saved it |
-
-From these, `Division.mysideline_title_overridden` /
-`Team.mysideline_title_overridden` (`title != mysideline_title_synced`) is
-*our* variation and `mysideline_title_changed`
-(`mysideline_title != mysideline_title_synced`) is *theirs*. The
-synchronisation then:
-
-* applies the remote name while the record has no local variation -- the
-  behaviour before this feature and still the default, so nothing needs
-  configuring for divisions whose upstream names are fine;
-* keeps the local name when there is one, and **reports** an upstream rename
-  of such a record (in `SyncResult.warnings`, the task log, the management
-  command output and the *Synchronise with MySideline* admin page) so that
-  somebody can decide which name is right. The record is never silently
-  renamed and the upstream change is never silently discarded.
-
-An administrator resolves a reported rename by editing the division or team:
-the form shows what MySideline calls it and offers **Use the MySideline
-name**, which discards the local name (and reverts the slug) so that later
-renames are applied automatically again. Saving the form without ticking it
-keeps the local name and acknowledges the remote change, so it is not
-reported again until MySideline renames the record once more. Records
-awaiting that decision are listed on the *Synchronise with MySideline* page
-for the season.
-
-`mysideline_renamed(queryset)` filters divisions or teams to those awaiting
-a decision. The fields are added by migration `0064_mysideline_titles`,
-which backfills existing links from their current titles so that nothing
-already synchronised is reported as a variation.
-
-Pools have no remote identifier -- they are matched by name -- so a pool
-cannot be renamed locally; a local rename is treated as a new pool.
-
-## Synchronisation semantics
-
-The whole snapshot (association listing plus every selected competition) is
-fetched before anything is written, then applied inside one transaction:
-
-* **added** remotely: created locally (division, stage, pool, team, match,
-  venue, ground as needed);
-* **modified** remotely (date/time, field, teams, pool membership, bye):
-  the corresponding fields are updated in place;
-* **renamed** remotely: the local title and slug are updated unless the name
-  has been changed locally (see [Naming](#naming)); identity is the
-  MySideline id so relations (matches, registrations, ladders) are kept.
-  Slugs marked as locked are left alone. A rename which would collide with
-  another division in the season, or another team in the division, is
-  reported and retried on the next synchronisation rather than failing;
-* **scored** remotely: the scores are applied and the ladder is recalculated
-  through the normal `Match` save signals. A result that is later changed or
-  withdrawn is changed or cleared. A forfeit sets `is_forfeit`,
-  `forfeit_winner` and the division's forfeit scores;
-* **removed** remotely: matches are deleted; teams are deleted once their
-  MySideline fixtures are gone, or detached (identifier cleared) when
-  native matches or registrations reference them; pools and the finals
-  stage are deleted once empty; a division is deleted when everything in it
-  could be, otherwise it is kept, marked as *draft* and reported.
-
-Only records carrying a MySideline identifier are ever changed or removed;
-native divisions, teams and matches in the same season are untouched, and
-venues and grounds are never removed.
-
-A transport failure, HTTP error, GraphQL error or a response that does not
-have the expected shape raises before the transaction starts, so a
-temporary outage never empties a competition. A database error during the
-apply rolls back the whole snapshot.
+| association | `Competition` (`upstream_url`) |
+| year / period | `Season` (`upstream_url` with `season` and optional `seasonTag`) |
+| competition | `Division` (`upstream_id`) |
+| `Regular` / `Final` rounds | `Stage` "Regular Season" / "Finals" |
+| pool | `StageGroup` on the regular stage |
+| team | `Team` (`upstream_id`) |
+| match | `Match` (`upstream_id`): round, date/time in the venue's time zone, teams, scores, bye, forfeit |
+| venue / field | `Venue` (with coordinates and `venueTimezone`) and `Ground` "Field *n*" |
+| TBA participant | `UndecidedTeam` "TBA" |
+| `laddertemplate` | the division's points formula and forfeit score when the division is created (for example the NSW State Cup's "Events Ladder" gives `4*win + 2*draw + 4*forfeit_for`) |
 
 ## Test data
 
 `tournamentcontrol/competition/tests/fixtures/mysideline/state_cup_2025/`
 holds the complete NSW State Cup 2025 (association 299999: 21 competitions,
 242 teams, 959 matches, pools and finals) as captured from the interfaces
-above, plus smaller captures of a club association. The unit tests and the
-end-to-end test `tests/e2e/test_mysideline.py` import it through the real
-client and reconciler with the HTTP layer replaced by
-`tournamentcontrol.competition.tests.mysideline.state_cup_session`. Running
+above, plus smaller captures of a club association. The unit tests
+(`tests/test_mysideline.py`) and the end-to-end test
+`tests/e2e/test_mysideline.py` import it through the real client and
+reconciler with the HTTP layer replaced by
+`tournamentcontrol.competition.tests.upstream.state_cup_session`. Running
 the end-to-end tests with `MYSIDELINE_LIVE=1` imports from the live site
 instead, which confirms the remote interface still matches this document.
 

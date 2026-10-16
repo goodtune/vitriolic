@@ -223,8 +223,8 @@ class SaveScoreTests(ResultsFixture):
         response = self.post_score(self.match, 5, 4, user=self.readonly)
         self.assertEqual(response.status_code, 403)
 
-    def test_mysideline_match_is_refused(self):
-        mirrored = self.make(9, mysideline_id=5)
+    def test_upstream_match_is_refused(self):
+        mirrored = self.make(9, upstream_id="mysideline:5")
         response = self.post_score(mirrored, 5, 4)
         self.assertEqual(response.status_code, 400)
 

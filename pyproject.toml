@@ -78,6 +78,7 @@ news = [
     "python-magic",
 ]
 competition = [
+    "beautifulsoup4>=4.12",
     "pydantic>=2.0",
     "celery>5",
     "cloudinary",

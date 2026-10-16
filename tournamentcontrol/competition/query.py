@@ -126,7 +126,8 @@ class MatchQuerySet(QuerySet):
 
         ``result_editable``
             the result may be entered by hand: never for a match mirrored from
-            MySideline, always for a bye, otherwise once both teams are known.
+            an upstream provider, always for a bye, otherwise once both teams
+            are known.
         """
         has_result = Case(
             When(is_bye=True, then=F("bye_processed")),
@@ -143,7 +144,7 @@ class MatchQuerySet(QuerySet):
             self.model.objects.filter(team_needs_progressing, pk=OuterRef("pk"))
         )
         result_editable = Case(
-            When(mysideline_id__isnull=False, then=Value(False)),
+            When(upstream_id__isnull=False, then=Value(False)),
             When(is_bye=True, then=Value(True)),
             When(needs_progressing=True, then=Value(False)),
             default=Value(True),
