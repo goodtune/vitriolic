@@ -15,6 +15,7 @@ from harness.ownership import refusal
 COMMANDS = {
     "seed": "harness.seeding.main",
     "pages": "harness.pages.main",
+    "unflow": "harness.unflow.main",
 }
 
 
