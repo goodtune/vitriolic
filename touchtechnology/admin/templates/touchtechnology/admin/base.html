@@ -7,6 +7,7 @@
 {% load admin %}
 {% load gravatar %}
 {% load bootstrap3 %}
+{% admin_brand as brand %}
 <head>
 	<title>{% block title %}{{ brand.name }}{% endblock %}</title>
 
@@ -85,7 +86,7 @@
 								<li><a href="{% url 'admin:settings:index' %}"><i class="fa fa-fw fa-cogs"></i>&nbsp;&nbsp;{% trans "Settings" %}</a></li>
 								<li class="divider"></li>
 								{# LogoutView only accepts POST since Django 5.0. #}
-								<li><form method="post" action="{% url 'admin:logout' %}">{% csrf_token %}<button type="submit">{% trans "Logout" %}</button></form></li>
+								<li><form method="post" action="{% url 'admin:logout' %}">{% csrf_token %}<button type="submit" class="btn btn-link"><i class="fa fa-fw fa-sign-out"></i>&nbsp;&nbsp;{% trans "Logout" %}</button></form></li>
 							</ul>
 
 						</li>

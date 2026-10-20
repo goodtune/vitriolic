@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.test import override_settings
 from test_plus import TestCase
 
@@ -26,6 +25,14 @@ class AdminLoginTests(TestCase):
             fetch_redirect_response=False,
         )
 
+    def test_login_without_next_lands_on_the_admin(self):
+        self.post("admin:login", data={"username": "admin", "password": "password"})
+        self.assertRedirects(
+            self.last_response,
+            self.reverse("admin:index"),
+            fetch_redirect_response=False,
+        )
+
     def test_login_follows_next(self):
         target = self.reverse("admin:news:article:list")
         self.post(
@@ -45,9 +52,7 @@ class AdminLoginTests(TestCase):
             },
         )
         self.response_302()
-        self.assertEqual(
-            self.last_response["Location"], str(settings.LOGIN_REDIRECT_URL)
-        )
+        self.assertEqual(self.last_response["Location"], self.reverse("admin:index"))
 
     def test_logout_requires_post_and_lands_on_login(self):
         with self.login(self.superuser):
@@ -78,9 +83,24 @@ class AdminLoginTests(TestCase):
             self.get("admin:login")
             self.assertRedirects(
                 self.last_response,
-                settings.LOGIN_REDIRECT_URL,
+                self.reverse("admin:index"),
                 fetch_redirect_response=False,
             )
+
+    def test_signed_in_staff_is_not_sent_back_to_the_login_page(self):
+        with self.login(self.superuser):
+            self.get("admin:login", data={"next": self.reverse("admin:login")})
+            self.assertRedirects(
+                self.last_response,
+                self.reverse("admin:index"),
+                fetch_redirect_response=False,
+            )
+
+    def test_staff_redirect_is_never_cached(self):
+        with self.login(self.superuser):
+            self.get("admin:login")
+        self.response_302()
+        self.assertIn("no-store", self.last_response["Cache-Control"])
 
     def test_signed_in_non_staff_sees_the_form_with_a_notice(self):
         user = factories.UserFactory.create(username="visitor")
