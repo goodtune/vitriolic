@@ -49,8 +49,14 @@ if [ "$reset" -eq 1 ]; then
 fi
 
 "$PGBIN/createdb" "${conn[@]}" "$database"
-printf 'COMMENT ON DATABASE "%s" IS :'"'"'owner'"'"';\n' "$database" |
-    sql -d postgres -v owner="$checkout"
+# A database with no owner would be refused by every script, so one whose owner
+# could not be recorded is dropped again.
+if ! printf 'COMMENT ON DATABASE "%s" IS :'"'"'owner'"'"';\n' "$database" |
+    sql -d postgres -v owner="$checkout"; then
+    "$PGBIN/dropdb" "${conn[@]}" --force "$database" || true
+    echo "db.sh: could not record the owner of $database; dropped it" >&2
+    exit 1
+fi
 
 harness_env "$name"
 echo "db.sh: created $database for $checkout" >&2
