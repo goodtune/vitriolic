@@ -127,7 +127,7 @@
 		for (var i = 0; i < tabSets.length; i += 1) {
 			var tabs = tabsOf(tabSets[i]);
 			for (var j = 0; j < tabs.length; j += 1) {
-				if (tabs[j].getAttribute("aria-controls") === id) {
+				if (tabs[j].id === id || tabs[j].getAttribute("aria-controls") === id) {
 					return { list: tabSets[i], tab: tabs[j] };
 				}
 			}
@@ -251,7 +251,7 @@
 			select(list, chosen, false);
 			// The address named a tab: show the page from its top, with the
 			// heading and the tabs, rather than jumping to the pane.
-			if (hash && chosen.getAttribute("aria-controls") === hash) {
+			if (hash && (chosen.id === hash || chosen.getAttribute("aria-controls") === hash)) {
 				window.scrollTo(0, 0);
 				window.addEventListener("load", function () {
 					window.scrollTo(0, 0);
@@ -522,7 +522,12 @@
 		done.onclick = finish;
 		dialog.onclose = function () {
 			picker.button.setAttribute("aria-expanded", "false");
-			picker.button.focus();
+			picker.closedAt = Date.now();
+			// After the key that closed the dialog has finished with it, so an
+			// Enter that chose an option does not press the button again.
+			setTimeout(function () {
+				picker.button.focus();
+			}, 0);
 		};
 
 		draw();
@@ -604,6 +609,9 @@
 			};
 			picker.refresh();
 			button.addEventListener("click", function () {
+				if (picker.closedAt && Date.now() - picker.closedAt < 400) {
+					return;
+				}
 				openPicker(picker);
 			});
 			if (label) {
@@ -637,6 +645,9 @@
 			}
 			event.preventDefault();
 			pending = form;
+			if (!form.id) {
+				form.id = nextId("wb-form");
+			}
 			var menu = form.closest("[popover]");
 			if (menu && menu.hidePopover) {
 				try {
@@ -649,19 +660,21 @@
 			message.textContent = form.getAttribute("data-wb-confirm");
 			go.textContent = form.dataset.wbConfirmLabel || "Delete";
 			go.className = "wb-button " + (form.dataset.wbConfirmTone === "plain" ? "wb-button-primary" : "wb-button-danger");
-			dialog.returnValue = "";
+			// The confirming button submits the form itself, so the page moves
+			// on as the button is pressed.
+			go.setAttribute("form", form.id);
+			go.removeAttribute("value");
 			dialog.showModal();
 		}, true);
 
-		dialog.addEventListener("close", function () {
-			if (dialog.returnValue === "confirm" && pending) {
+		go.addEventListener("click", function () {
+			if (pending) {
 				pending.dataset.wbConfirmed = "1";
-				if (pending.requestSubmit) {
-					pending.requestSubmit();
-				} else {
-					pending.submit();
-				}
 			}
+		});
+
+		dialog.addEventListener("close", function () {
+			go.removeAttribute("form");
 			pending = null;
 		});
 	}

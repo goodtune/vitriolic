@@ -36,14 +36,14 @@
 	{{ block.super }}
 	{% if object.pk %}
 		{% trans "Ladder" as ladder %}
-		{% include "touchtechnology/admin/_tab.html" with id="ladder-tab" label=ladder %}
+		{% include "touchtechnology/admin/_tab.html" with name="ladder" label=ladder %}
 	{% endif %}
 {% endblock %}
 
 {% block tab-panes %}
 	{{ block.super }}
 	{% if object.pk %}
-		<section class="wb-pane wb-sheet" role="tabpanel" id="ladder-tab">
+		<section class="wb-pane wb-sheet" role="tabpanel" id="ladder-pane">
 			<div class="wb-sheet-head"><h2>{% trans "Ladder" %}</h2></div>
 			{% for stage, pools in ladders %}
 				{% for pool, rows in pools %}

@@ -8,7 +8,7 @@
 
 {% block table-columns %}
 	{{ block.super }}
-	<td data-label="{% trans "Abbreviation" %}">{{ obj.abbreviation|default:"–" }}</td>
+	<td data-label="{% trans "Abbreviation" %}">{{ obj.abbreviation }}</td>
 {% endblock %}
 
 {% block empty-row-colspan %}3{% endblock %}

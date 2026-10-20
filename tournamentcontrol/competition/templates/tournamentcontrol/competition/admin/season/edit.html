@@ -48,7 +48,7 @@
 	{{ block.super }}
 	{% if object.pk %}
 		{% trans "Schedule" as schedule %}
-		{% include "touchtechnology/admin/_tab.html" with id="schedule-tab" label=schedule count=match_days|length %}
+		{% include "touchtechnology/admin/_tab.html" with name="schedule" label=schedule count=match_days|length %}
 	{% endif %}
 {% endblock %}
 
@@ -56,7 +56,7 @@
 	{{ block.super }}
 
 	{% if object.pk %}
-		<section class="wb-pane wb-sheet wb-sheet-flush" role="tabpanel" id="schedule-tab">
+		<section class="wb-pane wb-sheet wb-sheet-flush" role="tabpanel" id="schedule-pane">
 			<div class="wb-sheet-head">
 				<h2>{% trans "Schedule" %}</h2>
 				<div class="wb-actions">

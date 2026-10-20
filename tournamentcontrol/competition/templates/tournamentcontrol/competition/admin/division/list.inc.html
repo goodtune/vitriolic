@@ -16,7 +16,7 @@
 
 {% block table-columns %}
 	{{ block.super }}
-	<td data-label="{% trans "Short title" %}">{{ obj.short_title|default:"–" }}</td>
+	<td data-label="{% trans "Short title" %}">{{ obj.short_title }}</td>
 	<td class="wb-num" data-label="{% trans "Teams" %}">{{ obj.teams.count }}</td>
 {% endblock %}
 

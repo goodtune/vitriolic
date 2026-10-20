@@ -298,15 +298,16 @@ img, svg { max-width: 100%; }
 	width: min(20rem, 86vw);
 	background: var(--wb-brand);
 	color: var(--wb-on-brand);
-	transform: translateX(-102%);
+	opacity: 0;
 	visibility: hidden;
-	transition: transform 0.22s ease, visibility 0s linear 0.22s;
+	transition: opacity 0.15s ease, visibility 0s linear 0.15s;
 	box-shadow: var(--wb-shadow-lift);
 }
+/* The drawer fades in where it stands, so what it holds is never half off the screen. */
 .wb-rail.is-open {
-	transform: none;
+	opacity: 1;
 	visibility: visible;
-	transition: transform 0.22s ease;
+	transition: opacity 0.15s ease;
 }
 .wb-scrim {
 	position: fixed;
@@ -318,7 +319,7 @@ img, svg { max-width: 100%; }
 /* Without scripts, the menu sits at the end of the page on a phone. */
 .no-js .wb-rail {
 	position: static;
-	transform: none;
+	opacity: 1;
 	visibility: visible;
 	width: auto;
 	box-shadow: none;
@@ -487,6 +488,7 @@ img, svg { max-width: 100%; }
 		top: 0;
 		height: 100vh;
 		width: auto;
+		opacity: 1;
 		transform: none;
 		visibility: visible;
 		box-shadow: none;
@@ -1034,7 +1036,7 @@ select.wb-multi { max-width: 16rem; }
 	font-size: 0.9rem;
 	font-weight: 700;
 }
-.wb-picker-native { position: absolute !important; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.wb-picker-native { display: none !important; }
 
 /* ------------------------------------------------------------------------
  * Dialogs
@@ -1653,3 +1655,33 @@ h3 + .wb-table-wrap { margin-bottom: 1.5rem; }
 .wb-cards > *, .wb-dashboard > *, .wb-layout > * { margin-top: 0 !important; }
 .wb-bulk-row + .wb-bulk-row .wb-help { display: none; }
 @media (min-width: 48rem) { .wb-row-buttons { flex-wrap: nowrap; } }
+
+/* Nothing may push the page wider than a phone. */
+.wb-sheet, .wb-panes, .wb-tabbed, .wb-layout > * { min-width: 0; max-width: 100%; }
+.wb-formfoot .wb-button, .wb-dialog-actions .wb-button, .wb-head-actions .wb-button { white-space: normal; }
+@media (max-width: 39.99rem) {
+	.wb-formfoot .wb-actions { width: 100%; }
+	.wb-formfoot .wb-actions .wb-button { flex: 1 1 100%; }
+	.wb-formbar-actions .wb-button { min-height: 2.6rem; padding: 0.35rem 0.9rem; }
+	.wb-formbar-actions .wb-button-primary { min-width: 6rem; }
+}
+
+/* A phone keeps the top of a page short, so the work starts on the first screen. */
+@media (max-width: 47.99rem) {
+	.wb-main { padding-top: 0.5rem; }
+	.wb-head { gap: 0.6rem; margin-bottom: 0.9rem; }
+	.wb-head h1 { font-size: 1.65rem; }
+	.wb-lede { font-size: 0.95rem; }
+	.wb-head-actions { gap: 0.4rem; }
+	.wb-head-actions .wb-button { min-height: 2.5rem; padding: 0.3rem 0.85rem; font-size: 0.95rem; }
+	.wb-tabs { gap: 0.35rem; }
+	.wb-tab { min-height: 2.4rem; padding: 0.2rem 0.75rem; font-size: 0.95rem; }
+	.wb-tab-count { min-width: 1.4rem; height: 1.4rem; font-size: 0.75rem; }
+	.wb-checklist > summary { padding: 0.75rem var(--wb-sheet-pad); row-gap: 0.25rem; }
+	.wb-checklist-title { font-size: 1.05rem; }
+	.wb-checklist-next { font-size: 0.925rem; }
+	.wb-layout-aside { gap: 0.75rem; }
+	.wb-sheet-head { margin-bottom: 0.6rem; }
+	.wb-trail { margin-bottom: 0.25rem; }
+}
+.wb-sheet-head .wb-actions { gap: 0.4rem; }

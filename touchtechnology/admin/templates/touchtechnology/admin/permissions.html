@@ -20,13 +20,13 @@
 		<div class="wb-tabs" role="tablist" data-wb-tabs aria-label="{% trans "Permissions" %}">
 			{% for form in formset %}
 				{% trans form.permission.name as permission_name %}
-				{% include "touchtechnology/admin/_tab.html" with id=form.permission.codename|add:"-tab" label=permission_name|capfirst selected=forloop.first %}
+				{% include "touchtechnology/admin/_tab.html" with name=form.permission.codename label=permission_name|capfirst selected=forloop.first %}
 			{% endfor %}
 		</div>
 
 		<div class="wb-panes">
 			{% for form in formset %}
-				<section class="wb-pane wb-sheet" role="tabpanel" id="{{ form.permission.codename }}-tab">
+				<section class="wb-pane wb-sheet" role="tabpanel" id="{{ form.permission.codename }}-pane">
 					<h2>{% trans form.permission.name as permission_name %}{{ permission_name|capfirst }}</h2>
 					<p class="wb-muted">{% blocktrans with permission=form.permission.name|lower type=form.instance|type name=form.instance %}Control who <em>{{ permission }}</em> for the {{ type }} <strong>{{ name }}</strong>.{% endblocktrans %}</p>
 					<div class="wb-fields">

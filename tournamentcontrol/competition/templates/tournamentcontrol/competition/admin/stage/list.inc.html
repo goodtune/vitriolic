@@ -9,7 +9,7 @@
 
 {% block table-columns %}
 	{{ block.super }}
-	<td data-label="{% trans "Short title" %}">{{ obj.short_title|default:"–" }}</td>
+	<td data-label="{% trans "Short title" %}">{{ obj.short_title }}</td>
 	<td data-label="{% trans "Draw" %}">{% with count=obj.matches.count %}{% if count %}<span class="wb-badge wb-badge-ok">{% blocktrans count counter=count %}{{ counter }} match{% plural %}{{ counter }} matches{% endblocktrans %}</span>{% else %}<span class="wb-badge">{% trans "Not built" %}</span>{% endif %}{% endwith %}</td>
 {% endblock %}
 

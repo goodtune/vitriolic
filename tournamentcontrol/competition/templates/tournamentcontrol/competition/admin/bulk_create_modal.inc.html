@@ -5,7 +5,7 @@
 	scripts the button submits the form as it stands and the bulk page asks.
 {% endcomment %}
 <form method="get" action="{{ url }}" class="wb-inline-form">
-	<button type="submit" class="wb-button wb-button-small" data-wb-dialog="bulk-{{ name }}">{% icon "copy-plus" %}{{ title }}</button>
+	<button type="submit" class="wb-button wb-button-small" data-wb-dialog="bulk-{{ name }}" aria-label="{{ title }}">{% icon "copy-plus" %}{% trans "Add several" %}</button>
 	<dialog class="wb-dialog" id="bulk-{{ name }}" aria-labelledby="bulk-{{ name }}-title">
 		<div class="wb-dialog-body">
 			<h2 class="wb-dialog-title" id="bulk-{{ name }}-title">{{ title }}</h2>

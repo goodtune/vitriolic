@@ -7,14 +7,14 @@
 	{{ block.super }}
 	{% if object.pk %}
 		{% trans "Timeline" as label %}
-		{% include "touchtechnology/admin/_tab.html" with id="timeline-tab" label=label %}
+		{% include "touchtechnology/admin/_tab.html" with name="timeline" label=label %}
 	{% endif %}
 {% endblock tab-links %}
 
 {% block tab-panes %}
 	{{ block.super }}
 	{% if object.pk %}
-		<section class="wb-pane wb-sheet" role="tabpanel" id="timeline-tab">
+		<section class="wb-pane wb-sheet" role="tabpanel" id="timeline-pane">
 			<h2>{% trans "Timeline" %}</h2>
 			<ul>
 				{% for enrolment in object.enrolments.all %}

@@ -8,9 +8,9 @@
 	  page-head          the heading (eyebrow, title, head-actions)
 	  head-actions       buttons beside the title
 	  before-tabs        anything above the tabs (a checklist, a summary)
-	  tab-links          the tabs: <a role="tab" class="wb-tab" href="#x-tab">Label</a>
-	                     (or include "touchtechnology/admin/_tab.html" with id, label, count)
-	  tab-panes          the panes: <section class="wb-pane wb-sheet" role="tabpanel" id="x-tab">
+	  tab-links          the tabs: include "touchtechnology/admin/_tab.html" with name, label
+	                     (and count); the tab's id is "<name>-tab"
+	  tab-panes          the panes: <section class="wb-pane wb-sheet" role="tabpanel" id="<name>-pane">
 	  form-fieldset      the fields of the form
 	  form-bar           the bar at the top of the form, kept in view, with Cancel and Save
 	  form-title         its title
@@ -40,9 +40,9 @@
 			{% if object.pk %}
 				<div class="wb-tabs" role="tablist" data-wb-tabs aria-label="{% blocktrans with type=model|type %}Parts of this {{ type }}{% endblocktrans %}">
 					{% block tab-links %}
-						<a class="wb-tab" role="tab" href="#{{ model|type|slugify }}-tab" aria-controls="{{ model|type|slugify }}-tab" aria-selected="true">{% block edit-tab-label %}{% trans "Details" %}{% endblock %}{% if form.errors %} <span class="wb-tab-error">{% icon "circle-alert" %}</span>{% endif %}</a>
+						<a class="wb-tab" role="tab" id="{{ model|type|slugify }}-tab" href="#{{ model|type|slugify }}-pane" aria-controls="{{ model|type|slugify }}-pane" aria-selected="true">{% block edit-tab-label %}{% trans "Details" %}{% endblock %}{% if form.errors %} <span class="wb-tab-error">{% icon "circle-alert" %}</span>{% endif %}</a>
 						{% for manager, name in object|related:related %}
-							{% include "touchtechnology/admin/_tab.html" with id=name|add:"-tab" label=manager.all|types|capfirst count=manager.count %}
+							{% include "touchtechnology/admin/_tab.html" with name=name label=manager.all|types|capfirst count=manager.count %}
 						{% endfor %}
 					{% endblock tab-links %}
 				</div>
@@ -50,7 +50,7 @@
 
 			<div class="wb-panes">
 				{% block tab-panes %}
-					<section class="wb-pane wb-sheet" id="{{ model|type|slugify }}-tab"{% if object.pk %} role="tabpanel"{% endif %}>
+					<section class="wb-pane wb-sheet" id="{{ model|type|slugify }}-pane"{% if object.pk %} role="tabpanel"{% endif %}>
 						<form class="wb-form {% block form-class %}wb-form-wide{% endblock %}" action="" method="post" enctype="multipart/form-data" novalidate>
 							{% csrf_token %}
 							{% block form-bar %}
@@ -86,11 +86,11 @@
 					{% if object.pk %}
 						{% for manager, name in object|related:related %}
 							{% if htmx_admin_tabs %}
-								<section class="wb-pane wb-sheet" role="tabpanel" id="{{ name }}-tab" hx-get="?_htmx_tab={{ name }}" hx-trigger="intersect once" hx-swap="innerHTML">
+								<section class="wb-pane wb-sheet" role="tabpanel" id="{{ name }}-pane" hx-get="?_htmx_tab={{ name }}" hx-trigger="intersect once" hx-swap="innerHTML">
 									<p class="wb-pane-loading">{% trans "Loading…" %}</p>
 								</section>
 							{% else %}
-								<section class="wb-pane wb-sheet" role="tabpanel" id="{{ name }}-tab">
+								<section class="wb-pane wb-sheet" role="tabpanel" id="{{ name }}-pane">
 									{% block mvp-list %}
 										{% with table=templates|default:None %}
 											{% mvp_list manager.all template=manager|mvp_list_template:table %}

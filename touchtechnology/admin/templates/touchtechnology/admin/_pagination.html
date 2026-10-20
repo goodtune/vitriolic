@@ -8,7 +8,7 @@
 					<span aria-current="page">{{ number }}</span>
 				{% else %}
 					{% page_query number as query %}
-					<a href="{{ query }}"{% if tab_name %} hx-get="{{ query }}" hx-target="#{{ tab_name }}-tab" hx-swap="innerHTML" hx-push-url="false"{% endif %} aria-label="{% blocktrans %}Page {{ number }}{% endblocktrans %}">{{ number }}</a>
+					<a href="{{ query }}"{% if tab_name %} hx-get="{{ query }}" hx-target="#{{ tab_name }}-pane" hx-swap="innerHTML" hx-push-url="false"{% endif %} aria-label="{% blocktrans %}Page {{ number }}{% endblocktrans %}">{{ number }}</a>
 				{% endif %}
 			</li>
 		{% endfor %}

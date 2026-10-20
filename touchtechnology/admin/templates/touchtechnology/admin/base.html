@@ -16,12 +16,13 @@
 
 <div class="wb-shell">
 	{% block mainnav %}
-		<header class="wb-topbar" role="banner">
+		{# The phone's bar: the menu and the brand. The rail holds the site's navigation landmark. #}
+		<div class="wb-topbar">
 			<button type="button" class="wb-topbar-menu" aria-expanded="false" aria-controls="wb-rail" data-wb-menu>
 				{% icon "menu" %}<span>{% trans "Menu" %}</span>
 			</button>
 			<a class="wb-topbar-brand" href="{% url 'admin:index' %}">{% if brand.logo %}<img src="{{ brand.logo|brand_logo_url }}" alt="">{% endif %}<span>{{ brand.name }}</span></a>
-		</header>
+		</div>
 
 		<div class="wb-rail" id="wb-rail" data-wb-rail>
 			<div class="wb-rail-inner">

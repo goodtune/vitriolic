@@ -2432,7 +2432,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 stage.matches.all().delete()
 
         messages.success(request, _("Your draw has been undone."))
-        return self.redirect(division.urls["edit"])
+        return self.redirect(str(division.urls["edit"]) + "#stages-tab")
 
     @competition_by_pk_m
     @staff_login_required_m
