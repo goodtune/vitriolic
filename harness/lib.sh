@@ -62,14 +62,15 @@ harness_env() {
     export CLOUDINARY_URL="${CLOUDINARY_URL:-cloudinary://harness:harness@harness}"
 }
 
-# True when the process is a runserver listening on exactly 127.0.0.1:<port>.
+# True when the process is a runserver listening on exactly 127.0.0.1:<port>
+# (the address is the first argument after runserver, as serve.sh passes it).
 #   harness_is_runserver <pid> <port>
 harness_is_runserver() {
     local pid="${1-}" port="${2-}" command
     [ -n "$pid" ] && [ -n "$port" ] || return 1
     command="$(ps -p "$pid" -o command= 2>/dev/null)" || return 1
     case "$command " in
-        *" runserver "*" 127.0.0.1:$port "*) return 0 ;;
+        *" runserver 127.0.0.1:$port "*) return 0 ;;
         *) return 1 ;;
     esac
 }
