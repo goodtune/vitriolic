@@ -42,6 +42,16 @@ if [ -n "$exists" ] && [ "$reset" -eq 0 ]; then
 fi
 
 if [ "$reset" -eq 1 ]; then
+    # Removing the run directory would lose the pid file of a live server.
+    pidfile="$var/run/$name/pid"
+    if [ -f "$pidfile" ]; then
+        live_pid="$(sed -n 's/^pid=//p' "$pidfile" | head -n 1)"
+        live_port="$(sed -n 's/^port=//p' "$pidfile" | head -n 1)"
+        if harness_is_runserver "$live_pid" "$live_port"; then
+            echo "db.sh: '$name' is serving on port $live_port; run stop.sh $name first" >&2
+            exit 1
+        fi
+    fi
     if [ -n "$exists" ]; then
         "$PGBIN/dropdb" "${conn[@]}" --force "$database"
     fi

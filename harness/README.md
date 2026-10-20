@@ -11,8 +11,9 @@ remote service; the only network traffic is what a page asks the browser to
 load (see Decisions). All data is made up.
 
 You need PostgreSQL 17 binaries (Homebrew `postgresql@17` by default), a
-virtual environment at `.venv/` with the project installed, and Playwright's
-Chromium for the screenshots.
+virtual environment at `.venv/` with the project installed
+(`uv sync --all-extras --group test`), and Playwright's Chromium for the
+screenshots (`.venv/bin/playwright install chromium`).
 
 ## Quick start
 
@@ -48,30 +49,38 @@ Known issues for the faults on the baseline.
 
 ## The scripts
 
-All scripts are in `harness/`, start with `set -euo pipefail` and print usage
-on a wrong call (exit status 64).
+All scripts are in `harness/`. Every executable script starts with
+`set -euo pipefail` and prints usage on a wrong call (exit status 64).
+`lib.sh` is not executable: it is sourced, sets no shell options, and reads
+`BASH_SOURCE` to find its checkout, so it must be sourced from bash (from zsh,
+run the work in `bash -c '...'`).
 
 | Script | What it does |
 | --- | --- |
-| `lib.sh` | Shared by the others; source it, do not run it. `harness_env` exports everything the demo project needs for a name. |
+| `lib.sh` | Shared by the others; source it from bash, do not run it. `harness_env` exports everything the demo project needs for a name; `harness_db_check <name>` exits 3, naming the owner, unless the name's database belongs to this checkout. |
 | `pg.sh start\|stop\|status\|psql [name]` | A temporary PostgreSQL cluster in `pg/` in the state root, started with `pg_ctl`, never a service. `start` does nothing when the port already answers. `stop` stops only its own cluster. `psql` opens a shell on the server, or on the database of a name. |
-| `db.sh [--reset] <name>` | Creates `vitriolic_<name>` and records the checkout that owns it. Exit status 3 when another checkout owns it; `--reset` takes it over, drops it and its media, and creates it again. Prints `DATABASE_URL`. |
+| `db.sh [--reset] <name>` | Creates `vitriolic_<name>` and records the checkout that owns it. Exit status 3 when another checkout owns it; `--reset` takes it over, drops it and its media, run directory and pid file, and creates it again (it refuses while the name has a live server: stop it first). Prints `DATABASE_URL`. |
 | `seed.sh <name>` | Migrates the database, then seeds it. Safe to run again: it adds only what is missing. About 20 seconds. Prints the number of rows of each model. |
-| `serve.sh <name> <port> [--brand B] [--htmx-tabs]` | Runs `runserver --noreload` in the background and waits for the sign-in page. Refuses a port that is taken or a name that already has a server. |
+| `serve.sh <name> <port> [--brand B] [--htmx-tabs]` | Runs `runserver --noreload` in the background and waits up to 30 seconds for the sign-in page. Refuses a port that is taken or a name that already has a server. Writes the pid file, which records the pid, port, brand, tab mode and checkout. |
 | `stop.sh <name>` | Stops the server of a name, and only while the process is still its `runserver`. Not running is not an error. |
 | `manage.sh <name> <args...>` | Runs the demo project's `manage.py` against the database of a name. |
-| `shots.sh --name N [--base URL] [--brand B] [--widths 1440,390] [--height 900] [--only a,b\|none] [--no-video] [--contact] [--out DIR]` | Screenshots every page, records the flow, writes `manifest.json`. Without `--base`, finds the server in the pid file. |
+| `shots.sh --name N [--base URL] [--brand B] [--htmx-tabs] [--widths 1440,390] [--height 900] [--only a,b\|none] [--no-video] [--contact] [--out DIR]` | Screenshots every page, records the flow, writes `manifest.json`, then removes the flow's rows from the database. Without `--base`, finds the server in the pid file. The pid file decides the brand and the tab mode: a `--brand` that disagrees is refused (exit 64); with `--base` and no pid file for that server, `--brand` is required. |
 | `contact.sh <run-dir> [--width W] [--columns 4] [--tile-width 360] [--out FILE]` | Tiles a run's pictures at one width into one contact sheet. |
-| `test.sh <name> [unit\|e2e] [--] [args...]` | Runs the tests through tox against the harness server, with no Docker. |
-| `python -m harness seed\|pages` | The Python halves of `seed.sh` and `shots.sh`. |
+| `test.sh <name> [unit\|e2e] [--] [args...]` | Runs the tests through tox against the harness PostgreSQL, with no Docker. The name's database must exist and be yours. |
+| `python -m harness seed\|pages\|unflow <stamp>` | The Python halves of `seed.sh` and `shots.sh`. Each checks the owner of the database first (exit 3). `unflow` deletes what one run of the flow made. |
 
 Where things are kept, under the state root:
 `pg/` the cluster, `media/<name>/` uploaded files, `log/<name>/server.log`,
-`run/<name>/pid` the server, `run/<name>/<brand>/` a screenshot run, and
-`state/<name>/pages.json` the pages found for the last run.
+`run/<name>/pid` the server, `run/<name>/<brand>/` a screenshot run
+(`<brand>-htmx/` for a server started with `--htmx-tabs`, so the two modes
+never replace each other), and `state/<name>/pages.json` the pages found for
+the last run.
 
 `shots.sh` refuses to write into a directory that is not an earlier run of the
-same name and brand. It replaces an earlier run of its own.
+same name, brand and tab mode. It replaces an earlier run of its own, and it
+does so before anything else: a run that fails early (no server, discovery
+failing) leaves an empty directory and a start manifest that says why, never
+the pictures of the run before.
 
 ## Brands
 
@@ -232,15 +241,20 @@ for those labels in `dj61-py314`. `test.sh <name> e2e -- e2e/test_admin_flow.py`
 runs Playwright tests in the `e2e` environment, with the commentary events
 held in memory instead of Redis. Both turn Docker off for tox, and point the
 tests at the PostgreSQL that `pg.sh` started. Django makes the database
-`test_vitriolic_<name>` for them and drops it afterwards. With no labels, the
-whole suite runs.
+`test_vitriolic_<name>` for them and drops it afterwards. With no labels,
+tox's default list runs: `touchtechnology.common`, `touchtechnology.admin`,
+`touchtechnology.content`, `touchtechnology.news`,
+`tournamentcontrol.competition` and `enrolment`.
 
 The harness has tests of its own (`harness/test_*.py`). Run them from the
-checkout root, in the environment of a name:
+checkout root, in the environment of a name, from bash:
 
 ```sh
 bash -c 'source harness/lib.sh; harness_env demo; .venv/bin/python -m pytest harness/ -q'
 ```
+
+The tests that seed write their pictures to the name's `media/` folder; give
+them a throwaway state root with `VITRIOLIC_HARNESS_VAR=/tmp/harness-tests`.
 
 ## Decisions
 
@@ -261,8 +275,14 @@ bash -c 'source harness/lib.sh; harness_env demo; .venv/bin/python -m pytest har
   edit page runs DataTables on a table whose only row is the empty-list
   message, and DataTables 1.10 cannot take that row. Every other uncaught
   page error fails the step.
-- **Databases are owned by a checkout.** `db.sh` refuses to touch a database
-  that another checkout made, so two worktrees cannot overwrite each other.
+- **Databases are owned by a checkout.** `db.sh` records the checkout that
+  made a database, and `seed.sh`, `serve.sh`, `manage.sh`, `shots.sh`,
+  `test.sh` and `python -m harness` all compare it with their own and exit 3,
+  naming the owner, when it differs or is missing. So two worktrees that
+  both follow the quick start with `demo` cannot migrate, serve or replace
+  each other's data; the second `db.sh demo` says so, and `--reset` takes it
+  over on purpose. The scripts do not guard against someone running
+  `psql` directly.
 
 ## Known issues found while building
 
