@@ -33,10 +33,12 @@ harness/test.sh demo unit               # 8. the unit tests, with no Docker
 
 Sign in at `/admin/` as `admin` with the password `password`.
 
-Step 5 takes about 12 minutes: 139 pages at two widths, then the flow at each
-width. It prints one line per capture and a summary, and writes everything to
-`run/demo/default/` under the state root (the last part is the brand; the root
-is `~/.local/state/vitriolic-harness` unless `VITRIOLIC_HARNESS_VAR` says
+Step 5 takes about 14 minutes: 153 pages and their tabs at two
+widths (554 pictures), then the flow at each width. It prints one line
+per capture and a summary, and writes everything to `run/demo/<brand>/` under
+the state root (`<brand>` is the brand the server was started with, and
+`<brand>-htmx` for a server started with `--htmx-tabs`; the root is
+`~/.local/state/vitriolic-harness` unless `VITRIOLIC_HARNESS_VAR` says
 otherwise). Use `--only` and
 `--widths` for a quicker look, for example
 `shots.sh --name demo --only season-edit,match-results --widths 1440 --no-video`.
@@ -44,7 +46,8 @@ otherwise). Use `--only` and
 the flow, which is what the video records.
 
 The exit status of `shots.sh` is 1 when any page errored or any flow step
-failed, so on a branch with known faults a run is expected to exit 1. See
+failed, or when fewer pages were captured than were listed (unless `--only`
+said so), so on a branch with known faults a run is expected to exit 1. See
 Known issues for the faults on the baseline.
 
 ## The scripts
@@ -101,8 +104,8 @@ They are defined in `tests/vitriolic/brands.py`. `--htmx-tabs` (the variable
 
 An invented touch association, built through the admin toolset wherever it
 offers a tool and through models or factories where it does not. Dates are
-relative to the day of the first seed: the current season is in the middle of
-round 5.
+relative to the day of the first seed: the current season has played its
+fifth round.
 
 - **Clubs:** eight. **People:** 24, three per club, each with a club role
   (President, Secretary or Treasurer). 84 team associations (two per team,
@@ -113,19 +116,23 @@ round 5.
     cross-pool finals.
   - Spring 2026: in progress. Rounds 1 to 5 are played, including one draw,
     one forfeit and, in the Women's Open, one played match with no result.
-    Round 6 is the night after the seed day; round 7 and the finals are to
-    come. A season-wide break and a Mixed Open break are set.
+    Round 6 is the next Wednesday, one to seven days after the seed day;
+    round 7 and the finals are to come. A season-wide break and a Mixed Open break are set.
 - **Divisions:** Men's Open (8 teams), Women's Open (7, so a bye each round)
   and Mixed Open (6). Each plays seven rounds, then finals. 172 matches in all.
 - **Venues:** four (two per season, Anchor Park and Lantern Reserve) with ten
-  grounds in all, and four kick-off times a night with no clash of ground and
-  time.
+  grounds in all, at round invented coordinates that name no real ground, and
+  four kick-off times a night with no clash of ground and time.
 - **Extras on Spring 2026:** a season referee, a live stream key and event,
-  and, on one Men's Open match, a score sheet and four statistics.
+  and, on one Men's Open match, a score sheet and four statistics; a place
+  waiting for a team in the Men's Open finals (an undecided team); and the
+  officials two clubs named for the season (four rows).
 - **Users:** `admin` (superuser), `editor` (the Editors group, which can
   edit pages and news) and `scorer` (can change matches and add score
   statistics). The password of each is `password`.
-- **Content:** a home page with two child pages, two chunks and a redirect.
+- **Content:** a home page with two child pages, a folder and an application
+  node that points at the news site, three chunks (one of them
+  the disclaimer the registration form shows) and a redirect.
 - **News:** two categories, five articles (three with pictures) and one
   Spanish translation.
 - **Enrolment:** the demo school (two school years, 21 classes, 300 students,
@@ -138,22 +145,36 @@ downloaded.
 
 The pages are found, not listed by hand (`python -m harness pages`): the
 registered admin components, the admin URLs each model describes for itself,
-and the named routes of the competition component that no model owns. Every
-URL is reversed; none is guessed. The result is 139 pages:
+the site tree's folder, page and application nodes, the content routes that
+no model owns, and the named routes of the competition component that no
+model owns. Every URL is reversed; none is guessed. The result is 153
+pages:
 
 - **static:** the index, sign-in, settings and the app indexes.
 - **per model:** a list (where the model has one), an add page, an edit page
   for one instance and a permissions page.
+- **site tree:** an edit, add and permissions page for a page node, an
+  application node and (edit and add) a folder; the application
+  configurations (list, add, edit) and the file manager.
 - **auth:** the user and group lists and one of each.
 - **named special pages:** match results, schedule, run sheet, grid (by day
-  and for the season), visual scheduler, scorecards, washout, season report
-  and summary, progression, JSON builder, reschedule, scorers, bulk create of
-  divisions and of teams, officials, registration form, draw build, progress
-  matches, referees and the division detail.
-- **tabs:** every tab of the season, division, club, class and enrolment edit
-  pages, one picture each, named `<page>-tab-<n>-<width>.png`.
+  and for the season), visual scheduler, scorecards, washout, the match day's
+  live stream, the scorecard report, season report and summary, progression,
+  JSON builder, reschedule, scorers, bulk create of divisions and of teams,
+  officials, registration form, person merge, draw build, progress matches,
+  referees and the division detail.
+- **tabs:** every page that has tabs gets one more picture per tab, named
+  `<page>-tab-<n>-<width>.png`. Tabs are found on every captured page, not
+  from a list: a `role="tab"` control, else the links of a `role="tablist"`,
+  else (when there are two or more) the links to anchors of the page. Today's
+  markup uses the last form. The discovery's `tabs: true` is only a hint: a
+  page marked as tabbed that has no tabs gets the warning "no tabs found".
 - **fold shots:** season-edit and match-results at 1440 also get the first
   screenful as `<page>-fold-1440.png`.
+
+The sign-in page is photographed first at each width, before signing in, with
+the same checks as every page (it must not redirect). The rest are
+photographed signed in as `admin`.
 
 The instance for a page is the Spring 2026 season, the division with the most
 teams, a played match with a result, and a round robin stage.
@@ -165,19 +186,65 @@ not load, answers 4xx or 5xx, ends on the sign-in page, logs a console error
 or an uncaught page error, or fails a request to the server under test. A
 request to another host (a font, an avatar, a CDN script) is only a warning.
 
-Models that cannot be given a page appear under `skipped` in
+The manifest also says what kind of run it was, so a partial or stale set can
+be told from a complete one by reading one file: `only` (the page names asked
+for, `null` for all), `widths`, `video`, `expected_pages` (how many pages
+`pages.json` listed), `checkout` and `commit` (where the run was made),
+`htmx_tabs`, `flow_stamps` (for the clean-up below) and `errors` (what went
+wrong with the run itself). It counts as failed when any page or step
+errored, or when fewer pages were captured than `expected_pages` times the
+widths and `--only` was not given.
+
+Models and routes that cannot be given a page appear under `skipped` in
 `pages.json`, each with a reason. On the baseline these are `Place` (the
 parent of Venue and Ground, which has no admin route of its own),
-`SeasonAssociation` and `UndecidedTeam` (the seed has no instance of either).
-A name in `skipped` is a gap in what the run shows, not a failure.
+`SeasonAssociation` (edited on its club's officials page, which is captured,
+now with rows), `progress-teams` (no stage of the season gives that page) and
+`upstream-sync`. The last is left out on purpose: it exists only for a season
+with an upstream, and enabling one would make the page name a remote host to
+fetch from, so the seed never does. A name in `skipped` is a gap in what the
+run shows, not a failure.
 
 ## The flow
 
 After the pages, `shots.sh` records one administrator's errand through the
-admin at each width, to `flow-1440.webm` and `flow-390.webm` (about four and
-a half minutes each). Every element is found by role, name, link target or
-form field name, never by CSS class. A 3 pixel ring marks where the pointer
-goes. The steps, in order:
+admin at each width, to `flow-1440.webm` and `flow-390.webm` (about five
+minutes each). The flow must survive an admin whose markup has been rewritten,
+so every lookup is by role and accessible name (`get_by_role`), by visible
+text (`get_by_text`), by link target (`a[href=...]`, `a[href$=...]`) or by
+form field name (`[name=...]`, `get_by_label`). It never looks for an id, a
+class or a data attribute first. The few that today's markup needs (the
+sidebar of tabs, the two menu buttons, the profile drop-down, a row's
+drop-down and undo button, and Select2's container) are in `LEGACY_FALLBACKS`
+in `flow.py`, which is read only by `legacy_fallback`, and only after the
+lookups by role, text, link target and field name have found nothing. A test
+checks both rules. A 3 pixel ring marks where the pointer goes. How it looks:
+
+- **A folded menu** is opened with a button named like a menu ("Toggle
+  navigation", "Menu"), or any control that says so, or an `aria-expanded`
+  button, trying each in turn until the entry (found by its text) is on show;
+  with no such entry, the step goes `direct`.
+- **A tab** is a `tab` by name, a link of that name in a `tablist`, a link to an
+  anchor with that text, or any link or button of that name. A tab with a
+  page of its own that is out of sight goes `direct`; a tab that cannot be
+  found at all is a warning ("could not open the pane") and the step goes on.
+- **Confirming** a delete or an undo presses the button of the dialog on show
+  (a button whose name matches delete, undo, remove, confirm or yes), or of
+  the page the click led to; a browser prompt is accepted.
+- **Dates** are typed as the field takes them: an input of type `date` or
+  `datetime-local` gets its ISO form, a text field's placeholder is read when
+  it looks like `dd/mm/yyyy`, and otherwise Django's first date input format
+  is used. A saved date is looked for in any of the usual forms.
+- **A step whose target cannot be found** by any of these records `direct`
+  with a one-line note naming what it looked for, goes to the address, and
+  goes on.
+
+What the flow expects of any admin, and so what an entry must keep: the
+sign-in form's `username` and `password` fields and a "Sign in" button; a
+"Save" button and a "Cancel" link; a `search` field on long lists; the menu
+entries "Tournament Control", "News", "Content" and "Enrolment"; the form
+field names of the models (which are frozen); and the URL paths. The steps,
+in order:
 
 1. **sign_in:** the sign-in page, then the index.
 2. **competition:** add a competition.
@@ -199,23 +266,39 @@ goes. The steps, in order:
 12. **delete_attendance:** delete an attendance record.
 13. **sign_out:** sign out from the menu.
 
+The flow checks what it saved: the titles are listed, the translation's
+headline, the undecided team's label, the allocation and the scores are read
+back from the forms, the marks of the assessment are on it when it is opened
+again, and the attendance record is gone after the delete.
+
 The manifest records for each step how it reached its page, in `via`:
 
 - `link`: by clicking a visible link or button that leads there.
-- `scroll`: the link was out of view, so the page was scrolled to it first.
-- `direct`: no link leads there, so the step went to the address.
+- `scroll`: the link or button that changes the page, or opens the tab, was
+  out of view, so the page was scrolled to it first. Typing into a field
+  below the fold does not count.
+- `direct`: nothing on the page led there, so the step went to the address.
 
-On the baseline no step has to go `direct`, and the flow mostly scrolls: in the
-last run 7 of the 13 steps scrolled at 1440 and 9 at 390, and the rest went by
-link. The split moves a little with the data on the page. At 390 the folded
-menu is opened first for any step that uses it. A step that fails ends the
-flow, and a picture of the page is saved as `flow-<width>-failed.png`. Only
-an uncaught page error fails a step; other console and HTTP errors are
-warnings on the step. The one exception is the allowance in Decisions.
+On the baseline no step has to go `direct`. In the last run 7 of the 13 steps went by link and 6 scrolled at
+1440 and 5 went by link and 8 scrolled (none went direct at either width) at 390; the split moves a little with the data on the
+page (a longer list pushes a link out of view). At 390 the folded menu is
+opened first for any step that uses it. A step that raises ends the flow, and
+a picture of the page is saved as `flow-<width>-failed.png`.
 
-The flow adds a competition, a season, a draw format and enrolment rows to the
-database every time it runs, and titles them with the time of day. The
-screenshots run before it, so the flow does not change what they capture.
+A step fails, and the run with it, on an uncaught page error, a console
+error, a request to the server under test that fails, or a failed assertion,
+exactly as a page capture does; a request to another host is a warning. A
+step that only met such an error does not stop the flow, so the recording
+still reaches its end. The one allowance is in Decisions.
+
+**The flow cleans up after itself.** It adds a competition, a season, a draw
+format, news, a page and enrolment rows to the database, and ends every
+title and last name with its stamp (the time of day). It notes the stamp in
+the manifest (`flow_stamps`) as it starts, and `shots.sh` then runs
+`python -m harness unflow <stamp>` for each width, which deletes those rows
+through the ORM and prints what it removed. So a capture always shows the
+seed alone, and runs of one entry or of two can be compared page for page.
+`unflow` accepts only six digits and is safe to run twice.
 
 ## Environment variables
 
@@ -270,11 +353,12 @@ them a throwaway state root with `VITRIOLIC_HARNESS_VAR=/tmp/harness-tests`.
 - **A temporary cluster, not a service.** `pg.sh` starts a cluster under the
   state root with `pg_ctl` and leaves other PostgreSQL servers alone.
 - **One allowance.** `KNOWN_PAGE_ERRORS` in `flow.py` turns one uncaught page
-  error into a warning, so a recording reaches the end:
-  `Cannot set properties of undefined (setting '_DT_CellIndex')`. The club
-  edit page runs DataTables on a table whose only row is the empty-list
-  message, and DataTables 1.10 cannot take that row. Every other uncaught
-  page error fails the step.
+  error into a warning, recorded with its text, so a recording reaches the
+  end: `Cannot set properties of undefined (setting '_DT_CellIndex')`, matched
+  against the whole text of the error and nothing else. The club edit page
+  runs DataTables on a table whose only row is the empty-list message, and
+  DataTables 1.10 cannot take that row. Every other uncaught page error, and
+  every console error, fails the step.
 - **Databases are owned by a checkout.** `db.sh` records the checkout that
   made a database, and `seed.sh`, `serve.sh`, `manage.sh`, `shots.sh`,
   `test.sh` and `python -m harness` all compare it with their own and exit 3,
@@ -287,7 +371,8 @@ them a throwaway state root with `VITRIOLIC_HARNESS_VAR=/tmp/harness-tests`.
 ## Known issues found while building
 
 On the baseline, `shots.sh` exits 1 with 22 page-capture errors and no failed
-flow steps. The 22 errors are on six pages, each at both widths:
+flow steps (the run of 153 pages, 554 pictures and 26 steps).
+The 22 errors are on six pages, each at both widths:
 
 - `match-grid`, `match-grid-season` and `scorecards` link print stylesheets
   that are not served (404 for `css/reset-min.css`, `base-min.css`,
