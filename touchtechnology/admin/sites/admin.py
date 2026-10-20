@@ -4,9 +4,12 @@ import logging
 from django.conf import settings
 from django.contrib.admin.sites import (
     AdminSite as DjangoAdminSite,
+)
+from django.contrib.admin.sites import (
     AlreadyRegistered,
     NotRegistered,
 )
+from django.contrib.auth.views import LogoutView
 from django.db import connection
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
@@ -16,6 +19,8 @@ from django.utils.encoding import smart_str
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
 
+from touchtechnology.admin.branding import get_brand
+from touchtechnology.admin.views import AdminLoginView
 from touchtechnology.common.decorators import staff_login_required_m
 from touchtechnology.common.models import SitemapNode
 
@@ -96,6 +101,16 @@ class AdminSite(DjangoAdminSite):
     def get_urls(self):
         urlpatterns = [
             path("", self.index, name="index"),
+            path(
+                "login/",
+                AdminLoginView.as_view(extra_context={"admin": self}),
+                name="login",
+            ),
+            path(
+                "logout/",
+                LogoutView.as_view(next_page=reverse_lazy(f"{self.name}:login")),
+                name="logout",
+            ),
             re_path(
                 r"^sitemapnode/move/(?P<id>\d+)/(?P<direction>(up|down))/$",
                 self.reorder,
@@ -162,6 +177,11 @@ class AdminSite(DjangoAdminSite):
     def index(self, request, *args, **kwargs):
         context = {"admin": self}
         context.update(kwargs)
+        if "brand" not in context:
+            context["brand"] = get_brand(request)
+        context.setdefault(
+            "field_template", "touchtechnology/admin/templatetags/field.html"
+        )
         response = TemplateResponse(
             request, "touchtechnology/admin/index.html", context=context
         )

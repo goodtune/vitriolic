@@ -1,6 +1,8 @@
 from django.template import Library
+from django.templatetags.static import static
 
 import touchtechnology.admin
+from touchtechnology.admin.branding import get_brand
 
 register = Library()
 
@@ -56,3 +58,27 @@ def allowed(components, request):
         return instance.unprotected
 
     return [c for c in components if show(c)]
+
+
+@register.filter
+def brand_logo_url(logo):
+    """
+    Resolve a brand logo: absolute URLs and root-relative paths are used as
+    given, anything else is looked up as a static file.
+    """
+    if "://" in logo or logo.startswith("/"):
+        return logo
+    return static(logo)
+
+
+@register.simple_tag(takes_context=True)
+def admin_brand(context):
+    """
+    The brand for the page: the one the view or the ``brand`` context processor
+    supplied, otherwise resolved here from the request. Pages that bypass
+    ``AdminComponentMixin.render``, such as the wizards, are therefore branded
+    even when the context processor has not been configured.
+    """
+    if "brand" in context:
+        return context["brand"]
+    return get_brand(context.get("request"))

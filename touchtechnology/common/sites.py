@@ -60,6 +60,15 @@ class AlreadyRegistered(Exception):
 class Application(object):
     kwargs_form_class = None
     model_form_bases = (ModelForm,)
+    required_form_bases = None
+
+    def get_required_form_bases(self):
+        """
+        The bases a form must inherit, defaulting to ``model_form_bases``.
+        """
+        if self.required_form_bases is None:
+            return self.model_form_bases
+        return self.required_form_bases
 
     def __init__(self, name, app_name, node=None, **kwargs):
         self.name = name
@@ -555,7 +564,7 @@ class Application(object):
         # Whether we've dynamically constructed our form_class or not, check to
         # ensure that we've inherited from all the bases. Log when we haven't,
         # but don't raise any exceptions.
-        for base in self.model_form_bases:
+        for base in self.get_required_form_bases():
             if not issubclass(form_class, base):
                 logger.error('"%s" does not inherit "%s"', form_class, base)
 
@@ -981,7 +990,7 @@ class Application(object):
         # Whether we've dynamically constructed our form_class or not, check to
         # ensure that we've inherited from all the bases. Log when we haven't,
         # but don't raise any exceptions.
-        for base in self.model_form_bases:
+        for base in self.get_required_form_bases():
             if not issubclass(form_class, base):
                 logger.error('"%s" does not inherit "%s"', form_class, base)
 

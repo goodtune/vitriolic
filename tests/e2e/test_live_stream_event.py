@@ -135,7 +135,7 @@ class TestLiveStreamEventForm:
             expect(page.locator(f'select[name="{prefix}_3"]')).to_have_count(0)
 
         # The implied timezone is stated to the user.
-        expect(page.locator("form")).to_contain_text(
+        expect(page.locator(".content form")).to_contain_text(
             "Local time in Australia/Sydney."
         )
 
