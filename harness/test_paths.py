@@ -1,4 +1,4 @@
-from paths import normalise, paths_for, var_root
+from harness.paths import normalise, paths_for, var_root
 
 
 def test_normalise_lowercases_and_replaces():
