@@ -1,21 +1,16 @@
 {% extends "mvp/list.inc.html" %}
-{% load i18n %}
-{% load common %}
+{% load i18n common %}
 
 {% block table-headings %}
-	<th>{% trans "Category" %}</th>
+	<th scope="col">{% trans "Category" %}</th>
+	<th scope="col" class="wb-num">{% trans "Articles" %}</th>
 {% endblock %}
 
 {% block table-columns %}
-	<td>
-		{% if change_perm in object_perms %}
-			<a href="{{ obj.urls.edit }}">{{ obj }}</a>&nbsp;
-		{% else %}
-			<span>{{ obj }}</span>
-		{% endif %}
-
-		{% if obj.article_set.count %}
-			<span class="badge badge-default">{{ obj.article_set.count }}</span>
-		{% endif %}
+	<td class="wb-title-cell">
+		{% if change_perm in object_perms %}<a href="{{ obj.urls.edit }}">{{ obj }}</a>{% else %}<span>{{ obj }}</span>{% endif %}
 	</td>
+	<td class="wb-num" data-label="{% trans "Articles" %}">{{ obj.article_set.count }}</td>
 {% endblock %}
+
+{% block empty-row-colspan %}3{% endblock %}

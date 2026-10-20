@@ -1,33 +1,22 @@
 {% extends "mvp/list.inc.html" %}
-{% load i18n %}
-{% load common %}
+{% load i18n common admin_ui %}
 
 {% block table-headings %}
-	<th>{% trans "Language" %}</th>
-	<th class="hidden-xs hidden-sm">{% trans "Headline" %}</th>
+	<th scope="col">{% trans "Language" %}</th>
+	<th scope="col">{% trans "Headline" %}</th>
 {% endblock %}
 
 {% block table-columns %}
-	<td>
-		{% if change_perm in object_perms %}
-			<a href="{{ obj.urls.edit }}">{{ obj.locale|language_name }}</a>&nbsp;
-		{% else %}
-			<span>{{ obj.locale|language_name }}</span>
-		{% endif %}
-
-        <span class="label label-default">{{ obj.locale }}</span>
+	<td class="wb-title-cell">
+		{% if change_perm in object_perms %}<a href="{{ obj.urls.edit }}">{{ obj.locale|language_name }}</a>{% else %}<span>{{ obj.locale|language_name }}</span>{% endif %}
+		<span class="wb-badge">{{ obj.locale }}</span>
 	</td>
-	<td class="hidden-xs hidden-sm">{{ obj.headline }}</td>
+	<td data-label="{% trans "Headline" %}">{{ obj.headline }}</td>
 {% endblock %}
 
 {% block empty-row-colspan %}3{% endblock %}
 
 {% block row-buttons-items %}
-    <li role="presentation">
-        <a role="button" href="{{ obj.get_absolute_url }}" target="_blank">
-			<i class="fa fa-eye fa-fw"></i>
-			{% trans "View on web" %}
-        </a>
-    </li>
-{{ block.super }}
+	<li><a href="{{ obj.get_absolute_url }}" target="_blank" rel="noopener">{% icon "external-link" %}{% trans "View on the site" %}</a></li>
+	{{ block.super }}
 {% endblock row-buttons-items %}

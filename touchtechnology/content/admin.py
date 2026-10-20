@@ -142,6 +142,17 @@ class ContentAdminComponent(AdminComponent):
         ]
         return urlpatterns
 
+    def tasks(self, request):
+        return (
+            {
+                "label": _("Edit the website's pages"),
+                "url": self.reverse("index"),
+                "note": _("Pages, menus, files and redirects"),
+                "icon": "file-text",
+                "priority": 21,
+            },
+        )
+
     def dropdowns(self):
         dl = (
             (_("Sitemap"), self.reverse("index"), "sitemap"),
@@ -226,6 +237,9 @@ class ContentAdminComponent(AdminComponent):
             nodes = descendants.filter(self.filter).filter(level=root.level + 1)
         except KeyError:
             nodes = SitemapNode.objects.filter(self.filter).filter(level=0)
+        else:
+            # The folder being looked in, for the page's heading.
+            extra_context.setdefault("root", root)
         return self.generic_list(
             request,
             nodes,
