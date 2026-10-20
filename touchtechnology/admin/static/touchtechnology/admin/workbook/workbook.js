@@ -495,7 +495,10 @@
 
 		search.oninput = draw;
 		search.onkeydown = function (event) {
-			if (event.key === "ArrowDown") {
+			if (event.key === "Escape") {
+				event.preventDefault();
+				finish();
+			} else if (event.key === "ArrowDown") {
 				event.preventDefault();
 				activate(Math.min(active + 1, shown.length - 1));
 			} else if (event.key === "ArrowUp") {

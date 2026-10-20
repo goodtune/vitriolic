@@ -1735,3 +1735,5 @@ th.wb-num .wb-sort { flex-direction: row-reverse; }
 	.wb-formbar-actions .wb-button-quiet { padding-left: 0.6rem; padding-right: 0.6rem; }
 }
 .wb-table td { overflow-wrap: anywhere; }
+.wb-match-meta .wb-badge { align-self: flex-start; }
+.wb-menu li.wb-menu-last { margin-top: 0.3rem; padding-top: 0.3rem; border-top: 1px solid var(--wb-line); }

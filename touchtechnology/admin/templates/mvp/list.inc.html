@@ -14,6 +14,7 @@
 	  table-columns        <td> cells (the first, class "wb-title-cell", links the object)
 	  row-buttons-extra    buttons always on show in a row (Build, Undo, Up...)
 	  row-buttons-items    the row's menu: <li><a href="...">Label</a></li>
+	  row-buttons-delete   the menu's last item, Delete (empty it for none)
 	  delete-data-title    how the object is named when asking to delete it
 	  table-row-empty      what an empty list says
 {% endcomment %}{% firstof create|resolved create_url as create_link %}{% with type=model|type %}
@@ -81,10 +82,12 @@
 												{% if obj.urls.perms and add_perm in object_perms %}
 													<li><a href="{{ obj.urls.perms }}">{% icon "lock" %}{% trans "Security" %}</a></li>
 												{% endif %}
-												{% if obj.urls.delete and delete_perm in object_perms %}
-													<li>{% include "touchtechnology/admin/_delete.html" with action=obj.urls.delete %}</li>
-												{% endif %}
 											{% endblock row-buttons-items %}
+											{% block row-buttons-delete %}
+												{% if obj.urls.delete and delete_perm in object_perms %}
+													<li class="wb-menu-last">{% include "touchtechnology/admin/_delete.html" with action=obj.urls.delete %}</li>
+												{% endif %}
+											{% endblock row-buttons-delete %}
 										</ul>
 									</div>
 								</div>
