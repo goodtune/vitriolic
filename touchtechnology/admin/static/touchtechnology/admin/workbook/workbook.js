@@ -571,7 +571,11 @@
 			value.className = "wb-picker-value";
 			button.setAttribute("aria-labelledby", (label ? label.id + " " : "") + value.id);
 			button.appendChild(value);
-			button.insertAdjacentHTML("beforeend", '<span aria-hidden="true">▾</span>');
+			var sprite = document.querySelector("svg.wb-icon use");
+			var caret = sprite
+				? '<svg class="wb-icon" aria-hidden="true"><use href="' + sprite.getAttribute("href").split("#")[0] + '#chevron-down"></use></svg>'
+				: "\u25be";
+			button.insertAdjacentHTML("beforeend", '<span class="wb-picker-caret" aria-hidden="true">' + caret + "</span>");
 			if (control.getAttribute("aria-describedby")) {
 				button.setAttribute("aria-describedby", control.getAttribute("aria-describedby"));
 			}

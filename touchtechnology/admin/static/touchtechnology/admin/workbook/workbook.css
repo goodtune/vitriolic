@@ -1685,3 +1685,7 @@ h3 + .wb-table-wrap { margin-bottom: 1.5rem; }
 	.wb-trail { margin-bottom: 0.25rem; }
 }
 .wb-sheet-head .wb-actions { gap: 0.4rem; }
+
+/* An object with no related lists has nothing to tab between. */
+.wb-tabs:not(:has(.wb-tab + .wb-tab)) { display: none; }
+.wb-picker-caret { display: inline-flex; color: var(--wb-ink-soft); }
