@@ -321,3 +321,14 @@ def sheetable(formset):
         ):
             return False
     return True
+
+
+@register.filter
+def total_of(paginator, object_list):
+    """How many objects a list holds in all: its paginator's count, or the list's."""
+    if paginator:
+        return paginator.count
+    try:
+        return len(object_list)
+    except TypeError:
+        return 0

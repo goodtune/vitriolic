@@ -8,7 +8,7 @@
 		<div class="page-head__text">
 			<p class="page-head__kind">{% trans "List" %}</p>
 			<h1 class="page-head__title">{% block list-title %}{{ model|types|capfirst }}{% endblock %}</h1>
-			<p class="page-head__meta">{% if search %}{% blocktrans count counter=paginator.count|default:object_list|length %}{{ counter }} match{% plural %}{{ counter }} matches{% endblocktrans %} {% blocktrans %}for “{{ search }}”{% endblocktrans %} · <a href="?">{% trans "Show all" %}</a>{% else %}{% blocktrans count counter=paginator.count|default:object_list|length %}{{ counter }} in all{% plural %}{{ counter }} in all{% endblocktrans %}{% endif %}</p>
+			<p class="page-head__meta">{% if search %}{% blocktrans count counter=paginator|total_of:object_list %}{{ counter }} match{% plural %}{{ counter }} matches{% endblocktrans %} {% blocktrans %}for “{{ search }}”{% endblocktrans %} · <a href="?">{% trans "Show all" %}</a>{% else %}{% blocktrans count counter=paginator|total_of:object_list %}{{ counter }} in all{% plural %}{{ counter }} in all{% endblocktrans %}{% endif %}</p>
 		</div>
 		<div class="page-head__actions">
 			{% with model_perms=model|hasperm:user %}
