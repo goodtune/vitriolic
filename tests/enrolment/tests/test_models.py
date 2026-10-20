@@ -3,8 +3,16 @@ import datetime
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from enrolment.models import (
-    Assessment, AttendanceRecord, ClassGroup, Enrolment, Grade, ReportCard,
-    SchoolYear, Score, Student, Teacher,
+    Assessment,
+    AttendanceRecord,
+    ClassGroup,
+    Enrolment,
+    Grade,
+    ReportCard,
+    SchoolYear,
+    Score,
+    Student,
+    Teacher,
 )
 from test_plus import TestCase
 

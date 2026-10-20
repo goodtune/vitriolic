@@ -1,5 +1,3 @@
-from modelforms.forms import ModelForm
-
 from enrolment.models import (
     Assessment,
     AttendanceRecord,
@@ -12,6 +10,8 @@ from enrolment.models import (
     Student,
     Teacher,
 )
+from modelforms.forms import ModelForm
+
 from touchtechnology.common.forms.mixins import BootstrapFormControlMixin
 
 

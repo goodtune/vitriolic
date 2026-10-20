@@ -12,8 +12,16 @@ import random
 
 from django.db import transaction
 from enrolment.models import (
-    Assessment, AttendanceRecord, ClassGroup, Enrolment, Grade, ReportCard,
-    SchoolYear, Score, Student, Teacher,
+    Assessment,
+    AttendanceRecord,
+    ClassGroup,
+    Enrolment,
+    Grade,
+    ReportCard,
+    SchoolYear,
+    Score,
+    Student,
+    Teacher,
 )
 
 FIRST_NAMES = [

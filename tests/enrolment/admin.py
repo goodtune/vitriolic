@@ -2,8 +2,6 @@ from django.forms.models import inlineformset_factory
 from django.shortcuts import get_object_or_404
 from django.urls import include, path
 from django.utils.translation import gettext_lazy as _
-from guardian.utils import get_40x_or_None
-
 from enrolment.forms import (
     AssessmentForm,
     AttendanceRecordForm,
@@ -28,6 +26,8 @@ from enrolment.models import (
     Student,
     Teacher,
 )
+from guardian.utils import get_40x_or_None
+
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.common.decorators import staff_login_required_m
 from touchtechnology.common.utils import get_perms_for_model

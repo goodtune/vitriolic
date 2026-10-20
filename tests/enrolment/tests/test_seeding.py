@@ -2,8 +2,15 @@ from io import StringIO
 
 from django.core.management import call_command
 from enrolment.models import (
-    Assessment, AttendanceRecord, ClassGroup, Enrolment, Grade, ReportCard,
-    SchoolYear, Score, Student,
+    Assessment,
+    AttendanceRecord,
+    ClassGroup,
+    Enrolment,
+    Grade,
+    ReportCard,
+    SchoolYear,
+    Score,
+    Student,
 )
 from enrolment.seeding import seed
 from test_plus import TestCase
