@@ -82,6 +82,95 @@
 	}
 
 	/* ------------------------------------------------------------------
+	 * The tree in the rail: a folder opens in place, and one never opened
+	 * before is fetched. On a phone the same tree is a drill-down, one
+	 * folder at a time. Without scripts the tree shows the way to the page.
+	 */
+
+	function fetchHTML(url) {
+		return fetch(url, {
+			credentials: "same-origin",
+			headers: { "X-Requested-With": "fetch" }
+		}).then(function (response) {
+			if (!response.ok) {
+				throw new Error(response.status);
+			}
+			return response.text();
+		});
+	}
+
+	function tree() {
+		var root = document.querySelector(".wb-tree");
+		var drill = document.getElementById("wb-drill");
+		if (!root) {
+			return;
+		}
+
+		document.addEventListener("click", function (event) {
+			var twisty = event.target.closest(".wb-twisty");
+			if (!twisty || !root.contains(twisty)) {
+				return;
+			}
+			var list = document.getElementById(twisty.getAttribute("aria-controls"));
+			if (!list) {
+				return;
+			}
+			var open = twisty.getAttribute("aria-expanded") === "true";
+			twisty.setAttribute("aria-expanded", open ? "false" : "true");
+			list.hidden = open;
+			if (!open && twisty.hasAttribute("data-lazy")) {
+				twisty.removeAttribute("data-lazy");
+				list.setAttribute("aria-busy", "true");
+				fetchHTML(root.getAttribute("data-endpoint") + "?node=" + encodeURIComponent(twisty.getAttribute("data-node")))
+					.then(function (html) { list.innerHTML = html; })
+					.catch(function () { twisty.setAttribute("data-lazy", ""); })
+					.then(function () { list.removeAttribute("aria-busy"); });
+			}
+		});
+
+		if (drill) {
+			document.addEventListener("click", function (event) {
+				var link = event.target.closest("[data-drill]");
+				if (!link) {
+					return;
+				}
+				event.preventDefault();
+				var url = drill.getAttribute("data-endpoint") + "?mode=drill&node=" + encodeURIComponent(link.getAttribute("data-drill"));
+				drill.setAttribute("aria-busy", "true");
+				fetchHTML(url).then(function (html) {
+					drill.innerHTML = html;
+					var trail = (drill.getAttribute("data-trail") || "").split(" ");
+					each(drill, "li[data-key]", function (item) {
+						item.classList.toggle("is-on-trail", trail.indexOf(item.getAttribute("data-key")) !== -1);
+					});
+					var title = drill.querySelector(".wb-drill-up, .wb-drill-title");
+					if (title) {
+						title.focus({ preventScroll: true });
+					}
+					drill.scrollIntoView({ block: "nearest" });
+				}).catch(function () {
+					var href = link.getAttribute("href");
+					if (href && href !== "#") {
+						window.location.href = href;
+					}
+				}).then(function () {
+					drill.removeAttribute("aria-busy");
+				});
+			});
+		}
+
+		// Keep the place of the page in view in the rail at a desk.
+		var here = root.querySelector(".is-here > .wb-node-row") || root.querySelector(".wb-nav-entry.is-active > .wb-nav-row");
+		var scroller = root.closest(".wb-rail-scroll");
+		if (here && scroller && wide.matches) {
+			var top = here.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+			if (top > scroller.clientHeight * 0.4) {
+				scroller.scrollTop = top - scroller.clientHeight * 0.25;
+			}
+		}
+	}
+
+	/* ------------------------------------------------------------------
 	 * Tabs: one part of an object at a time. Without scripts every part is
 	 * on the page, one after another, and the tabs are links to them.
 	 */
@@ -962,6 +1051,7 @@
 	}
 
 	menu();
+	tree();
 	copies();
 	tabLinks();
 	confirms();

@@ -137,7 +137,7 @@
 	--wb-gap: 1rem;
 	--wb-pad: 1rem;
 	--wb-control: 3rem;
-	--wb-rail: 17.5rem;
+	--wb-rail: 19.5rem;
 	--wb-topbar: 3.5rem;
 
 	color-scheme: light;
@@ -381,8 +381,8 @@ img, svg { max-width: 100%; }
 .wb-rail-close span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 
 .wb-nav { flex: 1 0 auto; }
-.wb-nav-list, .wb-nav-sections, .wb-me-links { list-style: none; margin: 0; padding: 0; }
-.wb-nav-list { display: grid; gap: 0.2rem; }
+.wb-nav-list, .wb-nodes, .wb-me-links { list-style: none; margin: 0; padding: 0; }
+.wb-nav-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.2rem; }
 
 .wb-nav-head {
 	display: flex;
@@ -397,34 +397,133 @@ img, svg { max-width: 100%; }
 .wb-nav-head:hover { background: color-mix(in oklch, var(--wb-on-brand) 10%, transparent); color: inherit; }
 .wb-nav-head .wb-icon { --icon-size: 1.25rem; }
 
-/* The current place is a tab of paper the rail opens onto: a workbook divider. */
-.wb-nav-entry.is-active > .wb-nav-head {
+.wb-nav-row { display: flex; align-items: center; gap: 0.15rem; }
+.wb-nav-row > .wb-nav-head { flex: 1 1 auto; min-width: 0; }
+.wb-nav-entry.is-active > .wb-nav-row > .wb-nav-head {
+	background: color-mix(in oklch, var(--wb-on-brand) 14%, transparent);
+}
+
+/* The tree: the component's sections, then the objects down to the page. */
+.wb-twisty, .wb-drill-in {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 2.25rem;
+	height: 2.25rem;
+	padding: 0;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+}
+.wb-twisty:hover, .wb-drill-in:hover { background: color-mix(in oklch, var(--wb-on-brand) 14%, transparent); }
+.wb-twisty .wb-icon { --icon-size: 1rem; transition: rotate 0.15s ease; }
+.wb-twisty[aria-expanded="true"] .wb-icon { rotate: 90deg; }
+.wb-twisty-gap { flex: none; width: 2.25rem; }
+.wb-nodes-top {
+	margin: 0.2rem 0 0.5rem 0.55rem;
+	padding-left: 0.2rem;
+	border-left: 2px solid color-mix(in oklch, var(--wb-on-brand) 30%, transparent);
+}
+.wb-nodes .wb-nodes { padding-left: 0.85rem; }
+.wb-nodes[aria-busy="true"] { min-height: 2.25rem; }
+.wb-node-row { display: flex; align-items: center; }
+.wb-node-link {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: center;
+	gap: 0.5rem;
+	min-width: 0;
+	min-height: 2.25rem;
+	padding: 0.2rem 0.55rem;
+	border-radius: 8px;
+	font-size: 0.95rem;
+	line-height: 1.25;
+	text-decoration: none;
+}
+.wb-node-link:hover { background: color-mix(in oklch, var(--wb-on-brand) 10%, transparent); }
+.wb-node-link .wb-icon { --icon-size: 1rem; flex: none; }
+.wb-node-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-node-note { margin-left: auto; font-size: 0.8rem; }
+.wb-node.is-on-trail > .wb-node-row > .wb-node-link { font-weight: 700; }
+.wb-node.is-more > .wb-node-row > .wb-node-link { font-style: italic; }
+.wb-node-empty { display: block; padding: 0.35rem 0.55rem 0.35rem 2.8rem; font-size: 0.9rem; font-style: italic; }
+
+/* Where the page is: a tab of paper the rail opens onto, a workbook divider. */
+.wb-node.is-here > .wb-node-row > .wb-node-link,
+.wb-nav-head[aria-current="page"],
+.wb-nav-head[aria-current="location"] {
 	background: var(--wb-paper);
 	color: var(--wb-ink);
 	box-shadow: inset 4px 0 0 var(--wb-mark);
 }
-.wb-nav-sections {
-	display: grid;
-	gap: 0.1rem;
-	margin: 0.3rem 0 0.4rem 1.6rem;
-	padding-left: 0.75rem;
-	border-left: 2px solid color-mix(in oklch, var(--wb-on-brand) 30%, transparent);
+
+/* On a phone: the folder the page is in, one level at a time. */
+.wb-drill:not(:has(*)) { display: none; }
+.wb-drill { margin-bottom: 0.75rem; }
+.wb-drill-panel {
+	padding: 0.5rem;
+	border-radius: 14px;
+	background: color-mix(in oklch, var(--wb-on-brand) 9%, transparent);
 }
-.wb-nav-sections a {
-	display: flex;
+.wb-drill-head {
+	display: grid;
+	justify-items: start;
+	gap: 0.15rem;
+	padding: 0 0 0.4rem;
+	border-bottom: 1px solid color-mix(in oklch, var(--wb-on-brand) 25%, transparent);
+}
+.wb-drill-up {
+	display: inline-flex;
 	align-items: center;
-	min-height: 2.4rem;
-	padding: 0.25rem 0.75rem;
+	gap: 0.4rem;
+	min-height: 2.75rem;
+	padding: 0 0.6rem 0 0.3rem;
+	border: 0;
+	border-radius: 10px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+.wb-drill-up:hover { background: color-mix(in oklch, var(--wb-on-brand) 12%, transparent); }
+.wb-drill-title {
+	padding: 0.2rem 0.6rem;
+	font-family: var(--wb-display);
+	font-size: 1.2rem;
+	font-weight: 800;
+	line-height: 1.2;
+	text-decoration: none;
+}
+.wb-drill-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.1rem; margin: 0.4rem 0 0; padding: 0; list-style: none; }
+.wb-drill-list li { display: flex; align-items: center; gap: 0.25rem; }
+.wb-drill-link {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: center;
+	gap: 0.6rem;
+	min-width: 0;
+	min-height: 2.75rem;
+	padding: 0.25rem 0.6rem;
 	border-radius: 10px;
 	text-decoration: none;
 }
-.wb-nav-sections a:hover { background: color-mix(in oklch, var(--wb-on-brand) 10%, transparent); }
-.wb-nav-sections a[aria-current] {
-	font-weight: 700;
-	text-decoration: underline;
-	text-decoration-thickness: 2px;
-	text-underline-offset: 0.3em;
+.wb-drill-link:hover { background: color-mix(in oklch, var(--wb-on-brand) 10%, transparent); }
+.wb-drill-link span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.is-on-trail > .wb-drill-link { font-weight: 700; }
+.wb-drill-link[aria-current="page"] { background: var(--wb-paper); color: var(--wb-ink); }
+.wb-drill-in { width: 2.75rem; height: 2.75rem; background: color-mix(in oklch, var(--wb-on-brand) 12%, transparent); }
+.wb-drill-empty { padding: 0.5rem 0.6rem; font-style: italic; }
+.wb-drill[aria-busy="true"] { opacity: 0.7; }
+
+@media (max-width: 63.99rem) {
+	.js .wb-nodes-top, .js .wb-twisty-head { display: none !important; }
 }
+.no-js .wb-drill, .no-js .wb-drill-head-in, .no-js .wb-twisty { display: none !important; }
+.no-js .wb-twisty-gap { width: 0.5rem; }
 
 .wb-me {
 	display: grid;
@@ -496,15 +595,42 @@ img, svg { max-width: 100%; }
 	}
 	.wb-rail-close, .wb-scrim { display: none !important; }
 	.wb-main { padding: 1.75rem var(--wb-pad) 6rem; }
-	.wb-nav-entry.is-active > .wb-nav-head {
-		margin-right: -1rem;
-		border-radius: 12px 0 0 12px;
+	.wb-drill, .wb-drill-head-in { display: none !important; }
+	/* The rail holds its brand and its foot; the tree between them scrolls. */
+	.wb-rail-inner { overflow: hidden; }
+	.wb-rail-scroll {
+		flex: 1 1 auto;
+		min-height: 0;
+		margin: 0 -1rem;
+		padding: 0 1rem 0.5rem;
+		overflow-x: hidden;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		scrollbar-width: thin;
 	}
+	.wb-node.is-here > .wb-node-row > .wb-node-link,
+	.wb-nav-head[aria-current="page"],
+	.wb-nav-head[aria-current="location"] {
+		margin-right: -1rem;
+		border-radius: 8px 0 0 8px;
+	}
+	.wb-nav-head[aria-current="page"], .wb-nav-head[aria-current="location"] { border-radius: 12px 0 0 12px; }
 	html { scroll-padding-top: 1rem; }
 }
 
+/* At a desk the tree has the rail: the brand and the person take a line each. */
+@media (min-width: 64rem) {
+	.wb-brand { flex-direction: row; align-items: center; gap: 0.75rem; padding-bottom: 0.25rem; }
+	.wb-brand-logo { max-height: 2.75rem; }
+	.wb-brand-name { font-size: 1.1rem; }
+	.wb-me { grid-template-columns: minmax(0, 1fr) auto; align-items: center; padding: 0.6rem 0.25rem 0; }
+	.wb-me-links { display: flex; gap: 0.15rem; }
+	.wb-me-links a, .wb-signout { width: 2.5rem; min-height: 2.5rem; justify-content: center; padding: 0; }
+	.wb-me-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+
 @media (min-width: 64rem) and (max-height: 50rem) {
-	.wb-brand-logo { max-height: 2.5rem; }
+	.wb-brand-logo { max-height: 2.25rem; }
 	.wb-rail-inner { gap: 0.6rem; padding-top: 1rem; }
 }
 

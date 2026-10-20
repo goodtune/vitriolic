@@ -32,7 +32,7 @@
 				</a>
 				<button type="button" class="wb-rail-close" data-wb-menu-close>{% icon "x" %}<span>{% trans "Close menu" %}</span></button>
 
-				{% admin_nav %}
+				<div class="wb-rail-scroll">{% admin_nav %}</div>
 
 				{% block profile %}
 					<div class="wb-me">
@@ -42,11 +42,11 @@
 						</div>
 						<ul class="wb-me-links">
 							{% url 'accounts:password_change' as password_url %}
-							{% if password_url %}<li><a href="{{ password_url }}">{% icon "key-round" %}{% trans "Change password" %}</a></li>{% endif %}
-							{% if user.is_superuser %}<li><a href="{% url 'admin:settings:index' %}">{% icon "settings" %}{% trans "Settings" %}</a></li>{% endif %}
+							{% if password_url %}<li><a href="{{ password_url }}" title="{% trans "Change password" %}">{% icon "key-round" %}<span class="wb-me-label">{% trans "Change password" %}</span></a></li>{% endif %}
+							{% if user.is_superuser %}<li><a href="{% url 'admin:settings:index' %}" title="{% trans "Settings" %}">{% icon "settings" %}<span class="wb-me-label">{% trans "Settings" %}</span></a></li>{% endif %}
 							<li>
 								{# LogoutView only accepts POST since Django 5.0. #}
-								<form method="post" action="{% url 'admin:logout' %}">{% csrf_token %}<button type="submit" class="wb-signout">{% icon "log-out" %}{% trans "Sign out" %}</button></form>
+								<form method="post" action="{% url 'admin:logout' %}">{% csrf_token %}<button type="submit" class="wb-signout" title="{% trans "Sign out" %}">{% icon "log-out" %}<span class="wb-me-label">{% trans "Sign out" %}</span></button></form>
 							</li>
 						</ul>
 					</div>

@@ -20,6 +20,7 @@ from django.http import QueryDict
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
+from touchtechnology.admin.explorer import COMPONENT_ICONS, build_tree
 from touchtechnology.admin.trail import build_trail
 from touchtechnology.admin.widgets import admin_media as _admin_media
 from touchtechnology.admin.widgets import kind_of, render_field
@@ -29,14 +30,6 @@ register = template.Library()
 SPRITE = "touchtechnology/admin/workbook/icons.svg"
 
 #: The icon of a component that does not name one (``AdminComponent.icon``).
-COMPONENT_ICONS = {
-    "competition": "trophy",
-    "content": "file-text",
-    "news": "newspaper",
-    "auth": "users",
-    "enrolment": "graduation-cap",
-    "settings": "settings",
-}
 
 
 @register.simple_tag
@@ -160,55 +153,38 @@ def initials(user):
     return name[:2].upper()
 
 
-def _sections(component):
-    try:
-        dropdowns = component.dropdowns()
-    except TypeError:
-        dropdowns = component.dropdowns
-    sections = []
-    for entry in dropdowns or ():
-        label, url = entry[0], entry[1]
-        sections.append({"label": str(label), "url": str(url)})
-    return sections
-
-
 @register.inclusion_tag("touchtechnology/admin/_nav.html", takes_context=True)
 def admin_nav(context, placement="rail"):
     """
-    The components the person may use, each with its sections. The section
-    whose address is the longest match for this page is the current one, and
-    the component that holds it (or the page's own component) is open.
+    The components the person may use, each a folder of the tree (see
+    ``touchtechnology.admin.explorer``). The page's own component is opened
+    down to where the page is; the others open when asked. On a phone the
+    same tree is a drill-down at the folder the page is in.
     """
     from touchtechnology.admin.templatetags.admin import allowed
 
     request = context.get("request")
     admin = context.get("admin") or default_site()
-    current = context.get("component")
     path = request.path if request is not None else ""
     entries = []
+    tree = None
     if admin is not None and request is not None:
-        for verbose_name, __, url, component, __ in allowed(
-            admin.get_components(), request
-        ):
+        components = allowed(admin.get_components(), request)
+        tree = getattr(request, "_admin_explorer", None)
+        if tree is None:
+            tree = build_tree(request, context, components)
+            request._admin_explorer = tree
+        roots = {node.key: node for node in tree.roots}
+        for verbose_name, __, url, component, __ in components:
             if not component.visible:
                 continue
-            sections = _sections(component)
-            url = str(url)
-            best = None
-            for section in sections:
-                if path.startswith(section["url"]) and (
-                    best is None or len(section["url"]) > len(best["url"])
-                ):
-                    best = section
-            if best is not None:
-                best["current"] = True
-            active = component is current or best is not None or path.startswith(url)
+            root = roots.get(component.explorer().key(""))
             entries.append(
                 {
                     "label": str(verbose_name),
-                    "url": url,
-                    "active": active,
-                    "sections": sections,
+                    "url": str(url),
+                    "active": bool(root and root.on_trail),
+                    "root": root,
                     "name": component.name,
                     "icon": getattr(component, "icon", None)
                     or COMPONENT_ICONS.get(component.app_name, "layout-grid"),
@@ -220,9 +196,11 @@ def admin_nav(context, placement="rail"):
         home = "/"
     return {
         "entries": entries,
+        "tree": tree,
         "home": home,
         "at_home": path == home,
         "placement": placement,
+        "request": request,
     }
 
 

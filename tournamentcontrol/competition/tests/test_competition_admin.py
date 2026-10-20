@@ -3184,7 +3184,8 @@ class TeamEditViewQueryTests(TestCase):
             self.assertGoodView(
                 edit_team.url_name,
                 *edit_team.args,
-                test_query_count=25,
+                # The tree in the rail opens the folders down to the team.
+                test_query_count=28,
             )
 
     def test_full_team_query_count(self):
@@ -3193,7 +3194,8 @@ class TeamEditViewQueryTests(TestCase):
             self.assertGoodView(
                 edit_team.url_name,
                 *edit_team.args,
-                test_query_count=25,
+                # The tree in the rail opens the folders down to the team.
+                test_query_count=28,
             )
 
 
@@ -3621,11 +3623,12 @@ class MatchResultsQueryTests(TestCase):
                 **kwargs,
             )
 
+    # The tree in the rail opens the season's match days down to this one.
     def test_few_matches_query_count(self):
-        self.get_day(self.few, test_query_count=13)
+        self.get_day(self.few, test_query_count=16)
 
     def test_many_matches_query_count(self):
-        self.get_day(self.many, test_query_count=13)
+        self.get_day(self.many, test_query_count=16)
 
     def test_forfeit_winner_choices(self):
         match = self.few[0]
@@ -3740,11 +3743,12 @@ class MatchDetailQueryTests(TestCase):
                 **kwargs,
             )
 
+    # The tree in the rail opens the folders down to the match's pool.
     def test_small_squads_query_count(self):
-        self.get_detail(self.small, test_query_count=20)
+        self.get_detail(self.small, test_query_count=25)
 
     def test_large_squads_query_count(self):
-        self.get_detail(self.large, test_query_count=20)
+        self.get_detail(self.large, test_query_count=25)
 
     def test_entered_statistics_are_shown(self):
         self.get_detail(self.small)

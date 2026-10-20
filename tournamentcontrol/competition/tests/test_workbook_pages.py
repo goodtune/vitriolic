@@ -243,3 +243,64 @@ class ClubOfficialsTests(TestCase):
         self.assertEqual(
             list(self.club.staff.values_list("person", flat=True)), [self.person.pk]
         )
+
+
+class TreeTests(TestCase):
+    """
+    The tree in the rail: the page's own component opened down to where the
+    page is, and the folders the browser asks for as they are opened.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
+        self.pool = factories.StageGroupFactory.create(title="Pool Kestrel")
+        self.stage = self.pool.stage
+        self.division = self.stage.division
+        self.season = self.division.season
+
+    def node(self, obj, icon, current=""):
+        return (
+            f'<a class="wb-node-link" href="{obj.urls["edit"]}" title="{obj.title}"'
+            f"{current}>{ICON % icon}"
+            f'<span class="wb-node-label">{obj.title}</span></a>'
+        )
+
+    def test_a_pool_page_opens_the_tree_down_to_the_pool(self):
+        with self.login(self.superuser):
+            edit = self.pool.url_names["edit"]
+            self.get_check_200(edit.url_name, *edit.args)
+        self.assertResponseContains(
+            self.node(self.season.competition, "trophy"), html=True
+        )
+        self.assertResponseContains(self.node(self.season, "calendar"), html=True)
+        self.assertResponseContains(self.node(self.division, "layers"), html=True)
+        self.assertResponseContains(self.node(self.stage, "git-merge"), html=True)
+        self.assertResponseContains(
+            self.node(self.pool, "users-round", ' aria-current="page"'), html=True
+        )
+
+    def test_opening_a_season_lists_its_divisions(self):
+        key = "fixja/o:competition.season:%d" % self.season.pk
+        with self.login(self.superuser):
+            self.get_check_200("admin:explorer", data={"node": key})
+        self.assertResponseContains(self.node(self.division, "layers"), html=True)
+
+    def test_the_phone_drills_into_a_division(self):
+        key = "fixja/o:competition.division:%d" % self.division.pk
+        with self.login(self.superuser):
+            self.get_check_200("admin:explorer", data={"node": key, "mode": "drill"})
+        self.assertResponseContains(
+            f'<a class="wb-drill-title" href="{self.division.urls["edit"]}">'
+            f"{self.division.title}</a>",
+            html=True,
+        )
+
+    def test_an_unknown_component_is_not_found(self):
+        with self.login(self.superuser):
+            self.get("admin:explorer", data={"node": "nowhere/"})
+        self.response_404()
+
+    def test_only_staff_may_open_folders(self):
+        self.get("admin:explorer", data={"node": "fixja/"})
+        self.response_302()
