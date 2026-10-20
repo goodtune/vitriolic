@@ -1,7 +1,10 @@
+from django.db.models import Count
 from django.forms.models import inlineformset_factory
 from django.shortcuts import get_object_or_404
 from django.urls import include, path
-from django.utils.translation import gettext_lazy as _
+from django.utils import formats
+from django.utils.text import slugify
+from django.utils.translation import gettext_lazy as _, ngettext
 from enrolment.forms import (
     AssessmentForm,
     AttendanceRecordForm,
@@ -30,6 +33,7 @@ from guardian.utils import get_40x_or_None
 
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.explorer import Explorer, Rel
+from touchtechnology.admin.setup import Setup, Step
 from touchtechnology.common.decorators import staff_login_required_m
 from touchtechnology.common.utils import get_perms_for_model
 
@@ -38,6 +42,84 @@ CLASS = YEAR + "class/"
 CLASS_ITEM = CLASS + "<int:class_group_id>/"
 ENROLMENT = CLASS_ITEM + "enrolment/"
 ENROLMENT_ITEM = ENROLMENT + "<int:enrolment_id>/"
+
+
+def year_setup(year, here=True):
+    """What a school ``year`` needs before its classes can be taught."""
+    edit = str(year.urls["edit"])
+    details = "%s#%s-tab" % (edit, slugify(year._meta.verbose_name))
+    classes = list(
+        year.classes.annotate(
+            enrolment_count=Count("enrolments", distinct=True),
+            assessment_count=Count("assessments", distinct=True),
+        ).select_related("year")
+    )
+    untaught = next((c for c in classes if c.teacher_id is None), None)
+    empty = next((c for c in classes if not c.enrolment_count), None)
+    assessments = sum(c.assessment_count for c in classes)
+
+    def tab(obj, name):
+        return "%s#%s-tab" % (obj.urls["edit"], name)
+
+    def count(n, singular, plural):
+        return ngettext(singular, plural, n) % {"n": n}
+
+    steps = [
+        Step(
+            _("Set the dates"),
+            bool(year.start_date and year.end_date),
+            _("%(start)s to %(end)s")
+            % {
+                "start": formats.date_format(year.start_date, "j F Y"),
+                "end": formats.date_format(year.end_date, "j F Y"),
+            },
+            details,
+        ),
+        Step(
+            _("Add the classes"),
+            bool(classes),
+            count(len(classes), "%(n)d class", "%(n)d classes")
+            if classes
+            else _("No classes yet"),
+            edit + "#classes-tab",
+        ),
+        Step(
+            _("Give every class a teacher"),
+            bool(classes) and untaught is None,
+            _("%(class)s has no teacher") % {"class": untaught}
+            if untaught
+            else _("Every class has one")
+            if classes
+            else _("Once there are classes"),
+            str(untaught.urls["edit"]) if untaught else edit + "#classes-tab",
+        ),
+        Step(
+            _("Enrol the students"),
+            bool(classes) and empty is None,
+            _("%(class)s has no students") % {"class": empty}
+            if empty
+            else count(
+                sum(c.enrolment_count for c in classes),
+                "%(n)d enrolment",
+                "%(n)d enrolments",
+            )
+            if classes
+            else _("Once there are classes"),
+            tab(empty, "enrolments") if empty else edit + "#classes-tab",
+        ),
+        Step(
+            _("Plan the assessments"),
+            assessments > 0,
+            count(assessments, "%(n)d assessment", "%(n)d assessments")
+            if assessments
+            else _("Tests and assignments, as they are set"),
+            edit + "#classes-tab",
+            optional=True,
+        ),
+    ]
+    if here:
+        return Setup(_("School year set-up"), steps)
+    return Setup(_("School year set-up"), steps, url=edit + "#setup-tab", here=False)
 
 
 class EnrolmentExplorer(Explorer):
@@ -70,6 +152,21 @@ class EnrolmentAdminComponent(AdminComponent):
 
     def __init__(self, app, name="enrolment", app_name="enrolment"):
         super().__init__(app, name, app_name)
+
+    def generic_edit(self, request, *args, extra_context=None, **kwargs):
+        # Every page inside a school year shows how far its set-up has got.
+        extra_context = {} if extra_context is None else extra_context
+        year = extra_context.get("year")
+        if (
+            request.method == "GET"
+            and "_htmx_tab" not in request.GET
+            and "setup" not in extra_context
+            and isinstance(year, SchoolYear)
+        ):
+            extra_context["setup"] = year_setup(year, here=False)
+        return super().generic_edit(
+            request, *args, extra_context=extra_context, **kwargs
+        )
 
     def _include(self, name, edit, delete, perms, list_=None):
         """
@@ -234,7 +331,15 @@ class EnrolmentAdminComponent(AdminComponent):
             permission_required=True,
             post_save_redirect=self.redirect(self.reverse("schoolyear:list")),
             related=("classes",),
-            extra_context={"year": year, **kwargs},
+            extra_context={
+                "year": year,
+                "setup": year_setup(year)
+                if year is not None
+                and request.method == "GET"
+                and "_htmx_tab" not in request.GET
+                else None,
+                **kwargs,
+            },
         )
 
     @staff_login_required_m

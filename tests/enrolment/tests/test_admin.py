@@ -715,3 +715,31 @@ class NestingTests(PermissionDataMixin, test_plus.TestCase):
                         class_group_id=self.other_group.pk,
                     )
                     self.response_404()
+
+
+class YearSetupTests(EnrolmentDataMixin, test_plus.TestCase):
+    def test_year_shows_class_without_teacher(self):
+        bare = ClassGroup.objects.create(year=self.year, grade=self.grade, title="2W")
+        with self.login(self.superuser):
+            self.get("admin:enrolment:schoolyear:edit", pk=self.year.pk)
+            self.response_200()
+        self.assertResponseContains(
+            '<p class="setup-detail"><span class="visually-hidden">Still to do:'
+            "</span> %s has no teacher</p>" % bare
+        )
+        self.assertEqual(self.context["setup"].next_step.url, bare.urls["edit"])
+
+    def test_class_shows_year_progress(self):
+        with self.login(self.superuser):
+            self.get(
+                "admin:enrolment:classgroup:edit",
+                year_id=self.year.pk,
+                pk=self.group.pk,
+            )
+            self.response_200()
+        setup = self.context["setup"]
+        self.assertFalse(setup.here)
+        self.assertResponseContains(
+            '<a href="%s#setup-tab"><strong>School year set-up</strong> '
+            "%d of %d done</a>" % (self.year.urls["edit"], setup.done, setup.total)
+        )
