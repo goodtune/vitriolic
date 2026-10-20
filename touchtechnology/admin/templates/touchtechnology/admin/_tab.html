@@ -1,0 +1,4 @@
+{% comment %}
+	One tab of an edit page: give it ``id`` (the pane's id), ``label`` and
+	optionally ``count`` and ``selected``.
+{% endcomment %}<a class="wb-tab" role="tab" href="#{{ id }}" aria-controls="{{ id }}" aria-selected="{% if selected %}true{% else %}false{% endif %}"{% if count != None and count != "" %} aria-label="{{ label }}"{% endif %}>{{ label }}{% if count != None and count != "" %} <span class="wb-tab-count" aria-hidden="true">{{ count }}</span>{% endif %}</a>

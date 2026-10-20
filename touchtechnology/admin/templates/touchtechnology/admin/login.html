@@ -1,52 +1,53 @@
-{% load i18n %}
-{% load admin %}
-{% load common %}
 <!DOCTYPE html>
-<html lang="en">
+{% load i18n static admin admin_ui common %}{% get_current_language as LANGUAGE_CODE %}
+<html lang="{{ LANGUAGE_CODE|default:"en" }}">
 <head>
-	<title>{% trans "Sign in" %} &middot; {{ brand.name }}</title>
-
 	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-	<link rel="stylesheet" href="{{ STATIC_URL }}bootstrap/dist/css/bootstrap.min.css">
-	<link rel="stylesheet" href="{{ STATIC_URL }}css/mvpready-admin.css">
-	<link rel="stylesheet" href="{{ STATIC_URL }}css/custom.css">
-
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>{% trans "Sign in" %} &middot; {{ brand.name }}</title>
+	<link rel="stylesheet" href="{% static 'touchtechnology/admin/workbook/workbook.css' %}">
 	{% include "touchtechnology/admin/_brand.html" %}
-
-	<link rel="shortcut icon" href="{{ STATIC_URL }}favicon.ico">
 </head>
+<body class="wb">
+<main class="wb-gate">
+	<div class="wb-gate-card">
+		<div class="wb-gate-brand">
+			{% if brand.logo %}<img src="{{ brand.logo|brand_logo_url }}" alt="">{% endif %}
+			<span>{{ brand.name }}</span>
+		</div>
 
-<body>
-<main class="container">
-	{% if brand.logo %}<img src="{{ brand.logo|brand_logo_url }}" alt="{{ brand.name }}">{% endif %}
-	<h1>{{ brand.name }}</h1>
+		<h1>{% trans "Sign in" %}</h1>
+		<p class="wb-muted">{% trans "Use the account your organisation gave you." %}</p>
 
-	{% if signed_in_as %}
-		<p class="signed-in-notice">{% blocktrans %}You are signed in as {{ signed_in_as }}, which cannot use the administration. Sign in with another account.{% endblocktrans %}</p>
-	{% endif %}
-
-	<form method="post" class="form-horizontal">
-		{% csrf_token %}
-
-		{% if form.non_field_errors %}
-			<ul class="errorlist">
-				{% for error in form.non_field_errors %}
-					<li>{{ error }}</li>
-				{% endfor %}
-			</ul>
+		{% if signed_in_as %}
+			<p class="wb-message wb-message-warning signed-in-notice">{% icon "triangle-alert" %}<span>{% blocktrans %}You are signed in as {{ signed_in_as }}, which cannot use the administration. Sign in with another account.{% endblocktrans %}</span></p>
 		{% endif %}
 
-		{% field form.username %}
-		{% field form.password %}
+		<form method="post" novalidate>
+			{% csrf_token %}
 
-		<input type="hidden" name="next" value="{{ next }}">
+			{% if form.non_field_errors %}
+				<div class="wb-problems" role="alert">
+					<ul class="errorlist">
+						{% for error in form.non_field_errors %}
+							<li>{{ error }}</li>
+						{% endfor %}
+					</ul>
+				</div>
+			{% endif %}
 
-		<button type="submit">{% trans "Sign in" %}</button>
+			<div class="wb-fields">
+				{% field form.username %}
+				{% field form.password %}
+			</div>
+
+			<input type="hidden" name="next" value="{{ next }}">
+
+			<button type="submit" class="wb-button wb-button-primary">{% trans "Sign in" %}</button>
+		</form>
 		{% url 'accounts:password_reset' as reset_url %}
-		{% if reset_url %}<a href="{{ reset_url }}">{% trans "Reset Password" %}</a>{% endif %}
-	</form>
+		{% if reset_url %}<p class="wb-gate-links"><a href="{{ reset_url }}">{% trans "Forgotten your password?" %}</a></p>{% endif %}
+	</div>
 </main>
 </body>
 </html>

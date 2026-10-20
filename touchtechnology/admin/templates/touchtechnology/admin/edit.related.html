@@ -1,11 +1,9 @@
 {% extends "touchtechnology/admin/edit.html" %}
-{% load common %}
+{% load common admin_ui %}
 
 {% block extracss %}
 	{{ block.super }}
-
-	<!-- formset.media -->
-	{{ formset.media }}
+	{{ formset.media|admin_media }}
 {% endblock extracss %}
 
 {% block form-fieldset %}
@@ -13,8 +11,10 @@
 
 	{{ formset.management_form }}
 	{% for form in formset %}
-		{% for f in form %}
-			{% field f %}
-		{% endfor %}
+		<div class="wb-fields wb-group">
+			{% for f in form %}
+				{% field f %}
+			{% endfor %}
+		</div>
 	{% endfor %}
 {% endblock form-fieldset %}

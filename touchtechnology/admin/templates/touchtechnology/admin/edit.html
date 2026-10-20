@@ -1,223 +1,112 @@
 {% extends "touchtechnology/admin/base.html" %}
-{% load i18n %}
-{% load common mvp_tags %}
-{% load bootstrap3 %}
+{% load i18n common mvp_tags admin_ui %}
+{% comment %}
+	An object's page: its heading, then its parts as tabs (the form first,
+	then one tab per related list), each part a sheet of its own.
+
+	Blocks a deployment may fill:
+	  page-head          the heading (eyebrow, title, head-actions)
+	  head-actions       buttons beside the title
+	  before-tabs        anything above the tabs (a checklist, a summary)
+	  tab-links          the tabs: <a role="tab" class="wb-tab" href="#x-tab">Label</a>
+	                     (or include "touchtechnology/admin/_tab.html" with id, label, count)
+	  tab-panes          the panes: <section class="wb-pane wb-sheet" role="tabpanel" id="x-tab">
+	  form-fieldset      the fields of the form
+	  form-bar           the bar at the top of the form, kept in view, with Cancel and Save
+	  form-title         its title
+	  form-buttons       the Save button at the foot of the form
+	  cancel-url         where Cancel goes
+	  aside              a column beside the tabs at a desk
+{% endcomment %}
+
+{% block page_title %}{% if object.pk %}{{ object }}{% else %}{% blocktrans with type=model|type %}New {{ type }}{% endblocktrans %}{% endif %}{% endblock %}
 
 {% block messages %}{% endblock %}
 
 {% block content %}
-	<div class="layout layout-main-right layout-stack-sm">
-		<div class="col-md-3 col-sm-4 layout-sidebar">
-			<div class="nav-layout-sidebar-skip">
-				<strong>{% trans "Tab Navigation" %}</strong> /
-				<a href="#tab-content">{% trans "Skip to Content" %}</a>
+	{% block page-head %}
+		<header class="wb-head">
+			<div class="wb-head-text">
+				<p class="wb-eyebrow">{% block eyebrow %}{{ model|type|capfirst }}{% endblock %}</p>
+				<h1>{% block heading %}{% if object.pk %}{{ object }}{% else %}{% blocktrans with type=model|type %}New {{ type }}{% endblocktrans %}{% endif %}{% endblock %}</h1>
+				{% block lede %}{% endblock %}
 			</div>
+			<div class="wb-head-actions">{% block head-actions %}{% endblock %}</div>
+		</header>
+	{% endblock page-head %}
 
-			<ul id="myTab" class="nav nav-layout-sidebar nav-stacked">
-				{% block tab-links %}
-					<li class="active">
-						<a href="#{{ model|type|slugify }}-tab"
-						   {% if htmx_admin_tabs %}class="htmx-tab-link" data-tab-id="{{ model|type|slugify }}-tab"{% endif %}
-						   data-toggle="tab">
-							<i class="fa fa-chevron-right fa-fw"></i>
-							&nbsp;{% trans "Edit" %} {{ model|type }}
-						</a>
-					</li>
+	{% include "touchtechnology/admin/_messages.html" %}
 
-					{% if object.pk %}
+	{% block before-tabs %}{% endblock %}
+
+	<div class="wb-layout{% block layout-class %}{% endblock %}">
+		<div class="wb-tabbed">
+			{% if object.pk %}
+				<div class="wb-tabs" role="tablist" data-wb-tabs aria-label="{% blocktrans with type=model|type %}Parts of this {{ type }}{% endblocktrans %}">
+					{% block tab-links %}
+						<a class="wb-tab" role="tab" href="#{{ model|type|slugify }}-tab" aria-controls="{{ model|type|slugify }}-tab" aria-selected="true">{% block edit-tab-label %}{% trans "Details" %}{% endblock %}{% if form.errors %} <span class="wb-tab-error">{% icon "circle-alert" %}</span>{% endif %}</a>
 						{% for manager, name in object|related:related %}
-							<li{% if not object.pk %} class="disabled"{% endif %}>
-								{% if htmx_admin_tabs %}
-									<a href="#{{ name }}-tab"
-									   class="htmx-tab-link"
-									   data-tab-id="{{ name }}-tab"
-									   data-toggle="tab">
-										<i class="fa fa-chevron-right fa-fw"></i>
-										&nbsp;{{ manager.all|types|capfirst }}
-									</a>
-								{% else %}
-									<a href={% if object.pk %}"#{{ name }}-tab" data-toggle="tab"{% else %}"#"{% endif %}>
-										<i class="fa fa-chevron-right fa-fw"></i>
-										&nbsp;{{ manager.all|types|capfirst }}
-									</a>
-								{% endif %}
-							</li>
+							{% include "touchtechnology/admin/_tab.html" with id=name|add:"-tab" label=manager.all|types|capfirst count=manager.count %}
 						{% endfor %}
-					{% endif %}
-				{% endblock tab-links %}
-			</ul>
-		</div> <!-- /.col -->
-
-		<div class="col-md-9 col-sm-8 layout-main">
-			{% bootstrap_messages %}
-
-			{% if not htmx_admin_tabs %}
-			<form class="{% block form-class %}form-horizontal{% endblock %}" action="" method="post" enctype="multipart/form-data">
-			{% csrf_token %}
+					{% endblock tab-links %}
+				</div>
 			{% endif %}
 
-			<div id="tab-content" class="tab-content stacked-content">
+			<div class="wb-panes">
 				{% block tab-panes %}
-					<div class="tab-pane active" id="{{ model|type|slugify }}-tab">
-						{% if htmx_admin_tabs %}
-						<form class="form-horizontal" action="" method="post" enctype="multipart/form-data">
-						{% csrf_token %}
-						{% endif %}
-
-							<div class="heading-block">
-								<h3>{{ model|type|capfirst }}</h3>
-							</div>
-
+					<section class="wb-pane wb-sheet" id="{{ model|type|slugify }}-tab"{% if object.pk %} role="tabpanel"{% endif %}>
+						<form class="wb-form {% block form-class %}wb-form-wide{% endblock %}" action="" method="post" enctype="multipart/form-data" novalidate>
+							{% csrf_token %}
+							{% block form-bar %}
+								<div class="wb-formbar">
+									<h2 class="wb-formbar-title">{% block form-title %}{% blocktrans with type=model|type|capfirst %}{{ type }} details{% endblocktrans %}{% endblock %}</h2>
+									<div class="wb-formbar-actions">
+										<a class="wb-button wb-button-quiet" href="{% block cancel-url %}{{ cancel_url }}{% endblock %}">{% trans "Cancel" %}</a>
+										<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
+									</div>
+								</div>
+							{% endblock form-bar %}
+							{% include "touchtechnology/admin/_problems.html" %}
 							{% block form-fieldset %}
-								<fieldset>
+								<div class="wb-fields">
 									{% for f in form %}
 										{% field f %}
 									{% endfor %}
-								</fieldset>
+								</div>
 							{% endblock form-fieldset %}
-
-							<div class="form-group">
-								<div class="text-center">
-									<button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
-									&nbsp;<a class="btn btn-default" href="{% block cancel-url %}{{ cancel_url }}{% endblock %}">{% trans "Cancel" %}</a>
-								</div> <!-- /.col -->
-							</div>
-
-						{% if htmx_admin_tabs %}
+							{% block form-buttons %}
+								<div class="wb-formfoot">
+									<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
+								</div>
+							{% endblock form-buttons %}
 						</form>
-						{% endif %}
-					</div>
+					</section>
 
 					{% if object.pk %}
 						{% for manager, name in object|related:related %}
 							{% if htmx_admin_tabs %}
-								<div class="tab-pane" id="{{ name }}-tab"
-									 hx-get="?_htmx_tab={{ name }}"
-									 hx-trigger="intersect once"
-									 hx-swap="innerHTML">
-									<div class="text-center text-muted">
-										<i class="fa fa-spinner fa-spin"></i>
-										&nbsp;{% trans "Loading..." %}
-									</div>
-								</div>
+								<section class="wb-pane wb-sheet" role="tabpanel" id="{{ name }}-tab" hx-get="?_htmx_tab={{ name }}" hx-trigger="intersect once" hx-swap="innerHTML">
+									<p class="wb-pane-loading">{% trans "Loading…" %}</p>
+								</section>
 							{% else %}
-								<div class="tab-pane" id="{{ name }}-tab">
-									<!-- mvp_list manager.all -->
+								<section class="wb-pane wb-sheet" role="tabpanel" id="{{ name }}-tab">
 									{% block mvp-list %}
 										{% with table=templates|default:None %}
 											{% mvp_list manager.all template=manager|mvp_list_template:table %}
 										{% endwith %}
 									{% endblock %}
-									<!-- /mvp_list manager.all -->
-								</div>
+								</section>
 							{% endif %}
 						{% endfor %}
 					{% endif %}
 				{% endblock tab-panes %}
 			</div>
-
-			{% if not htmx_admin_tabs %}
-			</form>
-			{% endif %}
-		</div> <!-- /.col -->
+		</div>
+		{% block aside %}{% endblock %}
 	</div>
 {% endblock %}
 
 {% block extracss %}
 	{{ block.super }}
-	<style type="text/css">
-		.heading-block .actions { float: right; }
-		.heading-block .actions a { padding-right: 0.5em; }
-	</style>
-
-	{% if htmx_admin_tabs %}
-		<style type="text/css">
-			.htmx-indicator { display: none; }
-			.htmx-request .htmx-indicator { display: inline-block; }
-			.htmx-request.htmx-indicator { display: inline-block; }
-		</style>
-	{% endif %}
-
-	<!-- form media -->
-	{{ form.media }}
-{% endblock %}
-
-{% block extrajs %}
-	{{ block.super }}
-
-	<!-- inline javascripts -->
-	<script type="text/javascript">
-		$(document).ready(function() {
-			$('div.icheck input').iCheck ({
-				checkboxClass: 'ui-icheck icheckbox_minimal-grey',
-				radioClass: 'ui-icheck iradio_minimal-grey'
-			}).on ('ifChanged', function (e) {
-				$(e.currentTarget).trigger ('change')
-			})
-
-			/* determine which tab should be active */
-
-			// Remember the tab last shown on this page, for when the person
-			// comes back to it from one of the objects it lists.
-			var tab_key = 'admin-tab:' + document.location.pathname
-			$('#myTab a[data-toggle="tab"]').on('shown.bs.tab', function(e) {
-				try { sessionStorage.setItem(tab_key, $(e.target).attr('href')) }
-				catch (err) {}
-			})
-
-			var uri = URI(document.location)
-			if (uri.hash()) {
-				$('a[href="' + uri.hash() + '"]').tab('show')
-			}
-			else if (document.referrer) {
-				// Coming back from an object listed in a tab shows that tab again.
-				var referrer = URI(document.referrer)
-				var found = false
-				$('a[role=button]').each(function(i, a) {
-					var rel = new URI(a.href)
-					if (rel.relativeTo(referrer).pathname() == "") {
-						var last_tab = $(a).closest('.tab-pane').attr('id')
-						if (last_tab) {
-							$('a[href="#' + last_tab + '"]').tab('show')
-							found = true
-						}
-					}
-				})
-				// A tab fetched when it is shown (HTMX admin tabs) is not in the
-				// page yet, so fall back to the tab last shown here when the
-				// referrer is one of this page's own objects.
-				var here = uri.pathname()
-				var there = referrer.pathname()
-				if (!found && there != here && there.indexOf(here) == 0) {
-					var last_shown = null
-					try { last_shown = sessionStorage.getItem(tab_key) }
-					catch (err) {}
-					if (last_shown) {
-						$('#myTab a[href="' + last_shown + '"]').tab('show')
-					}
-				}
-			}
-
-			/* activate Select2 */
-			$('.form-group.select select, .form-group.select_multiple select').select2({
-				allowClear: true
-			})
-
-			{% if htmx_admin_tabs %}
-			/* Re-initialize plugins after HTMX content swap */
-			document.body.addEventListener('htmx:afterSwap', function(evt) {
-				var target = $(evt.detail.target)
-				target.find('div.icheck input').iCheck({
-					checkboxClass: 'ui-icheck icheckbox_minimal-grey',
-					radioClass: 'ui-icheck iradio_minimal-grey'
-				}).on('ifChanged', function(e) {
-					$(e.currentTarget).trigger('change')
-				})
-				target.find('.form-group.select select, .form-group.select_multiple select').select2({
-					allowClear: true
-				})
-			})
-			{% endif %}
-		})
-	</script>
+	{{ form.media|admin_media }}
 {% endblock %}

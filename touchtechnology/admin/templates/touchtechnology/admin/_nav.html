@@ -1,0 +1,20 @@
+{% load i18n admin_ui %}
+<nav class="wb-nav" aria-label="{% trans "Main" %}">
+	<ul class="wb-nav-list">
+		<li class="wb-nav-entry{% if at_home %} is-active{% endif %}">
+			<a class="wb-nav-head" href="{{ home }}"{% if at_home %} aria-current="page"{% endif %}>{% icon "house" %}<span>{% trans "Home" %}</span></a>
+		</li>
+		{% for entry in entries %}
+			<li class="wb-nav-entry{% if entry.active %} is-active{% endif %}">
+				<a class="wb-nav-head" href="{{ entry.url }}"{% if entry.active %} aria-current="true"{% endif %}>{% icon entry.icon %}<span>{{ entry.label }}</span></a>
+				{% if entry.active and entry.sections %}
+					<ul class="wb-nav-sections">
+						{% for section in entry.sections %}
+							<li><a href="{{ section.url }}"{% if section.current %} aria-current="page"{% endif %}>{{ section.label }}</a></li>
+						{% endfor %}
+					</ul>
+				{% endif %}
+			</li>
+		{% endfor %}
+	</ul>
+</nav>

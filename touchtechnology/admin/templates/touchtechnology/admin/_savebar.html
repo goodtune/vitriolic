@@ -1,0 +1,9 @@
+{% load i18n %}{% comment %}
+	Save and Cancel, kept at the foot of the screen while the form is on show.
+	Give it ``cancel`` (an address) and optionally ``label`` for the button.
+{% endcomment %}
+<div class="wb-savebar">
+	<button type="submit" class="wb-button wb-button-primary">{{ label|default:_("Save") }}</button>
+	<a class="wb-button wb-button-quiet" href="{{ cancel }}">{% trans "Cancel" %}</a>
+	{% if note %}<span class="wb-savebar-note">{{ note }}</span>{% endif %}
+</div>
