@@ -48,6 +48,10 @@ dev = [
 test = [
     "babel==2.17.0",
     "coverage",
+    # The demo project still lists these in INSTALLED_APPS, as an older
+    # deployment would; the admin itself no longer uses either.
+    "django-bootstrap3",
+    "django-gravatar2",
     "django-environ",
     "django-template-partials>=25.3",
     "django-test-plus",
@@ -69,7 +73,7 @@ test = [
 ]
 
 [project.optional-dependencies]
-admin = ["django-bootstrap3", "django-gravatar2"]
+admin = []
 common = []
 content = []
 news = [
