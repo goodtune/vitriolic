@@ -1,7 +1,8 @@
-from django.conf import settings
 from django.contrib.auth.views import LoginView
 from django.http import HttpResponseRedirect
-from django.shortcuts import resolve_url
+from django.urls import reverse_lazy
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import never_cache
 
 from touchtechnology.admin.branding import get_brand
 
@@ -22,18 +23,21 @@ class AdminLoginView(LoginView):
     """
 
     template_name = "touchtechnology/admin/login.html"
+    next_page = reverse_lazy("admin:index")
 
+    @method_decorator(never_cache)
     def dispatch(self, request, *args, **kwargs):
         if request.method == "GET" and request.user.is_staff:
             url = self.get_success_url()
             if url == request.path:
-                url = resolve_url(settings.LOGIN_REDIRECT_URL)
+                url = str(self.next_page)
             return HttpResponseRedirect(url)
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.setdefault("brand", get_brand(self.request))
+        if "brand" not in context:
+            context["brand"] = get_brand(self.request)
         context.setdefault("field_template", FIELD_TEMPLATE)
         user = self.request.user
         if user.is_authenticated and not user.is_staff:
