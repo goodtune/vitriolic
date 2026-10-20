@@ -19,14 +19,14 @@
 	  aside              a column beside the tabs at a desk
 {% endcomment %}
 
-{% block page_title %}{% if object.pk %}{{ object }}{% else %}{% blocktrans with type=model|type %}New {{ type }}{% endblocktrans %}{% endif %}{% endblock %}
+{% block page_title %}{% if object|is_saved %}{{ object }}{% else %}{% blocktrans with type=model|type %}New {{ type }}{% endblocktrans %}{% endif %}{% endblock %}
 
 {% block content %}
 	{% block page-head %}
 		<header class="wb-head">
 			<div class="wb-head-text">
 				<p class="wb-eyebrow">{% block eyebrow %}{{ model|type|capfirst }}{% endblock %}</p>
-				<h1>{% block heading %}{% if object.pk %}{{ object }}{% else %}{% blocktrans with type=model|type %}New {{ type }}{% endblocktrans %}{% endif %}{% endblock %}</h1>
+				<h1>{% block heading %}{% if object|is_saved %}{{ object }}{% else %}{% blocktrans with type=model|type %}New {{ type }}{% endblocktrans %}{% endif %}{% endblock %}</h1>
 				{% block lede %}{% endblock %}
 			</div>
 			<div class="wb-head-actions">{% block head-actions %}{% endblock %}</div>
@@ -37,7 +37,7 @@
 
 	<div class="wb-layout{% block layout-class %}{% endblock %}">
 		<div class="wb-tabbed">
-			{% if object.pk %}
+			{% if object|is_saved %}
 				<div class="wb-tabs" role="tablist" data-wb-tabs aria-label="{% blocktrans with type=model|type %}Parts of this {{ type }}{% endblocktrans %}">
 					{% block tab-links %}
 						<a class="wb-tab" role="tab" id="{{ model|type|slugify }}-tab" href="#{{ model|type|slugify }}-pane" aria-controls="{{ model|type|slugify }}-pane" aria-selected="true">{% block edit-tab-label %}{% trans "Details" %}{% endblock %}{% if form.errors %} <span class="wb-tab-error">{% icon "circle-alert" %}</span>{% endif %}</a>
@@ -50,7 +50,7 @@
 
 			<div class="wb-panes">
 				{% block tab-panes %}
-					<section class="wb-pane wb-sheet" id="{{ model|type|slugify }}-pane"{% if object.pk %} role="tabpanel"{% endif %}>
+					<section class="wb-pane wb-sheet" id="{{ model|type|slugify }}-pane"{% if object|is_saved %} role="tabpanel"{% endif %}>
 						<form class="wb-form {% block form-class %}wb-form-wide{% endblock %}" action="" method="post" enctype="multipart/form-data" novalidate>
 							{% csrf_token %}
 							{% block form-bar %}
@@ -74,7 +74,7 @@
 								<div class="wb-formfoot">
 									<div class="wb-actions">
 										<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
-										{% if not object.pk and form and not formset and not wizard %}
+										{% if not object|is_saved and form and not formset and not wizard %}
 											<button type="submit" name="_addanother" value="1" class="wb-button">{% icon "copy-plus" %}{% blocktrans with type=model|type %}Save and add another {{ type }}{% endblocktrans %}</button>
 										{% endif %}
 									</div>
@@ -83,7 +83,7 @@
 						</form>
 					</section>
 
-					{% if object.pk %}
+					{% if object|is_saved %}
 						{% for manager, name in object|related:related %}
 							{% if htmx_admin_tabs %}
 								<section class="wb-pane wb-sheet" role="tabpanel" id="{{ name }}-pane" hx-get="?_htmx_tab={{ name }}" hx-trigger="intersect once" hx-swap="innerHTML">

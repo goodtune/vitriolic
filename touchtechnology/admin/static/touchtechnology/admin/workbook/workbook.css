@@ -1727,3 +1727,11 @@ th.wb-num .wb-sort { flex-direction: row-reverse; }
 .wb-thumbnail-clear { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
 .wb-thumbnail-label { font-weight: 700; }
 .wb-thumbnail-widget .wb-empty { padding: 1rem; justify-items: center; text-align: center; }
+@media (max-width: 47.99rem) {
+	.wb-table-cards td.wb-num { text-align: left; }
+	.wb-formbar { flex-wrap: nowrap; }
+	.wb-formbar-title { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.05rem; }
+	.wb-formbar-actions { flex: none; gap: 0.25rem; }
+	.wb-formbar-actions .wb-button-quiet { padding-left: 0.6rem; padding-right: 0.6rem; }
+}
+.wb-table td { overflow-wrap: anywhere; }

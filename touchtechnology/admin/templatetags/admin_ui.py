@@ -132,6 +132,20 @@ def tab_count(manager):
             return ""
 
 
+def default_site():
+    """The admin site pages belong to when a view did not say."""
+    from touchtechnology.admin.sites import site
+
+    return site
+
+
+@register.filter
+def is_saved(instance):
+    """Whether ``instance`` is in the database (an add page's is not yet)."""
+    state = getattr(instance, "_state", None)
+    return state is not None and not state.adding and instance.pk is not None
+
+
 @register.filter
 def initials(user):
     """Up to two letters for ``user``: their initials, or their user name's first."""
@@ -168,7 +182,7 @@ def admin_nav(context, placement="rail"):
     from touchtechnology.admin.templatetags.admin import allowed
 
     request = context.get("request")
-    admin = context.get("admin")
+    admin = context.get("admin") or default_site()
     current = context.get("component")
     path = request.path if request is not None else ""
     entries = []
@@ -221,7 +235,7 @@ def admin_tasks(context):
     from touchtechnology.admin.templatetags.admin import allowed
 
     request = context.get("request")
-    admin = context.get("admin")
+    admin = context.get("admin") or default_site()
     if admin is None or request is None:
         return []
     tasks = []
