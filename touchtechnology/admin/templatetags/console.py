@@ -25,6 +25,13 @@ ICONS = "touchtechnology/admin/console/icons.svg"
 #: Classes that forms outside the admin give their widgets for other themes.
 FOREIGN_CLASSES = {"form-control"}
 
+#: Widgets from outside the admin that the console dresses with its own template.
+WIDGET_TEMPLATES = {
+    "touchtechnology/common/widgets/location_widget.html": (
+        "touchtechnology/admin/widgets/location_widget.html"
+    ),
+}
+
 #: A select with more options than this is chosen from a dialog with search.
 PICKER_THRESHOLD = 12
 
@@ -172,6 +179,10 @@ def control(bf, **extra):
         widget = copy.copy(widget)
         widget.input_type = "date"
         widget.format = "%Y-%m-%d"
+        return bf.as_widget(widget=widget, attrs=attrs)
+    if getattr(widget, "template_name", None) in WIDGET_TEMPLATES:
+        widget = copy.copy(widget)
+        widget.template_name = WIDGET_TEMPLATES[widget.template_name]
         return bf.as_widget(widget=widget, attrs=attrs)
     if type(widget) is forms.TimeInput:
         widget = copy.copy(widget)

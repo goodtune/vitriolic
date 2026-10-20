@@ -1,8 +1,7 @@
 {% with date=widget.subwidgets.0 hour=widget.subwidgets.1 minute=widget.subwidgets.2 %}
 <style>
-	/* Bootstrap's .form-inline only applies at desktop widths; the
-	   date-line/time-line grouping must hold on every viewport. */
-	.season-timezone-datetime .form-control {
+	/* The date line and the time line hold together on every viewport. */
+	.season-timezone-datetime select {
 		display: inline-block;
 		width: auto;
 		vertical-align: middle;

@@ -1017,3 +1017,6 @@ input[type="file"]::file-selector-button {
 .trail li:not(:nth-last-child(-n+2)) .trail__kind { display: none; }
 .trail li:first-child { flex-shrink: 0; }
 .trail li:first-child a { padding: 3px 5px; }
+.location-widget-inputs { display: flex; gap: 6px; margin-top: 6px; }
+.location-widget-inputs input { flex: 1 1 0; min-width: 0; }
+.location-widget-inputs input:nth-of-type(3) { flex: 0 0 5em; }

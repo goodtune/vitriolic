@@ -1,0 +1,11 @@
+{% comment %}
+	The admin's dress for the common LocationWidget: the same map and inputs,
+	and the same hooks for location-widget.js, styled by the console.
+{% endcomment %}
+<div class="location-widget">
+	<div class="location-widget-map" data-zoom="{{ widget.zoom }}" style="height: {{ widget.height }}px;"></div>
+	<div class="location-widget-inputs">
+		{% for widget in widget.subwidgets %}{% include widget.template_name %}{% endfor %}
+		<button type="button" class="btn location-widget-toggle" aria-pressed="false" hidden>Edit</button>
+	</div>
+</div>
