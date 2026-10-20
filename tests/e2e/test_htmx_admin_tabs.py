@@ -22,8 +22,10 @@ from tests.e2e.shells import (
     PAGER,
     PAGER_CURRENT,
     SAVE,
+    SHELL,
     TABLIST,
     by_shell,
+    pane_id,
     tab_control,
     tab_link,
 )
@@ -212,8 +214,12 @@ class TestTraditionalTabMode:
         """Without HTMX the people tab is rendered with the page, in full."""
         url = club_edit_url(live_server, club_data["club"])
         html = authenticated_page.request.get(url).text()
-        assert html.count(", Alice</a>") == len(club_data["members"])
+        if SHELL == "workbook":
+            assert html.count(", Alice</a>") == len(club_data["members"])
         authenticated_page.goto(url)
+        if SHELL == "explorer":
+            rows = authenticated_page.locator("#members-tab tbody tr")
+            expect(rows).to_have_count(len(club_data["members"]))
         authenticated_page.locator(tab_link("members")).click()
         expect(authenticated_page.locator(f"#{pane_id('members')}")).to_be_visible()
         shoot(authenticated_page, screenshot_dir, "tabs_traditional_club_people")
@@ -429,11 +435,8 @@ class TestHtmxTabPagination:
         authenticated_page.wait_for_load_state("networkidle")
 
         assert fetched == []
-        # People, teams and officials each wait to be shown (Explorer's
-        # officials are in the set-up tab).
-        expect(authenticated_page.locator(f"{LAZY_PANES} {LOADING}")).to_have_count(
-            by_shell(workbook=3, explorer=2)
-        )
+        # People, teams and officials each wait to be shown.
+        expect(authenticated_page.locator(f"{LAZY_PANES} {LOADING}")).to_have_count(3)
         shoot(authenticated_page, screenshot_dir, "club_tabs_waiting")
 
         authenticated_page.locator(tab_link("members")).click()
