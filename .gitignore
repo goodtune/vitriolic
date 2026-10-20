@@ -12,3 +12,6 @@ __pycache__
 # E2E test screenshots
 screenshots/
 tests/screenshots/
+
+# Demo project uploads
+tests/media/
