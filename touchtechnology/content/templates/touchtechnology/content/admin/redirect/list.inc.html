@@ -1,0 +1,22 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	<th scope="col">{% trans "Label" %}</th>
+	<th scope="col" class="opt">{% trans "Source" %}</th>
+	<th scope="col" class="opt-sm">{% trans "Destination" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td>
+		{% if change_perm in object_perms %}
+			<a href="{% url 'admin:content:redirect:edit' obj.pk %}">{{ obj.label|default:obj.source_url }}</a>
+		{% else %}
+			{{ obj.label|default:obj.source_url }}
+		{% endif %}
+	</td>
+	<td class="opt mono">{{ obj.source_url }}</td>
+	<td class="opt-sm mono">{{ obj.destination_url }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}

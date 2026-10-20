@@ -1,33 +1,31 @@
 {% extends "touchtechnology/admin/base.html" %}
-{% load i18n %}
-{% load common %}
+{% load i18n common console %}
 
 {% block content %}
 	{% with type=object|type %}
-		<h1>{% blocktrans %}Delete {{ type }}{% endblocktrans %}</h1>
+		<header class="page-head">
+			<div class="page-head__text">
+				<p class="page-head__kind">{% trans "Delete" %}</p>
+				<h1 class="page-head__title">{{ object }}</h1>
+			</div>
+		</header>
 
 		{% if object.is_leaf_node %}
-			<h2>{% trans "Warning" %}</h2>
-
-			<p>{% blocktrans %}You are about to delete the {{ type }} <strong>{{ object }}</strong>. This will permanently remove it from your site. Are you sure you want to continue?{% endblocktrans %}</p>
-
-			<form action="" method="post">
+			<form class="panel" action="" method="post" style="max-width:640px">
 				{% csrf_token %}
-				<div class="buttons">
-					<button type="submit">{% trans "Delete" %}</button>
+				<div class="panel__body">
+					<p>{% blocktrans %}You are about to delete the {{ type }} <strong>{{ object }}</strong>. This will permanently remove it from your site.{% endblocktrans %}</p>
+				</div>
+				<div class="panel__foot">
+					<button type="submit" class="btn btn--danger">{% icon "trash" %}{% trans "Delete" %}</button>
 					{% block cancel_button %}
-						<a href="{% block cancel_url %}{% url 'admin:content:index' %}{% if object.parent %}?r={{ object.parent.pk }}{% endif %}{% endblock %}" class="button">{% trans "Cancel" %}</a>
+						<a href="{% block cancel_url %}{% url 'admin:content:index' %}{% if object.parent %}?r={{ object.parent.pk }}{% endif %}{% endblock %}" class="btn">{% trans "Cancel" %}</a>
 					{% endblock %}
 				</div>
 			</form>
 		{% else %}
-			<h2>{% trans "Error" %}</h2>
-
-			<p>{% blocktrans %}You are attempting to delete a {{ type }} which has children in the site hierarchy, which is not possible.{% endblocktrans %}</p>
-
-			<div class="buttons">
-				<a href="{% url 'admin:content:index' %}{% if object.parent %}?r={{ object.parent.pk }}{% endif %}" class="button">{% trans "Cancel" %}</a>
-			</div>
+			<div class="notice notice--bad" role="alert">{% blocktrans %}You are attempting to delete a {{ type }} which has children in the site hierarchy, which is not possible.{% endblocktrans %}</div>
+			<p style="margin-top:12px"><a href="{% url 'admin:content:index' %}{% if object.parent %}?r={{ object.parent.pk }}{% endif %}" class="btn">{% trans "Cancel" %}</a></p>
 		{% endif %}
 	{% endwith %}
 {% endblock %}

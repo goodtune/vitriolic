@@ -1,3 +1,6 @@
 {% extends "touchtechnology/admin/edit.related.html" %}
+{% load i18n %}
 
-{% block cancel-url %}../../{% if object.parent %}?r={{ object.parent_id }}{% endif %}{% endblock %}
+{% block page-kind %}{% trans "Page" %}{% endblock %}
+{% block page-title %}{% if object.pk %}{{ object }}{% else %}{% trans "New page" %}{% endif %}{% endblock %}
+{% block cancel-url %}{% url 'admin:content:index' %}{% if object.parent %}?r={{ object.parent_id }}{% endif %}{% endblock %}

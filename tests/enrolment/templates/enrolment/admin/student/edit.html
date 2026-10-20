@@ -6,24 +6,28 @@
 {% block tab-links %}
 	{{ block.super }}
 	{% if object.pk %}
-		<li><a href="#timeline-tab" data-toggle="tab"><i class="fa fa-chevron-right fa-fw"></i>&nbsp;{% trans "Timeline" %}</a></li>
+		{% trans "Timeline" as label %}
+		{% include "touchtechnology/admin/_tab.html" with pane="timeline-tab" label=label count=object.enrolments.count %}
 	{% endif %}
 {% endblock tab-links %}
 
 {% block tab-panes %}
 	{{ block.super }}
 	{% if object.pk %}
-		<div class="tab-pane" id="timeline-tab">
-			<div class="heading-block">
-				<h3>{% trans "Timeline" %}</h3>
+		<section class="pane pane--list" role="tabpanel" id="timeline-tab" aria-labelledby="timeline-tab-label" tabindex="-1">
+			<div class="list-head"><h2 class="list-head__title">{% trans "Timeline" %}</h2></div>
+			<div class="table-wrap">
+				<table class="data">
+					<thead><tr><th scope="col">{% trans "Class" %}</th><th scope="col">{% trans "Year" %}</th></tr></thead>
+					<tbody>
+						{% for enrolment in object.enrolments.all %}
+							<tr><td><a href="{{ enrolment.urls.edit }}">{{ enrolment.class_group.title }}</a></td><td>{{ enrolment.class_group.year }}</td></tr>
+						{% empty %}
+							<tr class="empty"><td colspan="2">{% trans "Not enrolled in any class yet." %}</td></tr>
+						{% endfor %}
+					</tbody>
+				</table>
 			</div>
-			<ul class="list-unstyled">
-				{% for enrolment in object.enrolments.all %}
-					<li><a href="{{ enrolment.urls.edit }}">{{ enrolment.class_group.title }} ({{ enrolment.class_group.year }})</a></li>
-				{% empty %}
-					<li class="text-muted">{% trans "Not enrolled in any class yet." %}</li>
-				{% endfor %}
-			</ul>
-		</div>
+		</section>
 	{% endif %}
 {% endblock tab-panes %}

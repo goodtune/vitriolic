@@ -1,80 +1,42 @@
 {% extends "touchtechnology/content/admin/edit.html" %}
-{% load i18n %}
-{% load common %}
-{% load mvp_tags %}
+{% load i18n common console %}
+
+{% block page-kind %}{% trans "Application" %}{% endblock %}
+{% block page-title %}{% if node.pk %}{{ node }}{% else %}{% trans "New application" %}{% endif %}{% endblock %}
 
 {% block extracss %}
 	{{ block.super }}
-	<!-- formset.media.css -->
-	{{ formset_media.css }}
-{% endblock %}
-
-{% block extrajs %}
-	{{ block.super }}
-	<!-- formset.media.js -->
-	{{ formset_media.js }}
+	{{ formset_media }}
 {% endblock %}
 
 {% block tab-links %}
-	{{ block.super }}
-
-	<li>
-		<a href="#kwargs-tab" data-toggle="tab">
-			<i class="fa fa-chevron-right fa-fw"></i>
-			&nbsp;{% trans "Configuration" %}
-		</a>
-	</li>
-
-	<li>
-		<a href="#copy-tab" data-toggle="tab">
-			<i class="fa fa-chevron-right fa-fw"></i>
-			&nbsp;{% trans "Optional copy" %}
-		</a>
-	</li>
+	{% trans "Details" as details %}
+	{% include "touchtechnology/admin/_tab.html" with pane="details-tab" label=details icon="pencil" %}
+	{% trans "Configuration" as configuration %}
+	{% include "touchtechnology/admin/_tab.html" with pane="kwargs-tab" label=configuration %}
+	{% trans "Optional copy" as copy %}
+	{% include "touchtechnology/admin/_tab.html" with pane="copy-tab" label=copy %}
 {% endblock tab-links %}
 
 {% block tab-panes %}
-	{{ block.super }}
+	<section class="pane pane--form" role="tabpanel" id="details-tab" aria-labelledby="details-tab-label" tabindex="-1">
+		{% if form.non_field_errors %}<div class="non-field-errors" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+		{% for f in form %}{% field f %}{% endfor %}
+	</section>
 
-	<div class="tab-pane" id="kwargs-tab">
-		<div class="heading-block">
-			<h3>{% trans "Configuration" %}</h3>
-		</div>
-
+	<section class="pane pane--form" role="tabpanel" id="kwargs-tab" aria-labelledby="kwargs-tab-label" tabindex="-1">
 		{% if formsets.kwargs.forms %}
 			{{ formsets.kwargs.management_form }}
-
-			<fieldset>
-				{% for form in formsets.kwargs %}
-					{% for f in form %}
-						{% field f %}
-					{% endfor %}
-				{% endfor %}
-			</fieldset>
-
-			<p>FIXME: need to be able to dynamically add more forms</p>
+			{% for form in formsets.kwargs %}{% for f in form %}{% field f %}{% endfor %}{% endfor %}
 		{% else %}
-			<fieldset>
-				{% for f in formsets.kwargs %}
-					{% field f %}
-				{% endfor %}
-			</fieldset>
+			{% for f in formsets.kwargs %}{% field f %}{% empty %}<p class="empty-state">{% trans "This application has nothing to configure." %}</p>{% endfor %}
 		{% endif %}
-	</div>
+	</section>
 
-	{{ formsets.copy.management_form }}
-
-	<div class="tab-pane" id="copy-tab">
-		<div class="heading-block">
-			<h3>{% trans "Optional copy" %}</h3>
-		</div>
-
-		<fieldset>
-			{% for form in formsets.copy %}
-				{% for f in form %}
-					{% field f %}
-				{% endfor %}
-			{% endfor %}
-		</fieldset>
-	</div>
+	<section class="pane pane--form" role="tabpanel" id="copy-tab" aria-labelledby="copy-tab-label" tabindex="-1">
+		{{ formsets.copy.management_form }}
+		{% for form in formsets.copy %}{% for f in form %}{% field f %}{% endfor %}{% endfor %}
+	</section>
 {% endblock tab-panes %}
+
+{% block cancel-url %}{% url 'admin:content:index' %}{% if node.parent %}?r={{ node.parent_id }}{% endif %}{% endblock %}

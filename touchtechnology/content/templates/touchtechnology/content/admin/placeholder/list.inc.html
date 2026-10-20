@@ -1,0 +1,22 @@
+{% extends "mvp/list.inc.html" %}
+{% load i18n common %}
+
+{% block table-headings %}
+	<th scope="col">{% trans "Application" %}</th>
+	<th scope="col" class="num">{% trans "Pages" %}</th>
+	<th scope="col" class="opt">{% trans "Import Path" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td>
+		{% if change_perm in object_perms %}
+			<a href="{% url 'admin:content:real_placeholder:edit' obj.pk %}">{{ obj }}</a>
+		{% else %}
+			<span>{{ obj }}</span>
+		{% endif %}
+	</td>
+	<td class="num">{{ obj.nodes.count }}</td>
+	<td class="opt mono">{{ obj.path }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}

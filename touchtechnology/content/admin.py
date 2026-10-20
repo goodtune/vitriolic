@@ -225,7 +225,10 @@ class ContentAdminComponent(AdminComponent):
             descendants = root.get_descendants()
             nodes = descendants.filter(self.filter).filter(level=root.level + 1)
         except KeyError:
+            root = None
             nodes = SitemapNode.objects.filter(self.filter).filter(level=0)
+        # The folder on show, so the page can say where in the tree it is.
+        extra_context.setdefault("root", root)
         return self.generic_list(
             request,
             nodes,
