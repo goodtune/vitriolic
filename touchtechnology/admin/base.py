@@ -10,7 +10,8 @@ from modelforms.forms import ModelForm
 from touchtechnology.admin.branding import get_brand
 from touchtechnology.admin.explorer import Explorer
 from touchtechnology.admin.forms import AdminFormControlMixin
-from touchtechnology.admin.shells import DEFAULT_SHELL, ShellTemplatesMixin, get_shell
+from touchtechnology.admin.shells import ShellTemplatesMixin
+from touchtechnology.admin.sites import site as default_site
 from touchtechnology.common.decorators import (
     never_cache_m,
     staff_login_required_m,
@@ -54,20 +55,20 @@ class AdminComponentMixin(ShellTemplatesMixin):
     def shell(self):
         """The shell the admin site this component belongs to wears."""
         site = self.admin_site
-        return site.shell if site is not None else get_shell(DEFAULT_SHELL)
+        return site.shell if site is not None else default_site.shell
 
     def admin_template(self, filename):
         return self.shell.template(filename)
 
     def _template_path(self, filename, *args):
         """
-        For each place the component's pages may be, the shell's own first and
-        the same place without the shell (where a deployment overrides it) next;
-        the admin's own pages come last.
+        For each place the component's pages may be, the same place without the
+        shell (where a deployment overrides it) first and the shell's own next;
+        the admin's own pages come last, neutral before the shell's.
         """
         yield from super()._template_path(filename, *args)
-        yield self.shell.template(filename)
         yield os.path.join("touchtechnology/admin", filename)
+        yield self.shell.template(filename)
 
     @never_cache_m
     @staff_login_required_m

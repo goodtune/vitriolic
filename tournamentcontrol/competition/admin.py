@@ -20,6 +20,7 @@ from django.http import (
     HttpResponseRedirect,
 )
 from django.shortcuts import get_object_or_404
+from django.template.loader import select_template
 from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
 from django.utils import formats, timezone
@@ -742,7 +743,7 @@ def season_days(explorer, request, season):
                 "admin:fixja:match-results",
                 args=(season.competition_id, season.pk, day.strftime("%Y%m%d")),
             ),
-            icon="square-check",
+            icon=explorer.shell.icon("day"),
         )
         for day in season.matches.dates("date", "day")
     ]
@@ -759,12 +760,12 @@ class CompetitionExplorer(Explorer):
         Competition: (Rel("seasons", flat=True),),
         Season: (
             Rel("divisions", flat=True),
-            Rel("venues", label=_("Venues"), icon="map-pin"),
-            Folder("days", _("Match days"), children=season_days, icon="calendar-days"),
+            Rel("venues", label=_("Venues"), icon="venues"),
+            Folder("days", _("Match days"), children=season_days, icon="days"),
         ),
         Division: (
             Rel("stages", flat=True),
-            Rel("teams", label=_("Teams"), icon="shield"),
+            Rel("teams", label=_("Teams"), icon="teams"),
         ),
         Stage: (Rel("pools", flat=True),),
         StageGroup: (),
@@ -3734,9 +3735,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @registration
     def edit_club(self, request, extra_context, club=None, **kwargs):
         templates = {
-            Team: self.shell.shelled(
-                "tournamentcontrol/competition/admin/club/team.inc.html"
-            ),
+            Team: select_template(
+                self.shell.names(
+                    "tournamentcontrol/competition/admin/club/team.inc.html"
+                )
+            ).template.name,
         }
         extra_context.setdefault("templates", templates)
         return self.generic_edit(

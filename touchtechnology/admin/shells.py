@@ -15,11 +15,11 @@ site::
 
 Every template a shell ships lives in a directory of its own, next to the
 neutral path a deployment may use to override it (see
-``AdminComponentMixin._template_path``): the shell's directory is tried first
-at each level, then the neutral path at the same level. So a deployment that
-overrides ``tournamentcontrol/competition/admin/season/edit.html`` wins over
-the shell's page for a season, but not over the shell's page for anything more
-general.
+``AdminComponentMixin._template_path``): at each level the neutral path is
+tried first, then the shell's directory. The library ships no page at a
+neutral path, so nothing is shadowed, and a deployment's override at the old
+path (``tournamentcontrol/competition/admin/season/edit.html``, say) keeps
+working, for either shell, exactly as it did before shells existed.
 """
 
 import os.path
@@ -87,6 +87,15 @@ WORKBOOK_ICONS = MappingProxyType(
         "section": "model",
         "item": "file",
         "kinds": MappingProxyType({"page": "file"}),
+        # The icon of the folders and nodes a component's explorer names by role.
+        "roles": MappingProxyType(
+            {
+                "venues": "map-pin",
+                "days": "calendar-days",
+                "day": "square-check",
+                "teams": "shield",
+            }
+        ),
         "more": "ellipsis",
         "folder": "folder",
     }
@@ -103,6 +112,7 @@ EXPLORER_ICONS = MappingProxyType(
                 "content": "sitemap",
                 "news": "article",
                 "auth": "group",
+                "enrolment": "schoolyear",
                 "settings": "settings",
             }
         ),
@@ -112,6 +122,9 @@ EXPLORER_ICONS = MappingProxyType(
         "section": "menu",
         "item": "item",
         "kinds": MappingProxyType({"page": "page"}),
+        "roles": MappingProxyType(
+            {"venues": "venue", "days": "season", "day": "results", "teams": "team"}
+        ),
         "more": "more",
         "folder": "folder",
     }
@@ -158,8 +171,8 @@ class Shell:
         return "%s/admin/%s/%s" % (head, self.name, tail)
 
     def names(self, name):
-        """Where to look for an admin template: the shell's own, then the neutral."""
-        return [self.shelled(name), name]
+        """Where to look for an admin template: the neutral path, then the shell's."""
+        return [name, self.shelled(name)]
 
     @property
     def error_template(self):
@@ -172,9 +185,27 @@ class Shell:
         return self.template("templatetags/field.html")
 
     @property
+    def forbidden_template(self):
+        """The page of the 403 handler."""
+        return self.template("403.html")
+
+    @property
+    def not_found_template(self):
+        """The page of the 404 handler."""
+        return self.template("404.html")
+
+    @property
     def print_template(self):
         """The page print layouts (scorecards, reports, grids) extend."""
         return self.template("print.html")
+
+    def icon(self, name):
+        """
+        The icon for ``name``: a role a component's explorer names (``venues``,
+        ``days``, ``day``, ``teams``) becomes the shell's own icon for it, any
+        other name is already an icon.
+        """
+        return self.icons["roles"].get(name, name)
 
     def component_icon(self, component):
         """The icon of a component's folder in the tree."""
@@ -239,14 +270,14 @@ class ShellTemplatesMixin:
     """
     For an application with templates of its own for each shell: it names its
     shell as ``shell`` and its templates are looked for in the shell's folder
-    of its ``template_base`` before the same place without the shell (where a
-    deployment overrides them).
+    of its ``template_base`` after the same place without the shell (where a
+    deployment overrides them, and the library ships nothing).
     """
 
     def _template_path(self, filename, *args):
         shell = self.shell
         base = self.template_base
         for candidate in super()._template_path(filename, *args):
+            yield candidate
             if candidate.startswith(base + os.sep):
                 yield os.path.join(base, shell.name, os.path.relpath(candidate, base))
-            yield candidate
