@@ -306,7 +306,7 @@ class TestMySidelineNameDeviations:
 
     def _help(self, page: Page, starts_with):
         """The form help text which begins with ``starts_with``."""
-        return page.locator("p.help-block", has_text=starts_with).first
+        return page.locator("p.field-help", has_text=starts_with).first
 
     def _save(self, page: Page, url, title=None, upstream_title_reset=False):
         """Open an admin edit form, optionally change it, and save it."""

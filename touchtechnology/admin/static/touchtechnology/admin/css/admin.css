@@ -2192,6 +2192,7 @@ dialog::backdrop {
 
 	.sign-in {
 		grid-template-columns: 1fr;
+		grid-template-rows: auto 1fr;
 	}
 
 	.sign-in-art {
@@ -2459,8 +2460,15 @@ legend.slot-head { padding: 0; }
 /* widgets of the shared forms */
 .datetime-parts {
 	display: flex;
-	flex-wrap: wrap;
+	flex-direction: column;
+	align-items: flex-start;
 	gap: 8px;
+}
+
+.datetime-date {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 6px;
 }
 
 .datetime-parts select,

@@ -145,7 +145,6 @@
 		syncPanelButtons();
 		var id = tab.getAttribute('aria-controls');
 		try { sessionStorage.setItem('admin-tab:' + location.pathname, id); } catch (e) { /* private mode */ }
-		if (history.replaceState) { history.replaceState(null, '', '#' + id); }
 		var panel = document.getElementById(id);
 		if (panel && window.htmx && panel.hasAttribute('hx-get') && !panel.dataset.loaded) {
 			panel.dataset.loaded = '1';
@@ -479,6 +478,8 @@
 
 	function enhancePicker(select) {
 		if (select.dataset.picker === 'off' || select.closest('[data-no-picker]')) { return; }
+		// The parts of a date or a time are chosen in place, not searched for.
+		if (/_\d+(_(day|month|year))?$/.test(select.name || '')) { return; }
 		var many = realOptions(select).length > MANY;
 		if (!(select.multiple || many || select.dataset.picker === 'on')) { return; }
 		if (select.size > 1 && !select.multiple) { return; }
