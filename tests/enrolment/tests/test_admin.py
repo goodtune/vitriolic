@@ -743,3 +743,16 @@ class YearSetupTests(EnrolmentDataMixin, test_plus.TestCase):
             '<a href="%s#setup-tab"><strong>School year set-up</strong> '
             "%d of %d done</a>" % (self.year.urls["edit"], setup.done, setup.total)
         )
+
+    def test_report_card_shows_year_progress(self):
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:enrolment:reportcard:edit",
+                pk=self.report_card.pk,
+                **self.enrolment_kwargs,
+            )
+        setup = self.context["setup"]
+        self.assertResponseContains(
+            '<a href="%s#setup-tab"><strong>School year set-up</strong> '
+            "%d of %d done</a>" % (self.year.urls["edit"], setup.done, setup.total)
+        )

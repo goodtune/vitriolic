@@ -157,6 +157,8 @@ class EnrolmentAdminComponent(AdminComponent):
         # Every page inside a school year shows how far its set-up has got.
         extra_context = {} if extra_context is None else extra_context
         year = extra_context.get("year")
+        if year is None and "enrolment" in extra_context:
+            year = extra_context["enrolment"].class_group.year
         if (
             request.method == "GET"
             and "_htmx_tab" not in request.GET
