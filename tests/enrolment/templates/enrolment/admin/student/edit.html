@@ -6,7 +6,7 @@
 {% block tab-links %}
 	{{ block.super }}
 	{% if object.pk %}
-		<li><a href="#timeline-tab" data-toggle="tab">{% trans "Timeline" %}</a></li>
+		<li><a href="#timeline-tab" data-toggle="tab"><i class="fa fa-chevron-right fa-fw"></i>&nbsp;{% trans "Timeline" %}</a></li>
 	{% endif %}
 {% endblock tab-links %}
 

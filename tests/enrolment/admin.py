@@ -203,15 +203,18 @@ class EnrolmentAdminComponent(AdminComponent):
 
     @staff_login_required_m
     def edit_schoolyear(self, request, pk=None, **kwargs):
+        # The class groups tab adds a class to the school year on the page, so
+        # it is told which year that is; the add page has no year yet.
+        year = None if pk is None else get_object_or_404(SchoolYear, pk=pk)
         return self.generic_edit(
             request,
             SchoolYear,
-            pk=pk,
+            instance=year,
             form_class=SchoolYearForm,
             permission_required=True,
             post_save_redirect=self.redirect(self.reverse("schoolyear:list")),
             related=("classes",),
-            extra_context=kwargs,
+            extra_context={"year": year, **kwargs},
         )
 
     @staff_login_required_m
@@ -337,6 +340,7 @@ class EnrolmentAdminComponent(AdminComponent):
             Student,
             paginate_by=25,
             permission_required=True,
+            search=("first_name", "last_name"),
             extra_context=kwargs,
         )
 
@@ -619,8 +623,13 @@ class EnrolmentAdminComponent(AdminComponent):
             instance=instance,
             form_class=AssessmentForm,
             formset_class=inlineformset_factory(
-                Assessment, Score, form=ScoreForm, fields=("enrolment", "mark"), extra=1
+                Assessment, Score, form=ScoreForm, extra=1
             ),
+            formset_kwargs={
+                "form_kwargs": {
+                    "enrolments": class_group.enrolments.select_related("student")
+                }
+            },
             post_save_redirect=post_save_redirect,
             extra_context=extra_context,
         )

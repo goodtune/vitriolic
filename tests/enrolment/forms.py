@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from enrolment.models import (
     Assessment,
     AttendanceRecord,
@@ -96,6 +97,22 @@ class EnrolmentForm(ParentUniqueMixin, BootstrapFormControlMixin, ModelForm):
         model = Enrolment
         exclude = ("class_group",)
 
+    def clean(self):
+        super().clean()
+        student = self.cleaned_data.get("student")
+        if student is not None:
+            elsewhere = student.enrolments.filter(
+                class_group__year_id=self.instance.class_group.year_id
+            ).exclude(class_group_id=self.instance.class_group_id)
+            if self.instance.pk is not None:
+                elsewhere = elsewhere.exclude(pk=self.instance.pk)
+            existing = elsewhere.select_related("class_group__year").first()
+            if existing is not None:
+                raise ValidationError(
+                    "%(student)s is already enrolled in %(class_group)s this year.",
+                    params={"student": student, "class_group": existing.class_group},
+                )
+
 
 class AttendanceRecordForm(ParentUniqueMixin, BootstrapFormControlMixin, ModelForm):
     parent_field = "enrolment"
@@ -124,10 +141,19 @@ class AssessmentForm(BootstrapFormControlMixin, ModelForm):
 class ScoreForm(BootstrapFormControlMixin, ModelForm):
     """
     A row of an assessment. The model's ``clean()`` rejects a mark above the
-    assessment's maximum; the inline formset sets the assessment on the
-    instance before the form is validated.
+    assessment's maximum and a student from another class; the inline formset
+    sets the assessment on the instance before the form is validated.
+
+    The ``enrolments`` of the assessment's class are passed in by the view, so
+    the choices are that class's students, labelled with their names.
     """
 
     class Meta:
         model = Score
         fields = ("enrolment", "mark")
+
+    def __init__(self, *args, enrolments, **kwargs):
+        super().__init__(*args, **kwargs)
+        field = self.fields["enrolment"]
+        field.queryset = enrolments
+        field.label_from_instance = lambda enrolment: str(enrolment.student)
