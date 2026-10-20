@@ -5,6 +5,7 @@ from datetime import date, datetime, time
 from unittest.mock import ANY, MagicMock, PropertyMock, patch
 from zoneinfo import ZoneInfo
 
+import cloudinary
 from dateutil.rrule import DAILY
 from django.conf import settings
 from django.contrib import messages
@@ -27,6 +28,7 @@ from tournamentcontrol.competition.models import (
     Division,
     Ground,
     Match,
+    MatchScoreSheet,
     SimpleScoreMatchStatistic,
     Stage,
     StageGroup,
@@ -427,6 +429,33 @@ class GoodViewTests(TestCase):
     def test_match(self):
         match = factories.MatchFactory.create()
         self.assertGoodNamespace(match)
+
+    @patch.multiple(
+        cloudinary.config(),
+        create=True,
+        cloud_name="test",
+        api_key="test",
+        api_secret="test",
+    )
+    def test_match_scoresheet(self):
+        scoresheet = MatchScoreSheet.objects.create(
+            match=factories.MatchFactory.create(), image="harness/score-sheet"
+        )
+        self.assertGoodNamespace(scoresheet)
+
+    @patch.multiple(
+        cloudinary.config(),
+        create=True,
+        cloud_name="test",
+        api_key="test",
+        api_secret="test",
+    )
+    def test_match_with_scoresheet(self):
+        match = factories.MatchFactory.create()
+        MatchScoreSheet.objects.create(match=match, image="harness/score-sheet")
+        with self.login(self.superuser):
+            self.get("%s:edit" % match._get_admin_namespace(), *match._get_url_args())
+            self.response_200()
 
     def test_pool(self):
         pool = factories.StageGroupFactory.create()

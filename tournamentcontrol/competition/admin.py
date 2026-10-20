@@ -225,8 +225,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         matchscoresheet_urls = (
             [
                 path("add/", self.edit_matchscoresheet, name="add"),
-                path("<int:pk>/", self.edit_matchscoresheet, name="edit"),
-                path("<int:pk>/delete/", self.delete_matchscoresheet, name="delete"),
+                path("<uuid:pk>/", self.edit_matchscoresheet, name="edit"),
+                path("<uuid:pk>/delete/", self.delete_matchscoresheet, name="delete"),
             ],
             self.app_name,
         )
