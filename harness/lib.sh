@@ -54,4 +54,5 @@ harness_env() {
     export COMPOPS_EVENTS_BACKEND=memory
     export ADMIN_BRAND="$brand"
     export HTMX_ADMIN_TABS="$htmx"
+    export PYTHONUNBUFFERED=1
 }
