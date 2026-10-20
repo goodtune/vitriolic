@@ -1,0 +1,64 @@
+{% extends "tournamentcontrol/competition/admin/workbook/base.html" %}
+{% load i18n common tz admin_workbook %}
+
+{% block page_title %}{% trans "Live stream" %} · {{ date|date:"j M Y" }}{% endblock %}
+
+{% block content %}
+	{% trans "Match day" as eyebrow %}{% trans "Choose the matches to stream" as title %}{% blocktrans asvar lede with date=date|date:"l j F Y" %}{{ date }}: tick the matches on camera-equipped fields that should go out live on YouTube.{% endblocktrans %}
+	{% include "tournamentcontrol/competition/admin/workbook/_page_head.html" %}
+
+	<form class="wb-sheet wb-form" action="" method="post">
+		{% csrf_token %}
+		{{ formset.management_form }}
+		{% trans "Matches" as bar_title %}
+		<div class="wb-formbar">
+			<h2 class="wb-formbar-title">{{ bar_title }}</h2>
+			<div class="wb-formbar-actions">
+				<a class="wb-button wb-button-quiet" href="{{ season.urls.edit }}#schedule-tab">{% trans "Cancel" %}</a>
+				<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
+			</div>
+		</div>
+		{% include "touchtechnology/admin/workbook/_problems.html" with form=None %}
+		{% timezone season.timezone %}
+			<div class="wb-table-wrap">
+				<table class="wb-table wb-table-cards">
+					<thead>
+						<tr>
+							<th scope="col">{% trans "Match" %}</th>
+							<th scope="col">{% trans "Time" %}</th>
+							<th scope="col">{% trans "Division" %}</th>
+							<th scope="col">{% trans "Field" %}</th>
+							<th scope="col">{% trans "Stream it" %}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{% for form in formset.forms %}
+							{% with match=form.instance %}
+								<tr>
+									<td class="wb-title-cell"><label for="{{ form.live_stream.id_for_label }}">{{ match|safe }}</label>{{ form.id }}</td>
+									<td data-label="{% trans "Time" %}">{{ match.datetime|time:"H:i" }}</td>
+									<td data-label="{% trans "Division" %}">{{ match.stage.division.short_title|default:match.stage.division.title }}</td>
+									<td data-label="{% trans "Field" %}">{{ match.play_at.title }}</td>
+									<td class="wb-row-actions">{{ form.live_stream|control }}</td>
+								</tr>
+							{% endwith %}
+						{% empty %}
+							<tr class="wb-table-empty"><td colspan="5">{% trans "No matches on this day are on a field with a camera." %}</td></tr>
+						{% endfor %}
+					</tbody>
+				</table>
+			</div>
+		{% endtimezone %}
+	</form>
+
+	<form class="wb-sheet" action="{% url 'admin:fixja:match-live-stream-resync' season.competition.pk season.pk date|date:"Ymd" %}" method="post">
+		{% csrf_token %}
+		<div class="wb-sheet-head">
+			<div>
+				<h2>{% trans "Resync everything" %}</h2>
+				<p class="wb-help">{% blocktrans %}Re-push title, thumbnail, and schedule to YouTube for every match above that is already streaming.{% endblocktrans %}</p>
+			</div>
+			<button type="submit" class="wb-button">{% icon "refresh-cw" %}{% trans "Resync All" %}</button>
+		</div>
+	</form>
+{% endblock %}

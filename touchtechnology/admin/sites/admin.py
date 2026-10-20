@@ -21,6 +21,7 @@ from django.utils.translation import gettext_lazy as _
 
 from touchtechnology.admin import explorer
 from touchtechnology.admin.branding import get_brand
+from touchtechnology.admin.shells import DEFAULT_SHELL, get_shell
 from touchtechnology.admin.templatetags.admin import allowed
 from touchtechnology.admin.views import AdminLoginView
 from touchtechnology.common.decorators import staff_login_required_m
@@ -30,10 +31,22 @@ logger = logging.getLogger(__name__)
 
 
 class AdminSite(DjangoAdminSite):
-    def __init__(self, name="admin"):
+    def __init__(self, name="admin", shell=DEFAULT_SHELL):
         super(AdminSite, self).__init__(name)
+        self.shell = shell
         self._components = collections.OrderedDict()
         self._schemas = collections.defaultdict(lambda: None)
+
+    @property
+    def shell(self):
+        """The ``Shell`` the site's pages are drawn by (see ``admin.shells``)."""
+        return self._shell
+
+    @shell.setter
+    def shell(self, shell):
+        # A name, as the constructor takes it. ``ImproperlyConfigured`` for any
+        # shell the admin does not ship.
+        self._shell = get_shell(getattr(shell, "name", shell))
 
     def register(self, component, *schemas):
         logger.debug("Registering admin component... %s" % component.__name__)
@@ -50,7 +63,8 @@ class AdminSite(DjangoAdminSite):
                     % component.__name__
                 )
                 return
-        self._components[component] = component(self.name)
+        self._components[component] = instance = component(self.name)
+        instance.admin_site = self
         if schemas:
             self._schemas[component] = schemas
 
@@ -182,11 +196,10 @@ class AdminSite(DjangoAdminSite):
         context.update(kwargs)
         if "brand" not in context:
             context["brand"] = get_brand(request)
-        context.setdefault(
-            "field_template", "touchtechnology/admin/templatetags/field.html"
-        )
+        context.setdefault("shell", self.shell)
+        context.setdefault("field_template", self.shell.field_template)
         response = TemplateResponse(
-            request, "touchtechnology/admin/index.html", context=context
+            request, self.shell.template("index.html"), context=context
         )
         response.current_app = self.name
         return response
@@ -207,14 +220,14 @@ class AdminSite(DjangoAdminSite):
         )
         if component is None:
             raise Http404("No such part of the tree.")
-        context = {"admin": self, "component": component}
+        context = {"admin": self, "component": component, "shell": self.shell}
         if request.GET.get("mode") == "drill":
             context["tree"] = explorer.drill(request, component, local)
-            template = "touchtechnology/admin/explorer/drill.html"
+            template = self.shell.template("explorer/drill.html")
         else:
             context["nodes"] = component.explorer().children(request, local)
             context["parent_key"] = node
-            template = "touchtechnology/admin/explorer/nodes.html"
+            template = self.shell.template("explorer/nodes.html")
         response = TemplateResponse(request, template, context=context)
         response.current_app = self.name
         response["Cache-Control"] = "private, no-store"

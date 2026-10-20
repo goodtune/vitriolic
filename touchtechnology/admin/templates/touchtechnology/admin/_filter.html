@@ -1,7 +1,0 @@
-{% load i18n common admin_ui %}{% comment %}
-	A box that filters the rows of the list in its pane as you type.
-{% endcomment %}
-<div class="wb-list-filter">
-	{% icon "search" %}
-	<input class="wb-input" type="search" data-wb-filter aria-label="{% blocktrans with types=model|types %}Filter these {{ types }}{% endblocktrans %}" placeholder="{% blocktrans with types=model|types %}Filter these {{ types }}{% endblocktrans %}">
-</div>

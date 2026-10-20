@@ -9,10 +9,10 @@ from dateutil.relativedelta import relativedelta
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.db.models import Q
-from google.auth.exceptions import RefreshError
 from django.template.loader import render_to_string
 from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
+from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 
 from tournamentcontrol.competition.compops.status import refresh_season_status
@@ -24,6 +24,8 @@ from tournamentcontrol.competition.models import (
 )
 from tournamentcontrol.competition.upstream.sync import (
     synchronise_all as _upstream_synchronise_all,
+)
+from tournamentcontrol.competition.upstream.sync import (
     synchronise_season as _upstream_synchronise_season,
 )
 from tournamentcontrol.competition.utils import (
@@ -729,12 +731,13 @@ def generate_pdf_scorecards(
 
 
 @shared_task(base=PdfResultTask, bind=True, max_retries=PDF_RENDER_MAX_RETRIES)
-def generate_pdf_grid(self, season, extra_context, date=None):
+def generate_pdf_grid(self, season, extra_context, date=None, templates=None):
     dates = [date] if date is not None else None
     try:
         data: bytes = generate_fixture_grid(
             season,
             dates=dates,
+            templates=templates,
             format="pdf",
             extra_context=extra_context,
             http_response=False,  # Get bytes back, not a response object

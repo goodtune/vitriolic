@@ -2,6 +2,7 @@ from django.test import override_settings
 from django.urls import reverse
 from test_plus import TestCase
 
+from touchtechnology.admin.sites import site
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.tests import factories
 
@@ -57,7 +58,7 @@ class HtmxCompetitionTabTests(TestCase):
             self.response_200()
             self.assertTemplateUsed(
                 self.last_response,
-                "touchtechnology/admin/_htmx_tab_empty.html",
+                site.shell.template("_htmx_tab_empty.html"),
             )
 
     def test_competition_htmx_tab_ignored_without_flag(self):
@@ -71,7 +72,7 @@ class HtmxCompetitionTabTests(TestCase):
             )
             self.response_200()
             self.assertTemplateUsed(
-                self.last_response, "touchtechnology/admin/edit.html"
+                self.last_response, site.shell.template("edit.html")
             )
 
     @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
@@ -85,7 +86,7 @@ class HtmxCompetitionTabTests(TestCase):
             )
             self.response_200()
             self.assertTemplateUsed(
-                self.last_response, "touchtechnology/admin/edit.html"
+                self.last_response, site.shell.template("edit.html")
             )
 
 
@@ -115,7 +116,7 @@ class HtmxSeasonTabTests(TestCase):
             )
             self.response_200()
             self.assertTemplateNotUsed(
-                self.last_response, "touchtechnology/admin/edit.html"
+                self.last_response, site.shell.template("edit.html")
             )
 
     @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
@@ -131,7 +132,7 @@ class HtmxSeasonTabTests(TestCase):
             )
             self.response_200()
             self.assertTemplateNotUsed(
-                self.last_response, "touchtechnology/admin/edit.html"
+                self.last_response, site.shell.template("edit.html")
             )
 
     @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
@@ -147,7 +148,7 @@ class HtmxSeasonTabTests(TestCase):
             )
             self.response_200()
             self.assertTemplateNotUsed(
-                self.last_response, "touchtechnology/admin/edit.html"
+                self.last_response, site.shell.template("edit.html")
             )
 
     def test_season_edit_traditional_mode(self):

@@ -5,8 +5,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 
 from touchtechnology.admin.branding import get_brand
-
-FIELD_TEMPLATE = "touchtechnology/admin/templatetags/field.html"
+from touchtechnology.admin.shells import DEFAULT_SHELL, get_shell
 
 
 class AdminLoginView(LoginView):
@@ -22,8 +21,16 @@ class AdminLoginView(LoginView):
     would loop; they get the form with a notice and may sign in as someone else.
     """
 
-    template_name = "touchtechnology/admin/login.html"
     next_page = reverse_lazy("admin:index")
+
+    @property
+    def shell(self):
+        """The shell of the admin site this view belongs to."""
+        site = (self.extra_context or {}).get("admin")
+        return site.shell if site is not None else get_shell(DEFAULT_SHELL)
+
+    def get_template_names(self):
+        return [self.shell.template("login.html")]
 
     @method_decorator(never_cache)
     def dispatch(self, request, *args, **kwargs):
@@ -38,7 +45,8 @@ class AdminLoginView(LoginView):
         context = super().get_context_data(**kwargs)
         if "brand" not in context:
             context["brand"] = get_brand(self.request)
-        context.setdefault("field_template", FIELD_TEMPLATE)
+        context.setdefault("shell", self.shell)
+        context.setdefault("field_template", self.shell.field_template)
         user = self.request.user
         if user.is_authenticated and not user.is_staff:
             context["signed_in_as"] = user.get_username()

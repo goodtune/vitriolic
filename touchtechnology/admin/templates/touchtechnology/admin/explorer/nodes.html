@@ -1,9 +1,0 @@
-{% load i18n admin_ui %}{% for node in nodes %}
-<li class="wb-node{% if node.on_trail %} is-on-trail{% endif %}{% if node.current %} is-here{% endif %}{% if node.more %} is-more{% endif %}">
-	<div class="wb-node-row">
-		{% if node.expandable %}<button type="button" class="wb-twisty" aria-expanded="{{ node.open|yesno:"true,false" }}" aria-controls="{{ node.dom_id }}" data-node="{{ node.key }}"{% if node.children is None %} data-lazy{% endif %}>{% icon "chevron-right" %}<span class="wb-sr">{% blocktrans with label=node.label %}Show what is in {{ label }}{% endblocktrans %}</span></button>{% else %}<span class="wb-twisty-gap"></span>{% endif %}
-		<a class="wb-node-link" href="{{ node.url|default:"#" }}" title="{{ node.label }}"{% if node.is_page %} aria-current="page"{% elif node.current %} aria-current="location"{% endif %}>{% icon node.icon %}<span class="wb-node-label">{{ node.label }}</span>{% if node.note %}<small class="wb-node-note">{{ node.note }}</small>{% endif %}</a>
-	</div>
-	{% if node.expandable %}<ul class="wb-nodes" role="list" id="{{ node.dom_id }}"{% if not node.open %} hidden{% endif %}>{% if node.children is not None %}{% include "touchtechnology/admin/explorer/nodes.html" with nodes=node.children parent_key=node.key %}{% endif %}</ul>{% endif %}
-</li>
-{% empty %}{% if parent_key %}<li class="wb-node is-empty"><span class="wb-node-empty">{% trans "Nothing here yet" %}</span></li>{% endif %}{% endfor %}

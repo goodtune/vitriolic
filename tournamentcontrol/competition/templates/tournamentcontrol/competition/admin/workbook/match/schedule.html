@@ -1,0 +1,62 @@
+{% extends "tournamentcontrol/competition/admin/workbook/base.html" %}
+{% load i18n common admin_workbook %}
+
+{% block page_title %}{% trans "Allocate" %}{% if date %} · {{ date|date:"j M Y" }}{% endif %}{% endblock %}
+
+{% block content %}
+	<header class="wb-head">
+		<div class="wb-head-text">
+			<p class="wb-eyebrow">{% icon "clock" %}{% trans "Allocate times and grounds" %}</p>
+			<h1>{% if date %}{{ date|date:"l j F Y" }}{% else %}{% trans "Schedule" %}{% endif %}</h1>
+			<p class="wb-lede">{% if division %}{{ division.title }}{% if stage %} · {{ stage.title }}{% endif %} · {% endif %}{% trans "Give each match a kick-off time and a ground. A ground cannot host two matches at once." %}</p>
+		</div>
+		{% if date %}
+			<div class="wb-head-actions">
+				<a class="wb-button" href="{% url 'admin:fixja:match-visual-schedule' season.competition_id season.pk date|date:"Ymd" %}" target="_blank" rel="noopener">{% icon "layout-grid" %}{% trans "Visual schedule" %}<span class="wb-sr"> {% trans "(opens a new tab)" %}</span></a>
+			</div>
+		{% endif %}
+	</header>
+
+	<form class="wb-sheet wb-form" action="" method="post" novalidate>
+		{% csrf_token %}
+		{{ formset.management_form }}
+		<div class="wb-formbar">
+			<h2 class="wb-formbar-title">{% trans "Matches" %}</h2>
+			<div class="wb-formbar-actions">
+				<a class="wb-button wb-button-quiet" href="{{ season.urls.edit }}#schedule-tab">{% trans "Cancel" %}</a>
+				<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
+			</div>
+		</div>
+		{% include "touchtechnology/admin/workbook/_problems.html" with form=None %}
+
+		{% regroup formset.forms by instance.stage.division as grouped %}
+		{% for group in grouped %}
+			<section class="wb-time" aria-labelledby="division-{{ group.grouper.pk }}">
+				<h3 class="wb-time-title" id="division-{{ group.grouper.pk }}">{{ group.grouper }}</h3>
+				<div class="wb-alloc">
+					{% for form in group.list %}
+						{% with match=form.instance %}
+							<div class="wb-alloc-row">
+								{{ form.id }}
+								<div class="wb-alloc-match">
+									<span class="wb-muted">{% if match.label %}{{ match.label }}{% else %}{% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}{% endif %}</span><br>
+									{{ match }}
+								</div>
+								<div class="wb-alloc-fields">
+									{% field form.time %}
+									{% field form.play_at %}
+								</div>
+							</div>
+						{% endwith %}
+					{% endfor %}
+				</div>
+			</section>
+		{% empty %}
+			<p class="wb-empty">{% trans "There are no matches to allocate on this day." %}</p>
+		{% endfor %}
+
+		<div class="wb-formfoot">
+			<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
+		</div>
+	</form>
+{% endblock %}

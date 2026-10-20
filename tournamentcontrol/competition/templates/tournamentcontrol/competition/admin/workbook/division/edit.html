@@ -1,0 +1,93 @@
+{% extends "touchtechnology/admin/workbook/edit.html" %}
+{% load i18n common admin_workbook %}
+
+{% block lede %}
+	{% if object.pk %}
+		<p class="wb-lede">{{ object.season }}{% if object.draft %} · <span class="wb-badge wb-badge-warn">{% trans "Draft: not on the public site" %}</span>{% endif %}</p>
+	{% endif %}
+{% endblock %}
+
+{% block head-actions %}
+	{% if object.pk %}
+		<a class="wb-button" href="{% url 'admin:fixja:competition:season:division:scorers' object.season.competition_id object.season_id object.pk %}">{% icon "chart-bar" %}{% trans "Leaders" %}</a>
+	{% endif %}
+{% endblock %}
+
+{% block form-fieldset %}
+	{% fields_in form "title upstream_title_reset short_title points_formula forfeit_for_score forfeit_against_score games_per_day draft" as basics %}
+	{% include "touchtechnology/admin/workbook/_fieldgroup.html" with fields=basics first=True %}
+	{% fields_besides form "title upstream_title_reset short_title points_formula forfeit_for_score forfeit_against_score games_per_day draft" as rest %}
+	{% trans "More settings" as title %}{% trans "Public notes, colour, bonus points and the web address." as hint %}
+	{% include "touchtechnology/admin/workbook/_fieldgroup.html" with fields=rest title=title hint=hint folded=True %}
+{% endblock %}
+
+{% block layout-class %}{% if object.pk %} wb-layout-aside{% endif %}{% endblock %}
+
+{% block aside %}
+	{% if object.pk %}
+		<aside class="wb-aside" aria-label="{% trans "Division set-up" %}">
+			{% trans "Division set-up" as title %}
+			{% include "touchtechnology/admin/workbook/_checklist.html" with checklist=checklist title=title %}
+		</aside>
+	{% endif %}
+{% endblock %}
+
+{% block tab-links %}
+	{{ block.super }}
+	{% if object.pk %}
+		{% trans "Ladder" as ladder %}
+		{% include "touchtechnology/admin/workbook/_tab.html" with name="ladder" label=ladder only %}
+	{% endif %}
+{% endblock %}
+
+{% block tab-panes %}
+	{{ block.super }}
+	{% if object.pk %}
+		<section class="wb-pane wb-sheet" role="tabpanel" id="ladder-pane">
+			<div class="wb-sheet-head"><h2>{% trans "Ladder" %}</h2></div>
+			{% for stage, pools in ladders %}
+				{% for pool, rows in pools %}
+					<h3>{{ stage.title }}{% if pool %} · {{ pool.title }}{% endif %}</h3>
+					<div class="wb-table-wrap">
+						<table class="wb-table wb-ladder">
+							<thead>
+								<tr>
+									<th scope="col" class="wb-num">#</th>
+									<th scope="col">{% trans "Team" %}</th>
+									<th scope="col" class="wb-num"><abbr title="{% trans "Played" %}">{% trans "P" %}</abbr></th>
+									<th scope="col" class="wb-num"><abbr title="{% trans "Won" %}">{% trans "W" %}</abbr></th>
+									<th scope="col" class="wb-num"><abbr title="{% trans "Drawn" %}">{% trans "D" %}</abbr></th>
+									<th scope="col" class="wb-num"><abbr title="{% trans "Lost" %}">{% trans "L" %}</abbr></th>
+									<th scope="col" class="wb-num"><abbr title="{% trans "Byes" %}">{% trans "B" %}</abbr></th>
+									<th scope="col" class="wb-num"><abbr title="{% trans "Score for" %}">{% trans "For" %}</abbr></th>
+									<th scope="col" class="wb-num"><abbr title="{% trans "Score against" %}">{% trans "Agst" %}</abbr></th>
+									<th scope="col" class="wb-num"><abbr title="{% trans "Difference" %}">{% trans "Diff" %}</abbr></th>
+									<th scope="col" class="wb-num"><abbr title="{% trans "Points" %}">{% trans "Pts" %}</abbr></th>
+								</tr>
+							</thead>
+							<tbody>
+								{% for row in rows %}
+									<tr>
+										<td class="wb-num">{{ forloop.counter }}</td>
+										<th scope="row">{{ row.team.title }}</th>
+										<td class="wb-num">{{ row.played }}</td>
+										<td class="wb-num">{{ row.win }}</td>
+										<td class="wb-num">{{ row.draw }}</td>
+										<td class="wb-num">{{ row.loss }}</td>
+										<td class="wb-num">{{ row.bye }}</td>
+										<td class="wb-num">{{ row.score_for }}</td>
+										<td class="wb-num">{{ row.score_against }}</td>
+										<td class="wb-num">{{ row.difference|floatformat:"0" }}</td>
+										<td class="wb-num"><strong>{{ row.points|floatformat:"-2" }}</strong></td>
+									</tr>
+								{% endfor %}
+							</tbody>
+						</table>
+					</div>
+				{% endfor %}
+			{% empty %}
+				<p class="wb-empty">{% trans "The ladder appears here once results are in." %}</p>
+			{% endfor %}
+		</section>
+	{% endif %}
+{% endblock %}

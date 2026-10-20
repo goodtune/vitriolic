@@ -29,6 +29,7 @@ from guardian.shortcuts import get_objects_for_user
 from guardian.utils import get_40x_or_None
 from modelforms.forms import ModelForm
 
+from touchtechnology.admin.sites import site as admin_site
 from touchtechnology.admin.templatetags.mvp_tags import related as related_filter
 from touchtechnology.common.decorators import (
     login_required_m,
@@ -164,6 +165,14 @@ class Application(object):
 
     def template_path(self, *args, **kwargs):
         return list(self._template_path(*args, **kwargs))
+
+    def admin_template(self, filename):
+        """
+        The path of one of the admin's own templates, for the generic views to
+        fall back on: the shell of the admin site (an admin component names the
+        one its own site wears).
+        """
+        return admin_site.shell.template(filename)
 
     def generic_permissions(
         self,
@@ -308,8 +317,8 @@ class Application(object):
 
         if list_templates is None:
             list_templates = self.template_path("list.inc.html", model._meta.model_name)
-            # Always tack the mvp theme version on the end as a fallback.
-            list_templates.append("mvp/list.inc.html")
+            # Always tack the admin's own version on the end as a fallback.
+            list_templates.append(self.admin_template("mvp/list.inc.html"))
 
         # Determine the namespace of this Application, so we can construct
         # view names to pass to the template engine to reverse CRUD URI's.
@@ -448,7 +457,7 @@ class Application(object):
                         }
                     )
                     templates = [
-                        "touchtechnology/admin/_htmx_tab_related.html",
+                        self.admin_template("_htmx_tab_related.html"),
                     ]
                     response = self.render(request, templates, context)
                     # A page of a tab is not a page of its own, so tell htmx not
@@ -458,7 +467,7 @@ class Application(object):
 
         # Tab not found - return empty content
         return TemplateResponse(
-            request, "touchtechnology/admin/_htmx_tab_empty.html", context
+            request, self.admin_template("_htmx_tab_empty.html"), context
         )
 
     def generic_edit(

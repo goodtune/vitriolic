@@ -1,0 +1,112 @@
+{% extends "tournamentcontrol/competition/admin/workbook/base.html" %}
+{% load i18n tz common admin_workbook %}
+
+{% block page_title %}{% trans "Results" %} · {{ date|date:"j M Y" }}{% endblock %}
+
+{% block content %}
+	{% timezone season.timezone %}
+	<header class="wb-head">
+		<div class="wb-head-text">
+			<p class="wb-eyebrow">{% icon "list-checks" %}{% trans "Enter results" %}</p>
+			<h1>{{ date|date:"l j F Y" }}</h1>
+			<p class="wb-lede">{% blocktrans with season=season.title count counter=match_formset.forms|length %}{{ season }} · {{ counter }} match{% plural %}{{ season }} · {{ counter }} matches{% endblocktrans %}{% if bye_formset.forms %} · {% blocktrans count counter=bye_formset.forms|length %}{{ counter }} bye{% plural %}{{ counter }} byes{% endblocktrans %}{% endif %}</p>
+		</div>
+	</header>
+
+	<form class="wb-sheet wb-form wb-results" action="" method="post" novalidate>
+		{% csrf_token %}
+		{{ match_formset.management_form }}
+		{{ bye_formset.management_form }}
+
+		<div class="wb-formbar">
+			<h2 class="wb-formbar-title">{% trans "Scores" %}</h2>
+			<div class="wb-formbar-actions">
+				<a class="wb-button wb-button-quiet" href="{{ cancel_url|default:season.urls.edit }}">{% trans "Cancel" %}</a>
+				<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
+			</div>
+		</div>
+
+		{% include "touchtechnology/admin/workbook/_problems.html" with form=None formset=match_formset %}
+
+		{% regroup match_formset.forms by instance.datetime as times %}
+		{% if times|length > 1 %}
+			<nav aria-label="{% trans "Kick-off times" %}">
+				<ul class="wb-day-nav">
+					{% for slot in times %}
+						<li><a class="wb-tab" href="#time-{{ slot.grouper|date:"Hi" }}">{{ slot.grouper|time:"H:i"|default:_("No time") }} <span class="wb-tab-count" aria-hidden="true">{{ slot.list|length }}</span></a></li>
+					{% endfor %}
+					{% if bye_formset.forms %}<li><a class="wb-tab" href="#byes">{% trans "Byes" %}</a></li>{% endif %}
+				</ul>
+			</nav>
+		{% endif %}
+
+		{% for slot in times %}
+			<section class="wb-time" id="time-{{ slot.grouper|date:"Hi" }}" aria-labelledby="time-{{ slot.grouper|date:"Hi" }}-title">
+				<h3 class="wb-time-title" id="time-{{ slot.grouper|date:"Hi" }}-title">{% icon "clock" %}{{ slot.grouper|time:"H:i"|default:_("No time set") }}</h3>
+				<div class="wb-matches">
+					{% for form in slot.list %}
+						{% with match=form.instance %}
+							<fieldset class="wb-match{% if form.errors %} wb-has-error{% elif match.home_team_score == None and form.home_team_score %} is-pending{% endif %}">
+								<legend class="wb-sr">{{ match }}</legend>
+								{{ form.id }}
+								<div class="wb-match-meta">
+									<strong>{{ match.stage.division.title }}</strong>
+									<span>{% if match.label %}{{ match.label }}{% else %}{% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}{% endif %}</span>
+									<span>{% icon "map-pin" %} {{ match.play_at.title|default:_("No ground") }}</span>
+									{% if match.home_team_score == None and form.home_team_score %}<span class="wb-badge wb-badge-warn">{% trans "No result yet" %}</span>{% endif %}
+								</div>
+								<div>
+									{% if form.home_team_score %}
+										<div class="wb-score">
+											<label class="wb-score-home-label" for="{{ form.home_team_score.id_for_label }}">{{ form.home_team_score.label }}</label>
+											<span class="wb-score-home">{{ form.home_team_score|control }}</span>
+											<span class="wb-score-dash" aria-hidden="true">–</span>
+											<span class="wb-score-away">{{ form.away_team_score|control }}</span>
+											<label class="wb-score-away-label" for="{{ form.away_team_score.id_for_label }}">{{ form.away_team_score.label }}</label>
+										</div>
+										{% for field in form %}{% if field.errors %}<p class="wb-error">{% icon "circle-alert" %}<span>{{ field.errors|join:" " }}</span></p>{% endif %}{% endfor %}
+										{% for error in form.non_field_errors %}<p class="wb-error">{{ error }}</p>{% endfor %}
+									{% else %}
+										<p class="wb-muted">{{ match }}</p>
+									{% endif %}
+									{% if form.is_forfeit %}
+										<details class="wb-forfeit"{% if match.is_forfeit or form.is_forfeit.errors or form.forfeit_winner.errors %} open{% endif %}>
+											<summary>{% trans "Forfeit?" %}</summary>
+											<div class="wb-match-extra">
+												{% field form.is_forfeit %}
+												{% field form.forfeit_winner %}
+											</div>
+										</details>
+									{% endif %}
+								</div>
+							</fieldset>
+						{% endwith %}
+					{% endfor %}
+				</div>
+			</section>
+		{% empty %}
+			<p class="wb-empty">{% trans "There are no matches to enter results for on this day." %}</p>
+		{% endfor %}
+
+		{% if bye_formset.forms %}
+			<section class="wb-time" id="byes" aria-labelledby="byes-title">
+				<h3 class="wb-time-title" id="byes-title">{% trans "Byes" %}</h3>
+				<p class="wb-help">{% blocktrans with date=date|date:"j F" %}Process the byes of {{ date }} to update the ladder as configured.{% endblocktrans %}</p>
+				<div class="wb-rows">
+					{% for form in bye_formset.forms %}
+						<div class="wb-row-form">
+							{{ form.id }}
+							{% field form.bye_processed %}
+							<p class="wb-help">{{ form.instance.stage.division.title }}</p>
+						</div>
+					{% endfor %}
+				</div>
+			</section>
+		{% endif %}
+
+		<div class="wb-formfoot">
+			<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
+		</div>
+	</form>
+	{% endtimezone %}
+{% endblock %}

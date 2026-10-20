@@ -1,0 +1,16 @@
+{% extends "touchtechnology/admin/workbook/mvp/list.inc.html" %}
+{% load i18n admin_workbook %}
+
+{% block table-headings %}
+	{{ block.super }}
+	<th scope="col" class="wb-num">{% trans "Teams" %}</th>
+	<th scope="col">{% trans "Kind" %}</th>
+{% endblock table-headings %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td class="wb-num" data-label="{% trans "Teams" %}">{{ obj.teams|default:"–" }}</td>
+	<td data-label="{% trans "Kind" %}">{% if obj.is_final %}<span class="wb-badge wb-badge-warn">{% icon "trophy" %}{% trans "Finals" %}</span>{% else %}<span class="wb-badge">{% trans "Rounds" %}</span>{% endif %}</td>
+{% endblock table-columns %}
+
+{% block empty-row-colspan %}4{% endblock %}

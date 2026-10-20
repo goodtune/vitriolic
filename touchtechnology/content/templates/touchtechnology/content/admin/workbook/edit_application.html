@@ -1,0 +1,36 @@
+{% extends "touchtechnology/content/admin/workbook/edit.html" %}
+{% load i18n common mvp_tags admin_workbook %}
+
+{% block extracss %}
+	{{ block.super }}
+	{{ formset_media.css }}
+{% endblock %}
+
+{% block extrajs %}
+	{{ block.super }}
+	{{ formset_media.js }}
+{% endblock %}
+
+{% block form-fieldset %}
+	{{ block.super }}
+
+	<div class="wb-group" role="group" aria-labelledby="kwargs-title">
+		<h3 class="wb-group-title" id="kwargs-title">{% trans "Configuration" %}</h3>
+		{% if formsets.kwargs.forms %}
+			{{ formsets.kwargs.management_form }}
+			{% for form in formsets.kwargs %}
+				<div class="wb-fields">{% for f in form %}{% field f %}{% endfor %}</div>
+			{% endfor %}
+		{% else %}
+			<div class="wb-fields">{% for f in formsets.kwargs %}{% field f %}{% endfor %}</div>
+		{% endif %}
+	</div>
+
+	{{ formsets.copy.management_form }}
+	<div class="wb-group" role="group" aria-labelledby="copy-title">
+		<h3 class="wb-group-title" id="copy-title">{% trans "Optional copy" %}</h3>
+		{% for form in formsets.copy %}
+			<div class="wb-fields">{% for f in form %}{% field f %}{% endfor %}</div>
+		{% endfor %}
+	</div>
+{% endblock %}

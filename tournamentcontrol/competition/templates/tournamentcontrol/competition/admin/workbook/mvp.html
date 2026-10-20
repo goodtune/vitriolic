@@ -1,0 +1,18 @@
+{% extends "touchtechnology/admin/workbook/print.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Most Valuable Player" %}{% endblock %}
+
+{% block extracss %}
+	<meta name="author" content="{% block meta_author %}{{ site.name }}{% endblock %}">
+	<meta name="subject" content="{% block meta_subject %}{% endblock %}">
+	<meta name="keywords" content="{% block meta_keywords %}{% endblock %}">
+	<meta name="date" content="{% block meta_date %}{% now "c" %}{% endblock %}">
+{% endblock %}
+
+{% block content %}
+	<div class="p-sheet">
+		<p>{% trans "Please provide a custom template." %}</p>
+		<p><code>tournamentcontrol/competition/admin/mvp.html</code></p>
+	</div>
+{% endblock %}

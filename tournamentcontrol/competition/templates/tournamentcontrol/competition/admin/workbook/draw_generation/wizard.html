@@ -1,0 +1,25 @@
+{% extends "touchtechnology/admin/workbook/edit.html" %}
+{% load i18n common admin_workbook %}
+
+{% block page_title %}{% trans "Build the draw" %} · {{ stage.title }}{% endblock %}
+{% block eyebrow %}{% blocktrans with step=wizard.steps.step1 count=wizard.steps.count %}Build the draw · step {{ step }} of {{ count }}{% endblocktrans %}{% endblock %}
+{% block heading %}{{ stage.title }}{% endblock %}
+{% block lede %}<p class="wb-lede">{% if wizard.steps.current == "0" %}{% trans "Choose a draw format and the date of the first round. You check the matches it makes before anything is saved." %}{% else %}{% trans "These are the matches the format makes. Adjust any, then save to add them to the season." %}{% endif %}</p>{% endblock %}
+{% block form-title %}{% if wizard.steps.current == "0" %}{% trans "Format and dates" %}{% else %}{% trans "The matches" %}{% endif %}{% endblock %}
+{% block form-class %}{% endblock %}
+
+{% block form-fieldset %}
+	{{ wizard.management_form }}
+	{{ wizard.form.management_form }}
+	{% for form in wizard.form %}
+		<div class="wb-group{% if forloop.first %} wb-group-first{% endif %}" role="group" aria-label="{{ form.instance.descriptor|default:form.instance }}">
+			<h3 class="wb-group-title">{{ form.instance.descriptor|default:form.instance }}</h3>
+			{% for error in form.non_field_errors %}<p class="wb-error">{{ error }}</p>{% endfor %}
+			<div class="wb-fields wb-fields-grid">
+				{% for f in form %}
+					{% field f %}
+				{% endfor %}
+			</div>
+		</div>
+	{% endfor %}
+{% endblock %}

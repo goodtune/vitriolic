@@ -10,6 +10,7 @@ from modelforms.forms import ModelForm
 from touchtechnology.admin.branding import get_brand
 from touchtechnology.admin.explorer import Explorer
 from touchtechnology.admin.forms import AdminFormControlMixin
+from touchtechnology.admin.shells import DEFAULT_SHELL, get_shell
 from touchtechnology.common.decorators import (
     never_cache_m,
     staff_login_required_m,
@@ -46,10 +47,33 @@ class AdminComponentMixin(object):
     def current_app(self):
         return self.app
 
+    #: The site this component is registered with (set by ``AdminSite.register``).
+    admin_site = None
+
+    @property
+    def shell(self):
+        """The shell the admin site this component belongs to wears."""
+        site = self.admin_site
+        return site.shell if site is not None else get_shell(DEFAULT_SHELL)
+
+    def admin_template(self, filename):
+        return self.shell.template(filename)
+
     def _template_path(self, filename, *args):
-        i = super(AdminComponentMixin, self)._template_path(filename, *args)
-        for t in i:
-            yield t
+        """
+        For each place the component's pages may be, the shell's own first and
+        the same place without the shell (where a deployment overrides it) next;
+        the admin's own pages come last.
+        """
+        shell = self.shell
+        base = self.template_base
+        for candidate in super(AdminComponentMixin, self)._template_path(
+            filename, *args
+        ):
+            if candidate.startswith(base + os.sep):
+                yield os.path.join(base, shell.name, os.path.relpath(candidate, base))
+            yield candidate
+        yield shell.template(filename)
         yield os.path.join("touchtechnology/admin", filename)
 
     @never_cache_m
@@ -83,9 +107,8 @@ class AdminComponentMixin(object):
         # ``brand`` context processor has not been configured.
         if "brand" not in context:
             context["brand"] = get_brand(request)
-        context.setdefault(
-            "field_template", "touchtechnology/admin/templatetags/field.html"
-        )
+        context.setdefault("shell", self.shell)
+        context.setdefault("field_template", self.shell.field_template)
 
         return super(AdminComponentMixin, self).render(
             request, templates, context, *args, **kwargs

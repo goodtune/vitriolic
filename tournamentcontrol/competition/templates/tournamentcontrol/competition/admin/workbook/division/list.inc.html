@@ -1,0 +1,34 @@
+{% extends "touchtechnology/admin/workbook/mvp/list.inc.html" %}
+{% load i18n admin_workbook %}
+
+{% block actions %}
+	{% url 'admin:fixja:competition:season:division:bulk' competition.pk season.pk as bulk_url %}
+	{% trans "Add several divisions" as bulk_title %}
+	{% include "tournamentcontrol/competition/admin/workbook/bulk_create_modal.inc.html" with name="division" url=bulk_url title=bulk_title %}
+	{{ block.super }}
+{% endblock %}
+
+{% block table-headings %}
+	{{ block.super }}
+	<th scope="col">{% trans "Short title" %}</th>
+	<th scope="col" class="wb-num">{% trans "Teams" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td data-label="{% trans "Short title" %}">{{ obj.short_title }}</td>
+	<td class="wb-num" data-label="{% trans "Teams" %}">{{ obj.teams.count }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}
+
+{% block row-buttons-items %}
+	{{ block.super }}
+	<li><a href="{% url 'admin:fixja:competition:season:division:scorers' competition.pk season.pk obj.pk %}">{% icon "chart-bar" %}{% trans "Leaders" %}</a></li>
+	<li><a href="{% url 'admin:fixja:competition:season:division:export-json' competition.pk season.pk obj.pk %}">{% icon "download" %}{% trans "Export as JSON" %}</a></li>
+{% endblock %}
+
+{% block table %}
+	{{ block.super }}
+	<p class="wb-muted wb-list-foot">{% icon "file-json" %} <a href="{% url 'admin:fixja:competition:season:json-builder' competition.pk season.pk %}">{% trans "Build divisions from JSON" %}</a></p>
+{% endblock %}

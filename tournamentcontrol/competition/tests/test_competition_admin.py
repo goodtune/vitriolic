@@ -19,6 +19,7 @@ from guardian.shortcuts import assign_perm
 from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.admin.branding import get_brand
+from touchtechnology.admin.sites import site
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.dashboard import MostValuableWidget
 from tournamentcontrol.competition.draw.schemas import (
@@ -41,8 +42,6 @@ from tournamentcontrol.competition.models import (
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin, round_robin_format
-
-
 
 #: The home page's budget: the widgets' queries, and two for its jobs (the
 #: latest day with results to enter and the next match day). It holds however
@@ -79,6 +78,7 @@ def bulk_dialog(url, name, title):
         '<button type="submit" class="wb-button wb-button-primary">Continue</button>'
         "</div></div></dialog></form>"
     )
+
 
 class TestCase(BaseTestCase):
     def setUp(self):
@@ -237,7 +237,9 @@ class TemplateTests(TestCase):
         # queues it since #42: primary keys only, the task loads the season
         # and competition for the template itself.
         mock_prince.return_value = b"%PDF-1.4"
-        templates = ["tournamentcontrol/competition/admin/scorecards.html"]
+        templates = site.shell.names(
+            "tournamentcontrol/competition/admin/scorecards.html"
+        )
         match_pks = list(self.season.matches.values_list("pk", flat=True))
         data = generate_pdf_scorecards(
             match_pks, templates, {}, season_pk=self.season.pk
@@ -410,7 +412,10 @@ class GoodViewTests(TestCase):
             self.assertResponseContains(
                 '<a class="wb-task" href="%s"><span class="wb-task-icon">%s</span>'
                 '<span class="wb-task-title">Competitions</span></a>'
-                % (self.reverse("admin:fixja:competition:list"), ICON % "chevron-right"),
+                % (
+                    self.reverse("admin:fixja:competition:list"),
+                    ICON % "chevron-right",
+                ),
                 html=True,
             )
 
@@ -815,7 +820,9 @@ class GoodViewTests(TestCase):
             self.response_200()
             self.assertTemplateUsed(
                 self.last_response,
-                "tournamentcontrol/competition/admin/progress_matches.html",
+                site.shell.shelled(
+                    "tournamentcontrol/competition/admin/progress_matches.html"
+                ),
             )
             formset = self.get_context("formset")
             self.assertEqual(formset.model, Match)
@@ -824,9 +831,7 @@ class GoodViewTests(TestCase):
             self.assertEqual(
                 {
                     form.instance.pk: {
-                        name: form.initial[name]
-                        for name in form.fields
-                        if name != "id"
+                        name: form.initial[name] for name in form.fields if name != "id"
                     }
                     for form in formset.forms
                 },
@@ -879,7 +884,9 @@ class GoodViewTests(TestCase):
             self.response_200()
             self.assertTemplateUsed(
                 self.last_response,
-                "tournamentcontrol/competition/admin/progress_teams.html",
+                site.shell.shelled(
+                    "tournamentcontrol/competition/admin/progress_teams.html"
+                ),
             )
             formset = self.get_context("formset")
             self.assertEqual(formset.model, UndecidedTeam)
@@ -2150,9 +2157,7 @@ class BackendTests(MessagesTestMixin, TestCase):
 
             # This should complete successfully without TypeError
             data["live_stream_thumbnail_image"] = ""
-            self.post(
-                edit_match_url.url_name, *edit_match_url.args, data=data
-            )
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
             self.response_302()  # Should redirect successfully
 
             # Verify the match was updated
@@ -2423,9 +2428,7 @@ class BackendTests(MessagesTestMixin, TestCase):
 
             # This should complete successfully without TypeError
             data["live_stream_thumbnail_image"] = ""
-            self.post(
-                edit_match_url.url_name, *edit_match_url.args, data=data
-            )
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
             self.response_302()  # Should redirect successfully
 
             # Verify the match was updated
@@ -2655,7 +2658,9 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.response_302()
 
     @patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
-    @patch("tournamentcontrol.competition.models.Season.youtube", new_callable=PropertyMock)
+    @patch(
+        "tournamentcontrol.competition.models.Season.youtube", new_callable=PropertyMock
+    )
     def test_resync_live_stream_sends_unescaped_apostrophes(
         self, mock_youtube_prop, mock_thumbnail
     ):
@@ -2677,9 +2682,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         home = factories.TeamFactory.create(
             title="St George's", division=stage.division
         )
-        away = factories.TeamFactory.create(
-            title="O'Connor", division=stage.division
-        )
+        away = factories.TeamFactory.create(title="O'Connor", division=stage.division)
         match = factories.MatchFactory.create(
             stage=stage,
             play_at=ground,
@@ -2721,7 +2724,9 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.assertNotIn("&#x27;", description)
         self.assertNotIn("&#39;", description)
 
-    @patch("tournamentcontrol.competition.models.Season.youtube", new_callable=PropertyMock)
+    @patch(
+        "tournamentcontrol.competition.models.Season.youtube", new_callable=PropertyMock
+    )
     def test_resync_live_stream_refuses_when_not_streaming(self, mock_youtube_prop):
         """Resync refuses and flashes an error when the match has no broadcast."""
         stage = factories.StageFactory.create(
@@ -3102,9 +3107,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             queued_pks,
             {streaming_match_1.pk, streaming_match_2.pk, never_broadcast.pk},
         )
-        self.assertEqual(
-            mock_sync_live_stream.s.return_value.apply_async.call_count, 3
-        )
+        self.assertEqual(mock_sync_live_stream.s.return_value.apply_async.call_count, 3)
 
     @patch("tournamentcontrol.competition.admin.sync_live_stream")
     def test_match_live_stream_resync_refuses_when_not_configured(
@@ -3215,7 +3218,9 @@ class EditViewPermissionTests(TestCase):
     def test_object_level_change_permission_allows_edit(self):
         assign_perm("competition.change_season", self.staff, self.season)
         with self.login(self.staff):
-            self.get("admin:fixja:competition:season:edit", *self.season._get_url_args())
+            self.get(
+                "admin:fixja:competition:season:edit", *self.season._get_url_args()
+            )
             self.response_200()
             self.assertResponseContains(
                 '<input type="text" name="title" value="%s" maxlength="255" '
@@ -3239,7 +3244,9 @@ class EditViewPermissionTests(TestCase):
         with self.login(self.staff):
             self.get("admin:fixja:competition:season:add", self.season.competition_id)
             self.response_200()
-            self.get("admin:fixja:competition:season:edit", *self.season._get_url_args())
+            self.get(
+                "admin:fixja:competition:season:edit", *self.season._get_url_args()
+            )
             self.response_403()
 
 
@@ -3280,11 +3287,13 @@ class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
         with self.login(self.superuser):
             self.get("admin:fixja:competition:season:edit", *self.args)
             self.response_200()
-            self.assertResponseContains(bulk_dialog(
-                self.reverse(self.viewname, *self.args),
-                "division",
-                "Add several divisions",
-            ))
+            self.assertResponseContains(
+                bulk_dialog(
+                    self.reverse(self.viewname, *self.args),
+                    "division",
+                    "Add several divisions",
+                )
+            )
 
     def test_get_shows_count_blank_rows_after_existing_divisions(self):
         factories.DivisionFactory.create(season=self.season, order=4)
@@ -3435,11 +3444,13 @@ class BulkCreateTeamTests(MessagesTestMixin, TestCase):
         with self.login(self.superuser):
             self.get("admin:fixja:competition:season:division:edit", *self.args)
             self.response_200()
-            self.assertResponseContains(bulk_dialog(
-                self.reverse(self.viewname, *self.args),
-                "team",
-                "Add several teams",
-            ))
+            self.assertResponseContains(
+                bulk_dialog(
+                    self.reverse(self.viewname, *self.args),
+                    "team",
+                    "Add several teams",
+                )
+            )
 
     def test_get_shows_count_blank_rows_after_existing_teams(self):
         factories.TeamFactory.create(division=self.division, order=2)
@@ -3553,7 +3564,9 @@ class SeasonEditForfeitNotificationsTests(TestCase):
 
     def test_season_page_has_no_forfeit_notifications(self):
         with self.login(self.superuser):
-            self.get("admin:fixja:competition:season:edit", *self.season._get_url_args())
+            self.get(
+                "admin:fixja:competition:season:edit", *self.season._get_url_args()
+            )
             self.response_200()
             self.assertNotIn("forfeit_notifications", self.get_context("form").fields)
 

@@ -1,0 +1,16 @@
+{% load i18n admin_workbook %}
+<section class="wb-sheet wb-widget">
+	<div class="wb-sheet-head"><h2>{% icon "list-checks" %} {{ widget.verbose_name }}</h2></div>
+	<ul class="wb-plain wb-widget-list">
+		{% for competition, season, date, time in dates_times %}
+			{% url 'admin:competition:match-results' competition_id=competition season_id=season datestr=date|date:"Ymd" as edit_date %}
+			{% url 'admin:competition:match-results' competition_id=competition season_id=season datestr=date|date:"Ymd" timestr=time|time:"Hi" as edit_time %}
+			<li>
+				{% ifchanged %}<a class="wb-widget-date" href="{{ edit_date }}">{{ date|date:"D j M Y" }}</a>{% endifchanged %}
+				{% if time %}<a class="wb-badge" href="{{ edit_time }}">{{ time|time:"H:i" }}</a>{% endif %}
+			</li>
+		{% empty %}
+			<li class="wb-muted">{% icon "circle-check" %} {% trans "No matches awaiting result entry." %}</li>
+		{% endfor %}
+	</ul>
+</section>

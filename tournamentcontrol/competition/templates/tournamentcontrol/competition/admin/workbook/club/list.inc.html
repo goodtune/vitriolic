@@ -1,0 +1,14 @@
+{% extends "touchtechnology/admin/workbook/mvp/list.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	{{ block.super }}
+	<th scope="col">{% trans "Abbreviation" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td data-label="{% trans "Abbreviation" %}">{{ obj.abbreviation }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}3{% endblock %}

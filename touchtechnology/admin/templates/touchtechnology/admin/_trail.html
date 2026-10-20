@@ -1,9 +1,0 @@
-{% load i18n admin_ui %}{% if crumbs %}
-<nav class="wb-trail" aria-label="{% trans "You are here" %}">
-	<ol>
-		{% for crumb in crumbs %}
-			<li{% if forloop.last %} class="wb-trail-parent"{% endif %}><a href="{{ crumb.url }}">{% if forloop.last %}{% icon "arrow-left" %}{% endif %}<span>{{ crumb.label }}</span></a></li>
-		{% endfor %}
-	</ol>
-</nav>
-{% endif %}

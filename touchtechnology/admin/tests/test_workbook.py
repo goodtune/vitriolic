@@ -9,6 +9,7 @@ from django.test import RequestFactory
 from django.urls import reverse_lazy
 from test_plus import TestCase
 
+from touchtechnology.admin.tests.shells import per_shell
 from touchtechnology.common.forms.mixins import BootstrapFormControlMixin
 from touchtechnology.common.forms.widgets import HTMLWidget, LocationWidget
 from touchtechnology.common.tests import factories
@@ -32,9 +33,10 @@ class ChoiceForm(BootstrapFormControlMixin, forms.Form):
 
 
 def render(source, **context):
-    return Template("{% load admin_ui %}" + source).render(Context(context))
+    return Template("{% load admin_workbook %}" + source).render(Context(context))
 
 
+@per_shell(shells=("workbook",))
 class ControlTests(TestCase):
     """The admin draws each control itself, whatever form it comes from."""
 
@@ -98,9 +100,7 @@ class ControlTests(TestCase):
             drawn,
         )
         media = str(render("{{ form.media|admin_media }}", form=form))
-        self.assertIn(
-            "/static/touchtechnology/admin/workbook/vendor/leaflet/leaflet.js", media
-        )
+        self.assertIn("/static/touchtechnology/admin/vendor/leaflet/leaflet.js", media)
         self.assertNotIn("unpkg.com", media)
 
 
@@ -108,17 +108,16 @@ class CopyForm(BootstrapFormControlMixin, forms.Form):
     copy = forms.CharField(label="Copy", widget=HTMLWidget)
 
 
+@per_shell(shells=("workbook",))
 class RichTextTests(TestCase):
     """The rich-text editor finds its field by the class of the field's box."""
 
     def test_the_field_box_names_the_widget(self):
-        html = Template(
-            "{% load common %}{% field form.copy %}"
-        ).render(
+        html = Template("{% load common %}{% field form.copy %}").render(
             Context(
                 {
                     "form": CopyForm(),
-                    "field_template": "touchtechnology/admin/templatetags/field.html",
+                    "field_template": "touchtechnology/admin/workbook/templatetags/field.html",
                 }
             )
         )
@@ -144,6 +143,7 @@ class RichTextTests(TestCase):
         )
 
 
+@per_shell(shells=("workbook",))
 class FilterTests(TestCase):
     def test_label_text_drops_the_colon_django_adds(self):
         self.assertEqual(
@@ -176,6 +176,7 @@ class FilterTests(TestCase):
         self.assertEqual(render("{{ user|initials }}", user=user), "ZE")
 
 
+@per_shell(shells=("workbook",))
 class TrailTests(TestCase):
     """Every page names the pages above it, each a link."""
 
@@ -202,6 +203,7 @@ class TrailTests(TestCase):
         )
 
 
+@per_shell(shells=("workbook",))
 class HomeTests(TestCase):
     def setUp(self):
         super().setUp()
@@ -222,6 +224,7 @@ class HomeTests(TestCase):
         )
 
 
+@per_shell(shells=("workbook",))
 class AddAnotherTests(TestCase):
     """Adding one after another: Save and add another comes back to the form."""
 

@@ -1,0 +1,46 @@
+{% extends "touchtechnology/admin/workbook/base.html" %}
+{% load i18n common admin_workbook %}
+
+{% block page_title %}{% with first=formset.forms.0 %}{% blocktrans with name=first.instance %}Who can work on {{ name }}{% endblocktrans %}{% endwith %}{% endblock %}
+
+{% block content %}
+	<header class="wb-head">
+		<div class="wb-head-text">
+			<p class="wb-eyebrow">{% icon "lock" %}{% trans "Security" %}</p>
+			<h1>{% with first=formset.forms.0 %}{% blocktrans with name=first.instance %}Who can work on {{ name }}{% endblocktrans %}{% endwith %}</h1>
+			<p class="wb-lede">{% trans "Choose the people and groups allowed to do each thing. Everyone else needs a permission for the whole site." %}</p>
+		</div>
+	</header>
+
+	<form class="wb-form" action="" method="post" novalidate>
+		{% csrf_token %}
+		{{ formset.management_form }}
+		{% include "touchtechnology/admin/workbook/_problems.html" with form=None %}
+
+		<div class="wb-tabs" role="tablist" data-wb-tabs aria-label="{% trans "Permissions" %}">
+			{% for form in formset %}
+				{% trans form.permission.name as permission_name %}
+				{% include "touchtechnology/admin/workbook/_tab.html" with name=form.permission.codename label=permission_name|capfirst selected=forloop.first only %}
+			{% endfor %}
+		</div>
+
+		<div class="wb-panes">
+			{% for form in formset %}
+				<section class="wb-pane wb-sheet" role="tabpanel" id="{{ form.permission.codename }}-pane">
+					<h2>{% trans form.permission.name as permission_name %}{{ permission_name|capfirst }}</h2>
+					<p class="wb-muted">{% blocktrans with permission=form.permission.name|lower type=form.instance|type name=form.instance %}Control who <em>{{ permission }}</em> for the {{ type }} <strong>{{ name }}</strong>.{% endblocktrans %}</p>
+					<div class="wb-fields">
+						{% field form.users %}
+						{% field form.groups %}
+					</div>
+					{% include "touchtechnology/admin/workbook/_savebar.html" with cancel="../.." save_label=_("Save changes") %}
+				</section>
+			{% endfor %}
+		</div>
+	</form>
+{% endblock %}
+
+{% block extracss %}
+	{{ block.super }}
+	{{ formset.media|admin_media }}
+{% endblock %}

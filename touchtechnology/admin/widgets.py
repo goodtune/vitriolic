@@ -25,10 +25,10 @@ PICKER_THRESHOLD = 10
 #: Remote assets a widget may declare, and the copy the admin serves itself.
 SELF_HOSTED = {
     "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css": (
-        "touchtechnology/admin/workbook/vendor/leaflet/leaflet.css"
+        "touchtechnology/admin/vendor/leaflet/leaflet.css"
     ),
     "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js": (
-        "touchtechnology/admin/workbook/vendor/leaflet/leaflet.js"
+        "touchtechnology/admin/vendor/leaflet/leaflet.js"
     ),
 }
 
@@ -36,12 +36,12 @@ SELF_HOSTED = {
 class AdminLocationWidget(LocationWidget):
     """The location widget with the admin's markup and a self-hosted map."""
 
-    template_name = "touchtechnology/admin/widgets/location_widget.html"
+    template_name = "touchtechnology/admin/workbook/widgets/location_widget.html"
 
     class Media:
-        css = {"all": ("touchtechnology/admin/workbook/vendor/leaflet/leaflet.css",)}
+        css = {"all": ("touchtechnology/admin/vendor/leaflet/leaflet.css",)}
         js = (
-            "touchtechnology/admin/workbook/vendor/leaflet/leaflet.js",
+            "touchtechnology/admin/vendor/leaflet/leaflet.js",
             "touchtechnology/common/js/location-widget.js",
         )
 
@@ -159,5 +159,8 @@ def admin_media(media):
         return SELF_HOSTED.get(str(path), asset)
 
     js = [swap(asset) for asset in media._js]
-    css = {medium: [swap(asset) for asset in assets] for medium, assets in media._css.items()}
+    css = {
+        medium: [swap(asset) for asset in assets]
+        for medium, assets in media._css.items()
+    }
     return django_widgets.Media(css=css, js=js)

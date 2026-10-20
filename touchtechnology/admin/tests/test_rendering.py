@@ -5,6 +5,7 @@ from django.template.loader import select_template
 from test_plus import TestCase
 
 from touchtechnology.admin.forms import AdminFormControlMixin
+from touchtechnology.admin.tests.shells import per_shell
 from touchtechnology.common.forms.mixins import BootstrapFormControlMixin
 from touchtechnology.common.tests import factories
 from touchtechnology.content.admin import ContentAdminComponent
@@ -15,6 +16,7 @@ class SomeOtherMixin:
     """A deployment's own form base, standing in for AdminFormControlMixin."""
 
 
+@per_shell
 class FieldTemplateTests(TestCase):
     def setUp(self):
         super().setUp()
@@ -24,7 +26,7 @@ class FieldTemplateTests(TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:news:article:add")
             names = [t.name for t in self.last_response.templates]
-            self.assertIn("touchtechnology/admin/templatetags/field.html", names)
+            self.assertIn(self.shell.field_template, names)
             self.assertNotIn("touchtechnology/common/templatetags/field.html", names)
 
     def test_public_login_uses_common_field_template(self):
@@ -33,6 +35,7 @@ class FieldTemplateTests(TestCase):
         self.assertIn("touchtechnology/common/templatetags/field.html", names)
 
 
+@per_shell
 class AdminOwnershipTests(TestCase):
     def setUp(self):
         super().setUp()
@@ -48,8 +51,11 @@ class AdminOwnershipTests(TestCase):
 
     def test_mvp_list_templates_live_in_admin(self):
         for name in ("list.html", "list.inc.html", "list.split.inc.html"):
-            origin = select_template(["mvp/%s" % name]).origin.name
-            self.assertIn("/touchtechnology/admin/templates/mvp/", origin)
+            origin = select_template([self.shell.template("mvp/%s" % name)]).origin.name
+            self.assertIn(
+                "/touchtechnology/admin/templates/%s/" % self.shell.template("mvp"),
+                origin,
+            )
 
     def test_explicit_form_on_common_mixin_logs_no_error(self):
         # ArticleForm is an explicit form built on the common mixin.

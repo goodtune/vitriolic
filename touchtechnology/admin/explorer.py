@@ -1,10 +1,6 @@
 """
 The explorer: the hierarchy of everything the admin manages, as a tree.
 
-Adopted for Workbook from the Explorer entry of the admin design contest
-(``admin/explorer``), which worked out building the tree from the admin's
-nested URLs; Workbook draws it in its own rail and drawer, with its own icons.
-
 Every admin component is a top-level folder of the tree. Its sections (the
 entries of its menu, from ``AdminComponent.dropdowns``) are the folders inside
 it, and the objects behind them are found by following the admin's own URLs:
@@ -54,64 +50,13 @@ logger = logging.getLogger(__name__)
 #: How many children a folder lists before it offers the rest as one link.
 LIMIT = 40
 
-#: The icon (a symbol of Workbook's sprite) of each component's folder.
-COMPONENT_ICONS = {
-    "competition": "trophy",
-    "content": "file-text",
-    "news": "newspaper",
-    "auth": "users",
-    "enrolment": "graduation-cap",
-    "settings": "settings",
-}
-
-#: The icon of the objects of each model, by model name.
-MODEL_ICONS = {
-    "competition": "trophy",
-    "season": "calendar",
-    "division": "layers",
-    "stage": "git-merge",
-    "stagegroup": "users-round",
-    "team": "shield",
-    "undecidedteam": "circle-dashed",
-    "venue": "map-pin",
-    "ground": "map",
-    "match": "goal",
-    "club": "flag",
-    "person": "user",
-    "drawformat": "list-ordered",
-    "user": "user",
-    "group": "users",
-    "article": "newspaper",
-    "category": "tag",
-    "schoolyear": "school",
-    "grade": "award",
-    "classgroup": "users-round",
-    "student": "user",
-    "enrolment": "notebook-pen",
-    "teacher": "user",
-    "assessment": "clipboard-list",
-    "attendancerecord": "list-checks",
-    "reportcard": "book-marked",
-    "score": "star",
-}
-
-
-def model_icon(model):
-    return MODEL_ICONS.get(model._meta.model_name, "file")
-
-
-def component_icon(component):
-    return getattr(component, "icon", None) or COMPONENT_ICONS.get(
-        getattr(component, "app_name", ""), "layout-grid"
-    )
-
 
 @dataclass
 class Node:
     key: str
     label: str
     url: str | None = None
-    icon: str = "file"
+    icon: str = "item"
     expandable: bool = False
     children: list | None = None
     open: bool = False
@@ -205,6 +150,11 @@ class Explorer:
     def __init__(self, component):
         self.component = component
 
+    @property
+    def shell(self):
+        """The shell the component's admin wears, which names the icons."""
+        return self.component.shell
+
     # ------------------------------------------------------------------
     # Keys
 
@@ -228,7 +178,7 @@ class Explorer:
                     label=str(label),
                     url=url,
                     icon=self.section_icons.get(
-                        str(label), model_icon(model) if model else "folder"
+                        str(label), self.shell.section_icon(entry, model)
                     ),
                     model=model,
                 )
@@ -334,7 +284,7 @@ class Explorer:
             key=self.key(_key(obj)),
             label=self.object_label(obj),
             url=_url(obj),
-            icon=self.icons.get(model, model_icon(model)),
+            icon=self.icons.get(model, self.shell.model_icon(model)),
             expandable=bool(self.relations(model, obj)),
             note=self.object_note(obj),
         )
@@ -363,7 +313,7 @@ class Explorer:
                         % {"count": total, "things": more_label or ""}
                     ),
                     url=more_url,
-                    icon="ellipsis",
+                    icon=self.shell.icons["more"],
                     more=True,
                 )
             )
@@ -784,7 +734,7 @@ def build_tree(request, context, components):
             key=explorer.key(""),
             label=str(verbose_name),
             url=str(url),
-            icon=component_icon(component),
+            icon=component.shell.component_icon(component),
             expandable=True,
         )
         tree.roots.append(root)
@@ -815,8 +765,10 @@ def build_tree(request, context, components):
         # node when it has anything inside, otherwise the folder holding it.
         if here.expandable and here.children is not None:
             folder = here
-            parent_key = trail[-2] if len(trail) > 1 else (
-                root.key if here is not root else None
+            parent_key = (
+                trail[-2]
+                if len(trail) > 1
+                else (root.key if here is not root else None)
             )
         else:
             parent_key = trail[-2] if len(trail) > 1 else root.key
@@ -826,7 +778,9 @@ def build_tree(request, context, components):
                     folder = node
             folder = folder or root
             parent_key = (
-                trail[-3] if len(trail) > 2 else (root.key if folder is not root else None)
+                trail[-3]
+                if len(trail) > 2
+                else (root.key if folder is not root else None)
             )
         tree.drill_key = folder.key
         tree.drill_label = folder.label

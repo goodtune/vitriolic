@@ -16,7 +16,7 @@ class Settings(AdminComponent):
 
     @property
     def template_base(self):
-        return "touchtechnology/admin/settings"
+        return "touchtechnology/admin"
 
     def get_urls(self):
         urlpatterns = super(Settings, self).get_urls()
@@ -27,7 +27,7 @@ class Settings(AdminComponent):
 
     @superuser_login_required_m
     def index(self, request, *args, **kwargs):
-        templates = self.template_path("index.html")
+        templates = self.template_path("index.html", "settings")
         return self.render(request, templates, kwargs)
 
     @superuser_login_required_m

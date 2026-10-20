@@ -12,6 +12,7 @@ from django.test import override_settings
 from django.urls import reverse
 from test_plus import TestCase
 
+from touchtechnology.admin.shells import DEFAULT_SHELL, get_shell
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.admin import SCORECARD_PDF_WAIT
 from tournamentcontrol.competition.tasks import (
@@ -390,7 +391,11 @@ class GeneratePdfScorecardsTaskTests(ScorecardTestCase):
     (including the tenant specific ones) so a signature change is caught.
     """
 
-    templates = ("tournamentcontrol/competition/admin/scorecards.html",)
+    templates = tuple(
+        get_shell(DEFAULT_SHELL).names(
+            "tournamentcontrol/competition/admin/scorecards.html"
+        )
+    )
 
     def test_stage_keyword_arguments(self):
         render = self.capture_context()
@@ -491,7 +496,11 @@ class PdfServiceRetryTests(TestCase):
     these tests turn propagation off and inspect the final result instead.
     """
 
-    templates = ("tournamentcontrol/competition/admin/scorecards.html",)
+    templates = tuple(
+        get_shell(DEFAULT_SHELL).names(
+            "tournamentcontrol/competition/admin/scorecards.html"
+        )
+    )
 
     def setUp(self):
         super().setUp()
