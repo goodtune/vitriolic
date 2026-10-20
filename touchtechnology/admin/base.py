@@ -8,6 +8,7 @@ from django.utils.encoding import smart_str
 from modelforms.forms import ModelForm
 
 from touchtechnology.admin.branding import get_brand
+from touchtechnology.admin.explorer import Explorer
 from touchtechnology.admin.forms import AdminFormControlMixin
 from touchtechnology.common.decorators import (
     never_cache_m,
@@ -24,6 +25,10 @@ class AdminComponentMixin(object):
     #: The name of the component's icon in the admin's sprite (``None`` picks
     #: one from the component's ``app_name``).
     icon = None
+    #: The ``Explorer`` that draws this component's part of the tree in the
+    #: rail. The stock one follows the admin's nested URLs; a subclass may
+    #: name relations, groupings and folders of its own.
+    explorer_class = Explorer
 
     # While adding this new functionality, we'll start out with
     # AdminComponents being unprotected by default, even though we typically
@@ -85,6 +90,13 @@ class AdminComponentMixin(object):
         return super(AdminComponentMixin, self).render(
             request, templates, context, *args, **kwargs
         )
+
+    def explorer(self):
+        """This component's ``Explorer``."""
+        explorer = getattr(self, "_explorer", None)
+        if explorer is None:
+            explorer = self._explorer = self.explorer_class(self)
+        return explorer
 
     def reverse(self, name, args=(), kwargs={}, prefix=None):
         if prefix is None:

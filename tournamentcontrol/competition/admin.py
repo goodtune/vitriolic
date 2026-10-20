@@ -1,5 +1,6 @@
 import base64
 import collections
+import datetime
 import functools
 import logging
 import operator
@@ -29,6 +30,7 @@ from googleapiclient.errors import HttpError
 from guardian.utils import get_40x_or_None
 
 from touchtechnology.admin.base import AdminComponent, DashboardWidget
+from touchtechnology.admin.explorer import Explorer, Folder, Node, Rel
 from touchtechnology.common.decorators import (
     csrf_exempt_m,
     staff_login_required_m,
@@ -466,8 +468,74 @@ def next_related_factory(model, parent=None, fk_name=None):
     return model(order=last + 1, **kw)
 
 
+def season_days(explorer, request, season):
+    """The season's match days, each opening on its results."""
+    return [
+        Node(
+            key=explorer.key("x:day:%s:%s" % (season.pk, day.strftime("%Y%m%d"))),
+            label=date_format(day, "D j M"),
+            url=reverse(
+                "admin:fixja:match-results",
+                args=(season.competition_id, season.pk, day.strftime("%Y%m%d")),
+            ),
+            icon="square-check",
+        )
+        for day in season.matches.dates("date", "day")
+    ]
+
+
+class CompetitionExplorer(Explorer):
+    """
+    Competition, season, division, stage and pool, as the URLs nest them,
+    with a season's venues and match days and a division's teams in folders
+    of their own. A club holds its people. (After the Explorer entry.)
+    """
+
+    branches = {
+        Competition: (Rel("seasons", flat=True),),
+        Season: (
+            Rel("divisions", flat=True),
+            Rel("venues", label=_("Venues"), icon="map-pin"),
+            Folder(
+                "days", _("Match days"), children=season_days, icon="calendar-days"
+            ),
+        ),
+        Division: (
+            Rel("stages", flat=True),
+            Rel("teams", label=_("Teams"), icon="shield"),
+        ),
+        Stage: (Rel("pools", flat=True),),
+        StageGroup: (),
+        Venue: (Rel("grounds", flat=True),),
+        Ground: (),
+        Team: (),
+        UndecidedTeam: (),
+        Match: (),
+        Club: (Rel("members", flat=True),),
+        Person: (),
+        DrawFormat: (),
+    }
+
+    def trail(self, request, context):
+        keys = super().trail(request, context)
+        season, day = context.get("season"), context.get("date")
+        if isinstance(season, Season) and isinstance(day, datetime.date):
+            keys += [
+                self.key("g:competition.season:%s:days" % season.pk),
+                self.key("x:day:%s:%s" % (season.pk, day.strftime("%Y%m%d"))),
+            ]
+        return keys
+
+    def group_node(self, obj, rel, value=None, label=None):
+        node = super().group_node(obj, rel, value, label)
+        if isinstance(obj, Season) and rel.name == "days":
+            node.url = "%s#schedule-tab" % obj.urls["edit"]
+        return node
+
+
 class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     verbose_name = _("Tournament Control")
+    explorer_class = CompetitionExplorer
     unprotected = False
 
     def __init__(self, app, name="fixja", app_name="competition"):

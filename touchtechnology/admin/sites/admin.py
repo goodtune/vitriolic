@@ -11,7 +11,7 @@ from django.contrib.admin.sites import (
 )
 from django.contrib.auth.views import LogoutView
 from django.db import connection
-from django.http import HttpResponseRedirect
+from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import path, re_path, reverse_lazy
@@ -19,7 +19,9 @@ from django.utils.encoding import smart_str
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
 
+from touchtechnology.admin import explorer
 from touchtechnology.admin.branding import get_brand
+from touchtechnology.admin.templatetags.admin import allowed
 from touchtechnology.admin.views import AdminLoginView
 from touchtechnology.common.decorators import staff_login_required_m
 from touchtechnology.common.models import SitemapNode
@@ -111,6 +113,7 @@ class AdminSite(DjangoAdminSite):
                 LogoutView.as_view(next_page=reverse_lazy(f"{self.name}:login")),
                 name="logout",
             ),
+            path("explorer/", self.explorer, name="explorer"),
             re_path(
                 r"^sitemapnode/move/(?P<id>\d+)/(?P<direction>(up|down))/$",
                 self.reorder,
@@ -186,6 +189,35 @@ class AdminSite(DjangoAdminSite):
             request, "touchtechnology/admin/index.html", context=context
         )
         response.current_app = self.name
+        return response
+
+    @staff_login_required_m
+    def explorer(self, request, *args, **kwargs):
+        """
+        A part of the tree in the rail, for the browser to fetch when a folder
+        is opened (``mode=tree``, the default) or when the phone's drill-down
+        moves to another folder (``mode=drill``). The node is a key
+        ``<component>/<local>``, see ``touchtechnology.admin.explorer``.
+        """
+        node = request.GET.get("node", "")
+        name, __, local = node.partition("/")
+        components = allowed(self.get_components(), request)
+        component = next(
+            (c for __, __, __, c, __ in components if c.name == name), None
+        )
+        if component is None:
+            raise Http404("No such part of the tree.")
+        context = {"admin": self, "component": component}
+        if request.GET.get("mode") == "drill":
+            context["tree"] = explorer.drill(request, component, local)
+            template = "touchtechnology/admin/explorer/drill.html"
+        else:
+            context["nodes"] = component.explorer().children(request, local)
+            context["parent_key"] = node
+            template = "touchtechnology/admin/explorer/nodes.html"
+        response = TemplateResponse(request, template, context=context)
+        response.current_app = self.name
+        response["Cache-Control"] = "private, no-store"
         return response
 
     @staff_login_required_m
