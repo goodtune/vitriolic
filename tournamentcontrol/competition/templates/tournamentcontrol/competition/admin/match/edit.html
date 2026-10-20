@@ -1,7 +1,12 @@
 {% extends "touchtechnology/admin/edit.html" %}
-{% load static %}
+{% load i18n admin %}
 
-{% block extracss %}
+{% block object-actions %}
+	{% if object.pk %}
+		{% with referees_url=object|admin_url:"referees" detail_url=object|admin_url:"detail" %}
+			{% if referees_url %}<a class="button quiet" href="{{ referees_url }}">{% icon "referee" %}<span>{% trans "Referees" %}</span></a>{% endif %}
+			{% if detail_url %}<a class="button quiet" href="{{ detail_url }}">{% icon "chart" %}<span>{% trans "Statistics" %}</span></a>{% endif %}
+		{% endwith %}
+	{% endif %}
 	{{ block.super }}
-	<link rel="stylesheet" href="{% get_static_prefix %}tournamentcontrol/competition/css/vi_admin.css" media="screen" />
 {% endblock %}

@@ -1,7 +1,7 @@
 {% load i18n %}{% if is_paginated %}{% with current=page_num|default:page %}
 <nav aria-label="{% trans "Pages" %}">
-	<ol class="pagination">
-		<li class="label">{% trans "Page" %}</li>
+	<ol class="pager">
+		<li class="pager-label">{% trans "Page" %}</li>
 		{% for page_number in paginator.page_range %}
 			<li>
 				{% if page_number == current or page_number == current.number %}

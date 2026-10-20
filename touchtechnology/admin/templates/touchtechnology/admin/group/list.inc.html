@@ -21,7 +21,7 @@
 	{% if delete_perm in object_perms %}
 		<form method="post" action="{% url 'admin:auth:groups:delete' obj.pk %}" data-confirm="{% blocktrans %}The group “{{ obj }}” will be removed for good.{% endblocktrans %}" data-confirm-label="{% trans "Delete" %}">
 			{% csrf_token %}
-			<button type="submit" class="danger-item">{% icon "trash" %}{% trans "Delete" %}</button>
+			<button type="submit" class="destructive-item">{% icon "trash" %}{% trans "Delete" %}</button>
 		</form>
 	{% endif %}
 {% endblock %}

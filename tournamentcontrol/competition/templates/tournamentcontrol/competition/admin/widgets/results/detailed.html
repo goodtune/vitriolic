@@ -2,7 +2,7 @@
 <section class="card wide">
 	<h2>{% icon "chart" %}{{ widget.verbose_name }}</h2>
 	<div class="table-wrap">
-		<table class="table">
+		<table class="listing">
 			<thead>
 				<tr>
 					<th>{% trans "When" %}</th>
@@ -22,7 +22,7 @@
 							<td class="wide-only"><span title="{{ match.stage.title }}">{% if match.label %}{{ match.label }}{% else %}{% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}{% endif %}</span></td>
 							<td>{{ home.short_title|default:home.title }}</td>
 							<td>{{ away.short_title|default:away.title }}</td>
-							<td class="actions-cell"><a class="button small" href="{% url 'admin:fixja:competition:season:division:stage:match:detail' division.season.competition.pk division.season.pk division.pk match.stage.pk match.pk %}">{% trans "Enter" %}</a></td>
+							<td class="actions-cell"><a class="button compact" href="{% url 'admin:fixja:competition:season:division:stage:match:detail' division.season.competition.pk division.season.pk division.pk match.stage.pk match.pk %}">{% trans "Enter" %}</a></td>
 						</tr>
 					{% endwith %}
 				{% empty %}

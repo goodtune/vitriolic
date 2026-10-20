@@ -3,10 +3,8 @@
 {% load cloudinary %}
 
 {% block form-fieldset %}
-	<fieldset>
-		{% cloudinary object.image width="800" format="jpg" sign_url=True %}
-		{% for f in form %}
-			{% field f %}
-		{% endfor %}
-	</fieldset>
+	{% if object.image %}
+		<figure class="scoresheet">{% cloudinary object.image width="800" format="jpg" sign_url=True %}</figure>
+	{% endif %}
+	{{ block.super }}
 {% endblock form-fieldset %}

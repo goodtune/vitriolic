@@ -996,10 +996,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         extra_context.setdefault("dates", dates)
 
         related = (
-            "exclusions",
             "divisions",
             "venues",
             "timeslots",
+            "exclusions",
             "referees",
         )
         # Adhoc live stream events and their managed stream keys are only
@@ -2096,7 +2096,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 stage.matches.all().delete()
 
         messages.success(request, _("Your draw has been undone."))
-        return self.redirect(division.urls["edit"])
+        return self.redirect(division.urls["edit"] + "#stages-tab")
 
     @competition_by_pk_m
     @staff_login_required_m
@@ -3243,8 +3243,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 ).append(
                     (
                         pa.number or "",
-                        pa.person.first_name.encode("utf-8").strip(),
-                        pa.person.last_name.encode("utf-8").strip(),
+                        pa.person.first_name.strip(),
+                        pa.person.last_name.strip(),
                         pa.person.date_of_birth,
                         pa.person.email,
                     )
@@ -3258,8 +3258,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                         "staff", collections.OrderedDict()
                     ).setdefault(role.name, set()).add(
                         (
-                            pa.person.first_name.encode("utf-8").strip(),
-                            pa.person.last_name.encode("utf-8").strip(),
+                            pa.person.first_name.strip(),
+                            pa.person.last_name.strip(),
                             pa.person.date_of_birth,
                             pa.person.email,
                         )

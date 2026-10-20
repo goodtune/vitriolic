@@ -1,40 +1,30 @@
 {% extends base %}
-{% load i18n %}
+{% load i18n admin %}
 
-{% block breadcrumbs %}
-	{{ block.super }}
-	<li><a href="{% url 'admin:competition:club:list' %}">{% trans "Clubs" %}</a></li>
-	<li><a href="{% url 'admin:competition:club:edit' club.pk %}">{{ club.title }}</a></li>
-	<li><span>{% trans "Officials" %}</span></li>
-{% endblock %}
+{% block page_title %}{% trans "Officials" %}{% endblock %}
+{% block page_kind %}{{ club.title }} &ndash; {{ season.competition.title }}, {{ season.title }}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "referee" %}</span>{% endblock %}
+{% block page_actions %}<a class="button" href="{% url 'admin:fixja:club:edit' club.pk %}">{% icon "up" %}<span>{% trans "Back to the club" %}</span></a>{% endblock %}
 
-{% block main_content %}
-	<div class="box">
-		<h1>{{ season.competition.title }} - {{ season.title }}</h1>
-
-		<table>
+{% block content %}
+	<div class="table-wrap">
+		<table class="listing">
 			<thead>
-				<th>{% trans "Person" %}</th>
-				<th>{% trans "Roles" %}</th>
+				<tr>
+					<th>{% trans "Person" %}</th>
+					<th>{% trans "Roles" %}</th>
+				</tr>
 			</thead>
 			<tbody>
 				{% for player in people.select_related %}
-					<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
+					<tr>
 						<td>{{ player.person.get_full_name }}</td>
-						<td>{% for role in player.roles.all %}{{ role.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+						<td>{% for role in player.roles.all %}<span class="tag">{{ role.name }}</span> {% endfor %}</td>
 					</tr>
 				{% empty %}
-					<tr class="first odd last">
-						<td colspan="2" class="no_results">{% trans "There are no club officials for this season." %}</td>
-					</tr>
+					<tr><td colspan="2" class="empty-state">{% trans "The club has no officials for this season." %}</td></tr>
 				{% endfor %}
 			</tbody>
 		</table>
-
-		<div class="buttons">
-			{% block buttons %}
-            	<a class="button" href="{% url 'admin:competition:club:edit' club.pk %}">{% trans "Cancel" %}</a>
-            {% endblock %}
-		</div>
 	</div>
 {% endblock %}

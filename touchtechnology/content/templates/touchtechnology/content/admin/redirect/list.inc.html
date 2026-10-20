@@ -1,0 +1,22 @@
+{% extends "touchtechnology/admin/list.inc.html" %}
+{% load i18n admin %}
+
+{% block table-headings %}
+	<th>{% trans "Redirect" %}</th>
+	<th class="wide-only">{% trans "From" %}</th>
+	<th class="wide-only">{% trans "To" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td class="title-cell">
+		{% if change_perm in object_perms %}
+			<a href="{{ obj.urls.edit }}">{% icon "redirect" %}<span>{{ obj.label|default:obj.source_url }}</span></a>
+		{% else %}
+			{{ obj.label|default:obj.source_url }}
+		{% endif %}
+	</td>
+	<td class="wide-only"><code>{{ obj.source_url }}</code></td>
+	<td class="wide-only"><code>{{ obj.destination_url }}</code></td>
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}

@@ -217,6 +217,11 @@ def widget(bound_field, extra_class=""):
     if extra_class:
         classes.append(extra_class)
     attrs = {"class": " ".join(classes) if classes else False}
+    # The shared form mixin repeats each label as a placeholder; beside a
+    # visible label that is only noise.
+    placeholder = bound_field.field.widget.attrs.get("placeholder")
+    if placeholder is not None and str(placeholder) == str(bound_field.label):
+        attrs["placeholder"] = False
     if bound_field.errors:
         attrs["aria-invalid"] = "true"
         attrs["aria-describedby"] = "%s-errors" % bound_field.auto_id
@@ -301,3 +306,26 @@ def admin_pagination(context):
     ]
     context.update({"QUERY_STRING": urlencode(query, True)})
     return context
+
+
+@register.filter
+def dates_of(queryset, field="date"):
+    """The distinct days of a date field of ``queryset``, in order."""
+    try:
+        return list(queryset.dates(field, "day"))
+    except (AttributeError, TypeError, ValueError):
+        return []
+
+
+@register.simple_tag
+def adjacent(sequence, value):
+    """The items either side of ``value`` in ``sequence``, as ``previous`` and ``next``."""
+    items = list(sequence or ())
+    try:
+        index = items.index(value)
+    except ValueError:
+        return {"previous": None, "next": None}
+    return {
+        "previous": items[index - 1] if index > 0 else None,
+        "next": items[index + 1] if index + 1 < len(items) else None,
+    }

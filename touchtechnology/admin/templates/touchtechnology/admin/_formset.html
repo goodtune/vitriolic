@@ -12,7 +12,7 @@ that names its row.
 	<section class="formset form-section">
 		{% if formset_title %}<h2>{{ formset_title }}</h2>{% elif formset.model %}<h2>{{ formset.model|types|capfirst }}</h2>{% endif %}
 		<div class="table-wrap">
-			<table class="table formset-table">
+			<table class="listing formset-table">
 				<thead>
 					<tr>
 						{% with first=formset.forms.0 %}

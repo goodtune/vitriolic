@@ -1,66 +1,47 @@
-{% extends base %}
-{% load i18n %}
-{% load common %}
+{% extends "touchtechnology/admin/form_page.html" %}
+{% load i18n common admin %}
 
-{% block body_class %}{{ block.super }} rego team{% endblock %}
+{% block page_title %}{% trans "Officials" %}{% endblock %}
+{% block page_kind %}{{ club.title }} &ndash; {{ season.competition.title }}, {{ season.title }}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "referee" %}</span>{% endblock %}
+{% block cancel-url %}{% url 'admin:fixja:club:edit' club.pk %}{% endblock %}
 
-{% block extrajs %}
-	{{ block.super }}
-	<script type="text/javascript" src="{{ STATIC_URL }}tournamentcontrol/competition/js/formset.js"></script>
-{% endblock %}
-
-{% block breadcrumbs %}
-	{{ block.super }}
-	<li><a href="{% url 'admin:competition:club:list' %}">{% trans "Clubs" %}</a></li>
-	<li><a href="{% url 'admin:competition:club:edit' club.pk %}">{{ club.title }}</a></li>
-	<li><span>{% trans "Officials" %}</span></li>
-{% endblock %}
-
-{% block main_content %}
-	<div class="box">
-		<h1>{{ season.competition.title }} - {{ season.title }}</h1>
-
-		<form class="formset" action="" method="post">
-			{% csrf_token %}
-
-			{{ formset.management_form }}
-
-			<table>
-				<tbody>
-					{% for form in formset %}
-						<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
-							<td>{{ form.id }}{% field form.person "" %}</td>
-							<td>{% field form.roles "" %}</td>
-							<td>{% field form.DELETE %}</td>
-						</tr>
-					{% empty %}
-						<tr class="first odd last">
-							<td colspan="3" class="no_results">{% trans "There are no officials of this club." %}</td>
-						</tr>
-					{% endfor %}
-				</tbody>
-
-				{% with formset.empty_form as form %}
-					<tfoot class="hidden">
-						<tr class="empty">
-							<td>{{ form.id }}{% field form.person "" %}</td>
-							<td>{% field form.roles "" %}</td>
-							<td>{% field form.DELETE %}</td>
-						</tr>
-					</tfoot>
-				{% endwith %}
-			</table>
-
-			<div id="actions" class="actions">
-				<a class="button add" href="#add">{% trans "Add row" %}</a>
-			</div>
-
-			<div class="buttons">
-				<button type="submit">{% trans "Save" %}</button>
-                {% block buttons %}
-                    <a class="button" href="{% url 'admin:competition:club:edit' club.pk %}">{% trans "Cancel" %}</a>
-                {% endblock %}
-			</div>
-		</form>
+{% block form-body %}
+	{{ formset.management_form }}
+	{% if formset.non_form_errors %}
+		<div class="form-errors" role="alert">{% icon "alert" %}<ul>{% for error in formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>
+	{% endif %}
+	<p class="muted">{% trans "The people who hold a role for the club this season." %}</p>
+	<div class="table-wrap">
+		<table class="listing formset-table" data-formset="{{ formset.prefix }}">
+			<thead>
+				<tr>
+					<th>{% trans "Person" %}</th>
+					<th>{% trans "Roles" %}</th>
+					<th>{% trans "Remove" %}</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for form in formset %}
+					<tr>
+						<td>{{ form.id }}<label class="visually-hidden" for="{{ form.person.id_for_label }}">{% blocktrans with n=forloop.counter %}Person (row {{ n }}){% endblocktrans %}</label>{{ form.person|widget }}{% if form.person.errors %}<ul class="field-errors">{% for e in form.person.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}</td>
+						<td><label class="visually-hidden" for="{{ form.roles.id_for_label }}">{% blocktrans with n=forloop.counter %}Roles (row {{ n }}){% endblocktrans %}</label>{{ form.roles|widget }}</td>
+						<td>{% if form.DELETE %}<label class="check">{{ form.DELETE|widget }} <span class="visually-hidden">{% blocktrans with n=forloop.counter %}Remove row {{ n }}{% endblocktrans %}</span></label>{% endif %}</td>
+					</tr>
+				{% empty %}
+					<tr><td colspan="3" class="empty-state">{% trans "The club has no officials for this season yet." %}</td></tr>
+				{% endfor %}
+			</tbody>
+		</table>
 	</div>
+	<template id="{{ formset.prefix }}-empty-row">
+		{% with form=formset.empty_form %}
+			<tr>
+				<td>{{ form.id }}<label class="visually-hidden" for="{{ form.person.id_for_label }}">{% trans "Person" %}</label>{{ form.person|widget }}</td>
+				<td><label class="visually-hidden" for="{{ form.roles.id_for_label }}">{% trans "Roles" %}</label>{{ form.roles|widget }}</td>
+				<td>{% if form.DELETE %}{{ form.DELETE|widget }}{% endif %}</td>
+			</tr>
+		{% endwith %}
+	</template>
+	<p class="add-row-line"><button type="button" class="button compact quiet" data-add-row="{{ formset.prefix }}">{% icon "plus" %}<span>{% trans "Another official" %}</span></button></p>
 {% endblock %}

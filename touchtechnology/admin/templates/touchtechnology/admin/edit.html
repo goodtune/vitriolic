@@ -11,7 +11,7 @@
 				{% if delete_url %}
 					<form method="post" action="{{ delete_url }}" data-confirm="{% blocktrans with type=object|type %}The {{ type }} “{{ object }}” will be removed for good.{% endblocktrans %}" data-confirm-title="{% blocktrans with type=object|type %}Delete this {{ type }}?{% endblocktrans %}" data-confirm-label="{% trans "Delete" %}">
 						{% csrf_token %}
-						<button type="submit" class="button danger-quiet">{% icon "trash" %}<span>{% trans "Delete" %}</span></button>
+						<button type="submit" class="button destructive-quiet">{% icon "trash" %}<span>{% trans "Delete" %}</span></button>
 					</form>
 				{% endif %}
 			{% endwith %}
@@ -42,7 +42,7 @@
 {% block content %}
 	<div class="panels" id="tab-content">
 		{% block tab-panes %}
-			<section class="panel is-active" data-tab-panel role="tabpanel" id="{{ model|type|slugify }}-tab" aria-labelledby="{{ model|type|slugify }}-tab-link">
+			<section class="pane is-active" data-tab-panel role="tabpanel" id="{{ model|type|slugify }}-tab" aria-labelledby="{{ model|type|slugify }}-tab-link">
 				<form class="{% block form-class %}edit-form{% endblock %}" id="edit-form" action="" method="post" enctype="multipart/form-data">
 					{% csrf_token %}
 					{% block form-errors %}{% include "touchtechnology/admin/_form_errors.html" %}{% endblock %}
@@ -59,12 +59,12 @@
 			{% if object.pk %}
 				{% for manager, name in object|related:related %}
 					{% if htmx_admin_tabs %}
-						<section class="panel" data-tab-panel role="tabpanel" id="{{ name }}-tab" aria-labelledby="{{ name }}-tab-link" hx-get="?_htmx_tab={{ name }}" hx-trigger="shown once" hx-swap="innerHTML">
-							<p class="panel-loading">{% icon "refresh" %}{% trans "Loading…" %}</p>
+						<section class="pane" data-tab-panel role="tabpanel" id="{{ name }}-tab" aria-labelledby="{{ name }}-tab-link" hx-get="?_htmx_tab={{ name }}" hx-trigger="shown once" hx-swap="innerHTML">
+							<p class="pane-loading">{% icon "refresh" %}{% trans "Loading…" %}</p>
 							<noscript><p>{% trans "This list needs scripts to load." %}</p></noscript>
 						</section>
 					{% else %}
-						<section class="panel" data-tab-panel role="tabpanel" id="{{ name }}-tab" aria-labelledby="{{ name }}-tab-link">
+						<section class="pane" data-tab-panel role="tabpanel" id="{{ name }}-tab" aria-labelledby="{{ name }}-tab-link">
 							{% block mvp-list %}
 								{% with table=templates|default:None %}
 									{% mvp_list manager.all template=manager|mvp_list_template:table %}

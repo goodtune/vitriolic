@@ -32,7 +32,7 @@
 	{% if delete_perm in object_perms %}
 		<form method="post" action="{% url 'admin:auth:users:delete' obj.pk %}" data-confirm="{% blocktrans with name=obj.get_full_name|default:obj.get_username %}The account of {{ name }} will be removed for good.{% endblocktrans %}" data-confirm-label="{% trans "Delete" %}">
 			{% csrf_token %}
-			<button type="submit" class="danger-item">{% icon "trash" %}{% trans "Delete" %}</button>
+			<button type="submit" class="destructive-item">{% icon "trash" %}{% trans "Delete" %}</button>
 		</form>
 	{% endif %}
 {% endblock %}

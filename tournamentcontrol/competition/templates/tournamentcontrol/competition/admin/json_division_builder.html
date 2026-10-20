@@ -1,156 +1,74 @@
-{% extends "touchtechnology/admin/edit.html" %}
-{% load common %}
-{% load i18n %}
+{% extends "touchtechnology/admin/form_page.html" %}
+{% load i18n common admin %}
 
-{% block tab-panes %}
-	<div class="tab-pane active" id="{{ model|type|slugify }}-tab">
-		<div class="heading-block">
-			{% spaceless %}
-				<div class="actions fa-2x">
-					<a href="#" id="add-form" title="{% trans "Add Division" %}" role="button">
-						<i class="fa fa-plus-square"></i>
-					</a>
-				</div>
-				<h3>{{ model|type|capfirst }}</h3>
-			{% endspaceless %}
-		</div>
+{% block page_title %}{% trans "Build divisions from JSON" %}{% endblock %}
+{% block page_kind %}{{ season }}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "json" %}</span>{% endblock %}
 
-		{% block form-fieldset %}
-	<p>
-		{% blocktrans %}
-		Use this interface to build divisions from JSON.
-		Each form accepts a complete <code>DivisionStructure</code> JSON object that will be
-		validated and used to create teams, stages, pools, and matches.
-		{% endblocktrans %}
-	</p>
-	<p class="mb-0">
-		<strong>{% trans "Note:" %}</strong>
-		{% trans "All divisions will be created within a single transaction - if any division fails to build, all changes will be rolled back." %}
-	</p>
-
+{% block form-body %}
+	<p>{% blocktrans %}Each box takes one complete <code>DivisionStructure</code> JSON object; it is checked, then used to make the division's teams, stages, pools and matches.{% endblocktrans %}</p>
+	<p class="notice">{% trans "All the divisions are made together: if any one of them cannot be built, none is." %}</p>
 	{{ formset.management_form }}
-
-	<div id="json-formset">
+	{% if formset.non_form_errors %}
+		<div class="form-errors" role="alert">{% icon "alert" %}<ul>{% for error in formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>
+	{% endif %}
+	<div id="json-formset" class="json-forms">
 		{% for form in formset %}
-			<fieldset class="json-form" data-form-index="{{ forloop.counter0 }}">
-				{% if not forloop.first %}
-					<div class="form-group">
-						<button type="button" class="btn btn-sm btn-danger remove-form pull-right">
-							<i class="fa fa-trash"></i> {% trans "Remove" %}
-						</button>
-					</div>
-				{% endif %}
-				{% for f in form %}
-					<div class="form-group">
-						{{ f }}
-						{% if f.help_text %}
-							<p class="help-block">{{ f.help_text }}</p>
-						{% endif %}
-						{% if f.errors %}
-							<div class="text-danger">
-								{% for error in f.errors %}
-									<small>{{ error }}</small>
-								{% endfor %}
-							</div>
-						{% endif %}
-					</div>
-				{% endfor %}
+			<fieldset class="form-section json-form">
+				<legend><h2>{% blocktrans with n=forloop.counter %}Division {{ n }}{% endblocktrans %}</h2></legend>
+				{% for f in form %}{% field f %}{% endfor %}
 			</fieldset>
 		{% endfor %}
 	</div>
-
-	<!-- Empty form template -->
-	<fieldset class="json-form hidden" id="empty-form">
-		<div class="form-group">
-			<button type="button" class="btn btn-sm btn-danger remove-form pull-right">
-				<i class="fa fa-trash"></i> {% trans "Remove" %}
-			</button>
-		</div>
-		{% for f in formset.empty_form %}
-			<div class="form-group">
-				{{ f }}
-				{% if f.help_text %}
-					<p class="help-block">{{ f.help_text }}</p>
-				{% endif %}
-				{% if f.errors %}
-					<div class="text-danger">
-						{% for error in f.errors %}
-							<small>{{ error }}</small>
-						{% endfor %}
-					</div>
-				{% endif %}
-			</div>
-		{% endfor %}
-	</fieldset>
-
-		{% endblock form-fieldset %}
-
-		<div class="form-group">
-			<div class="text-center">
-				<button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
-				&nbsp;<a class="btn btn-default" href="{% block cancel-url %}{{ cancel_url }}{% endblock %}">{% trans "Cancel" %}</a>
-			</div>
-		</div>
-	</div>
+	<template id="{{ formset.prefix }}-empty-form">
+		<fieldset class="form-section json-form">
+			<legend><h2>{% trans "Another division" %}</h2></legend>
+			{% for f in formset.empty_form %}{% field f %}{% endfor %}
+			<p><button type="button" class="button compact destructive-quiet" data-remove-form>{% icon "trash" %}<span>{% trans "Remove" %}</span></button></p>
+		</fieldset>
+	</template>
+	<p class="add-row-line"><button type="button" class="button compact" data-add-form="{{ formset.prefix }}">{% icon "plus" %}<span>{% trans "Another division" %}</span></button></p>
 {% endblock %}
 
 {% block extrajs %}
 	{{ block.super }}
 	<script>
-		$(document).ready(function() {
-			var totalForms = $('#id_form-TOTAL_FORMS');
-			var maxForms = parseInt($('#id_form-MAX_NUM_FORMS').val()) || 10;
-
-			// Disable form fields in the empty form template to prevent validation issues
-			$('#empty-form input, #empty-form select, #empty-form textarea').prop('disabled', true);
-
-			function updateFormIndices() {
-				$('#json-formset .json-form').each(function(index) {
-					$(this).attr('data-form-index', index);
-
-					// Update form field names and IDs
-					$(this).find('input, select, textarea').each(function() {
-						var name = $(this).attr('name');
-						var id = $(this).attr('id');
-
-						if (name) {
-							$(this).attr('name', name.replace(/form-\d+/, 'form-' + index));
-						}
-						if (id) {
-							$(this).attr('id', id.replace(/form-\d+/, 'form-' + index));
-						}
+		(function () {
+			var button = document.querySelector('[data-add-form]');
+			if (!button) { return; }
+			var prefix = button.getAttribute('data-add-form');
+			var total = document.querySelector('input[name="' + prefix + '-TOTAL_FORMS"]');
+			var max = parseInt((document.querySelector('input[name="' + prefix + '-MAX_NUM_FORMS"]') || {}).value, 10) || 10;
+			var template = document.getElementById(prefix + '-empty-form');
+			var list = document.getElementById('json-formset');
+			button.addEventListener('click', function () {
+				var count = parseInt(total.value, 10);
+				if (count >= max) { return; }
+				var holder = document.createElement('div');
+				holder.innerHTML = template.innerHTML.replace(/__prefix__/g, count);
+				var form = holder.firstElementChild;
+				list.appendChild(form);
+				total.value = count + 1;
+				button.disabled = count + 1 >= max;
+				var first = form.querySelector('textarea, input');
+				if (first) { first.focus(); }
+			});
+			list.addEventListener('click', function (event) {
+				var remove = event.target.closest('[data-remove-form]');
+				if (!remove) { return; }
+				remove.closest('.json-form').remove();
+				total.value = list.querySelectorAll('.json-form').length;
+				button.disabled = false;
+				// Number the forms again, so the names run from 0 without a gap.
+				Array.prototype.forEach.call(list.querySelectorAll('.json-form'), function (form, index) {
+					Array.prototype.forEach.call(form.querySelectorAll('[name], [id], label[for]'), function (el) {
+						['name', 'id', 'for'].forEach(function (attr) {
+							var value = el.getAttribute(attr);
+							if (value) { el.setAttribute(attr, value.replace(new RegExp(prefix + '-\\d+-'), prefix + '-' + index + '-')); }
+						});
 					});
 				});
-			}
-
-			$('#add-form').click(function() {
-				var formCount = parseInt(totalForms.val());
-				if (formCount >= maxForms) {
-					alert('Maximum number of forms (' + maxForms + ') reached.');
-					return;
-				}
-
-				var newForm = $('#empty-form').clone();
-				newForm.removeClass('hidden').attr('id', '');
-				newForm.attr('data-form-index', formCount);
-
-				// Replace __prefix__ in the form
-				newForm.html(newForm.html().replace(/__prefix__/g, formCount));
-
-				// Enable form fields (they should be disabled in the template)
-				newForm.find('input, select, textarea').prop('disabled', false);
-
-				$('#json-formset').append(newForm);
-				totalForms.val(formCount + 1);
-				updateFormIndices();
 			});
-
-			$(document).on('click', '.remove-form', function() {
-				$(this).closest('.json-form').remove();
-				var formCount = parseInt(totalForms.val());
-				totalForms.val(formCount - 1);
-				updateFormIndices();
-			});
-		});
+		})();
 	</script>
 {% endblock %}

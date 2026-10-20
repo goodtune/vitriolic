@@ -1,5 +1,5 @@
-{% extends "mvp/list.inc.html" %}
-{% load i18n %}
+{% extends "touchtechnology/admin/list.inc.html" %}
+{% load i18n admin %}
 
 {% block actions %}{% endblock %}
 
@@ -7,25 +7,16 @@
 	<th>{% trans "Team" %}</th>
 	<th>{% trans "Competition" %}</th>
 	<th>{% trans "Season" %}</th>
-	<th>{% trans "Division" %}</th>
+	<th class="wide-only">{% trans "Division" %}</th>
 {% endblock %}
 
 {% block table-columns %}
-	<td data-order="{{ forloop.counter }}">{{ obj.title }}</td>
-	<td data-order="{{ obj.division.season.competition.order }}">
-		<span class="hidden-xs hidden-sm">{{ obj.division.season.competition.title }}</span>
-		<span class="hidden-md hidden-lg">{{ obj.division.season.competition.short_title|default:obj.division.season.competition.title }}</span>
-	</td>
-	<td data-order="{{ obj.division.season.start_date|date:"U" }}">
-		<span class="hidden-xs hidden-sm">{{ obj.division.season.title }}</span>
-		<span class="hidden-md hidden-lg">{{ obj.division.season.short_title|default:obj.division.season.title }}</span>
-	</td>
-	<td>
-		<span class="hidden-xs hidden-sm">{{ obj.division.title }}</span>
-		<span class="hidden-md hidden-lg">{{ obj.division.short_title|default:obj.division.title }}</span>
-	</td>
+	<td class="title-cell"><a href="{{ obj.urls.edit }}">{% icon "team" %}<span>{{ obj.title }}</span></a></td>
+	<td>{{ obj.division.season.competition.short_title|default:obj.division.season.competition.title }}</td>
+	<td>{{ obj.division.season.short_title|default:obj.division.season.title }}</td>
+	<td class="wide-only">{{ obj.division.title }}</td>
 {% endblock table-columns %}
 
-{% block table-row-empty %}{% endblock %}
-
-{% block empty-row-colspan %}5{% endblock %}
+{% block table-row-empty %}
+	<tr><td colspan="5" class="empty-state">{% trans "This club has no teams yet." %}</td></tr>
+{% endblock %}

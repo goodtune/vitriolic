@@ -1,3 +1,28 @@
-{% extends "tournamentcontrol/competition/progression_list.html" %}
+{% extends "touchtechnology/admin/print.html" %}
+{% load i18n %}
 
-{% block progress_link %}{% url 'admin:fixja:competition:season:division:stage:progress' competition.pk season.pk stage.division.pk stage.pk %}{% endblock %}
+{% block title %}{% trans "Progression" %} &ndash; {{ season }}{% endblock %}
+{% block heading %}{% trans "Progression" %}{% endblock %}
+{% block subheading %}{{ competition }}, {{ season }}{% endblock %}
+{% block tools %}<a href="{{ season.urls.edit }}">{% trans "Back to the season" %}</a>{% endblock %}
+
+{% block content %}
+	<table id="match_list">
+		<thead>
+			<tr>
+				<th>{% trans "Division" %}</th>
+				<th>{% trans "Stage" %}</th>
+				<th>{% trans "Teams to place" %}</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for stage in stages %}
+				<tr{% ifchanged stage.division %} class="set-head"{% endifchanged %}>
+					<th>{% ifchanged stage.division %}{{ stage.division }}{% endifchanged %}</th>
+					<td>{{ stage }}</td>
+					<td>{% if stage.awaiting_progression %}<a href="{% url 'admin:fixja:competition:season:division:stage:progress' competition.pk season.pk stage.division.pk stage.pk %}">{% trans "Place the teams" %}</a>{% else %}<span class="muted">{% trans "Nothing to do" %}</span>{% endif %}</td>
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+{% endblock %}

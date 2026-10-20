@@ -1,0 +1,26 @@
+{% extends "touchtechnology/admin/base.html" %}
+{% load i18n admin %}
+{% comment %}
+A page that is one form: its Save and Cancel are in the page head (and in
+the bar on a phone), so they never scroll away. Fill form-body; the form is
+#edit-form.
+{% endcomment %}
+
+{% block page_actions %}
+	{% block object-actions %}{% endblock %}
+	{% block form-actions %}
+		<div class="form-buttons">
+			<a class="button" href="{% block cancel-url %}{{ cancel_url }}{% endblock %}">{% trans "Cancel" %}</a>
+			{% block form-actions-extra %}{% endblock %}
+			<button type="submit" form="edit-form" class="button primary">{% icon "check" %}<span>{% trans "Save" %}</span></button>
+		</div>
+	{% endblock form-actions %}
+{% endblock page_actions %}
+
+{% block content %}
+	<form id="edit-form" class="{% block form-class %}edit-form{% endblock %}" action="" method="post" enctype="multipart/form-data">
+		{% csrf_token %}
+		{% block form-body %}{% endblock %}
+	</form>
+	{% block after-form %}{% endblock %}
+{% endblock %}

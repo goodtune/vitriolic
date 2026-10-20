@@ -1,31 +1,40 @@
-{% extends "touchtechnology/admin/edit.multiple.html" %}
-{% load i18n %}
-{% load common %}
+{% extends "touchtechnology/admin/form_page.html" %}
+{% load i18n common admin %}
 
-{% block form-fieldset %}
-	<!-- formset -->
+{% block page_title %}{% trans "Reschedule" %}{% endblock %}
+{% block page_kind %}{% blocktrans with season=season %}Move the unplayed match days of {{ season }}{% endblocktrans %}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "season" %}</span>{% endblock %}
+
+{% block form-body %}
 	{{ formset.management_form }}
-
-	<table class="table table-condensed table-striped">
-		<thead>
-			<tr>
-				<th>{% trans "Original Date" %}</th>
-				<th>{% trans "Affected Matches" %}</th>
-				<th>{% trans "New Date" %}</th>
-			</tr>
-		</thead>
-		<tbody>
-			{% for form in formset.forms %}
+	{% if formset.non_form_errors %}
+		<div class="form-errors" role="alert">{% icon "alert" %}<ul>{% for error in formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>
+	{% endif %}
+	<div class="table-wrap">
+		<table class="listing">
+			<thead>
 				<tr>
-					<td>{{ form.original }}</td>
-					<td>{{ form.matches.count }}</td>
-					<td>{% field form.date "" %}</td>
+					<th>{% trans "Match day" %}</th>
+					<th class="num">{% trans "Matches" %}</th>
+					<th>{% trans "Move to" %}</th>
 				</tr>
-			{% empty %}
-				<tr>
-					<td colspan="3">{% trans "There are no unplayed matches to be rescheduled." %}</td>
-				</tr>
-			{% endfor %}
-		</tbody>
-	</table>
+			</thead>
+			<tbody>
+				{% for form in formset.forms %}
+					<tr>
+						<td>{{ form.original|date:"D j M Y" }}</td>
+						<td class="num">{{ form.matches.count }}</td>
+						<td>
+							<label class="visually-hidden" for="{{ form.date.id_for_label }}">{% blocktrans with day=form.original|date:"j F" %}New date for {{ day }}{% endblocktrans %}</label>
+							{% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+							{{ form.date|widget }}
+							{% if form.date.errors %}<ul class="field-errors">{% for e in form.date.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+						</td>
+					</tr>
+				{% empty %}
+					<tr><td colspan="3" class="empty-state">{% trans "Every match of this season has been played." %}</td></tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
 {% endblock %}

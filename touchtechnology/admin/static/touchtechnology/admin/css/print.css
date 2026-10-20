@@ -1,0 +1,186 @@
+/*
+ * vitriolic admin: sheets made to be printed (run sheet, matrix, reports,
+ * score sheets). The same brand properties and type as the admin, set for
+ * paper first and a screen second.
+ */
+
+@font-face {
+	font-family: "Plex Sans";
+	src: url("../fonts/IBMPlexSans-Variable.woff2") format("woff2");
+	font-weight: 100 700;
+	font-stretch: 75% 100%;
+	font-display: swap;
+}
+
+:root {
+	--brand-primary: #275d8b;
+	--brand-secondary: #e8862a;
+	--ink: oklch(from var(--brand-primary) min(l, 0.43) min(c, 0.14) h);
+	--fill: var(--brand-primary);
+	--on-fill: oklch(from var(--brand-primary) clamp(0.2, (0.63 - l) * 1000, 1) 0 h);
+	--line: oklch(from var(--brand-primary) 0.86 0.01 h);
+	--wash: oklch(from var(--brand-primary) 0.965 0.012 h);
+	--text: oklch(from var(--brand-primary) 0.22 0.015 h);
+	--muted: oklch(from var(--brand-primary) 0.45 0.015 h);
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+body.sheet {
+	margin: 0;
+	padding: 28px 32px 40px;
+	background: #fff;
+	color: var(--text);
+	font-family: "Plex Sans", system-ui, sans-serif;
+	font-size: 13.5px;
+	line-height: 1.4;
+	font-variant-numeric: tabular-nums;
+}
+
+.sheet-head {
+	display: flex;
+	align-items: center;
+	gap: 18px;
+	padding-bottom: 14px;
+	margin-bottom: 18px;
+	border-bottom: 3px solid var(--fill);
+}
+
+.sheet-brand {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-weight: 600;
+	max-width: 240px;
+}
+
+.sheet-tile,
+.sheet-logo {
+	display: grid;
+	place-items: center;
+	flex: none;
+	min-width: 32px;
+	height: 32px;
+	padding: 0 6px;
+	border-radius: 6px;
+	background: var(--fill);
+	color: var(--on-fill);
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.sheet-logo img { max-height: 20px; display: block; }
+
+.sheet-titles { flex: 1; min-width: 0; }
+.sheet-titles h1 { margin: 0; font-size: 22px; line-height: 1.15; }
+.sheet-titles p { margin: 2px 0 0; color: var(--muted); }
+.sheet-titles p:empty { display: none; }
+
+.sheet-tools { display: flex; gap: 8px; }
+
+.sheet-button,
+.sheet-tools a {
+	display: inline-flex;
+	align-items: center;
+	min-height: 32px;
+	padding: 4px 12px;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	background: #fff;
+	color: var(--ink);
+	font: inherit;
+	font-weight: 600;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.sheet-button:focus-visible,
+.sheet-tools a:focus-visible,
+a:focus-visible {
+	outline: 2px solid oklch(from var(--brand-secondary) min(l, 0.56) max(c, 0.1) h);
+	outline-offset: 2px;
+}
+
+a { color: var(--ink); }
+
+h2 { margin: 26px 0 8px; font-size: 17px; }
+h3 { margin: 18px 0 6px; font-size: 15px; }
+
+table {
+	width: 100%;
+	border-collapse: collapse;
+	margin-bottom: 10px;
+}
+
+th,
+td {
+	padding: 5px 8px;
+	border-bottom: 1px solid var(--line);
+	text-align: left;
+	vertical-align: top;
+}
+
+thead th {
+	border-bottom: 1.5px solid var(--text);
+	color: var(--muted);
+	font-size: 12px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+tbody th { font-weight: 600; }
+tbody + tbody { border-top: 2px solid var(--line); }
+.num { text-align: right; }
+.muted { color: var(--muted); }
+.set-head td { border-top: 1.5px solid var(--text); }
+.empty { color: var(--muted); font-style: italic; }
+
+.sheet-foot {
+	margin-top: 26px;
+	padding-top: 8px;
+	border-top: 1px solid var(--line);
+	color: var(--muted);
+	font-size: 12px;
+}
+
+/* the matrix: kick-off times down, grounds across */
+.matrix th:first-child { width: 80px; }
+.matrix td { padding: 4px; }
+
+.matrix .match {
+	padding: 5px 7px;
+	border-left: 4px solid var(--division, var(--fill));
+	border-radius: 4px;
+	background: var(--wash);
+	break-inside: avoid;
+}
+
+.matrix .match + .match { margin-top: 4px; }
+.matrix .match strong { display: block; font-size: 12px; }
+.matrix .match small { color: var(--muted); }
+.matrix .match.video { box-shadow: inset 0 0 0 1.5px var(--ink); }
+
+.venue-block { break-after: page; }
+.venue-block:last-child { break-after: auto; }
+
+/* a score sheet or sign-on sheet, one a page */
+.card-sheet { break-after: page; padding-bottom: 12px; }
+.card-sheet:last-child { break-after: auto; }
+
+.boxes td { height: 26px; }
+
+@media screen and (max-width: 767.98px) {
+	body.sheet { padding: 16px; font-size: 13px; }
+	.sheet-head { flex-wrap: wrap; }
+	.sheet-tools { width: 100%; }
+	.sheet-scroll { overflow-x: auto; margin: 0 -16px; padding: 0 16px; }
+}
+
+@media print {
+	@page { margin: 12mm; }
+	body.sheet { padding: 0; font-size: 11px; }
+	.sheet-tools { display: none; }
+	a { color: inherit; text-decoration: none; }
+}

@@ -1,28 +1,27 @@
-{% extends "tournamentcontrol/competition/admin/base.html" %}
-{% load i18n common %}
+{% extends "touchtechnology/admin/form_page.html" %}
+{% load i18n common admin %}
 
-{% block main_content %}
-<div class="box">
-	<h1>{% blocktrans with step=wizard.steps.step1 count=wizard.steps.count %}Produce Scorecards: Step {{ step }} of {{ count }}{% endblocktrans %}</h1>
+{% block page_title %}{% trans "Score sheet reports" %}{% endblock %}
+{% block page_kind %}{% blocktrans with step=wizard.steps.step1 count=wizard.steps.count %}Step {{ step }} of {{ count }}{% endblocktrans %}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "print" %}</span>{% endblock %}
 
+{% block form-actions %}
+	<div class="form-buttons">
+		{% if wizard.steps.prev %}
+			<button type="submit" form="edit-form" class="button" name="wizard_prev_step" value="{{ wizard.steps.prev }}" formnovalidate>{% icon "chevron-left" %}<span>{% trans "Back" %}</span></button>
+		{% endif %}
+		<button type="submit" form="edit-form" class="button primary">{% if wizard.steps.current == wizard.steps.last %}{% icon "print" %}<span>{% trans "Make the report" %}</span>{% else %}<span>{% trans "Next" %}</span>{% icon "chevron-right" %}{% endif %}</button>
+	</div>
+{% endblock %}
+
+{% block form-body %}
+	{{ wizard.management_form }}
 	{% if wizard.form.non_field_errors %}
-		{{ wizard.form.non_field_errors }}
+		<div class="form-errors" role="alert">{% icon "alert" %}<ul>{% for error in wizard.form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>
 	{% endif %}
-
-	<form action="" method="post">{% csrf_token %}
-		{{ wizard.management_form }}
-		<fieldset>
-			{% for f in wizard.form %}
-				{% field f %}
-			{% endfor %}
-		</fieldset>
-
-		<div class="buttons">
-			<button class="default" type="submit">{% if wizard.steps.current == wizard.steps.last %}{% trans "Generate" %}{% else %}{% trans "Next" %}{% endif %}</button>
-			{% if wizard.steps.prev %}
-				<button name="wizard_prev_step" value="{{ wizard.steps.prev }}">{% trans "Back" %}</button>
-			{% endif %}
-		</div>
-	</form>
-</div>
+	<div class="fields">
+		{% for f in wizard.form %}
+			{% field f %}
+		{% endfor %}
+	</div>
 {% endblock %}

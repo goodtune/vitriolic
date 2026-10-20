@@ -1,36 +1,30 @@
-{% extends "mvp/list.split.inc.html" %}
-{% load i18n %}
+{% extends "touchtechnology/admin/list.inc.html" %}
+{% load i18n admin %}
 
 {% block table-headings %}
-	{{ block.super }}
-	<th>{% trans "Short title" %}</th>
+	<th>{% trans "Stage" %}</th>
+	<th class="wide-only">{% trans "Short title" %}</th>
+	<th class="num">{% trans "Matches" %}</th>
 {% endblock %}
 
 {% block table-columns %}
 	{{ block.super }}
-	<td>{{ obj.short_title|default:"-" }}</td>
+	<td class="wide-only">{{ obj.short_title|default:"&ndash;" }}</td>
+	<td class="num">{{ obj.matches.count }}</td>
 {% endblock %}
 
-{% block empty-row-colspan %}3{% endblock %}
+{% block empty-row-colspan %}4{% endblock %}
 
 {% block row-buttons-extra %}
 	{% if obj.matches.exists %}
-		<a class="btn btn-default btn-sm" role="button" href="{{ obj.urls.undo }}" data-toggle="modal" data-target="#undoModal_stage" data-action="{{ obj.urls.undo }}" data-title="{{ obj }}">
-			<i class="fa fa-eject"></i>
-			&nbsp;{% trans "Undo" %} <span class="badge">{{ obj.matches.count }}</span>
-		</a>
+		<form method="post" action="{{ obj.urls.undo }}" data-confirm="{% blocktrans with count=obj.matches.count %}The {{ count }} matches of “{{ obj }}”, and the results entered for them, will be removed for good.{% endblocktrans %}" data-confirm-title="{% trans "Undo this draw?" %}" data-confirm-label="{% trans "Undo draw" %}">
+			{% csrf_token %}
+			<button type="submit" class="button compact">{% icon "undo" %}<span>{% trans "Undo" %}</span></button>
+		</form>
 	{% else %}
-		<a class="btn btn-default btn-sm" href="{{ obj.urls.build }}" role="button">
-			<i class="fa fa-play"></i>
-			&nbsp;{% trans "Build" %}
-		</a>
+		<a class="button compact" href="{{ obj.urls.build }}">{% icon "play" %}<span>{% trans "Build" %}</span></a>
 	{% endif %}
-	<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:reorder' 'stage:division' obj.pk "up" %}" role="button">
-		<i class="fa fa-chevron-up"></i>
-		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Up" %}</span>
-	</a>
-	<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:reorder' 'stage:division' obj.pk "down" %}" role="button">
-		<i class="fa fa-chevron-down"></i>
-		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Down" %}</span>
-	</a>
+	{% url 'admin:fixja:reorder' 'stage:division' obj.pk "up" as up_url %}
+	{% url 'admin:fixja:reorder' 'stage:division' obj.pk "down" as down_url %}
+	{% include "tournamentcontrol/competition/admin/_reorder.inc.html" %}
 {% endblock %}

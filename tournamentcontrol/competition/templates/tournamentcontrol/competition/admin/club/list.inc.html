@@ -1,14 +1,16 @@
-{% extends "mvp/list.inc.html" %}
+{% extends "touchtechnology/admin/list.inc.html" %}
 {% load i18n %}
 
 {% block table-headings %}
-	{{ block.super }}
+	<th>{% trans "Club" %}</th>
 	<th>{% trans "Abbreviation" %}</th>
+	<th class="num wide-only">{% trans "People" %}</th>
 {% endblock %}
 
 {% block table-columns %}
 	{{ block.super }}
-	<td>{{ obj.abbreviation|default:"-" }}</td>
+	<td>{{ obj.abbreviation|default:"&ndash;" }}</td>
+	<td class="num wide-only">{{ obj.members.count }}</td>
 {% endblock %}
 
-{% block empty-row-colspan %}3{% endblock %}
+{% block empty-row-colspan %}4{% endblock %}

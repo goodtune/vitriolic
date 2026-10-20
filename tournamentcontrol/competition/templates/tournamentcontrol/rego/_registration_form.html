@@ -1,136 +1,74 @@
-<!DOCTYPE html>
-<html>
-{% load static %}
-{% load common content %}
-<head>
-	<title>Registration Forms - {{ competition.title }} {{ season.title }} ({{ club.title }})</title>
+{% extends "touchtechnology/admin/print.html" %}
+{% load i18n common content %}
 
-	<base href="http://{{ site.domain }}/" />
+{% block title %}{% trans "Registration forms" %} &ndash; {{ club.title }}{% endblock %}
+{% block heading %}{% trans "Registration forms" %}{% endblock %}
+{% block subheading %}{{ club.title }} &ndash; {{ competition.title }}, {{ season.title }}{% endblock %}
+{% block tools %}<a href="{% url 'admin:fixja:club:edit' club.pk %}">{% trans "Back to the club" %}</a>{% endblock %}
 
-	<link rel="stylesheet" type="text/css" media="print" href="http://yui.yahooapis.com/3.17.2/build/cssreset-context/cssreset-context-min.css">
-	<link rel="stylesheet" type="text/css" media="print" href="http://yui.yahooapis.com/3.17.2/build/cssbase-context/cssbase-context-min.css">
-
-	<style type="text/css" media="print">
-		@page {
-			size: A4 landscape;
-			margin: 1cm 1cm 3cm;
-			position: relative;
-		}
-
-		body {
-			font-family: Arial;
-		}
-
-		td, th {
-			padding: 6px;
-			text-align: left;
-		}
-
-		.logos {
-			position: absolute;
-		}
-
-		.team,
-		.division,
-		.players,
-		.staff {
-			font-size: 10pt;
-			position: absolute;
-		}
-
-		.team,
-		.division {
-			font-size: 16pt;
-			left: 10cm;
-		}
-
-		.team {
-			top: 1cm;
-		}
-
-		.division {
-			page-break-before: always;
-		}
-
-		.staff {
-			right: 0;
-			top: 0;
-		}
-
-		.players {
-			top: 4cm;
-			width: 100%;
-		}
-
-		.players td:nth-child(1) { text-align: center; width: 1cm; }
-		.players td:nth-child(2),
-		.players td:nth-child(3) {
-			width: 5cm;
-		}
-		.players td:nth-child(4) { text-align: center; width: 3cm; }
-		.players td:last-child { width: 6cm; }
-
-		.staff th { vertical-align: top; width: 4cm; }
-		.staff td { width: 5cm; }
+{% block extracss %}
+	<style>
+		@page { size: A4 landscape; margin: 12mm; }
+		.disclaimer { margin-bottom: 18px; color: var(--muted); }
+		.team-sheet { break-before: page; }
+		.team-sheet:first-of-type { break-before: auto; }
+		.team-sheet header { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; }
+		.team-sheet h2 { margin: 0; }
+		.team-sheet .staff { width: auto; min-width: 280px; }
+		.players td { height: 28px; }
+		.players .signature { width: 25%; }
 	</style>
-</head>
-<body class="yui3-cssreset yui3-cssbase">
+{% endblock %}
 
-{% chunk "registration-form-disclaimer" %}
+{% block content %}
+	<div class="disclaimer">{% block logos_outer %}{% block logos_img %}{% endblock %}{% endblock %}{% chunk "registration-form-disclaimer" %}</div>
 
-{% for team, data in teams.items %}
-	<div class="division">{{ team.division.title }}</div>
-
-	<div class="team">{{ team.title }}</div>
-
-	{% block logos_outer %}
-		<div class="logos">
-			{% block logos_img %}
-				<img src="{% get_static_prefix %}img/logo-horizontal.png" alt="{{ site.name }}" />
-			{% endblock %}
-		</div>
-	{% endblock %}
-
-	<table class="staff">
-		<tbody>
-			{% for role, people in data.staff.items %}
-				{% for first_name, last_name, date_of_birth, email in people %}
+	{% for team, sheet in data.items %}
+		<section class="team-sheet">
+			<header>
+				<div>
+					<h2>{{ team.title }}</h2>
+					<p class="muted">{{ team.division.title }}</p>
+				</div>
+				<table class="staff">
+					<tbody>
+						{% for role, people in sheet.staff.items %}
+							{% for first_name, last_name, date_of_birth, email in people %}
+								<tr>
+									{% if forloop.first %}<th rowspan="{{ people|length }}">{{ role }}</th>{% endif %}
+									<td>{{ first_name|htmlentities }} {{ last_name|htmlentities }}</td>
+								</tr>
+							{% endfor %}
+						{% endfor %}
+					</tbody>
+				</table>
+			</header>
+			<table class="players">
+				<thead>
 					<tr>
-						{% if forloop.first %}
-							<th rowspan="{{ people|length }}">{{ role }}</th>
-						{% endif %}
-						<td>{{ first_name|htmlentities }} {{ last_name|htmlentities }}</td>
+						<th class="num">{% trans "No." %}</th>
+						<th>{% trans "First name" %}</th>
+						<th>{% trans "Last name" %}</th>
+						<th>{% trans "Born" %}</th>
+						<th>{% trans "Email" %}</th>
+						<th>{% trans "Signature" %}</th>
 					</tr>
-				{% endfor %}
-			{% endfor %}
-		</tbody>
-	</table>
-
-	<table class="players">
-		<thead>
-			<tr>
-				<th>No.</th>
-				<th>First name</th>
-				<th>Last name</th>
-				<th>Date of birth</th>
-				<th>Email address</th>
-				<th>Signature</th>
-			</tr>
-		</thead>
-
-		<tbody>
-			{% for number, first_name, last_name, date_of_birth, email in data.players %}
-				<tr>
-					<td>{{ number }}</td>
-					<td>{{ first_name|htmlentities }}</td>
-					<td>{{ last_name|htmlentities }}</td>
-					<td>{{ date_of_birth|date:"d/m/Y" }}</td>
-					<td>{{ email }}</td>
-					<td class="signature"></td>
-				</tr>
-			{% endfor %}
-		</tbody>
-	</table>
-{% endfor %}
-</body>
-</html>
+				</thead>
+				<tbody>
+					{% for number, first_name, last_name, date_of_birth, email in sheet.players %}
+						<tr>
+							<td class="num">{{ number }}</td>
+							<td>{{ first_name|htmlentities }}</td>
+							<td>{{ last_name|htmlentities }}</td>
+							<td>{{ date_of_birth|date:"d/m/Y" }}</td>
+							<td>{{ email }}</td>
+							<td class="signature"></td>
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</section>
+	{% empty %}
+		<p class="empty">{% trans "The club has no players registered in a team this season." %}</p>
+	{% endfor %}
+{% endblock %}

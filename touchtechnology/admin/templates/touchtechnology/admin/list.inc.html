@@ -12,7 +12,7 @@ the actions above the list (actions), the buttons beside each row
 			<div class="list-actions">
 				{% block actions %}
 					{% if create %}
-						<a class="button primary small" href="{{ create }}">{% icon "plus" %}<span>{% blocktrans with type=model|type %}Add {{ type }}{% endblocktrans %}</span></a>
+						<a class="button primary compact" href="{{ create }}">{% icon "plus" %}<span>{% blocktrans with type=model|type %}Add {{ type }}{% endblocktrans %}</span></a>
 					{% endif %}
 				{% endblock actions %}
 			</div>
@@ -24,7 +24,7 @@ the actions above the list (actions), the buttons beside each row
 
 {% block table %}
 	<div class="table-wrap">
-		<table class="table">
+		<table class="listing">
 			<thead>
 				{% block table-head %}
 					<tr>
@@ -55,7 +55,7 @@ the actions above the list (actions), the buttons beside each row
 											<div class="row-actions">
 												{% block row-buttons-extra %}{% endblock %}
 												<div class="menu">
-													<button type="button" class="button quiet icon-only small" data-popover aria-expanded="false" aria-controls="row-menu-{{ model|type|slugify }}-{{ obj.pk }}">{% icon "more" %}<span class="visually-hidden">{% blocktrans %}More actions for {{ obj }}{% endblocktrans %}</span></button>
+													<button type="button" class="button quiet icon-only compact" data-popover aria-expanded="false" aria-controls="row-menu-{{ model|type|slugify }}-{{ obj.pk }}">{% icon "more" %}<span class="visually-hidden">{% blocktrans %}More actions for {{ obj }}{% endblocktrans %}</span></button>
 													<div class="menu-panel" id="row-menu-{{ model|type|slugify }}-{{ obj.pk }}">
 														{% block row-buttons-items %}
 															{% with detail_url=obj|admin_url:"detail" edit_url=obj|admin_url:"edit" delete_url=obj|admin_url:"delete" perms_url=obj|admin_url:"perms" %}
@@ -71,7 +71,7 @@ the actions above the list (actions), the buttons beside each row
 																{% if delete_url and delete_perm in object_perms %}
 																	<form method="post" action="{{ delete_url }}" data-confirm="{% blocktrans with type=model|type %}The {{ type }} “{{ obj }}” will be removed for good.{% endblocktrans %}" data-confirm-title="{% blocktrans with type=model|type %}Delete this {{ type }}?{% endblocktrans %}" data-confirm-label="{% trans "Delete" %}">
 																		{% csrf_token %}
-																		<button type="submit" class="danger-item">{% icon "trash" %}{% trans "Delete" %}</button>
+																		<button type="submit" class="destructive-item">{% icon "trash" %}{% trans "Delete" %}</button>
 																	</form>
 																{% endif %}
 															{% endwith %}

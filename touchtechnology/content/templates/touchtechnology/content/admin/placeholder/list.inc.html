@@ -1,0 +1,21 @@
+{% extends "touchtechnology/admin/list.inc.html" %}
+{% load i18n common admin %}
+
+{% block table-headings %}
+	<th>{% trans "Application" %}</th>
+	{% if add_perm in model|hasperm:user %}<th class="wide-only">{% trans "Import path" %}</th>{% endif %}
+{% endblock %}
+
+{% block table-columns %}
+	<td class="title-cell">
+		{% if change_perm in object_perms %}
+			<a href="{{ obj.urls.edit }}">{% icon "puzzle" %}<span>{{ obj }}</span></a>
+		{% else %}
+			<span>{{ obj }}</span>
+		{% endif %}
+		{% if obj.nodes.count %}<span class="tag">{% blocktrans count count=obj.nodes.count %}{{ count }} page{% plural %}{{ count }} pages{% endblocktrans %}</span>{% endif %}
+	</td>
+	{% if add_perm in model|hasperm:user %}<td class="wide-only"><code>{{ obj.path }}</code></td>{% endif %}
+{% endblock %}
+
+{% block empty-row-colspan %}3{% endblock %}

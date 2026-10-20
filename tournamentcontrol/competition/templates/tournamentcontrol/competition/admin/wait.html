@@ -1,10 +1,9 @@
-{% extends "tournamentcontrol/competition/admin/base.html" %}
-{% load i18n %}
+{% extends "touchtechnology/admin/base.html" %}
+{% load i18n admin %}
+
+{% block page_title %}{% trans "Making your PDF" %}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "print" %}</span>{% endblock %}
 
 {% block content %}
-	<h1>{% trans "Please wait..." %}</h1>
-
-	<fieldset>
-		<p>{% block waitfor %}{% endblock %}</p>
-	</fieldset>
+	<p class="pane-loading">{% icon "refresh" %}{% block waitfor %}{% endblock %}</p>
 {% endblock %}

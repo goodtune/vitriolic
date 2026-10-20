@@ -1,44 +1,29 @@
-{% extends "mvp/list.split.inc.html" %}
-{% load i18n %}
+{% extends "touchtechnology/admin/list.inc.html" %}
+{% load i18n admin %}
 
 {% block actions %}
 	{% url 'admin:fixja:competition:season:division:team:bulk' competition.pk season.pk division.pk as bulk_url %}
 	{% if bulk_url %}
-		<a href="#" title="{% trans "Add several teams" %}" role="button" data-toggle="modal" data-target="#bulkCreateModal_team">
-			<i class="fa fa-th-list"></i>
-		</a>
-	{% endif %}
-	{{ block.super }}
-{% endblock %}
-
-{% block modal %}
-	{{ block.super }}
-	{% url 'admin:fixja:competition:season:division:team:bulk' competition.pk season.pk division.pk as bulk_url %}
-	{% if bulk_url %}
 		{% trans "Add several teams" as bulk_title %}
-		{% include "tournamentcontrol/competition/admin/bulk_create_modal.inc.html" with name="team" url=bulk_url title=bulk_title %}
+		{% include "tournamentcontrol/competition/admin/_add_many.inc.html" with name="team" url=bulk_url title=bulk_title %}
 	{% endif %}
+	{{ block.super }}
 {% endblock %}
 
 {% block table-headings %}
-	{{ block.super }}
-	<th>{% trans "Slug" %}</th>
+	<th>{% trans "Team" %}</th>
+	<th class="wide-only">{% trans "Club" %}</th>
 {% endblock %}
 
 {% block table-columns %}
 	{{ block.super }}
-	<td>{{ obj.slug|default:"-" }}</td>
+	<td class="wide-only">{{ obj.club|default:"&ndash;" }}</td>
 {% endblock %}
 
 {% block empty-row-colspan %}3{% endblock %}
 
 {% block row-buttons-extra %}
-	<a class="btn btn-default btn-sm up" href="{% url 'admin:competition:reorder' model="team" parent="division" pk=obj.pk direction="up" %}">
-		<i class="fa fa-chevron-up"></i>
-		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Up" %}</span>
-	</a>
-	<a class="btn btn-default btn-sm down" href="{% url 'admin:competition:reorder' model="team" parent="division" pk=obj.pk direction="down" %}">
-		<i class="fa fa-chevron-down"></i>
-		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Down" %}</span>
-	</a>
+	{% url 'admin:competition:reorder' model="team" parent="division" pk=obj.pk direction="up" as up_url %}
+	{% url 'admin:competition:reorder' model="team" parent="division" pk=obj.pk direction="down" as down_url %}
+	{% include "tournamentcontrol/competition/admin/_reorder.inc.html" %}
 {% endblock %}

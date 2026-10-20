@@ -1,23 +1,48 @@
 {% extends "touchtechnology/admin/list.html" %}
-{% load i18n %}
-{% load common mvp_tags %}
-{% load bootstrap3 guardian_tags %}
+{% load i18n common admin %}
+
+{% block page_title %}{% trans "Media" %}{% endblock %}
+{% block page_kind %}{% if path %}{{ path }}{% else %}{% trans "The site's files" %}{% endif %}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "image" %}</span>{% endblock %}
+
+{% block nav-pills-list %}
+	<a class="button" href="#folder-dialog" data-add-many="folder-dialog">{% icon "folder" %}<span>{% trans "New folder" %}</span></a>
+	<a class="button primary" href="#file-dialog" data-add-many="file-dialog">{% icon "upload" %}<span>{% trans "Upload file" %}</span></a>
+{% endblock %}
 
 {% block content %}
-	<div class="row">
-		<div class="col-md-3 col-sm-3 col-md-push-9 col-sm-push-9">
-			<ul class="nav nav-pills nav-stacked">
-				<li class="active">
-					<a href="#" type="button" data-toggle="modal" data-target="#fileModal">{% trans "Upload file" %}</a>
-				</li>
-				<li>
-					<a href="#" type="button" data-toggle="modal" data-target="#folderModal">{% trans "New folder" %}</a>
-				</li>
-			</ul>
-		</div>
+	{% if path %}<p><a class="button compact quiet" href="..">{% icon "up" %}<span>{{ parent }}</span></a></p>{% endif %}
+	{% include list_template|default:"touchtechnology/admin/list.inc.html" %}
 
-		<div class="col-md-9 col-sm-9 col-md-pull-3 col-sm-pull-3">
-			{% include list_template|default:"mvp/list.inc.html" %}
-		</div>
-	</div>
+	<dialog class="add-many-dialog" id="folder-dialog" aria-labelledby="folder-dialog-title">
+		<form action="" method="post">
+			{% csrf_token %}
+			<h2 id="folder-dialog-title">{% trans "New folder" %}</h2>
+			<div class="fields">{% for f in folder_form %}{% field f %}{% endfor %}</div>
+			<div class="confirm-actions">
+				<button type="button" class="button" data-close>{% trans "Cancel" %}</button>
+				<button type="submit" class="button primary">{% trans "Make the folder" %}</button>
+			</div>
+		</form>
+	</dialog>
+	<dialog class="add-many-dialog" id="file-dialog" aria-labelledby="file-dialog-title">
+		<form action="" method="post" enctype="multipart/form-data">
+			{% csrf_token %}
+			<h2 id="file-dialog-title">{% trans "Upload file" %}</h2>
+			<div class="fields">{% for f in file_form %}{% field f %}{% endfor %}</div>
+			<div class="confirm-actions">
+				<button type="button" class="button" data-close>{% trans "Cancel" %}</button>
+				<button type="submit" class="button primary">{% trans "Upload" %}</button>
+			</div>
+		</form>
+	</dialog>
+	<noscript>
+		<section class="form-section">
+			<form action="" method="post" enctype="multipart/form-data">
+				{% csrf_token %}
+				<div class="fields">{% for f in folder_form %}{% field f %}{% endfor %}{% for f in file_form %}{% field f %}{% endfor %}</div>
+				<p><button type="submit" class="button primary">{% trans "Save" %}</button></p>
+			</form>
+		</section>
+	</noscript>
 {% endblock %}

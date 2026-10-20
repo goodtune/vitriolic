@@ -1,73 +1,51 @@
-{% extends "touchtechnology/admin/edit.html" %}
-{% load i18n common tz %}
+{% extends "touchtechnology/admin/form_page.html" %}
+{% load i18n common tz admin %}
 
-{% block content %}
-	<form class="form-horizontal" action="" method="post">
-		<div class="heading-block">
-			<h3>{% trans "Live Stream" %}</h3>
+{% block page_title %}{% trans "Live stream" %}{% endblock %}
+{% block page_kind %}{{ date|date:"l j F Y" }}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "video" %}</span>{% endblock %}
+{% block cancel-url %}{{ season.urls.edit }}#schedule-tab{% endblock %}
+{% block page_nav %}{% include "tournamentcontrol/competition/admin/_day_nav.html" with day_url="admin:fixja:match-live-stream" day_page="live-stream" %}{% endblock %}
+
+{% block form-body %}
+	{{ formset.management_form }}
+	<p class="muted">{% trans "Choose which matches on camera-equipped grounds are streamed to YouTube." %}</p>
+	{% timezone season.timezone %}
+		<div class="table-wrap">
+			<table class="listing">
+				<thead>
+					<tr>
+						<th>{% trans "Time" %}</th>
+						<th class="wide-only">{% trans "Division" %}</th>
+						<th>{% trans "Ground" %}</th>
+						<th>{% trans "Match" %}</th>
+						<th>{% trans "Stream" %}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for form in formset.forms %}
+						{% with match=form.instance %}
+							<tr>
+								<td class="num">{{ form.id }}{{ match.datetime|time }}</td>
+								<td class="wide-only">{{ match.stage.division.short_title|default:match.stage.division.title|htmlentities }}</td>
+								<td>{{ match.play_at.title|htmlentities }}</td>
+								<td><label for="{{ form.live_stream.id_for_label }}">{{ match|safe }}</label></td>
+								<td>{{ form.live_stream|widget }}</td>
+							</tr>
+						{% endwith %}
+					{% empty %}
+						<tr><td colspan="5" class="empty-state">{% trans "No match on this day is on a ground with a camera." %}</td></tr>
+					{% endfor %}
+				</tbody>
+			</table>
 		</div>
+	{% endtimezone %}
+{% endblock %}
 
+{% block after-form %}
+	<form class="aside-form" action="{% url 'admin:fixja:match-live-stream-resync' season.competition.pk season.pk date|date:"Ymd" %}" method="post">
 		{% csrf_token %}
-
-		{{ formset.management_form }}
-
-		<p>{% blocktrans %}Mark which matches on camera-equipped fields should be live streamed to YouTube.{% endblocktrans %}</p>
-
-		<div class="row hidden-xs live-stream-header">
-			<div class="col-sm-10">
-				<div class="row">
-					<div class="col-sm-2"><strong>{% trans "Time" %}</strong></div>
-					<div class="col-sm-3"><strong>{% trans "Division" %}</strong></div>
-					<div class="col-sm-2"><strong>{% trans "Field" %}</strong></div>
-					<div class="col-sm-5"><strong>{% trans "Match" %}</strong></div>
-				</div>
-			</div>
-			<div class="col-sm-2"></div>
-		</div>
-
-		{% timezone season.timezone %}
-			<div class="list-group live-stream-list">
-				{% for form in formset.forms %}
-					{% with match=form.instance %}
-						<div class="list-group-item live-stream-row">
-							{{ form.id }}
-							<div class="row">
-								<div class="col-xs-9 col-sm-10">
-									<div class="row">
-										<div class="col-sm-2">{{ match.datetime|time }}</div>
-										<div class="col-sm-3">{{ match.stage.division.short_title|default:match.stage.division.title|htmlentities }}</div>
-										<div class="col-sm-2">{{ match.play_at.title|htmlentities }}</div>
-										<div class="col-sm-5">{{ match|safe }}</div>
-									</div>
-								</div>
-								<div class="col-xs-3 col-sm-2 text-right">
-									{{ form.live_stream }}
-								</div>
-							</div>
-						</div>
-					{% endwith %}
-				{% endfor %}
-			</div>
-		{% endtimezone %}
-
-		<div class="form-group">
-			<div class="text-center">
-				<button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
-				&nbsp;<a class="btn btn-default" href="{{ season.urls.edit }}">{% trans "Cancel" %}</a>
-			</div> <!-- /.col -->
-		</div>
-	</form>
-
-	<form class="form-horizontal" action="{% url 'admin:fixja:match-live-stream-resync' season.competition.pk season.pk date|date:"Ymd" %}" method="post">
-		{% csrf_token %}
-		<div class="form-group">
-			<div class="text-center">
-				<button type="submit" class="btn btn-default">
-					<i class="fa fa-refresh fa-fw"></i>
-					{% trans "Resync All" %}
-				</button>
-				<p class="help-block">{% blocktrans %}Re-push title, thumbnail, and schedule to YouTube for every match above that is already streaming.{% endblocktrans %}</p>
-			</div>
-		</div>
+		<button type="submit" class="button">{% icon "refresh" %}<span>{% trans "Resync all" %}</span></button>
+		<p class="muted">{% trans "Push the title, thumbnail and schedule to YouTube again for every match above that is already streaming." %}</p>
 	</form>
 {% endblock %}

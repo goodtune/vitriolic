@@ -1,33 +1,24 @@
 {% extends "touchtechnology/admin/base.html" %}
-{% load i18n %}
-{% load common %}
+{% load i18n common admin %}
+
+{% block page_title %}{% with type=object|type %}{% blocktrans %}Delete this {{ type }}?{% endblocktrans %}{% endwith %}{% endblock %}
+{% block page_kind %}{{ object }}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "trash" %}</span>{% endblock %}
 
 {% block content %}
 	{% with type=object|type %}
-		<h1>{% blocktrans %}Delete {{ type }}{% endblocktrans %}</h1>
-
 		{% if object.is_leaf_node %}
-			<h2>{% trans "Warning" %}</h2>
-
-			<p>{% blocktrans %}You are about to delete the {{ type }} <strong>{{ object }}</strong>. This will permanently remove it from your site. Are you sure you want to continue?{% endblocktrans %}</p>
-
-			<form action="" method="post">
+			<p>{% blocktrans %}The {{ type }} <strong>{{ object }}</strong> will be removed from the site for good.{% endblocktrans %}</p>
+			<form action="" method="post" class="button-row">
 				{% csrf_token %}
-				<div class="buttons">
-					<button type="submit">{% trans "Delete" %}</button>
-					{% block cancel_button %}
-						<a href="{% block cancel_url %}{% url 'admin:content:index' %}{% if object.parent %}?r={{ object.parent.pk }}{% endif %}{% endblock %}" class="button">{% trans "Cancel" %}</a>
-					{% endblock %}
-				</div>
+				<button type="submit" class="button destructive">{% icon "trash" %}<span>{% trans "Delete" %}</span></button>
+				{% block cancel_button %}
+					<a href="{% block cancel_url %}{% url 'admin:content:index' %}{% if object.parent %}?r={{ object.parent.pk }}{% endif %}{% endblock %}" class="button">{% trans "Cancel" %}</a>
+				{% endblock %}
 			</form>
 		{% else %}
-			<h2>{% trans "Error" %}</h2>
-
-			<p>{% blocktrans %}You are attempting to delete a {{ type }} which has children in the site hierarchy, which is not possible.{% endblocktrans %}</p>
-
-			<div class="buttons">
-				<a href="{% url 'admin:content:index' %}{% if object.parent %}?r={{ object.parent.pk }}{% endif %}" class="button">{% trans "Cancel" %}</a>
-			</div>
+			<p class="notice">{% blocktrans %}The {{ type }} <strong>{{ object }}</strong> has pages inside it. Move or delete them first.{% endblocktrans %}</p>
+			<p><a href="{% url 'admin:content:index' %}{% if object.parent %}?r={{ object.parent.pk }}{% endif %}" class="button">{% trans "Cancel" %}</a></p>
 		{% endif %}
 	{% endwith %}
 {% endblock %}

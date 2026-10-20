@@ -1,112 +1,87 @@
 {% extends "touchtechnology/admin/edit.html" %}
-{% load i18n %}
+{% load i18n admin %}
+
+{% block object-actions %}
+	{% if object.pk %}
+		<div class="menu">
+			<button type="button" class="button quiet" data-popover aria-expanded="false" aria-controls="season-tools">{% icon "report" %}<span>{% trans "Reports and tools" %}</span>{% icon "chevron-down" %}</button>
+			<div class="menu-panel" id="season-tools">
+				<a href="{% url 'admin:fixja:competition:season:report' object.competition_id object.pk %}">{% icon "report" %}{% trans "Season report" %}</a>
+				<a href="{% url 'admin:fixja:competition:season:summary' object.competition_id object.pk %}">{% icon "team" %}{% trans "Registrations" %}</a>
+				<a href="{% url 'admin:fixja:competition:season:progression-list' object.competition_id object.pk %}">{% icon "stage" %}{% trans "Progression" %}</a>
+				<a href="{% url 'admin:fixja:competition:season:match-grid' object.competition_id object.pk "html" %}">{% icon "stagegroup" %}{% trans "Matrix of the season" %}</a>
+				<hr>
+				<a href="{% url 'admin:fixja:competition:season:reschedule' object.competition_id object.pk %}">{% icon "season" %}{% trans "Reschedule" %}</a>
+				<a href="{% url 'admin:fixja:competition:season:json-builder' object.competition_id object.pk %}">{% icon "json" %}{% trans "Build divisions from JSON" %}</a>
+				{% if object.live_stream %}<a href="{% url 'admin:fixja:competition:season:authorize' object.competition_id object.pk %}">{% icon "video" %}{% trans "Authorise YouTube" %}</a>{% endif %}
+				{% if object.upstream_enabled and object.upstream_backend %}<a href="{% url 'admin:fixja:competition:season:upstream-sync' object.competition_id object.pk %}">{% icon "refresh" %}{% blocktrans with name=object.upstream_backend.name %}Synchronise from {{ name }}{% endblocktrans %}</a>{% endif %}
+			</div>
+		</div>
+	{% endif %}
+	{{ block.super }}
+{% endblock %}
 
 {% block tab-links %}
 	{{ block.super }}
-
 	{% if object.pk %}
-		<li>
-			<a href={% if object.pk %}"#schedule-tab" data-toggle="tab"{% else %}"#"{% endif %}>
-				<i class="fa fa-chevron-right fa-fw"></i>
-				&nbsp;{% trans "Schedule" %}
-			</a>
-		</li>
+		<a class="tab" role="tab" id="schedule-tab-link" href="#schedule-tab" aria-controls="schedule-tab" aria-selected="false" tabindex="-1">{% icon "results" %}<span>{% trans "Schedule" %}</span><span class="count" aria-hidden="true">{{ dates|length }}</span></a>
 	{% endif %}
 {% endblock %}
 
 {% block tab-panes %}
 	{{ block.super }}
-
 	{% if object.pk %}
-		<div class="tab-pane" id="schedule-tab">
-			<div class="heading-block">
-				<h3>Schedule</h3>
+		<section class="pane" data-tab-panel role="tabpanel" id="schedule-tab" aria-labelledby="schedule-tab-link">
+			<div class="list-head">
+				<h2>{% trans "Match days" %}</h2>
+				<div class="list-actions">
+					<a class="button compact" href="{% url 'admin:fixja:competition:season:reschedule' object.competition_id object.pk %}">{% icon "season" %}<span>{% trans "Reschedule" %}</span></a>
+					<a class="button compact" href="{% url 'admin:fixja:competition:season:match-grid' object.competition_id object.pk "html" %}">{% icon "stagegroup" %}<span>{% trans "Matrix of the season" %}</span></a>
+				</div>
 			</div>
-
-			<table class="table table-striped">
-				<thead>
-					<tr>
-						<th>{% trans "Date" %}</th>
-						<th></th>
-					</tr>
-				</thead>
-				<tbody>
-					{% for date in dates %}
+			{% now "Y-m-d" as today %}
+			<div class="table-wrap">
+				<table class="listing days-table">
+					<thead>
 						<tr>
-							<td>
-								<a href="{% url 'admin:fixja:match-results' object.competition.pk object.pk date|date:"Ymd" %}" role="button">
-									{{ date }}
-								</a>
-							</td>
-							<td class="text-right">
-								<div class="btn-group" role="group" aria-label="...">
-									<a href="{% url 'admin:fixja:match-schedule' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
-										<i class="fa fa-asterisk fa-fw"></i>
-										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Allocate" %}</span>
-									</a>
-									<a href="{% url 'admin:fixja:match-results' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
-										<i class="fa fa-asterisk fa-fw"></i>
-										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Results" %}</span>
-									</a>
-									<a href="{% url 'admin:fixja:match-runsheet' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
-										<i class="fa fa-clock-o fa-fw"></i>
-										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Run Sheet" %}</span>
-									</a>
-									<div class="btn-group">
-										<button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-expanded="false">
-										<i class="fa fa-table fa-fw"></i>
-										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Matrix" %}</span>
-											<span class="caret"></span>
-										</button>
-										<ul class="dropdown-menu dropdown-menu-right" role="menu">
-											<li role="presentation">
-												<a href="{% url 'admin:fixja:match-grid' object.competition.pk object.pk date|date:"Ymd" "html" %}" role="button">
-													<i class="fa fa-html5 fa-fw"></i>
-													<span class="hidden-sm hidden-xs">&nbsp;{% trans "HTML" %}</span>
-												</a>
-											</li>
-											<li role="presentation">
-												<a href="{% url 'admin:fixja:match-grid' object.competition.pk object.pk date|date:"Ymd" "pdf" %}" role="button">
-													<i class="fa fa-file-pdf-o fa-fw"></i>
-													<span class="hidden-sm hidden-xs">&nbsp;{% trans "PDF" %}</span>
-												</a>
-											</li>
-											<li role="presentation">
-												<a href="{% url 'admin:fixja:match-visual-schedule' object.competition.pk object.pk date|date:"Ymd" %}" role="button" target="_blank">
-													<i class="fa fa-th fa-fw"></i>
-													<span class="hidden-sm hidden-xs">&nbsp;{% trans "Visual Schedule" %}</span>
-												</a>
-											</li>
-										</ul>
-									</div>
-									<a href="{% url 'admin:fixja:match-washout' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
-										<i class="fa fa-umbrella fa-fw"></i>
-										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Washout" %}</span>
-									</a>
-									<a href="{% url 'admin:fixja:match-live-stream' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
-										<i class="fa fa-video-camera fa-fw"></i>
-										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Live Stream" %}</span>
-									</a>
-									<a href="{% url 'admin:fixja:scorecards' object.competition.pk object.pk date|date:"Ymd" "pdf" %}" class="btn btn-default btn-sm" role="button">
-										<i class="fa fa-print fa-fw"></i>
-										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Scorecards" %}</span>
-									</a>
-								</div>
-							</td>
+							<th>{% trans "Day" %}</th>
+							<th class="wide-only">{% trans "State" %}</th>
+							<th class="actions-cell"><span class="visually-hidden">{% trans "Actions" %}</span></th>
 						</tr>
-					{% empty %}
-						<tr>
-							<td colspan="2">{% blocktrans %}No stages have been generated yet.{% endblocktrans %}</td>
-						</tr>
-					{% endfor %}
-				</tbody>
-			</table>
-
-			<div class="form-group">
-				<div class="text-center">
-					<a class="btn btn-default" href="{% url 'admin:fixja:competition:season:reschedule' competition.pk season.pk %}">{% trans "Reschedule" %}</a>
-				</div> <!-- /.col -->
+					</thead>
+					<tbody>
+						{% for date in dates %}
+							{% with ymd=date|date:"Ymd" iso=date|date:"Y-m-d" %}
+								<tr>
+									<td class="title-cell"><a href="{% url 'admin:fixja:match-results' object.competition_id object.pk ymd %}">{% icon "season" %}<span>{{ date|date:"D j M Y" }}</span></a></td>
+									<td class="wide-only">{% if iso < today %}<span class="tag">{% trans "Played" %}</span>{% elif iso == today %}<span class="tag attention">{% trans "Today" %}</span>{% else %}<span class="tag good">{% trans "To come" %}</span>{% endif %}</td>
+									<td class="actions-cell">
+										<div class="row-actions">
+											<a class="button compact" href="{% url 'admin:fixja:match-schedule' object.competition_id object.pk ymd %}">{% icon "allocate" %}<span>{% trans "Allocate" %}</span></a>
+											<a class="button compact" href="{% url 'admin:fixja:match-results' object.competition_id object.pk ymd %}">{% icon "results" %}<span>{% trans "Results" %}</span></a>
+											<div class="menu">
+												<button type="button" class="button quiet icon-only compact" data-popover aria-expanded="false" aria-controls="day-menu-{{ ymd }}">{% icon "more" %}<span class="visually-hidden">{% blocktrans with day=date|date:"j F" %}More actions for {{ day }}{% endblocktrans %}</span></button>
+												<div class="menu-panel" id="day-menu-{{ ymd }}">
+													<a href="{% url 'admin:fixja:match-runsheet' object.competition_id object.pk ymd %}">{% icon "clock" %}{% trans "Run sheet" %}</a>
+													<a href="{% url 'admin:fixja:match-grid' object.competition_id object.pk ymd "html" %}">{% icon "stagegroup" %}{% trans "Matrix" %}</a>
+													<a href="{% url 'admin:fixja:match-grid' object.competition_id object.pk ymd "pdf" %}">{% icon "download" %}{% trans "Matrix as PDF" %}</a>
+													<a href="{% url 'admin:fixja:scorecards' object.competition_id object.pk ymd "pdf" %}">{% icon "print" %}{% trans "Scorecards" %}</a>
+													<hr>
+													<a href="{% url 'admin:fixja:match-washout' object.competition_id object.pk ymd %}">{% icon "umbrella" %}{% trans "Washout" %}</a>
+													{% if object.live_stream %}<a href="{% url 'admin:fixja:match-live-stream' object.competition_id object.pk ymd %}">{% icon "video" %}{% trans "Live stream" %}</a>{% endif %}
+													<a href="{% url 'admin:fixja:match-visual-schedule' object.competition_id object.pk ymd %}" target="_blank">{% icon "external" %}{% trans "Visual scheduler" %}</a>
+												</div>
+											</div>
+										</div>
+									</td>
+								</tr>
+							{% endwith %}
+						{% empty %}
+							<tr><td colspan="3" class="empty-state">{% trans "No match has a date yet. Build a stage's draw to make the match days." %}</td></tr>
+						{% endfor %}
+					</tbody>
+				</table>
 			</div>
-		</div>
+		</section>
 	{% endif %}
 {% endblock %}

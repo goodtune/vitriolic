@@ -273,6 +273,43 @@
 		});
 	}
 
+	// "Add several": ask how many in a dialog rather than following the link.
+	document.addEventListener('click', function (event) {
+		var opener = event.target.closest('[data-add-many]');
+		if (opener) {
+			var box = document.getElementById(opener.getAttribute('data-add-many'));
+			if (box && box.showModal) {
+				event.preventDefault();
+				box.showModal();
+				var count = $('input[type="number"]', box);
+				if (count) { count.focus(); count.select(); }
+			}
+			return;
+		}
+		var closer = event.target.closest('dialog [data-close]');
+		if (closer) { closer.closest('dialog').close(); }
+	});
+
+	// Another blank row of a formset, from its empty form.
+	document.addEventListener('click', function (event) {
+		var button = event.target.closest('[data-add-row]');
+		if (!button) { return; }
+		var prefix = button.getAttribute('data-add-row');
+		var total = document.querySelector('input[name="' + prefix + '-TOTAL_FORMS"]');
+		var template = document.getElementById(prefix + '-empty-row');
+		var body = $('[data-formset="' + prefix + '"] tbody');
+		if (!total || !template || !body) { return; }
+		var index = parseInt(total.value, 10);
+		var row = document.createElement('tbody');
+		row.innerHTML = template.innerHTML.replace(/__prefix__/g, index);
+		var tr = row.firstElementChild;
+		body.appendChild(tr);
+		total.value = index + 1;
+		enhance(tr);
+		var first = $('input:not([type="hidden"]), select, textarea', tr);
+		if (first) { first.focus(); }
+	});
+
 	/* ------------------------------------------------------------------
 	 * Confirm: a delete, an undo, anything that cannot be taken back
 	 */
@@ -365,7 +402,7 @@
 				if (parent.tagName === 'OPTGROUP' && parent !== group) {
 					group = parent;
 					var heading = document.createElement('li');
-					heading.className = 'group';
+					heading.className = 'picker-heading';
 					heading.setAttribute('role', 'presentation');
 					heading.textContent = parent.label;
 					list.appendChild(heading);
@@ -389,10 +426,10 @@
 		}
 
 		function setActive(index) {
-			if (active >= 0 && shown[active]) { shown[active].item.classList.remove('active'); }
+			if (active >= 0 && shown[active]) { shown[active].item.classList.remove('focused'); }
 			active = index;
 			if (active >= 0 && shown[active]) {
-				shown[active].item.classList.add('active');
+				shown[active].item.classList.add('focused');
 				shown[active].item.scrollIntoView({ block: 'nearest' });
 				search.setAttribute('aria-activedescendant', shown[active].item.id);
 			} else {

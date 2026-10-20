@@ -1,80 +1,44 @@
-{% extends "touchtechnology/content/admin/edit.html" %}
-{% load i18n %}
-{% load common %}
-{% load mvp_tags %}
+{% extends "touchtechnology/content/admin/base.html" %}
+{% load i18n common mvp_tags admin %}
 
-{% block extracss %}
-	{{ block.super }}
-	<!-- formset.media.css -->
-	{{ formset_media.css }}
+{% block page_title %}{% if node.pk %}{{ node.title }}{% else %}{% trans "New application" %}{% endif %}{% endblock %}
+{% block page_kind %}{% if node.pk %}{% trans "Application" %}{% else %}{% trans "Not saved yet" %}{% endif %}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "puzzle" %}</span>{% endblock %}
+
+{% block page_actions %}
+	{% if node.pk %}
+		{% with perms_url=node|admin_url:"perms" %}{% if perms_url %}<a class="button quiet" href="{{ perms_url }}">{% icon "lock" %}<span>{% trans "Permissions" %}</span></a>{% endif %}{% endwith %}
+	{% endif %}
+	<div class="form-buttons">
+		<a class="button" href="../../{% if node.parent %}?r={{ node.parent_id }}{% endif %}">{% trans "Cancel" %}</a>
+		<button type="submit" form="edit-form" class="button primary">{% icon "check" %}<span>{% trans "Save" %}</span></button>
+	</div>
 {% endblock %}
 
-{% block extrajs %}
-	{{ block.super }}
-	<!-- formset.media.js -->
-	{{ formset_media.js }}
+{% block extracss %}{{ block.super }}{{ form.media.css|admin_media }}{{ formset_media.css|admin_media }}{% endblock %}
+{% block extrajs %}{{ block.super }}{{ form.media.js|admin_media }}{{ formset_media.js|admin_media }}{% endblock %}
+
+{% block content %}
+	<form id="edit-form" action="" method="post">
+		{% csrf_token %}
+		{% include "touchtechnology/admin/_form_errors.html" %}
+		<section class="form-section">
+			<h2>{% trans "The application" %}</h2>
+			<div class="fields">{% for f in form %}{% field f %}{% endfor %}</div>
+		</section>
+		<section class="form-section">
+			<h2>{% trans "Configuration" %}</h2>
+			{% if formsets.kwargs.forms %}
+				{{ formsets.kwargs.management_form }}
+				{% for kwform in formsets.kwargs %}<div class="fields">{% for f in kwform %}{% field f %}{% endfor %}</div>{% endfor %}
+			{% else %}
+				<div class="fields">{% for f in formsets.kwargs %}{% field f %}{% endfor %}</div>
+			{% endif %}
+		</section>
+		{{ formsets.copy.management_form }}
+		<section class="form-section">
+			<h2>{% trans "Optional copy" %}</h2>
+			{% for copyform in formsets.copy %}<div class="fields">{% for f in copyform %}{% field f %}{% endfor %}</div>{% endfor %}
+		</section>
+	</form>
 {% endblock %}
-
-{% block tab-links %}
-	{{ block.super }}
-
-	<li>
-		<a href="#kwargs-tab" data-toggle="tab">
-			<i class="fa fa-chevron-right fa-fw"></i>
-			&nbsp;{% trans "Configuration" %}
-		</a>
-	</li>
-
-	<li>
-		<a href="#copy-tab" data-toggle="tab">
-			<i class="fa fa-chevron-right fa-fw"></i>
-			&nbsp;{% trans "Optional copy" %}
-		</a>
-	</li>
-{% endblock tab-links %}
-
-{% block tab-panes %}
-	{{ block.super }}
-
-	<div class="tab-pane" id="kwargs-tab">
-		<div class="heading-block">
-			<h3>{% trans "Configuration" %}</h3>
-		</div>
-
-		{% if formsets.kwargs.forms %}
-			{{ formsets.kwargs.management_form }}
-
-			<fieldset>
-				{% for form in formsets.kwargs %}
-					{% for f in form %}
-						{% field f %}
-					{% endfor %}
-				{% endfor %}
-			</fieldset>
-
-			<p>FIXME: need to be able to dynamically add more forms</p>
-		{% else %}
-			<fieldset>
-				{% for f in formsets.kwargs %}
-					{% field f %}
-				{% endfor %}
-			</fieldset>
-		{% endif %}
-	</div>
-
-	{{ formsets.copy.management_form }}
-
-	<div class="tab-pane" id="copy-tab">
-		<div class="heading-block">
-			<h3>{% trans "Optional copy" %}</h3>
-		</div>
-
-		<fieldset>
-			{% for form in formsets.copy %}
-				{% for f in form %}
-					{% field f %}
-				{% endfor %}
-			{% endfor %}
-		</fieldset>
-	</div>
-{% endblock tab-panes %}

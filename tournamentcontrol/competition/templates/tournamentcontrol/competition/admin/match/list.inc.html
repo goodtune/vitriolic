@@ -1,41 +1,36 @@
-{% extends "mvp/list.inc.html" %}
-{% load i18n %}
+{% extends "touchtechnology/admin/list.inc.html" %}
+{% load i18n admin %}
 
 {% block table-headings %}
-	<th>{% trans "ID" %}</th>
+	<th>{% trans "Match" %}</th>
 	<th>{% trans "Date" %}</th>
-	<th>{% trans "Time" %}</th>
-	<th>{% trans "Play at" %}</th>
-	<th>{% trans "Home Team" %}</th>
-	<th>{% trans "Away Team" %}</th>
-	<th>{% trans "Videos" %}</th>
+	<th class="wide-only">{% trans "Time" %}</th>
+	<th class="wide-only">{% trans "Ground" %}</th>
+	<th>{% trans "Home" %}</th>
+	<th>{% trans "Away" %}</th>
+	<th class="num wide-only">{% trans "Videos" %}</th>
 {% endblock %}
 
 {% block table-columns %}
 	{% trans "TBC" as tbc context "to be confirmed" %}
-	<td>
+	<td class="title-cell">
 		{% if change_perm in object_perms %}
-			<a href="{{ obj.urls.edit }}">{{ obj.label|default:obj.pk }}</a>&nbsp;
+			<a href="{{ obj.urls.edit }}">{% icon "match" %}<span>{{ obj.label|default:obj.pk }}</span></a>
 		{% else %}
 			<span>{{ obj.label|default:obj.pk }}</span>
 		{% endif %}
 	</td>
-	<td>{{ obj.date|default_if_none:tbc }}</td>
-	<td>{{ obj.time|default_if_none:tbc }}</td>
-	<td>{{ obj.play_at|default_if_none:"-" }}</td>
+	<td class="nowrap">{{ obj.date|date:"D j M"|default_if_none:tbc }}</td>
+	<td class="wide-only">{{ obj.time|time|default_if_none:tbc }}</td>
+	<td class="wide-only">{{ obj.play_at|default_if_none:"&ndash;" }}</td>
 	<td>{{ obj.get_home_team_plain }}</td>
 	<td>{{ obj.get_away_team_plain }}</td>
-	<td>{{ obj.videos|length }}</td>
+	<td class="num wide-only">{{ obj.videos|length }}</td>
 {% endblock %}
 
-{% block empty-row-colspan %}7{% endblock %}
+{% block empty-row-colspan %}8{% endblock %}
 
 {% block row-buttons-items %}
-<li role="presentation">
-	<a role="button" href="{{ obj.urls.referees }}">
-		<i class="fa fa-flag fa-fw"></i>
-		{% trans "Referees" %}
-	</a>
-</li>
-{{ block.super }}
+	<a href="{{ obj.urls.referees }}">{% icon "referee" %}{% trans "Referees" %}</a>
+	{{ block.super }}
 {% endblock row-buttons-items %}

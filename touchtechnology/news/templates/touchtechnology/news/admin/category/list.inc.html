@@ -1,21 +1,20 @@
-{% extends "mvp/list.inc.html" %}
-{% load i18n %}
-{% load common %}
+{% extends "touchtechnology/admin/list.inc.html" %}
+{% load i18n common admin %}
 
 {% block table-headings %}
 	<th>{% trans "Category" %}</th>
+	<th class="num">{% trans "Articles" %}</th>
 {% endblock %}
 
 {% block table-columns %}
-	<td>
+	<td class="title-cell">
 		{% if change_perm in object_perms %}
-			<a href="{{ obj.urls.edit }}">{{ obj }}</a>&nbsp;
+			<a href="{{ obj.urls.edit }}">{% icon "category" %}<span>{{ obj }}</span></a>
 		{% else %}
 			<span>{{ obj }}</span>
 		{% endif %}
-
-		{% if obj.article_set.count %}
-			<span class="badge badge-default">{{ obj.article_set.count }}</span>
-		{% endif %}
 	</td>
+	<td class="num">{{ obj.article_set.count }}</td>
 {% endblock %}
+
+{% block empty-row-colspan %}3{% endblock %}

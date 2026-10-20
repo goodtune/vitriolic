@@ -1,0 +1,3 @@
+{% load i18n admin %}
+<a class="button quiet icon-only compact" href="{{ up_url }}" title="{% trans "Move up" %}">{% icon "arrow-up" %}<span class="visually-hidden">{% blocktrans %}Move {{ obj }} up{% endblocktrans %}</span></a>
+<a class="button quiet icon-only compact" href="{{ down_url }}" title="{% trans "Move down" %}">{% icon "arrow-down" %}<span class="visually-hidden">{% blocktrans %}Move {{ obj }} down{% endblocktrans %}</span></a>

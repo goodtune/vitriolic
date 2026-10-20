@@ -1,37 +1,36 @@
-{% extends "mvp/list.split.inc.html" %}
+{% extends "touchtechnology/admin/list.inc.html" %}
 {% load i18n %}
-{% load competition %}
 
 {% block table-headings %}
 	<th>{% trans "Team" %}</th>
-	<th>{% trans "P" %}</th>
-	<th>{% trans "W" %}</th>
-	<th>{% trans "L" %}</th>
-	<th>{% trans "D" %}</th>
-	<th>{% trans "B" %}</th>
-	<th>{% trans "FW" %}</th>
-	<th>{% trans "FL" %}</th>
-	<th>{% trans "+" %}</th>
-	<th>{% trans "-" %}</th>
-	<th>{% trans "BP" %}</th>
-	<th>{% trans "Pts" %}</th>
+	<th class="num"><abbr title="{% trans "Played" %}">P</abbr></th>
+	<th class="num"><abbr title="{% trans "Won" %}">W</abbr></th>
+	<th class="num"><abbr title="{% trans "Lost" %}">L</abbr></th>
+	<th class="num"><abbr title="{% trans "Drawn" %}">D</abbr></th>
+	<th class="num wide-only"><abbr title="{% trans "Byes" %}">B</abbr></th>
+	<th class="num wide-only"><abbr title="{% trans "Forfeits for" %}">FW</abbr></th>
+	<th class="num wide-only"><abbr title="{% trans "Forfeits against" %}">FL</abbr></th>
+	<th class="num">+</th>
+	<th class="num">&minus;</th>
+	<th class="num wide-only"><abbr title="{% trans "Bonus points" %}">BP</abbr></th>
+	<th class="num"><abbr title="{% trans "Points" %}">Pts</abbr></th>
 {% endblock %}
 
 {% block table-columns %}
 	<td>{{ obj.team }}</td>
-	<td>{{ obj.played }}</td>
-	<td>{{ obj.win }}</td>
-	<td>{{ obj.loss }}</td>
-	<td>{{ obj.draw }}</td>
-	<td>{{ obj.bye }}</td>
-	<td>{{ obj.forfeit_for }}</td>
-	<td>{{ obj.forfeit_against }}</td>
-	<td>{{ obj.score_for }}</td>
-	<td>{{ obj.score_against }}</td>
-	<td>{{ obj.bonus_points }}</td>
-	<td>{{ obj.points }}</td>
+	<td class="num">{{ obj.played }}</td>
+	<td class="num">{{ obj.win }}</td>
+	<td class="num">{{ obj.loss }}</td>
+	<td class="num">{{ obj.draw }}</td>
+	<td class="num wide-only">{{ obj.bye }}</td>
+	<td class="num wide-only">{{ obj.forfeit_for }}</td>
+	<td class="num wide-only">{{ obj.forfeit_against }}</td>
+	<td class="num">{{ obj.score_for }}</td>
+	<td class="num">{{ obj.score_against }}</td>
+	<td class="num wide-only">{{ obj.bonus_points }}</td>
+	<td class="num strong">{{ obj.points|floatformat:"-2" }}</td>
 {% endblock %}
 
 {% block actions %}{% endblock %}
-{% block row-buttons-items %}{% endblock %}
+{% block row-buttons %}{% endblock %}
 {% block table-row-empty %}{% endblock %}
