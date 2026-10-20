@@ -1058,6 +1058,31 @@ class GoodViewTests(TestCase):
                 "html",
             )
 
+    def test_officials(self):
+        club = factories.ClubFactory.create()
+        season = factories.SeasonFactory.create()
+        season.competition.clubs.add(club)
+        with self.login(self.superuser):
+            self.get("admin:fixja:club:officials", club.pk, season.pk)
+            self.response_200()
+            self.assertResponseContains(
+                '<td colspan="3" class="no_results">'
+                "There are no officials of this club.</td>"
+            )
+
+    def test_officials_complete_season_is_read_only_to_club_administrators(self):
+        club = factories.ClubFactory.create()
+        season = factories.SeasonFactory.create(complete=True)
+        season.competition.clubs.add(club)
+        user = UserFactory.create(is_staff=True)
+        with self.login(user):
+            self.get("admin:fixja:club:officials", club.pk, season.pk)
+            self.response_200()
+            self.assertResponseContains(
+                '<td colspan="2" class="no_results">'
+                "There are no club officials for this season.</td>"
+            )
+
     @unittest.expectedFailure
     def test_edit_team_members(self):
         club = factories.ClubFactory.create()

@@ -477,6 +477,7 @@ class ConstructFormMixin(object):
             auto_id=self.auto_id,
             prefix=self.add_prefix("__prefix__"),
             empty_permitted=True,
+            use_required_attribute=False,
             **defaults,
         )
         self.add_fields(form, None)

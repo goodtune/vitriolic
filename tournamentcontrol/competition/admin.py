@@ -3071,10 +3071,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @registration
     def officials(self, request, club, season, extra_context, **kwargs):
-        # Read only is presently applied to the entire application, but we
-        # really need to be able to provide granular control for specific
-        # seasons.  FIXME
-        read_only, scheduled_read_only = self.read_only
+        # Read only is no longer a switch for the entire application, it is
+        # decided by the season below.  FIXME
+        read_only, scheduled_read_only = False, None
         if season.complete:
             if not request.user.is_superuser:
                 read_only = True
