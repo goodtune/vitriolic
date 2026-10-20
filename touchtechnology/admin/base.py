@@ -73,6 +73,9 @@ class AdminComponentMixin(object):
         # Resolve the brand here so the shell is branded even when the
         # ``brand`` context processor has not been configured.
         context.setdefault("brand", get_brand(request))
+        context.setdefault(
+            "field_template", "touchtechnology/admin/templatetags/field.html"
+        )
 
         return super(AdminComponentMixin, self).render(
             request, templates, context, *args, **kwargs

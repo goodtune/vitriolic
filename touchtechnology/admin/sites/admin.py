@@ -164,6 +164,9 @@ class AdminSite(DjangoAdminSite):
         context = {"admin": self}
         context.update(kwargs)
         context.setdefault("brand", get_brand(request))
+        context.setdefault(
+            "field_template", "touchtechnology/admin/templatetags/field.html"
+        )
         response = TemplateResponse(
             request, "touchtechnology/admin/index.html", context=context
         )

@@ -1,0 +1,20 @@
+<div class="form-group{% if f.errors %} has-feedback has-error{% endif %} {{ widget_class_name }}">
+	{% if caption %}
+		<label for="{{ f.html_name }}" class="placeholder-hidden control-label col-md-3">{{ f.label }}</label>
+	{% endif %}
+
+	<div class="col-md-7">
+		{{ f }}
+
+		{% if f.errors %}
+			<i class="form-control-feedback glyphicon glyphicon-remove"></i>
+			{% for error in f.errors %}
+				<small class="help-block">{{ error }}</small>
+			{% endfor %}
+		{% endif %}
+
+		{% if f.help_text %}
+			<p class="help-block">{{ f.help_text }}</p>
+		{% endif %}
+	</div>
+</div> <!-- /.form-group -->
