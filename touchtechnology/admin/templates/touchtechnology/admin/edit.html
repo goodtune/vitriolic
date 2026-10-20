@@ -26,7 +26,7 @@
 			{% block tab-links %}
 				<a class="tab" role="tab" id="{{ model|type|slugify }}-tab-link" href="#{{ model|type|slugify }}-tab" aria-controls="{{ model|type|slugify }}-tab" aria-selected="true">{% icon "edit" %}<span>{% trans "Details" %}</span></a>
 				{% for manager, name in object|related:related %}
-					<a class="tab" role="tab" id="{{ name }}-tab-link" href="#{{ name }}-tab" aria-controls="{{ name }}-tab" aria-selected="false" tabindex="-1">{% icon manager|model_icon %}<span>{{ manager.all|types|capfirst }}</span><span class="count" aria-hidden="true" data-count-of="{{ name }}-tab" hidden></span></a>
+					<a class="tab" role="tab" id="{{ name }}-tab-link" href="#{{ name }}-tab" aria-controls="{{ name }}-tab" aria-selected="false" tabindex="-1">{% icon manager|model_icon %}<span>{{ manager.all|plural_label }}</span><span class="count" aria-hidden="true" data-count-of="{{ name }}-tab" hidden></span></a>
 				{% endfor %}
 			{% endblock tab-links %}
 		</div>

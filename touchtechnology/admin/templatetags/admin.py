@@ -342,3 +342,18 @@ def saved(obj):
     if state is None:
         return bool(getattr(obj, "pk", None))
     return obj.pk is not None and not state.adding
+
+
+@register.filter
+def plural_label(queryset):
+    """
+    The plural name of a queryset's model for a label, with the
+    ``entry``/``entrys`` slip of the automatic plural mended.
+    """
+    model = getattr(queryset, "model", None)
+    if model is None:
+        return ""
+    name = str(model._meta.verbose_name_plural)
+    if name.endswith("ys") and len(name) > 2 and name[-3] not in "aeiou":
+        name = name[:-2] + "ies"
+    return name[:1].upper() + name[1:]

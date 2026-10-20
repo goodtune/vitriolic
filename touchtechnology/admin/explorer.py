@@ -700,6 +700,9 @@ def _open(explorer, request, level, trail):
             found.children = explorer.children(request, local)
             found.open = True
             level = found.children
+            if not found.children:
+                # An empty folder on the way to the page has nothing to open.
+                found.expandable = False
         else:
             break
     if last is not None:
@@ -747,7 +750,9 @@ def build_tree(request, context, components):
             crumbs[-1].is_page = True
             crumbs = crumbs[:-1]
         tree.crumbs = crumbs
-        tree.up = crumbs[-1] if crumbs else None
+        # A component's own page only redirects to its first section, so a
+        # section has no way up but the menu.
+        tree.up = crumbs[-1] if crumbs and crumbs[-1] is not root else None
 
         # The drill-down shows the folder the page is in: the page's own
         # node when it has anything inside, otherwise the folder holding it.
