@@ -3,7 +3,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.test import RequestFactory, override_settings
 from test_plus import TestCase
 
-from touchtechnology.admin.branding import brand_check, get_brand
+from touchtechnology.admin.branding import brand_check, brand_from, get_brand
 
 
 def brand_for(request):
@@ -63,3 +63,11 @@ class BrandTests(TestCase):
     @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=brand_for)
     def test_callable_is_not_called_by_check(self):
         self.assertEqual(brand_check(None), [])
+
+    def test_trailing_newline_is_refused(self):
+        with self.assertRaisesMessage(
+            ImproperlyConfigured,
+            "TOUCHTECHNOLOGY_ADMIN_BRAND colour 'primary' must be #rrggbb, "
+            "got '#275d8b\\n'",
+        ):
+            brand_from({"colours": {"primary": "#275d8b\n"}})

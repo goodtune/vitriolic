@@ -77,7 +77,7 @@ def brand_from(value):
         if key not in supplied:
             continue
         colour = supplied[key]
-        if not isinstance(colour, str) or not COLOUR_RE.match(colour):
+        if not isinstance(colour, str) or not COLOUR_RE.fullmatch(colour):
             raise ImproperlyConfigured(
                 f"{SETTING} colour {key!r} must be #rrggbb, got {colour!r}"
             )
