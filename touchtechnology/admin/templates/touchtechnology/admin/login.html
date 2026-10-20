@@ -23,6 +23,10 @@
 	{% if brand.logo %}<img src="{{ brand.logo|brand_logo_url }}" alt="{{ brand.name }}">{% endif %}
 	<h1>{{ brand.name }}</h1>
 
+	{% if signed_in_as %}
+		<p class="signed-in-notice">{% blocktrans %}You are signed in as {{ signed_in_as }}, which cannot use the administration. Sign in with another account.{% endblocktrans %}</p>
+	{% endif %}
+
 	<form method="post" class="form-horizontal">
 		{% csrf_token %}
 
@@ -40,7 +44,8 @@
 		<input type="hidden" name="next" value="{{ next }}">
 
 		<button type="submit">{% trans "Sign in" %}</button>
-		<a href="{% url 'accounts:password_reset' %}">{% trans "Reset Password" %}</a>
+		{% url 'accounts:password_reset' as reset_url %}
+		{% if reset_url %}<a href="{{ reset_url }}">{% trans "Reset Password" %}</a>{% endif %}
 	</form>
 </main>
 </body>
