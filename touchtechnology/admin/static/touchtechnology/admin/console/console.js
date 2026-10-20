@@ -202,6 +202,7 @@
   /* --------------------------------------------------------------- confirm */
 
   var confirmBox = $("#confirm");
+  var pending = null;
   doc.addEventListener("click", function (e) {
     var button = e.target.closest("[data-confirm]");
     if (!button || !confirmBox) return;
@@ -213,16 +214,28 @@
     // Coming back from a delete shows the tab it was made in.
     var pane = button.closest('[role="tabpanel"]');
     if (pane && button.name === "next" && button.value.indexOf("#") < 0) button.value += "#" + pane.id;
-    confirmBox.returnValue = "";
-    confirmBox.onclose = function () {
-      if (confirmBox.returnValue === "confirm") {
-        button.dataset.confirmed = "1";
-        button.click();
-      }
-    };
+    pending = button;
+    var menu = button.closest("[popover]");
+    if (menu && menu.hidePopover) { try { menu.hidePopover(); } catch (err) {} }
     confirmBox.showModal();
     $("[data-confirm-go]", confirmBox).focus();
   });
+  if (confirmBox) {
+    // The confirming click submits at once, so the page moves on with it.
+    $("[data-confirm-go]", confirmBox).addEventListener("click", function (e) {
+      e.preventDefault();
+      var button = pending;
+      pending = null;
+      confirmBox.close();
+      if (!button) return;
+      button.dataset.confirmed = "1";
+      var form = button.form;
+      delete button.dataset.confirmed;
+      if (form && form.requestSubmit) form.requestSubmit(button);
+      else { button.dataset.confirmed = "1"; button.click(); }
+    });
+    confirmBox.addEventListener("close", function () { pending = null; });
+  }
 
   /* ------------------------------------------------------------- row menus */
 

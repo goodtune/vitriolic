@@ -67,7 +67,6 @@
 					<form method="post" action="{% url 'admin:logout' %}">{% csrf_token %}<button type="submit" class="rail__signout">{% icon "signout" %}<span>{% trans "Sign out" %}</span></button></form>
 				</li>
 			</ul>
-			<p class="rail__version">{% version_string %}</p>
 		</div>
 		{% endblock profile %}
 	</nav>

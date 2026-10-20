@@ -126,7 +126,10 @@ def _describe(match, url):
         return Crumb("", smart_str(_("Dashboard")), url)
     component = match.kwargs.get("component")
     if name == "index" and component is not None:
-        if namespace.count(":") == 1:
+        # A component is a step of the trail only when its index is a page of
+        # its own; most only redirect to their first list, which the trail
+        # names anyway.
+        if namespace.count(":") == 1 and getattr(component, "index_page", False):
             return Crumb("", smart_str(component.verbose_name), url)
         return None
     model = model_for(namespace)

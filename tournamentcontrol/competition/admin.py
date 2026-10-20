@@ -178,6 +178,7 @@ def next_related_factory(model, parent=None, fk_name=None):
 class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     verbose_name = _("Tournament Control")
     unprotected = False
+    index_page = True
 
     def __init__(self, app, name="fixja", app_name="competition"):
         super(CompetitionAdminComponent, self).__init__(app, name, app_name)

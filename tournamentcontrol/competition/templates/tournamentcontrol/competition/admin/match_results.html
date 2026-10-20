@@ -32,7 +32,8 @@
 			<section class="time-block" id="t{{ slot.grouper|date:"Hi" }}" aria-labelledby="t{{ slot.grouper|date:"Hi" }}-h">
 				<h2 class="time-block__head" id="t{{ slot.grouper|date:"Hi" }}-h"><span class="mono">{{ slot.grouper|time:"H:i"|default:_("No time") }}</span><span class="muted">{% blocktrans count n=slot.list|length %}{{ n }} match{% plural %}{{ n }} matches{% endblocktrans %}</span></h2>
 				<div class="table-wrap">
-					<table class="data">
+					<table class="data results-table">
+						<colgroup><col class="c-field opt"><col class="c-division opt"><col class="c-team"><col class="c-score"><col class="c-vs"><col class="c-score"><col class="c-team"><col class="c-forfeit opt-sm"></colgroup>
 						<thead>
 							<tr>
 								<th scope="col" class="opt">{% trans "Field" %}</th>

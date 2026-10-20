@@ -22,6 +22,10 @@ class AdminComponentMixin(object):
     verbose_name = "ExampleComponent"
     visible = True
 
+    # Whether the component's index is a page of its own (rather than a
+    # redirect to one of its lists), so the trail of its pages names it.
+    index_page = False
+
     # While adding this new functionality, we'll start out with
     # AdminComponents being unprotected by default, even though we typically
     # protect by @staff_login_required_m it's not our intent, we're moving
