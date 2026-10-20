@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -27,6 +28,20 @@ EXPECTED = (
     "group-edit",
     "match-results",
     "match-visual-schedule",
+    "match-live-stream",
+    "scorecard-report",
+    "person-merge",
+    "placeholder-list",
+    "placeholder-add",
+    "placeholder-edit",
+    "media-list",
+    "folder-edit",
+    "folder-add",
+    "application-edit",
+    "application-add",
+    "application-perms",
+    "undecidedteam-edit",
+    "undecidedteam-add",
 )
 
 
@@ -70,3 +85,44 @@ def test_main_writes_the_pages_under_the_state_directory(monkeypatch, tmp_path, 
     written = json.loads((paths_for("unit_test")["state"] / "pages.json").read_text())
     assert written == json.loads(json.dumps(discover()))
     assert "%d pages" % len(written["pages"]) in capsys.readouterr().out
+
+
+@pytest.mark.django_db(transaction=True)
+def test_every_model_and_route_left_out_says_why():
+    seed()
+    skipped = {s["model"]: s["reason"] for s in discover()["skipped"]}
+    # The seed now fills the model it used to leave out.
+    assert "UndecidedTeam" not in skipped
+    # Place is the multi-table parent of Venue and Ground, and SeasonAssociation
+    # is edited on its club's officials page: neither has a route of its own.
+    assert "NotImplementedError" in skipped["Place"]
+    assert "NotImplementedError" in skipped["SeasonAssociation"]
+    assert any(page["name"] == "officials" for page in discover()["pages"])
+    # Enabling an upstream would contact a remote host.
+    assert "remote host" in skipped["upstream-sync"]
+    assert all(reason for reason in skipped.values())
+
+
+@pytest.mark.django_db(transaction=True)
+def test_main_without_a_name_takes_it_from_the_database(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("VITRIOLIC_HARNESS_VAR", str(tmp_path))
+    # Only what the function reads is replaced, not the live connection.
+    monkeypatch.setattr(
+        "harness.pages.settings",
+        SimpleNamespace(DATABASES={"default": {"NAME": "vitriolic_Feat_X"}}),
+    )
+    seed()
+    assert main([]) == 0
+    assert (paths_for("feat_x")["state"] / "pages.json").is_file()
+    assert "pages," in capsys.readouterr().out
+
+
+def test_main_without_a_name_refuses_a_database_that_is_not_the_harness_s(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        "harness.pages.settings",
+        SimpleNamespace(DATABASES={"default": {"NAME": "elsewhere"}}),
+    )
+    assert main([]) == 64
+    assert "pass the name" in capsys.readouterr().err
