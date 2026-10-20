@@ -21,7 +21,7 @@ from django.template.response import TemplateResponse
 from django.urls import NoReverseMatch, path, reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.encoding import smart_str
-from django.utils.http import urlencode
+from django.utils.http import url_has_allowed_host_and_scheme, urlencode
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.cache import patch_cache_control
@@ -1100,7 +1100,15 @@ class Application(object):
                 return has_permission
 
         if post_delete_redirect is None:
-            redirect_to = urljoin(request.path, "../..")
+            # The page the delete was asked from says where to go back to,
+            # when it is on this site; otherwise the parent of the object.
+            redirect_to = request.POST.get("next", "")
+            if not url_has_allowed_host_and_scheme(
+                redirect_to,
+                allowed_hosts={request.get_host()},
+                require_https=request.is_secure(),
+            ):
+                redirect_to = urljoin(request.path, "../..")
             post_delete_redirect = self.redirect(redirect_to)
 
         try:

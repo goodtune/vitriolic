@@ -4,9 +4,6 @@
 {% block error-code %}403{% endblock %}
 
 {% block error-details %}
-	<h4>{% blocktrans %}Oops, <span class="text-danger">You're not permitted</span>.{% endblocktrans %}</h4>
-
+	<h1 class="page-head__title">{% trans "You’re not permitted" %}</h1>
 	<p>{% trans "The requested resource is protected. You do not have the permissions necessary to see it." %}</p>
 {% endblock %}
-
-{% block search-form %}{% endblock %}

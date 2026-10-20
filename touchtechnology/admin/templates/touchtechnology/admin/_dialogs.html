@@ -1,0 +1,34 @@
+{% load i18n console %}
+{# The jump search: a plain GET form to its own page, opened in a dialog when scripts run. #}
+<dialog class="dialog dialog--jump" id="jump" aria-labelledby="jump-title">
+	<form class="jump" method="get" action="{% url 'admin:jump' %}" role="search">
+		<h2 class="visually-hidden" id="jump-title">{% trans "Jump to" %}</h2>
+		<div class="jump__box">
+			{% icon "search" %}
+			<input type="search" name="q" autocomplete="off" spellcheck="false"
+				aria-label="{% trans "Jump to a competition, season, team, person, page…" %}"
+				placeholder="{% trans "Jump to a competition, season, team, person, page…" %}"
+				aria-controls="jump-results" aria-autocomplete="list"
+				hx-get="{% url 'admin:jump' %}" hx-trigger="input changed delay:150ms, search" hx-target="#jump-results" hx-sync="this:replace">
+			<button type="button" class="btn btn--ghost btn--icon" data-dialog-close aria-label="{% trans "Close" %}">{% icon "close" %}</button>
+		</div>
+		<div class="jump__results" id="jump-results" role="listbox" aria-label="{% trans "Matches" %}">
+			<p class="jump__hint">{% trans "Type part of a name. Arrow keys move, Enter opens." %}</p>
+		</div>
+	</form>
+</dialog>
+
+{# Asks before a delete or an undo; the button that asked says where to post. #}
+<dialog class="dialog dialog--confirm" id="confirm" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+	<form method="dialog" class="dialog__body">
+		<h2 id="confirm-title" class="dialog__title"></h2>
+		<p id="confirm-text"></p>
+		<div class="dialog__actions">
+			<button type="submit" value="cancel" class="btn">{% trans "Cancel" %}</button>
+			<button type="submit" value="confirm" class="btn btn--danger" data-confirm-go></button>
+		</div>
+	</form>
+</dialog>
+
+{# Every delete and undo button on the page posts this form (form= and formaction=). #}
+<form id="console-post" method="post" hidden>{% csrf_token %}</form>

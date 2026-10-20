@@ -1,0 +1,39 @@
+{% load i18n common console %}
+{% comment %}
+	A formset of the page's form: a table when its fields fit in a row, else a
+	group of fields per form. With ``title`` it has a heading of its own.
+{% endcomment %}
+{{ formset.management_form }}
+{% if formset.non_form_errors %}<div class="non-field-errors" role="alert">{{ formset.non_form_errors }}</div>{% endif %}
+{% if title %}<h2 class="section-title">{{ title }}</h2>{% endif %}
+{% if formset|sheetable %}
+	<div class="table-wrap sheet">
+		<table class="data">
+			<thead>
+				<tr>
+					<th scope="col" class="num">#</th>
+					{% for bf in formset.empty_form.visible_fields %}<th scope="col">{{ bf.label }}</th>{% endfor %}
+				</tr>
+			</thead>
+			<tbody>
+				{% for form in formset %}
+					<tr{% if form.errors %} class="has-error"{% endif %}>
+						<td class="num key">{{ forloop.counter }}{% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}</td>
+						{% for bf in form.visible_fields %}<td>{% field bf "" %}</td>{% endfor %}
+					</tr>
+					{% if form.non_field_errors %}<tr><td colspan="99"><div class="non-field-errors">{{ form.non_field_errors }}</div></td></tr>{% endif %}
+				{% empty %}
+					<tr class="empty"><td colspan="99">{% trans "Nothing here yet." %}</td></tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+{% else %}
+	{% for form in formset %}
+		<fieldset class="fieldset">
+			<legend class="fieldset__legend">{{ form.instance|default:"" }}{% if not form.instance.pk %}{% blocktrans with n=forloop.counter %}New {{ n }}{% endblocktrans %}{% endif %}</legend>
+			{% if form.non_field_errors %}<div class="non-field-errors">{{ form.non_field_errors }}</div>{% endif %}
+			{% for f in form %}{% field f %}{% endfor %}
+		</fieldset>
+	{% endfor %}
+{% endif %}

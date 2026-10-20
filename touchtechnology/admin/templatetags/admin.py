@@ -15,7 +15,7 @@ def version_string(context):
     node = context.get("node")
     if node is not None and hasattr(node.object, "site"):
         return {"version": node.object.site(node).version}
-    return {"version": touchtechnology.admin.__version__}
+    return {"version": getattr(touchtechnology.admin, "__version__", "")}
 
 
 @register.filter

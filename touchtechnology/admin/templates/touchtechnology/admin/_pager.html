@@ -1,0 +1,20 @@
+{% load i18n console %}
+{% if is_paginated %}
+	{% with current=page|page_number %}
+	<nav class="pager" aria-label="{% trans "Pages" %}">
+		<span class="pager__label">{% blocktrans with count=paginator.count %}{{ count }} in all · page{% endblocktrans %}</span>
+		<ul>
+			{% for number in paginator.page_range %}
+				<li>
+					{% if number == current %}
+						<span aria-current="page">{{ number }}</span>
+					{% else %}
+						{% page_query number as query %}
+						<a href="{{ query }}"{% if tab_name %} hx-get="{{ query }}&amp;_htmx_tab={{ tab_name }}" hx-target="#{{ tab_name }}-tab" hx-swap="innerHTML" hx-push-url="false"{% endif %}>{{ number }}</a>
+					{% endif %}
+				</li>
+			{% endfor %}
+		</ul>
+	</nav>
+	{% endwith %}
+{% endif %}

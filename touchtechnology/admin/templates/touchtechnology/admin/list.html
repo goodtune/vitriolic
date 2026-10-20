@@ -1,30 +1,36 @@
-{% extends "touchtechnology/admin/edit.html" %}
-{% load i18n %}
-{% load common mvp_tags %}
-{% load bootstrap3 guardian_tags %}
+{% extends "touchtechnology/admin/base.html" %}
+{% load i18n common console %}
 
-{% block messages %}
-	{% bootstrap_messages %}
-{% endblock %}
+{% block title %}{{ model|types|capfirst }} · {{ brand.name }}{% endblock %}
 
 {% block content %}
-	<div class="row">
-		<div class="col-md-3 col-sm-3 col-md-push-9 col-sm-push-9">
-			<ul class="nav nav-pills nav-stacked">
-				{% with model_perms=model|hasperm:user %}
-					{% block nav-pills-list %}
-						<li class="active{% if add_perm not in model_perms %} disabled{% endif %}">
-							{% if add_perm in model_perms and create_url %}
-								<a href="{{ create_url }}">New {{ model|type }}</a>
-							{% endif %}
-						</li>
-					{% endblock nav-pills-list %}
-				{% endwith %}
-			</ul>
+	<header class="page-head">
+		<div class="page-head__text">
+			<p class="page-head__kind">{% trans "List" %}</p>
+			<h1 class="page-head__title">{% block list-title %}{{ model|types|capfirst }}{% endblock %}</h1>
+			<p class="page-head__meta">{% if search %}{% blocktrans count counter=paginator.count|default:object_list|length %}{{ counter }} match{% plural %}{{ counter }} matches{% endblocktrans %} {% blocktrans %}for “{{ search }}”{% endblocktrans %} · <a href="?">{% trans "Show all" %}</a>{% else %}{% blocktrans count counter=paginator.count|default:object_list|length %}{{ counter }} in all{% plural %}{{ counter }} in all{% endblocktrans %}{% endif %}</p>
 		</div>
+		<div class="page-head__actions">
+			{% with model_perms=model|hasperm:user %}
+				{% block nav-pills-list %}
+					{% if add_perm in model_perms and create_url %}
+						<a class="btn btn--primary" href="{{ create_url }}">{% icon "plus" %}{% blocktrans with type=model|type %}Add {{ type }}{% endblocktrans %}</a>
+					{% endif %}
+				{% endblock nav-pills-list %}
+			{% endwith %}
+		</div>
+	</header>
 
-		<div class="col-md-9 col-sm-9 col-md-pull-3 col-sm-pull-3">
-			{% include list_template|default:"mvp/list.inc.html" %}
-		</div>
-	</div>
+	{% if searchable %}
+		<form class="toolbar" method="get" action="" role="search">
+			<label class="toolbar__search">
+				<span class="visually-hidden">{% blocktrans with types=model|types %}Search {{ types }}{% endblocktrans %}</span>
+				{% icon "search" %}
+				<input type="search" name="search" value="{{ search }}" placeholder="{% blocktrans with types=model|types %}Search {{ types }}{% endblocktrans %}">
+			</label>
+			<button type="submit" class="btn">{% trans "Search" %}</button>
+		</form>
+	{% endif %}
+
+	{% include list_template|default:"mvp/list.inc.html" %}
 {% endblock %}

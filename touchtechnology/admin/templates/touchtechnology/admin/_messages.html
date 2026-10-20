@@ -1,0 +1,10 @@
+{% load console %}{% if messages %}
+<div class="flashes">
+	{% for message in messages %}
+		<div class="flash flash--{{ message.tags|default:"info" }}" role="{% if message.level >= 40 %}alert{% else %}status{% endif %}">
+			{% if message.level >= 40 %}{% icon "alert" %}{% elif message.level == 25 %}{% icon "check" %}{% else %}{% icon "info" %}{% endif %}
+			<p>{{ message }}</p>
+		</div>
+	{% endfor %}
+</div>
+{% endif %}

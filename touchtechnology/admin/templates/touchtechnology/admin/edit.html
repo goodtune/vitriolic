@@ -1,223 +1,100 @@
 {% extends "touchtechnology/admin/base.html" %}
-{% load i18n %}
-{% load common mvp_tags %}
-{% load bootstrap3 %}
+{% load i18n common mvp_tags console %}
 
-{% block messages %}{% endblock %}
+{% comment %}
+	The page of one object: its head, a tab for its own form and a tab for each
+	kind of object listed under it. Extension points (see the entry statement):
+	page-head, page-kind, page-title, page-actions, tab-links (tabs, made with
+	_tab.html), tab-panes (sections with role="tabpanel"), form-fieldset,
+	form-actions, cancel-url and mvp-list.
+{% endcomment %}
 
 {% block content %}
-	<div class="layout layout-main-right layout-stack-sm">
-		<div class="col-md-3 col-sm-4 layout-sidebar">
-			<div class="nav-layout-sidebar-skip">
-				<strong>{% trans "Tab Navigation" %}</strong> /
-				<a href="#tab-content">{% trans "Skip to Content" %}</a>
+	{% block page-head %}
+		<header class="page-head">
+			<div class="page-head__text">
+				<p class="page-head__kind">{% block page-kind %}{{ model|type|capfirst }}{% with key=object|number_key %}{% if key %} <span class="mono">#{{ key }}</span>{% endif %}{% endwith %}{% endblock %}</p>
+				<h1 class="page-head__title">{% block page-title %}{% if object.pk %}{{ object }}{% else %}{% blocktrans with type=model|type %}New {{ type }}{% endblocktrans %}{% endif %}{% endblock %}</h1>
 			</div>
-
-			<ul id="myTab" class="nav nav-layout-sidebar nav-stacked">
-				{% block tab-links %}
-					<li class="active">
-						<a href="#{{ model|type|slugify }}-tab"
-						   {% if htmx_admin_tabs %}class="htmx-tab-link" data-tab-id="{{ model|type|slugify }}-tab"{% endif %}
-						   data-toggle="tab">
-							<i class="fa fa-chevron-right fa-fw"></i>
-							&nbsp;{% trans "Edit" %} {{ model|type }}
-						</a>
-					</li>
-
+			<div class="page-head__actions">
+				{% block page-actions %}
 					{% if object.pk %}
-						{% for manager, name in object|related:related %}
-							<li{% if not object.pk %} class="disabled"{% endif %}>
-								{% if htmx_admin_tabs %}
-									<a href="#{{ name }}-tab"
-									   class="htmx-tab-link"
-									   data-tab-id="{{ name }}-tab"
-									   data-toggle="tab">
-										<i class="fa fa-chevron-right fa-fw"></i>
-										&nbsp;{{ manager.all|types|capfirst }}
-									</a>
-								{% else %}
-									<a href={% if object.pk %}"#{{ name }}-tab" data-toggle="tab"{% else %}"#"{% endif %}>
-										<i class="fa fa-chevron-right fa-fw"></i>
-										&nbsp;{{ manager.all|types|capfirst }}
-									</a>
-								{% endif %}
-							</li>
-						{% endfor %}
+						{% with site=object|site_url perms=object|admin_url:"perms" delete=object|admin_url:"delete" %}
+							{% if site %}<a class="btn btn--ghost" href="{{ site }}" target="_blank" rel="noopener">{% icon "external" %}{% trans "View on site" %}</a>{% endif %}
+							{% if perms %}<a class="btn btn--ghost" href="{{ perms }}">{% icon "shield" %}{% trans "Permissions" %}</a>{% endif %}
+							{% if delete %}{% with up=trail|last %}<button type="submit" class="btn btn--ghost btn--quiet-danger" form="console-post" formaction="{{ delete }}" name="next" value="{{ up.url|default:"" }}" data-confirm="{% blocktrans with type=model|type %}Delete this {{ type }}?{% endblocktrans %}" data-confirm-text="{% blocktrans %}“{{ object }}” will be removed from the site. This cannot be undone.{% endblocktrans %}" data-confirm-label="{% trans "Delete" %}">{% icon "trash" %}{% trans "Delete" %}</button>{% endwith %}{% endif %}
+						{% endwith %}
 					{% endif %}
-				{% endblock tab-links %}
-			</ul>
-		</div> <!-- /.col -->
-
-		<div class="col-md-9 col-sm-8 layout-main">
-			{% bootstrap_messages %}
-
-			{% if not htmx_admin_tabs %}
-			<form class="{% block form-class %}form-horizontal{% endblock %}" action="" method="post" enctype="multipart/form-data">
-			{% csrf_token %}
-			{% endif %}
-
-			<div id="tab-content" class="tab-content stacked-content">
-				{% block tab-panes %}
-					<div class="tab-pane active" id="{{ model|type|slugify }}-tab">
-						{% if htmx_admin_tabs %}
-						<form class="form-horizontal" action="" method="post" enctype="multipart/form-data">
-						{% csrf_token %}
-						{% endif %}
-
-							<div class="heading-block">
-								<h3>{{ model|type|capfirst }}</h3>
-							</div>
-
-							{% block form-fieldset %}
-								<fieldset>
-									{% for f in form %}
-										{% field f %}
-									{% endfor %}
-								</fieldset>
-							{% endblock form-fieldset %}
-
-							<div class="form-group">
-								<div class="text-center">
-									<button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
-									&nbsp;<a class="btn btn-default" href="{% block cancel-url %}{{ cancel_url }}{% endblock %}">{% trans "Cancel" %}</a>
-								</div> <!-- /.col -->
-							</div>
-
-						{% if htmx_admin_tabs %}
-						</form>
-						{% endif %}
-					</div>
-
-					{% if object.pk %}
-						{% for manager, name in object|related:related %}
-							{% if htmx_admin_tabs %}
-								<div class="tab-pane" id="{{ name }}-tab"
-									 hx-get="?_htmx_tab={{ name }}"
-									 hx-trigger="intersect once"
-									 hx-swap="innerHTML">
-									<div class="text-center text-muted">
-										<i class="fa fa-spinner fa-spin"></i>
-										&nbsp;{% trans "Loading..." %}
-									</div>
-								</div>
-							{% else %}
-								<div class="tab-pane" id="{{ name }}-tab">
-									<!-- mvp_list manager.all -->
-									{% block mvp-list %}
-										{% with table=templates|default:None %}
-											{% mvp_list manager.all template=manager|mvp_list_template:table %}
-										{% endwith %}
-									{% endblock %}
-									<!-- /mvp_list manager.all -->
-								</div>
-							{% endif %}
-						{% endfor %}
-					{% endif %}
-				{% endblock tab-panes %}
+				{% endblock page-actions %}
 			</div>
+		</header>
+	{% endblock page-head %}
 
-			{% if not htmx_admin_tabs %}
-			</form>
-			{% endif %}
-		</div> <!-- /.col -->
-	</div>
+	<form id="edit-form" class="{% block form-class %}form edit{% endblock %} form-flow" action="" method="post" enctype="multipart/form-data" data-watch novalidate>
+		{% csrf_token %}
+
+		<div class="tabs" role="tablist" aria-label="{% trans "Sections of this page" %}">
+			{% block tab-links %}
+				{% trans "Details" as details %}
+				{% include "touchtechnology/admin/_tab.html" with pane=model|type|slugify|add:"-tab" label=details icon="pencil" %}
+				{% if object.pk %}
+					{% for manager, name in object|related:related %}
+						{% include "touchtechnology/admin/_tab.html" with pane=name|add:"-tab" label=manager.all|types|capfirst count=manager|count_of %}
+					{% endfor %}
+				{% endif %}
+			{% endblock tab-links %}
+		</div>
+
+		{% block form-actions %}
+			<div class="actions-bar">
+				<button type="submit" class="btn btn--primary" data-save>{% icon "check" %}{% trans "Save" %}</button>
+				{% with up=trail|last %}
+					<a class="btn" href="{% block cancel-url %}{% if cancel_url and cancel_url != request.path %}{{ cancel_url }}{% elif up %}{{ up.url }}{% else %}{{ cancel_url }}{% endif %}{% endblock %}">{% trans "Cancel" %}</a>
+				{% endwith %}
+				<span class="actions-bar__hint"><span class="actions-bar__state" hidden>{% trans "Unsaved changes" %} ·</span> <kbd>⌘S</kbd> {% trans "saves" %}</span>
+			</div>
+		{% endblock form-actions %}
+
+		<div class="panes">
+			{% block tab-panes %}
+				<section class="pane pane--form" role="tabpanel" id="{{ model|type|slugify }}-tab" aria-labelledby="{{ model|type|slugify }}-tab-label" tabindex="-1">
+					{% if form.non_field_errors %}
+						<div class="non-field-errors" role="alert">{{ form.non_field_errors }}</div>
+					{% endif %}
+					{% block form-fieldset %}
+						<fieldset>
+							{% for f in form %}
+								{% field f %}
+							{% endfor %}
+						</fieldset>
+					{% endblock form-fieldset %}
+				</section>
+
+				{% if object.pk %}
+					{% for manager, name in object|related:related %}
+						{% if htmx_admin_tabs %}
+							<section class="pane pane--list" role="tabpanel" id="{{ name }}-tab" aria-labelledby="{{ name }}-tab-label" tabindex="-1"
+								hx-get="?_htmx_tab={{ name }}" hx-trigger="intersect once" hx-swap="innerHTML" aria-busy="true">
+								<p class="loading">{% trans "Loading…" %}</p>
+							</section>
+						{% else %}
+							<section class="pane pane--list" role="tabpanel" id="{{ name }}-tab" aria-labelledby="{{ name }}-tab-label" tabindex="-1">
+								{% block mvp-list %}
+									{% with table=templates|default:None %}
+										{% mvp_list manager.all template=manager|mvp_list_template:table %}
+									{% endwith %}
+								{% endblock %}
+							</section>
+						{% endif %}
+					{% endfor %}
+				{% endif %}
+			{% endblock tab-panes %}
+		</div>
+
+	</form>
 {% endblock %}
 
 {% block extracss %}
 	{{ block.super }}
-	<style type="text/css">
-		.heading-block .actions { float: right; }
-		.heading-block .actions a { padding-right: 0.5em; }
-	</style>
-
-	{% if htmx_admin_tabs %}
-		<style type="text/css">
-			.htmx-indicator { display: none; }
-			.htmx-request .htmx-indicator { display: inline-block; }
-			.htmx-request.htmx-indicator { display: inline-block; }
-		</style>
-	{% endif %}
-
-	<!-- form media -->
 	{{ form.media }}
-{% endblock %}
-
-{% block extrajs %}
-	{{ block.super }}
-
-	<!-- inline javascripts -->
-	<script type="text/javascript">
-		$(document).ready(function() {
-			$('div.icheck input').iCheck ({
-				checkboxClass: 'ui-icheck icheckbox_minimal-grey',
-				radioClass: 'ui-icheck iradio_minimal-grey'
-			}).on ('ifChanged', function (e) {
-				$(e.currentTarget).trigger ('change')
-			})
-
-			/* determine which tab should be active */
-
-			// Remember the tab last shown on this page, for when the person
-			// comes back to it from one of the objects it lists.
-			var tab_key = 'admin-tab:' + document.location.pathname
-			$('#myTab a[data-toggle="tab"]').on('shown.bs.tab', function(e) {
-				try { sessionStorage.setItem(tab_key, $(e.target).attr('href')) }
-				catch (err) {}
-			})
-
-			var uri = URI(document.location)
-			if (uri.hash()) {
-				$('a[href="' + uri.hash() + '"]').tab('show')
-			}
-			else if (document.referrer) {
-				// Coming back from an object listed in a tab shows that tab again.
-				var referrer = URI(document.referrer)
-				var found = false
-				$('a[role=button]').each(function(i, a) {
-					var rel = new URI(a.href)
-					if (rel.relativeTo(referrer).pathname() == "") {
-						var last_tab = $(a).closest('.tab-pane').attr('id')
-						if (last_tab) {
-							$('a[href="#' + last_tab + '"]').tab('show')
-							found = true
-						}
-					}
-				})
-				// A tab fetched when it is shown (HTMX admin tabs) is not in the
-				// page yet, so fall back to the tab last shown here when the
-				// referrer is one of this page's own objects.
-				var here = uri.pathname()
-				var there = referrer.pathname()
-				if (!found && there != here && there.indexOf(here) == 0) {
-					var last_shown = null
-					try { last_shown = sessionStorage.getItem(tab_key) }
-					catch (err) {}
-					if (last_shown) {
-						$('#myTab a[href="' + last_shown + '"]').tab('show')
-					}
-				}
-			}
-
-			/* activate Select2 */
-			$('.form-group.select select, .form-group.select_multiple select').select2({
-				allowClear: true
-			})
-
-			{% if htmx_admin_tabs %}
-			/* Re-initialize plugins after HTMX content swap */
-			document.body.addEventListener('htmx:afterSwap', function(evt) {
-				var target = $(evt.detail.target)
-				target.find('div.icheck input').iCheck({
-					checkboxClass: 'ui-icheck icheckbox_minimal-grey',
-					radioClass: 'ui-icheck iradio_minimal-grey'
-				}).on('ifChanged', function(e) {
-					$(e.currentTarget).trigger('change')
-				})
-				target.find('.form-group.select select, .form-group.select_multiple select').select2({
-					allowClear: true
-				})
-			})
-			{% endif %}
-		})
-	</script>
 {% endblock %}

@@ -14,8 +14,20 @@ class AdminFormControlMixin(BootstrapFormControlMixin):
 
     Forms the admin builds dynamically derive from this rather than from the
     public site's mixin, so the admin can change how its forms behave without
-    changing the public forms.
+    changing the public forms. The public mixin dresses every widget for
+    another theme (a class, and a placeholder that repeats the label); the
+    console labels its fields and styles controls by type, so both are taken
+    off again here.
     """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in getattr(self, "fields", {}).values():
+            attrs = field.widget.attrs
+            if attrs.get("class") == "form-control":
+                del attrs["class"]
+            if attrs.get("placeholder") == field.label:
+                del attrs["placeholder"]
 
 
 class UserEditForm(UserMixin, ModelForm):

@@ -1,0 +1,27 @@
+{% extends "touchtechnology/admin/base.html" %}
+{% load i18n console %}
+
+{% block title %}{% trans "Jump to" %}{% if query %}: {{ query }}{% endif %} · {{ brand.name }}{% endblock %}
+
+{% block content %}
+	<header class="page-head">
+		<div class="page-head__text">
+			<p class="page-head__kind">{% trans "Search everything" %}</p>
+			<h1 class="page-head__title">{% trans "Jump to" %}</h1>
+		</div>
+	</header>
+
+	<form class="jump jump--page" method="get" action="{% url 'admin:jump' %}" role="search">
+		<div class="jump__box">
+			{% icon "search" %}
+			<input type="search" name="q" value="{{ query }}" autocomplete="off" spellcheck="false"
+				aria-label="{% trans "Jump to a competition, season, team, person, page…" %}"
+				placeholder="{% trans "Jump to a competition, season, team, person, page…" %}">
+			<button type="submit" class="btn btn--primary">{% trans "Find" %}</button>
+		</div>
+		{% if query %}<p class="jump__count" role="status">{% blocktrans count counter=found %}{{ counter }} match{% plural %}{{ counter }} matches{% endblocktrans %}</p>{% endif %}
+		<div class="jump__results jump__results--page">
+			{% include "touchtechnology/admin/_jump_results.html" %}
+		</div>
+	</form>
+{% endblock %}

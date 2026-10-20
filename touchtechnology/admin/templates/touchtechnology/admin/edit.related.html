@@ -1,20 +1,12 @@
 {% extends "touchtechnology/admin/edit.html" %}
-{% load common %}
+{% load i18n common %}
 
 {% block extracss %}
 	{{ block.super }}
-
-	<!-- formset.media -->
 	{{ formset.media }}
 {% endblock extracss %}
 
 {% block form-fieldset %}
 	{{ block.super }}
-
-	{{ formset.management_form }}
-	{% for form in formset %}
-		{% for f in form %}
-			{% field f %}
-		{% endfor %}
-	{% endfor %}
+	{% include "touchtechnology/admin/_formset.html" with title=formset.model|types|capfirst %}
 {% endblock form-fieldset %}

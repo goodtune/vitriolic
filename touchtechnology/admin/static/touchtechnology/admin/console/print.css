@@ -1,0 +1,70 @@
+/*
+ * Console: the standalone pages that are printed or read on their own (run
+ * sheets, matrices, scorecards, reports). The same type and brand palette
+ * as the admin, on paper-white, with a toolbar that does not print.
+ */
+@import url("console.css");
+
+body.sheet-page { background: #fff; }
+
+.sheet-bar {
+	position: sticky; top: 0; z-index: 5;
+	display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+	padding: 10px 24px; background: var(--rail); color: var(--rail-ink);
+	border-bottom: 3px solid var(--secondary-fill);
+}
+.sheet-bar a, .sheet-bar button { color: var(--rail-ink); }
+.sheet-bar .btn { background: var(--rail-2); border-color: var(--rail-3); color: var(--rail-ink); }
+.sheet-bar .btn:hover { background: var(--rail-3); }
+.sheet-bar__brand { font-weight: 600; margin-right: auto; }
+.sheet-bar :focus-visible { outline-color: var(--rail-mark); }
+
+.sheet-main { padding: 22px 24px 40px; max-width: 1400px; }
+.sheet-head { margin: 0 0 18px; padding-bottom: 12px; border-bottom: 2px solid var(--ink); }
+.sheet-head__kind { margin: 0 0 4px; font: 500 11px/1.2 var(--font); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
+.sheet-head h1 { font-size: 22px; }
+.sheet-head p { margin: 4px 0 0; color: var(--ink-2); }
+.sheet-foot { margin-top: 18px; font: 11px/1.3 var(--mono); color: var(--ink-3); }
+
+.sheet-main h2 { margin: 22px 0 8px; font-size: 15px; }
+.sheet-main .data { font-size: 13px; }
+.sheet-main .data thead th { position: static; }
+.sheet-main .table-wrap { overflow: visible; }
+
+/* The match matrix: grounds across, kick-off times down. */
+.matrix th, .matrix td { vertical-align: top; }
+.matrix tbody th { width: 64px; font: 600 13px/1.2 var(--mono); }
+.matrix-match {
+	padding: 6px 8px; border-radius: 4px; background: var(--sunk);
+	border-left: 4px solid var(--division, var(--line-2));
+}
+.matrix-match + .matrix-match { margin-top: 4px; }
+.matrix-match h4 { font-size: 12px; margin: 0; }
+.matrix-match h4 small { display: block; font-weight: 400; color: var(--ink-3); }
+.matrix-match h5 { font: 500 11px/1.2 var(--mono); margin: 2px 0 0; color: var(--ink-2); }
+.matrix-match p { margin: 4px 0 0; font-size: 12.5px; }
+.matrix-match.video { box-shadow: inset 0 0 0 2px var(--bad); }
+
+/* Scorecards and sign-on sheets: one card per match. */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 18px; }
+.scorecard { width: 100%; border-collapse: collapse; font-size: 12px; break-inside: avoid; }
+.scorecard th, .scorecard td { border: 1px solid var(--ink-2); padding: 5px 6px; text-align: left; }
+.scorecard thead th { background: var(--sunk); }
+.scorecard .team { font-size: 14px; }
+.scorecard tbody td { height: 22px; }
+.scorecard .signature, .scorecard .captain { height: 26px; }
+.scorecard .score { vertical-align: top; }
+
+@media print {
+	@page { margin: 12mm; }
+	.sheet-bar { display: none; }
+	.sheet-main { padding: 0; max-width: none; }
+	body { font-size: 10pt; }
+	a { color: inherit; text-decoration: none; }
+	.data { font-size: 9.5pt; }
+	.data tbody tr:hover > * { background: none; }
+	.table-wrap { border: 0; }
+	.cards { display: block; }
+	.scorecard { margin-bottom: 8mm; }
+	.page-break { break-before: page; }
+}

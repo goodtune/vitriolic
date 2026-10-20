@@ -1,0 +1,27 @@
+{% load i18n console %}
+{% if not query %}
+	<p class="jump__hint">{% trans "Type part of a name. Arrow keys move, Enter opens." %}</p>
+{% elif not found %}
+	<p class="jump__hint">{% blocktrans %}Nothing is called “{{ query }}”.{% endblocktrans %}</p>
+{% else %}
+	{% if places %}
+		<div class="jump__group" role="group" aria-labelledby="jump-places">
+			<h3 class="jump__kind" id="jump-places">{% trans "Places" %}</h3>
+			<ul>
+				{% for component, label, url in places %}
+					<li><a class="jump__hit" role="option" href="{{ url }}">{% icon "chevron-right" %}<span class="jump__label">{{ label }}</span><span class="jump__context">{{ component }}</span></a></li>
+				{% endfor %}
+			</ul>
+		</div>
+	{% endif %}
+	{% for kind, hits in groups %}
+		<div class="jump__group" role="group" aria-labelledby="jump-kind-{{ forloop.counter }}">
+			<h3 class="jump__kind" id="jump-kind-{{ forloop.counter }}">{{ kind }}</h3>
+			<ul>
+				{% for hit in hits %}
+					<li><a class="jump__hit" role="option" href="{{ hit.url }}"><span class="jump__type">{{ hit.kind }}</span><span class="jump__label">{{ hit.label }}</span>{% if hit.context %}<span class="jump__context">{{ hit.context }}</span>{% endif %}</a></li>
+				{% endfor %}
+			</ul>
+		</div>
+	{% endfor %}
+{% endif %}

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+{% load i18n static admin console %}
+{% admin_brand as brand %}
+<html lang="{{ LANGUAGE_CODE|default:"en" }}">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>{% block title %}{% block heading %}{% endblock %} · {{ brand.name }}{% endblock %}</title>
+	<link rel="stylesheet" href="{% static 'touchtechnology/admin/console/print.css' %}">
+	{% include "touchtechnology/admin/_brand.html" %}
+	<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23222'/%3E%3Cpath d='M4 5h8M4 8h8M4 11h5' stroke='%23fff' stroke-width='1.5'/%3E%3C/svg%3E">
+	{% block extrahead %}{% endblock %}
+</head>
+<body class="sheet-page {% block body_class %}{% endblock %}">
+	{% block bar %}
+	<div class="sheet-bar" role="toolbar" aria-label="{% trans "Page tools" %}">
+		<span class="sheet-bar__brand">{{ brand.name }}</span>
+		{% block tools %}{% endblock %}
+		{% if back %}<a class="btn btn--sm" href="{{ back }}">{% icon "arrow-left" %}{% trans "Back" %}</a>{% endif %}
+		<button type="button" class="btn btn--sm" onclick="window.print()">{% icon "print" %}{% trans "Print" %}</button>
+	</div>
+	{% endblock %}
+	<main class="sheet-main">
+		<header class="sheet-head">
+			<p class="sheet-head__kind">{% block kind %}{% endblock %}</p>
+			<h1>{% block heading-again %}{% endblock %}</h1>
+			{% block meta %}{% endblock %}
+		</header>
+		{% block content %}{% endblock %}
+		<p class="sheet-foot">{% block foot %}{% now "j M Y H:i" %}{% if user.is_authenticated %} · {{ user.get_full_name|default:user.get_username }}{% endif %}{% endblock %}</p>
+	</main>
+</body>
+</html>

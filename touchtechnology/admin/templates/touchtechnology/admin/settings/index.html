@@ -1,15 +1,14 @@
 {% extends "touchtechnology/admin/base.html" %}
+{% load i18n console %}
 
 {% block content %}
-	<div class="box">
-		<h1>Site Settings</h1>
-
-		<table>
-			<tbody>
-				<tr class="first odd last">
-					<td class="actions"><a href="{% url 'admin:settings:site' %}">Domain Name</a></td>
-				</tr>
-			</tbody>
-		</table>
+	<header class="page-head">
+		<div class="page-head__text">
+			<p class="page-head__kind">{% trans "Settings" %}</p>
+			<h1 class="page-head__title">{% trans "Site settings" %}</h1>
+		</div>
+	</header>
+	<div class="links-grid">
+		<a class="link-card" href="{% url 'admin:settings:site' %}">{% icon "settings" %}<span>{% trans "Domain Name" %}<small>{% trans "The address and name of this site" %}</small></span></a>
 	</div>
 {% endblock %}

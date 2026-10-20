@@ -1,15 +1,5 @@
 {% extends "mvp/list.inc.html" %}
-
-{% block row-buttons %}
-	<div class="btn-group">
-		{% block row-buttons-extra %}{% endblock %}
-		<button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-expanded="false">
-			<span class="caret"></span>
-		</button>
-		<ul class="dropdown-menu dropdown-menu-right" role="menu">
-			{% block row-buttons-items %}
-				{{ block.super }}
-			{% endblock %}
-		</ul>
-	</div>
-{% endblock %}
+{% comment %}
+	Kept for lists that extend it: every list now shows the row's own buttons
+	(row-buttons-extra) beside the menu of the rest (row-buttons-items).
+{% endcomment %}

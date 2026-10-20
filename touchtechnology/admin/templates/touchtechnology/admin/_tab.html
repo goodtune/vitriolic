@@ -1,0 +1,5 @@
+{% comment %}
+	One tab of an edit page, for the ``tab-links`` block:
+	{% include "touchtechnology/admin/_tab.html" with pane="timeline-tab" label="Timeline" %}
+	``count`` (optional) is shown beside the label; ``icon`` (optional) before it.
+{% endcomment %}{% load console %}<a class="tab" role="tab" id="{{ pane }}-label" href="#{{ pane }}" aria-controls="{{ pane }}" aria-selected="false">{% if icon %}{% icon icon %}{% endif %}{{ label }}{% if count != None and count != "" %}<span class="tab__count" aria-hidden="true">{{ count }}</span>{% endif %}</a>

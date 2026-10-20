@@ -1,20 +1,29 @@
-<div class="form-group{% if f.errors %} has-feedback has-error{% endif %} {{ widget_class_name }}">
-	{% if caption %}
-		<label for="{{ f.html_name }}" class="placeholder-hidden control-label col-md-3">{{ f.label }}</label>
-	{% endif %}
-
-	<div class="col-md-7">
-		{{ f }}
-
-		{% if f.errors %}
-			<i class="form-control-feedback glyphicon glyphicon-remove"></i>
-			{% for error in f.errors %}
-				<small class="help-block">{{ error }}</small>
-			{% endfor %}
-		{% endif %}
-
-		{% if f.help_text %}
-			<p class="help-block">{{ f.help_text }}</p>
-		{% endif %}
+{% load console %}{% spaceless %}
+{% if radio_checkbox_input %}
+<div class="field field--check{% if f.errors %} field--error{% endif %}">
+	<div class="field__control">
+		<label class="check">{% control f %}<span>{{ f.label }}</span></label>
+		{% if f.help_text %}<p class="field__help" id="{{ f.auto_id }}_helptext">{{ f.help_text }}</p>{% endif %}
+		{% if f.errors %}<p class="field__error" id="{{ f.auto_id }}_error">{% icon "alert" %}<span>{{ f.errors|join:" " }}</span></p>{% endif %}
 	</div>
-</div> <!-- /.form-group -->
+</div>
+{% elif f|is_group %}
+<div class="field field--{{ widget_class_name }}{% if f.errors %} field--error{% endif %}{% if f.field.required %} field--required{% endif %}" role="group"{% if not no_label %} aria-labelledby="{{ f.auto_id }}_label"{% endif %}>
+	{% if not no_label %}<span class="field__label" id="{{ f.auto_id }}_label">{{ f.label }}</span>{% endif %}
+	<div class="field__control">
+		{% control f %}
+		{% if f.help_text %}<p class="field__help" id="{{ f.auto_id }}_helptext">{{ f.help_text }}</p>{% endif %}
+		{% if f.errors %}<p class="field__error" id="{{ f.auto_id }}_error">{% icon "alert" %}<span>{{ f.errors|join:" " }}</span></p>{% endif %}
+	</div>
+</div>
+{% else %}
+<div class="field field--{{ widget_class_name }}{% if f|is_wide %} field--wide{% endif %}{% if f.errors %} field--error{% endif %}{% if f.field.required %} field--required{% endif %}">
+	{% if not no_label %}<label class="field__label" for="{{ f.id_for_label }}">{{ f.label }}</label>{% endif %}
+	<div class="field__control">
+		{% if no_label %}{% control f aria_label=f.label %}{% else %}{% control f %}{% endif %}
+		{% if f.help_text %}<p class="field__help" id="{{ f.auto_id }}_helptext">{{ f.help_text }}</p>{% endif %}
+		{% if f.errors %}<p class="field__error" id="{{ f.auto_id }}_error">{% icon "alert" %}<span>{{ f.errors|join:" " }}</span></p>{% endif %}
+	</div>
+</div>
+{% endif %}
+{% endspaceless %}

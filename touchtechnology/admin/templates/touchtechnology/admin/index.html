@@ -1,8 +1,40 @@
 {% extends "touchtechnology/admin/base.html" %}
-{% load dashboard %}
+{% load i18n dashboard console %}
+
+{% block title %}{% trans "Dashboard" %} · {{ brand.name }}{% endblock %}
 
 {% block content %}
-	{% for widget in admin.dashboard %}
-		{% render widget %}
-	{% endfor %}
+	<header class="page-head">
+		<div class="page-head__text">
+			<p class="page-head__kind">{{ brand.name }}</p>
+			<h1 class="page-head__title">{% trans "Dashboard" %}</h1>
+			<p class="page-head__meta">{% now "l j F Y" %}</p>
+		</div>
+	</header>
+
+	<form class="jump jump--page jump--hero" method="get" action="{% url 'admin:jump' %}" role="search">
+		<div class="jump__box">
+			{% icon "search" %}
+			<input type="search" name="q" autocomplete="off" spellcheck="false"
+				aria-label="{% trans "Jump to a competition, season, team, person, page…" %}"
+				placeholder="{% trans "Jump to a competition, season, team, person, page…" %}">
+			<kbd aria-hidden="true">/</kbd>
+		</div>
+	</form>
+
+	<div class="panels">
+		{% for widget in admin.dashboard %}
+			{% render widget %}
+		{% endfor %}
+	</div>
+
+	{% admin_nav as places %}
+	<h2 class="section-title">{% trans "Go to" %}</h2>
+	<div class="links-grid">
+		{% for group in places %}
+			{% for item in group.items %}
+				<a class="link-card" href="{{ item.url }}">{% icon group.icon %}<span>{{ item.label }}<small>{{ group.label }}</small></span></a>
+			{% endfor %}
+		{% endfor %}
+	</div>
 {% endblock %}

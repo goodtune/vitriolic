@@ -1,24 +1,15 @@
 {% extends "touchtechnology/admin/edit.html" %}
-{% load common %}
+{% load i18n common %}
 
 {% block extracss %}
 	{{ block.super }}
-
-	<!-- formset.media -->
 	{{ formset.media }}
 {% endblock extracss %}
 
+{% block page-title %}{% if object_list %}{{ object_list|types|capfirst }}{% else %}{{ model|types|capfirst }}{% endif %}{% endblock %}
+
+{% block tab-links %}{% endblock %}
+
 {% block form-fieldset %}
-	{{ block.super }}
-
-	<!-- formset -->
-	{{ formset.management_form }}
-
-	{% for form in formset.forms %}
-		<fieldset>
-			{% for f in form %}
-				{% field f %}
-			{% endfor %}
-		</fieldset>
-	{% endfor %}
+	{% include "touchtechnology/admin/_formset.html" %}
 {% endblock %}

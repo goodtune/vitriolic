@@ -19,7 +19,9 @@ from django.utils.encoding import smart_str
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
 
+from touchtechnology.admin import console
 from touchtechnology.admin.branding import get_brand
+from touchtechnology.admin.templatetags.admin import allowed
 from touchtechnology.admin.views import AdminLoginView
 from touchtechnology.common.decorators import staff_login_required_m
 from touchtechnology.common.models import SitemapNode
@@ -111,6 +113,7 @@ class AdminSite(DjangoAdminSite):
                 LogoutView.as_view(next_page=reverse_lazy(f"{self.name}:login")),
                 name="logout",
             ),
+            path("jump/", self.jump, name="jump"),
             re_path(
                 r"^sitemapnode/move/(?P<id>\d+)/(?P<direction>(up|down))/$",
                 self.reorder,
@@ -185,6 +188,46 @@ class AdminSite(DjangoAdminSite):
         response = TemplateResponse(
             request, "touchtechnology/admin/index.html", context=context
         )
+        response.current_app = self.name
+        return response
+
+    @staff_login_required_m
+    def jump(self, request, *args, **kwargs):
+        """
+        Find any object by its name, and the places of the menu by theirs.
+
+        An htmx request gets the list of what was found, for the jump dialog;
+        any other gets a page of its own, so the search works without scripts.
+        """
+        query = request.GET.get("q", "").strip()
+        places = []
+        groups = []
+        if query:
+            needle = query.lower()
+            places = [
+                (component, label, url)
+                for component, label, url in console.sections(
+                    allowed(self.get_components(), request)
+                )
+                if needle in label.lower() or needle in component.lower()
+            ]
+            groups = console.jump(request.user, query)
+        context = {
+            "admin": self,
+            "query": query,
+            "places": places,
+            "groups": groups,
+            "found": len(places) + sum(len(hits) for __, hits in groups),
+            "brand": get_brand(request),
+            "field_template": "touchtechnology/admin/templatetags/field.html",
+        }
+        htmx = request.META.get("HTTP_HX_REQUEST") == "true"
+        template = (
+            "touchtechnology/admin/_jump_results.html"
+            if htmx
+            else "touchtechnology/admin/jump.html"
+        )
+        response = TemplateResponse(request, template, context=context)
         response.current_app = self.name
         return response
 
