@@ -91,6 +91,11 @@
 		drill.setAttribute('aria-busy', 'true');
 		fetchHTML(url).then(function (text) {
 			drill.innerHTML = text;
+			// Mark the way back down to the page in the folder now shown.
+			var trail = (drill.getAttribute('data-trail') || '').split(' ');
+			$$('li[data-key]', drill).forEach(function (item) {
+				item.classList.toggle('on-trail', trail.indexOf(item.getAttribute('data-key')) >= 0);
+			});
 			var title = $('.drill-title', drill);
 			if (title) { title.focus({ preventScroll: true }); }
 			drill.scrollIntoView({ block: 'nearest' });

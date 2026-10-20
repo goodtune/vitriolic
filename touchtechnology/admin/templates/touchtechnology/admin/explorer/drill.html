@@ -12,7 +12,7 @@
 	</div>
 	<ul class="drill-list" role="list">
 		{% for node in tree.drill_children %}
-			<li class="{% if node.on_trail %}on-trail{% endif %}">
+			<li class="{% if node.on_trail %}on-trail{% endif %}" data-key="{{ node.key }}">
 				<a class="drill-link" href="{{ node.url|default:"#" }}"{% if node.is_page %} aria-current="page"{% endif %}>{% icon node.icon %}<span>{{ node.label }}</span></a>
 				{% if node.expandable %}
 					<button type="button" class="drill-in" data-drill="{{ node.key }}">{% icon "chevron-right" %}<span class="visually-hidden">{% blocktrans with label=node.label %}Inside {{ label }}{% endblocktrans %}</span></button>

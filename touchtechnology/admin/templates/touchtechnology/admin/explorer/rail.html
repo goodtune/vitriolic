@@ -32,7 +32,7 @@
 			</div>
 
 			{% if tree.drill_key %}
-				<div class="drill" id="drill" data-endpoint="{% url 'admin:explorer' %}" aria-live="polite">
+				<div class="drill" id="drill" data-endpoint="{% url 'admin:explorer' %}" data-trail="{{ tree.trail|join:" " }}" aria-live="polite">
 					{% include "touchtechnology/admin/explorer/drill.html" %}
 				</div>
 			{% endif %}
