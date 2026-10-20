@@ -156,7 +156,8 @@ DATABASES = {
 if DATABASES["default"]["ENGINE"].startswith("django.db.backends.postgresql"):
     DATABASES["default"]["PORT"] = env.int("DB_5432_TCP_PORT", default=5432)
     # delay long enough to let the postgresql container startup
-    time.sleep(4)
+    if env.bool("DJANGO_DB_WAIT", default=True):
+        time.sleep(4)
 
 
 # Password validation
@@ -209,6 +210,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.10/howto/static-files/
 
 STATIC_URL = "/static/"
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = env("MEDIA_ROOT", default=os.path.join(BASE_DIR, "media"))
 
 
 # OAuth2

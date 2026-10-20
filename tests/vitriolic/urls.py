@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib.sitemaps.views import sitemap
 from django.urls import include, path
 from oauth2_provider.urls import metadata_urlpatterns
@@ -28,3 +30,6 @@ urlpatterns = [
     path("api/", include("touchtechnology.common.rest.urls")),
     path("sitemap.xml", sitemap, {"sitemaps": {"nodes": NodeSitemap}}, name="sitemap"),
 ]
+
+# Serve uploaded media when DEBUG is on; a no-op otherwise.
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
