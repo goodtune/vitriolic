@@ -375,7 +375,7 @@ class Explorer:
                 label = str(rel.label)
             else:
                 label = self.rel_label(type(obj), rel)
-        icon = rel.icon or "folder"
+        icon = self.shell.icon(rel.icon or "folder")
         url = _url(obj)
         if url and not isinstance(rel, Folder):
             url = "%s#%s-tab" % (url, rel.name)
