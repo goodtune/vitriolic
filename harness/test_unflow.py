@@ -15,6 +15,7 @@ from enrolment.models import (
     Teacher,
 )
 
+from harness.flow import State
 from harness.unflow import STAMP, main, school_year, unflow
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.content.models import Page, PageContent
@@ -196,8 +197,6 @@ def test_unflow_refuses_anything_but_six_digits(stamp):
 
 
 def test_the_school_year_is_the_one_the_flow_derives():
-    from harness.flow import State
-
     state = State(page=None, base="", width=1440, stamp="123456", today=None)
     assert school_year("123456") == state.year == "9456"
 
