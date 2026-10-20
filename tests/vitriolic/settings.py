@@ -258,6 +258,10 @@ LOGGING = {
 
 TOUCHTECHNOLOGY_SITEMAP_ROOT = "home"
 
+# The admin loads each edit tab on first show when this is on. The harness sets
+# HTMX_ADMIN_TABS in the environment.
+TOUCHTECHNOLOGY_HTMX_ADMIN_TABS = env.bool("HTMX_ADMIN_TABS", default=False)
+
 
 # MCP server settings
 
