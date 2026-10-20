@@ -42,7 +42,7 @@
 					{% block tab-links %}
 						<a class="wb-tab" role="tab" id="{{ model|type|slugify }}-tab" href="#{{ model|type|slugify }}-pane" aria-controls="{{ model|type|slugify }}-pane" aria-selected="true">{% block edit-tab-label %}{% trans "Details" %}{% endblock %}{% if form.errors %} <span class="wb-tab-error">{% icon "circle-alert" %}</span>{% endif %}</a>
 						{% for manager, name in object|related:related %}
-							{% include "touchtechnology/admin/_tab.html" with name=name label=manager.all|types|capfirst count=manager.count only %}
+							{% include "touchtechnology/admin/_tab.html" with name=name label=manager.all|types|capfirst count=manager|tab_count only %}
 						{% endfor %}
 					{% endblock tab-links %}
 				</div>

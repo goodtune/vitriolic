@@ -3368,6 +3368,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             form_class=ClubEditForm,
             related=(
                 "members",
+                "staff",
                 "teams",
             ),
             permission_required=True,
@@ -3462,10 +3463,17 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def edit_clubassociation(
         self, request, club, extra_context, clubassociation_id=None, **kwargs
     ):
+        # A new official belongs to the club whose page added it, and saving
+        # returns to that club's officials.
+        instance = (
+            ClubAssociation(club=club) if clubassociation_id is None else None
+        )
         return self.generic_edit(
             request,
             ClubAssociation,
             pk=clubassociation_id,
+            instance=instance,
+            post_save_redirect=self.redirect(str(club.urls["edit"]) + "#staff-tab"),
             form_class=ClubAssociationForm,
             form_kwargs={
                 "user": request.user,

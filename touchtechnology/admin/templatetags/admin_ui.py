@@ -119,6 +119,20 @@ def resolved(url):
 
 
 @register.filter
+def tab_count(manager):
+    """How many objects a tab lists: a count query, or the length of a list."""
+    try:
+        return manager.count()
+    except TypeError:
+        return len(manager)
+    except AttributeError:
+        try:
+            return len(manager)
+        except TypeError:
+            return ""
+
+
+@register.filter
 def initials(user):
     """Up to two letters for ``user``: their initials, or their user name's first."""
     if user is None:

@@ -206,3 +206,40 @@ class ReturnTests(TestCase):
             self.last_response["Location"],
             "%s#schedule-tab" % self.season.urls["edit"],
         )
+
+
+
+class ClubOfficialsTests(TestCase):
+    """A club's page lists its officials and adds another from the tab."""
+
+    def setUp(self):
+        super().setUp()
+        self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
+        self.club = factories.ClubFactory.create()
+        self.person = factories.PersonFactory.create(club=self.club)
+
+    def test_the_club_page_offers_to_add_an_official(self):
+        with self.login(self.superuser):
+            self.get_check_200("admin:fixja:club:edit", self.club.pk)
+        self.assertResponseContains(
+            '<a class="wb-button wb-button-primary wb-button-small" href="%s">'
+            "%sAdd Official</a>"
+            % (self.reverse("admin:fixja:club:clubassociation:add", self.club.pk), ICON % "plus"),
+            html=True,
+        )
+
+    def test_adding_an_official_belongs_to_the_club(self):
+        role = factories.ClubRoleFactory.create(name="Secretary")
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:club:clubassociation:add",
+                self.club.pk,
+                data={"person": str(self.person.pk), "roles": [str(role.pk)]},
+            )
+        self.response_302()
+        self.assertEqual(
+            self.last_response["Location"], "%s#staff-tab" % self.club.urls["edit"]
+        )
+        self.assertEqual(
+            list(self.club.staff.values_list("person", flat=True)), [self.person.pk]
+        )

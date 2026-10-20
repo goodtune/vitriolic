@@ -251,9 +251,15 @@
 			// The address named a tab: show the page from its top, with the
 			// heading and the tabs, rather than jumping to the pane.
 			if (hash && (chosen.id === hash || chosen.getAttribute("aria-controls") === hash)) {
+				if (document.activeElement === chosen) {
+					chosen.blur();
+				}
 				window.scrollTo(0, 0);
 				window.addEventListener("load", function () {
 					window.scrollTo(0, 0);
+					if (document.activeElement === chosen) {
+						chosen.blur();
+					}
 				});
 			}
 		});
