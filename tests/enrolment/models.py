@@ -104,6 +104,11 @@ class Enrolment(EnrolmentModel):
     )
 
     class Meta:
+        ordering = (
+            "class_group__year__start_date",
+            "student__last_name",
+            "student__first_name",
+        )
         constraints = [
             models.UniqueConstraint(
                 fields=("student", "class_group"), name="unique_student_per_class"
@@ -187,6 +192,7 @@ class Score(models.Model):
     mark = models.PositiveSmallIntegerField()
 
     class Meta:
+        ordering = ("enrolment__student__last_name", "enrolment__student__first_name")
         constraints = [
             models.UniqueConstraint(
                 fields=("assessment", "enrolment"), name="unique_score_per_assessment"
@@ -198,17 +204,22 @@ class Score(models.Model):
 
     def clean(self):
         super().clean()
-        if (
-            self.assessment_id
-            and self.mark is not None
-            and self.mark > self.assessment.maximum_mark
-        ):
-            raise ValidationError(
-                {
-                    "mark": "The mark cannot be more than the maximum of %s."
+        errors = {}
+        if self.assessment_id:
+            if self.mark is not None and self.mark > self.assessment.maximum_mark:
+                errors["mark"] = (
+                    "The mark cannot be more than the maximum of %s."
                     % self.assessment.maximum_mark
-                }
-            )
+                )
+            if (
+                self.enrolment_id
+                and self.enrolment.class_group_id != self.assessment.class_group_id
+            ):
+                errors["enrolment"] = (
+                    "The student is not enrolled in the class this assessment is for."
+                )
+        if errors:
+            raise ValidationError(errors)
 
 
 class ReportCard(EnrolmentModel):

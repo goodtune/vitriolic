@@ -102,7 +102,58 @@ class ModelTests(TestCase):
         score = Score(assessment=self.assessment, enrolment=self.enrolment, mark=11)
         with self.assertRaises(ValidationError) as cm:
             score.full_clean()
-        self.assertIn("mark", cm.exception.message_dict)
+        self.assertEqual(
+            cm.exception.message_dict,
+            {"mark": ["The mark cannot be more than the maximum of 10."]},
+        )
+
+    def test_enrolments_are_ordered_by_year_then_student_name(self):
+        next_year = SchoolYear.objects.create(
+            title="2027",
+            start_date=datetime.date(2027, 1, 27),
+            end_date=datetime.date(2027, 12, 10),
+        )
+        next_group = ClassGroup.objects.create(
+            year=next_year, grade=self.grade, title="2B"
+        )
+        later = Enrolment.objects.create(student=self.student, class_group=next_group)
+        earlier_name = Enrolment.objects.create(
+            student=Student.objects.create(
+                first_name="Alba",
+                last_name="Ashdown",
+                date_of_birth=datetime.date(2019, 1, 2),
+                guardian_name="Bram Ashdown",
+            ),
+            class_group=self.group,
+        )
+        self.assertEqual(
+            list(Enrolment.objects.all()), [earlier_name, self.enrolment, later]
+        )
+
+    def test_score_for_a_student_of_another_class_is_invalid(self):
+        other_group = ClassGroup.objects.create(
+            year=self.year, grade=self.grade, title="1C"
+        )
+        other_enrolment = Enrolment.objects.create(
+            student=Student.objects.create(
+                first_name="Tomas",
+                last_name="Lindqvist",
+                date_of_birth=datetime.date(2019, 8, 9),
+                guardian_name="Anna Lindqvist",
+            ),
+            class_group=other_group,
+        )
+        score = Score(assessment=self.assessment, enrolment=other_enrolment, mark=5)
+        with self.assertRaises(ValidationError) as cm:
+            score.full_clean()
+        self.assertEqual(
+            cm.exception.message_dict,
+            {
+                "enrolment": [
+                    "The student is not enrolled in the class this assessment is for."
+                ]
+            },
+        )
 
     def test_score_at_maximum_is_valid(self):
         score = Score(assessment=self.assessment, enrolment=self.enrolment, mark=10)
