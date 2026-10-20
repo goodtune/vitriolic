@@ -16,6 +16,7 @@ from django.utils.encoding import smart_str
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
 
+from touchtechnology.admin.branding import get_brand
 from touchtechnology.common.decorators import staff_login_required_m
 from touchtechnology.common.models import SitemapNode
 
@@ -162,6 +163,7 @@ class AdminSite(DjangoAdminSite):
     def index(self, request, *args, **kwargs):
         context = {"admin": self}
         context.update(kwargs)
+        context.setdefault("brand", get_brand(request))
         response = TemplateResponse(
             request, "touchtechnology/admin/index.html", context=context
         )

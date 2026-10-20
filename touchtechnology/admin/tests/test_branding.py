@@ -1,3 +1,6 @@
+import copy
+
+from django.conf import settings
 from django.core import checks
 from django.core.exceptions import ImproperlyConfigured
 from django.test import RequestFactory, override_settings
@@ -103,4 +106,14 @@ class ShellTests(TestCase):
             self.get_check_200("admin:index")
             self.assertResponseContains(
                 '<img src="/static/img/harbour.png" alt="Harbour Touch">', html=True
+            )
+
+    def test_shell_resolves_brand_without_the_context_processor(self):
+        templates = copy.deepcopy(settings.TEMPLATES)
+        processors = templates[0]["OPTIONS"]["context_processors"]
+        processors.remove("touchtechnology.admin.context_processors.brand")
+        with self.settings(TEMPLATES=templates), self.login(self.superuser):
+            self.get_check_200("admin:index")
+            self.assertResponseContains(
+                '<span class="navbar-brand-text">Administration</span>', html=True
             )
