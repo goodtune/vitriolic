@@ -5,7 +5,6 @@
 	{{ block.super }}
 	<li><a href="{% url 'admin:competition:club:list' %}">{% trans "Clubs" %}</a></li>
 	<li><a href="{% url 'admin:competition:club:edit' club.pk %}">{{ club.title }}</a></li>
-	<li><a href="{% url 'admin:competition:club-teams' club.pk %}">{% trans "Teams" %}</a></li>
 	<li><span>{% trans "Officials" %}</span></li>
 {% endblock %}
 
@@ -34,7 +33,7 @@
 
 		<div class="buttons">
 			{% block buttons %}
-            	<a class="button" href="{% url 'admin:competition:club-teams' club.pk %}">{% trans "Cancel" %}</a>
+            	<a class="button" href="{% url 'admin:competition:club:edit' club.pk %}">{% trans "Cancel" %}</a>
             {% endblock %}
 		</div>
 	</div>

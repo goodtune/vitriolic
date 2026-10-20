@@ -225,8 +225,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         matchscoresheet_urls = (
             [
                 path("add/", self.edit_matchscoresheet, name="add"),
-                path("<int:pk>/", self.edit_matchscoresheet, name="edit"),
-                path("<int:pk>/delete/", self.delete_matchscoresheet, name="delete"),
+                path("<uuid:pk>/", self.edit_matchscoresheet, name="edit"),
+                path("<uuid:pk>/delete/", self.delete_matchscoresheet, name="delete"),
             ],
             self.app_name,
         )
@@ -3071,10 +3071,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @registration
     def officials(self, request, club, season, extra_context, **kwargs):
-        # Read only is presently applied to the entire application, but we
-        # really need to be able to provide granular control for specific
-        # seasons.  FIXME
-        read_only, scheduled_read_only = self.read_only
+        # Read only is no longer a switch for the entire application, it is
+        # decided by the season below.  FIXME
+        read_only, scheduled_read_only = False, None
         if season.complete:
             if not request.user.is_superuser:
                 read_only = True
@@ -3115,8 +3114,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 "club": club,
                 "season": season,
             },
-            post_save_redirect="club-teams",
-            post_save_redirect_kwargs={"club_id": club.pk},
+            post_save_redirect="club:edit",
+            post_save_redirect_args=(club.pk,),
             templates=templates,
             extra_context=extra_context,
         )
@@ -3163,8 +3162,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             TeamAssociation,
             formset_class=TeamAssociationFormSet,
             formset_kwargs={"user": request.user, "instance": team},
-            post_save_redirect="club-teams",
-            post_save_redirect_kwargs={"club_id": club.pk},
+            post_save_redirect="club:edit",
+            post_save_redirect_args=(club.pk,),
             permission_required=True,
             extra_context=extra_context,
         )
