@@ -101,6 +101,22 @@ FINALS_FORMAT = (
     "3: W1 vs W2 Final"
 )
 
+#: The finals of a division whose regular season is played in two pools: the
+#: winner of each pool meets the runner up of the other.
+POOL_FINALS_FORMAT = (
+    "ROUND Semi Finals\n"
+    "1: G1P1 vs G2P2 Semi 1\n"
+    "2: G2P1 vs G1P2 Semi 2\n"
+    "ROUND Grand Final\n"
+    "3: W1 vs W2 Final"
+)
+
+#: The division of the finished season that plays its regular season in two
+#: pools of three, a single round robin in each.
+POOLED_SEASON = "Autumn 2026"
+POOLED_DIVISION = "Mixed Open"
+POOLS = ["Pool A", "Pool B"]
+
 CLUB_ROLES = ["President", "Secretary", "Treasurer"]
 TEAM_ROLES = ["Captain", "Coach"]
 
@@ -274,10 +290,23 @@ def _seed_organisation(anchor) -> bool:
         )["draw_format"]["id"]
         for teams in (6, 8)
     }
+    pool_round_robin = tools.create_draw_format(
+        name="Round robin (3 teams)",
+        text=round_robin_format(list(range(1, 4))),
+        teams=3,
+    )["draw_format"]["id"]
     finals = tools.create_draw_format(
         name="Top four finals", text=FINALS_FORMAT, teams=4, is_final=True
     )["draw_format"]["id"]
-    formats = {"round_robin": round_robin, "finals": finals}
+    pool_finals = tools.create_draw_format(
+        name="Cross-pool finals", text=POOL_FINALS_FORMAT, teams=4, is_final=True
+    )["draw_format"]["id"]
+    formats = {
+        "round_robin": round_robin,
+        "pool_round_robin": pool_round_robin,
+        "finals": finals,
+        "pool_finals": pool_finals,
+    }
 
     # The last Wednesday before the seed date is the fifth round of the
     # current season, which began four weeks before it. The finished season
@@ -292,8 +321,9 @@ def _seed_organisation(anchor) -> bool:
         competition,
         clubs,
         formats,
-        title="Autumn 2026",
+        title=POOLED_SEASON,
         start=finished_start,
+        pooled=POOLED_DIVISION,
     )
     current = _build_season(
         tools,
@@ -358,10 +388,13 @@ def _build_season(
     start,
     season_exclusions=(),
     division_exclusions=None,
+    pooled=None,
 ):
     """
     A season with its venues, time slots, divisions, teams and stages, and the
     draw for both stages built and scheduled on Wednesday nights from ``start``.
+    The regular season of the division titled ``pooled`` is played in two
+    pools, and its finals are drawn across them.
     """
     season_id = tools.create_season(
         competition_id=competition.pk,
@@ -435,34 +468,76 @@ def _build_season(
     for division_title, dates in (division_exclusions or {}).items():
         tools.add_division_exclusion_dates(divisions[division_title]["id"], dates)
 
-    built = tools.build_draw(
-        [
-            {
-                "stage_id": stage["id"],
-                "draw_format_id": formats["round_robin"][8 if count > 6 else 6],
-                "start_date": start,
-                "rounds": REGULAR_ROUNDS,
-                "alternate_home_away_on_repeat": True,
-            }
-            for stage, (__, count) in zip(regular, DIVISIONS)
-        ]
-    )["builds"]
+    # One build for each stage, or for each pool of the pooled division.
+    builds = []
+    for index, (stage, (division_title, count)) in enumerate(zip(regular, DIVISIONS)):
+        if division_title == pooled:
+            for pool_id in _pools(tools, stage["id"], divisions[division_title]["id"]):
+                builds.append(
+                    (
+                        index,
+                        {
+                            "pool_id": pool_id,
+                            "draw_format_id": formats["pool_round_robin"],
+                            "start_date": start,
+                        },
+                    )
+                )
+        else:
+            builds.append(
+                (
+                    index,
+                    {
+                        "stage_id": stage["id"],
+                        "draw_format_id": formats["round_robin"][8 if count > 6 else 6],
+                        "start_date": start,
+                        "rounds": REGULAR_ROUNDS,
+                        "alternate_home_away_on_repeat": True,
+                    },
+                )
+            )
+    built = tools.build_draw([build for __, build in builds])["builds"]
+    last_dates = {}
+    for (index, __), build in zip(builds, built):
+        last_dates[index] = max(last_dates.get(index, ""), build["last_date"])
     # The finals start the week after each division's last regular round.
     tools.build_draw(
         [
             {
                 "stage_id": stage["id"],
-                "draw_format_id": formats["finals"],
-                "start_date": datetime.date.fromisoformat(build["last_date"])
+                "draw_format_id": formats[
+                    "pool_finals" if division_title == pooled else "finals"
+                ],
+                "start_date": datetime.date.fromisoformat(last_dates[index])
                 + datetime.timedelta(weeks=1),
             }
-            for stage, build in zip(finals, built)
+            for index, (stage, (division_title, __)) in enumerate(
+                zip(finals, DIVISIONS)
+            )
         ]
     )
 
     season = Season.objects.get(pk=season_id)
     _schedule(tools, season, times, grounds)
     return season
+
+
+def _pools(tools, stage_id, division_id):
+    """
+    Split the teams of a division between the pools of its stage, alternating
+    down the teams in the order they were entered. Returns the pool ids.
+    """
+    pools = tools.create_pools(
+        [{"stage_id": stage_id, "title": title} for title in POOLS]
+    )["pools"]
+    team_ids = list(
+        Team.objects.filter(division_id=division_id)
+        .order_by("order", "pk")
+        .values_list("pk", flat=True)
+    )
+    for index, pool in enumerate(pools):
+        tools.update_pool(pool["id"], team_ids=team_ids[index :: len(pools)])
+    return [pool["id"] for pool in pools]
 
 
 def _schedule(tools, season, times, grounds):
