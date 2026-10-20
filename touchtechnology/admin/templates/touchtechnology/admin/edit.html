@@ -21,10 +21,12 @@
 {% endblock page_actions %}
 
 {% block page_nav %}
+	{% if setup and object|saved or setup and not setup.here %}{% include "touchtechnology/admin/_setup_summary.html" %}{% endif %}
 	{% if object|saved %}
 		<div class="tabs" role="tablist" data-tabs aria-label="{% blocktrans with type=model|type %}Parts of this {{ type }}{% endblocktrans %}">
 			{% block tab-links %}
 				<a class="tab" role="tab" id="{{ model|type|slugify }}-tab-link" href="#{{ model|type|slugify }}-tab" aria-controls="{{ model|type|slugify }}-tab" aria-selected="true">{% icon "edit" %}<span>{% trans "Details" %}</span></a>
+				{% if setup.here and object|saved %}<a class="tab" role="tab" id="setup-tab-link" href="#setup-tab" aria-controls="setup-tab" aria-selected="false" tabindex="-1">{% icon "check" %}<span>{% trans "Set-up" %}</span><span class="count" aria-hidden="true">{{ setup.done }}/{{ setup.total }}</span></a>{% endif %}
 				{% for manager, name in object|related:related %}
 					<a class="tab" role="tab" id="{{ name }}-tab-link" href="#{{ name }}-tab" aria-controls="{{ name }}-tab" aria-selected="false" tabindex="-1">{% icon manager|model_icon %}<span>{{ manager.all|plural_label }}</span><span class="count" aria-hidden="true" data-count-of="{{ name }}-tab" hidden></span></a>
 				{% endfor %}
@@ -50,6 +52,11 @@
 				</form>
 			</section>
 
+			{% if setup.here and object|saved %}
+				<section class="pane" data-tab-panel role="tabpanel" id="setup-tab" aria-labelledby="setup-tab-link">
+					{% include "touchtechnology/admin/_setup.html" %}
+				</section>
+			{% endif %}
 			{% if object|saved %}
 				{% for manager, name in object|related:related %}
 					{% if htmx_admin_tabs %}

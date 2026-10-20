@@ -231,6 +231,17 @@
 		}
 	});
 
+	// A link to a pane of this page (a set-up step, say) shows that pane.
+	window.addEventListener('hashchange', function () {
+		var id = decodeURIComponent(location.hash.slice(1));
+		var tab = id && $('[role="tab"][aria-controls="' + id + '"]');
+		if (tab) {
+			selectTab(tab);
+			var list = tab.closest('[role="tablist"]');
+			if (list) { list.scrollIntoView({ block: 'nearest' }); }
+		}
+	});
+
 	/* ------------------------------------------------------------------
 	 * Popovers: a button with aria-expanded that shows the element it controls
 	 */

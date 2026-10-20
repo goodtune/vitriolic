@@ -2580,3 +2580,90 @@ th[aria-sort="ascending"] .sort::after { transform: translateY(1px) rotate(-135d
 	.live-stream-table tr.live-stream-row td:nth-child(1) { font-weight: 600; }
 	.live-stream-table tr.live-stream-row td:last-child { grid-column: 2; grid-row: 1 / span 4; align-self: center; }
 }
+
+/* ---------------------------------------------------------------------
+ * Set-up guidance: what an object still needs, and where to do it
+ */
+
+.setup-summary {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 14px;
+	margin: 12px 0 0;
+	padding: 8px 12px;
+	border-radius: var(--radius-large);
+	background: var(--attention-soft);
+}
+
+.setup-summary.is-complete { background: var(--success-soft); }
+.setup-summary p { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; font-size: 14px; }
+.setup-summary a { color: var(--text); }
+.setup-next { color: var(--attention); font-weight: 500; }
+.setup-next a { color: var(--attention); font-weight: 600; }
+.is-complete .setup-next { color: var(--success); }
+
+.setup-meter {
+	flex: 0 0 140px;
+	height: 8px;
+	border-radius: 999px;
+	background: var(--surface);
+	box-shadow: inset 0 0 0 1px var(--line);
+	overflow: hidden;
+}
+
+.setup-meter span {
+	display: block;
+	height: 100%;
+	border-radius: 999px;
+	background: var(--fill);
+	box-shadow: inset 0 0 0 1px var(--fill-edge);
+}
+
+.setup-steps {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	border: 1px solid var(--line);
+	border-radius: var(--radius-large);
+	background: var(--surface);
+}
+
+.setup-step {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 12px 16px;
+}
+
+.setup-step + .setup-step { border-top: 1px solid var(--line); }
+.setup-step.is-next { background: var(--attention-soft); }
+
+.setup-mark {
+	display: grid;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	flex: none;
+	border-radius: 50%;
+	box-shadow: inset 0 0 0 1.5px var(--line-strong);
+	color: var(--muted);
+	font-weight: 700;
+	font-size: 13px;
+	font-variant-numeric: tabular-nums;
+}
+
+.is-done .setup-mark { background: var(--success-soft); box-shadow: inset 0 0 0 1.5px var(--success); color: var(--success); }
+.is-next .setup-mark { box-shadow: inset 0 0 0 2px var(--attention); color: var(--attention); }
+.setup-text { flex: 1; min-width: 0; }
+.setup-text p { margin: 0; }
+.setup-label { font-weight: 600; }
+.setup-label a { color: var(--text); text-decoration: none; }
+.setup-label a:hover { color: var(--ink); text-decoration: underline; }
+.setup-detail { color: var(--muted); font-size: 14px; }
+
+@media (max-width: 767.98px) {
+	.setup-meter { flex-basis: 100%; }
+	.setup-step { align-items: flex-start; padding: 12px 14px; flex-wrap: wrap; }
+	.setup-step .button { margin-left: 44px; }
+}

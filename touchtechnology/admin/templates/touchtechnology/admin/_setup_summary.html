@@ -1,0 +1,8 @@
+{% load i18n admin %}
+<div class="setup-summary{% if setup.complete %} is-complete{% endif %}">
+	<div class="setup-meter" role="progressbar" aria-valuemin="0" aria-valuemax="{{ setup.total }}" aria-valuenow="{{ setup.done }}" aria-label="{{ setup.title }}"><span style="width: {{ setup.percent }}%"></span></div>
+	<p>
+		<a href="{{ setup.url }}"><strong>{{ setup.title }}</strong> {% blocktrans with done=setup.done total=setup.total %}{{ done }} of {{ total }} done{% endblocktrans %}</a>
+		{% with step=setup.next_step %}{% if step %}<span class="setup-next">{% trans "Next" %}: {% if step.url %}<a href="{{ step.url }}">{{ step.label }}</a>{% else %}{{ step.label }}{% endif %}</span>{% else %}<span class="setup-next">{% icon "check" %}{% trans "Ready" %}</span>{% endif %}{% endwith %}
+	</p>
+</div>
