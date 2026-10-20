@@ -417,9 +417,10 @@ class TestHtmxTabPagination:
         authenticated_page.wait_for_load_state("networkidle")
 
         assert fetched == []
+        # People, teams and officials each wait to be shown.
         expect(
             authenticated_page.locator(".wb-pane[hx-get] .wb-pane-loading")
-        ).to_have_count(2)
+        ).to_have_count(3)
         shoot(authenticated_page, screenshot_dir, "club_tabs_waiting")
 
         authenticated_page.locator('[role=tab][aria-controls="members-pane"]').click()
