@@ -64,3 +64,14 @@ A pool field on the team form; a default points formula for bulk divisions;
 
 Deep enrolment paths truncate in the rail; long sections list forty objects
 then link to the rest; query-count ceilings rise by the open folders.
+
+## Round 2
+
+Adopted Workbook's set-up checklist, made to fit the tree. A season,
+competition and school year gain a Set-up tab: numbered steps, each saying
+what is done or missing ("Mixed Open has no matches yet") and linking to the
+page or tab that completes it, the next one marked. Every page inside a
+season or school year (division, stage, pool, team, class) shows that
+parent's progress bar and next step under its title, so the tree says where
+you are and the bar says what is left. `touchtechnology/admin/setup.py` holds
+the steps; it is all server-rendered.
