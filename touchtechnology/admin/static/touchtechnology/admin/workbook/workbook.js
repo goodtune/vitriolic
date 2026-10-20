@@ -159,13 +159,18 @@
 			});
 		}
 
-		// Keep the place of the page in view in the rail at a desk.
+		// Keep the place of the page in view in the rail at a desk, with as
+		// much of the way down to it as fits above it.
 		var here = root.querySelector(".is-here > .wb-node-row") || root.querySelector(".wb-nav-entry.is-active > .wb-nav-row");
+		var head = root.querySelector(".wb-nav-entry.is-active > .wb-nav-row");
 		var scroller = root.closest(".wb-rail-scroll");
 		if (here && scroller && wide.matches) {
-			var top = here.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
-			if (top > scroller.clientHeight * 0.4) {
-				scroller.scrollTop = top - scroller.clientHeight * 0.25;
+			var origin = scroller.getBoundingClientRect().top - scroller.scrollTop;
+			var hereTop = here.getBoundingClientRect().top - origin;
+			var headTop = head ? head.getBoundingClientRect().top - origin : 0;
+			var room = scroller.clientHeight;
+			if (hereTop + here.offsetHeight > room) {
+				scroller.scrollTop = hereTop - headTop < room * 0.8 ? headTop - 8 : hereTop - room * 0.6;
 			}
 		}
 	}
