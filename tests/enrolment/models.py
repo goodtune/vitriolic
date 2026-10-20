@@ -213,33 +213,15 @@ class Score(models.Model):
 
 class ReportCard(EnrolmentModel):
     TERM_CHOICES = [(term, "Term %d" % term) for term in range(1, 5)]
-    BEGINNING = "beginning"
-    DEVELOPING = "developing"
-    SECURE = "secure"
-    EXTENDING = "extending"
-    RATING_CHOICES = [
-        (BEGINNING, "Beginning"),
-        (DEVELOPING, "Developing"),
-        (SECURE, "Secure"),
-        (EXTENDING, "Extending"),
-    ]
 
     enrolment = models.ForeignKey(
         Enrolment, on_delete=models.CASCADE, related_name="report_cards"
     )
     term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
-    literacy = models.CharField(
-        max_length=10, choices=RATING_CHOICES, default=DEVELOPING
-    )
-    numeracy = models.CharField(
-        max_length=10, choices=RATING_CHOICES, default=DEVELOPING
-    )
-    inquiry = models.CharField(
-        max_length=10, choices=RATING_CHOICES, default=DEVELOPING
-    )
-    wellbeing = models.CharField(
-        max_length=10, choices=RATING_CHOICES, default=DEVELOPING
-    )
+    literacy = models.TextField(blank=True)
+    numeracy = models.TextField(blank=True)
+    inquiry = models.TextField(blank=True)
+    wellbeing = models.TextField(blank=True)
     general_comment = models.TextField(blank=True)
 
     class Meta:
