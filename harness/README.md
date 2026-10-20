@@ -23,7 +23,7 @@ it picks the database `vitriolic_<name>` and the folders that belong to it.
 harness/pg.sh start                     # 1. a temporary PostgreSQL (once per boot)
 harness/db.sh demo                      # 2. create the database vitriolic_demo
 harness/seed.sh demo                    # 3. migrate it and fill it with the made-up association
-harness/serve.sh demo 8200              # 4. serve it; prints http://127.0.0.1:8200/admin/
+harness/serve.sh demo 8300              # 4. serve it; prints http://127.0.0.1:8300/admin/
 harness/shots.sh --name demo --contact  # 5. screenshots, the flow video and contact sheets
 harness/contact.sh <run-dir>            # 6. (only to re-tile; step 5 already did)
 harness/stop.sh demo                    # 7. stop the server
