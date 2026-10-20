@@ -146,8 +146,8 @@ def render_field(bound_field):
 
 def admin_media(media):
     """``media`` with the remote assets it names swapped for the admin's copies."""
-    if media is None:
-        return ""
+    if not isinstance(media, django_widgets.Media):
+        return media or ""
     js = [SELF_HOSTED.get(str(path), path) for path in media._js]
     css = {
         medium: [SELF_HOSTED.get(str(path), path) for path in paths]

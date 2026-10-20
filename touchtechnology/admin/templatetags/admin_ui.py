@@ -107,6 +107,18 @@ def trail(context):
 
 
 @register.filter
+def resolved(url):
+    """
+    ``url`` as a string, or "" when it is a lazy reverse that has no match
+    (a component with flat URL namespaces has no nested add page).
+    """
+    try:
+        return str(url) if url else ""
+    except NoReverseMatch:
+        return ""
+
+
+@register.filter
 def initials(user):
     """Up to two letters for ``user``: their initials, or their user name's first."""
     if user is None:
@@ -202,8 +214,17 @@ def admin_tasks(context):
     for __, __, __, component, __ in allowed(admin.get_components(), request):
         if not component.visible:
             continue
-        tasks.extend(component.tasks(request) or ())
-    return tasks
+        for task in component.tasks(request) or ():
+            task = dict(task)
+            task.setdefault(
+                "icon",
+                getattr(component, "icon", None)
+                or COMPONENT_ICONS.get(component.app_name, "layout-grid"),
+            )
+            if not task["icon"]:
+                task["icon"] = COMPONENT_ICONS.get(component.app_name, "layout-grid")
+            tasks.append(task)
+    return sorted(tasks, key=lambda task: task.get("priority", 50))
 
 
 @register.simple_tag

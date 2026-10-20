@@ -21,8 +21,6 @@
 
 {% block page_title %}{% if object.pk %}{{ object }}{% else %}{% blocktrans with type=model|type %}New {{ type }}{% endblocktrans %}{% endif %}{% endblock %}
 
-{% block messages %}{% endblock %}
-
 {% block content %}
 	{% block page-head %}
 		<header class="wb-head">
@@ -34,8 +32,6 @@
 			<div class="wb-head-actions">{% block head-actions %}{% endblock %}</div>
 		</header>
 	{% endblock page-head %}
-
-	{% include "touchtechnology/admin/_messages.html" %}
 
 	{% block before-tabs %}{% endblock %}
 
@@ -76,7 +72,12 @@
 							{% endblock form-fieldset %}
 							{% block form-buttons %}
 								<div class="wb-formfoot">
-									<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
+									<div class="wb-actions">
+										<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
+										{% if not object.pk and form and not formset and not wizard %}
+											<button type="submit" name="_addanother" value="1" class="wb-button">{% icon "copy-plus" %}{% blocktrans with type=model|type %}Save and add another {{ type }}{% endblocktrans %}</button>
+										{% endif %}
+									</div>
 								</div>
 							{% endblock form-buttons %}
 						</form>

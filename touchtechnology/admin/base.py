@@ -95,14 +95,22 @@ class AdminComponentMixin(object):
         """
         The jobs this component offers on the admin's home page, most common
         first: an iterable of mappings with ``label``, ``url`` and optionally
-        ``note`` (a line saying more) and ``icon`` (a name in the admin's icon
-        sprite). By default, the first of the component's ``dropdowns``.
+        ``note`` (a line saying more), ``icon`` (a name in the admin's icon
+        sprite) and ``priority`` (lower comes first; 50 when not given). By
+        default, one job: the component itself, naming its sections.
         """
         sections = list(self.dropdowns() or ())
         if not sections:
             return ()
-        label, url = sections[0][0], sections[0][1]
-        return ({"label": label, "url": url, "note": self.verbose_name},)
+        return (
+            {
+                "label": self.verbose_name,
+                "url": sections[0][1],
+                "note": ", ".join(str(section[0]) for section in sections),
+                "icon": getattr(self, "icon", None),
+                "priority": 80,
+            },
+        )
 
     def dropdowns(self):
         """

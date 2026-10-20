@@ -5,21 +5,23 @@
 
 	Blocks a list may fill:
 	  heading, actions     the heading of a tab's list and its buttons
+	                       (include "touchtechnology/admin/_add.html" with url=... for Add)
 	  modal                dialogs the list needs (such as "Add several")
 	  table-headings       <th> cells (the title is the first)
+	  table-head-actions   the heading of the actions column (empty when rows have none)
 	  table-columns        <td> cells (the first, class "wb-title-cell", links the object)
 	  row-buttons-extra    buttons always on show in a row (Build, Undo, Up...)
 	  row-buttons-items    the row's menu: <li><a href="...">Label</a></li>
 	  delete-data-title    how the object is named when asking to delete it
 	  table-row-empty      what an empty list says
-{% endcomment %}{% firstof create create_url as create_link %}{% with type=model|type %}
+{% endcomment %}{% firstof create|resolved create_url as create_link %}{% with type=model|type %}
 {% if manager %}
 	{% block heading %}
 		<div class="wb-sheet-head">
 			<h2>{{ manager.all|types|capfirst }}</h2>
 			<div class="wb-actions">
 				{% block actions %}
-					{% if create_link %}<a class="wb-button wb-button-primary wb-button-small" href="{{ create_link }}">{% icon "plus" %}{% blocktrans %}Add {{ type }}{% endblocktrans %}</a>{% endif %}
+					{% if create_link %}{% include "touchtechnology/admin/_add.html" with url=create_link %}{% endif %}
 				{% endblock actions %}
 			</div>
 		</div>
@@ -37,7 +39,7 @@
 			{% block table-headings %}
 				<th scope="col">{% trans "Title" %}</th>
 			{% endblock %}
-			<th scope="col"><span class="wb-sr">{% trans "Actions" %}</span></th>
+			{% block table-head-actions %}<th scope="col"><span class="wb-sr">{% trans "Actions" %}</span></th>{% endblock %}
 		</tr>
 		{% endblock table-head %}
 	</thead>

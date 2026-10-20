@@ -62,6 +62,17 @@ class UsersGroups(AdminComponent):
         ]
         return urlpatterns
 
+    def tasks(self, request):
+        return (
+            {
+                "label": _("Manage who can sign in"),
+                "url": self.reverse("users:list"),
+                "note": _("Users, groups and what they may do"),
+                "icon": "users",
+                "priority": 90,
+            },
+        )
+
     def dropdowns(self):
         dl = (
             (_("Users"), self.reverse("users:list"), "user"),

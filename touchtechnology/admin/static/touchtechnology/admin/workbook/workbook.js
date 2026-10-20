@@ -249,6 +249,14 @@
 				})[0] || all[0];
 			}
 			select(list, chosen, false);
+			// The address named a tab: show the page from its top, with the
+			// heading and the tabs, rather than jumping to the pane.
+			if (hash && chosen.getAttribute("aria-controls") === hash) {
+				window.scrollTo(0, 0);
+				window.addEventListener("load", function () {
+					window.scrollTo(0, 0);
+				});
+			}
 		});
 	}
 
@@ -741,14 +749,112 @@
 		});
 	}
 
+	/* ------------------------------------------------------------------
+	 * Copy buttons: data-wb-copy holds the text to copy.
+	 */
+
+	function copies() {
+		document.addEventListener("click", function (event) {
+			var button = event.target.closest && event.target.closest("[data-wb-copy]");
+			if (!button || !navigator.clipboard) {
+				return;
+			}
+			navigator.clipboard.writeText(button.getAttribute("data-wb-copy")).then(function () {
+				var label = button.querySelector("span");
+				if (!label) {
+					return;
+				}
+				var was = label.textContent;
+				label.textContent = button.getAttribute("data-wb-copied") || "Copied";
+				setTimeout(function () {
+					label.textContent = was;
+				}, 2000);
+			});
+		});
+	}
+
+	/* ------------------------------------------------------------------
+	 * Formsets that grow: data-wb-formset holds a <template> of an empty
+	 * form (data-wb-formset-empty) and a button that adds one.
+	 */
+
+	function formsets(root) {
+		each(root, "[data-wb-formset]", function (container) {
+			if (container.dataset.wbReady) {
+				return;
+			}
+			container.dataset.wbReady = "1";
+			var add = container.querySelector("[data-wb-formset-add]");
+			var template = container.querySelector("template[data-wb-formset-empty]");
+			var rows = container.querySelector("[data-wb-formset-rows]");
+			var total = container.querySelector("input[name$='TOTAL_FORMS']");
+			if (!add || !template || !rows || !total) {
+				return;
+			}
+			var prefix = total.name.replace(/-TOTAL_FORMS$/, "");
+			var pattern = new RegExp("^" + prefix + "-\\d+-");
+
+			// After a row goes, the rows that follow are numbered down by one.
+			function renumber() {
+				var count = 0;
+				Array.prototype.forEach.call(rows.children, function (row) {
+					if (row.hasAttribute("data-wb-formset-none")) {
+						return;
+					}
+					each(row, "[name], [id], label[for]", function (el) {
+						["name", "id", "for"].forEach(function (attribute) {
+							var value = el.getAttribute(attribute);
+							if (value) {
+								el.setAttribute(attribute, value.replace(pattern, prefix + "-" + count + "-").replace(new RegExp("^id_" + prefix + "-\\d+-"), "id_" + prefix + "-" + count + "-"));
+							}
+						});
+					});
+					count += 1;
+				});
+				total.value = count;
+			}
+
+			container.addEventListener("click", function (event) {
+				var remove = event.target.closest && event.target.closest("[data-wb-formset-remove]");
+				if (!remove) {
+					return;
+				}
+				var row = remove.closest(".wb-row-form");
+				if (row) {
+					row.remove();
+					renumber();
+				}
+			});
+
+			add.addEventListener("click", function () {
+				var index = parseInt(total.value, 10) || 0;
+				var html = template.innerHTML.replace(/__prefix__/g, String(index));
+				var none = rows.querySelector("[data-wb-formset-none]");
+				if (none) {
+					none.remove();
+				}
+				rows.insertAdjacentHTML("beforeend", html);
+				total.value = index + 1;
+				var added = rows.lastElementChild;
+				enhance(added);
+				var first = added && added.querySelector("input:not([type=hidden]), select, textarea, button.wb-picker");
+				if (first) {
+					first.focus();
+				}
+			});
+		});
+	}
+
 	function enhance(root) {
 		tabs(root);
 		pickers(root);
 		dialogs(root);
 		menus(root);
+		formsets(root);
 	}
 
 	menu();
+	copies();
 	tabLinks();
 	confirms();
 	checklists(document);

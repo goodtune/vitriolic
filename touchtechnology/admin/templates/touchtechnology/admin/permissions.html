@@ -1,7 +1,7 @@
 {% extends "touchtechnology/admin/base.html" %}
 {% load i18n common admin_ui %}
 
-{% block page_title %}{% blocktrans with name=instance|default:object %}Who can work on {{ name }}{% endblocktrans %}{% endblock %}
+{% block page_title %}{% with first=formset.forms.0 %}{% blocktrans with name=first.instance %}Who can work on {{ name }}{% endblocktrans %}{% endwith %}{% endblock %}
 
 {% block content %}
 	<header class="wb-head">
@@ -11,8 +11,6 @@
 			<p class="wb-lede">{% trans "Choose the people and groups allowed to do each thing. Everyone else needs a permission for the whole site." %}</p>
 		</div>
 	</header>
-
-	{% include "touchtechnology/admin/_messages.html" %}
 
 	<form class="wb-form" action="" method="post" novalidate>
 		{% csrf_token %}
