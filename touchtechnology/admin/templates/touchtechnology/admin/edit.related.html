@@ -1,20 +1,17 @@
 {% extends "touchtechnology/admin/edit.html" %}
-{% load common %}
+{% load i18n common admin %}
 
 {% block extracss %}
 	{{ block.super }}
-
-	<!-- formset.media -->
-	{{ formset.media }}
+	{{ formset.media.css|admin_media }}
 {% endblock extracss %}
 
 {% block form-fieldset %}
 	{{ block.super }}
-
-	{{ formset.management_form }}
-	{% for form in formset %}
-		{% for f in form %}
-			{% field f %}
-		{% endfor %}
-	{% endfor %}
+	{% include "touchtechnology/admin/_formset.html" %}
 {% endblock form-fieldset %}
+
+{% block extrajs %}
+	{{ block.super }}
+	{{ formset.media.js|admin_media }}
+{% endblock extrajs %}

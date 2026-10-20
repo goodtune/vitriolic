@@ -1,0 +1,11 @@
+{% load i18n admin %}{% if messages %}
+<div class="messages" role="status">
+	{% for message in messages %}
+		<div class="message message-{{ message.tags|default:"info" }}">
+			{% if message.level >= 40 %}{% icon "alert" %}{% elif message.level == 25 %}{% icon "check" %}{% else %}{% icon "info" %}{% endif %}
+			<p>{{ message }}</p>
+			<button type="button" class="message-close">{% icon "x" %}<span class="visually-hidden">{% trans "Dismiss" %}</span></button>
+		</div>
+	{% endfor %}
+</div>
+{% endif %}

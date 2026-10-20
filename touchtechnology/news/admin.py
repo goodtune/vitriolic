@@ -16,6 +16,7 @@ from touchtechnology.news.models import Article, Category, Translation
 
 class NewsAdminComponent(AdminComponent):
     verbose_name = _("News")
+    explorer_icon = "article"
     unprotected = False
 
     def __init__(self, app, name="news", app_name="news"):

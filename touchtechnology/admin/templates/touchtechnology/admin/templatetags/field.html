@@ -1,20 +1,22 @@
-<div class="form-group{% if f.errors %} has-feedback has-error{% endif %} {{ widget_class_name }}">
+{% load i18n admin %}{% with labelled=caption|default_if_none:""|stringformat:"s" %}
+<div class="field {{ widget_class_name }}{% if f.errors %} has-errors{% endif %}{% if not caption %} no-label{% endif %}">
 	{% if caption %}
-		<label for="{{ f.html_name }}" class="placeholder-hidden control-label col-md-3">{{ f.label }}</label>
-	{% endif %}
-
-	<div class="col-md-7">
-		{{ f }}
-
-		{% if f.errors %}
-			<i class="form-control-feedback glyphicon glyphicon-remove"></i>
-			{% for error in f.errors %}
-				<small class="help-block">{{ error }}</small>
-			{% endfor %}
+		{% if "<label" in labelled %}
+			<label class="field-label" for="{{ f.id_for_label }}">{{ f.label }}{% if not f.field.required and widget_class_name != "checkbox_input" %} <span class="required">{% trans "optional" %}</span>{% endif %}</label>
+		{% else %}
+			<span class="field-label" id="{{ f.auto_id }}-label">{{ f.label }}{% if not f.field.required and widget_class_name != "checkbox_input" %} <span class="required">{% trans "optional" %}</span>{% endif %}</span>
 		{% endif %}
-
+	{% endif %}
+	<div class="field-control"{% if caption and "<label" not in labelled %} role="group" aria-labelledby="{{ f.auto_id }}-label"{% endif %}>
+		{{ f|widget }}
+		{% if f.errors %}
+			<ul class="field-errors" id="{{ f.auto_id }}-errors">
+				{% for error in f.errors %}<li>{{ error }}</li>{% endfor %}
+			</ul>
+		{% endif %}
 		{% if f.help_text %}
-			<p class="help-block">{{ f.help_text }}</p>
+			<p class="field-help" id="{{ f.auto_id }}-help">{{ f.help_text }}</p>
 		{% endif %}
 	</div>
-</div> <!-- /.form-group -->
+</div>
+{% endwith %}

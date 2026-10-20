@@ -1,52 +1,71 @@
-{% load i18n %}
-{% load admin %}
-{% load common %}
-<!DOCTYPE html>
-<html lang="en">
+{% load i18n static admin common %}<!DOCTYPE html>
+{% get_current_language as LANGUAGE_CODE %}
+<html lang="{{ LANGUAGE_CODE|default:"en" }}" class="no-js">
 <head>
-	<title>{% trans "Sign in" %} &middot; {{ brand.name }}</title>
-
 	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-	<link rel="stylesheet" href="{{ STATIC_URL }}bootstrap/dist/css/bootstrap.min.css">
-	<link rel="stylesheet" href="{{ STATIC_URL }}css/mvpready-admin.css">
-	<link rel="stylesheet" href="{{ STATIC_URL }}css/custom.css">
-
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>{% trans "Sign in" %} &ndash; {{ brand.name }}</title>
+	<script>document.documentElement.classList.replace('no-js', 'js')</script>
+	<link rel="preload" href="{% static 'touchtechnology/admin/fonts/IBMPlexSans-Variable.woff2' %}" as="font" type="font/woff2" crossorigin>
+	<link rel="stylesheet" href="{% static 'touchtechnology/admin/css/admin.css' %}">
 	{% include "touchtechnology/admin/_brand.html" %}
-
-	<link rel="shortcut icon" href="{{ STATIC_URL }}favicon.ico">
+	<link rel="icon" href="{% static 'touchtechnology/admin/img/favicon.svg' %}" type="image/svg+xml">
 </head>
 
-<body>
-<main class="container">
-	{% if brand.logo %}<img src="{{ brand.logo|brand_logo_url }}" alt="{{ brand.name }}">{% endif %}
-	<h1>{{ brand.name }}</h1>
+<body class="admin">
+<div class="sign-in">
+	<header class="sign-in-art">
+		<a class="brandmark" href="{% url 'admin:login' %}">
+			{% if brand.logo %}
+				<img src="{{ brand.logo|brand_logo_url }}" alt="{{ brand.name }}">
+			{% else %}
+				<span class="brand-tile" aria-hidden="true">{{ brand.name|initials }}</span>
+				<span class="brand-name">{{ brand.name }}</span>
+			{% endif %}
+		</a>
+		<svg class="map" viewBox="0 0 520 300" aria-hidden="true" focusable="false">
+			<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".55">
+				<path d="M40 40v220M40 90h60M40 160h60M40 240h60M120 90v120M120 130h60M120 200h60M200 130v80M200 170h60M200 205h60"/>
+			</g>
+			<g fill="var(--surface)" stroke="currentColor" stroke-width="2">
+				<rect x="16" y="16" width="150" height="40" rx="8"/>
+				<rect x="100" y="70" width="170" height="40" rx="8"/>
+				<rect x="100" y="140" width="150" height="40" rx="8"/>
+				<rect x="100" y="220" width="150" height="40" rx="8"/>
+				<rect x="180" y="110" width="160" height="40" rx="8"/>
+				<rect x="260" y="150" width="190" height="40" rx="8" fill="var(--fill)" stroke="var(--fill-edge)"/>
+				<rect x="260" y="190" width="150" height="34" rx="8"/>
+			</g>
+			<g fill="currentColor" opacity=".35">
+				<rect x="34" y="31" width="90" height="10" rx="5"/><rect x="118" y="85" width="110" height="10" rx="5"/>
+				<rect x="118" y="155" width="90" height="10" rx="5"/><rect x="118" y="235" width="80" height="10" rx="5"/>
+				<rect x="198" y="125" width="100" height="10" rx="5"/><rect x="278" y="202" width="90" height="10" rx="5"/>
+			</g>
+			<rect x="278" y="165" width="120" height="10" rx="5" fill="var(--on-fill)" opacity=".8"/>
+		</svg>
+	</header>
 
-	{% if signed_in_as %}
-		<p class="signed-in-notice">{% blocktrans %}You are signed in as {{ signed_in_as }}, which cannot use the administration. Sign in with another account.{% endblocktrans %}</p>
-	{% endif %}
+	<main class="sign-in-form" id="main">
+		<h1>{% trans "Sign in" %}</h1>
+		<p class="lede">{% blocktrans with name=brand.name %}The administration of {{ name }}.{% endblocktrans %}</p>
 
-	<form method="post" class="form-horizontal">
-		{% csrf_token %}
-
-		{% if form.non_field_errors %}
-			<ul class="errorlist">
-				{% for error in form.non_field_errors %}
-					<li>{{ error }}</li>
-				{% endfor %}
-			</ul>
+		{% if signed_in_as %}
+			<p class="notice signed-in-notice">{% blocktrans %}You are signed in as {{ signed_in_as }}, which cannot use the administration. Sign in with another account.{% endblocktrans %}</p>
 		{% endif %}
 
-		{% field form.username %}
-		{% field form.password %}
-
-		<input type="hidden" name="next" value="{{ next }}">
-
-		<button type="submit">{% trans "Sign in" %}</button>
-		{% url 'accounts:password_reset' as reset_url %}
-		{% if reset_url %}<a href="{{ reset_url }}">{% trans "Reset Password" %}</a>{% endif %}
-	</form>
-</main>
+		<form method="post">
+			{% csrf_token %}
+			{% include "touchtechnology/admin/_form_errors.html" %}
+			{% field form.username %}
+			{% field form.password %}
+			<input type="hidden" name="next" value="{{ next }}">
+			<div class="form-actions">
+				<button type="submit" class="button primary">{% trans "Sign in" %}</button>
+				{% url 'accounts:password_reset' as reset_url %}
+				{% if reset_url %}<a class="button quiet" href="{{ reset_url }}">{% trans "Forgotten your password?" %}</a>{% endif %}
+			</div>
+		</form>
+	</main>
+</div>
 </body>
 </html>

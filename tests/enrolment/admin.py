@@ -29,6 +29,7 @@ from enrolment.models import (
 from guardian.utils import get_40x_or_None
 
 from touchtechnology.admin.base import AdminComponent
+from touchtechnology.admin.explorer import Explorer, Rel
 from touchtechnology.common.decorators import staff_login_required_m
 from touchtechnology.common.utils import get_perms_for_model
 
@@ -39,6 +40,23 @@ ENROLMENT = CLASS_ITEM + "enrolment/"
 ENROLMENT_ITEM = ENROLMENT + "<int:enrolment_id>/"
 
 
+class EnrolmentExplorer(Explorer):
+    """
+    The explorer follows the component's nested URLs by itself; this only
+    groups a school year's classes by grade and names classes and enrolments
+    by what is not already said by the folder they are in.
+    """
+
+    branches = {SchoolYear: (Rel("classes", group_by="grade"),)}
+
+    def object_label(self, obj):
+        if isinstance(obj, ClassGroup):
+            return obj.title
+        if isinstance(obj, Enrolment):
+            return str(obj.student)
+        return super().object_label(obj)
+
+
 class EnrolmentAdminComponent(AdminComponent):
     """
     School year, grade, class, student and enrolment records, with the
@@ -47,6 +65,8 @@ class EnrolmentAdminComponent(AdminComponent):
 
     verbose_name = _("Enrolment")
     unprotected = False
+    explorer_class = EnrolmentExplorer
+    explorer_icon = "schoolyear"
 
     def __init__(self, app, name="enrolment", app_name="enrolment"):
         super().__init__(app, name, app_name)

@@ -1,4 +1,5 @@
 import base64
+import datetime
 import collections
 import functools
 import logging
@@ -21,13 +22,14 @@ from django.http import (
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
-from django.utils import timezone
+from django.utils import formats, timezone
 from django.utils.translation import gettext_lazy as _, ngettext
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from guardian.utils import get_40x_or_None
 
 from touchtechnology.admin.base import AdminComponent
+from touchtechnology.admin.explorer import Explorer, Folder, Node, Rel
 from touchtechnology.common.decorators import (
     csrf_exempt_m,
     staff_login_required_m,
@@ -175,9 +177,76 @@ def next_related_factory(model, parent=None, fk_name=None):
     return model(order=last + 1, **kw)
 
 
+def season_days(explorer, request, season):
+    """The season's match days, each opening on its results."""
+    nodes = []
+    for day in season.matches.dates("date", "day"):
+        nodes.append(
+            Node(
+                key=explorer.key("x:day:%s:%s" % (season.pk, day.strftime("%Y%m%d"))),
+                label=formats.date_format(day, "D j M"),
+                url=reverse(
+                    "admin:fixja:match-results",
+                    args=(season.competition_id, season.pk, day.strftime("%Y%m%d")),
+                ),
+                icon="results",
+            )
+        )
+    return nodes
+
+
+class CompetitionExplorer(Explorer):
+    """
+    Competition, season, division, stage and pool, as the URLs nest them, with
+    a season's venues and match days in folders of their own and a division's
+    teams in another. A club holds its people.
+    """
+
+    branches = {
+        Competition: (Rel("seasons", flat=True),),
+        Season: (
+            Rel("divisions", flat=True),
+            Rel("venues", label=_("Venues"), icon="venue"),
+            Folder("days", _("Match days"), children=season_days, icon="season"),
+        ),
+        Division: (
+            Rel("stages", flat=True),
+            Rel("teams", label=_("Teams"), icon="team"),
+        ),
+        Stage: (Rel("pools", flat=True),),
+        StageGroup: (),
+        Venue: (Rel("grounds", flat=True),),
+        Ground: (),
+        Team: (),
+        UndecidedTeam: (),
+        Match: (),
+        Club: (Rel("members", flat=True),),
+        Person: (),
+        DrawFormat: (),
+    }
+
+    def trail(self, request, context):
+        keys = super().trail(request, context)
+        season, day = context.get("season"), context.get("date")
+        if isinstance(season, Season) and isinstance(day, datetime.date):
+            keys += [
+                self.key("g:competition.season:%s:days" % season.pk),
+                self.key("x:day:%s:%s" % (season.pk, day.strftime("%Y%m%d"))),
+            ]
+        return keys
+
+    def group_node(self, obj, rel, value=None, label=None):
+        node = super().group_node(obj, rel, value, label)
+        if isinstance(obj, Season) and rel.name == "days":
+            node.url = "%s#schedule-tab" % obj.urls["edit"]
+        return node
+
+
 class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     verbose_name = _("Tournament Control")
     unprotected = False
+    explorer_class = CompetitionExplorer
+    explorer_icon = "competition"
 
     def __init__(self, app, name="fixja", app_name="competition"):
         super(CompetitionAdminComponent, self).__init__(app, name, app_name)
@@ -767,14 +836,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @staff_login_required_m
     def index(self, request, **kwargs):
-        messages.warning(
-            request,
-            _(
-                "We're moving a few things around, please "
-                "update any bookmarks you may find that "
-                "have broken."
-            ),
-        )
         return self.redirect(self.reverse("competition:list"))
 
     @competition_by_pk_m

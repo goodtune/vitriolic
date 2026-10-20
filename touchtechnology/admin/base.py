@@ -8,6 +8,7 @@ from django.utils.encoding import smart_str
 from modelforms.forms import ModelForm
 
 from touchtechnology.admin.branding import get_brand
+from touchtechnology.admin.explorer import Explorer
 from touchtechnology.admin.forms import AdminFormControlMixin
 from touchtechnology.common.decorators import (
     never_cache_m,
@@ -27,6 +28,13 @@ class AdminComponentMixin(object):
     # protect by @staff_login_required_m it's not our intent, we're moving
     # towards the permission's and django-guardian.
     unprotected = True
+
+    #: The ``Explorer`` that draws this component's part of the tree. The
+    #: stock one follows the admin URLs; a subclass may name relations,
+    #: groupings and folders of its own.
+    explorer_class = Explorer
+    #: The icon of this component's folder in the tree.
+    explorer_icon = "component"
 
     def __init__(self, app, name, app_name, *args, **kwargs):
         super(AdminComponentMixin, self).__init__(
@@ -82,6 +90,13 @@ class AdminComponentMixin(object):
         return super(AdminComponentMixin, self).render(
             request, templates, context, *args, **kwargs
         )
+
+    def explorer(self):
+        """This component's ``Explorer``."""
+        explorer = getattr(self, "_explorer", None)
+        if explorer is None:
+            explorer = self._explorer = self.explorer_class(self)
+        return explorer
 
     def reverse(self, name, args=(), kwargs={}, prefix=None):
         if prefix is None:

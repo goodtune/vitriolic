@@ -1,0 +1,25 @@
+{% load i18n admin %}
+<div class="drill-panel" data-node="{{ tree.drill_key }}">
+	<div class="drill-head">
+		{% if tree.drill_parent %}
+			<a class="drill-up" href="{{ tree.drill_parent_url|default:"#" }}" data-drill="{{ tree.drill_parent }}">{% icon "chevron-left" %}<span>{{ tree.drill_parent_label }}</span></a>
+		{% endif %}
+		{% if tree.drill_url %}
+			<a class="drill-title" href="{{ tree.drill_url }}">{{ tree.drill_label }}</a>
+		{% else %}
+			<span class="drill-title">{{ tree.drill_label }}</span>
+		{% endif %}
+	</div>
+	<ul class="drill-list" role="list">
+		{% for node in tree.drill_children %}
+			<li class="{% if node.on_trail %}on-trail{% endif %}">
+				<a class="drill-link" href="{{ node.url|default:"#" }}"{% if node.is_page %} aria-current="page"{% endif %}>{% icon node.icon %}<span>{{ node.label }}</span></a>
+				{% if node.expandable %}
+					<button type="button" class="drill-in" data-drill="{{ node.key }}">{% icon "chevron-right" %}<span class="visually-hidden">{% blocktrans with label=node.label %}Inside {{ label }}{% endblocktrans %}</span></button>
+				{% endif %}
+			</li>
+		{% empty %}
+			<li class="drill-empty">{% trans "Nothing here yet." %}</li>
+		{% endfor %}
+	</ul>
+</div>

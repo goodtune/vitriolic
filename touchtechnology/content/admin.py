@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 
 class ContentAdminComponent(AdminComponent):
     verbose_name = _("Content")
+    explorer_icon = "sitemap"
 
     filter = Q(content_type__app_label="content") | Q(content_type__isnull=True)
 

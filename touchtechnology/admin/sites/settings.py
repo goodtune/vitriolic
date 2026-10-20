@@ -9,6 +9,7 @@ from touchtechnology.common.decorators import superuser_login_required_m
 
 class Settings(AdminComponent):
     verbose_name = _("Settings")
+    explorer_icon = "settings"
     visible = False
 
     def __init__(self, app, name="settings", app_name="settings"):

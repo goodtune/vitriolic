@@ -1,29 +1,13 @@
 {% extends "touchtechnology/admin/base.html" %}
-
-{% block mainnav %}{% endblock %}
+{% load i18n admin %}
 
 {% block full_content %}
-	<hr class="spacer-md">
-	<hr class="spacer-xs">
-
-	<div class="error-container">
-		<div class="error-code">{% block error-code %}{% endblock %}</div> <!-- /.error-code -->
-
-		<div class="error-details">
+	<main id="main" class="error-page" tabindex="-1">
+		<div>
+			<p class="code">{% block error-code %}{% endblock %}</p>
 			{% block error-details %}{% endblock %}
-
-			{% block search-form %}
-				<form action="#" class="form">
-					<div class="input-group">
-						<input type="text" class="form-control" placeholder="Search...">
-						<span class="input-group-btn">
-							<button class="btn btn-secondary" type="button">
-								<i class="fa fa-search"></i>
-							</button>
-						</span>
-					</div><!-- /input-group -->
-				</form>
-			{% endblock %}
-		</div> <!-- /.error-details -->
-	</div>
+			{% block search-form %}{% endblock %}
+			<p><a class="button" href="{% url 'admin:index' %}">{% icon "dashboard" %}{% trans "Back to the dashboard" %}</a></p>
+		</div>
+	</main>
 {% endblock %}

@@ -16,6 +16,7 @@ ANONYMOUS_USER_ID = getattr(settings, "ANONYMOUS_USER_ID", None)
 
 class UsersGroups(AdminComponent):
     verbose_name = _("Users & Groups")
+    explorer_icon = "group"
 
     user_order_by = ("last_name", "first_name")
 
