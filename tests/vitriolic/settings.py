@@ -118,7 +118,7 @@ TEMPLATES = [
                 # in entirety.
                 "touchtechnology.common.context_processors.env",
                 "touchtechnology.common.context_processors.query_string",
-                "touchtechnology.common.context_processors.site",
+                "vitriolic.context_processors.site",
                 "touchtechnology.common.context_processors.tz",
                 "touchtechnology.common.context_processors.htmx_admin_tabs",
                 "touchtechnology.admin.context_processors.brand",
