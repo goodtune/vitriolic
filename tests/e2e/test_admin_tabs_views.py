@@ -10,12 +10,14 @@ the most the club and person pages show at once.
 """
 
 import datetime
+import re
 from urllib.parse import urljoin
 
 import pytest
 from playwright.sync_api import Page, expect
 
 from tests.e2e.admin_tabs import assert_same_in_both_modes, set_mode, show_tab
+from tests.e2e.shells import by_shell, pane_id
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.content.models import Placeholder
 from touchtechnology.content.tests.factories import RedirectFactory
@@ -187,33 +189,33 @@ def edit_url(live_server, obj):
 # What some tabs must list, so a tab that is empty in both modes still fails.
 LISTED = {
     "competition": {
-        "seasons-pane": ["season"],
-        "club_roles-pane": ["club_role"],
-        "team_roles-pane": ["team_role"],
+        pane_id("seasons"): ["season"],
+        pane_id("club_roles"): ["club_role"],
+        pane_id("team_roles"): ["team_role"],
     },
     "season": {
-        "exclusions-pane": ["season_exclusion"],
-        "divisions-pane": ["division"],
-        "venues-pane": ["venue"],
-        "timeslots-pane": ["timeslot"],
-        "referees-pane": ["season_referee"],
-        "live_stream_events-pane": ["live_stream_event"],
-        "live_stream_keys-pane": ["live_stream_key"],
+        pane_id("exclusions"): ["season_exclusion"],
+        pane_id("divisions"): ["division"],
+        pane_id("venues"): ["venue"],
+        pane_id("timeslots"): ["timeslot"],
+        pane_id("referees"): ["season_referee"],
+        pane_id("live_stream_events"): ["live_stream_event"],
+        pane_id("live_stream_keys"): ["live_stream_key"],
     },
-    "venue": {"grounds-pane": ["ground"]},
+    "venue": {pane_id("grounds"): ["ground"]},
     "division": {
-        "teams-pane": ["team"],
-        "stages-pane": ["stage"],
-        "exclusions-pane": ["division_exclusion"],
+        pane_id("teams"): ["team"],
+        pane_id("stages"): ["stage"],
+        pane_id("exclusions"): ["division_exclusion"],
     },
     "stage": {
-        "pools-pane": ["pool"],
-        "undecided_teams-pane": ["undecided_team"],
-        "matches-pane": ["match"],
+        pane_id("pools"): ["pool"],
+        pane_id("undecided_teams"): ["undecided_team"],
+        pane_id("matches"): ["match"],
     },
-    "team": {"people-pane": ["team_association"]},
-    "club": {"members-pane": ["person"]},
-    "article": {"translations-pane": ["translation"]},
+    "team": {pane_id("people"): ["team_association"]},
+    "club": {pane_id("members"): ["person"]},
+    "article": {pane_id("translations"): ["translation"]},
 }
 
 
@@ -231,7 +233,7 @@ def test_every_tab_lists_the_same_in_both_modes(
 
 @pytest.mark.parametrize("htmx", [False, True], ids=["plain", "htmx"])
 @pytest.mark.parametrize(
-    "name,tab_id", [("club", "members-pane"), ("person", "statistics-pane")]
+    "name,tab_id", [("club", pane_id("members")), ("person", pane_id("statistics"))]
 )
 def test_a_tab_list_can_be_searched_and_sorted(
     authenticated_page: Page, live_server, settings, site, name, tab_id, htmx
@@ -244,12 +246,19 @@ def test_a_tab_list_can_be_searched_and_sorted(
     page = authenticated_page
     page.goto(edit_url(live_server, site[name]))
     pane = show_tab(page, tab_id)
-    expect(pane.get_by_role("searchbox")).to_be_visible()
+    search = pane.get_by_role(
+        "searchbox", name=re.compile(by_shell(workbook="", explorer="^Filter"))
+    )
+    expect(search).to_be_visible()
     # A column sorts once there is more than one row to put in order.
     if pane.locator("tbody tr").count() > 1:
-        pane.locator("thead th button.wb-sort").first.click()
+        pane.locator(
+            by_shell(
+                workbook="thead th button.wb-sort", explorer="thead th button.sort"
+            )
+        ).first.click()
         expect(pane.locator("thead th[aria-sort]")).to_have_count(1)
-        pane.get_by_role("searchbox").fill("zzz-nobody")
+        search.fill("zzz-nobody")
         expect(pane.locator("tbody tr:visible")).to_have_count(0)
 
 

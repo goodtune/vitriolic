@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from playwright.sync_api import Page, expect
 
+from tests.e2e.shells import LIVE_STREAM_ROWS, by_shell
 from tournamentcontrol.competition.tests.factories import (
     DivisionFactory,
     GroundFactory,
@@ -110,12 +111,10 @@ class TestMatchLiveStream:
         page = authenticated_page
         data = live_stream_dataset
 
-        page.goto(
-            self._live_stream_url(live_server, data["season"], data["match_day"])
-        )
-        expect(page.locator("form table tbody tr")).to_have_count(3)
+        page.goto(self._live_stream_url(live_server, data["season"], data["match_day"]))
+        expect(page.locator(LIVE_STREAM_ROWS)).to_have_count(3)
 
-        row_texts = page.locator("form table tbody tr").all_inner_texts()
+        row_texts = page.locator(LIVE_STREAM_ROWS).all_inner_texts()
 
         # match_early_court1 and match_late_court1 share a division and field,
         # but reversed home/away, so their text distinguishes them without
@@ -136,14 +135,20 @@ class TestMatchLiveStream:
         page = authenticated_page
         data = live_stream_dataset
 
-        page.goto(
-            self._live_stream_url(live_server, data["season"], data["match_day"])
-        )
+        page.goto(self._live_stream_url(live_server, data["season"], data["match_day"]))
 
-        first_row = page.locator("form table tbody tr").first
+        first_row = page.locator(LIVE_STREAM_ROWS).first
         # Time is rendered in the season's local timezone, so match on
-        # shape (a 24-hour "09:00") rather than a literal string.
-        expect(first_row).to_contain_text(re.compile(r"\b\d{2}:\d{2}\b"))
+        # shape (a 24-hour "09:00" in Workbook, "9 a.m." in Explorer) rather
+        # than a literal string.
+        expect(first_row).to_contain_text(
+            re.compile(
+                by_shell(
+                    workbook=r"\b\d{2}:\d{2}\b",
+                    explorer=r"\d{1,2}(:\d{2})?\s*[ap]\.m\.",
+                )
+            )
+        )
         expect(first_row).to_contain_text("Beta Division")
         expect(first_row).to_contain_text("Court 1")
         expect(first_row).to_contain_text("Beta One")
@@ -160,19 +165,17 @@ class TestMatchLiveStream:
         page = authenticated_page
         data = live_stream_dataset
 
-        page.goto(
-            self._live_stream_url(live_server, data["season"], data["match_day"])
-        )
-        expect(page.locator("form table tbody tr")).to_have_count(3)
+        page.goto(self._live_stream_url(live_server, data["season"], data["match_day"]))
+        expect(page.locator(LIVE_STREAM_ROWS)).to_have_count(3)
 
         # Desktop (conftest's default 1920x1080 viewport).
         page.screenshot(
             path=str(screenshot_dir / "live_stream_desktop.png"), full_page=True
         )
 
-        first_row = page.locator("form table tbody tr").first
-        time_box = first_row.locator('td[data-label="Time"]').bounding_box()
-        division_box = first_row.locator('td[data-label="Division"]').bounding_box()
+        first_row = page.locator(LIVE_STREAM_ROWS).first
+        time_box = first_row.locator("td").nth(0).bounding_box()
+        division_box = first_row.locator("td").nth(1).bounding_box()
         select_box = first_row.locator("select").bounding_box()
 
         # On desktop, time and division sit on the same line.
@@ -186,10 +189,10 @@ class TestMatchLiveStream:
             path=str(screenshot_dir / "live_stream_mobile.png"), full_page=True
         )
 
-        first_row = page.locator("form table tbody tr").first
-        time_box = first_row.locator('td[data-label="Time"]').bounding_box()
-        division_box = first_row.locator('td[data-label="Division"]').bounding_box()
-        field_box = first_row.locator('td[data-label="Field"]').bounding_box()
+        first_row = page.locator(LIVE_STREAM_ROWS).first
+        time_box = first_row.locator("td").nth(0).bounding_box()
+        division_box = first_row.locator("td").nth(1).bounding_box()
+        field_box = first_row.locator("td").nth(2).bounding_box()
         select_box = first_row.locator("select").bounding_box()
 
         # On mobile, time/division/field stack onto separate lines.

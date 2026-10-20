@@ -43,7 +43,7 @@ case "$mode" in
     unit)
         exec tox -e dj61-py314 \
             --override testenv.docker= \
-            --override testenv.passenv=DATABASE_URL,DB_5432_TCP_PORT \
+            --override testenv.passenv=DATABASE_URL,DB_5432_TCP_PORT,ADMIN_SHELL \
             ${1+-- "$@"}
         ;;
     e2e)
@@ -51,7 +51,7 @@ case "$mode" in
         # overrides name it; its setenv is replaced to drop the Redis backend.
         COMPOPS_EVENTS_BACKEND=memory exec tox -e e2e \
             --override testenv:e2e.docker= \
-            --override testenv:e2e.passenv=DATABASE_URL,DB_5432_TCP_PORT,COMPOPS_EVENTS_BACKEND,PLAYWRIGHT_CHROMIUM_EXECUTABLE \
+            --override testenv:e2e.passenv=DATABASE_URL,DB_5432_TCP_PORT,ADMIN_SHELL,COMPOPS_EVENTS_BACKEND,PLAYWRIGHT_CHROMIUM_EXECUTABLE \
             --override 'testenv:e2e.setenv=DJANGO_ALLOW_ASYNC_UNSAFE=1' \
             ${1+-- "$@"}
         ;;

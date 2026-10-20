@@ -1,4 +1,4 @@
-{% extends shell.print_template|default:"touchtechnology/admin/workbook/print.html" %}
+{% extends "touchtechnology/admin/workbook/print.html" %}
 {% load i18n common mathfilters %}
 
 {% block title %}{{ node|default:"Model Draw Generator" }}{% endblock %}
@@ -25,7 +25,7 @@
 	<h1>{{ node|default:"Model Draw Generator" }}</h1>
 	<div class="c-layout">
 		<form class="p-sheet c-form" action="" method="get">
-			{% with field_template=shell.field_template|default:"touchtechnology/admin/workbook/templatetags/field.html" %}
+			{% with field_template="touchtechnology/admin/workbook/templatetags/field.html" %}
 				{% for f in form %}{% field f %}{% endfor %}
 			{% endwith %}
 			<div class="c-actions">

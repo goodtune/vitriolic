@@ -10,7 +10,7 @@ from modelforms.forms import ModelForm
 from touchtechnology.admin.branding import get_brand
 from touchtechnology.admin.explorer import Explorer
 from touchtechnology.admin.forms import AdminFormControlMixin
-from touchtechnology.admin.shells import DEFAULT_SHELL, get_shell
+from touchtechnology.admin.shells import DEFAULT_SHELL, ShellTemplatesMixin, get_shell
 from touchtechnology.common.decorators import (
     never_cache_m,
     staff_login_required_m,
@@ -20,7 +20,7 @@ from touchtechnology.common.forms.mixins import BootstrapFormControlMixin
 from touchtechnology.common.sites import Application
 
 
-class AdminComponentMixin(object):
+class AdminComponentMixin(ShellTemplatesMixin):
     verbose_name = "ExampleComponent"
     visible = True
     #: The name of the component's icon in the admin's sprite (``None`` picks
@@ -65,15 +65,8 @@ class AdminComponentMixin(object):
         the same place without the shell (where a deployment overrides it) next;
         the admin's own pages come last.
         """
-        shell = self.shell
-        base = self.template_base
-        for candidate in super(AdminComponentMixin, self)._template_path(
-            filename, *args
-        ):
-            if candidate.startswith(base + os.sep):
-                yield os.path.join(base, shell.name, os.path.relpath(candidate, base))
-            yield candidate
-        yield shell.template(filename)
+        yield from super()._template_path(filename, *args)
+        yield self.shell.template(filename)
         yield os.path.join("touchtechnology/admin", filename)
 
     @never_cache_m

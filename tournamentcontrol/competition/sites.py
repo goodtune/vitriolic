@@ -21,11 +21,14 @@ from django.utils.cache import patch_vary_headers
 from django.utils.html import strip_tags
 from django.utils.http import urlencode
 from django.utils.module_loading import import_string
-from django.utils.translation import gettext, gettext_lazy as _
+from django.utils.translation import gettext
+from django.utils.translation import gettext_lazy as _
 from django.views.decorators.cache import cache_page, patch_cache_control
 from guardian.utils import get_40x_or_None
 from icalendar import Calendar, Event, vUri
 
+from touchtechnology.admin.shells import ShellTemplatesMixin
+from touchtechnology.admin.sites import site as admin_site
 from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
 from touchtechnology.common.utils import get_perms_for_model
@@ -208,8 +211,7 @@ class CompetitionAdminMixin(object):
                 "away_team_eval_related",
                 "play_at",
                 "stage__division",
-            )
-            .defer(
+            ).defer(
                 "live_stream_thumbnail_image",
                 "home_team_eval_related__live_stream_thumbnail_image",
                 "away_team_eval_related__live_stream_thumbnail_image",
@@ -1157,8 +1159,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                 # a venue selection includes matches scheduled directly at
                 # the venue and on any of its grounds
                 matches = matches.filter(
-                    Q(play_at=selected_place)
-                    | Q(play_at__ground__venue=selected_place)
+                    Q(play_at=selected_place) | Q(play_at__ground__venue=selected_place)
                 )
             except Venue.DoesNotExist:
                 selected_place = get_object_or_404(
@@ -1418,9 +1419,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             return HttpResponseGone()
 
         if team is not None:
-            matches = Match.objects.filter(
-                Q(home_team=team) | Q(away_team=team)
-            )
+            matches = Match.objects.filter(Q(home_team=team) | Q(away_team=team))
         elif division is not None:
             matches = Match.objects.filter(stage__division=division)
         elif club is not None:
@@ -1822,7 +1821,11 @@ class RegistrationSite(Application):
         return []
 
 
-class TournamentCalculatorSite(Application):
+class TournamentCalculatorSite(ShellTemplatesMixin, Application):
+    @property
+    def shell(self):
+        return admin_site.shell
+
     def __init__(self, name="calculator", app_name="calculator", **kwargs):
         self.form_class = import_string(
             kwargs.pop(

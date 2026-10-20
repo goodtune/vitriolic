@@ -13,6 +13,7 @@ from django.urls import reverse
 from test_plus import TestCase
 
 from touchtechnology.admin.shells import DEFAULT_SHELL, get_shell
+from touchtechnology.admin.tests.shells import by_shell
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.admin import SCORECARD_PDF_WAIT
 from tournamentcontrol.competition.tasks import (
@@ -142,7 +143,7 @@ class DateScorecardTests(ScorecardTestCase):
                 "html",
             )
         self.response_200()
-        self.assertIn("<!DOCTYPE html>", self.last_response.content.decode("utf8"))
+        self.assertIn("<html", self.last_response.content.decode("utf8"))
         self.prince.assert_not_called()
 
     def test_login_required(self):
@@ -191,7 +192,7 @@ class StageScorecardTests(ScorecardTestCase):
                 "html",
             )
         self.response_200()
-        self.assertIn("<!DOCTYPE html>", self.last_response.content.decode("utf8"))
+        self.assertIn("<html", self.last_response.content.decode("utf8"))
         self.prince.assert_not_called()
 
     def test_login_required(self):
@@ -242,8 +243,11 @@ class AsyncResultViewTests(ScorecardTestCase):
         self.response_200()
         self.assertResponseHeaders({"Refresh": str(SCORECARD_PDF_WAIT)})
         self.assertResponseContains(
-            '<p class="wb-pane-loading">'
-            "Your scorecards will finish generating shortly.</p>"
+            by_shell(
+                workbook='<p class="wb-pane-loading">'
+                "Your scorecards will finish generating shortly.</p>",
+                explorer="<p>Your scorecards will finish generating shortly.</p>",
+            )
         )
         self.assertNoAsyncResult()
 
@@ -278,17 +282,39 @@ class AsyncResultViewTests(ScorecardTestCase):
         self.response_200()
         self.assertResponseHeaders({"Refresh": None})
         self.assertResponseContains(
-            '<p class="wb-message wb-message-error">'
-            '<svg class="wb-icon" aria-hidden="true" focusable="false">'
-            '<use href="/static/touchtechnology/admin/workbook/icons.svg#circle-alert">'
-            "</use></svg><span>The PDF service didn&#x27;t respond, so your PDF "
-            "could not be generated. Please try again.</span></p>"
+            by_shell(
+                workbook=(
+                    '<p class="wb-message wb-message-error">'
+                    '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+                    '<use href="/static/touchtechnology/admin/workbook/icons.svg#circle-alert">'
+                    "</use></svg><span>The PDF service didn&#x27;t respond, so your "
+                    "PDF could not be generated. Please try again.</span></p>"
+                ),
+                explorer=(
+                    '<div class="message message-error">'
+                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/explorer/img/icons.svg#alert"></use></svg>'
+                    "<p>The PDF service didn&#x27;t respond, so your PDF could not be "
+                    "generated. Please try again.</p>"
+                    '<button type="button" class="message-close">'
+                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/explorer/img/icons.svg#x"></use></svg>'
+                    '<span class="visually-hidden">Dismiss</span></button></div>'
+                ),
+            )
         )
         self.assertResponseContains(
-            f'<a class="wb-button wb-button-primary" href="{self.start_again()}">'
-            '<svg class="wb-icon" aria-hidden="true" focusable="false">'
-            '<use href="/static/touchtechnology/admin/workbook/icons.svg#refresh-cw">'
-            "</use></svg>Start again</a>"
+            by_shell(
+                workbook=(
+                    f'<a class="wb-button wb-button-primary" href="{self.start_again()}">'
+                    '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+                    '<use href="/static/touchtechnology/admin/workbook/icons.svg#refresh-cw">'
+                    "</use></svg>Start again</a>"
+                ),
+                explorer=(
+                    f'<a class="button primary" href="{self.start_again()}">'
+                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/explorer/img/icons.svg#refresh"></use></svg>'
+                    "<span>Try again</span></a>"
+                ),
+            )
         )
         self.assertNoAsyncResult()
 

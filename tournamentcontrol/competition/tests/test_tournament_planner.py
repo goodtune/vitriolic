@@ -1,6 +1,7 @@
 from django.test import override_settings
 from test_plus import TestCase
 
+from touchtechnology.admin.tests.shells import by_shell
 from tournamentcontrol.competition.draw.algorithms import seeded_tournament
 from tournamentcontrol.competition.tests import factories
 
@@ -66,4 +67,9 @@ class TournamentPlannerViewTests(TestCase):
         )
         self.response_200()
         self.assertResponseContains("<h3>Pool 2</h3>")
-        self.assertResponseContains("<li><span>Seed 1</span><strong>1</strong></li>")
+        self.assertResponseContains(
+            by_shell(
+                workbook="<li><span>Seed 1</span><strong>1</strong></li>",
+                explorer='<li>Seed 1 <span class="muted">(1)</span></li>',
+            )
+        )

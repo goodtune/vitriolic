@@ -20,6 +20,7 @@ from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.admin.branding import get_brand
 from touchtechnology.admin.sites import site
+from touchtechnology.admin.tests.shells import by_shell
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.dashboard import MostValuableWidget
 from tournamentcontrol.competition.draw.schemas import (
@@ -53,6 +54,17 @@ ICON = (
     '<svg class="wb-icon" aria-hidden="true" focusable="false">'
     '<use href="/static/touchtechnology/admin/workbook/icons.svg#%s"></use></svg>'
 )
+
+
+def bulk_link(url, name, title):
+    """Explorer's "Add several" control: a link, the dialog is the page's own."""
+    return (
+        f'<a class="button compact" href="{url}?count=5" '
+        f'data-add-many="add-many-{name}">'
+        '<svg class="icon" aria-hidden="true" focusable="false"><use '
+        'href="/static/touchtechnology/admin/explorer/img/icons.svg#plus-many">'
+        f"</use></svg><span>{title}</span></a>"
+    )
 
 
 def bulk_dialog(url, name, title):
@@ -171,11 +183,10 @@ class TemplateTests(TestCase):
                 self.season.pk,
                 "20170213",
             )
-            self.assertResponseContains("<td>1st</td>")
-            self.assertResponseContains("<td>2nd </td>")  # whitespace deliberate
-            self.assertResponseContains(
-                "<td>Chees&eacute;&nbsp;&amp;&nbsp;Crackers</td>"
-            )
+            cell = by_shell(workbook="<td>%s</td>", explorer='<td class="team">%s</td>')
+            self.assertResponseContains(cell % "1st")
+            self.assertResponseContains(cell % "2nd ")  # whitespace deliberate
+            self.assertResponseContains(cell % "Chees&eacute;&nbsp;&amp;&nbsp;Crackers")
 
     def test_match_grid(self):
         self.assertLoginRequired(
@@ -193,14 +204,22 @@ class TemplateTests(TestCase):
                 "20170213",
                 "html",
             )
+            for fragment in by_shell(
+                workbook=(
+                    "<h4>%s <small>%s</small></h4>" % (self.division, self.stage),
+                ),
+                explorer=(
+                    "<strong>%s</strong>" % self.division,
+                    "<small>%s</small>" % self.stage,
+                ),
+            ):
+                self.assertResponseContains(fragment)
+            box = by_shell(workbook="<p>%s</p>", explorer="<div>%s</div>")
             self.assertResponseContains(
-                "<h4>%s <small>%s</small></h4>" % (self.division, self.stage)
-            )
-            self.assertResponseContains(
-                "<p>1st <br>2nd</p>"
+                box % "1st <br>2nd"
             )  # whitespace & br style deliberate
             self.assertResponseContains(
-                "<p>Chees&eacute;&nbsp;&amp;&nbsp;Crackers<br>4th</p>"
+                box % "Chees&eacute;&nbsp;&amp;&nbsp;Crackers<br>4th"
             )
 
     def test_scorecards_html(self):
@@ -222,11 +241,15 @@ class TemplateTests(TestCase):
                 "html",
             )
             self.assertResponseContains(
-                "<title>Scorecards &middot; %s</title>" % get_brand().name
+                by_shell(
+                    workbook="<title>Scorecards &middot; %s</title>" % get_brand().name,
+                    explorer="<title>Scorecards</title>",
+                )
             )
             self.assertResponseContains(
-                '<th colspan="5" class="p-card-team team">'
+                '<th colspan="5" class="%s">'
                 "Chees&eacute;&nbsp;&amp;&nbsp;Crackers</th>"
+                % by_shell(workbook="p-card-team team", explorer="team")
             )
 
     @patch("tournamentcontrol.competition.utils.prince")
@@ -247,10 +270,16 @@ class TemplateTests(TestCase):
         self.assertEqual(base64.b64decode(data), b"%PDF-1.4")
         mock_prince.assert_called_once()
         html = mock_prince.call_args.args[0]
-        self.assertIn("<title>Scorecards \u00b7 %s</title>" % get_brand().name, html)
         self.assertIn(
-            '<th colspan="5" class="p-card-team team">'
-            "Chees\u00e9\u00a0&amp;\u00a0Crackers</th>",
+            by_shell(
+                workbook="<title>Scorecards \u00b7 %s</title>" % get_brand().name,
+                explorer="<title>Scorecards</title>",
+            ),
+            html,
+        )
+        self.assertIn(
+            '<th colspan="5" class="%s">Chees\u00e9\u00a0&amp;\u00a0Crackers</th>'
+            % by_shell(workbook="p-card-team team", explorer="team"),
             html,
         )
 
@@ -402,22 +431,26 @@ class GoodViewTests(TestCase):
 
     def test_index(self):
         """
-        Tournament Control opens on its own page, its jobs and sections, rather
-        than redirecting to the list of competitions with a warning.
+        Where the shell has landing pages Tournament Control opens on its own
+        page, its jobs and sections; where it has none it goes straight to the
+        list of competitions.
         """
         self.assertLoginRequired("admin:fixja:index")
         with self.login(self.superuser):
             self.get("admin:fixja:index")
-            self.response_200()
-            self.assertResponseContains(
-                '<a class="wb-task" href="%s"><span class="wb-task-icon">%s</span>'
-                '<span class="wb-task-title">Competitions</span></a>'
-                % (
-                    self.reverse("admin:fixja:competition:list"),
-                    ICON % "chevron-right",
-                ),
-                html=True,
-            )
+            if site.shell.index_landing:
+                self.response_200()
+                self.assertResponseContains(
+                    '<a class="wb-task" href="%s"><span class="wb-task-icon">%s</span>'
+                    '<span class="wb-task-title">Competitions</span></a>'
+                    % (
+                        self.reverse("admin:fixja:competition:list"),
+                        ICON % "chevron-right",
+                    ),
+                    html=True,
+                )
+            else:
+                self.response_302()
 
     def test_competition(self):
         competition = factories.CompetitionFactory.create()
@@ -1124,8 +1157,13 @@ class GoodViewTests(TestCase):
             self.get("admin:fixja:club:officials", club.pk, season.pk)
             self.response_200()
             self.assertResponseContains(
-                '<p class="wb-empty" data-wb-formset-none>'
-                "There are no officials of this club.</p>"
+                by_shell(
+                    workbook='<p class="wb-empty" data-wb-formset-none>'
+                    "There are no officials of this club.</p>",
+                    explorer='<td colspan="3" class="empty-state">'
+                    "The club has no officials for this season yet.</td>",
+                ),
+                html=by_shell(workbook=False, explorer=True),
             )
 
     def test_officials_complete_season_is_read_only_to_club_administrators(self):
@@ -1137,8 +1175,13 @@ class GoodViewTests(TestCase):
             self.get("admin:fixja:club:officials", club.pk, season.pk)
             self.response_200()
             self.assertResponseContains(
-                '<tr class="wb-table-empty"><td colspan="2">'
-                "There are no club officials for this season.</td></tr>"
+                by_shell(
+                    workbook='<tr class="wb-table-empty"><td colspan="2">'
+                    "There are no club officials for this season.</td></tr>",
+                    explorer='<td colspan="2" class="empty-state">'
+                    "The club has no officials for this season.</td>",
+                ),
+                html=by_shell(workbook=False, explorer=True),
             )
 
     def test_officials_save_returns_to_the_club(self):
@@ -1334,20 +1377,26 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.assertEqual([expected_scorer], list(mvp))
 
         # Assert HTML structure contains the expected table rows
-        expected_scorer_row = (
-            '<tr><td class="wb-num">1</td>'  # rank
-            f'<th scope="row">{person.first_name} {person.last_name}</th>'
-            f"<td>{team.club.title}</td>"
-            '<td class="wb-num">1</td>'  # played
-            '<td class="wb-num"><strong>10</strong></td></tr>'  # points
-        )
-        expected_mvp_row = (
-            '<tr><td class="wb-num">1</td>'  # rank
-            f'<th scope="row">{person.first_name} {person.last_name}</th>'
-            f"<td>{team.club.title}</td>"
-            '<td class="wb-num">1</td>'  # played
-            '<td class="wb-num"><strong>2</strong></td></tr>'  # mvp
-        )
+        def row(total):
+            return by_shell(
+                workbook=(
+                    '<tr><td class="wb-num">1</td>'  # rank
+                    f'<th scope="row">{person.first_name} {person.last_name}</th>'
+                    f"<td>{team.club.title}</td>"
+                    '<td class="wb-num">1</td>'  # played
+                    f'<td class="wb-num"><strong>{total}</strong></td></tr>'
+                ),
+                explorer=(
+                    '<tr><td class="num muted">1</td>'  # place
+                    f"<td>{person.first_name} {person.last_name}</td>"
+                    f'<td class="wide-only">{team.club.title}</td>'
+                    '<td class="num">1</td>'  # played
+                    f'<td class="num strong">{total}</td></tr>'
+                ),
+            )
+
+        expected_scorer_row = row(10)  # points
+        expected_mvp_row = row(2)  # votes
 
         self.assertResponseContains(expected_scorer_row, html=True)
         self.assertResponseContains(expected_mvp_row, html=True)
@@ -1402,11 +1451,18 @@ class BackendTests(MessagesTestMixin, TestCase):
         res = self.client.get(url)
 
         # After GET ensure away_team has no players
-        text = """
+        text = by_shell(
+            workbook="""
         <tr class="wb-table-empty"><td colspan="5">
             There are no registered players in this team.
         </td></tr>
-        """
+        """,
+            explorer="""
+        <td colspan="5" class="empty-state">
+            No player is registered in this team.
+        </td>
+        """,
+        )
         self.assertContains(res, text, html=True)
 
         data = {
@@ -1439,14 +1495,29 @@ class BackendTests(MessagesTestMixin, TestCase):
         }
 
         res = self.client.post(url, data=data)
-        text = """
+        text = by_shell(
+            workbook="""
         <div class="wb-problems" role="alert"><ul>
             <li>
                 Total number of points (0) does not equal total
                 number of scores (3) for this team.
             </li>
         </ul></div>
-        """
+        """,
+            explorer="""
+        <div class="form-errors" role="alert">
+            <svg class="icon" aria-hidden="true" focusable="false">
+                <use href="/static/touchtechnology/admin/explorer/img/icons.svg#alert"></use>
+            </svg>
+            <ul>
+                <li>
+                    Total number of points (0) does not equal total
+                    number of scores (3) for this team.
+                </li>
+            </ul>
+        </div>
+        """,
+        )
         self.assertContains(res, text, html=True)
 
         data.update(
@@ -3187,8 +3258,9 @@ class TeamEditViewQueryTests(TestCase):
             self.assertGoodView(
                 edit_team.url_name,
                 *edit_team.args,
-                # The tree in the rail opens the folders down to the team.
-                test_query_count=28,
+                # The tree in the rail opens the folders down to the team
+                # (28 in Workbook, 30 in Explorer).
+                test_query_count=30,
             )
 
     def test_full_team_query_count(self):
@@ -3197,8 +3269,9 @@ class TeamEditViewQueryTests(TestCase):
             self.assertGoodView(
                 edit_team.url_name,
                 *edit_team.args,
-                # The tree in the rail opens the folders down to the team.
-                test_query_count=28,
+                # The tree in the rail opens the folders down to the team
+                # (28 in Workbook, 30 in Explorer).
+                test_query_count=30,
             )
 
 
@@ -3224,7 +3297,11 @@ class EditViewPermissionTests(TestCase):
             self.response_200()
             self.assertResponseContains(
                 '<input type="text" name="title" value="%s" maxlength="255" '
-                'class="wb-input" required id="id_title">' % self.season.title
+                '%srequired id="id_title">'
+                % (
+                    self.season.title,
+                    by_shell(workbook='class="wb-input" ', explorer=""),
+                )
             )
 
     def test_object_level_change_permission_is_scoped_to_object(self):
@@ -3288,10 +3365,17 @@ class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
             self.get("admin:fixja:competition:season:edit", *self.args)
             self.response_200()
             self.assertResponseContains(
-                bulk_dialog(
-                    self.reverse(self.viewname, *self.args),
-                    "division",
-                    "Add several divisions",
+                by_shell(
+                    workbook=bulk_dialog(
+                        self.reverse(self.viewname, *self.args),
+                        "division",
+                        "Add several divisions",
+                    ),
+                    explorer=bulk_link(
+                        self.reverse(self.viewname, *self.args),
+                        "division",
+                        "Add several divisions",
+                    ),
                 )
             )
 
@@ -3306,8 +3390,11 @@ class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
                 'id="id_form-TOTAL_FORMS">'
             )
             self.assertResponseContains(
-                '<label for="id_form-0-games_per_day" class="field_name">'
-                "Games per day</label>"
+                by_shell(
+                    workbook='<label for="id_form-0-games_per_day" class="field_name">'
+                    "Games per day</label>",
+                    explorer="<th>Games per day</th>",
+                )
             )
             formset = self.get_context("formset")
             self.assertEqual([form.instance.order for form in formset], [5, 6, 7])
@@ -3389,9 +3476,14 @@ class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
             self.post(self.viewname, *self.args, data=self.rows({}, {}))
             self.response_200()
             self.assertResponseContains(
-                '<div class="wb-problems" role="alert" tabindex="-1">'
-                "<h2>Please check the form</h2>"
-                "<ul><li>Fill in at least one row.</li></ul></div>"
+                by_shell(
+                    workbook='<div class="wb-problems" role="alert" tabindex="-1">'
+                    "<h2>Please check the form</h2>"
+                    "<ul><li>Fill in at least one row.</li></ul></div>",
+                    explorer='<div class="form-errors" role="alert">'
+                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/explorer/img/icons.svg#alert"></use></svg>'
+                    "<ul><li>Fill in at least one row.</li></ul></div>",
+                )
             )
         self.assertEqual(self.season.divisions.count(), 0)
 
@@ -3445,10 +3537,17 @@ class BulkCreateTeamTests(MessagesTestMixin, TestCase):
             self.get("admin:fixja:competition:season:division:edit", *self.args)
             self.response_200()
             self.assertResponseContains(
-                bulk_dialog(
-                    self.reverse(self.viewname, *self.args),
-                    "team",
-                    "Add several teams",
+                by_shell(
+                    workbook=bulk_dialog(
+                        self.reverse(self.viewname, *self.args),
+                        "team",
+                        "Add several teams",
+                    ),
+                    explorer=bulk_link(
+                        self.reverse(self.viewname, *self.args),
+                        "team",
+                        "Add several teams",
+                    ),
                 )
             )
 
@@ -3638,18 +3737,22 @@ class MatchResultsQueryTests(TestCase):
 
     # The tree in the rail opens the season's match days down to this one.
     def test_few_matches_query_count(self):
-        self.get_day(self.few, test_query_count=16)
+        self.get_day(self.few, test_query_count=17)
 
     def test_many_matches_query_count(self):
-        self.get_day(self.many, test_query_count=16)
+        self.get_day(self.many, test_query_count=17)
 
     def test_forfeit_winner_choices(self):
         match = self.few[0]
         self.get_day(self.few)
         self.assertResponseContains(
-            f'<select name="matches-0-forfeit_winner" class="wb-select" '
-            f'aria-describedby="id_matches-0-forfeit_winner_help" '
-            f'id="id_matches-0-forfeit_winner">'
+            '<select name="matches-0-forfeit_winner" '
+            + by_shell(
+                workbook='class="wb-select" '
+                'aria-describedby="id_matches-0-forfeit_winner_help" ',
+                explorer='aria-describedby="id_matches-0-forfeit_winner_helptext" ',
+            )
+            + f'id="id_matches-0-forfeit_winner">'
             f'<option value="" selected>Double forfeit</option>'
             f'<option value="{match.home_team.pk}">{match.home_team.title}</option>'
             f'<option value="{match.away_team.pk}">{match.away_team.title}</option>'
@@ -3758,10 +3861,10 @@ class MatchDetailQueryTests(TestCase):
 
     # The tree in the rail opens the folders down to the match's pool.
     def test_small_squads_query_count(self):
-        self.get_detail(self.small, test_query_count=25)
+        self.get_detail(self.small, test_query_count=26)
 
     def test_large_squads_query_count(self):
-        self.get_detail(self.large, test_query_count=25)
+        self.get_detail(self.large, test_query_count=26)
 
     def test_entered_statistics_are_shown(self):
         self.get_detail(self.small)
@@ -3908,7 +4011,8 @@ class MostValuableWidgetTests(TestCase):
             ),
         )
         self.assertResponseContains(
-            f'<a class="wb-button wb-button-small" href="{url}">Enter</a>'
+            f'<a class="{by_shell(workbook="wb-button wb-button-small", explorer="button compact")}" '
+            f'href="{url}">Enter</a>'
         )
 
 
@@ -3935,8 +4039,11 @@ class WizardBrandTests(TestCase):
             self.response_200()
             self.assertNotIn("brand", self.last_response.context_data)
             self.assertResponseContains(
-                "<title>Build the draw &middot; %s &middot; Administration</title>"
-                % stage.title,
+                by_shell(
+                    workbook="<title>Build the draw &middot; %s &middot; Administration</title>"
+                    % stage.title,
+                    explorer=f"<title>{stage.title} \u2013 Administration</title>",
+                ),
                 html=True,
             )
             self.assertResponseContains(
@@ -3946,8 +4053,11 @@ class WizardBrandTests(TestCase):
                 html=True,
             )
             self.assertResponseContains(
-                '<a class="wb-brand" href="/admin/">'
-                '<img class="wb-brand-logo" src="/static/img/logo.png" alt="">'
-                '<span class="wb-brand-name">Administration</span></a>',
+                by_shell(
+                    workbook='<a class="wb-brand" href="/admin/">'
+                    '<img class="wb-brand-logo" src="/static/img/logo.png" alt="">'
+                    '<span class="wb-brand-name">Administration</span></a>',
+                    explorer='<img src="/static/img/logo.png" alt="Administration">',
+                ),
                 html=True,
             )

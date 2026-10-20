@@ -4001,6 +4001,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             % (competition.slug, season.slug),
             "tournamentcontrol/rego/%s/registration_form.html" % (competition.slug,),
             "tournamentcontrol/rego/registration_form.html",
+            "tournamentcontrol/rego/%s/registration_form.html" % self.shell.name,
         ]
 
         res = TemplateResponse(request, templates, extra_context)

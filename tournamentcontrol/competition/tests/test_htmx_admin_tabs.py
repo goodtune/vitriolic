@@ -3,6 +3,7 @@ from django.urls import reverse
 from test_plus import TestCase
 
 from touchtechnology.admin.sites import site
+from touchtechnology.admin.tests.shells import by_shell
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.tests import factories
 
@@ -197,7 +198,15 @@ class HtmxTabPaginationTests(TestCase):
 
     def _member_link(self, member):
         url = reverse("admin:fixja:club:person:edit", args=[self.club.pk, member.pk])
-        return f'<a href="{url}">{member}</a>'
+        return by_shell(
+            workbook=f'<a href="{url}">{member}</a>',
+            explorer=(
+                f'<a href="{url}">'
+                '<svg class="icon" aria-hidden="true" focusable="false">'
+                '<use href="/static/touchtechnology/admin/explorer/img/icons.svg#person">'
+                f"</use></svg><span>{member}</span></a>"
+            ),
+        )
 
     def _get_club_tab(self, **data):
         with self.login(self.superuser):
@@ -231,9 +240,17 @@ class HtmxTabPaginationTests(TestCase):
         for number in (2, 3):
             href = f"?_htmx_tab=members&page={number}"
             self.assertResponseContains(
-                f'<a href="{href}" hx-get="{href}" hx-target="#members-pane" '
-                f'hx-swap="innerHTML" hx-push-url="false" '
-                f'aria-label="Page {number}">{number}</a>',
+                by_shell(
+                    workbook=(
+                        f'<a href="{href}" hx-get="{href}" hx-target="#members-pane" '
+                        f'hx-swap="innerHTML" hx-push-url="false" '
+                        f'aria-label="Page {number}">{number}</a>'
+                    ),
+                    explorer=(
+                        f'<a href="{href}" hx-get="{href}" hx-target="#members-tab" '
+                        f'hx-swap="innerHTML" hx-push-url="false">{number}</a>'
+                    ),
+                ),
                 html=True,
             )
 
@@ -288,11 +305,19 @@ class HtmxTabAddLinkTests(TestCase):
 
     def _add_link(self, url_name, *args, type_name):
         url = reverse(url_name, args=args)
-        return (
-            f'<a class="wb-button wb-button-primary wb-button-small" href="{url}">'
-            '<svg class="wb-icon" aria-hidden="true" focusable="false">'
-            '<use href="/static/touchtechnology/admin/workbook/icons.svg#plus"></use>'
-            f"</svg>Add {type_name}</a>"
+        return by_shell(
+            workbook=(
+                f'<a class="wb-button wb-button-primary wb-button-small" href="{url}">'
+                '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+                '<use href="/static/touchtechnology/admin/workbook/icons.svg#plus"></use>'
+                f"</svg>Add {type_name}</a>"
+            ),
+            explorer=(
+                f'<a class="button primary compact" href="{url}">'
+                '<svg class="icon" aria-hidden="true" focusable="false">'
+                '<use href="/static/touchtechnology/admin/explorer/img/icons.svg#plus">'
+                f"</use></svg><span>Add {type_name}</span></a>"
+            ),
         )
 
     def test_club_people_tab_traditional_mode(self):

@@ -26,6 +26,15 @@ from touchtechnology.admin.shells import SHELLS, get_shell
 from touchtechnology.admin.sites import site
 
 
+def by_shell(**expected):
+    """
+    The value given for the shell the admin site wears now: for the tests that
+    are not run once for each shell (see ``per_shell``) but assert on its markup
+    in a place or two, and are run again with ``ADMIN_SHELL`` set.
+    """
+    return expected[site.shell.name]
+
+
 class ShellMixin:
     """Puts the admin site in the shell named by ``shell_name`` for each test."""
 

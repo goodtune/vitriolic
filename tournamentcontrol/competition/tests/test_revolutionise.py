@@ -18,6 +18,7 @@ from django.test import TransactionTestCase
 from freezegun import freeze_time
 from test_plus import TestCase
 
+from touchtechnology.admin.tests.shells import by_shell
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.forms import CompetitionForm, SeasonForm
 from tournamentcontrol.competition.models import (
@@ -36,17 +37,17 @@ from tournamentcontrol.competition.tests.upstream import (
     ccha_session,
 )
 from tournamentcontrol.competition.upstream import (
-    get_backends,
     UpstreamResponseError,
     UpstreamTransportError,
     UpstreamURLError,
     get_backend_for_identifier,
     get_backend_for_url,
+    get_backends,
 )
 from tournamentcontrol.competition.upstream.backends.revolutionise import (
     LadderRow,
-    RevolutioniseClient,
     RevolutioniseBackend,
+    RevolutioniseClient,
     RevolutioniseURL,
     infer_ladder_template,
 )
@@ -724,11 +725,23 @@ class AdminTests(TestCase):
                 test_query_count=60,
             )
             self.assertResponseContains(
-                '<a href="%s">'
-                '<svg class="wb-icon" aria-hidden="true" focusable="false">'
-                '<use href="/static/touchtechnology/admin/workbook/icons.svg#refresh-cw">'
-                "</use></svg>Sync with revolutioniseSPORT</a>"
-                % self.reverse("admin:fixja:competition:season:upstream-sync", *self.args)
+                by_shell(
+                    workbook=(
+                        '<a href="%s">'
+                        '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+                        '<use href="/static/touchtechnology/admin/workbook/icons.svg#refresh-cw">'
+                        "</use></svg>Sync with revolutioniseSPORT</a>"
+                    ),
+                    explorer=(
+                        '<a href="%s">'
+                        '<svg class="icon" aria-hidden="true" focusable="false">'
+                        '<use href="/static/touchtechnology/admin/explorer/img/icons.svg#refresh">'
+                        "</use></svg>Synchronise from revolutioniseSPORT</a>"
+                    ),
+                )
+                % self.reverse(
+                    "admin:fixja:competition:season:upstream-sync", *self.args
+                )
             )
 
     @mock.patch("tournamentcontrol.competition.admin.synchronise_upstream_season")

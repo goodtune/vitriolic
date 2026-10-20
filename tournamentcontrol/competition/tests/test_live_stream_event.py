@@ -13,6 +13,7 @@ from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from test_plus import TestCase
 
+from touchtechnology.admin.tests.shells import by_shell
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.forms import LiveStreamEventForm
 from tournamentcontrol.competition.models import LiveStreamEvent, LiveStreamKey
@@ -32,16 +33,20 @@ def _http_error(status, message):
     return HttpError(resp=resp, content=message.encode())
 
 
-
 #: The button that copies an event's video link, as its row in the season's
 #: list of events draws it.
-COPY_VIDEO_LINK = (
-    '<button type="button" class="wb-button wb-button-small" '
-    'data-wb-copy="https://youtu.be/adhoc123" data-wb-copied="Copied">'
-    '<svg class="wb-icon" aria-hidden="true" focusable="false">'
-    '<use href="/static/touchtechnology/admin/workbook/icons.svg#link"></use>'
-    "</svg><span>Copy video link</span></button>"
-)
+def copy_video_link():
+    return by_shell(
+        workbook=(
+            '<button type="button" class="wb-button wb-button-small" '
+            'data-wb-copy="https://youtu.be/adhoc123" data-wb-copied="Copied">'
+            '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+            '<use href="/static/touchtechnology/admin/workbook/icons.svg#link"></use>'
+            "</svg><span>Copy video link</span></button>"
+        ),
+        explorer='data-copy="https://youtu.be/adhoc123"',
+    )
+
 
 class LiveStreamEventModelTests(TestCase):
     def test_str_is_title(self):
@@ -112,9 +117,7 @@ class LiveStreamEventModelTests(TestCase):
         self.assertCountEqual(event.season.live_stream_events.all(), [event])
 
     def test_video_url(self):
-        event = factories.LiveStreamEventFactory.create(
-            external_identifier="adhoc123"
-        )
+        event = factories.LiveStreamEventFactory.create(external_identifier="adhoc123")
         self.assertEqual(event.video_url, "https://youtu.be/adhoc123")
 
 
@@ -221,12 +224,8 @@ class LiveStreamEventFormTests(TestCase):
         event = form.save()
         self.assertEqual(event.pk, "adhoc999")
         self.assertEqual(event.season, season)
-        self.assertEqual(
-            event.start, datetime.datetime(2025, 5, 1, 19, 0, tzinfo=UTC)
-        )
-        self.assertEqual(
-            event.stop, datetime.datetime(2025, 5, 1, 20, 30, tzinfo=UTC)
-        )
+        self.assertEqual(event.start, datetime.datetime(2025, 5, 1, 19, 0, tzinfo=UTC))
+        self.assertEqual(event.stop, datetime.datetime(2025, 5, 1, 20, 30, tzinfo=UTC))
         self.assertEqual(event.stream_key, stream_key)
 
     def test_times_are_implied_in_season_timezone(self):
@@ -391,9 +390,7 @@ class SyncLiveStreamEventTests(TestCase):
         sync_live_stream_event(event.pk)
 
         mock_youtube.liveBroadcasts.return_value.update.assert_called_once()
-        body = mock_youtube.liveBroadcasts.return_value.update.call_args.kwargs[
-            "body"
-        ]
+        body = mock_youtube.liveBroadcasts.return_value.update.call_args.kwargs["body"]
         self.assertEqual(body["id"], "adhoc123")
         mock_youtube.liveBroadcasts.return_value.insert.assert_not_called()
 
@@ -425,9 +422,7 @@ class SyncLiveStreamEventTests(TestCase):
         "tournamentcontrol.competition.models.Season.youtube",
         new_callable=mock.PropertyMock,
     )
-    def test_disable_live_stream_tolerates_missing_broadcast(
-        self, mock_youtube_prop
-    ):
+    def test_disable_live_stream_tolerates_missing_broadcast(self, mock_youtube_prop):
         mock_youtube = mock.MagicMock()
         mock_youtube_prop.return_value = mock_youtube
         mock_youtube.liveBroadcasts.return_value.delete.return_value.execute.side_effect = _http_error(
@@ -587,7 +582,9 @@ class LiveStreamEventAdminTests(TestCase):
                 event.season.competition_id,
                 event.season_id,
             )
-            self.assertResponseContains(COPY_VIDEO_LINK)
+            self.assertResponseContains(
+                copy_video_link(), html=by_shell(workbook=True, explorer=False)
+            )
 
     def test_season_edit_hides_copy_video_link_for_removed_broadcast(self):
         event = factories.LiveStreamEventFactory.create(
@@ -601,7 +598,9 @@ class LiveStreamEventAdminTests(TestCase):
                 event.season.competition_id,
                 event.season_id,
             )
-            self.assertResponseNotContains(COPY_VIDEO_LINK)
+            self.assertResponseNotContains(
+                copy_video_link(), html=by_shell(workbook=True, explorer=False)
+            )
 
     def test_season_edit_hides_events_tab_when_not_live_streamed(self):
         season = factories.SeasonFactory.create(live_stream=False)
@@ -745,9 +744,7 @@ class LiveStreamEventAdminTests(TestCase):
         "tournamentcontrol.competition.models.Season.youtube",
         new_callable=mock.PropertyMock,
     )
-    def test_delete_event_blocked_when_platform_delete_fails(
-        self, mock_youtube_prop
-    ):
+    def test_delete_event_blocked_when_platform_delete_fails(self, mock_youtube_prop):
         mock_youtube = mock.MagicMock()
         mock_youtube_prop.return_value = mock_youtube
         mock_youtube.liveBroadcasts.return_value.delete.return_value.execute.side_effect = _http_error(
@@ -776,9 +773,7 @@ class LiveStreamEventAdminTests(TestCase):
         "tournamentcontrol.competition.models.Season.youtube",
         new_callable=mock.PropertyMock,
     )
-    def test_delete_event_proceeds_when_broadcast_already_gone(
-        self, mock_youtube_prop
-    ):
+    def test_delete_event_proceeds_when_broadcast_already_gone(self, mock_youtube_prop):
         mock_youtube = mock.MagicMock()
         mock_youtube_prop.return_value = mock_youtube
         mock_youtube.liveBroadcasts.return_value.delete.return_value.execute.side_effect = _http_error(
@@ -831,9 +826,7 @@ class LiveStreamEventAdminTests(TestCase):
         "tournamentcontrol.competition.models.Season.youtube",
         new_callable=mock.PropertyMock,
     )
-    def test_add_event_with_expired_authorisation_is_graceful(
-        self, mock_youtube_prop
-    ):
+    def test_add_event_with_expired_authorisation_is_graceful(self, mock_youtube_prop):
         mock_youtube_prop.side_effect = RefreshError(
             "invalid_grant: Token has been expired or revoked."
         )
@@ -919,9 +912,7 @@ class LiveStreamEventAdminTests(TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             event.delete()
 
-        mock_broadcast_task.s.assert_called_once_with(
-            event.season.pk, "adhoc123"
-        )
+        mock_broadcast_task.s.assert_called_once_with(event.season.pk, "adhoc123")
 
 
 class DeleteYoutubeStreamTests(TestCase):
@@ -1068,9 +1059,7 @@ class LiveStreamKeyAdminTests(TestCase):
         "tournamentcontrol.competition.models.Season.youtube",
         new_callable=mock.PropertyMock,
     )
-    def test_add_stream_key_without_credentials_is_refused(
-        self, mock_youtube_prop
-    ):
+    def test_add_stream_key_without_credentials_is_refused(self, mock_youtube_prop):
         mock_youtube = mock.MagicMock()
         mock_youtube_prop.return_value = mock_youtube
 

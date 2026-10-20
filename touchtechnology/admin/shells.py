@@ -233,3 +233,20 @@ def get_shell(name):
             "Unknown admin shell %r; choose one of %s."
             % (name, ", ".join(repr(known) for known in SHELLS))
         )
+
+
+class ShellTemplatesMixin:
+    """
+    For an application with templates of its own for each shell: it names its
+    shell as ``shell`` and its templates are looked for in the shell's folder
+    of its ``template_base`` before the same place without the shell (where a
+    deployment overrides them).
+    """
+
+    def _template_path(self, filename, *args):
+        shell = self.shell
+        base = self.template_base
+        for candidate in super()._template_path(filename, *args):
+            if candidate.startswith(base + os.sep):
+                yield os.path.join(base, shell.name, os.path.relpath(candidate, base))
+            yield candidate
