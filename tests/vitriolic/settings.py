@@ -117,6 +117,7 @@ TEMPLATES = [
                 "touchtechnology.common.context_processors.site",
                 "touchtechnology.common.context_processors.tz",
                 "touchtechnology.common.context_processors.htmx_admin_tabs",
+                "touchtechnology.admin.context_processors.brand",
                 # Static files context processor
                 "django.template.context_processors.static",
             ],

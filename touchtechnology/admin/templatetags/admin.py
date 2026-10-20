@@ -1,4 +1,5 @@
 from django.template import Library
+from django.templatetags.static import static
 
 import touchtechnology.admin
 
@@ -56,3 +57,14 @@ def allowed(components, request):
         return instance.unprotected
 
     return [c for c in components if show(c)]
+
+
+@register.filter
+def brand_logo_url(logo):
+    """
+    Resolve a brand logo: absolute URLs and root-relative paths are used as
+    given, anything else is looked up as a static file.
+    """
+    if "://" in logo or logo.startswith("/"):
+        return logo
+    return static(logo)

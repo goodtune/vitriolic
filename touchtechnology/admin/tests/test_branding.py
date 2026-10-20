@@ -4,6 +4,7 @@ from django.test import RequestFactory, override_settings
 from test_plus import TestCase
 
 from touchtechnology.admin.branding import brand_check, brand_from, get_brand
+from touchtechnology.common.tests import factories
 
 
 def brand_for(request):
@@ -71,3 +72,35 @@ class BrandTests(TestCase):
             "got '#275d8b\\n'",
         ):
             brand_from({"colours": {"primary": "#275d8b\n"}})
+
+
+class ShellTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.superuser = factories.UserFactory.create(is_staff=True, is_superuser=True)
+
+    def test_admin_index_emits_brand_properties(self):
+        with self.login(self.superuser):
+            self.get_check_200("admin:index")
+            self.assertResponseContains(
+                "<style>:root{--brand-primary:#275d8b;--brand-secondary:#e8862a;"
+                "--brand-success:#2a8a5c;--brand-warning:#d9a21b;"
+                "--brand-danger:#b8322f;}</style>",
+                html=True,
+            )
+            self.assertResponseContains(
+                '<span class="navbar-brand-text">Administration</span>', html=True
+            )
+
+    @override_settings(
+        TOUCHTECHNOLOGY_ADMIN_BRAND={
+            "name": "Harbour Touch",
+            "logo": "img/harbour.png",
+        }
+    )
+    def test_logo_is_resolved_through_static(self):
+        with self.login(self.superuser):
+            self.get_check_200("admin:index")
+            self.assertResponseContains(
+                '<img src="/static/img/harbour.png" alt="Harbour Touch">', html=True
+            )

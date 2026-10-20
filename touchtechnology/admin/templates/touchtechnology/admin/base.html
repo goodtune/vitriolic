@@ -8,7 +8,7 @@
 {% load gravatar %}
 {% load bootstrap3 %}
 <head>
-	<title>{# request.tenant|default:request.hostname|default:"Admin" #}</title>
+	<title>{% block title %}{{ brand.name }}{% endblock %}</title>
 
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -32,6 +32,9 @@
 	<!-- App CSS -->
 	<link rel="stylesheet" href="{{ STATIC_URL }}css/mvpready-admin.css">
 	<link rel="stylesheet" href="{{ STATIC_URL }}css/custom.css">
+
+	<!-- Brand -->
+	{% include "touchtechnology/admin/_brand.html" %}
 
 	<!-- Favicon -->
 	<link rel="shortcut icon" href="{{ STATIC_URL }}favicon.ico">
@@ -62,7 +65,7 @@
 				</button>
 
 				<a href="{% url 'admin:index' %}" class="navbar-brand navbar-brand-img">
-					<img src="{{ STATIC_URL }}img/logo.png" alt="{# request.tenant|default:request.hostname #}">
+					{% if brand.logo %}<img src="{{ brand.logo|brand_logo_url }}" alt="{{ brand.name }}">{% else %}<span class="navbar-brand-text">{{ brand.name }}</span>{% endif %}
 				</a>
 			</div> <!-- /.navbar-header -->
 
