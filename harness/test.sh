@@ -3,8 +3,9 @@
 #   test.sh <name> [unit|e2e] [--] [test labels or pytest arguments...]
 # unit (the default) runs the Django test suite through tox, environment
 # dj61-py314; e2e runs the Playwright suite through the e2e environment with
-# the in-memory commentary backend. Django makes its own test_vitriolic_<name>
-# database beside the harness database for <name>.
+# the in-memory commentary backend. The harness database for <name> must exist
+# and belong to this checkout (db.sh); Django makes its own
+# test_vitriolic_<name> database beside it.
 # Set PLAYWRIGHT_CHROMIUM_EXECUTABLE to use a browser that is already installed.
 set -euo pipefail
 
@@ -32,12 +33,8 @@ if [ "${1-}" = "--" ]; then
 fi
 
 harness_env "$name"
+harness_db_check "$name"
 checkout="$(harness_checkout)"
-
-if ! "$PGBIN/pg_isready" -q -h 127.0.0.1 -p "$PGPORT_HARNESS"; then
-    echo "test.sh: nothing answers on port $PGPORT_HARNESS; run pg.sh start" >&2
-    exit 1
-fi
 
 cd "$checkout"
 case "$mode" in

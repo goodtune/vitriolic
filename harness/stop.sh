@@ -25,42 +25,45 @@ fi
 pid="$(sed -n 's/^pid=//p' "$pidfile" | head -n 1)"
 port="$(sed -n 's/^port=//p' "$pidfile" | head -n 1)"
 
-command=""
-if [ -n "$pid" ] && [ -n "$port" ]; then
-    command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+if ! harness_is_runserver "$pid" "$port"; then
+    rm -f "$pidfile"
+    echo "stop.sh: '$name' is not running (pid ${pid:-unknown} is gone or is not its runserver)"
+    exit 0
 fi
-case "$command" in
-    *runserver*"$port"*) ;;
-    *)
-        rm -f "$pidfile"
-        echo "stop.sh: '$name' is not running (pid ${pid:-unknown} is gone or is not its runserver)"
-        exit 0
-        ;;
-esac
 
 # Any child of the server that is itself a runserver goes with it.
 targets=("$pid")
 while read -r child; do
     [ -n "$child" ] || continue
-    case "$(ps -p "$child" -o command= 2>/dev/null || true)" in
-        *runserver*"$port"*) targets+=("$child") ;;
-    esac
+    if harness_is_runserver "$child" "$port"; then
+        targets+=("$child")
+    fi
 done < <(pgrep -P "$pid" 2>/dev/null || true)
+
+# True while any of the targets is still running.
+any_alive() {
+    local target
+    for target in "${targets[@]}"; do
+        if kill -0 "$target" 2>/dev/null; then
+            return 0
+        fi
+    done
+    return 1
+}
 
 kill "${targets[@]}" 2>/dev/null || true
 for _ in $(seq 1 50); do
-    alive=0
-    for target in "${targets[@]}"; do
-        if kill -0 "$target" 2>/dev/null; then
-            alive=1
-        fi
-    done
-    [ "$alive" -eq 1 ] || break
+    any_alive || break
     sleep 0.2
 done
-if [ "$alive" -eq 1 ]; then
+if any_alive; then
     kill -9 "${targets[@]}" 2>/dev/null || true
+    sleep 0.5
 fi
 
+if any_alive; then
+    echo "stop.sh: '$name' is still running on port $port after kill -9; the pid file is kept" >&2
+    exit 1
+fi
 rm -f "$pidfile"
 echo "stop.sh: stopped '$name' (port $port)"

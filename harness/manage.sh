@@ -14,4 +14,5 @@ fi
 name="$1"
 shift
 harness_env "$name"
+harness_db_check "$name"
 exec "$HARNESS_PYTHON" "$(harness_checkout)/tests/manage.py" "$@"

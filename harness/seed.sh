@@ -14,8 +14,9 @@ fi
 
 name="$1"
 checkout="$(harness_checkout)"
-"$checkout/harness/manage.sh" "$name" migrate --noinput
-
 harness_env "$name"
+harness_db_check "$name"
+
+"$HARNESS_PYTHON" "$checkout/tests/manage.py" migrate --noinput
 cd "$checkout"
 exec "$HARNESS_PYTHON" -m harness seed

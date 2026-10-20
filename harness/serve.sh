@@ -2,7 +2,8 @@
 # Run the demo project's dev server for a name, in a chosen brand.
 #   serve.sh <name> <port> [--brand default|forest|sherbet] [--htmx-tabs]
 # Exit status 1 when the port is taken, the name already has a server, or the
-# server does not answer within 30 seconds.
+# server does not answer within 30 seconds; 3 when another checkout owns the
+# name's database.
 set -euo pipefail
 
 # shellcheck source=lib.sh
@@ -54,6 +55,8 @@ esac
 name="$(harness_name "$raw_name")"
 checkout="$(harness_checkout)"
 var="$(harness_var)"
+harness_env "$name" "$brand" "$htmx"
+harness_db_check "$name"
 pidfile="$var/run/$name/pid"
 logfile="$var/log/$name/server.log"
 url="http://127.0.0.1:$port/admin/"
@@ -63,21 +66,11 @@ pidfile_value() {
     sed -n "s/^$1=//p" "$pidfile" 2>/dev/null | head -n 1
 }
 
-# True when the pid is alive and is still a runserver on this port.
-is_our_server() {
-    local pid="$1" listen="$2" command
-    [ -n "$pid" ] || return 1
-    command="$(ps -p "$pid" -o command= 2>/dev/null)" || return 1
-    case "$command" in
-        *runserver*"$listen"*) return 0 ;;
-        *) return 1 ;;
-    esac
-}
-
 if [ -f "$pidfile" ]; then
     old_pid="$(pidfile_value pid)"
     old_port="$(pidfile_value port)"
-    if is_our_server "$old_pid" "${old_port:-0}"; then
+    # A pid file with no port in it is not ours to honour.
+    if harness_is_runserver "$old_pid" "$old_port"; then
         echo "serve.sh: '$name' is already serving on port $old_port (pid $old_pid); run stop.sh $name first" >&2
         exit 1
     fi
@@ -89,7 +82,6 @@ if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
     exit 1
 fi
 
-harness_env "$name" "$brand" "$htmx"
 : >"$logfile"
 
 nohup "$HARNESS_PYTHON" "$checkout/tests/manage.py" runserver "127.0.0.1:$port" --noreload \
@@ -104,7 +96,8 @@ pid=$!
     echo "checkout=$checkout"
 } >"$pidfile"
 
-for _ in $(seq 1 60); do
+SECONDS=0
+while [ "$SECONDS" -lt 30 ]; do
     if ! kill -0 "$pid" 2>/dev/null; then
         echo "serve.sh: the server for '$name' exited early; last of $logfile:" >&2
         tail -n 20 "$logfile" >&2
