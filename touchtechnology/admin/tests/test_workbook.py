@@ -10,7 +10,7 @@ from django.urls import reverse_lazy
 from test_plus import TestCase
 
 from touchtechnology.common.forms.mixins import BootstrapFormControlMixin
-from touchtechnology.common.forms.widgets import LocationWidget
+from touchtechnology.common.forms.widgets import HTMLWidget, LocationWidget
 from touchtechnology.common.tests import factories
 from touchtechnology.content.models import Redirect
 from touchtechnology.news.tests.factories import ArticleFactory, TranslationFactory
@@ -102,6 +102,46 @@ class ControlTests(TestCase):
             "/static/touchtechnology/admin/workbook/vendor/leaflet/leaflet.js", media
         )
         self.assertNotIn("unpkg.com", media)
+
+
+class CopyForm(BootstrapFormControlMixin, forms.Form):
+    copy = forms.CharField(label="Copy", widget=HTMLWidget)
+
+
+class RichTextTests(TestCase):
+    """The rich-text editor finds its field by the class of the field's box."""
+
+    def test_the_field_box_names_the_widget(self):
+        html = Template(
+            "{% load common %}{% field form.copy %}"
+        ).render(
+            Context(
+                {
+                    "form": CopyForm(),
+                    "field_template": "touchtechnology/admin/templatetags/field.html",
+                }
+            )
+        )
+        self.assertTrue(
+            html.lstrip().startswith(
+                '<div class="wb-field wb-field-textarea html_widget">'
+            ),
+            html[:200],
+        )
+
+    def test_the_article_page_carries_the_editor(self):
+        article = ArticleFactory.create()
+        superuser = factories.UserFactory.create(is_staff=True, is_superuser=True)
+        with self.login(superuser):
+            self.get_check_200("admin:news:article:edit", article.pk)
+        self.assertResponseContains(
+            '<script src="/static/touchtechnology/common/js/html-editor.js"></script>',
+            html=True,
+        )
+        self.assertIn(
+            '<div class="wb-field wb-field-textarea html_widget">',
+            self.last_response.content.decode(),
+        )
 
 
 class FilterTests(TestCase):
