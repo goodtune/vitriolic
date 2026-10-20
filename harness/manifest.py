@@ -23,6 +23,8 @@ class PageResult:
     file: str = ""
     #: Where the page ended after redirects; empty when it did not move.
     final_url: str = ""
+    #: 0 for the page itself, n for the picture of its nth tab.
+    tab: int = 0
 
 
 @dataclass
@@ -49,6 +51,11 @@ class StepResult:
 
 @dataclass
 class Manifest:
+    """
+    What a run captured, and enough about the run to tell a partial or stale
+    set of pictures from a complete one.
+    """
+
     name: str
     brand: str
     base: str
@@ -56,6 +63,22 @@ class Manifest:
     finished: str = ""
     pages: list[PageResult] = field(default_factory=list)
     flow: list[StepResult] = field(default_factory=list)
+    #: The page names ``--only`` asked for; ``None`` is every page.
+    only: list[str] | None = None
+    widths: list[int] = field(default_factory=list)
+    #: Whether the flow was to be recorded.
+    video: bool = True
+    #: How many pages ``pages.json`` listed for the run.
+    expected_pages: int = 0
+    #: The checkout the run was made from, and its commit.
+    checkout: str = ""
+    commit: str = ""
+    #: Whether the server loaded its tabs over HTMX.
+    htmx_tabs: bool = False
+    #: The stamp of the flow at each width, by width, for ``unflow``.
+    flow_stamps: dict[str, str] = field(default_factory=dict)
+    #: What went wrong with the run itself, before or between pages.
+    errors: list[str] = field(default_factory=list)
 
     @property
     def results(self) -> list[PageResult | StepResult]:
@@ -63,15 +86,33 @@ class Manifest:
 
     @property
     def error_count(self) -> int:
-        return sum(len(r.errors) for r in self.results)
+        return len(self.errors) + sum(len(r.errors) for r in self.results)
 
     @property
     def warning_count(self) -> int:
         return sum(len(r.warnings) for r in self.results)
 
     @property
+    def captured(self) -> int:
+        """How many pages were captured, counted once for each width."""
+        return len(
+            {
+                (result.name, result.width)
+                for result in self.pages
+                if result.tab == 0 and result.file
+            }
+        )
+
+    @property
+    def incomplete(self) -> bool:
+        """Fewer pages were captured than were listed, and no ``--only`` said why."""
+        return self.only is None and self.captured < self.expected_pages * len(
+            self.widths
+        )
+
+    @property
     def failed(self) -> bool:
-        return self.error_count > 0
+        return self.error_count > 0 or self.incomplete
 
     def write(self, path: Path) -> None:
         path = Path(path)
@@ -81,6 +122,8 @@ class Manifest:
     @classmethod
     def read(cls, path: Path) -> "Manifest":
         data = json.loads(Path(path).read_text())
+        if not isinstance(data, dict):
+            raise ValueError("%s does not hold a manifest" % path)
         pages = [PageResult(**p) for p in data.pop("pages", [])]
         flow = [StepResult(**s) for s in data.pop("flow", [])]
         return cls(pages=pages, flow=flow, **data)
