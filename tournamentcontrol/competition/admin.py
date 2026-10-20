@@ -10,7 +10,7 @@ from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
 from django.db import models
-from django.db.models import Case, F, Q, Sum, When
+from django.db.models import Case, Count, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
 from django.http import (
     Http404,
@@ -22,6 +22,7 @@ from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _, ngettext
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
@@ -40,6 +41,7 @@ from tournamentcontrol.competition.dashboard import (
     MostValuableWidget,
     ProgressStageWidget,
     ScoresheetWidget,
+    matches_require_basic_results,
 )
 from tournamentcontrol.competition.decorators import (
     competition_by_pk_m,
@@ -147,6 +149,195 @@ YOUTUBE_AUTH_EXPIRED_MESSAGE = _(
 )
 
 log = logging.getLogger(__name__)
+
+
+def _step(key, title, done, note, url, optional=False):
+    return {
+        "key": key,
+        "title": title,
+        "done": done,
+        "note": note,
+        "url": url,
+        "optional": optional,
+    }
+
+
+def checklist(steps):
+    """
+    A checklist of ``steps``: how many of the required ones are done, the
+    first step still to do, and the share done as a percentage.
+    """
+    required = [step for step in steps if not step["optional"]]
+    done = sum(1 for step in required if step["done"])
+    following = next((step for step in steps if not step["done"]), None)
+    if following is not None:
+        following["next"] = True
+    return {
+        "steps": steps,
+        "done": done,
+        "total": len(required),
+        "percent": int(round(100 * done / len(required))) if required else 100,
+        "complete": done == len(required),
+        "next": following,
+    }
+
+
+def match_days(season):
+    """Each day of ``season``'s matches, with how far its matches have come."""
+    scheduled = Q(time__isnull=False, play_at__isnull=False) | Q(is_bye=True)
+    played = Q(home_team_score__isnull=False, away_team_score__isnull=False) | Q(
+        is_bye=True, bye_processed=True
+    )
+    rows = (
+        Match.objects.filter(stage__division__season=season, date__isnull=False)
+        .values("date")
+        .annotate(
+            total=Count("pk"),
+            scheduled=Count("pk", filter=scheduled),
+            played=Count("pk", filter=played | Q(is_washout=True)),
+        )
+        .order_by("date")
+    )
+    today = season.local_date()
+    return [dict(row, past=row["date"] <= today) for row in rows]
+
+
+def season_checklist(season):
+    """The jobs that set ``season`` up and run it, in the order they are done."""
+    edit = str(season.urls["edit"])
+    timeslots = season.timeslots.count()
+    venues = season.venues.count()
+    grounds = Ground.objects.filter(venue__season=season).count()
+    exclusions = season.exclusions.count()
+    divisions = list(
+        season.divisions.annotate(
+            team_count=Count("teams", distinct=True),
+            match_count=Count("stages__matches", distinct=True),
+        ).order_by("order")
+    )
+    teams = sum(division.team_count for division in divisions)
+    without_teams = [d for d in divisions if d.team_count < 2]
+    without_draw = [d for d in divisions if not d.match_count]
+    matches = Match.objects.filter(stage__division__season=season)
+    total = matches.count()
+    unscheduled = (
+        matches.exclude(is_bye=True)
+        .filter(Q(date__isnull=True) | Q(time__isnull=True) | Q(play_at__isnull=True))
+        .count()
+    )
+    awaiting = list(
+        matches_require_basic_results(matches=matches.filter(datetime__lte=timezone.now()))
+        .order_by("date")
+        .values_list("date", flat=True)
+    )
+
+    def division_link(division, tab):
+        return "%s#%s-tab" % (division.urls["edit"], tab)
+
+    steps = [
+        _step(
+            "details",
+            _("Name the season and when it starts"),
+            bool(season.start_date),
+            season.start_date
+            and _("Starts %(date)s") % {"date": date_format(season.start_date, "j F Y")},
+            edit + "#season-tab",
+        ),
+        _step(
+            "timeslots",
+            _("Add the kick-off times"),
+            timeslots > 0,
+            ngettext("%(n)d time slot", "%(n)d time slots", timeslots) % {"n": timeslots}
+            if timeslots
+            else _("When matches can start each day"),
+            edit + "#timeslots-tab",
+        ),
+        _step(
+            "venues",
+            _("Add venues and their grounds"),
+            grounds > 0,
+            _("%(venues)d venues, %(grounds)d grounds")
+            % {"venues": venues, "grounds": grounds}
+            if venues
+            else _("Where the matches are played"),
+            edit + "#venues-tab",
+        ),
+        _step(
+            "exclusions",
+            _("Mark the dates with no matches"),
+            exclusions > 0,
+            ngettext("%(n)d date set aside", "%(n)d dates set aside", exclusions)
+            % {"n": exclusions}
+            if exclusions
+            else _("Public holidays and breaks"),
+            edit + "#exclusions-tab",
+            optional=True,
+        ),
+        _step(
+            "divisions",
+            _("Add the divisions"),
+            bool(divisions),
+            ngettext("%(n)d division", "%(n)d divisions", len(divisions))
+            % {"n": len(divisions)}
+            if divisions
+            else _("Add several at once"),
+            edit + "#divisions-tab",
+        ),
+        _step(
+            "teams",
+            _("Enter the teams"),
+            bool(divisions) and not without_teams,
+            _("%(division)s needs teams") % {"division": without_teams[0].title}
+            if without_teams
+            else ngettext("%(n)d team", "%(n)d teams", teams) % {"n": teams},
+            division_link(without_teams[0], "teams")
+            if without_teams
+            else edit + "#divisions-tab",
+        ),
+        _step(
+            "draw",
+            _("Build the draw"),
+            bool(divisions) and not without_draw,
+            _("%(division)s has no draw yet") % {"division": without_draw[0].title}
+            if without_draw
+            else ngettext("%(n)d match", "%(n)d matches", total) % {"n": total},
+            division_link(without_draw[0], "stages")
+            if without_draw
+            else edit + "#schedule-tab",
+        ),
+        _step(
+            "schedule",
+            _("Give every match a time and a ground"),
+            total > 0 and unscheduled == 0,
+            ngettext(
+                "%(n)d match to schedule", "%(n)d matches to schedule", unscheduled
+            )
+            % {"n": unscheduled}
+            if unscheduled
+            else (_("All scheduled") if total else _("Once the draw is built")),
+            edit + "#schedule-tab",
+        ),
+        _step(
+            "results",
+            _("Enter the results"),
+            total > 0 and not awaiting,
+            ngettext(
+                "%(n)d match waiting for a result",
+                "%(n)d matches waiting for a result",
+                len(awaiting),
+            )
+            % {"n": len(awaiting)}
+            if awaiting
+            else (_("Up to date") if total else _("On each match day")),
+            reverse(
+                "admin:fixja:match-results",
+                args=(season.competition_id, season.pk, awaiting[0].strftime("%Y%m%d")),
+            )
+            if awaiting
+            else edit + "#schedule-tab",
+        ),
+    ]
+    return checklist(steps)
 
 
 def bulk_create_count(request, default=5):
@@ -933,12 +1124,16 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             dates = season.matches.dates("date", "day")
 
         extra_context.setdefault("dates", dates)
+        if season.pk:
+            extra_context.setdefault("match_days", match_days(season))
+            extra_context.setdefault("checklist", season_checklist(season))
 
+        # In the order a season is set up: divisions, then when and where.
         related = (
-            "exclusions",
             "divisions",
-            "venues",
             "timeslots",
+            "venues",
+            "exclusions",
             "referees",
         )
         # Adhoc live stream events and their managed stream keys are only

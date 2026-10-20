@@ -1,16 +1,54 @@
 {% extends "touchtechnology/admin/edit.html" %}
-{% load i18n %}
+{% load i18n common admin_ui %}
+
+{% block lede %}
+	{% if object.pk %}
+		<p class="wb-lede">{{ object.competition }}{% if object.start_date %} · {% blocktrans with date=object.start_date|date:"j F Y" %}starts {{ date }}{% endblocktrans %}{% endif %}{% if object.complete %} · <span class="wb-badge wb-badge-ok">{% trans "Complete" %}</span>{% endif %}</p>
+	{% endif %}
+{% endblock %}
+
+{% block head-actions %}
+	{% if object.pk %}
+		{% for step in checklist.steps %}{% if step.key == "results" and not step.done and step.url|slice:":1" == "/" and "#" not in step.url %}
+			<a class="wb-button wb-button-primary" href="{{ step.url }}">{% icon "list-checks" %}{% trans "Enter results" %}</a>
+		{% endif %}{% endfor %}
+		<a class="wb-button" href="{% url 'admin:fixja:competition:season:report' object.competition.pk object.pk %}">{% icon "printer" %}{% trans "Season report" %}</a>
+		{% if object.upstream_enabled and object.upstream_backend %}
+			<a class="wb-button" href="{% url 'admin:fixja:competition:season:upstream-sync' object.competition.pk object.pk %}">{% icon "refresh-cw" %}{% blocktrans with name=object.upstream_backend.name %}Sync with {{ name }}{% endblocktrans %}</a>
+		{% endif %}
+	{% endif %}
+{% endblock %}
+
+{% block form-fieldset %}
+	{% fields_in form "title short_title start_date timezone mode enabled complete" as basics %}
+	{% include "touchtechnology/admin/_fieldgroup.html" with fields=basics first=True %}
+	{% fields_in form "copy hashtag statistics mvp_results_public enable_experimental_views" as public %}
+	{% trans "On the public site" as title %}{% trans "What spectators see about this season." as hint %}
+	{% include "touchtechnology/admin/_fieldgroup.html" with fields=public title=title hint=hint %}
+	{% fields_in form "live_stream live_stream_privacy live_stream_project_id live_stream_client_id live_stream_client_secret live_stream_thumbnail_image" as stream %}
+	{% trans "Live streaming" as title %}{% trans "Only needed if matches are streamed." as hint %}
+	{% include "touchtechnology/admin/_fieldgroup.html" with fields=stream title=title hint=hint folded=True %}
+	{% fields_besides form "title short_title start_date timezone mode enabled complete copy hashtag statistics mvp_results_public enable_experimental_views live_stream live_stream_privacy live_stream_project_id live_stream_client_id live_stream_client_secret live_stream_thumbnail_image" as rest %}
+	{% trans "Advanced" as title %}{% trans "The web address, and copying the draw from another site." as hint %}
+	{% include "touchtechnology/admin/_fieldgroup.html" with fields=rest title=title hint=hint folded=True %}
+{% endblock %}
+
+{% block layout-class %}{% if object.pk %} wb-layout-aside{% endif %}{% endblock %}
+
+{% block aside %}
+	{% if object.pk %}
+		<aside class="wb-aside" aria-label="{% trans "Season set-up" %}">
+			{% trans "Season set-up" as title %}
+			{% include "touchtechnology/admin/_checklist.html" with checklist=checklist title=title %}
+		</aside>
+	{% endif %}
+{% endblock %}
 
 {% block tab-links %}
 	{{ block.super }}
-
 	{% if object.pk %}
-		<li>
-			<a href={% if object.pk %}"#schedule-tab" data-toggle="tab"{% else %}"#"{% endif %}>
-				<i class="fa fa-chevron-right fa-fw"></i>
-				&nbsp;{% trans "Schedule" %}
-			</a>
-		</li>
+		{% trans "Schedule" as schedule %}
+		{% include "touchtechnology/admin/_tab.html" with id="schedule-tab" label=schedule count=match_days|length %}
 	{% endif %}
 {% endblock %}
 
@@ -18,95 +56,59 @@
 	{{ block.super }}
 
 	{% if object.pk %}
-		<div class="tab-pane" id="schedule-tab">
-			<div class="heading-block">
-				<h3>Schedule</h3>
+		<section class="wb-pane wb-sheet wb-sheet-flush" role="tabpanel" id="schedule-tab">
+			<div class="wb-sheet-head">
+				<h2>{% trans "Schedule" %}</h2>
+				<div class="wb-actions">
+					<a class="wb-button wb-button-small" href="{% url 'admin:fixja:competition:season:reschedule' object.competition.pk object.pk %}">{% icon "calendar-clock" %}{% trans "Reschedule" %}</a>
+					<a class="wb-button wb-button-small" href="{% url 'admin:fixja:competition:season:match-grid' object.competition.pk object.pk 'html' %}">{% icon "table" %}{% trans "Season grid" %}</a>
+				</div>
 			</div>
-
-			<table class="table table-striped">
-				<thead>
-					<tr>
-						<th>{% trans "Date" %}</th>
-						<th></th>
-					</tr>
-				</thead>
-				<tbody>
-					{% for date in dates %}
+			<div class="wb-table-wrap">
+				<table class="wb-table wb-table-cards">
+					<thead>
 						<tr>
-							<td>
-								<a href="{% url 'admin:fixja:match-results' object.competition.pk object.pk date|date:"Ymd" %}" role="button">
-									{{ date }}
-								</a>
-							</td>
-							<td class="text-right">
-								<div class="btn-group" role="group" aria-label="...">
-									<a href="{% url 'admin:fixja:match-schedule' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
-										<i class="fa fa-asterisk fa-fw"></i>
-										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Allocate" %}</span>
-									</a>
-									<a href="{% url 'admin:fixja:match-results' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
-										<i class="fa fa-asterisk fa-fw"></i>
-										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Results" %}</span>
-									</a>
-									<a href="{% url 'admin:fixja:match-runsheet' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
-										<i class="fa fa-clock-o fa-fw"></i>
-										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Run Sheet" %}</span>
-									</a>
-									<div class="btn-group">
-										<button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-expanded="false">
-										<i class="fa fa-table fa-fw"></i>
-										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Matrix" %}</span>
-											<span class="caret"></span>
-										</button>
-										<ul class="dropdown-menu dropdown-menu-right" role="menu">
-											<li role="presentation">
-												<a href="{% url 'admin:fixja:match-grid' object.competition.pk object.pk date|date:"Ymd" "html" %}" role="button">
-													<i class="fa fa-html5 fa-fw"></i>
-													<span class="hidden-sm hidden-xs">&nbsp;{% trans "HTML" %}</span>
-												</a>
-											</li>
-											<li role="presentation">
-												<a href="{% url 'admin:fixja:match-grid' object.competition.pk object.pk date|date:"Ymd" "pdf" %}" role="button">
-													<i class="fa fa-file-pdf-o fa-fw"></i>
-													<span class="hidden-sm hidden-xs">&nbsp;{% trans "PDF" %}</span>
-												</a>
-											</li>
-											<li role="presentation">
-												<a href="{% url 'admin:fixja:match-visual-schedule' object.competition.pk object.pk date|date:"Ymd" %}" role="button" target="_blank">
-													<i class="fa fa-th fa-fw"></i>
-													<span class="hidden-sm hidden-xs">&nbsp;{% trans "Visual Schedule" %}</span>
-												</a>
-											</li>
-										</ul>
+							<th scope="col">{% trans "Match day" %}</th>
+							<th scope="col" class="wb-num">{% trans "Matches" %}</th>
+							<th scope="col">{% trans "Scheduled" %}</th>
+							<th scope="col">{% trans "Results" %}</th>
+							<th scope="col"><span class="wb-sr">{% trans "Actions" %}</span></th>
+						</tr>
+					</thead>
+					<tbody>
+						{% for day in match_days %}
+							{% with ymd=day.date|date:"Ymd" competition_id=object.competition.pk %}
+							<tr>
+								<td class="wb-title-cell"><a href="{% url 'admin:fixja:match-results' competition_id object.pk ymd %}">{{ day.date|date:"D j M Y" }}</a></td>
+								<td class="wb-num" data-label="{% trans "Matches" %}">{{ day.total }}</td>
+								<td data-label="{% trans "Scheduled" %}">{% if day.scheduled == day.total %}<span class="wb-badge wb-badge-ok">{% icon "check" %}{% trans "All" %}</span>{% else %}<span class="wb-badge wb-badge-warn">{% blocktrans with done=day.scheduled total=day.total %}{{ done }} of {{ total }}{% endblocktrans %}</span>{% endif %}</td>
+								<td data-label="{% trans "Results" %}">{% if day.played == day.total %}<span class="wb-badge wb-badge-ok">{% icon "check" %}{% trans "All in" %}</span>{% elif day.past %}<span class="wb-badge wb-badge-danger">{% blocktrans with done=day.played total=day.total %}{{ done }} of {{ total }}{% endblocktrans %}</span>{% else %}<span class="wb-badge">{% trans "To come" %}</span>{% endif %}</td>
+								<td class="wb-row-actions">
+									<div class="wb-row-buttons">
+										<a class="wb-button wb-button-small" href="{% url 'admin:fixja:match-schedule' competition_id object.pk ymd %}">{% icon "clock" %}{% trans "Allocate" %}</a>
+										<a class="wb-button wb-button-small" href="{% url 'admin:fixja:match-results' competition_id object.pk ymd %}">{% icon "list-checks" %}{% trans "Results" %}</a>
+										<button type="button" class="wb-button wb-button-quiet wb-button-icon wb-button-small" popovertarget="wbm-day-{{ ymd }}" aria-expanded="false" aria-label="{% blocktrans with day=day.date|date:"j M" %}More for {{ day }}{% endblocktrans %}">{% icon "ellipsis" %}</button>
+										<div class="wb-menu" popover id="wbm-day-{{ ymd }}">
+											<ul>
+												<li><a href="{% url 'admin:fixja:match-runsheet' competition_id object.pk ymd %}">{% icon "file-text" %}{% trans "Run sheet" %}</a></li>
+												<li><a href="{% url 'admin:fixja:match-grid' competition_id object.pk ymd 'html' %}">{% icon "table" %}{% trans "Match grid" %}</a></li>
+												<li><a href="{% url 'admin:fixja:match-grid' competition_id object.pk ymd 'pdf' %}">{% icon "printer" %}{% trans "Match grid (PDF)" %}</a></li>
+												<li><a href="{% url 'admin:fixja:match-visual-schedule' competition_id object.pk ymd %}" target="_blank" rel="noopener">{% icon "layout-grid" %}{% trans "Visual schedule" %} <span class="wb-sr">{% trans "(opens a new tab)" %}</span>{% icon "external-link" %}</a></li>
+												<li><a href="{% url 'admin:fixja:scorecards' competition_id object.pk ymd 'pdf' %}">{% icon "printer" %}{% trans "Scorecards" %}</a></li>
+												<li><a href="{% url 'admin:fixja:match-washout' competition_id object.pk ymd %}">{% icon "umbrella" %}{% trans "Washout" %}</a></li>
+												<li><a href="{% url 'admin:fixja:match-live-stream' competition_id object.pk ymd %}">{% icon "video" %}{% trans "Live stream" %}</a></li>
+											</ul>
+										</div>
 									</div>
-									<a href="{% url 'admin:fixja:match-washout' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
-										<i class="fa fa-umbrella fa-fw"></i>
-										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Washout" %}</span>
-									</a>
-									<a href="{% url 'admin:fixja:match-live-stream' object.competition.pk object.pk date|date:"Ymd" %}" class="btn btn-default btn-sm" role="button">
-										<i class="fa fa-video-camera fa-fw"></i>
-										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Live Stream" %}</span>
-									</a>
-									<a href="{% url 'admin:fixja:scorecards' object.competition.pk object.pk date|date:"Ymd" "pdf" %}" class="btn btn-default btn-sm" role="button">
-										<i class="fa fa-print fa-fw"></i>
-										<span class="hidden-sm hidden-xs">&nbsp;{% trans "Scorecards" %}</span>
-									</a>
-								</div>
-							</td>
-						</tr>
-					{% empty %}
-						<tr>
-							<td colspan="2">{% blocktrans %}No stages have been generated yet.{% endblocktrans %}</td>
-						</tr>
-					{% endfor %}
-				</tbody>
-			</table>
-
-			<div class="form-group">
-				<div class="text-center">
-					<a class="btn btn-default" href="{% url 'admin:fixja:competition:season:reschedule' competition.pk season.pk %}">{% trans "Reschedule" %}</a>
-				</div> <!-- /.col -->
+								</td>
+							</tr>
+							{% endwith %}
+						{% empty %}
+							<tr class="wb-table-empty"><td colspan="5">{% trans "No matches yet. Build a draw for each division and its days appear here." %}</td></tr>
+						{% endfor %}
+					</tbody>
+				</table>
 			</div>
-		</div>
+		</section>
 	{% endif %}
 {% endblock %}
