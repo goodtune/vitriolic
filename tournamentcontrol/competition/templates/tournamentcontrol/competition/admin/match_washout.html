@@ -17,7 +17,7 @@
 			<ul class="check-list">
 				{% for form in group.list %}
 					{% with match=form.instance %}
-						<li>{{ form.id }}<label class="check">{{ form.is_washout|widget }} <span>{{ match|safe }}</span></label></li>
+						<li class="bye">{{ form.id }}<label for="{{ form.is_washout.id_for_label }}">{{ match|safe }}{% if match.time %} <small class="muted">{{ match.time|time }}{% if match.play_at %}, {{ match.play_at.title }}{% endif %}</small>{% endif %}</label>{{ form.is_washout|widget }}</li>
 					{% endwith %}
 				{% endfor %}
 			</ul>
