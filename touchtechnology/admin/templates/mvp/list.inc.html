@@ -8,7 +8,7 @@
 	empty-row-colspan, pagination.
 {% endcomment %}
 
-{% if manager %}
+{% if manager != None %}
 	{% block heading %}
 		<div class="list-head">
 			<h2 class="list-head__title">{{ manager.all|types|capfirst }}</h2>

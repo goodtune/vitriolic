@@ -78,7 +78,7 @@
 			<nav class="trail" aria-label="{% trans "You are here" %}">
 				<ol>
 					{% for crumb in trail %}
-						<li><a href="{{ crumb.url }}">{% if crumb.kind %}<span class="trail__kind">{{ crumb.kind }}</span>{% endif %}<span class="trail__label">{{ crumb.label }}</span></a></li>
+						<li><a href="{{ crumb.url }}">{% if forloop.first %}{% icon "home" %}<span class="trail__label visually-hidden">{{ crumb.label }}</span>{% else %}{% if crumb.kind %}<span class="trail__kind">{{ crumb.kind }}</span>{% endif %}<span class="trail__label">{{ crumb.label }}</span>{% endif %}</a></li>
 					{% endfor %}
 					{% block breadcrumbs %}{% endblock %}
 				</ol>

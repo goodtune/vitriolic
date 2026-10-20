@@ -113,10 +113,10 @@ def _picker(bf):
         widget, (forms.RadioSelect, forms.CheckboxSelectMultiple)
     ):
         return None
-    if bf.form.prefix and FORMSET_PREFIX.search(bf.form.prefix):
-        return None
     if isinstance(widget, forms.SelectMultiple):
         return "multiple"
+    if bf.form.prefix and FORMSET_PREFIX.search(bf.form.prefix):
+        return None
     choices = getattr(bf.field, "choices", None)
     if choices is None:
         choices = getattr(widget, "choices", ())

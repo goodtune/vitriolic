@@ -5,22 +5,15 @@ from playwright.sync_api import Page, expect
 
 from tournamentcontrol.competition.tests import factories
 
-#: Note when the next Bootstrap modal has finished fading and sliding in.
-WATCH_MODAL_SHOWN = """() => {
-    window.bulkCreateModalShown = false;
-    $(document).one("shown.bs.modal", () => { window.bulkCreateModalShown = true; });
-}"""
-
-
 def open_modal(page: Page, name: str):
     """
-    Open the "how many?" modal for ``name`` and wait until Bootstrap has
-    finished showing it, so a screenshot shows it as a person sees it.
+    Open the "how many?" dialog for ``name`` from its link, and return the
+    box that asks.
     """
-    page.evaluate(WATCH_MODAL_SHOWN)
-    page.click(f'a[data-target="#bulkCreateModal_{name}"]')
-    page.wait_for_function("window.bulkCreateModalShown")
-    return page.locator(f"#bulkCreateCount_{name}")
+    page.click(f'a[data-bulk="bulk-{name}"]')
+    dialog = page.locator(f"#bulk-{name}")
+    expect(dialog).to_be_visible()
+    return dialog.get_by_label("How many do you want to add?")
 
 
 class TestBulkCreate:
@@ -56,7 +49,7 @@ class TestBulkCreate:
         page.screenshot(
             path=str(screenshot_dir / "bulk_create_divisions_form.png"), full_page=True
         )
-        page.click('.content button[type="submit"]')
+        page.get_by_role("button", name="Save", exact=True).click()
 
         expect(page).to_have_url(
             f"{live_server.url}{season.urls['edit']}#divisions-tab"
@@ -80,7 +73,7 @@ class TestBulkCreate:
         expect(count).to_be_visible()
         count.fill("3")
         page.screenshot(path=str(screenshot_dir / "bulk_create_teams_modal.png"))
-        page.click("#bulkCreateModal_team .js-bulk-create")
+        page.locator("#bulk-team").get_by_role("button", name="Continue").click()
 
         expect(page).to_have_url(
             f"{live_server.url}{division.urls['edit']}teams/bulk/?count=3"
@@ -91,7 +84,7 @@ class TestBulkCreate:
         page.screenshot(
             path=str(screenshot_dir / "bulk_create_teams_form.png"), full_page=True
         )
-        page.click('.content button[type="submit"]')
+        page.get_by_role("button", name="Save", exact=True).click()
 
         expect(page).to_have_url(f"{live_server.url}{division.urls['edit']}#teams-tab")
         expect(page.locator("#teams-tab")).to_contain_text("Charlie")

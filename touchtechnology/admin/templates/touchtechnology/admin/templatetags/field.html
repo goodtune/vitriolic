@@ -8,7 +8,7 @@
 	</div>
 </div>
 {% elif f|is_group %}
-<div class="field field--{{ widget_class_name }}{% if f.errors %} field--error{% endif %}{% if f.field.required %} field--required{% endif %}" role="group"{% if not no_label %} aria-labelledby="{{ f.auto_id }}_label"{% endif %}>
+<div class="field field--{{ widget_class_name }} {{ widget_class_name }}{% if f.errors %} field--error{% endif %}{% if f.field.required %} field--required{% endif %}" role="group"{% if not no_label %} aria-labelledby="{{ f.auto_id }}_label"{% endif %}>
 	{% if not no_label %}<span class="field__label" id="{{ f.auto_id }}_label">{{ f.label }}</span>{% endif %}
 	<div class="field__control">
 		{% control f %}
@@ -17,7 +17,7 @@
 	</div>
 </div>
 {% else %}
-<div class="field field--{{ widget_class_name }}{% if f|is_wide %} field--wide{% endif %}{% if f.errors %} field--error{% endif %}{% if f.field.required %} field--required{% endif %}">
+<div class="field field--{{ widget_class_name }} {{ widget_class_name }}{% if f|is_wide %} field--wide{% endif %}{% if f.errors %} field--error{% endif %}{% if f.field.required %} field--required{% endif %}">
 	{% if not no_label %}<label class="field__label" for="{{ f.id_for_label }}">{{ f.label }}</label>{% endif %}
 	<div class="field__control">
 		{% if no_label %}{% control f aria_label=f.label %}{% else %}{% control f %}{% endif %}

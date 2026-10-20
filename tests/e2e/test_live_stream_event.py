@@ -1,5 +1,6 @@
 """E2E tests for the adhoc live stream event admin forms."""
 
+import re
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -79,7 +80,7 @@ class TestLiveStreamEventForm:
 
         # Visual feedback, and the click must not have navigated away by
         # submitting the season form.
-        expect(button.locator("i")).to_have_class("fa fa-check")
+        expect(button).to_have_class(re.compile(r"\bis-copied\b"))
         expect(page.locator("#live_stream_events-tab")).to_be_visible()
 
         page.screenshot(
@@ -135,7 +136,7 @@ class TestLiveStreamEventForm:
             expect(page.locator(f'select[name="{prefix}_3"]')).to_have_count(0)
 
         # The implied timezone is stated to the user.
-        expect(page.locator(".content form")).to_contain_text(
+        expect(page.locator("form#edit-form")).to_contain_text(
             "Local time in Australia/Sydney."
         )
 

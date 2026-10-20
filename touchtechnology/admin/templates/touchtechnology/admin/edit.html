@@ -47,6 +47,7 @@
 		{% block form-actions %}
 			<div class="actions-bar">
 				<button type="submit" class="btn btn--primary" data-save>{% icon "check" %}{% trans "Save" %}</button>
+				{% if form and object and not object.pk %}<button type="submit" class="btn" name="_addanother" value="1">{% icon "plus" %}{% trans "Save and add another" %}</button>{% endif %}
 				{% with up=trail|last %}
 					<a class="btn" href="{% block cancel-url %}{% if cancel_url and cancel_url != request.path %}{{ cancel_url }}{% elif up %}{{ up.url }}{% else %}{{ cancel_url }}{% endif %}{% endblock %}">{% trans "Cancel" %}</a>
 				{% endwith %}

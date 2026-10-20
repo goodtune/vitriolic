@@ -36,7 +36,9 @@ class TrailTests(TestCase):
                 *self.division._get_url_args(),
             )
         self.assertResponseContains(
-            '<li><a href="/admin/"><span class="trail__label">Dashboard</span></a></li>',
+            '<li><a href="/admin/">'
+            f'<svg class="i" aria-hidden="true" focusable="false"><use href="{ICONS}#i-home"></use></svg>'
+            '<span class="trail__label visually-hidden">Dashboard</span></a></li>',
             html=True,
         )
         self.assertResponseContains(
@@ -238,3 +240,40 @@ class DeleteReturnTests(TestCase):
             fetch_redirect_response=False,
         )
         self.assertEqual(Season.objects.filter(pk=self.season.pk).count(), 0)
+
+
+class AddAnotherTests(TestCase):
+    """An add page can save and come straight back for the next one."""
+
+    def setUp(self):
+        self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
+        self.season = factories.SeasonFactory.create()
+
+    def test_save_and_add_another_returns_to_the_form(self):
+        args = self.season._get_url_args()
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:competition:season:seasonexclusiondate:add", *args
+            )
+            self.assertResponseContains(
+                '<button type="submit" class="btn" name="_addanother" value="1">'
+                f'<svg class="i" aria-hidden="true" focusable="false"><use href="{ICONS}#i-plus"></use></svg>'
+                "Save and add another</button>",
+                html=True,
+            )
+            self.post(
+                "admin:fixja:competition:season:seasonexclusiondate:add",
+                *args,
+                data={"date": "2026-05-05", "_addanother": "1"},
+            )
+        self.assertRedirects(
+            self.last_response,
+            self.reverse(
+                "admin:fixja:competition:season:seasonexclusiondate:add", *args
+            ),
+            fetch_redirect_response=False,
+        )
+        self.assertEqual(
+            [str(d) for d in self.season.exclusions.values_list("date", flat=True)],
+            ["2026-05-05"],
+        )

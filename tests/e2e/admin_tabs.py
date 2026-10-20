@@ -23,18 +23,18 @@ def set_mode(settings, htmx, paginate_by=25):
 
 def tab_ids(page: Page):
     """The panes the tab navigation of the page leads to, in order."""
-    return page.locator("#myTab a[data-toggle='tab']").evaluate_all(
-        "links => links.map(a => a.getAttribute('href').slice(1))"
+    return page.locator("[role=tablist] [role=tab]").evaluate_all(
+        "links => links.map(a => a.getAttribute('aria-controls'))"
     )
 
 
 def show_tab(page: Page, tab_id):
     """Show a tab and wait until its content is in the page."""
-    page.locator(f"#myTab a[href='#{tab_id}']").click()
+    page.locator(f"[role=tab][aria-controls='{tab_id}']").click()
     pane = page.locator(f"#{tab_id}")
     expect(pane).to_be_visible()
-    # A lazily loaded tab shows a spinner until its content arrives.
-    expect(pane.locator(".fa-spinner")).to_have_count(0)
+    # A lazily loaded tab says it is loading until its content arrives.
+    expect(pane.locator(".loading")).to_have_count(0)
     # htmx settles new content a moment after swapping it in, and only then
     # fires htmx:load, which the page's scripts use to prepare the new links.
     expect(pane).not_to_have_class(re.compile(r"\bhtmx-(request|swapping|settling)\b"))
@@ -51,7 +51,7 @@ def row_links(pane):
 
 def action_links(pane):
     """Where the actions above the list in a tab lead, such as adding another."""
-    return pane.locator(".heading-block .actions a[href]").evaluate_all(
+    return pane.locator(".list-head__actions a[href]").evaluate_all(
         "links => links.map(a => a.getAttribute('href'))"
     )
 
@@ -93,7 +93,7 @@ def read_tabs(page: Page, url):
 
     page.on("pageerror", record)
     page.goto(url)
-    expect(page.locator("#myTab")).to_have_count(1)
+    expect(page.locator("[role=tablist]")).to_have_count(1)
     ids = tab_ids(page)
     actions, links, rows = {}, {}, {}
     for tab_id in ids[1:]:

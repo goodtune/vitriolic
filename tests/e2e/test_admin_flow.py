@@ -48,7 +48,7 @@ class TestAdminFlow:
         expect(page).to_have_url(f"{live_server.url}/admin/")
 
         # Check admin dashboard widgets are all loaded
-        expect(page.locator('h4[class="portlet-title"]')).to_have_text(
+        expect(page.locator(".widget .panel__head h2")).to_have_text(
             [
                 "Awaiting Scores",
                 "Progress Teams",
@@ -100,7 +100,7 @@ class TestAdminFlow:
         page.fill('input[name="parent-form-slug"]', "home")
 
         # Save the page
-        page.click('.content button[type="submit"]')
+        page.get_by_role("button", name="Save", exact=True).click()
 
         # Verify the home page was created
         expect(page).to_have_url(f"{live_server.url}/admin/content/")

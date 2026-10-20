@@ -142,8 +142,8 @@ class TestMatchLiveStream:
 
         first_row = page.locator(".live-stream-row").first
         # Time is rendered in the season's local timezone, so match on
-        # shape (e.g. "9 a.m." / "9:00 a.m.") rather than a literal string.
-        expect(first_row).to_contain_text(re.compile(r"\d{1,2}(:\d{2})?\s*[ap]\.m\."))
+        # shape (a 24 hour clock, e.g. "09:00") rather than a literal string.
+        expect(first_row).to_contain_text(re.compile(r"\b\d{2}:\d{2}\b"))
         expect(first_row).to_contain_text("Beta Division")
         expect(first_row).to_contain_text("Court 1")
         expect(first_row).to_contain_text("Beta One")
@@ -153,9 +153,9 @@ class TestMatchLiveStream:
         self, authenticated_page: Page, live_server, live_stream_dataset, screenshot_dir
     ):
         """
-        Desktop: time/division/field/match sit on one line (table-like).
-        Mobile: they stack onto separate lines, with the toggle staying
-        to the right of the stacked block, and each match visually grouped.
+        Each match is one row: its time, then the match with its division and
+        field beneath it, then the toggle to its right. A phone keeps the same
+        row, so the division and field stay in view with the match.
         """
         page = authenticated_page
         data = live_stream_dataset
@@ -165,37 +165,26 @@ class TestMatchLiveStream:
         )
         expect(page.locator(".live-stream-row")).to_have_count(3)
 
-        # Desktop (conftest's default 1920x1080 viewport).
-        page.screenshot(
-            path=str(screenshot_dir / "live_stream_desktop.png"), full_page=True
-        )
+        for viewport, name in (
+            ({"width": 1920, "height": 1080}, "live_stream_desktop.png"),
+            ({"width": 375, "height": 812}, "live_stream_mobile.png"),
+        ):
+            page.set_viewport_size(viewport)
+            page.screenshot(path=str(screenshot_dir / name), full_page=True)
 
-        first_row = page.locator(".live-stream-row").first
-        time_box = first_row.locator(".row .row > div").nth(0).bounding_box()
-        division_box = first_row.locator(".row .row > div").nth(1).bounding_box()
-        select_box = first_row.locator("select").bounding_box()
+            first_row = page.locator(".live-stream-row").first
+            time_box = first_row.locator(".live-stream-row__time").bounding_box()
+            match_box = first_row.locator(".live-stream-row__match label").bounding_box()
+            division_box = first_row.locator(
+                ".live-stream-row__division"
+            ).bounding_box()
+            field_box = first_row.locator(".live-stream-row__field").bounding_box()
+            select_box = first_row.locator("select").bounding_box()
 
-        # On desktop, time and division sit on the same line.
-        assert abs(time_box["y"] - division_box["y"]) < 5
-        # The toggle sits to the right of the info block.
-        assert select_box["x"] > division_box["x"]
-
-        # Mobile viewport.
-        page.set_viewport_size({"width": 375, "height": 812})
-        page.screenshot(
-            path=str(screenshot_dir / "live_stream_mobile.png"), full_page=True
-        )
-
-        first_row = page.locator(".live-stream-row").first
-        time_box = first_row.locator(".row .row > div").nth(0).bounding_box()
-        division_box = first_row.locator(".row .row > div").nth(1).bounding_box()
-        field_box = first_row.locator(".row .row > div").nth(2).bounding_box()
-        select_box = first_row.locator("select").bounding_box()
-
-        # On mobile, time/division/field stack onto separate lines.
-        assert division_box["y"] > time_box["y"]
-        assert field_box["y"] > division_box["y"]
-        # The toggle still sits to the right of the stacked block, roughly
-        # vertically centered alongside it rather than pushed below it.
-        assert select_box["x"] > time_box["x"]
-        assert select_box["y"] < field_box["y"]
+            # The time and the match share a line; division and field sit
+            # beneath the match, together.
+            assert time_box["x"] < match_box["x"]
+            assert division_box["y"] > match_box["y"]
+            assert abs(field_box["y"] - division_box["y"]) < 5
+            # The toggle sits to the right of the match.
+            assert select_box["x"] > match_box["x"]

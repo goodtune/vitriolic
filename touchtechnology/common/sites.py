@@ -583,6 +583,7 @@ class Application(object):
                     model=smart_str(model._meta.verbose_name),
                     models=smart_str(model._meta.verbose_name_plural),
                 )
+                creating = form.instance.pk is None
                 if always_save or form.has_changed():
                     res = pre_save_callback(form.instance)
                     if isinstance(res, HttpResponse):
@@ -593,6 +594,9 @@ class Application(object):
                         messages.add_message(request, level, message.format(**replace))
                     if callback_res is not None:
                         return callback_res
+                    # "Save and add another" comes back to an empty form.
+                    if creating and "_addanother" in request.POST:
+                        return self.redirect(request.get_full_path())
                 else:
                     for level, message in unchanged_messages:
                         messages.add_message(request, level, message.format(**replace))

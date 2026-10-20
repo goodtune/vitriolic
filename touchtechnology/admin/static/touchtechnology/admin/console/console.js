@@ -82,8 +82,9 @@
     });
     if (focus) tab.focus();
     if (remember) {
+      // Remembered for coming back to this page, but not written into the
+      // address: a tab is not a page of its own.
       try { sessionStorage.setItem(TAB_KEY, tab.getAttribute("aria-controls")); } catch (e) {}
-      if (history.replaceState) history.replaceState(null, "", "#" + tab.getAttribute("aria-controls"));
     }
   }
 

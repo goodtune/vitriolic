@@ -2,7 +2,7 @@
 {% load i18n common console %}
 
 {% block page-kind %}{% trans "Permissions" %}{% endblock %}
-{% block page-title %}{% with obj=formset.forms.0.instance %}{{ obj|default:model|types|capfirst }}{% endwith %}{% endblock %}
+{% block page-title %}{% with obj=formset.forms.0.instance %}{% if obj %}{{ obj }}{% else %}{{ model|types|capfirst }}{% endif %}{% endwith %}{% endblock %}
 {% block page-actions %}{% endblock %}
 
 {% block tab-links %}
