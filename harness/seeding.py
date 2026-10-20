@@ -1,7 +1,7 @@
 """Seed a harness database with an invented association.
 
 Everything here is made up: the clubs, the people, the venues and the news.
-The seed is idempotent. It is seven blocks and each one is skipped when its
+The seed is idempotent. It is eight blocks and each one is skipped when its
 marker already exists, so a second run, on this day or a later one, changes
 nothing. Each block runs in one transaction.
 
@@ -159,6 +159,7 @@ def seed(stdout=None) -> dict[str, int]:
         ("organisation", _seed_organisation),
         ("content", _seed_content),
         ("site tree", _seed_site_tree),
+        ("registration chunk", _seed_registration_chunk),
         ("news", _seed_news),
         ("enrolment", _seed_enrolment),
         ("season extras", _seed_season_extras),
@@ -815,6 +816,24 @@ def _seed_site_tree(anchor) -> bool:
         title="Latest news", slug="latest-news", parent=home, object=placeholder
     )
     return True
+
+
+def _seed_registration_chunk(anchor) -> bool:
+    """
+    The chunk the registration form shows, which viewing the form would
+    otherwise make, so that a capture of the chunk list does not depend on
+    whether the form was captured first.
+    """
+    __, created = Chunk.objects.get_or_create(
+        slug="registration-form-disclaimer",
+        defaults={
+            "copy": (
+                "<p>Registration is confirmed once the club secretary has "
+                "signed this form.</p>"
+            )
+        },
+    )
+    return created
 
 
 # =============================================================================

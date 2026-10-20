@@ -9,7 +9,7 @@ from freezegun import freeze_time
 
 from harness.seeding import seed
 from touchtechnology.common.models import SitemapNode
-from touchtechnology.content.models import Placeholder
+from touchtechnology.content.models import Chunk, Placeholder
 from touchtechnology.news.models import Article
 from tournamentcontrol.competition.models import (
     Competition,
@@ -117,3 +117,11 @@ def test_seed_places_the_venues_at_round_invented_coordinates():
         ("Anchor Park", -35.0, 150.0),
         ("Lantern Reserve", -35.01, 150.02),
     }
+
+
+@pytest.mark.django_db(transaction=True)
+def test_seed_makes_the_chunk_the_registration_form_would():
+    first = seed()
+    assert Chunk.objects.filter(slug="registration-form-disclaimer").count() == 1
+    assert Chunk.objects.count() == 3
+    assert seed() == first
