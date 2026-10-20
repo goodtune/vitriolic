@@ -55,4 +55,7 @@ harness_env() {
     export ADMIN_BRAND="$brand"
     export HTMX_ADMIN_TABS="$htmx"
     export PYTHONUNBUFFERED=1
+    # A dummy so the cloudinary library can build image URLs while pages
+    # render; nothing is ever uploaded.
+    export CLOUDINARY_URL="${CLOUDINARY_URL:-cloudinary://harness:harness@harness}"
 }
