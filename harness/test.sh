@@ -37,12 +37,14 @@ harness_db_check "$name"
 checkout="$(harness_checkout)"
 
 cd "$checkout"
+# An empty "--" would replace tox's default label list with nothing, so the
+# separator is passed only when there are arguments to follow it.
 case "$mode" in
     unit)
         exec tox -e dj61-py314 \
             --override testenv.docker= \
             --override testenv.passenv=DATABASE_URL,DB_5432_TCP_PORT \
-            -- "$@"
+            ${1+-- "$@"}
         ;;
     e2e)
         # The e2e environment declares its own docker and setenv, so the
@@ -51,6 +53,6 @@ case "$mode" in
             --override testenv:e2e.docker= \
             --override testenv:e2e.passenv=DATABASE_URL,DB_5432_TCP_PORT,COMPOPS_EVENTS_BACKEND,PLAYWRIGHT_CHROMIUM_EXECUTABLE \
             --override 'testenv:e2e.setenv=DJANGO_ALLOW_ASYNC_UNSAFE=1' \
-            -- "$@"
+            ${1+-- "$@"}
         ;;
 esac
