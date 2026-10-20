@@ -1,31 +1,34 @@
 {% extends "touchtechnology/admin/edit.multiple.html" %}
-{% load i18n %}
-{% load common %}
+{% load i18n common admin_ui %}
+
+{% block eyebrow %}{% trans "Schedule" %}{% endblock %}
+{% block heading %}{% trans "Move match days" %}{% endblock %}
+{% block lede %}<p class="wb-lede">{% trans "Give a day of unplayed matches a new date: every match on it moves together." %}</p>{% endblock %}
+{% block form-title %}{% trans "Match days" %}{% endblock %}
+{% block form-class %}{% endblock %}
 
 {% block form-fieldset %}
-	<!-- formset -->
 	{{ formset.management_form }}
-
-	<table class="table table-condensed table-striped">
-		<thead>
-			<tr>
-				<th>{% trans "Original Date" %}</th>
-				<th>{% trans "Affected Matches" %}</th>
-				<th>{% trans "New Date" %}</th>
-			</tr>
-		</thead>
-		<tbody>
-			{% for form in formset.forms %}
+	<div class="wb-table-wrap">
+		<table class="wb-table wb-table-cards">
+			<thead>
 				<tr>
-					<td>{{ form.original }}</td>
-					<td>{{ form.matches.count }}</td>
-					<td>{% field form.date "" %}</td>
+					<th scope="col">{% trans "Original date" %}</th>
+					<th scope="col" class="wb-num">{% trans "Matches" %}</th>
+					<th scope="col">{% trans "New date" %}</th>
 				</tr>
-			{% empty %}
-				<tr>
-					<td colspan="3">{% trans "There are no unplayed matches to be rescheduled." %}</td>
-				</tr>
-			{% endfor %}
-		</tbody>
-	</table>
+			</thead>
+			<tbody>
+				{% for form in formset.forms %}
+					<tr>
+						<td class="wb-title-cell"><label for="{{ form.date.id_for_label }}">{{ form.original }}</label></td>
+						<td class="wb-num" data-label="{% trans "Matches" %}">{{ form.matches.count }}</td>
+						<td>{% if form.date.errors %}<p class="wb-error">{{ form.date.errors|join:" " }}</p>{% endif %}{{ form.date|control }}{% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}</td>
+					</tr>
+				{% empty %}
+					<tr class="wb-table-empty"><td colspan="3">{% trans "There are no unplayed matches to be rescheduled." %}</td></tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
 {% endblock %}

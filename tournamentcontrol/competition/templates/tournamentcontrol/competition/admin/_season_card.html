@@ -1,0 +1,13 @@
+{% load i18n admin_ui %}
+<article class="wb-sheet wb-season-card">
+	<p class="wb-eyebrow">{{ season.competition.title }}</p>
+	<h3><a href="{{ season.urls.edit }}">{{ season.title }}</a></h3>
+	<span class="wb-progress" role="progressbar" aria-label="{% blocktrans with season=season.title %}{{ season }} set-up{% endblocktrans %}" aria-valuemin="0" aria-valuemax="{{ checklist.total }}" aria-valuenow="{{ checklist.done }}"><span style="--done: {{ checklist.percent }}%"></span></span>
+	<p class="wb-muted">{% blocktrans with done=checklist.done total=checklist.total %}{{ done }} of {{ total }} steps done{% endblocktrans %}</p>
+	{% if checklist.next %}
+		<p class="wb-season-next">{% icon "arrow-left" %}<span class="wb-sr">{% trans "Next:" %}</span><a href="{{ checklist.next.url }}">{{ checklist.next.title }}</a></p>
+		<p class="wb-muted">{{ checklist.next.note }}</p>
+	{% else %}
+		<p class="wb-season-next">{% icon "circle-check" %}{% trans "Everything is set up" %}</p>
+	{% endif %}
+</article>

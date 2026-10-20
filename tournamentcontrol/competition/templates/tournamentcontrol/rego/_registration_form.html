@@ -1,97 +1,39 @@
-<!DOCTYPE html>
-<html>
-{% load static %}
-{% load common content %}
-<head>
-	<title>Registration Forms - {{ competition.title }} {{ season.title }} ({{ club.title }})</title>
+{% extends "touchtechnology/admin/print_base.html" %}
+{% load static common content admin %}
 
-	<base href="http://{{ site.domain }}/" />
+{% block title %}Registration Forms - {{ competition.title }} {{ season.title }} ({{ club.title }}){% endblock %}
 
-	<link rel="stylesheet" type="text/css" media="print" href="http://yui.yahooapis.com/3.17.2/build/cssreset-context/cssreset-context-min.css">
-	<link rel="stylesheet" type="text/css" media="print" href="http://yui.yahooapis.com/3.17.2/build/cssbase-context/cssbase-context-min.css">
-
-	<style type="text/css" media="print">
-		@page {
-			size: A4 landscape;
-			margin: 1cm 1cm 3cm;
-			position: relative;
-		}
-
-		body {
-			font-family: Arial;
-		}
-
-		td, th {
-			padding: 6px;
-			text-align: left;
-		}
-
-		.logos {
-			position: absolute;
-		}
-
-		.team,
-		.division,
-		.players,
-		.staff {
-			font-size: 10pt;
-			position: absolute;
-		}
-
-		.team,
-		.division {
-			font-size: 16pt;
-			left: 10cm;
-		}
-
-		.team {
-			top: 1cm;
-		}
-
-		.division {
-			page-break-before: always;
-		}
-
-		.staff {
-			right: 0;
-			top: 0;
-		}
-
-		.players {
-			top: 4cm;
-			width: 100%;
-		}
-
-		.players td:nth-child(1) { text-align: center; width: 1cm; }
-		.players td:nth-child(2),
-		.players td:nth-child(3) {
-			width: 5cm;
-		}
-		.players td:nth-child(4) { text-align: center; width: 3cm; }
-		.players td:last-child { width: 6cm; }
-
+{% block extracss %}
+	<style>
+		@page { size: A4 landscape; margin: 1cm 1cm 3cm; }
+		.rf-team, .rf-division { font-family: "Bricolage Grotesque", sans-serif; font-size: 1.4rem; font-weight: 800; }
+		.rf-division { break-before: page; }
+		.logos img { max-height: 3rem; width: auto; }
 		.staff th { vertical-align: top; width: 4cm; }
-		.staff td { width: 5cm; }
+		.players td:last-child { width: 6cm; }
 	</style>
-</head>
-<body class="yui3-cssreset yui3-cssbase">
+{% endblock %}
 
+{% block back %}<a class="p-button" href="{% url 'admin:fixja:club:edit' club.pk %}">Back to the club</a>{% endblock %}
+
+{% block content %}
+<div class="p-sheet">
 {% chunk "registration-form-disclaimer" %}
 
 {% for team, data in teams.items %}
-	<div class="division">{{ team.division.title }}</div>
+	<div class="rf-division division">{{ team.division.title }}</div>
 
-	<div class="team">{{ team.title }}</div>
+	<div class="rf-team team">{{ team.title }}</div>
 
 	{% block logos_outer %}
 		<div class="logos">
 			{% block logos_img %}
-				<img src="{% get_static_prefix %}img/logo-horizontal.png" alt="{{ site.name }}" />
+				{% if brand.logo %}<img src="{{ brand.logo|brand_logo_url }}" alt="{{ brand.name }}">{% endif %}
 			{% endblock %}
 		</div>
 	{% endblock %}
 
-	<table class="staff">
+	<table class="p-table staff">
 		<tbody>
 			{% for role, people in data.staff.items %}
 				{% for first_name, last_name, date_of_birth, email in people %}
@@ -106,7 +48,7 @@
 		</tbody>
 	</table>
 
-	<table class="players">
+	<table class="p-table players">
 		<thead>
 			<tr>
 				<th>No.</th>
@@ -132,5 +74,5 @@
 		</tbody>
 	</table>
 {% endfor %}
-</body>
-</html>
+</div>
+{% endblock %}

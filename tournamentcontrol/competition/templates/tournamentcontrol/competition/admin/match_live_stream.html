@@ -1,73 +1,64 @@
-{% extends "touchtechnology/admin/edit.html" %}
-{% load i18n common tz %}
+{% extends "tournamentcontrol/competition/admin/base.html" %}
+{% load i18n common tz admin_ui %}
+
+{% block page_title %}{% trans "Live stream" %} · {{ date|date:"j M Y" }}{% endblock %}
 
 {% block content %}
-	<form class="form-horizontal" action="" method="post">
-		<div class="heading-block">
-			<h3>{% trans "Live Stream" %}</h3>
-		</div>
+	{% trans "Match day" as eyebrow %}{% trans "Choose the matches to stream" as title %}{% blocktrans asvar lede with date=date|date:"l j F Y" %}{{ date }}: tick the matches on camera-equipped fields that should go out live on YouTube.{% endblocktrans %}
+	{% include "tournamentcontrol/competition/admin/_page_head.html" %}
 
+	<form class="wb-sheet wb-form" action="" method="post">
 		{% csrf_token %}
-
 		{{ formset.management_form }}
-
-		<p>{% blocktrans %}Mark which matches on camera-equipped fields should be live streamed to YouTube.{% endblocktrans %}</p>
-
-		<div class="row hidden-xs live-stream-header">
-			<div class="col-sm-10">
-				<div class="row">
-					<div class="col-sm-2"><strong>{% trans "Time" %}</strong></div>
-					<div class="col-sm-3"><strong>{% trans "Division" %}</strong></div>
-					<div class="col-sm-2"><strong>{% trans "Field" %}</strong></div>
-					<div class="col-sm-5"><strong>{% trans "Match" %}</strong></div>
-				</div>
+		{% trans "Matches" as bar_title %}
+		<div class="wb-formbar">
+			<h2 class="wb-formbar-title">{{ bar_title }}</h2>
+			<div class="wb-formbar-actions">
+				<a class="wb-button wb-button-quiet" href="{{ season.urls.edit }}#schedule-tab">{% trans "Cancel" %}</a>
+				<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
 			</div>
-			<div class="col-sm-2"></div>
 		</div>
-
+		{% include "touchtechnology/admin/_problems.html" with form=None %}
 		{% timezone season.timezone %}
-			<div class="list-group live-stream-list">
-				{% for form in formset.forms %}
-					{% with match=form.instance %}
-						<div class="list-group-item live-stream-row">
-							{{ form.id }}
-							<div class="row">
-								<div class="col-xs-9 col-sm-10">
-									<div class="row">
-										<div class="col-sm-2">{{ match.datetime|time }}</div>
-										<div class="col-sm-3">{{ match.stage.division.short_title|default:match.stage.division.title|htmlentities }}</div>
-										<div class="col-sm-2">{{ match.play_at.title|htmlentities }}</div>
-										<div class="col-sm-5">{{ match|safe }}</div>
-									</div>
-								</div>
-								<div class="col-xs-3 col-sm-2 text-right">
-									{{ form.live_stream }}
-								</div>
-							</div>
-						</div>
-					{% endwith %}
-				{% endfor %}
+			<div class="wb-table-wrap">
+				<table class="wb-table wb-table-cards">
+					<thead>
+						<tr>
+							<th scope="col">{% trans "Match" %}</th>
+							<th scope="col">{% trans "Time" %}</th>
+							<th scope="col">{% trans "Division" %}</th>
+							<th scope="col">{% trans "Field" %}</th>
+							<th scope="col">{% trans "Stream it" %}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{% for form in formset.forms %}
+							{% with match=form.instance %}
+								<tr>
+									<td class="wb-title-cell"><label for="{{ form.live_stream.id_for_label }}">{{ match|safe }}</label>{{ form.id }}</td>
+									<td data-label="{% trans "Time" %}">{{ match.datetime|time:"H:i" }}</td>
+									<td data-label="{% trans "Division" %}">{{ match.stage.division.short_title|default:match.stage.division.title }}</td>
+									<td data-label="{% trans "Field" %}">{{ match.play_at.title }}</td>
+									<td class="wb-row-actions">{{ form.live_stream|control }}</td>
+								</tr>
+							{% endwith %}
+						{% empty %}
+							<tr class="wb-table-empty"><td colspan="5">{% trans "No matches on this day are on a field with a camera." %}</td></tr>
+						{% endfor %}
+					</tbody>
+				</table>
 			</div>
 		{% endtimezone %}
-
-		<div class="form-group">
-			<div class="text-center">
-				<button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
-				&nbsp;<a class="btn btn-default" href="{{ season.urls.edit }}">{% trans "Cancel" %}</a>
-			</div> <!-- /.col -->
-		</div>
 	</form>
 
-	<form class="form-horizontal" action="{% url 'admin:fixja:match-live-stream-resync' season.competition.pk season.pk date|date:"Ymd" %}" method="post">
+	<form class="wb-sheet" action="{% url 'admin:fixja:match-live-stream-resync' season.competition.pk season.pk date|date:"Ymd" %}" method="post">
 		{% csrf_token %}
-		<div class="form-group">
-			<div class="text-center">
-				<button type="submit" class="btn btn-default">
-					<i class="fa fa-refresh fa-fw"></i>
-					{% trans "Resync All" %}
-				</button>
-				<p class="help-block">{% blocktrans %}Re-push title, thumbnail, and schedule to YouTube for every match above that is already streaming.{% endblocktrans %}</p>
+		<div class="wb-sheet-head">
+			<div>
+				<h2>{% trans "Resync everything" %}</h2>
+				<p class="wb-help">{% blocktrans %}Re-push title, thumbnail, and schedule to YouTube for every match above that is already streaming.{% endblocktrans %}</p>
 			</div>
+			<button type="submit" class="wb-button">{% icon "refresh-cw" %}{% trans "Resync All" %}</button>
 		</div>
 	</form>
 {% endblock %}

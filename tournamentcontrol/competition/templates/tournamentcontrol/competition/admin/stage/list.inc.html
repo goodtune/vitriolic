@@ -1,36 +1,33 @@
-{% extends "mvp/list.split.inc.html" %}
-{% load i18n %}
+{% extends "mvp/list.inc.html" %}
+{% load i18n admin_ui %}
 
 {% block table-headings %}
 	{{ block.super }}
-	<th>{% trans "Short title" %}</th>
+	<th scope="col">{% trans "Short title" %}</th>
+	<th scope="col">{% trans "Draw" %}</th>
 {% endblock %}
 
 {% block table-columns %}
 	{{ block.super }}
-	<td>{{ obj.short_title|default:"-" }}</td>
+	<td data-label="{% trans "Short title" %}">{{ obj.short_title|default:"–" }}</td>
+	<td data-label="{% trans "Draw" %}">{% with count=obj.matches.count %}{% if count %}<span class="wb-badge wb-badge-ok">{% blocktrans count counter=count %}{{ counter }} match{% plural %}{{ counter }} matches{% endblocktrans %}</span>{% else %}<span class="wb-badge">{% trans "Not built" %}</span>{% endif %}{% endwith %}</td>
 {% endblock %}
 
-{% block empty-row-colspan %}3{% endblock %}
+{% block empty-row-colspan %}4{% endblock %}
 
 {% block row-buttons-extra %}
 	{% if obj.matches.exists %}
-		<a class="btn btn-default btn-sm" role="button" href="{{ obj.urls.undo }}" data-toggle="modal" data-target="#undoModal_stage" data-action="{{ obj.urls.undo }}" data-title="{{ obj }}">
-			<i class="fa fa-eject"></i>
-			&nbsp;{% trans "Undo" %} <span class="badge">{{ obj.matches.count }}</span>
-		</a>
+		<form method="post" action="{{ obj.urls.undo }}" data-wb-confirm="{% blocktrans with name=obj count=obj.matches.count %}All {{ count }} matches of {{ name }} will be removed, with any results they have. You can build the draw again afterwards.{% endblocktrans %}" data-wb-confirm-title="{% blocktrans with name=obj %}Undo the draw of {{ name }}?{% endblocktrans %}" data-wb-confirm-label="{% trans "Undo the draw" %}">
+			{% csrf_token %}
+			<button type="submit" class="wb-button wb-button-small">{% icon "undo-2" %}{% trans "Undo" %}</button>
+		</form>
 	{% else %}
-		<a class="btn btn-default btn-sm" href="{{ obj.urls.build }}" role="button">
-			<i class="fa fa-play"></i>
-			&nbsp;{% trans "Build" %}
-		</a>
+		<a class="wb-button wb-button-small wb-button-primary" href="{{ obj.urls.build }}">{% icon "play" %}{% trans "Build" %}</a>
 	{% endif %}
-	<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:reorder' 'stage:division' obj.pk "up" %}" role="button">
-		<i class="fa fa-chevron-up"></i>
-		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Up" %}</span>
-	</a>
-	<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:reorder' 'stage:division' obj.pk "down" %}" role="button">
-		<i class="fa fa-chevron-down"></i>
-		<span class="hidden-xs hidden-sm">&nbsp;{% trans "Down" %}</span>
-	</a>
+{% endblock %}
+
+{% block row-buttons-items %}
+	{{ block.super }}
+	<li><a href="{% url 'admin:fixja:reorder' 'stage:division' obj.pk "up" %}">{% icon "arrow-up" %}{% trans "Move up" %}</a></li>
+	<li><a href="{% url 'admin:fixja:reorder' 'stage:division' obj.pk "down" %}">{% icon "arrow-down" %}{% trans "Move down" %}</a></li>
 {% endblock %}

@@ -2,13 +2,15 @@
 {% load i18n %}
 
 {% block table-headings %}
-	<th>{% trans "Competition name" %}</th>
-	<th>{% trans "Short name" %}</th>
+	<th scope="col">{% trans "Competition name" %}</th>
+	<th scope="col">{% trans "Short name" %}</th>
+	<th scope="col" class="wb-num">{% trans "Seasons" %}</th>
 {% endblock %}
 
 {% block table-columns %}
 	{{ block.super }}
-	<td>{{ obj.short_title|default:"-" }}</td>
+	<td data-label="{% trans "Short name" %}">{{ obj.short_title|default:"–" }}</td>
+	<td class="wb-num" data-label="{% trans "Seasons" %}">{{ obj.seasons.count }}</td>
 {% endblock %}
 
-{% block empty-row-colspan %}3{% endblock %}
+{% block empty-row-colspan %}4{% endblock %}

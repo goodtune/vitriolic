@@ -1,50 +1,44 @@
-{% extends "touchtechnology/admin/edit.html" %}
-{% load i18n %}
+{% extends "tournamentcontrol/competition/admin/base.html" %}
+{% load i18n common admin_ui %}
+
+{% block page_title %}{% trans "Wet weather" %}{% if date %} · {{ date|date:"j M Y" }}{% endif %}{% endblock %}
 
 {% block content %}
-	<form class="form-horizontal" action="" method="post">
-		<div class="heading-block">
-			<h3>{% trans "Wet weather" %}</h3>
+	<header class="wb-head">
+		<div class="wb-head-text">
+			<p class="wb-eyebrow">{% icon "umbrella" %}{% trans "Wet weather" %}</p>
+			<h1>{% if date %}{{ date|date:"l j F Y" }}{% else %}{% trans "Washout" %}{% endif %}</h1>
+			<p class="wb-lede">{% blocktrans %}Mark all matches that have been cancelled due to ground closures.{% endblocktrans %}</p>
 		</div>
+	</header>
 
+	<form class="wb-sheet wb-form" action="" method="post">
 		{% csrf_token %}
-
 		{{ formset.management_form }}
-
+		<div class="wb-formbar">
+			<h2 class="wb-formbar-title">{% trans "Matches" %}</h2>
+			<div class="wb-formbar-actions">
+				<a class="wb-button wb-button-quiet" href="{{ season.urls.edit }}#schedule-tab">{% trans "Cancel" %}</a>
+				<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
+			</div>
+		</div>
+		{% include "touchtechnology/admin/_problems.html" with form=None %}
 		{% regroup formset.forms by instance.stage.division as grouped %}
-
-		<div class="tab-pane active" id="washout-tab">
-			<p>{% blocktrans %}Mark all matches that have been cancelled due to ground closures.{% endblocktrans %}</p>
-
-			{% for group in grouped %}
-				<fieldset>
-					<legend>{{ group.grouper }}</legend>
-
+		{% for group in grouped %}
+			<section class="wb-time">
+				<h3 class="wb-time-title">{{ group.grouper }}</h3>
+				<div class="wb-checks wb-washouts">
 					{% for form in group.list %}
 						{% with match=form.instance %}
-							{% with home=match.get_home_team away=match.get_away_team %}
-								<div class="col-sm-6">
-									{{ form.id }}
-									<div class="form-group">
-										<label class="control-label col-md-7">{{ match|safe }}</label>
-										<div class="col-md-5">
-											{{ form.is_washout }}
-										</div>
-									</div>
-								</div>
-							{% endwith %}
+							{{ form.id }}
+							<label for="{{ form.is_washout.id_for_label }}">{{ form.is_washout|control }}<span>{% if match.time %}<strong>{{ match.time|time:"H:i" }}</strong> {% endif %}{{ match|safe }}</span></label>
 						{% endwith %}
 					{% endfor %}
-				</fieldset>
-			{% endfor %}
-		</div>
-		<div class="clearfix"></div>
-
-		<div class="form-group">
-			<div class="text-center">
-				<button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
-				&nbsp;<a class="btn btn-default" href="{{ season.urls.edit }}">{% trans "Cancel" %}</a>
-			</div> <!-- /.col -->
-		</div>
+				</div>
+			</section>
+		{% empty %}
+			<p class="wb-empty">{% trans "There are no matches on this day." %}</p>
+		{% endfor %}
+		<div class="wb-formfoot"><button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button></div>
 	</form>
 {% endblock %}

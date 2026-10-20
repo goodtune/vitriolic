@@ -28,7 +28,7 @@ from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from guardian.utils import get_40x_or_None
 
-from touchtechnology.admin.base import AdminComponent
+from touchtechnology.admin.base import AdminComponent, DashboardWidget
 from touchtechnology.common.decorators import (
     csrf_exempt_m,
     staff_login_required_m,
@@ -169,7 +169,9 @@ def checklist(steps):
     """
     required = [step for step in steps if not step["optional"]]
     done = sum(1 for step in required if step["done"])
-    following = next((step for step in steps if not step["done"]), None)
+    following = next(
+        (step for step in steps if not step["done"] and not step["optional"]), None
+    )
     if following is not None:
         following["next"] = True
     return {
@@ -202,6 +204,19 @@ def match_days(season):
     return [dict(row, past=row["date"] <= today) for row in rows]
 
 
+def awaiting_results(matches):
+    """
+    Of ``matches``, those played (or byes whose day has come) without a
+    result, as the home page's widget counts them.
+    """
+    now = timezone.now()
+    return matches_require_basic_results(
+        matches=matches.filter(
+            Q(datetime__lte=now) | Q(is_bye=True, date__lte=timezone.localdate())
+        )
+    )
+
+
 def season_checklist(season):
     """The jobs that set ``season`` up and run it, in the order they are done."""
     edit = str(season.urls["edit"])
@@ -225,11 +240,7 @@ def season_checklist(season):
         .filter(Q(date__isnull=True) | Q(time__isnull=True) | Q(play_at__isnull=True))
         .count()
     )
-    awaiting = list(
-        matches_require_basic_results(matches=matches.filter(datetime__lte=timezone.now()))
-        .order_by("date")
-        .values_list("date", flat=True)
-    )
+    awaiting = list(awaiting_results(matches).order_by("date").values_list("date", flat=True))
 
     def division_link(division, tab):
         return "%s#%s-tab" % (division.urls["edit"], tab)
@@ -340,6 +351,95 @@ def season_checklist(season):
     return checklist(steps)
 
 
+def division_ladders(division):
+    """
+    The ladder of each stage of ``division`` that has one, a table per pool:
+    a list of ``(stage, [(pool or None, rows)])``.
+    """
+    ladders = []
+    for stage in division.stages.all():
+        rows = list(
+            stage.ladder_summary.select_related("team", "stage_group").order_by(
+                "stage_group__order", "-points", "-difference", "-percentage", "team__title"
+            )
+        )
+        if not rows:
+            continue
+        pools = []
+        for row in rows:
+            if not pools or pools[-1][0] != row.stage_group:
+                pools.append((row.stage_group, []))
+            pools[-1][1].append(row)
+        ladders.append((stage, pools))
+    return ladders
+
+
+def division_checklist(division):
+    """The jobs that make ``division`` ready to play, in order."""
+    edit = str(division.urls["edit"])
+    teams = division.teams.count()
+    stages = list(division.stages.annotate(match_count=Count("matches")))
+    undrawn = [stage for stage in stages if not stage.match_count]
+    steps = [
+        _step(
+            "points",
+            _("Say how many points a win, draw and loss earn"),
+            bool(division.points_formula),
+            _("Needed before results can be saved")
+            if not division.points_formula
+            else _("Points are set"),
+            edit + "#division-tab",
+        ),
+        _step(
+            "teams",
+            _("Enter the teams"),
+            teams >= 2,
+            ngettext("%(n)d team", "%(n)d teams", teams) % {"n": teams}
+            if teams
+            else _("Add several at once"),
+            edit + "#teams-tab",
+        ),
+        _step(
+            "stages",
+            _("Add the stages"),
+            bool(stages),
+            ngettext("%(n)d stage", "%(n)d stages", len(stages)) % {"n": len(stages)}
+            if stages
+            else _("The rounds, then the finals"),
+            edit + "#stages-tab",
+        ),
+        _step(
+            "draw",
+            _("Build the draw of each stage"),
+            bool(stages) and not undrawn,
+            _("%(stage)s has no draw yet") % {"stage": undrawn[0].title}
+            if undrawn
+            else (_("Every stage is drawn") if stages else _("Once the stages are added")),
+            str(undrawn[0].urls["build"]) if undrawn else edit + "#stages-tab",
+        ),
+    ]
+    return checklist(steps)
+
+
+class SeasonProgressWidget(DashboardWidget):
+    """The seasons in progress on the home page, each with its checklist."""
+
+    verbose_name = _("Seasons in progress")
+    template = "tournamentcontrol/competition/admin/widgets/seasons.html"
+    half = False
+
+    def _get_context(self):
+        seasons = (
+            Season.objects.filter(complete=False, competition__enabled=True)
+            .select_related("competition")
+            .order_by("-start_date")
+        )
+        return {
+            "widget": self,
+            "seasons": [(season, season_checklist(season)) for season in seasons[:4]],
+        }
+
+
 def bulk_create_count(request, default=5):
     """
     The number of blank rows a bulk create view shows, from the ``count``
@@ -385,6 +485,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @property
     def widgets(self):
         widget_classes = (
+            SeasonProgressWidget,
             BasicResultWidget,
             ProgressStageWidget,
             ScoresheetWidget,
@@ -958,15 +1059,105 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @staff_login_required_m
     def index(self, request, **kwargs):
-        messages.warning(
-            request,
-            _(
-                "We're moving a few things around, please "
-                "update any bookmarks you may find that "
-                "have broken."
-            ),
+        """
+        Tournament Control's own page: its jobs, and the seasons in progress
+        with how far each has come.
+        """
+        context = dict(kwargs)
+        context.update(
+            {
+                "tasks": self.tasks(request),
+                "seasons": self.seasons_in_progress(),
+            }
         )
-        return self.redirect(self.reverse("competition:list"))
+        return self.render(request, self.template_path("index.html"), context)
+
+    def seasons_in_progress(self):
+        """The seasons that are not complete, each with its set-up checklist."""
+        seasons = (
+            Season.objects.filter(complete=False, competition__enabled=True)
+            .select_related("competition")
+            .order_by("-start_date")
+        )
+        return [(season, season_checklist(season)) for season in seasons[:6]]
+
+    def tasks(self, request):
+        """
+        The jobs of a match day and of a season, pointing at the day or the
+        season they are about: results waiting, the next day to schedule, the
+        season still being set up, and the clubs.
+        """
+        tasks = []
+        awaiting = (
+            matches_require_basic_results()
+            .order_by("-date")
+            .values_list("stage__division__season", "date")
+            .first()
+        )
+        if awaiting is not None:
+            season = Season.objects.select_related("competition").get(pk=awaiting[0])
+            count = awaiting_results(
+                Match.objects.filter(stage__division__season=season, date=awaiting[1])
+            ).count()
+            tasks.append(
+                {
+                    "label": _("Enter results"),
+                    "url": reverse(
+                        "admin:fixja:match-results",
+                        args=(season.competition_id, season.pk, awaiting[1].strftime("%Y%m%d")),
+                    ),
+                    "note": ngettext(
+                        "%(day)s · %(n)d match waiting",
+                        "%(day)s · %(n)d matches waiting",
+                        count,
+                    )
+                    % {"day": date_format(awaiting[1], "D j M"), "n": count},
+                    "icon": "list-checks",
+                    "priority": 10,
+                }
+            )
+        upcoming = (
+            Match.objects.filter(
+                stage__division__season__complete=False,
+                date__gte=timezone.localdate(),
+            )
+            .order_by("date")
+            .values_list("stage__division__season", "date")
+            .first()
+        )
+        if upcoming is not None:
+            season = Season.objects.get(pk=upcoming[0])
+            tasks.append(
+                {
+                    "label": _("Schedule the next match day"),
+                    "url": reverse(
+                        "admin:fixja:match-schedule",
+                        args=(season.competition_id, season.pk, upcoming[1].strftime("%Y%m%d")),
+                    ),
+                    "note": "%s · %s" % (date_format(upcoming[1], "D j M"), season.title),
+                    "icon": "clock",
+                    "priority": 11,
+                }
+            )
+        tasks.append(
+            {
+                "label": _("Set up a season"),
+                "url": self.reverse("competition:list"),
+                "note": _("Divisions, teams, venues and the draw"),
+                "icon": "trophy",
+                "priority": 12,
+            }
+        )
+        tasks.append(
+            {
+                "label": _("Keep clubs and people current"),
+                "url": self.reverse("club:list"),
+                "note": _("Clubs, their people and officials"),
+                "icon": "shield",
+                "priority": 13,
+            }
+        )
+        return tasks
 
     @competition_by_pk_m
     @staff_login_required_m
@@ -1531,6 +1722,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def edit_division(self, request, season, extra_context, division=None, **kwargs):
         if division is None:
             division = next_related_factory(Division, season)
+        else:
+            extra_context.setdefault("checklist", division_checklist(division))
+            extra_context.setdefault("ladders", division_ladders(division))
 
         return self.generic_edit(
             request,
@@ -2177,6 +2371,14 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             args=(competition.pk, season.pk, division.pk),
         )
 
+        # The wizard renders itself, so it is given what the admin's own
+        # pages are: where Cancel goes, and the admin's field template.
+        extra_context = {
+            "cancel_url": str(redirect_to) + "#stages-tab",
+            "field_template": "touchtechnology/admin/templatetags/field.html",
+            "stage": stage,
+            **extra_context,
+        }
         view = DrawGenerationWizard.as_view(
             form_list, extra_context=extra_context, redirect_to=redirect_to, stage=stage
         )
@@ -2770,7 +2972,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     "places": places,
                     "timeslots": timeslots,
                 },
-                post_save_redirect=self.redirect(season.urls["edit"]),
+                post_save_redirect=self.redirect(
+                    str(season.urls["edit"]) + "#schedule-tab"
+                ),
                 templates=self.template_path("match/schedule.html"),
                 extra_context=extra_context,
             )
@@ -2812,7 +3016,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         time=None,
         **kwargs,
     ):
-        redirect_to = reverse("admin:index", current_app=self.app)
+        # Back to the season's match days, where this day now shows its results.
+        redirect_to = str(season.urls["edit"]) + "#schedule-tab"
         return super(CompetitionAdminComponent, self).match_results(
             request,
             competition,

@@ -1,3 +1,39 @@
-{% extends "tournamentcontrol/competition/progression_list.html" %}
+{% extends "touchtechnology/admin/print_base.html" %}
+{% load i18n tz common %}
 
-{% block progress_link %}{% url 'admin:fixja:competition:season:division:stage:progress' competition.pk season.pk stage.division.pk stage.pk %}{% endblock %}
+{% block title %}{% blocktrans %}Stage Progression{% endblocktrans %}{% endblock %}
+{% block back %}<a class="p-button" href="{{ season.urls.edit }}">{% trans "Back to the season" %}</a>{% endblock %}
+
+{% block content %}
+	{% timezone season.timezone %}
+	<h1>{% trans "Stage Progression" %}</h1>
+	<p class="p-meta">{{ competition }} · {{ season }}</p>
+	<div class="p-sheet p-scroll">
+		<table class="p-table" id="match_list">
+			<thead>
+				<tr>
+					<th scope="col">{% trans "Division" %}</th>
+					<th scope="col">{% trans "Stage" %}</th>
+					<th scope="col">{% trans "Teams to progress" %}</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for stage in stages %}
+					<tr>
+						<th scope="row">{% ifchanged stage.division %}{{ stage.division }}{% endifchanged %}</th>
+						<td><span title="{{ stage.pk }}">{{ stage }}</span></td>
+						<td>
+							{% if stage.awaiting_progression %}
+								<a href="{% block progress_link %}{% url 'admin:fixja:competition:season:division:stage:progress' competition.pk season.pk stage.division.pk stage.pk %}{% endblock %}">{% trans "Progress teams" %}</a>
+							{% else %}
+								–
+							{% endif %}
+						</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+	<p class="p-meta">{% now "j F Y, H:i" %}{% if user.is_authenticated %} · {{ user.get_full_name|default:user.email }}{% endif %}</p>
+	{% endtimezone %}
+{% endblock %}
