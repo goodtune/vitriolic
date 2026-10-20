@@ -8,13 +8,18 @@ from enrolment.models import SchoolYear
 from freezegun import freeze_time
 
 from harness.seeding import seed
+from touchtechnology.common.models import SitemapNode
+from touchtechnology.content.models import Placeholder
 from touchtechnology.news.models import Article
 from tournamentcontrol.competition.models import (
     Competition,
     Division,
     Match,
     Season,
+    SeasonAssociation,
     StageGroup,
+    UndecidedTeam,
+    Venue,
 )
 
 User = get_user_model()
@@ -68,3 +73,47 @@ def test_seed_pools_one_division_and_plays_it_out():
     assert finals.count() == 3
     assert not finals.filter(home_team__isnull=True).exists()
     assert not finals.filter(home_team_score__isnull=True).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_seed_leaves_a_folder_and_an_application_node_in_the_site_tree():
+    seed()
+    folder = SitemapNode.objects.get(slug="archive")
+    assert folder.content_type is None
+    assert folder.parent.slug == "home"
+    application = SitemapNode.objects.get(slug="latest-news")
+    assert isinstance(application.object, Placeholder)
+    assert application.object.path == "touchtechnology.news.sites.NewsSite"
+    # The mount in tests/vitriolic/urls.py is at news/, so the node must not
+    # take that slug.
+    assert not SitemapNode.objects.filter(slug="news").exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_seed_leaves_an_undecided_team_and_officials_in_the_current_season():
+    first = seed()
+    undecided = UndecidedTeam.objects.get()
+    assert undecided.stage.title == "Finals"
+    assert undecided.stage.division.season.title == "Spring 2026"
+    officials = SeasonAssociation.objects.all()
+    assert {o.season.title for o in officials} == {"Spring 2026"}
+    assert officials.values("club").distinct().count() == 2
+    for official in officials:
+        assert official.person.club == official.club
+        assert official.roles.exists()
+    assert seed() == first
+    assert UndecidedTeam.objects.count() == 1
+    assert SeasonAssociation.objects.count() == officials.count()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_seed_places_the_venues_at_round_invented_coordinates():
+    seed()
+    places = {
+        (venue.title, round(float(venue.latitude), 4), round(float(venue.longitude), 4))
+        for venue in Venue.objects.all()
+    }
+    assert places == {
+        ("Anchor Park", -35.0, 150.0),
+        ("Lantern Reserve", -35.01, 150.02),
+    }

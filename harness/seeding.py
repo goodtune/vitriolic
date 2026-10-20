@@ -1,7 +1,7 @@
 """Seed a harness database with an invented association.
 
 Everything here is made up: the clubs, the people, the venues and the news.
-The seed is idempotent. It is five blocks and each one is skipped when its
+The seed is idempotent. It is seven blocks and each one is skipped when its
 marker already exists, so a second run, on this day or a later one, changes
 nothing. Each block runs in one transaction.
 
@@ -35,7 +35,13 @@ from enrolment.seeding import FIRST_NAMES, LAST_NAMES
 
 from harness.images import photo
 from touchtechnology.common.models import SitemapNode
-from touchtechnology.content.models import Chunk, Page, PageContent, Redirect
+from touchtechnology.content.models import (
+    Chunk,
+    Page,
+    PageContent,
+    Placeholder,
+    Redirect,
+)
 from touchtechnology.news.models import Article, Category, Translation
 from tournamentcontrol.competition.mcp.admin import AdminToolset
 from tournamentcontrol.competition.models import (
@@ -47,10 +53,13 @@ from tournamentcontrol.competition.models import (
     MatchScoreSheet,
     Person,
     Season,
+    SeasonAssociation,
     SeasonReferee,
+    Stage,
     Team,
     TeamAssociation,
     TeamRole,
+    UndecidedTeam,
 )
 from tournamentcontrol.competition.tests.factories import (
     LiveStreamEventFactory,
@@ -80,11 +89,15 @@ CLUBS = [
     ("Willowmere Wolves", "WIL"),
 ]
 
-#: Venues, with the coordinates of an invented place and its fields.
+#: Venues, with the coordinates of an invented place and its fields. The
+#: coordinates are round numbers that name no real ground.
 VENUES = [
-    ("Anchor Park", (-33.830, 151.240), ["Field 1", "Field 2", "Field 3"]),
-    ("Lantern Reserve", (-33.800, 151.280), ["Field 1", "Field 2"]),
+    ("Anchor Park", (-35.0000, 150.0000), ["Field 1", "Field 2", "Field 3"]),
+    ("Lantern Reserve", (-35.0100, 150.0200), ["Field 1", "Field 2"]),
 ]
+
+#: The season that is in progress, and the one that is finished.
+CURRENT_SEASON = "Spring 2026"
 
 #: Each division and how many of the clubs enter a team, from the first.
 DIVISIONS = [("Men's Open", 8), ("Women's Open", 7), ("Mixed Open", 6)]
@@ -145,8 +158,10 @@ def seed(stdout=None) -> dict[str, int]:
         ("users", _seed_users),
         ("organisation", _seed_organisation),
         ("content", _seed_content),
+        ("site tree", _seed_site_tree),
         ("news", _seed_news),
         ("enrolment", _seed_enrolment),
+        ("season extras", _seed_season_extras),
     ]
     for name, block in blocks:
         with transaction.atomic():
@@ -330,7 +345,7 @@ def _seed_organisation(anchor) -> bool:
         competition,
         clubs,
         formats,
-        title="Spring 2026",
+        title=CURRENT_SEASON,
         start=current_start,
         # The break after the regular season, and a bye week for Mixed Open.
         season_exclusions=[current_start + (REGULAR_ROUNDS) * week],
@@ -778,6 +793,31 @@ def _seed_content(anchor) -> bool:
 
 
 # =============================================================================
+# 3b. The rest of the site tree
+# =============================================================================
+
+
+def _seed_site_tree(anchor) -> bool:
+    """A folder, and an application node that publishes the news site."""
+    root_slug = str(settings.TOUCHTECHNOLOGY_SITEMAP_ROOT or "home")
+    home = SitemapNode.objects.filter(parent__isnull=True, slug=root_slug).first()
+    if home is None or SitemapNode.objects.filter(slug="archive").exists():
+        return False
+
+    # A node with no object is a folder.
+    SitemapNode.objects.create(title="Archive", slug="archive", parent=home)
+    # The demo project mounts the news site at news/; an application node
+    # points the sitemap at it. Its slug avoids the mount's own.
+    placeholder, __ = Placeholder.objects.get_or_create(
+        path="touchtechnology.news.sites.NewsSite", namespace="news"
+    )
+    SitemapNode.objects.create(
+        title="Latest news", slug="latest-news", parent=home, object=placeholder
+    )
+    return True
+
+
+# =============================================================================
 # 4. News
 # =============================================================================
 
@@ -841,3 +881,43 @@ def _seed_enrolment(anchor) -> bool:
     already = SchoolYear.objects.exists()
     call_command("seed_enrolment", stdout=io.StringIO())
     return not already
+
+
+# =============================================================================
+# 6. Season extras
+# =============================================================================
+
+
+def _seed_season_extras(anchor) -> bool:
+    """
+    A place waiting for a team in the finals, and the officials two clubs have
+    named for the season, so that the pages of both have something to show.
+    """
+    season = Season.objects.filter(title=CURRENT_SEASON).first()
+    if season is None:
+        return False
+    seeded = False
+
+    if not UndecidedTeam.objects.exists():
+        finals = Stage.objects.get(
+            division__season=season, division__title=DIVISIONS[0][0], title="Finals"
+        )
+        UndecidedTeam.objects.create(
+            stage=finals, formula="P5", label="Fifth place playoff"
+        )
+        seeded = True
+
+    if not SeasonAssociation.objects.exists():
+        # The officials formset offers a club's own people and the roles of the
+        # competition, and saves a person and their roles for the club and season.
+        roles = list(season.competition.club_roles.order_by("pk"))
+        clubs = Club.objects.filter(teams__division__season=season).distinct()
+        for club in clubs.order_by("pk")[:2]:
+            for index, person in enumerate(club.members.order_by("pk")[:2]):
+                association = SeasonAssociation.objects.create(
+                    club=club, season=season, person=person
+                )
+                association.roles.add(roles[index])
+        seeded = True
+
+    return seeded
