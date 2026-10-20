@@ -18,8 +18,8 @@ class AuthenticationTest(TestCase):
 
     def test_admin_logout_is_a_post_form(self):
         """
-        LogoutView refuses GET since Django 5.0, so the menu's Logout link
-        carries the CSRF token for logout.js to post it.
+        LogoutView refuses GET since Django 5.0, so the menu's Logout is a
+        form that posts to the admin's own logout.
         """
         user = UserFactory.create(is_staff=True, is_superuser=True)
         with self.login(user):
@@ -27,9 +27,9 @@ class AuthenticationTest(TestCase):
         self.response_200()
         token = self.get_context("csrf_token")
         self.assertResponseContains(
-            f'<a href="{self.reverse("accounts:logout")}" data-logout="{token}">'
-            '<i class="fa fa-fw fa-sign-out"></i>&nbsp;&nbsp;Logout</a>'
+            f'<form method="post" action="{self.reverse("admin:logout")}">'
+            f'<input type="hidden" name="csrfmiddlewaretoken" value="{token}">'
+            '<button type="submit">Logout</button></form>',
+            html=True,
         )
-        self.assertResponseContains(
-            '<script src="/static/touchtechnology/common/js/logout.js"></script>'
-        )
+        self.assertResponseNotContains("logout.js")

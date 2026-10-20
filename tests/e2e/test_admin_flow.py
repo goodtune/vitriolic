@@ -100,7 +100,7 @@ class TestAdminFlow:
         page.fill('input[name="parent-form-slug"]', "home")
 
         # Save the page
-        page.click('button[type="submit"]')
+        page.click('.content button[type="submit"]')
 
         # Verify the home page was created
         expect(page).to_have_url(f"{live_server.url}/admin/content/")

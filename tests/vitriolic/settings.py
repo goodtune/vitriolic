@@ -189,7 +189,7 @@ AUTHENTICATION_BACKENDS = (
     "oauth2_provider.backends.OAuth2Backend",
 )
 
-LOGIN_URL = reverse_lazy("accounts:login")
+LOGIN_URL = reverse_lazy("admin:login")
 
 ANONYMOUS_USER_NAME = "anonymous"
 

@@ -84,8 +84,8 @@
 								<li><a href="#fixme"><i class="fa fa-fw fa-dollar"></i>&nbsp;&nbsp;{% trans "Plans & Billing" %}</a></li>
 								<li><a href="{% url 'admin:settings:index' %}"><i class="fa fa-fw fa-cogs"></i>&nbsp;&nbsp;{% trans "Settings" %}</a></li>
 								<li class="divider"></li>
-								{# LogoutView only accepts POST since Django 5.0; logout.js posts this link. #}
-								<li><a href="{% url 'accounts:logout' %}" data-logout="{{ csrf_token }}"><i class="fa fa-fw fa-sign-out"></i>&nbsp;&nbsp;{% trans "Logout" %}</a></li>
+								{# LogoutView only accepts POST since Django 5.0. #}
+								<li><form method="post" action="{% url 'admin:logout' %}">{% csrf_token %}<button type="submit">{% trans "Logout" %}</button></form></li>
 							</ul>
 
 						</li>
@@ -184,7 +184,6 @@
 
 <!-- Framework JS -->
 <script src="{{ STATIC_URL }}touchtechnology/admin/js/modal_delete.js"></script>
-<script src="{{ STATIC_URL }}touchtechnology/common/js/logout.js"></script>
 
 <!-- HTMX -->
 {% load common %}

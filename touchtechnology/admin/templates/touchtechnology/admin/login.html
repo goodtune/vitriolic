@@ -1,0 +1,47 @@
+{% load i18n %}
+{% load admin %}
+{% load common %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>{% trans "Sign in" %} &middot; {{ brand.name }}</title>
+
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+	<link rel="stylesheet" href="{{ STATIC_URL }}bootstrap/dist/css/bootstrap.min.css">
+	<link rel="stylesheet" href="{{ STATIC_URL }}css/mvpready-admin.css">
+	<link rel="stylesheet" href="{{ STATIC_URL }}css/custom.css">
+
+	{% include "touchtechnology/admin/_brand.html" %}
+
+	<link rel="shortcut icon" href="{{ STATIC_URL }}favicon.ico">
+</head>
+
+<body>
+<main class="container">
+	{% if brand.logo %}<img src="{{ brand.logo|brand_logo_url }}" alt="{{ brand.name }}">{% endif %}
+	<h1>{{ brand.name }}</h1>
+
+	<form method="post" class="form-horizontal">
+		{% csrf_token %}
+
+		{% if form.non_field_errors %}
+			<ul class="errorlist">
+				{% for error in form.non_field_errors %}
+					<li>{{ error }}</li>
+				{% endfor %}
+			</ul>
+		{% endif %}
+
+		{% field form.username %}
+		{% field form.password %}
+
+		<input type="hidden" name="next" value="{{ next }}">
+
+		<button type="submit">{% trans "Sign in" %}</button>
+		<a href="{% url 'accounts:password_reset' %}">{% trans "Reset Password" %}</a>
+	</form>
+</main>
+</body>
+</html>
