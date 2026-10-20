@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     "touchtechnology.news",
     "tournamentcontrol.competition",
     "example_app",
+    "enrolment",
 ]
 
 # Template partials are part of Django from 6.0; before that they come from
