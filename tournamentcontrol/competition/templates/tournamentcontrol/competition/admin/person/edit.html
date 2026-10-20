@@ -1,8 +1,10 @@
 {% extends "touchtechnology/admin/edit.html" %}
 {% load i18n admin %}
 
+{% block panels-attrs %} data-filterable-lists{% endblock %}
+
 {% block object-actions %}
-	{% if object.pk %}
+	{% if object|saved %}
 		<a class="button quiet" href="{% url 'admin:fixja:club:person:merge' object.club_id object.pk %}">{% icon "merge" %}<span>{% trans "Merge" %}</span></a>
 		<a class="button quiet" href="{% url 'admin:fixja:club:person:transfer' object.club_id object.pk %}">{% icon "transfer" %}<span>{% trans "Transfer" %}</span></a>
 	{% endif %}

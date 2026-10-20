@@ -14,8 +14,13 @@ class AdminLoginTests(TestCase):
     @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=None)
     def test_login_page_renders(self):
         self.get_check_200("admin:login")
-        self.assertResponseContains("<h1>Administration</h1>", html=True)
-        self.assertResponseContains('<button type="submit">Sign in</button>', html=True)
+        self.assertResponseContains("<h1>Sign in</h1>", html=True)
+        self.assertResponseContains(
+            '<p class="lede">to the administration of Administration</p>', html=True
+        )
+        self.assertResponseContains(
+            '<button type="submit" class="button primary">Sign in</button>', html=True
+        )
 
     def test_anonymous_admin_index_redirects_to_admin_login(self):
         self.get("admin:index")
@@ -70,7 +75,11 @@ class AdminLoginTests(TestCase):
         self.response_200()
         error = self.last_response.context["form"].non_field_errors()[0]
         self.assertResponseContains(
-            f'<ul class="errorlist"><li>{error}</li></ul>', html=True
+            '<div class="form-errors" role="alert">'
+            '<svg class="icon" aria-hidden="true" focusable="false">'
+            '<use href="/static/touchtechnology/admin/img/icons.svg#alert"></use></svg>'
+            f"<div><ul><li>{error}</li></ul></div></div>",
+            html=True,
         )
 
     def test_signed_in_staff_is_sent_on_from_the_login_page(self):
@@ -108,11 +117,13 @@ class AdminLoginTests(TestCase):
             self.get("admin:login", data={"next": self.reverse("admin:index")})
         self.response_200()
         self.assertResponseContains(
-            '<p class="signed-in-notice">You are signed in as visitor, which '
+            '<p class="notice signed-in-notice">You are signed in as visitor, which '
             "cannot use the administration. Sign in with another account.</p>",
             html=True,
         )
-        self.assertResponseContains('<button type="submit">Sign in</button>', html=True)
+        self.assertResponseContains(
+            '<button type="submit" class="button primary">Sign in</button>', html=True
+        )
 
     def test_signed_in_non_staff_is_not_looped(self):
         user = factories.UserFactory.create(username="visitor")

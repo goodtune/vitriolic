@@ -137,7 +137,7 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:schoolyear:list")
             self.assertResponseContains(
-                f'<a href="{self.year.urls["edit"]}">2026</a>', html=True
+                f'<a href="{self.year.urls["edit"]}"><svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/img/icons.svg#schoolyear"></use></svg><span>2026</span></a>', html=True
             )
 
     def test_grade_list(self):
@@ -156,10 +156,10 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:student:list", data={"search": "Ines"})
             self.assertResponseContains(
-                f'<a href="{self.student.urls["edit"]}">Ines Varga</a>', html=True
+                f'<a href="{self.student.urls["edit"]}"><svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/img/icons.svg#student"></use></svg><span>Ines Varga</span></a>', html=True
             )
             self.assertResponseNotContains(
-                f'<a href="{self.outsider.urls["edit"]}">Tomas Lindqvist</a>',
+                f'<a href="{self.outsider.urls["edit"]}"><svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/img/icons.svg#student"></use></svg><span>Tomas Lindqvist</span></a>',
                 html=True,
             )
 
@@ -171,8 +171,10 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:schoolyear:edit", pk=self.year.pk)
             self.assertResponseContains(
-                '<a href="%s" title="Add" role="button">'
-                '<i class="fa fa-plus-square"></i></a>'
+                '<a class="button primary compact" href="%s">'
+                '<svg class="icon" aria-hidden="true" focusable="false">'
+                '<use href="/static/touchtechnology/admin/img/icons.svg#plus"></use>'
+                "</svg><span>Add class group</span></a>"
                 % self.reverse(ADD_CLASS_GROUP, year_id=self.year.pk),
                 html=True,
             )
@@ -181,7 +183,7 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:grade:edit", pk=self.grade.pk)
             self.assertResponseContains(
-                f'<a href="{self.group.urls["edit"]}">2C (2026)</a>', html=True
+                f'<a href="{self.group.urls["edit"]}"><svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/img/icons.svg#classgroup"></use></svg><span>2C (2026)</span></a>', html=True
             )
             self.assertNotContains(self.last_response, "/class/add/")
 
@@ -189,7 +191,7 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:teacher:edit", pk=self.teacher.pk)
             self.assertResponseContains(
-                f'<a href="{self.group.urls["edit"]}">2C (2026)</a>', html=True
+                f'<a href="{self.group.urls["edit"]}"><svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/img/icons.svg#classgroup"></use></svg><span>2C (2026)</span></a>', html=True
             )
             self.assertNotContains(self.last_response, "/class/add/")
 
@@ -236,8 +238,11 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:student:edit", pk=self.student.pk)
             self.assertResponseContains(
-                '<a href="#timeline-tab" data-toggle="tab">'
-                '<i class="fa fa-chevron-right fa-fw"></i>&nbsp;Timeline</a>',
+                '<a class="tab" role="tab" id="timeline-tab-link" href="#timeline-tab" '
+                'aria-controls="timeline-tab" aria-selected="false" tabindex="-1">'
+                '<svg class="icon" aria-hidden="true" focusable="false">'
+                '<use href="/static/touchtechnology/admin/img/icons.svg#season"></use>'
+                "</svg><span>Timeline</span></a>",
                 html=True,
             )
             self.assertResponseContains(

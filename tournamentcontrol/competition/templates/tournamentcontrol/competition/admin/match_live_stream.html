@@ -12,11 +12,11 @@
 	<p class="muted">{% trans "Choose which matches on camera-equipped grounds are streamed to YouTube." %}</p>
 	{% timezone season.timezone %}
 		<div class="table-wrap">
-			<table class="listing">
+			<table class="listing live-stream-table">
 				<thead>
 					<tr>
 						<th>{% trans "Time" %}</th>
-						<th class="wide-only">{% trans "Division" %}</th>
+						<th>{% trans "Division" %}</th>
 						<th>{% trans "Ground" %}</th>
 						<th>{% trans "Match" %}</th>
 						<th>{% trans "Stream" %}</th>
@@ -25,9 +25,9 @@
 				<tbody>
 					{% for form in formset.forms %}
 						{% with match=form.instance %}
-							<tr>
-								<td class="num">{{ form.id }}{{ match.datetime|time }}</td>
-								<td class="wide-only">{{ match.stage.division.short_title|default:match.stage.division.title|htmlentities }}</td>
+							<tr class="live-stream-row">
+								<td class="nowrap">{{ form.id }}{{ match.datetime|time }}</td>
+								<td>{{ match.stage.division.short_title|default:match.stage.division.title|htmlentities }}</td>
 								<td>{{ match.play_at.title|htmlentities }}</td>
 								<td><label for="{{ form.live_stream.id_for_label }}">{{ match|safe }}</label></td>
 								<td>{{ form.live_stream|widget }}</td>

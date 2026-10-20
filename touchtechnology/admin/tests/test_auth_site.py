@@ -58,15 +58,15 @@ class AuthSiteUserTests(TestCase):
             self.get("admin:auth:users:list")
             self.response_200()
             self.assertResponseContains(
-                '<th class="hidden-xs">Registered</th>', html=True
+                '<th class="wide-only">Registered</th>', html=True
             )
             self.assertResponseContains("<th>Last login</th>", html=True)
             self.assertResponseContains(
-                '<td class="hidden-xs">10 Jul 2018</td>', html=True
+                '<td class="wide-only">10 Jul 2018</td>', html=True
             )
             self.assertResponseContains("<td>19 Sep 2026</td>", html=True)
             self.assertResponseContains(
-                '<td class="hidden-xs">3 Sep 2026</td>', html=True
+                '<td class="wide-only">3 Sep 2026</td>', html=True
             )
             self.assertResponseContains("<td>Never</td>", html=True)
 

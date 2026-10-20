@@ -1,22 +1,24 @@
 """
-End-to-end validation that the admin's Logout menu entry signs the user out.
+End-to-end validation that the admin's Sign out button signs the user out.
 
 Since Django 5.0 the logout view only accepts POST, so a plain link to it
-answers 405 Method Not Allowed and leaves the user signed in. The menu entry
-is therefore a form button, and signing out lands on the admin's sign in.
+answers 405 Method Not Allowed and leaves the user signed in. The control at
+the foot of the explorer rail is therefore a form button, and signing out lands
+on the admin's sign in.
 """
 
 from django.urls import reverse
 from playwright.sync_api import Page, expect
 
 
-def test_logout_from_the_profile_menu(
+def test_logout_from_the_rail(
     authenticated_page: Page, live_server, screenshot_dir
 ):
     page = authenticated_page
 
-    page.locator(".navbar-profile .dropdown-toggle").click()
-    logout = page.get_by_role("button", name="Logout")
+    logout = page.get_by_role("navigation", name="Explorer").get_by_role(
+        "button", name="Sign out"
+    )
     expect(logout).to_be_visible()
     page.screenshot(path=screenshot_dir / "admin_logout_menu.png")
 

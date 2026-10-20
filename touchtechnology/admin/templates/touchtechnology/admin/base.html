@@ -57,8 +57,8 @@
 						<span class="title-icon">{% if object %}{% icon object|model_icon %}{% elif model %}{% icon model|model_icon %}{% elif tree.here %}{% icon tree.here.icon %}{% else %}{% icon "home" %}{% endif %}</span>
 					{% endblock page_icon %}
 					<div class="titles">
-						<h1>{% block page_title %}{% if object.pk %}{{ object }}{% elif object %}{% blocktrans with type=object|type %}New {{ type }}{% endblocktrans %}{% elif form %}{% blocktrans with type=model|type %}New {{ type }}{% endblocktrans %}{% elif model %}{{ model|types|capfirst }}{% elif tree.here %}{{ tree.here.label }}{% else %}{{ brand.name }}{% endif %}{% endblock page_title %}</h1>
-						<p class="kind">{% block page_kind %}{% if object.pk %}{{ object|type|capfirst }}{% elif object or form %}{% trans "Not saved yet" %}{% elif paginator.count %}{% blocktrans count counter=paginator.count %}{{ counter }} in all{% plural %}{{ counter }} in all{% endblocktrans %}{% elif object_list %}{% blocktrans count counter=object_list|length %}{{ counter }} in all{% plural %}{{ counter }} in all{% endblocktrans %}{% endif %}{% endblock page_kind %}</p>
+						<h1>{% block page_title %}{% if object|saved %}{{ object }}{% elif object %}{% blocktrans with type=object|type %}New {{ type }}{% endblocktrans %}{% elif form %}{% blocktrans with type=model|type %}New {{ type }}{% endblocktrans %}{% elif model %}{{ model|types|capfirst }}{% elif tree.here %}{{ tree.here.label }}{% else %}{{ brand.name }}{% endif %}{% endblock page_title %}</h1>
+						<p class="kind">{% block page_kind %}{% if object|saved %}{{ object|type|capfirst }}{% elif object or form %}{% trans "Not saved yet" %}{% elif paginator.count %}{% blocktrans count counter=paginator.count %}{{ counter }} in all{% plural %}{{ counter }} in all{% endblocktrans %}{% elif object_list %}{% blocktrans count counter=object_list|length %}{{ counter }} in all{% plural %}{{ counter }} in all{% endblocktrans %}{% endif %}{% endblock page_kind %}</p>
 					</div>
 					<div class="page-actions">{% block page_actions %}{% endblock page_actions %}</div>
 				</div>

@@ -575,7 +575,78 @@
 		if (select && select.value) { window.location = select.value; }
 	});
 
+	/* ------------------------------------------------------------------
+	 * Lists that can be filtered and sorted where they are, for the pages
+	 * that ask for it (data-filterable-lists), however their panes arrive.
+	 */
+
+	function cellValue(row, index) {
+		var cell = row.cells[index];
+		return cell ? cell.textContent.replace(/\s+/g, ' ').trim() : '';
+	}
+
+	function sortBy(table, index, th) {
+		var body = table.tBodies[0];
+		var rows = Array.prototype.slice.call(body.rows).filter(function (row) { return row.cells.length > 1; });
+		var ascending = th.getAttribute('aria-sort') !== 'ascending';
+		var numeric = rows.every(function (row) { var v = cellValue(row, index); return v === '' || !isNaN(parseFloat(v)); });
+		rows.sort(function (a, b) {
+			var x = cellValue(a, index), y = cellValue(b, index);
+			var order = numeric ? (parseFloat(x) || 0) - (parseFloat(y) || 0) : x.localeCompare(y, undefined, { numeric: true, sensitivity: 'base' });
+			return ascending ? order : -order;
+		});
+		rows.forEach(function (row) { body.appendChild(row); });
+		$$('th[aria-sort]', table).forEach(function (other) { other.removeAttribute('aria-sort'); });
+		th.setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
+	}
+
+	function enhanceLists(root) {
+		var scope = root.closest ? root.closest('[data-filterable-lists]') : null;
+		var tables = scope ? $$('table.listing', root) : $$('[data-filterable-lists] table.listing', root);
+		tables.forEach(function (table) {
+			if (table.hasAttribute('data-enhanced') || !table.tBodies[0]) { return; }
+			table.setAttribute('data-enhanced', '');
+			var wrap = table.closest('.table-wrap') || table;
+			var heading = wrap.parentNode.querySelector('.list-head h2');
+			var filter = document.createElement('input');
+			filter.type = 'search';
+			filter.className = 'filter-box';
+			filter.placeholder = 'Filter';
+			filter.setAttribute('aria-label', 'Filter ' + (heading ? heading.textContent.trim().toLowerCase() : 'the list'));
+			filter.addEventListener('input', function () {
+				var terms = filter.value.toLowerCase().trim();
+				Array.prototype.forEach.call(table.tBodies[0].rows, function (row) {
+					row.hidden = terms !== '' && row.textContent.toLowerCase().indexOf(terms) < 0;
+				});
+			});
+			wrap.parentNode.insertBefore(filter, wrap);
+			$$('thead th', table).forEach(function (th, index) {
+				if (th.classList.contains('actions-cell') || !th.textContent.trim()) { return; }
+				var button = document.createElement('button');
+				button.type = 'button';
+				button.className = 'sort';
+				while (th.firstChild) { button.appendChild(th.firstChild); }
+				th.appendChild(button);
+				button.addEventListener('click', function () { sortBy(table, index, th); });
+			});
+		});
+	}
+
+	// The number beside a tab: the rows its pane lists, once they are there.
+	function countTabs() {
+		$$('[data-count-of]').forEach(function (badge) {
+			var pane = document.getElementById(badge.getAttribute('data-count-of'));
+			var body = pane && $('table.listing tbody', pane);
+			if (!body || $('.pager', pane)) { return; }
+			var rows = Array.prototype.filter.call(body.rows, function (row) { return !$('.empty-state', row); });
+			badge.textContent = rows.length;
+			badge.hidden = false;
+		});
+	}
+
 	function enhance(root) {
+		countTabs();
+		enhanceLists(root);
 		preparePopovers(root);
 		$$('select', root).forEach(enhancePicker);
 	}

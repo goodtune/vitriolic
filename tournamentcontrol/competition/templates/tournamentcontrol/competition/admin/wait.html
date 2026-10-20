@@ -5,5 +5,5 @@
 {% block page_icon %}<span class="title-icon">{% icon "print" %}</span>{% endblock %}
 
 {% block content %}
-	<p class="pane-loading">{% icon "refresh" %}{% block waitfor %}{% endblock %}</p>
+	<div class="pane-loading">{% icon "refresh" %}<p>{% block waitfor %}{% endblock %}</p></div>
 {% endblock %}

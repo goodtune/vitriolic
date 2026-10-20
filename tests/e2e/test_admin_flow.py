@@ -47,9 +47,11 @@ class TestAdminFlow:
         # Verify successful login - should redirect to admin dashboard
         expect(page).to_have_url(f"{live_server.url}/admin/")
 
-        # Check admin dashboard widgets are all loaded
-        expect(page.locator('h4[class="portlet-title"]')).to_have_text(
+        # Check admin dashboard widgets are all loaded, after the overview of
+        # everything the administrator manages.
+        expect(page.locator("main .card > h2")).to_have_text(
             [
+                "Everything you manage",
                 "Awaiting Scores",
                 "Progress Teams",
                 "Season Reports",
@@ -100,7 +102,7 @@ class TestAdminFlow:
         page.fill('input[name="parent-form-slug"]', "home")
 
         # Save the page
-        page.click('.content button[type="submit"]')
+        page.get_by_role("button", name="Save", exact=True).click()
 
         # Verify the home page was created
         expect(page).to_have_url(f"{live_server.url}/admin/content/")

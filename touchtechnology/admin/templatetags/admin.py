@@ -224,9 +224,10 @@ def widget(bound_field, extra_class=""):
         attrs["placeholder"] = False
     if bound_field.errors:
         attrs["aria-invalid"] = "true"
-        attrs["aria-describedby"] = "%s-errors" % bound_field.auto_id
-    elif bound_field.help_text:
-        attrs["aria-describedby"] = "%s-help" % bound_field.auto_id
+        described = ["%s-errors" % bound_field.auto_id]
+        if bound_field.help_text:
+            described.append("%s_helptext" % bound_field.auto_id)
+        attrs["aria-describedby"] = " ".join(described)
     return bound_field.as_widget(attrs=attrs)
 
 
@@ -329,3 +330,15 @@ def adjacent(sequence, value):
         "previous": items[index - 1] if index > 0 else None,
         "next": items[index + 1] if index + 1 < len(items) else None,
     }
+
+
+@register.filter
+def saved(obj):
+    """
+    Whether ``obj`` is in the database: a primary key is not enough, as a
+    UUID key is given to an object before it is saved.
+    """
+    state = getattr(obj, "_state", None)
+    if state is None:
+        return bool(getattr(obj, "pk", None))
+    return obj.pk is not None and not state.adding

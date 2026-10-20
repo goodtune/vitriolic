@@ -68,7 +68,7 @@
 													<a href="{% url 'admin:fixja:scorecards' object.competition_id object.pk ymd "pdf" %}">{% icon "print" %}{% trans "Scorecards" %}</a>
 													<hr>
 													<a href="{% url 'admin:fixja:match-washout' object.competition_id object.pk ymd %}">{% icon "umbrella" %}{% trans "Washout" %}</a>
-													{% if object.live_stream %}<a href="{% url 'admin:fixja:match-live-stream' object.competition_id object.pk ymd %}">{% icon "video" %}{% trans "Live stream" %}</a>{% endif %}
+													<a href="{% url 'admin:fixja:match-live-stream' object.competition_id object.pk ymd %}">{% icon "video" %}{% trans "Live stream" %}</a>
 													<a href="{% url 'admin:fixja:match-visual-schedule' object.competition_id object.pk ymd %}" target="_blank">{% icon "external" %}{% trans "Visual scheduler" %}</a>
 												</div>
 											</div>

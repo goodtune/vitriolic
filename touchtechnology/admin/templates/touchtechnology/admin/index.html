@@ -7,10 +7,7 @@
 
 {% block content %}
 	<div class="cards">
-		{% for widget in admin.dashboard %}
-			{% render widget %}
-		{% endfor %}
-		<section class="card">
+		<section class="card wide">
 			<h2>{% icon "tree" %}{% trans "Everything you manage" %}</h2>
 			<ul class="folder-view">
 				{% for node in tree.roots %}
@@ -18,5 +15,8 @@
 				{% endfor %}
 			</ul>
 		</section>
+		{% for widget in admin.dashboard %}
+			{% render widget %}
+		{% endfor %}
 	</div>
 {% endblock %}

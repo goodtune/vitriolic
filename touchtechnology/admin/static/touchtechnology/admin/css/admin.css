@@ -984,7 +984,7 @@ textarea {
 
 input::placeholder,
 textarea::placeholder {
-	color: oklch(from var(--brand-primary) 0.62 0.01 h);
+	color: oklch(from var(--brand-primary) 0.52 0.012 h);
 }
 
 input:focus-visible,
@@ -1671,17 +1671,27 @@ dialog::backdrop {
 }
 
 .sign-in-art .brandmark { font-size: 19px; }
+
+.sign-in-caption {
+	position: absolute;
+	left: 48px;
+	bottom: 40px;
+	max-width: 34ch;
+	margin: 0;
+	color: var(--muted);
+	font-size: 15px;
+	text-wrap: pretty;
+}
 .sign-in-art .brand-tile { width: 48px; height: 48px; font-size: 18px; border-radius: 12px; }
 
 .sign-in-art svg.map {
 	position: absolute;
 	left: 48px;
-	right: 48px;
-	bottom: 48px;
-	width: calc(100% - 96px);
-	max-width: 520px;
+	top: 50%;
+	width: min(calc(100% - 96px), 440px);
 	height: auto;
 	color: var(--ink);
+	transform: translateY(-45%);
 }
 
 .sign-in-form {
@@ -2190,7 +2200,8 @@ dialog::backdrop {
 		border-bottom: 1px solid var(--line);
 	}
 
-	.sign-in-art svg.map { display: none; }
+	.sign-in-art svg.map,
+	.sign-in-caption { display: none; }
 
 	.sign-in-form {
 		justify-content: flex-start;
@@ -2515,3 +2526,49 @@ legend.slot-head { padding: 0; }
 .add-row-line { margin: 10px 0 0; }
 
 .thumb img { display: block; border-radius: 4px; }
+
+/* a list filtered and sorted in place */
+.filter-box {
+	max-width: 280px;
+	margin-bottom: 10px;
+}
+
+th .sort {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+th .sort::after {
+	content: "";
+	display: inline-block;
+	width: 6px;
+	height: 6px;
+	margin-left: 6px;
+	border-right: 1.5px solid currentColor;
+	border-bottom: 1.5px solid currentColor;
+	opacity: 0.35;
+	transform: translateY(-2px) rotate(45deg);
+}
+
+th[aria-sort] .sort { color: var(--ink); }
+th[aria-sort] .sort::after { opacity: 1; }
+th[aria-sort="ascending"] .sort::after { transform: translateY(1px) rotate(-135deg); }
+
+@media (max-width: 767.98px) {
+	/* a match to stream: what and when stacked, the choice beside it */
+	.live-stream-table thead { display: none; }
+	.live-stream-table tr.live-stream-row {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 2px 12px;
+		padding: 10px 14px;
+		border-top: 1px solid var(--line);
+	}
+	.live-stream-table tr.live-stream-row td { display: block; padding: 0; border: 0; grid-column: 1; }
+	.live-stream-table tr.live-stream-row td:nth-child(1) { font-weight: 600; }
+	.live-stream-table tr.live-stream-row td:last-child { grid-column: 2; grid-row: 1 / span 4; align-self: center; }
+}

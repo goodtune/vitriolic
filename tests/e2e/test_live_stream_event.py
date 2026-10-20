@@ -58,8 +58,7 @@ class TestLiveStreamEventForm:
     ):
         """
         The events tab offers a per-row button that copies the youtu.be
-        link for the broadcast to the clipboard, without submitting the
-        surrounding season form.
+        link for the broadcast to the clipboard, without leaving the page.
         """
         page = authenticated_page
         season = live_stream_season["season"]
@@ -69,7 +68,7 @@ class TestLiveStreamEventForm:
         page.goto(self._season_url(live_server, season))
         page.locator('a[href="#live_stream_events-tab"]').click()
 
-        button = page.locator(".js-copy-video-link")
+        button = page.locator("#live_stream_events-tab [data-copy]")
         expect(button).to_be_visible()
         button.click()
 
@@ -77,9 +76,8 @@ class TestLiveStreamEventForm:
         clipboard = page.evaluate("navigator.clipboard.readText()")
         assert clipboard == f"https://youtu.be/{event.pk}"
 
-        # Visual feedback, and the click must not have navigated away by
-        # submitting the season form.
-        expect(button.locator("i")).to_have_class("fa fa-check")
+        # Visual feedback, and the click must not have navigated away.
+        expect(button).to_have_text("Copied")
         expect(page.locator("#live_stream_events-tab")).to_be_visible()
 
         page.screenshot(
@@ -135,7 +133,7 @@ class TestLiveStreamEventForm:
             expect(page.locator(f'select[name="{prefix}_3"]')).to_have_count(0)
 
         # The implied timezone is stated to the user.
-        expect(page.locator(".content form")).to_contain_text(
+        expect(page.locator("form#edit-form")).to_contain_text(
             "Local time in Australia/Sydney."
         )
 

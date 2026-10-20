@@ -171,8 +171,8 @@ class TestMatchLiveStream:
         )
 
         first_row = page.locator(".live-stream-row").first
-        time_box = first_row.locator(".row .row > div").nth(0).bounding_box()
-        division_box = first_row.locator(".row .row > div").nth(1).bounding_box()
+        time_box = first_row.locator("td").nth(0).bounding_box()
+        division_box = first_row.locator("td").nth(1).bounding_box()
         select_box = first_row.locator("select").bounding_box()
 
         # On desktop, time and division sit on the same line.
@@ -187,9 +187,9 @@ class TestMatchLiveStream:
         )
 
         first_row = page.locator(".live-stream-row").first
-        time_box = first_row.locator(".row .row > div").nth(0).bounding_box()
-        division_box = first_row.locator(".row .row > div").nth(1).bounding_box()
-        field_box = first_row.locator(".row .row > div").nth(2).bounding_box()
+        time_box = first_row.locator("td").nth(0).bounding_box()
+        division_box = first_row.locator("td").nth(1).bounding_box()
+        field_box = first_row.locator("td").nth(2).bounding_box()
         select_box = first_row.locator("select").bounding_box()
 
         # On mobile, time/division/field stack onto separate lines.

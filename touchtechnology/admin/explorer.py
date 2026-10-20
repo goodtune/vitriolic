@@ -326,7 +326,7 @@ class Explorer:
             if local.startswith("s"):
                 return self.section_children(request, int(local[1:]))
             if local.startswith("o:"):
-                obj = self.lookup(local)
+                obj = self.lookup(local, request)
                 return self.object_children(request, obj) if obj else []
             if local.startswith("g:"):
                 return self.group_children(request, local)
@@ -413,7 +413,7 @@ class Explorer:
         parts = local.split(":")
         label, pk, name = parts[1], parts[2], parts[3]
         value = parts[4] if len(parts) > 4 else None
-        obj = self.lookup("o:%s:%s" % (label, pk))
+        obj = self.lookup("o:%s:%s" % (label, pk), request)
         if obj is None:
             return []
         for rel in self.relations(type(obj), obj):
@@ -424,8 +424,14 @@ class Explorer:
     def custom_children(self, request, name, arg):
         return []
 
-    def lookup(self, local):
-        """The object of an ``o:`` key, or ``None``."""
+    def lookup(self, local, request=None):
+        """
+        The object of an ``o:`` key, or ``None``. One the page already holds
+        is used as it is, with the related objects it has already fetched.
+        """
+        known = getattr(request, "_explorer_objects", {})
+        if local in known:
+            return known[local]
         try:
             __, label, pk = local.split(":", 2)
             model = apps.get_model(label)
@@ -443,12 +449,26 @@ class Explorer:
     # ------------------------------------------------------------------
     # Where a page is
 
-    def parent(self, obj):
-        """The object ``obj`` nests under, through one of its foreign keys."""
+    def parent(self, obj, known=()):
+        """
+        The object ``obj`` nests under: one the page already has (``known``,
+        which costs nothing), or else one reached through its foreign keys.
+        """
         url = _url(obj)
         if not url:
             return None
         best, best_url = None, ""
+        for candidate in known:
+            candidate_url = _url(candidate)
+            if (
+                candidate_url
+                and url.startswith(candidate_url)
+                and url != candidate_url
+                and len(candidate_url) > len(best_url)
+            ):
+                best, best_url = candidate, candidate_url
+        if best is not None:
+            return best
         for f in type(obj)._meta.concrete_fields:
             if not (f.is_relation and f.many_to_one):
                 continue
@@ -470,17 +490,25 @@ class Explorer:
                 best, best_url = candidate, candidate_url
         return best
 
-    def located(self, request, context):
-        """The deepest object of the page's context that the page is under."""
-        path = request.path
-        best, best_url = None, ""
-        seen = set()
+    def known(self, context):
+        """The saved objects with admin pages that the page's context holds."""
+        found, seen = [], set()
         for value in context.values():
             if not isinstance(value, models.Model) or value.pk is None:
                 continue
             if not isinstance(value, AdminUrlMixin) or id(value) in seen:
                 continue
+            if getattr(value, "_state", None) is not None and value._state.adding:
+                continue
             seen.add(id(value))
+            found.append(value)
+        return found
+
+    def located(self, request, context):
+        """The deepest object of the page's context that the page is under."""
+        path = request.path
+        best, best_url = None, ""
+        for value in self.known(context):
             url = _url(value)
             if url and path.startswith(url) and len(url) > len(best_url):
                 best, best_url = value, url
@@ -493,10 +521,17 @@ class Explorer:
         has one.
         """
         obj = self.located(request, context)
+        known = self.known(context)
         chain = []
         while obj is not None and len(chain) < 20:
             chain.insert(0, obj)
-            obj = self.parent(obj)
+            obj = self.parent(obj, known)
+        try:
+            objects = request.__dict__.setdefault("_explorer_objects", {})
+            for each in chain:
+                objects[_key(each)] = each
+        except AttributeError:
+            pass
 
         sections = self.sections()
         keys = []

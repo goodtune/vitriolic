@@ -577,7 +577,7 @@ class LiveStreamEventAdminTests(TestCase):
                 event.season_id,
             )
             self.assertResponseContains(
-                'data-video-url="https://youtu.be/adhoc123"', html=False
+                'data-copy="https://youtu.be/adhoc123"', html=False
             )
 
     def test_season_edit_hides_copy_video_link_for_removed_broadcast(self):
@@ -593,7 +593,7 @@ class LiveStreamEventAdminTests(TestCase):
                 event.season_id,
             )
             self.assertResponseNotContains(
-                'data-video-url="https://youtu.be/adhoc123"', html=False
+                'data-copy="https://youtu.be/adhoc123"', html=False
             )
 
     def test_season_edit_hides_events_tab_when_not_live_streamed(self):

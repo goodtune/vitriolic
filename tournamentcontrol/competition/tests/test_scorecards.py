@@ -65,7 +65,7 @@ class ScorecardTestCase(TestCase):
         with exactly the given keyword arguments.
         """
         self.prince.assert_called_once()
-        self.assertIn("<html>", self.prince.call_args.args[0])
+        self.assertIn("<html", self.prince.call_args.args[0])
         self.assertEqual(self.prince.call_args.kwargs, kwargs)
 
     def assertRedirectsToAsyncResult(self):
@@ -141,7 +141,7 @@ class DateScorecardTests(ScorecardTestCase):
                 "html",
             )
         self.response_200()
-        self.assertIn("<html>", self.last_response.content.decode("utf8"))
+        self.assertIn("<html", self.last_response.content.decode("utf8"))
         self.prince.assert_not_called()
 
     def test_login_required(self):
@@ -190,7 +190,7 @@ class StageScorecardTests(ScorecardTestCase):
                 "html",
             )
         self.response_200()
-        self.assertIn("<html>", self.last_response.content.decode("utf8"))
+        self.assertIn("<html", self.last_response.content.decode("utf8"))
         self.prince.assert_not_called()
 
     def test_login_required(self):
@@ -276,13 +276,19 @@ class AsyncResultViewTests(ScorecardTestCase):
         self.response_200()
         self.assertResponseHeaders({"Refresh": None})
         self.assertResponseContains(
-            '<div class="alert alert-danger alert-dismissable">'
-            '<button type="button" class="close" data-dismiss="alert" '
-            'aria-hidden="true">&#215;</button>'
-            "The PDF service didn&#x27;t respond, so your PDF could not be "
-            "generated. Please try again.</div>"
+            '<div class="message message-error">'
+            '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/img/icons.svg#alert"></use></svg>'
+            "<p>The PDF service didn&#x27;t respond, so your PDF could not be "
+            "generated. Please try again.</p>"
+            '<button type="button" class="message-close">'
+            '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/img/icons.svg#x"></use></svg>'
+            '<span class="visually-hidden">Dismiss</span></button></div>'
         )
-        self.assertResponseContains(f'<a href="{self.start_again()}">Start again</a>')
+        self.assertResponseContains(
+            f'<a class="button primary" href="{self.start_again()}">'
+            '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/img/icons.svg#refresh"></use></svg>'
+            "<span>Try again</span></a>"
+        )
         self.assertNoAsyncResult()
 
     def test_revoked(self):

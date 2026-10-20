@@ -6,7 +6,7 @@
 {% block subheading %}{{ season.competition.title }}, {{ season.title }} &ndash; {{ date|date:"l j F Y" }}{% endblock %}
 {% block tools %}
 	<a href="{% url 'admin:fixja:match-results' season.competition.pk season.pk date|date:"Ymd" %}">{% trans "Results" %}</a>
-	{% if season.live_stream %}<a href="{% url 'admin:fixja:match-live-stream' season.competition.pk season.pk date|date:"Ymd" %}">{% trans "Live stream" %}</a>{% endif %}
+	<a href="{% url 'admin:fixja:match-live-stream' season.competition.pk season.pk date|date:"Ymd" %}">{% trans "Live stream" %}</a>
 {% endblock %}
 
 {% block content %}
@@ -30,8 +30,8 @@
 							<th>{% ifchanged match.datetime %}{{ match.datetime|time }}{% endifchanged %}</th>
 							<td>{{ match.stage.division.short_title|default:match.stage.division.title|htmlentities }}</td>
 							<td>{{ match.play_at.title|htmlentities }}</td>
-							<td>{{ match.get_home_team.title|htmlentities }}{% if match.home_team_score is not None %} <strong>{{ match.home_team_score }}</strong>{% endif %}</td>
-							<td>{{ match.get_away_team.title|htmlentities }}{% if match.away_team_score is not None %} <strong>{{ match.away_team_score }}</strong>{% endif %}</td>
+							<td class="team">{{ match.get_home_team.title|htmlentities }}{% if match.home_team_score is not None %} <strong>{{ match.home_team_score }}</strong>{% endif %}</td>
+							<td class="team">{{ match.get_away_team.title|htmlentities }}{% if match.away_team_score is not None %} <strong>{{ match.away_team_score }}</strong>{% endif %}</td>
 							<td>{% for ref in match.referees.all %}{{ ref.person.first_name.0 }} {{ ref.person.last_name }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
 							<td class="nowrap">
 								<a href="{% url 'admin:fixja:competition:season:division:stage:match:detail' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}">{% trans "Statistics" %}</a>

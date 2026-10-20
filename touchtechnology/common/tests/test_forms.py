@@ -52,7 +52,7 @@ class LocationWidgetTest(TestCase):
             '<input type="text" name="latlng_0" value="-33.8471" placeholder="Latitude">'
             '<input type="text" name="latlng_1" value="151.0685" placeholder="Longitude">'
             '<input type="text" name="latlng_2" value="15" placeholder="Zoom">'
-            '<button type="button" class="btn btn-default location-widget-toggle" '
+            '<button type="button" class="button compact location-widget-toggle" '
             'aria-pressed="false" hidden>Edit</button>'
             "</div>"
             "</div>",

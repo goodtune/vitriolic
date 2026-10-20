@@ -196,7 +196,12 @@ class HtmxTabPaginationTests(TestCase):
 
     def _member_link(self, member):
         url = reverse("admin:fixja:club:person:edit", args=[self.club.pk, member.pk])
-        return f'<a href="{url}">{member}</a>'
+        return (
+            f'<a href="{url}">'
+            '<svg class="icon" aria-hidden="true" focusable="false">'
+            '<use href="/static/touchtechnology/admin/img/icons.svg#person"></use>'
+            f"</svg><span>{member}</span></a>"
+        )
 
     def _get_club_tab(self, **data):
         with self.login(self.superuser):
@@ -287,8 +292,10 @@ class HtmxTabAddLinkTests(TestCase):
     def _add_link(self, url_name, *args, type_name):
         url = reverse(url_name, args=args)
         return (
-            f'<a href="{url}" title="Add {type_name}" role="button">'
-            '<i class="fa fa-plus-square"></i></a>'
+            f'<a class="button primary compact" href="{url}">'
+            '<svg class="icon" aria-hidden="true" focusable="false">'
+            '<use href="/static/touchtechnology/admin/img/icons.svg#plus"></use>'
+            f"</svg><span>Add {type_name}</span></a>"
         )
 
     def test_club_people_tab_traditional_mode(self):

@@ -10,6 +10,7 @@ the most the club and person pages show at once.
 """
 
 import datetime
+import re
 from urllib.parse import urljoin
 
 import pytest
@@ -236,12 +237,18 @@ def test_every_tab_lists_the_same_in_both_modes(
 def test_a_tab_list_can_be_searched_and_sorted(
     authenticated_page: Page, live_server, settings, site, name, tab_id, htmx
 ):
-    """The club and person pages turn their lists into DataTables."""
+    """
+    The club and person pages let their lists be filtered and sorted where
+    they are, including lists fetched when their tab is first shown.
+    """
     set_mode(settings, htmx)
     page = authenticated_page
     page.goto(edit_url(live_server, site[name]))
     pane = show_tab(page, tab_id)
-    expect(pane.locator(".dataTables_filter input")).to_be_visible()
+    expect(pane.get_by_role("searchbox", name=re.compile("^Filter"))).to_be_visible()
+    first = pane.locator("thead th button.sort").first
+    first.click()
+    expect(pane.locator("thead th").first).to_have_attribute("aria-sort", "ascending")
 
 
 def test_choosing_a_club_names_the_team(

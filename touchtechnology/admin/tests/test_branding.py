@@ -206,7 +206,7 @@ class ShellTests(TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:index")
             self.assertResponseContains(
-                '<span class="navbar-brand-text">Administration</span>', html=True
+                '<span class="brand-name">Administration</span>', html=True
             )
 
     @override_settings(

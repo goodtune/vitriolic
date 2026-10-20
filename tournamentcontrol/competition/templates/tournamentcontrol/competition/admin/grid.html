@@ -4,7 +4,7 @@
 {% block title %}{% trans "Matrix" %} &ndash; {{ season.title }}{% endblock %}
 {% block body_class %}matrix-sheet{% endblock %}
 {% block heading %}{% trans "Matrix" %}{% endblock %}
-{% block subheading %}{{ competition.title|default:season.competition.title }}, {{ season.title }}{% if date %} &ndash; {{ date|date:"l j F Y" }}{% endif %}{% endblock %}
+{% block subheading %}{% firstof competition.title season.competition.title %}, {{ season.title }}{% if date %} &ndash; {{ date|date:"l j F Y" }}{% endif %}{% endblock %}
 {% block tools %}{% if season.urls %}<a href="{{ season.urls.edit }}#schedule-tab">{% trans "Back to the season" %}</a>{% endif %}{% endblock %}
 
 {% block extracss %}
@@ -41,7 +41,7 @@
 													{% with division=match.stage.division stage=match.stage home=match.get_home_team away=match.get_away_team %}
 														<div class="match{% if match.videos %} video{% endif %}" style="--division: {{ division.get_color }}" data-match="{{ match.pk }}" data-stage="{{ stage.pk }}" data-division="{{ division.pk }}">
 															<strong>{% block division %}{{ division.title|htmlentities }}{% endblock %}</strong>
-															<small>{{ stage.title|htmlentities }}{% if match.label %}, {% trans match.label %}{% endif %}</small>
+															<small>{{ stage.title|htmlentities }}</small>{% if match.label %} <small>{% trans match.label %}</small>{% endif %}
 															<div>{% block teams %}{{ home.title|htmlentities }}<br>{{ away.title|htmlentities }}{% endblock %}</div>
 														</div>
 													{% endwith %}

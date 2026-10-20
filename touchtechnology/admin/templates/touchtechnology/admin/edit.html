@@ -3,16 +3,10 @@
 
 {% block page_actions %}
 	{% block object-actions %}
-		{% if object.pk %}
-			{% with view_url=object|admin_url:"detail" perms_url=object|admin_url:"perms" delete_url=object|admin_url:"delete" %}
+		{% if object|saved %}
+			{% with perms_url=object|admin_url:"perms" %}
 				{% if perms_url %}
 					<a class="button quiet" href="{{ perms_url }}">{% icon "lock" %}<span>{% trans "Permissions" %}</span></a>
-				{% endif %}
-				{% if delete_url %}
-					<form method="post" action="{{ delete_url }}" data-confirm="{% blocktrans with type=object|type %}The {{ type }} “{{ object }}” will be removed for good.{% endblocktrans %}" data-confirm-title="{% blocktrans with type=object|type %}Delete this {{ type }}?{% endblocktrans %}" data-confirm-label="{% trans "Delete" %}">
-						{% csrf_token %}
-						<button type="submit" class="button destructive-quiet">{% icon "trash" %}<span>{% trans "Delete" %}</span></button>
-					</form>
 				{% endif %}
 			{% endwith %}
 		{% endif %}
@@ -27,12 +21,12 @@
 {% endblock page_actions %}
 
 {% block page_nav %}
-	{% if object.pk %}
+	{% if object|saved %}
 		<div class="tabs" role="tablist" data-tabs aria-label="{% blocktrans with type=model|type %}Parts of this {{ type }}{% endblocktrans %}">
 			{% block tab-links %}
 				<a class="tab" role="tab" id="{{ model|type|slugify }}-tab-link" href="#{{ model|type|slugify }}-tab" aria-controls="{{ model|type|slugify }}-tab" aria-selected="true">{% icon "edit" %}<span>{% trans "Details" %}</span></a>
 				{% for manager, name in object|related:related %}
-					<a class="tab" role="tab" id="{{ name }}-tab-link" href="#{{ name }}-tab" aria-controls="{{ name }}-tab" aria-selected="false" tabindex="-1">{% icon manager|model_icon %}<span>{{ manager.all|types|capfirst }}</span><span class="count" aria-hidden="true">{{ manager.count }}</span></a>
+					<a class="tab" role="tab" id="{{ name }}-tab-link" href="#{{ name }}-tab" aria-controls="{{ name }}-tab" aria-selected="false" tabindex="-1">{% icon manager|model_icon %}<span>{{ manager.all|types|capfirst }}</span><span class="count" aria-hidden="true" data-count-of="{{ name }}-tab" hidden></span></a>
 				{% endfor %}
 			{% endblock tab-links %}
 		</div>
@@ -40,7 +34,7 @@
 {% endblock page_nav %}
 
 {% block content %}
-	<div class="panels" id="tab-content">
+	<div class="panels" id="tab-content"{% block panels-attrs %}{% endblock %}>
 		{% block tab-panes %}
 			<section class="pane is-active" data-tab-panel role="tabpanel" id="{{ model|type|slugify }}-tab" aria-labelledby="{{ model|type|slugify }}-tab-link">
 				<form class="{% block form-class %}edit-form{% endblock %}" id="edit-form" action="" method="post" enctype="multipart/form-data">
@@ -56,7 +50,7 @@
 				</form>
 			</section>
 
-			{% if object.pk %}
+			{% if object|saved %}
 				{% for manager, name in object|related:related %}
 					{% if htmx_admin_tabs %}
 						<section class="pane" data-tab-panel role="tabpanel" id="{{ name }}-tab" aria-labelledby="{{ name }}-tab-link" hx-get="?_htmx_tab={{ name }}" hx-trigger="shown once" hx-swap="innerHTML">

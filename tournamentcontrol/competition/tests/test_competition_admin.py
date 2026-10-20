@@ -157,14 +157,13 @@ class TemplateTests(TestCase):
                 "20170213",
                 "html",
             )
+            self.assertResponseContains("<strong>%s</strong>" % self.division)
+            self.assertResponseContains("<small>%s</small>" % self.stage)
             self.assertResponseContains(
-                "<h4>%s<br /><small>%s</small></h4>" % (self.division, self.stage)
-            )
-            self.assertResponseContains(
-                "<p>1st <br>2nd</p>"
+                "<div>1st <br>2nd</div>"
             )  # whitespace & br style deliberate
             self.assertResponseContains(
-                "<p>Chees&eacute;&nbsp;&amp;&nbsp;Crackers<br>4th</p>"
+                "<div>Chees&eacute;&nbsp;&amp;&nbsp;Crackers<br>4th</div>"
             )
 
     def test_scorecards_html(self):
@@ -1068,8 +1067,9 @@ class GoodViewTests(TestCase):
             self.get("admin:fixja:club:officials", club.pk, season.pk)
             self.response_200()
             self.assertResponseContains(
-                '<td colspan="3" class="no_results">'
-                "There are no officials of this club.</td>"
+                '<td colspan="3" class="empty-state">'
+                "The club has no officials for this season yet.</td>",
+                html=True,
             )
 
     def test_officials_complete_season_is_read_only_to_club_administrators(self):
@@ -1081,8 +1081,9 @@ class GoodViewTests(TestCase):
             self.get("admin:fixja:club:officials", club.pk, season.pk)
             self.response_200()
             self.assertResponseContains(
-                '<td colspan="2" class="no_results">'
-                "There are no club officials for this season.</td>"
+                '<td colspan="2" class="empty-state">'
+                "The club has no officials for this season.</td>",
+                html=True,
             )
 
     def test_officials_save_returns_to_the_club(self):
@@ -1279,16 +1280,18 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # Assert HTML structure contains the expected table rows
         expected_scorer_row = (
+            '<tr><td class="num muted">1</td>'  # place
             f"<td>{person.first_name} {person.last_name}</td>"
-            f"<td>{team.club.title}</td>"
-            f"<td>1</td>"  # played
-            f"<td>10</td>"  # points
+            f'<td class="wide-only">{team.club.title}</td>'
+            '<td class="num">1</td>'  # played
+            '<td class="num strong">10</td></tr>'  # points
         )
         expected_mvp_row = (
+            '<tr><td class="num muted">1</td>'  # place
             f"<td>{person.first_name} {person.last_name}</td>"
-            f"<td>{team.club.title}</td>"
-            f"<td>1</td>"  # played
-            f"<td>2</td>"  # mvp
+            f'<td class="wide-only">{team.club.title}</td>'
+            '<td class="num">1</td>'  # played
+            '<td class="num strong">2</td></tr>'  # votes
         )
 
         self.assertResponseContains(expected_scorer_row, html=True)
@@ -1345,8 +1348,8 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # After GET ensure away_team has no players
         text = """
-        <td colspan="5" class="no_results">
-            There are no registered players in this team.
+        <td colspan="5" class="empty-state">
+            No player is registered in this team.
         </td>
         """
         self.assertContains(res, text, html=True)
@@ -1382,12 +1385,17 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         res = self.client.post(url, data=data)
         text = """
-        <ul class="list-group">
-            <li class="list-group-item list-group-item-danger">
-                Total number of points (0) does not equal total
-                number of scores (3) for this team.
-            </li>
-        </ul>
+        <div class="form-errors" role="alert">
+            <svg class="icon" aria-hidden="true" focusable="false">
+                <use href="/static/touchtechnology/admin/img/icons.svg#alert"></use>
+            </svg>
+            <ul>
+                <li>
+                    Total number of points (0) does not equal total
+                    number of scores (3) for this team.
+                </li>
+            </ul>
+        </div>
         """
         self.assertContains(res, text, html=True)
 
@@ -3115,6 +3123,9 @@ class TeamEditViewQueryTests(TestCase):
     per association. Pin the view's query count so the same upper bound
     holds whether the team is empty or fully squadded - any per-player
     scaling trips the large case.
+
+    The explorer beside the page lists each folder open on the way down to
+    it, one query a folder, so the bound includes that fixed number.
     """
 
     @classmethod
@@ -3133,7 +3144,7 @@ class TeamEditViewQueryTests(TestCase):
             self.assertGoodView(
                 edit_team.url_name,
                 *edit_team.args,
-                test_query_count=25,
+                test_query_count=30,
             )
 
     def test_full_team_query_count(self):
@@ -3142,7 +3153,7 @@ class TeamEditViewQueryTests(TestCase):
             self.assertGoodView(
                 edit_team.url_name,
                 *edit_team.args,
-                test_query_count=25,
+                test_query_count=30,
             )
 
 
@@ -3166,8 +3177,7 @@ class EditViewPermissionTests(TestCase):
             self.response_200()
             self.assertResponseContains(
                 '<input type="text" name="title" value="%s" maxlength="255" '
-                'placeholder="Title" class="form-control" required id="id_title">'
-                % self.season.title
+                'required id="id_title">' % self.season.title
             )
 
     def test_object_level_change_permission_is_scoped_to_object(self):
@@ -3229,9 +3239,11 @@ class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
             self.get("admin:fixja:competition:season:edit", *self.args)
             self.response_200()
             self.assertResponseContains(
-                '<button type="button" class="btn btn-primary js-bulk-create" '
-                f'data-url="{self.reverse(self.viewname, *self.args)}">'
-                "Continue</button>"
+                '<a class="button compact" '
+                f'href="{self.reverse(self.viewname, *self.args)}?count=5" '
+                'data-add-many="add-many-division">'
+                '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/img/icons.svg#plus-many"></use></svg>'
+                "<span>Add several divisions</span></a>"
             )
 
     def test_get_shows_count_blank_rows_after_existing_divisions(self):
@@ -3325,8 +3337,9 @@ class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
             self.post(self.viewname, *self.args, data=self.rows({}, {}))
             self.response_200()
             self.assertResponseContains(
-                '<div class="alert alert-danger"><ul class="errorlist nonform">'
-                "<li>Fill in at least one row.</li></ul></div>"
+                '<div class="form-errors" role="alert">'
+                '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/img/icons.svg#alert"></use></svg>'
+                "<ul><li>Fill in at least one row.</li></ul></div>"
             )
         self.assertEqual(self.season.divisions.count(), 0)
 
@@ -3380,9 +3393,11 @@ class BulkCreateTeamTests(MessagesTestMixin, TestCase):
             self.get("admin:fixja:competition:season:division:edit", *self.args)
             self.response_200()
             self.assertResponseContains(
-                '<button type="button" class="btn btn-primary js-bulk-create" '
-                f'data-url="{self.reverse(self.viewname, *self.args)}">'
-                "Continue</button>"
+                '<a class="button compact" '
+                f'href="{self.reverse(self.viewname, *self.args)}?count=5" '
+                'data-add-many="add-many-team">'
+                '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/img/icons.svg#plus-many"></use></svg>'
+                "<span>Add several teams</span></a>"
             )
 
     def test_get_shows_count_blank_rows_after_existing_teams(self):
@@ -3527,6 +3542,9 @@ class MatchResultsQueryTests(TestCase):
     queries of their own, so a full day of an event took hundreds of
     queries. The same query budget now holds however many matches the day
     has.
+
+    The explorer beside the page lists each folder open on the way down to
+    it, one query a folder, so the budget includes that fixed number.
     """
 
     kickoff = datetime(2026, 10, 8, 9, 0, tzinfo=ZoneInfo("UTC"))
@@ -3568,16 +3586,16 @@ class MatchResultsQueryTests(TestCase):
             )
 
     def test_few_matches_query_count(self):
-        self.get_day(self.few, test_query_count=13)
+        self.get_day(self.few, test_query_count=17)
 
     def test_many_matches_query_count(self):
-        self.get_day(self.many, test_query_count=13)
+        self.get_day(self.many, test_query_count=17)
 
     def test_forfeit_winner_choices(self):
         match = self.few[0]
         self.get_day(self.few)
         self.assertResponseContains(
-            f'<select name="matches-0-forfeit_winner" class="form-control" '
+            f'<select name="matches-0-forfeit_winner" '
             f'aria-describedby="id_matches-0-forfeit_winner_helptext" '
             f'id="id_matches-0-forfeit_winner">'
             f'<option value="" selected>Double forfeit</option>'
@@ -3650,6 +3668,9 @@ class MatchDetailQueryTests(TestCase):
     Each row looked up its player and their statistics for the match on its
     own, so a full squad took well over a hundred queries. The same query
     budget now holds however many players the teams have.
+
+    The explorer beside the page lists each folder open on the way down to
+    it, one query a folder, so the budget includes that fixed number.
     """
 
     def setUp(self):
@@ -3687,10 +3708,10 @@ class MatchDetailQueryTests(TestCase):
             )
 
     def test_small_squads_query_count(self):
-        self.get_detail(self.small, test_query_count=20)
+        self.get_detail(self.small, test_query_count=26)
 
     def test_large_squads_query_count(self):
-        self.get_detail(self.large, test_query_count=20)
+        self.get_detail(self.large, test_query_count=26)
 
     def test_entered_statistics_are_shown(self):
         self.get_detail(self.small)
@@ -3836,7 +3857,7 @@ class MostValuableWidgetTests(TestCase):
                 match.pk,
             ),
         )
-        self.assertResponseContains(f'<a href="{url}">Edit</a>')
+        self.assertResponseContains(f'<a class="button compact" href="{url}">Enter</a>')
 
 
 class WizardBrandTests(TestCase):
@@ -3861,7 +3882,9 @@ class WizardBrandTests(TestCase):
             self.get(build_url.url_name, *build_url.args)
             self.response_200()
             self.assertNotIn("brand", self.last_response.context_data)
-            self.assertResponseContains("<title>Administration</title>", html=True)
+            self.assertResponseContains(
+                f"<title>{stage.title} \u2013 Administration</title>", html=True
+            )
             self.assertResponseContains(
                 "<style>:root{--brand-primary:#275d8b;--brand-secondary:#e8862a;"
                 "--brand-success:#2a8a5c;--brand-warning:#d9a21b;"

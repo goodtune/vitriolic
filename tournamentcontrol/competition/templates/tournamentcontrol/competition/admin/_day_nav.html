@@ -30,9 +30,7 @@ page of a day includes it, naming itself in ``day_page``.
 		<a class="tab" href="{% url 'admin:fixja:match-results' competition.pk season.pk ymd %}"{% if day_page == "results" %} aria-current="page"{% endif %}>{% icon "results" %}<span>{% trans "Results" %}</span></a>
 		<a class="tab" href="{% url 'admin:fixja:match-schedule' competition.pk season.pk ymd %}"{% if day_page == "schedule" %} aria-current="page"{% endif %}>{% icon "allocate" %}<span>{% trans "Allocate" %}</span></a>
 		<a class="tab" href="{% url 'admin:fixja:match-washout' competition.pk season.pk ymd %}"{% if day_page == "washout" %} aria-current="page"{% endif %}>{% icon "umbrella" %}<span>{% trans "Washout" %}</span></a>
-		{% if season.live_stream %}
-			<a class="tab" href="{% url 'admin:fixja:match-live-stream' competition.pk season.pk ymd %}"{% if day_page == "live-stream" %} aria-current="page"{% endif %}>{% icon "video" %}<span>{% trans "Live stream" %}</span></a>
-		{% endif %}
+		<a class="tab" href="{% url 'admin:fixja:match-live-stream' competition.pk season.pk ymd %}"{% if day_page == "live-stream" %} aria-current="page"{% endif %}>{% icon "video" %}<span>{% trans "Live stream" %}</span></a>
 		<span class="tab-gap"></span>
 		<a class="tab" href="{% url 'admin:fixja:match-runsheet' competition.pk season.pk ymd %}">{% icon "clock" %}<span>{% trans "Run sheet" %}</span></a>
 		<a class="tab" href="{% url 'admin:fixja:match-grid' competition.pk season.pk ymd "html" %}">{% icon "stagegroup" %}<span>{% trans "Matrix" %}</span></a>

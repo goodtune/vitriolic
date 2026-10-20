@@ -14,7 +14,8 @@
 				</tr>
 			</thead>
 			<tbody>
-				{% for match in matches %}
+				{% with total=matches|length %}
+				{% for match in matches|slice:":12" %}
 					{% with home=match.get_home_team away=match.get_away_team division=match.stage.division %}
 						<tr>
 							<td>{% timezone division.season.timezone %}{{ match.datetime|date:"j M, G:i" }}{% endtimezone %}</td>
@@ -28,6 +29,10 @@
 				{% empty %}
 					<tr><td colspan="6" class="empty-state">{% trans "No match is waiting for a detailed result." %}</td></tr>
 				{% endfor %}
+				{% if total > 12 %}
+					<tr><td colspan="6" class="muted">{% blocktrans with more=total|add:"-12" %}and {{ more }} more, the oldest first{% endblocktrans %}</td></tr>
+				{% endif %}
+				{% endwith %}
 			</tbody>
 		</table>
 	</div>
