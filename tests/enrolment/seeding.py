@@ -39,6 +39,14 @@ LAST_NAMES = [
     "Zielinski", "Abernethy", "Blackthorn", "Carraway", "Devereux", "Ellerby",
 ]  # fmt: skip
 
+# The regulator's (ACMA) published mobile numbers reserved for use in fiction.
+FICTIONAL_MOBILES = [
+    "0491 570 006", "0491 570 156", "0491 570 157", "0491 570 158",
+    "0491 570 159", "0491 570 110", "0491 570 313", "0491 570 737",
+    "0491 571 266", "0491 571 491", "0491 571 804", "0491 578 888",
+    "0491 579 212", "0491 579 760",
+]  # fmt: skip
+
 TEACHER_COUNT = 16
 GRADES = [("Kindergarten", 0)] + [("Year %d" % n, n) for n in range(1, 7)]
 YEARS = [
@@ -161,8 +169,6 @@ def _seed_structure():
 
 def _seed_students(rng, students):
     combinations = list(itertools.product(FIRST_NAMES, LAST_NAMES))
-    if students > len(combinations):
-        raise ValueError("At most %d students can be seeded." % len(combinations))
     rng.shuffle(combinations)
 
     rows = []
@@ -177,7 +183,7 @@ def _seed_students(rng, students):
             date_of_birth=date_of_birth,
             defaults={
                 "guardian_name": "%s %s" % (rng.choice(FIRST_NAMES), last),
-                "guardian_phone": "0491 570 1%02d" % rng.randint(0, 99),
+                "guardian_phone": rng.choice(FICTIONAL_MOBILES),
             },
         )
         rows.append((student, ordinal, index // len(GRADES)))
@@ -249,7 +255,10 @@ def _seed_assessments(rng, groups, enrolments):
 
 
 def _seed_report_cards(rng, enrolments):
-    for enrolment in enrolments:
+    with_students = Enrolment.objects.select_related("student").in_bulk(
+        [enrolment.pk for enrolment in enrolments]
+    )
+    for enrolment in (with_students[enrolment.pk] for enrolment in enrolments):
         name = enrolment.student.first_name
         ReportCard.objects.update_or_create(
             enrolment=enrolment,
@@ -264,12 +273,18 @@ def _seed_report_cards(rng, enrolments):
         )
 
 
+MAX_STUDENTS = len(FIRST_NAMES) * len(LAST_NAMES)
+
+
 @transaction.atomic
 def seed(students: int = 300, seed: int = 20261) -> dict[str, int]:
     """
     Create (or bring up to date) the demonstration data and return the number
     of rows in each seeded table, keyed by model name.
     """
+    if not 1 <= students <= MAX_STUDENTS:
+        raise ValueError("students must be from 1 to %d." % MAX_STUDENTS)
+
     rng = random.Random(seed)
 
     _, groups = _seed_structure()

@@ -1,6 +1,6 @@
 from io import StringIO
 
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from enrolment.models import (
     Assessment,
     AttendanceRecord,
@@ -12,7 +12,7 @@ from enrolment.models import (
     Score,
     Student,
 )
-from enrolment.seeding import seed
+from enrolment.seeding import FICTIONAL_MOBILES, MAX_STUDENTS, seed
 from test_plus import TestCase
 
 
@@ -68,3 +68,29 @@ class SeedingTests(TestCase):
         out = StringIO()
         call_command("seed_enrolment", students=10, stdout=out)
         self.assertIn("Student: 10", out.getvalue())
+
+    def test_guardian_phones_are_reserved_fictional_numbers(self):
+        seed(students=40)
+        phones = set(Student.objects.values_list("guardian_phone", flat=True))
+        self.assertTrue(phones)
+        self.assertLessEqual(phones, set(FICTIONAL_MOBILES))
+
+    def test_command_refuses_fewer_than_one_student(self):
+        for students in (0, -5):
+            with self.subTest(students=students):
+                with self.assertRaisesMessage(
+                    CommandError,
+                    "--students must be from 1 to %d, not %d."
+                    % (MAX_STUDENTS, students),
+                ):
+                    call_command("seed_enrolment", students=students)
+        self.assertFalse(Student.objects.exists())
+
+    def test_command_refuses_more_students_than_there_are_names(self):
+        with self.assertRaisesMessage(
+            CommandError,
+            "--students must be from 1 to %d, not %d."
+            % (MAX_STUDENTS, MAX_STUDENTS + 1),
+        ):
+            call_command("seed_enrolment", students=MAX_STUDENTS + 1)
+        self.assertFalse(Student.objects.exists())

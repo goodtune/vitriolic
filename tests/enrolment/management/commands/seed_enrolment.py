@@ -1,5 +1,5 @@
-from django.core.management.base import BaseCommand
-from enrolment.seeding import seed
+from django.core.management.base import BaseCommand, CommandError
+from enrolment.seeding import MAX_STUDENTS, seed
 
 
 class Command(BaseCommand):
@@ -10,10 +10,16 @@ class Command(BaseCommand):
             "--students",
             type=int,
             default=300,
-            help="The number of students to create (default: 300).",
+            help="The number of students to create, from 1 to %d (default: 300)."
+            % MAX_STUDENTS,
         )
 
     def handle(self, *args, **options):
-        counts = seed(students=options["students"])
+        students = options["students"]
+        if not 1 <= students <= MAX_STUDENTS:
+            raise CommandError(
+                "--students must be from 1 to %d, not %d." % (MAX_STUDENTS, students)
+            )
+        counts = seed(students=students)
         for name, count in counts.items():
             self.stdout.write("%s: %d" % (name, count))
