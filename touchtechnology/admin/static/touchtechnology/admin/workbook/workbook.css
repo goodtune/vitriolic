@@ -453,8 +453,8 @@ img, svg { max-width: 100%; }
 
 /* Where the page is: a tab of paper the rail opens onto, a workbook divider. */
 .wb-node.is-here > .wb-node-row > .wb-node-link,
-.wb-nav-head[aria-current="page"],
-.wb-nav-head[aria-current="location"] {
+.wb-nav-entry > .wb-nav-row > .wb-nav-head[aria-current="page"],
+.wb-nav-entry > .wb-nav-row > .wb-nav-head[aria-current="location"] {
 	background: var(--wb-paper);
 	color: var(--wb-ink);
 	box-shadow: inset 4px 0 0 var(--wb-mark);
