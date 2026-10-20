@@ -29,7 +29,8 @@ class AuthenticationTest(TestCase):
         self.assertResponseContains(
             f'<form method="post" action="{self.reverse("admin:logout")}">'
             f'<input type="hidden" name="csrfmiddlewaretoken" value="{token}">'
-            '<button type="submit">Logout</button></form>',
+            '<button type="submit" class="btn btn-link">'
+            '<i class="fa fa-fw fa-sign-out"></i>&nbsp;&nbsp;Logout</button></form>',
             html=True,
         )
         self.assertResponseNotContains("logout.js")

@@ -1,14 +1,17 @@
 import base64
+import copy
 import unittest
 from datetime import date, datetime, time
 from unittest.mock import ANY, MagicMock, PropertyMock, patch
 from zoneinfo import ZoneInfo
 
 from dateutil.rrule import DAILY
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.messages.test import MessagesTestMixin
 from django.db import connection
 from django.template import Context, Template
+from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from guardian.shortcuts import assign_perm
@@ -3713,3 +3716,37 @@ class MostValuableWidgetTests(TestCase):
             ),
         )
         self.assertResponseContains(f'<a href="{url}">Edit</a>')
+
+
+class WizardBrandTests(TestCase):
+    """
+    The wizards render through SessionWizardView, not AdminComponentMixin.render,
+    so the shell must brand them without the context processor's help.
+    """
+
+    @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=None)
+    def test_draw_generation_wizard_is_branded_without_the_context_processor(self):
+        stage = factories.StageFactory.create(
+            division__season__mode=DAILY, division__games_per_day=1
+        )
+        factories.TeamFactory.create_batch(4, division=stage.division)
+        build_url = stage.url_names["build"]
+
+        templates = copy.deepcopy(settings.TEMPLATES)
+        processors = templates[0]["OPTIONS"]["context_processors"]
+        processors.remove("touchtechnology.admin.context_processors.brand")
+
+        with self.settings(TEMPLATES=templates), self.login(self.superuser):
+            self.get(build_url.url_name, *build_url.args)
+            self.response_200()
+            self.assertNotIn("brand", self.last_response.context_data)
+            self.assertResponseContains("<title>Administration</title>", html=True)
+            self.assertResponseContains(
+                "<style>:root{--brand-primary:#275d8b;--brand-secondary:#e8862a;"
+                "--brand-success:#2a8a5c;--brand-warning:#d9a21b;"
+                "--brand-danger:#b8322f;}</style>",
+                html=True,
+            )
+            self.assertResponseContains(
+                '<img src="/static/img/logo.png" alt="Administration">', html=True
+            )

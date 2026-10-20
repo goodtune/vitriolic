@@ -4,6 +4,8 @@ import logging
 from django.conf import settings
 from django.contrib.admin.sites import (
     AdminSite as DjangoAdminSite,
+)
+from django.contrib.admin.sites import (
     AlreadyRegistered,
     NotRegistered,
 )
@@ -175,7 +177,8 @@ class AdminSite(DjangoAdminSite):
     def index(self, request, *args, **kwargs):
         context = {"admin": self}
         context.update(kwargs)
-        context.setdefault("brand", get_brand(request))
+        if "brand" not in context:
+            context["brand"] = get_brand(request)
         context.setdefault(
             "field_template", "touchtechnology/admin/templatetags/field.html"
         )

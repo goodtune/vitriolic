@@ -9,9 +9,10 @@ BRANDS = {
     },
     "forest": {
         "name": "Ridgeway Sports Trust",
+        "logo": None,
         "colours": {
             "primary": "#1e3d2f",
-            "secondary": "#d97b3c",
+            "secondary": "#c9a227",
             "success": "#3c8d5a",
             "warning": "#e0a62d",
             "danger": "#a63d40",
@@ -19,6 +20,7 @@ BRANDS = {
     },
     "sherbet": {
         "name": "Bayside Junior League",
+        "logo": None,
         "colours": {
             "primary": "#ffd166",
             "secondary": "#073b4c",
