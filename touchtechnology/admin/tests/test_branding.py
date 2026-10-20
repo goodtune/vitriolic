@@ -198,7 +198,10 @@ class ShellTests(TestCase):
                 html=True,
             )
             self.assertResponseContains(
-                '<img src="/static/img/logo.png" alt="Administration">', html=True
+                '<a class="brand" href="/admin/">'
+                '<img class="brand__logo" src="/static/img/logo.png" alt="">'
+                '<span class="brand__name">Administration</span></a>',
+                html=True,
             )
 
     @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND={"logo": None})
@@ -206,7 +209,9 @@ class ShellTests(TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:index")
             self.assertResponseContains(
-                '<span class="navbar-brand-text">Administration</span>', html=True
+                '<a class="brand" href="/admin/">'
+                '<span class="brand__name">Administration</span></a>',
+                html=True,
             )
 
     @override_settings(
@@ -219,7 +224,10 @@ class ShellTests(TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:index")
             self.assertResponseContains(
-                '<img src="/static/img/harbour.png" alt="Harbour Touch">', html=True
+                '<a class="brand" href="/admin/">'
+                '<img class="brand__logo" src="/static/img/harbour.png" alt="">'
+                '<span class="brand__name">Harbour Touch</span></a>',
+                html=True,
             )
 
     @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=None)
@@ -230,14 +238,19 @@ class ShellTests(TestCase):
         with self.settings(TEMPLATES=templates), self.login(self.superuser):
             self.get_check_200("admin:index")
             self.assertResponseContains(
-                '<img src="/static/img/logo.png" alt="Administration">', html=True
+                '<a class="brand" href="/admin/">'
+                '<img class="brand__logo" src="/static/img/logo.png" alt="">'
+                '<span class="brand__name">Administration</span></a>',
+                html=True,
             )
 
     @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=None)
     def test_title_is_the_brand_name(self):
         with self.login(self.superuser):
             self.get_check_200("admin:index")
-            self.assertResponseContains("<title>Administration</title>", html=True)
+            self.assertResponseContains(
+                "<title>Dashboard · Administration</title>", html=True
+            )
 
     @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=counted_brand)
     def test_callable_brand_is_called_once_across_render_and_processor(self):

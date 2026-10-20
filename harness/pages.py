@@ -304,6 +304,14 @@ def _static_pages():
     ]
     for __, app_name, url, __, __ in site.get_components():
         pages.append(_page("%s-index" % app_name, str(url), "static"))
+    # The console admin's search across every kind of object, with a query
+    # that finds a season, divisions, teams and a place of the menu.
+    try:
+        jump = _reverse("admin:jump")
+    except NoReverseMatch:
+        jump = None
+    if jump:
+        pages.append(_page("jump", jump + "?q=open", "static"))
     return pages
 
 

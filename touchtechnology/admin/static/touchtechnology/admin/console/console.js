@@ -520,11 +520,67 @@
     appbar.insertBefore(mobile, jumpButton);
   }
 
+  /* ----------------------------------------------- filter and sort a list */
+
+  function rowsOf(table) {
+    return $$("tbody tr", table).filter(function (tr) { return !tr.classList.contains("empty"); });
+  }
+  doc.addEventListener("input", function (e) {
+    var input = e.target.closest("[data-table-filter]");
+    if (!input) return;
+    var head = input.closest(".list-head");
+    var table = head && head.parentElement.querySelector("table.data");
+    if (!table) return;
+    var words = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+    rowsOf(table).forEach(function (tr) {
+      var text = tr.textContent.toLowerCase();
+      tr.hidden = !words.every(function (w) { return text.indexOf(w) >= 0; });
+    });
+  });
+  doc.addEventListener("keydown", function (e) {
+    // Enter in a list's filter must not submit the form the list sits in.
+    if (e.key === "Enter" && e.target.closest("[data-table-filter]")) e.preventDefault();
+  });
+  function cellValue(tr, n) {
+    var cell = tr.cells[n];
+    var text = cell ? cell.textContent.replace(/\s+/g, " ").trim() : "";
+    var number = parseFloat(text.replace(/[^0-9.\-]/g, ""));
+    return /^[\d\s.\-\/–]+$/.test(text) && !isNaN(number) ? number : text.toLowerCase();
+  }
+  function initSort(scope) {
+    each(scope, "table[data-sortable]", function (table) {
+      if (table.dataset.sortReady) return;
+      table.dataset.sortReady = "1";
+      $$("thead th", table).forEach(function (th, n) {
+        if (th.classList.contains("actions") || !th.textContent.trim()) return;
+        var button = doc.createElement("button");
+        button.type = "button";
+        button.className = "th-sort";
+        while (th.firstChild) button.appendChild(th.firstChild);
+        th.appendChild(button);
+        button.addEventListener("click", function () {
+          var ascending = th.getAttribute("aria-sort") !== "ascending";
+          $$("thead th", table).forEach(function (other) { other.removeAttribute("aria-sort"); });
+          th.setAttribute("aria-sort", ascending ? "ascending" : "descending");
+          var rows = rowsOf(table);
+          rows.sort(function (a, b) {
+            var x = cellValue(a, n), y = cellValue(b, n);
+            var order = x < y ? -1 : x > y ? 1 : 0;
+            return ascending ? order : -order;
+          });
+          var body = table.tBodies[0];
+          rows.forEach(function (tr) { body.appendChild(tr); });
+        });
+      });
+    });
+  }
+
   /* ----------------------------------------------------------------- start */
 
   function enhance(scope) {
     initTabs(scope);
     initBulk(scope);
+    initSort(scope);
     each(scope, "select[data-picker]", enhanceSelect);
   }
   enhance(doc);

@@ -723,8 +723,14 @@ class AdminTests(TestCase):
                 self.season.competition_id,
                 test_query_count=60,
             )
+            sync = self.reverse(
+                "admin:fixja:competition:season:upstream-sync", *self.args
+            )
             self.assertResponseContains(
-                '<span class="hidden-xs hidden-sm">&nbsp;revolutioniseSPORT</span>'
+                f'<a href="{sync}">'
+                '<svg class="i" aria-hidden="true" focusable="false">'
+                '<use href="/static/touchtechnology/admin/console/icons.svg#i-refresh">'
+                "</use></svg>revolutioniseSPORT</a>"
             )
 
     @mock.patch("tournamentcontrol.competition.admin.synchronise_upstream_season")
@@ -733,7 +739,9 @@ class AdminTests(TestCase):
             self.assertGoodView(
                 "admin:fixja:competition:season:upstream-sync", *self.args
             )
-            self.assertResponseContains("<h3>Synchronise with revolutioniseSPORT</h3>")
+            self.assertResponseContains(
+                '<h1 class="page-head__title">Synchronise with revolutioniseSPORT</h1>'
+            )
             self.assertResponseContains(
                 f'<a href="{CCHA_MENS_URL}" target="_blank" rel="noopener">'
                 f"{CCHA_MENS_URL}</a>"

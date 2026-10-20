@@ -1,6 +1,6 @@
 {% load i18n console %}
 <section class="panel widget" aria-labelledby="w-basic">
-	<div class="panel__head"><h2 id="w-basic">{% icon "check" %} {{ widget.verbose_name }}</h2><span class="tag{% if dates_times %} tag--warn{% endif %}">{{ matches.count }}</span></div>
+	<div class="panel__head"><h2 id="w-basic">{% icon "check" %} {{ widget.verbose_name }}</h2><span class="tag{% if dates_times %} tag--warn{% endif %}">{{ dates_times|length }}</span></div>
 	<div class="table-scroll">
 		<table class="data">
 			<thead><tr><th scope="col">{% trans "Date" %}</th><th scope="col">{% trans "Time" %}</th></tr></thead>

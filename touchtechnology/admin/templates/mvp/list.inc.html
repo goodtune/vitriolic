@@ -13,6 +13,7 @@
 		<div class="list-head">
 			<h2 class="list-head__title">{{ manager.all|types|capfirst }}</h2>
 			<div class="list-head__actions">
+				<label class="list-filter">{% icon "search" %}<span class="visually-hidden">{% blocktrans with types=manager.all|types %}Filter {{ types }}{% endblocktrans %}</span><input type="search" data-table-filter placeholder="{% trans "Filter" %}"></label>
 				{% block actions %}
 					<a class="btn btn--sm" href="{{ create }}">{% icon "plus" %}{% blocktrans with type=model|type %}Add {{ type }}{% endblocktrans %}</a>
 				{% endblock actions %}
@@ -25,7 +26,7 @@
 
 {% block table %}
 <div class="table-wrap">
-<table class="data">
+<table class="data" data-sortable>
 	<thead>
 		{% block table-head %}
 		<tr>

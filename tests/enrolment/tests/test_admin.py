@@ -171,8 +171,10 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:schoolyear:edit", pk=self.year.pk)
             self.assertResponseContains(
-                '<a href="%s" title="Add" role="button">'
-                '<i class="fa fa-plus-square"></i></a>'
+                '<a class="btn btn--sm" href="%s">'
+                '<svg class="i" aria-hidden="true" focusable="false">'
+                '<use href="/static/touchtechnology/admin/console/icons.svg#i-plus">'
+                "</use></svg>Add</a>"
                 % self.reverse(ADD_CLASS_GROUP, year_id=self.year.pk),
                 html=True,
             )
@@ -236,12 +238,13 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:student:edit", pk=self.student.pk)
             self.assertResponseContains(
-                '<a href="#timeline-tab" data-toggle="tab">'
-                '<i class="fa fa-chevron-right fa-fw"></i>&nbsp;Timeline</a>',
+                '<a class="tab" role="tab" id="timeline-tab-label" href="#timeline-tab" '
+                'aria-controls="timeline-tab" aria-selected="false">Timeline'
+                '<span class="tab__count" aria-hidden="true">1</span></a>',
                 html=True,
             )
             self.assertResponseContains(
-                f'<li><a href="{self.enrolment.urls["edit"]}">2C (2026)</a></li>',
+                f'<td><a href="{self.enrolment.urls["edit"]}">2C (2026)</a></td>',
                 html=True,
             )
 

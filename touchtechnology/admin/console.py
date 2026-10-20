@@ -118,8 +118,12 @@ def _key(kwargs):
     return kwargs[keys[-1]] if keys else None
 
 
-def _describe(match, url):
-    """The crumb of one resolved admin URL, or ``None`` when it is not a page."""
+def _describe(match, url, known=None):
+    """
+    The crumb of one resolved admin URL, or ``None`` when it is not a page.
+    ``known`` maps ``(model, str(pk))`` to objects the page already has, so a
+    crumb for one of them costs no query.
+    """
     name = match.url_name
     namespace = match.namespace
     if namespace == "admin" and name == "index":
@@ -141,17 +145,19 @@ def _describe(match, url):
         key = _key(match.kwargs)
         if key is None:
             return None
-        try:
-            obj = model._default_manager.filter(pk=key).first()
-        except (ValueError, TypeError):
-            obj = None
+        obj = (known or {}).get((model, str(key)))
+        if obj is None:
+            try:
+                obj = model._default_manager.filter(pk=key).first()
+            except (ValueError, TypeError):
+                obj = None
         if obj is None:
             return None
         return Crumb(capfirst(smart_str(model._meta.verbose_name)), smart_str(obj), url)
     return None
 
 
-def trail(path):
+def trail(path, known=None):
     """
     The pages above ``path``, outermost first: each shorter prefix of the path
     that is itself an admin page, as a ``Crumb``. The page itself is not in it.
@@ -164,7 +170,7 @@ def trail(path):
             match = resolve(prefix)
         except Resolver404:
             continue
-        crumb = _describe(match, prefix)
+        crumb = _describe(match, prefix, known)
         if crumb is not None:
             crumbs.append(crumb)
     return crumbs
@@ -209,9 +215,7 @@ def _fields(model):
     return [
         f.name
         for f in model._meta.get_fields()
-        if f.name in SEARCH_FIELDS
-        and isinstance(f, models.CharField)
-        and not f.choices
+        if f.name in SEARCH_FIELDS and isinstance(f, models.CharField) and not f.choices
     ]
 
 
@@ -220,7 +224,7 @@ def _matching(fields, words):
     return reduce(
         operator.and_,
         (
-            reduce(operator.or_, (Q(**{"%s__icontains" % f: word}) for f in fields))
+            reduce(operator.or_, (Q(**{f"{f}__icontains": word}) for f in fields))
             for word in words
         ),
     )
@@ -231,8 +235,8 @@ def _may_see(user, model):
         return True
     label = model._meta.app_label
     name = model._meta.model_name
-    return user.has_perm("%s.change_%s" % (label, name)) or user.has_perm(
-        "%s.view_%s" % (label, name)
+    return user.has_perm(f"{label}.change_{name}") or user.has_perm(
+        f"{label}.view_{name}"
     )
 
 
@@ -275,9 +279,7 @@ def jump(user, query):
                     )
                 )
         if hits:
-            groups.append(
-                (capfirst(smart_str(model._meta.verbose_name_plural)), hits)
-            )
+            groups.append((capfirst(smart_str(model._meta.verbose_name_plural)), hits))
     groups.extend(_auth_hits(user, words))
     return groups
 
@@ -311,9 +313,7 @@ def _auth_hits(user, words):
                 reverse("admin:auth:groups:edit", args=[g.pk]),
                 "",
             )
-            for g in Group.objects.filter(_matching(["name"], words))[
-                :JUMP_PER_MODEL
-            ]
+            for g in Group.objects.filter(_matching(["name"], words))[:JUMP_PER_MODEL]
         ]
         if hits:
             groups.append((smart_str(_("Groups")), hits))

@@ -1073,9 +1073,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             messages.error(request, "OAuth2 application is not configured.")
             return self.redirect(season.urls["edit"])
         flow = season.flow()
-        flow.redirect_uri = request.build_absolute_uri(
-            self.reverse("youtube-callback")
-        )
+        flow.redirect_uri = request.build_absolute_uri(self.reverse("youtube-callback"))
         authorization_url, state = flow.authorization_url(
             # Enable offline access so that you can refresh an access token without
             # re-prompting the user for permission.
@@ -1096,9 +1094,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         season_id = request.session.pop("oauth_season_id")
         season = get_object_or_404(Season, pk=season_id)
         flow = season.flow(state=state)
-        flow.redirect_uri = request.build_absolute_uri(
-            self.reverse("youtube-callback")
-        )
+        flow.redirect_uri = request.build_absolute_uri(self.reverse("youtube-callback"))
         authorization_response = (
             f"{request.build_absolute_uri(request.path)}?{request.META['QUERY_STRING']}"
         )
@@ -1884,9 +1880,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             return redirect_response
 
         try:
-            getattr(season.youtube, collection_name)().delete(
-                id=instance.pk
-            ).execute()
+            getattr(season.youtube, collection_name)().delete(id=instance.pk).execute()
             log.info("YouTube resource %r deleted", instance.pk)
         except RefreshError:
             # Destruction cannot be confirmed without authorisation, so the
@@ -2148,7 +2142,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_save_redirect=self.redirect(
                 request.GET.get("next") or stage.urls["edit"]
             ),
-            post_save_callback=post_save_callback if season.live_stream else lambda o: None,
+            post_save_callback=(
+                post_save_callback if season.live_stream else lambda o: None
+            ),
             permission_required=True,
             extra_context=extra_context,
         )
@@ -2811,7 +2807,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         for match in matches:
             # A new broadcast needs a scheduled datetime to insert; an existing
             # one always needs syncing, to push updated title/thumbnail/schedule.
-            if not match.external_identifier and match.get_datetime(ZoneInfo("UTC")) is None:
+            if (
+                not match.external_identifier
+                and match.get_datetime(ZoneInfo("UTC")) is None
+            ):
                 continue
             sync_live_stream.s(match.pk, base_url=base_url).apply_async()
             count += 1

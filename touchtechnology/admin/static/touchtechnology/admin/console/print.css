@@ -29,7 +29,8 @@ body.sheet-page { background: #fff; }
 .sheet-main h2 { margin: 22px 0 8px; font-size: 15px; }
 .sheet-main .data { font-size: 13px; }
 .sheet-main .data thead th { position: static; }
-.sheet-main .table-wrap { overflow: visible; }
+.sheet-main .table-wrap { overflow-x: auto; }
+@media print { .sheet-main .table-wrap { overflow: visible; } }
 
 /* The match matrix: grounds across, kick-off times down. */
 .matrix th, .matrix td { vertical-align: top; }
@@ -40,13 +41,15 @@ body.sheet-page { background: #fff; }
 }
 .matrix-match + .matrix-match { margin-top: 4px; }
 .matrix-match h4 { font-size: 12px; margin: 0; }
-.matrix-match h4 small { display: block; font-weight: 400; color: var(--ink-3); }
+.matrix-match h4 small { font-weight: 400; color: var(--ink-3); }
 .matrix-match h5 { font: 500 11px/1.2 var(--mono); margin: 2px 0 0; color: var(--ink-2); }
 .matrix-match p { margin: 4px 0 0; font-size: 12.5px; }
 .matrix-match.video { box-shadow: inset 0 0 0 2px var(--bad); }
 
 /* Scorecards and sign-on sheets: one card per match. */
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 18px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(460px, 100%), 1fr)); gap: 18px; }
+.cards .scorecard { table-layout: fixed; }
+@media (max-width: 899px) { .sheet-main { padding: 14px; } .sheet-bar { padding: 8px 14px; } }
 .scorecard { width: 100%; border-collapse: collapse; font-size: 12px; break-inside: avoid; }
 .scorecard th, .scorecard td { border: 1px solid var(--ink-2); padding: 5px 6px; text-align: left; }
 .scorecard thead th { background: var(--sunk); }

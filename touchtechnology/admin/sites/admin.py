@@ -3,11 +3,7 @@ import logging
 
 from django.conf import settings
 from django.contrib.admin.sites import (
-    AdminSite as DjangoAdminSite,
-)
-from django.contrib.admin.sites import (
-    AlreadyRegistered,
-    NotRegistered,
+    AdminSite as DjangoAdminSite, AlreadyRegistered, NotRegistered,
 )
 from django.contrib.auth.views import LogoutView
 from django.db import connection

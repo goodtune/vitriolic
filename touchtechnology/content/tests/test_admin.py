@@ -35,13 +35,12 @@ class AdminTests(TestCase):
         with self.login(self.superuser):
             self.get("admin:content:index")
             html = """
-                <a role="button" href="/admin/content/application/{}/">
-                    <i class="fa fa-pencil fa-fw"></i>
-                    Edit
+                <a href="/admin/content/application/{}/">
+                    <svg class="i" aria-hidden="true" focusable="false">
+                        <use href="/static/touchtechnology/admin/console/icons.svg#i-pencil"></use>
+                    </svg>Edit
                 </a>
-            """.format(
-                self.root_node.pk
-            )
+            """.format(self.root_node.pk)
             self.assertResponseContains(html)
 
     def test_sitemap_index_staff_user(self):

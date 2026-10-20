@@ -20,8 +20,6 @@
 				<thead>
 					<tr>
 						<th scope="col">{% trans "Time" %}</th>
-						<th scope="col" class="opt">{% trans "Division" %}</th>
-						<th scope="col" class="opt">{% trans "Field" %}</th>
 						<th scope="col">{% trans "Match" %}</th>
 						<th scope="col">{% trans "Stream" %}</th>
 					</tr>
@@ -30,15 +28,16 @@
 					{% for form in formset.forms %}
 						{% with match=form.instance %}
 							<tr class="live-stream-row">
-								<td class="mono">{{ form.id }}{{ match.datetime|time:"H:i" }}</td>
-								<td class="opt">{{ match.stage.division.short_title|default:match.stage.division.title }}</td>
-								<td class="opt">{{ match.play_at.title }}</td>
-								<td><label for="{{ form.live_stream.id_for_label }}">{{ match|safe }}</label></td>
-								<td>{% control form.live_stream %}</td>
+								<td class="mono live-stream-row__time">{{ form.id }}{{ match.datetime|time:"H:i" }}</td>
+								<td class="live-stream-row__match">
+									<label for="{{ form.live_stream.id_for_label }}">{{ match|safe }}</label>
+									<span class="sub"><span class="live-stream-row__division">{{ match.stage.division.short_title|default:match.stage.division.title }}</span> · <span class="live-stream-row__field">{{ match.play_at.title }}</span></span>
+								</td>
+								<td class="live-stream-row__toggle">{% control form.live_stream %}</td>
 							</tr>
 						{% endwith %}
 					{% empty %}
-						<tr class="empty"><td colspan="5">{% trans "No matches on camera-equipped grounds on this day." %}</td></tr>
+						<tr class="empty"><td colspan="3">{% trans "No matches on camera-equipped grounds on this day." %}</td></tr>
 					{% endfor %}
 				</tbody>
 			</table>

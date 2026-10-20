@@ -6,8 +6,7 @@ from test_plus import TestCase
 class RelatedFilterTest(TestCase):
     def setUp(self):
         RelativeFactory.reset_sequence()
-        self.template = Template(
-            """
+        self.template = Template("""
         {% load common mvp_tags %}
         {% spaceless %}
             <dl>
@@ -17,8 +16,7 @@ class RelatedFilterTest(TestCase):
                 {% endfor %}
             </dl>
         {% endspaceless %}
-        """
-        )
+        """)
 
     def _get_context(self, obj, rel=None):
         if rel is None:

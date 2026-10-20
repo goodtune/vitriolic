@@ -65,7 +65,7 @@ class ScorecardTestCase(TestCase):
         with exactly the given keyword arguments.
         """
         self.prince.assert_called_once()
-        self.assertIn("<html>", self.prince.call_args.args[0])
+        self.assertIn("<html", self.prince.call_args.args[0])
         self.assertEqual(self.prince.call_args.kwargs, kwargs)
 
     def assertRedirectsToAsyncResult(self):
@@ -141,7 +141,7 @@ class DateScorecardTests(ScorecardTestCase):
                 "html",
             )
         self.response_200()
-        self.assertIn("<html>", self.last_response.content.decode("utf8"))
+        self.assertIn("<html", self.last_response.content.decode("utf8"))
         self.prince.assert_not_called()
 
     def test_login_required(self):
@@ -190,7 +190,7 @@ class StageScorecardTests(ScorecardTestCase):
                 "html",
             )
         self.response_200()
-        self.assertIn("<html>", self.last_response.content.decode("utf8"))
+        self.assertIn("<html", self.last_response.content.decode("utf8"))
         self.prince.assert_not_called()
 
     def test_login_required(self):
@@ -241,7 +241,7 @@ class AsyncResultViewTests(ScorecardTestCase):
         self.response_200()
         self.assertResponseHeaders({"Refresh": str(SCORECARD_PDF_WAIT)})
         self.assertResponseContains(
-            "<p>Your scorecards will finish generating shortly.</p>"
+            '<p class="loading">Your scorecards will finish generating shortly.</p>'
         )
         self.assertNoAsyncResult()
 
@@ -276,13 +276,12 @@ class AsyncResultViewTests(ScorecardTestCase):
         self.response_200()
         self.assertResponseHeaders({"Refresh": None})
         self.assertResponseContains(
-            '<div class="alert alert-danger alert-dismissable">'
-            '<button type="button" class="close" data-dismiss="alert" '
-            'aria-hidden="true">&#215;</button>'
-            "The PDF service didn&#x27;t respond, so your PDF could not be "
-            "generated. Please try again.</div>"
+            "<p>The PDF service didn&#x27;t respond, so your PDF could not be "
+            "generated. Please try again.</p>"
         )
-        self.assertResponseContains(f'<a href="{self.start_again()}">Start again</a>')
+        self.assertResponseContains(
+            f'<a class="btn btn--primary" href="{self.start_again()}">Start again</a>'
+        )
         self.assertNoAsyncResult()
 
     def test_revoked(self):

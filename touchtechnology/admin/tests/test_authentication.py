@@ -18,7 +18,7 @@ class AuthenticationTest(TestCase):
 
     def test_admin_logout_is_a_post_form(self):
         """
-        LogoutView refuses GET since Django 5.0, so the menu's Logout is a
+        LogoutView refuses GET since Django 5.0, so the menu's Sign out is a
         form that posts to the admin's own logout.
         """
         user = UserFactory.create(is_staff=True, is_superuser=True)
@@ -29,8 +29,10 @@ class AuthenticationTest(TestCase):
         self.assertResponseContains(
             f'<form method="post" action="{self.reverse("admin:logout")}">'
             f'<input type="hidden" name="csrfmiddlewaretoken" value="{token}">'
-            '<button type="submit" class="btn btn-link">'
-            '<i class="fa fa-fw fa-sign-out"></i>&nbsp;&nbsp;Logout</button></form>',
+            '<button type="submit" class="rail__signout">'
+            '<svg class="i" aria-hidden="true" focusable="false">'
+            '<use href="/static/touchtechnology/admin/console/icons.svg#i-signout">'
+            "</use></svg><span>Sign out</span></button></form>",
             html=True,
         )
         self.assertResponseNotContains("logout.js")

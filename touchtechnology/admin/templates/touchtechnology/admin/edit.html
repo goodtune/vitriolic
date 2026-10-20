@@ -19,10 +19,9 @@
 			<div class="page-head__actions">
 				{% block page-actions %}
 					{% if object.pk %}
-						{% with site=object|site_url perms=object|admin_url:"perms" delete=object|admin_url:"delete" %}
+						{% with site=object|site_url perms=object|admin_url:"perms" %}
 							{% if site %}<a class="btn btn--ghost" href="{{ site }}" target="_blank" rel="noopener">{% icon "external" %}{% trans "View on site" %}</a>{% endif %}
 							{% if perms %}<a class="btn btn--ghost" href="{{ perms }}">{% icon "shield" %}{% trans "Permissions" %}</a>{% endif %}
-							{% if delete %}{% with up=trail|last %}<button type="submit" class="btn btn--ghost btn--quiet-danger" form="console-post" formaction="{{ delete }}" name="next" value="{{ up.url|default:"" }}" data-confirm="{% blocktrans with type=model|type %}Delete this {{ type }}?{% endblocktrans %}" data-confirm-text="{% blocktrans %}“{{ object }}” will be removed from the site. This cannot be undone.{% endblocktrans %}" data-confirm-label="{% trans "Delete" %}">{% icon "trash" %}{% trans "Delete" %}</button>{% endwith %}{% endif %}
 						{% endwith %}
 					{% endif %}
 				{% endblock page-actions %}

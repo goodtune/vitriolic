@@ -8,7 +8,7 @@ import copy
 import re
 
 from django import forms
-from django.db.models import Manager, QuerySet
+from django.db.models import Manager, Model, QuerySet
 from django.template import Library
 from django.templatetags.static import static
 from django.urls import NoReverseMatch
@@ -38,7 +38,7 @@ def icon(name, label=""):
     An icon from the console's sprite. Without a ``label`` it is decoration
     and hidden from assistive technology; with one, the label is its name.
     """
-    href = "%s#i-%s" % (static(ICONS), name)
+    href = f"{static(ICONS)}#i-{name}"
     if label:
         return format_html(
             '<svg class="i" role="img" aria-label="{}"><use href="{}"></use></svg>',
@@ -57,7 +57,14 @@ def admin_trail(context):
     request = context.get("request")
     if request is None:
         return []
-    return console.trail(request.path)
+    # The objects the view already loaded name their own steps of the trail.
+    known = {}
+    for value in context.flatten().values():
+        if isinstance(value, Model) and value.pk is not None:
+            for cls in type(value).__mro__:
+                if isinstance(cls, type) and issubclass(cls, Model):
+                    known.setdefault((cls, str(value.pk)), value)
+    return console.trail(request.path, known)
 
 
 @register.filter
@@ -137,9 +144,9 @@ def control_attrs(bf, extra=None):
         attrs["placeholder"] = False
     described = []
     if bf.help_text:
-        described.append("%s_helptext" % bf.auto_id)
+        described.append(f"{bf.auto_id}_helptext")
     if bf.errors:
-        described.append("%s_error" % bf.auto_id)
+        described.append(f"{bf.auto_id}_error")
         attrs["aria-invalid"] = "true"
     if described and bf.auto_id:
         attrs["aria-describedby"] = " ".join(described)
@@ -176,7 +183,9 @@ def control(bf, **extra):
 
 @register.filter
 def is_checkbox(bf):
-    return isinstance(getattr(bf, "field", None) and bf.field.widget, forms.CheckboxInput)
+    return isinstance(
+        getattr(bf, "field", None) and bf.field.widget, forms.CheckboxInput
+    )
 
 
 @register.filter
@@ -262,7 +271,7 @@ def page_query(context, number):
         query.pop("page", None)
         query.pop("_htmx_tab", None)
         rest = query.urlencode()
-    return "?page=%s%s%s" % (number, "&" if rest else "", rest)
+    return "?page={}{}{}".format(number, "&" if rest else "", rest)
 
 
 @register.filter
@@ -291,7 +300,13 @@ def sheetable(formset):
         widget = bf.field.widget
         if isinstance(
             widget,
-            (forms.Textarea, forms.MultiWidget, forms.CheckboxSelectMultiple, forms.SelectMultiple, forms.RadioSelect),
+            (
+                forms.Textarea,
+                forms.MultiWidget,
+                forms.CheckboxSelectMultiple,
+                forms.SelectMultiple,
+                forms.RadioSelect,
+            ),
         ):
             return False
     return True

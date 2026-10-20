@@ -23,7 +23,7 @@
 					<tr>
 						<th scope="col" class="num">{% trans "Order" %}</th>
 						{% for field in formset.empty_form.visible_fields %}
-							<th scope="col">{{ field.label }}{% if field.field.required %} <span aria-hidden="true">*</span>{% endif %}</th>
+							<th scope="col">{{ field.label }}</th>
 						{% endfor %}
 					</tr>
 				</thead>

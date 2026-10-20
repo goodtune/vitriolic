@@ -18,12 +18,12 @@
 			<div class="list-head"><h2 class="list-head__title">{% trans "Timeline" %}</h2></div>
 			<div class="table-wrap">
 				<table class="data">
-					<thead><tr><th scope="col">{% trans "Class" %}</th><th scope="col">{% trans "Year" %}</th></tr></thead>
+					<thead><tr><th scope="col">{% trans "Class" %}</th></tr></thead>
 					<tbody>
 						{% for enrolment in object.enrolments.all %}
-							<tr><td><a href="{{ enrolment.urls.edit }}">{{ enrolment.class_group.title }}</a></td><td>{{ enrolment.class_group.year }}</td></tr>
+							<tr><td><a href="{{ enrolment.urls.edit }}">{{ enrolment.class_group.title }} ({{ enrolment.class_group.year }})</a></td></tr>
 						{% empty %}
-							<tr class="empty"><td colspan="2">{% trans "Not enrolled in any class yet." %}</td></tr>
+							<tr class="empty"><td>{% trans "Not enrolled in any class yet." %}</td></tr>
 						{% endfor %}
 					</tbody>
 				</table>
