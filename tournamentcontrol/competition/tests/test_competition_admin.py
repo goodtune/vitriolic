@@ -29,10 +29,12 @@ from tournamentcontrol.competition.models import (
     Ground,
     Match,
     MatchScoreSheet,
+    SeasonAssociation,
     SimpleScoreMatchStatistic,
     Stage,
     StageGroup,
     Team,
+    TeamAssociation,
     UndecidedTeam,
 )
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
@@ -1082,6 +1084,71 @@ class GoodViewTests(TestCase):
                 '<td colspan="2" class="no_results">'
                 "There are no club officials for this season.</td>"
             )
+
+    def test_officials_save_returns_to_the_club(self):
+        club = factories.ClubFactory.create()
+        season = factories.SeasonFactory.create()
+        season.competition.clubs.add(club)
+        person = factories.PersonFactory.create(club=club)
+        role = factories.ClubRoleFactory.create(competition=season.competition)
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:club:officials",
+                club.pk,
+                season.pk,
+                data={
+                    "form-TOTAL_FORMS": "1",
+                    "form-INITIAL_FORMS": "0",
+                    "form-MIN_NUM_FORMS": "",
+                    "form-MAX_NUM_FORMS": "1000",
+                    "form-0-person": person.pk,
+                    "form-0-roles": role.pk,
+                },
+            )
+            self.response_302()
+            self.assertRedirects(
+                self.last_response,
+                reverse("admin:fixja:club:edit", args=(club.pk,)),
+                fetch_redirect_response=False,
+            )
+        official = SeasonAssociation.objects.get(club=club, season=season)
+        self.assertEqual(official.person, person)
+        self.assertEqual(list(official.roles.all()), [role])
+
+    def test_team_members_save_returns_to_the_club(self):
+        club = factories.ClubFactory.create()
+        team = factories.TeamFactory.create(club=club)
+        season = team.division.season
+        season.competition.clubs.add(club)
+        person = factories.PersonFactory.create(club=club)
+        role = factories.TeamRoleFactory.create(competition=season.competition)
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:club:team:edit",
+                club.pk,
+                season.pk,
+                team.pk,
+                data={
+                    "people-TOTAL_FORMS": "1",
+                    "people-INITIAL_FORMS": "0",
+                    "people-MIN_NUM_FORMS": "",
+                    "people-MAX_NUM_FORMS": "1000",
+                    "people-0-number": "7",
+                    "people-0-person": person.pk,
+                    "people-0-is_player": "1",
+                    "people-0-roles": role.pk,
+                },
+            )
+            self.response_302()
+            self.assertRedirects(
+                self.last_response,
+                reverse("admin:fixja:club:edit", args=(club.pk,)),
+                fetch_redirect_response=False,
+            )
+        member = TeamAssociation.objects.get(team=team)
+        self.assertEqual(member.person, person)
+        self.assertEqual(member.number, 7)
+        self.assertEqual(list(member.roles.all()), [role])
 
     @unittest.expectedFailure
     def test_edit_team_members(self):

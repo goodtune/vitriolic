@@ -3114,8 +3114,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 "club": club,
                 "season": season,
             },
-            post_save_redirect="club-teams",
-            post_save_redirect_kwargs={"club_id": club.pk},
+            post_save_redirect="club:edit",
+            post_save_redirect_args=(club.pk,),
             templates=templates,
             extra_context=extra_context,
         )
@@ -3162,8 +3162,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             TeamAssociation,
             formset_class=TeamAssociationFormSet,
             formset_kwargs={"user": request.user, "instance": team},
-            post_save_redirect="club-teams",
-            post_save_redirect_kwargs={"club_id": club.pk},
+            post_save_redirect="club:edit",
+            post_save_redirect_args=(club.pk,),
             permission_required=True,
             extra_context=extra_context,
         )
