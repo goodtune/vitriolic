@@ -60,6 +60,9 @@ harness_env() {
     # A dummy so the cloudinary library can build image URLs while pages
     # render; nothing is ever uploaded.
     export CLOUDINARY_URL="${CLOUDINARY_URL:-cloudinary://harness:harness@harness}"
+    # The footer shows a host name; an invented one keeps the machine's own
+    # name out of pictures made for a public record.
+    export VITRIOLIC_DEMO_HOSTNAME="${VITRIOLIC_DEMO_HOSTNAME:-demo.example}"
 }
 
 # True when the process is a runserver listening on exactly 127.0.0.1:<port>

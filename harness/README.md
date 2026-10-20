@@ -310,6 +310,7 @@ seed alone, and runs of one entry or of two can be compared page for page.
 | `VITRIOLIC_PG_BIN` | `/opt/homebrew/opt/postgresql@17/bin` | Where `initdb`, `pg_ctl`, `psql` and the rest are. |
 | `HARNESS_PYTHON` | `<checkout>/.venv/bin/python` | The interpreter for the demo project. |
 | `CLOUDINARY_URL` | `cloudinary://harness:harness@harness` | A dummy so image tags can build their URLs. Nothing is uploaded. |
+| `VITRIOLIC_DEMO_HOSTNAME` | `demo.example` | The host name the admin footer shows, so a picture never carries the machine's own name. |
 | `ADMIN_BRAND` | `default` | The brand; `serve.sh --brand` sets it for the server. |
 | `HTMX_ADMIN_TABS` | `0` | Load tabs over HTMX; `serve.sh --htmx-tabs` sets it. |
 | `PLAYWRIGHT_CHROMIUM_EXECUTABLE` | unset | `test.sh e2e` passes it through, to use a browser that is already installed. |
