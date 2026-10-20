@@ -1,7 +1,7 @@
 import pytest
 
 from harness.manifest import Manifest, PageResult
-from harness.shots import prepare_out
+from harness.shots import prepare_out, select_pages
 
 
 def test_manifest_round_trip_and_failed(tmp_path):
@@ -63,3 +63,12 @@ def test_prepare_out_creates_a_missing_directory(tmp_path):
     out = tmp_path / "run" / "rigtest" / "default"
     prepare_out(out, "rigtest", "default")
     assert out.is_dir()
+
+
+def test_only_none_selects_no_pages_and_a_wrong_name_is_refused():
+    pages = [{"name": "index"}, {"name": "season-edit"}]
+    assert select_pages("none", pages) == set()
+    assert select_pages("", pages) is None
+    assert select_pages("index", pages) == {"index"}
+    with pytest.raises(SystemExit):
+        select_pages("indx", pages)

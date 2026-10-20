@@ -27,10 +27,21 @@ class PageResult:
 
 @dataclass
 class StepResult:
-    """One step of the recorded flow (Task 6 fills these in)."""
+    """One step of the recorded flow at one width."""
 
     name: str
+    width: int = 0
+    #: Where the step ended.
+    url: str = ""
+    #: How the step got where it was going: "link" (followed what the page
+    #: offers), "scroll" (the same, after scrolling the target into view) or
+    #: "direct" (the address was typed because nothing on the page led there).
+    via: str = "link"
+    #: Why a step had to go "direct", or anything else worth knowing.
+    note: str = ""
     status: str = "ok"
+    #: Seconds the step took.
+    duration: float = 0.0
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     file: str = ""

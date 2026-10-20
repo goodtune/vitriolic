@@ -33,6 +33,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Locator, Page, sync_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
+from harness import flow
 from harness.manifest import Manifest, PageResult
 from harness.paths import normalise, paths_for
 
@@ -263,15 +264,18 @@ def run(
     video: bool,
     only: set[str] | None,
     *,
-    name: str = "",
-    brand: str = "",
+    name: str,
+    brand: str,
 ) -> Manifest:
     """
     Capture ``pages`` at each of ``widths`` and return the manifest, which is
     also written to ``out/manifest.json`` however the run ends.
 
-    ``video`` is the switch the recorded flow uses; this function captures
-    pictures only and leaves it alone.
+    ``only`` limits the pages to those it names; an empty set captures none.
+    When ``video`` is true the administrator's errand (``harness.flow``) then
+    runs once per width, recorded to ``flow-<width>.webm``. ``name`` and
+    ``brand`` are what ``prepare_out`` checks before it clears ``out`` for a
+    later run, so they are always given.
     """
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -291,7 +295,7 @@ def run(
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
-                for width in widths:
+                for width in widths if selected else []:
                     context = browser.new_context(
                         viewport={"width": width, "height": height}
                     )
@@ -332,12 +336,37 @@ def run(
                                 report(tab)
                         page.close()
                     context.close()
+                if video:
+                    for width in widths:
+                        record_flow(browser, base, host, manifest, out, width, height)
             finally:
                 browser.close()
     finally:
         manifest.finished = datetime.now(timezone.utc).isoformat(timespec="seconds")
         manifest.write(out / "manifest.json")
     return manifest
+
+
+def record_flow(browser, base, host, manifest, out, width, height) -> None:
+    """
+    Run the flow at ``width`` in a context of its own that records a video,
+    and keep the video as ``flow-<width>.webm`` however the flow ends.
+    """
+    context = browser.new_context(
+        viewport={"width": width, "height": height},
+        record_video_dir=str(out),
+        record_video_size={"width": width, "height": height},
+    )
+    page = context.new_page()
+    video = page.video
+    collector = Collector(page, host)
+    try:
+        flow.run(page, base, manifest, width, collector)
+    finally:
+        context.close()
+        if video is not None:
+            video.save_as(str(out / ("flow-%d.webm" % width)))
+            video.delete()
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -347,11 +376,30 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--brand", default="default")
     parser.add_argument("--widths", default="1440,390")
     parser.add_argument("--height", type=int, default=900)
-    parser.add_argument("--only", default="")
+    parser.add_argument(
+        "--only",
+        default="",
+        help="page names to capture, or 'none' to run the flow alone",
+    )
     parser.add_argument("--no-video", dest="video", action="store_false")
     parser.add_argument("--pages", type=Path)
     parser.add_argument("--out", type=Path)
     return parser.parse_args(argv)
+
+
+def select_pages(only: str, pages: list[dict]) -> set[str] | None:
+    """
+    The page names ``--only`` asks for: ``None`` for every page, an empty set
+    for the sentinel ``none``. A name that is not a page is an error, so that
+    a misspelt name does not quietly capture nothing.
+    """
+    if only == "none":
+        return set()
+    wanted = {o for o in only.split(",") if o}
+    unknown = sorted(wanted - {p["name"] for p in pages})
+    if unknown:
+        raise SystemExit("unknown page name(s) in --only: %s" % ", ".join(unknown))
+    return wanted or None
 
 
 def main(argv: list[str]) -> int:
@@ -362,7 +410,11 @@ def main(argv: list[str]) -> int:
     pages_file = args.pages or paths["state"] / "pages.json"
     pages = json.loads(pages_file.read_text())["pages"]
     widths = [int(w) for w in args.widths.split(",") if w]
-    only = {o for o in args.only.split(",") if o} or None
+    only = select_pages(args.only, pages)
+    if not args.video and only is not None and not only:
+        raise SystemExit(
+            "nothing to do: --only none leaves only the flow, and --no-video skips it"
+        )
 
     prepare_out(out, name, args.brand)
     started = time.monotonic()
