@@ -5,22 +5,15 @@ from playwright.sync_api import Page, expect
 
 from tournamentcontrol.competition.tests import factories
 
-#: Note when the next Bootstrap modal has finished fading and sliding in.
-WATCH_MODAL_SHOWN = """() => {
-    window.bulkCreateModalShown = false;
-    $(document).one("shown.bs.modal", () => { window.bulkCreateModalShown = true; });
-}"""
-
-
-def open_modal(page: Page, name: str):
+def open_modal(page: Page, title: str):
     """
-    Open the "how many?" modal for ``name`` and wait until Bootstrap has
-    finished showing it, so a screenshot shows it as a person sees it.
+    Open the "how many?" dialog that the button called ``title`` opens, and
+    return its box for the number.
     """
-    page.evaluate(WATCH_MODAL_SHOWN)
-    page.click(f'a[data-target="#bulkCreateModal_{name}"]')
-    page.wait_for_function("window.bulkCreateModalShown")
-    return page.locator(f"#bulkCreateCount_{name}")
+    page.get_by_role("button", name=title).click()
+    dialog = page.get_by_role("dialog", name=title)
+    expect(dialog).to_be_visible()
+    return dialog.get_by_label("How many do you want to add?")
 
 
 class TestBulkCreate:
@@ -38,7 +31,7 @@ class TestBulkCreate:
         page = authenticated_page
         page.goto(f"{live_server.url}{season.urls['edit']}#divisions-tab")
 
-        count = open_modal(page, "division")
+        count = open_modal(page, "Add several divisions")
         expect(count).to_be_visible()
         count.fill("2")
         page.screenshot(path=str(screenshot_dir / "bulk_create_divisions_modal.png"))
@@ -48,7 +41,7 @@ class TestBulkCreate:
         expect(page).to_have_url(
             f"{live_server.url}{season.urls['edit']}division/bulk/?count=2"
         )
-        expect(page.locator("table.bulk-create tbody tr")).to_have_count(2)
+        expect(page.locator(".wb-bulk-row")).to_have_count(2)
         for index, title in enumerate(("Men's Open", "Women's Open")):
             page.fill(f'input[name="form-{index}-title"]', title)
             page.fill(f'input[name="form-{index}-forfeit_for_score"]', "5")
@@ -56,12 +49,12 @@ class TestBulkCreate:
         page.screenshot(
             path=str(screenshot_dir / "bulk_create_divisions_form.png"), full_page=True
         )
-        page.click('.content button[type="submit"]')
+        page.get_by_role("button", name="Save", exact=True).first.click()
 
         expect(page).to_have_url(
             f"{live_server.url}{season.urls['edit']}#divisions-tab"
         )
-        expect(page.locator("#divisions-tab")).to_contain_text("Women's Open")
+        expect(page.locator("#divisions-pane")).to_contain_text("Women's Open")
         page.screenshot(
             path=str(screenshot_dir / "bulk_create_divisions_saved.png"), full_page=True
         )
@@ -76,25 +69,27 @@ class TestBulkCreate:
         page = authenticated_page
         page.goto(f"{live_server.url}{division.urls['edit']}#teams-tab")
 
-        count = open_modal(page, "team")
+        count = open_modal(page, "Add several teams")
         expect(count).to_be_visible()
         count.fill("3")
         page.screenshot(path=str(screenshot_dir / "bulk_create_teams_modal.png"))
-        page.click("#bulkCreateModal_team .js-bulk-create")
+        page.get_by_role("dialog", name="Add several teams").get_by_role(
+            "button", name="Continue"
+        ).click()
 
         expect(page).to_have_url(
             f"{live_server.url}{division.urls['edit']}teams/bulk/?count=3"
         )
-        expect(page.locator("table.bulk-create tbody tr")).to_have_count(3)
+        expect(page.locator(".wb-bulk-row")).to_have_count(3)
         page.fill('input[name="form-0-title"]', "Alpha")
         page.fill('input[name="form-2-title"]', "Charlie")
         page.screenshot(
             path=str(screenshot_dir / "bulk_create_teams_form.png"), full_page=True
         )
-        page.click('.content button[type="submit"]')
+        page.get_by_role("button", name="Save", exact=True).first.click()
 
         expect(page).to_have_url(f"{live_server.url}{division.urls['edit']}#teams-tab")
-        expect(page.locator("#teams-tab")).to_contain_text("Charlie")
+        expect(page.locator("#teams-pane")).to_contain_text("Charlie")
         page.screenshot(
             path=str(screenshot_dir / "bulk_create_teams_saved.png"), full_page=True
         )

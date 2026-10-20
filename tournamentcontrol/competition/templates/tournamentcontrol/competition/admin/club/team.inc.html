@@ -17,8 +17,6 @@
 	<td data-label="{% trans "Division" %}">{{ obj.division.short_title|default:obj.division.title }}</td>
 {% endblock table-columns %}
 
-{% block row-buttons %}{% endblock %}
-{% block table-head-actions %}{% endblock %}
 
 {% block table-row-empty %}<tr class="wb-table-empty"><td colspan="5">{% trans "This club has no teams yet." %}</td></tr>{% endblock %}
 

@@ -1,5 +1,5 @@
 {% load admin_ui %}{% with kind=f|field_kind %}
-<div class="wb-field wb-field-{{ kind }}{% if kind == "check" %} wb-field-check{% endif %}{% if f.errors %} has-error{% endif %}">
+<div class="wb-field wb-field-{{ kind }}{% if kind == "check" %} wb-field-check{% endif %}{% if f.errors %} wb-has-error{% endif %}">
 	{% if caption %}
 		<div class="wb-label">
 			{% if kind == "check" %}<label for="{{ f.id_for_label }}">{{ caption|striptags|label_text }}</label>{% else %}{{ caption|label_text }}{% endif %}

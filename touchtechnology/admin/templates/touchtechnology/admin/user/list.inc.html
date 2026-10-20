@@ -3,7 +3,8 @@
 
 {% block table-headings %}
 	<th scope="col">{% trans "Name" %}</th>
-	<th scope="col">{% trans "Registered" %}</th>
+	{# Registered is the first to go on a narrow screen, last login is kept #}
+	<th scope="col" class="wb-hide-narrow">{% trans "Registered" %}</th>
 	<th scope="col">{% trans "Last login" %}</th>
 {% endblock %}
 
@@ -16,7 +17,7 @@
 			{{ obj.get_full_name|default:obj.get_username }}
 		{% endif %}
 	</td>
-	<td data-label="{% trans "Registered" %}">{{ obj.date_joined|date:"j M Y" }}</td>
+	<td class="wb-hide-narrow" data-label="{% trans "Registered" %}">{{ obj.date_joined|date:"j M Y" }}</td>
 	<td data-label="{% trans "Last login" %}">{% if obj.last_login %}{{ obj.last_login|date:"j M Y" }}{% else %}{% trans "Never" %}{% endif %}</td>
 {% endblock %}
 
@@ -33,6 +34,6 @@
 	{% endif %}
 	{% if delete_perm in object_perms %}
 		{% url 'admin:auth:users:delete' obj.pk as delete_url %}
-		<li>{% include "touchtechnology/admin/_delete.html" with action=delete_url name=obj.get_full_name|default:obj.get_username %}</li>
+		<li>{% include "touchtechnology/admin/_delete.html" with action=delete_url thing=obj.get_full_name|default:obj.get_username %}</li>
 	{% endif %}
 {% endblock %}

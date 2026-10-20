@@ -20,7 +20,7 @@
 		<div class="wb-tabs" role="tablist" data-wb-tabs aria-label="{% trans "Permissions" %}">
 			{% for form in formset %}
 				{% trans form.permission.name as permission_name %}
-				{% include "touchtechnology/admin/_tab.html" with name=form.permission.codename label=permission_name|capfirst selected=forloop.first %}
+				{% include "touchtechnology/admin/_tab.html" with name=form.permission.codename label=permission_name|capfirst selected=forloop.first only %}
 			{% endfor %}
 		</div>
 
@@ -33,7 +33,7 @@
 						{% field form.users %}
 						{% field form.groups %}
 					</div>
-					{% include "touchtechnology/admin/_savebar.html" with cancel="../.." label=_("Save changes") %}
+					{% include "touchtechnology/admin/_savebar.html" with cancel="../.." save_label=_("Save changes") %}
 				</section>
 			{% endfor %}
 		</div>

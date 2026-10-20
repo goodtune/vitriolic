@@ -48,7 +48,7 @@
 	{{ block.super }}
 	{% if object.pk %}
 		{% trans "Schedule" as schedule %}
-		{% include "touchtechnology/admin/_tab.html" with name="schedule" label=schedule count=match_days|length %}
+		{% include "touchtechnology/admin/_tab.html" with name="schedule" label=schedule count=match_days|length only %}
 	{% endif %}
 {% endblock %}
 

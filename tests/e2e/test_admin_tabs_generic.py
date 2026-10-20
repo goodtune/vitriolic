@@ -8,6 +8,7 @@ in the page) and with ``TOUCHTECHNOLOGY_HTMX_ADMIN_TABS`` (each tab fetched
 when it is first shown), and expects the same of both.
 """
 
+import re
 from urllib.parse import urljoin
 
 import pytest
@@ -52,10 +53,10 @@ def test_a_view_naming_no_relations_has_a_tab_for_each(
         authenticated_page, url(live_server, competition.urls["edit"])
     )
     assert tabs.errors == []
-    assert tabs.ids[0] == "competition-tab"
-    assert {"seasons-tab", "club_roles-tab", "team_roles-tab"} <= set(tabs.ids)
+    assert tabs.ids[0] == "competition-pane"
+    assert {"seasons-pane", "club_roles-pane", "team_roles-pane"} <= set(tabs.ids)
     assert {str(season.urls["edit"]) for season in competition.seasons.all()} <= set(
-        tabs.links["seasons-tab"]
+        tabs.links["seasons-pane"]
     )
 
 
@@ -69,9 +70,9 @@ def test_a_view_naming_its_relations_has_only_those(
     grounds = factories.GroundFactory.create_batch(2, venue=venue)
     tabs = read_tabs(authenticated_page, url(live_server, venue.urls["edit"]))
     assert tabs.errors == []
-    assert tabs.ids == ["venue-tab", "grounds-tab"]
+    assert tabs.ids == ["venue-pane", "grounds-pane"]
     assert {str(ground.urls["edit"]) for ground in grounds} <= set(
-        tabs.links["grounds-tab"]
+        tabs.links["grounds-pane"]
     )
 
 
@@ -103,17 +104,17 @@ def test_a_link_in_a_tab_leaves_the_page(
     set_mode(settings, htmx)
     page = authenticated_page
     page.goto(url(live_server, competition.urls["edit"]))
-    pane = show_tab(page, "seasons-tab")
+    pane = show_tab(page, "seasons-pane")
     row = pane.locator("tbody tr").first
-    row.locator("button.dropdown-toggle").click()
-    href = row.get_by_role("button", name="Edit").get_attribute("href")
-    row.get_by_role("button", name="Edit").click()
+    row.get_by_role("button", name=re.compile("More actions")).click()
+    href = row.get_by_role("link", name="Edit").get_attribute("href")
+    row.get_by_role("link", name="Edit").click()
     page.wait_for_url(url(live_server, href))
     # The season's page replaced the competition's, rather than being loaded
     # into the tab the link was in.
-    expect(page.locator("#myTab")).to_have_count(1)
-    expect(page.locator("#season-tab")).to_have_count(1)
-    expect(page.locator("#seasons-tab")).to_have_count(0)
+    expect(page.locator("[role=tablist]")).to_have_count(1)
+    expect(page.locator("#season-pane")).to_have_count(1)
+    expect(page.locator("#seasons-pane")).to_have_count(0)
 
 
 @pytest.mark.parametrize("htmx", MODES)
@@ -125,17 +126,16 @@ def test_deleting_from_a_tab(
     page = authenticated_page
     season = competition.seasons.get(title="2025")
     page.goto(url(live_server, competition.urls["edit"]))
-    pane = show_tab(page, "seasons-tab")
+    pane = show_tab(page, "seasons-pane")
     row = pane.locator("tbody tr", has_text="2025")
-    row.locator("button.dropdown-toggle").click()
+    row.get_by_role("button", name=re.compile("More actions")).click()
     row.get_by_role("button", name="Delete").click()
 
-    modal = page.locator("#deleteModal_season")
-    expect(modal).to_be_visible()
-    expect(modal.locator(".modal-body strong")).to_have_text(str(season))
-    # The dialog keeps aria-hidden on it, so find its button by what it is.
-    submit = modal.locator("button[type=submit]")
-    expect(submit).to_have_text("Delete season")
+    dialog = page.get_by_role("dialog")
+    expect(dialog).to_be_visible()
+    expect(dialog.get_by_role("heading")).to_have_text(f"Delete {season}?")
+    submit = dialog.get_by_role("button", name="Delete season")
+    expect(submit).to_be_visible()
     submit.click()
 
     page.wait_for_load_state("networkidle")
@@ -152,16 +152,16 @@ def test_coming_back_from_an_object_shows_its_tab(
     set_mode(settings, htmx)
     page = authenticated_page
     page.goto(url(live_server, competition.urls["edit"]))
-    pane = show_tab(page, "seasons-tab")
+    pane = show_tab(page, "seasons-pane")
     row = pane.locator("tbody tr").first
-    row.locator("button.dropdown-toggle").click()
-    row.get_by_role("button", name="Edit").click()
-    expect(page.locator("#season-tab")).to_be_visible()
+    row.get_by_role("button", name=re.compile("More actions")).click()
+    row.get_by_role("link", name="Edit").click()
+    expect(page.locator("#season-pane")).to_be_visible()
 
-    page.get_by_role("link", name="Cancel").click()
+    page.get_by_role("link", name="Cancel").first.click()
     page.wait_for_url(url(live_server, competition.urls["edit"]))
-    expect(page.locator("#seasons-tab")).to_be_visible()
-    expect(page.locator("#seasons-tab tbody tr").first).to_be_visible()
+    expect(page.locator("#seasons-pane")).to_be_visible()
+    expect(page.locator("#seasons-pane tbody tr").first).to_be_visible()
 
 
 @pytest.mark.parametrize("htmx", MODES)
@@ -170,13 +170,13 @@ def test_an_edit_page_opened_directly_has_no_script_errors(
 ):
     """
     Opened from a bookmark (no referrer), the page used to fail working out
-    which tab to show, which also stopped it setting up its select boxes.
+    which tab to show, which also stopped it setting up its choosers.
     """
     set_mode(settings, htmx)
     page = authenticated_page
     errors = []
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto(url(live_server, competition.urls["edit"]))
-    expect(page.locator("#competition-tab")).to_be_visible()
-    expect(page.locator(".select2-container").first).to_be_attached()
+    expect(page.locator("#competition-pane")).to_be_visible()
+    expect(page.get_by_role("combobox", name="Clubs")).to_be_attached()
     assert errors == []

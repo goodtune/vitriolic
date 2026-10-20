@@ -46,7 +46,7 @@
 				<div class="wb-matches">
 					{% for form in slot.list %}
 						{% with match=form.instance %}
-							<fieldset class="wb-match{% if form.errors %} has-error{% elif match.home_team_score == None and form.home_team_score %} is-pending{% endif %}">
+							<fieldset class="wb-match{% if form.errors %} wb-has-error{% elif match.home_team_score == None and form.home_team_score %} is-pending{% endif %}">
 								<legend class="wb-sr">{{ match }}</legend>
 								{{ form.id }}
 								<div class="wb-match-meta">

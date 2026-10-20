@@ -884,7 +884,7 @@ fieldset.wb-fields > legend, .wb-group-title {
 	color: var(--wb-danger);
 	font-weight: 700;
 }
-.wb-field.has-error { padding-left: 0.85rem; border-left: 4px solid var(--wb-danger); }
+.wb-field.wb-has-error { padding-left: 0.85rem; border-left: 4px solid var(--wb-danger); }
 
 .wb-input, .wb-select, .wb-textarea, .wb-multi input, input.wb-multi, select.wb-multi, .wb-file,
 input.wb-control, select.wb-control, textarea.wb-control {
@@ -1000,7 +1000,7 @@ select.wb-multi { max-width: 16rem; }
 	.wb-form-wide .wb-field:not(.wb-field-check) > * { grid-column: 2; }
 	.wb-form-wide .wb-field:not(.wb-field-check) > .wb-label { grid-column: 1; }
 	.wb-form-wide .wb-field-check { padding-left: calc(14rem + 1.75rem); }
-	.wb-form-wide .wb-field.has-error { padding-left: 0.85rem; }
+	.wb-form-wide .wb-field.wb-has-error { padding-left: 0.85rem; }
 }
 
 /* The picker: a select dressed as a button that opens a searchable dialog. */
@@ -1594,7 +1594,7 @@ h3 + .wb-table-wrap { margin-bottom: 1.5rem; }
 .wb-time + .wb-time { margin-top: 2rem; }
 .wb-time-title { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.85rem; font-size: 1.25rem; }
 .wb-match { margin: 0; min-width: 0; }
-.wb-match.has-error { border-color: var(--wb-danger); box-shadow: inset 4px 0 0 var(--wb-danger); }
+.wb-match.wb-has-error { border-color: var(--wb-danger); box-shadow: inset 4px 0 0 var(--wb-danger); }
 .wb-match-meta .wb-icon { color: var(--wb-ink-soft); }
 .wb-forfeit { margin-top: 0.6rem; }
 .wb-forfeit > summary { display: inline-flex; min-height: 2.25rem; align-items: center; color: var(--wb-accent); font-weight: 700; cursor: pointer; }
@@ -1689,3 +1689,41 @@ h3 + .wb-table-wrap { margin-bottom: 1.5rem; }
 /* An object with no related lists has nothing to tab between. */
 .wb-tabs:not(:has(.wb-tab + .wb-tab)) { display: none; }
 .wb-picker-caret { display: inline-flex; color: var(--wb-ink-soft); }
+
+.wb-list-filter { position: relative; max-width: 24rem; margin: 0 0 0.75rem; }
+.wb-list-filter .wb-icon { position: absolute; left: 0.85rem; top: 50%; transform: translateY(-50%); color: var(--wb-ink-soft); }
+.wb-list-filter input { padding-left: 2.5rem; min-height: 2.6rem; }
+.wb-sort {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	letter-spacing: inherit;
+	text-transform: inherit;
+	cursor: pointer;
+}
+.wb-sort::after { content: "\2195"; opacity: 0.45; font-size: 0.9em; }
+th[aria-sort="ascending"] .wb-sort::after { content: "\2191"; opacity: 1; }
+th[aria-sort="descending"] .wb-sort::after { content: "\2193"; opacity: 1; }
+.wb-sort:hover { color: var(--wb-accent); }
+th.wb-num .wb-sort { flex-direction: row-reverse; }
+@media (max-width: 47.99rem) { .wb-hide-narrow { display: none !important; } }
+
+/* A season-local date and time: the date's parts on one line, the time's on the next. */
+.season-timezone-datetime { display: grid; gap: 0.5rem; }
+.season-timezone-datetime-date, .season-timezone-datetime-time { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.4rem; }
+.season-timezone-datetime select { width: auto; max-width: none; flex: 0 1 auto; min-width: 0; }
+.season-timezone-datetime-separator { font-weight: 800; color: var(--wb-ink-soft); }
+
+.wb-thumbnail-widget { display: grid; gap: 0.6rem; max-width: 36rem; padding: 1rem; border: 1.5px solid var(--wb-line); border-radius: var(--wb-radius-sm); background: var(--wb-paper); }
+.wb-thumbnail-current { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; padding-bottom: 0.75rem; border-bottom: 1px solid var(--wb-line); }
+.wb-thumbnail-preview { flex: 0 0 min(50%, 14rem); max-height: 12rem; object-fit: contain; border-radius: 8px; border: 1px solid var(--wb-line); background: var(--wb-sheet); }
+.wb-thumbnail-info { flex: 1 1 10rem; display: grid; gap: 0.3rem; }
+.wb-thumbnail-title { margin: 0; font-weight: 700; }
+.wb-thumbnail-clear { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.wb-thumbnail-label { font-weight: 700; }
+.wb-thumbnail-widget .wb-empty { padding: 1rem; justify-items: center; text-align: center; }

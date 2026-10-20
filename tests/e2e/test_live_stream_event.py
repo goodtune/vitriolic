@@ -67,11 +67,13 @@ class TestLiveStreamEventForm:
 
         page.context.grant_permissions(["clipboard-read", "clipboard-write"])
         page.goto(self._season_url(live_server, season))
-        page.locator('a[href="#live_stream_events-tab"]').click()
+        page.get_by_role("tab", name="Live stream events").click()
 
-        button = page.locator(".js-copy-video-link")
+        button = page.get_by_role("button", name="Copy video link")
         expect(button).to_be_visible()
         button.click()
+        # Its label says it worked, so find it again by what it copies.
+        button = page.locator("[data-wb-copy]")
 
         # The youtu.be form of the link is now on the clipboard.
         clipboard = page.evaluate("navigator.clipboard.readText()")
@@ -79,8 +81,8 @@ class TestLiveStreamEventForm:
 
         # Visual feedback, and the click must not have navigated away by
         # submitting the season form.
-        expect(button.locator("i")).to_have_class("fa fa-check")
-        expect(page.locator("#live_stream_events-tab")).to_be_visible()
+        expect(button).to_have_text("Copied")
+        expect(page.locator("#live_stream_events-pane")).to_be_visible()
 
         page.screenshot(
             path=str(screenshot_dir / "live_stream_event_copy_link.png"),
@@ -99,11 +101,11 @@ class TestLiveStreamEventForm:
 
         page.goto(self._season_url(live_server, season))
 
-        expect(page.locator('a[href="#live_stream_events-tab"]')).to_be_attached()
-        expect(page.locator('a[href="#live_stream_keys-tab"]')).to_be_attached()
+        expect(page.get_by_role("tab", name="Live stream events")).to_be_attached()
+        expect(page.get_by_role("tab", name="Stream keys")).to_be_attached()
 
-        page.locator('a[href="#live_stream_events-tab"]').click()
-        expect(page.locator("#live_stream_events-tab")).to_contain_text(
+        page.get_by_role("tab", name="Live stream events").click()
+        expect(page.locator("#live_stream_events-pane")).to_contain_text(
             "Opening Ceremony"
         )
         page.screenshot(
@@ -135,7 +137,7 @@ class TestLiveStreamEventForm:
             expect(page.locator(f'select[name="{prefix}_3"]')).to_have_count(0)
 
         # The implied timezone is stated to the user.
-        expect(page.locator(".content form")).to_contain_text(
+        expect(page.locator("form.wb-form")).to_contain_text(
             "Local time in Australia/Sydney."
         )
 

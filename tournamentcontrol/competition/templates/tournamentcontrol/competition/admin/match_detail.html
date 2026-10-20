@@ -46,7 +46,7 @@
 								<tbody>
 									{% for form in formset %}
 										{% with player=form.instance.player errors=form.errors.items %}
-											<tr{% if errors %} class="has-error"{% endif %}>
+											<tr{% if errors %} class="wb-has-error"{% endif %}>
 												<td class="wb-num">{{ form.number|control }}</td>
 												<th scope="row">
 													{{ player.first_name }} {{ player.last_name }}

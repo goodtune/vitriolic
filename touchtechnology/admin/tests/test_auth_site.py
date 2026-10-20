@@ -58,17 +58,19 @@ class AuthSiteUserTests(TestCase):
             self.get("admin:auth:users:list")
             self.response_200()
             self.assertResponseContains(
-                '<th scope="col">Registered</th>', html=True
+                '<th scope="col" class="wb-hide-narrow">Registered</th>', html=True
             )
             self.assertResponseContains('<th scope="col">Last login</th>', html=True)
             self.assertResponseContains(
-                '<td data-label="Registered">10 Jul 2018</td>', html=True
+                '<td class="wb-hide-narrow" data-label="Registered">10 Jul 2018</td>',
+                html=True,
             )
             self.assertResponseContains(
                 '<td data-label="Last login">19 Sep 2026</td>', html=True
             )
             self.assertResponseContains(
-                '<td data-label="Registered">3 Sep 2026</td>', html=True
+                '<td class="wb-hide-narrow" data-label="Registered">3 Sep 2026</td>',
+                html=True,
             )
             self.assertResponseContains(
                 '<td data-label="Last login">Never</td>', html=True

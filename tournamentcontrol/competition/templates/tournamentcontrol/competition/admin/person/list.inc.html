@@ -1,6 +1,8 @@
 {% extends "mvp/list.inc.html" %}
 {% load i18n competition admin_ui %}
 
+{% block filter %}{% include "touchtechnology/admin/_filter.html" %}{% endblock %}
+
 {% block table-headings %}
 	<th scope="col">{% trans "Name" %}</th>
 	<th scope="col" class="wb-num">{% trans "Age" %}</th>

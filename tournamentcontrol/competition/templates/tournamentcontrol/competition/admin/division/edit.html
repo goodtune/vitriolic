@@ -14,9 +14,9 @@
 {% endblock %}
 
 {% block form-fieldset %}
-	{% fields_in form "title short_title points_formula forfeit_for_score forfeit_against_score games_per_day draft" as basics %}
+	{% fields_in form "title upstream_title_reset short_title points_formula forfeit_for_score forfeit_against_score games_per_day draft" as basics %}
 	{% include "touchtechnology/admin/_fieldgroup.html" with fields=basics first=True %}
-	{% fields_besides form "title short_title points_formula forfeit_for_score forfeit_against_score games_per_day draft" as rest %}
+	{% fields_besides form "title upstream_title_reset short_title points_formula forfeit_for_score forfeit_against_score games_per_day draft" as rest %}
 	{% trans "More settings" as title %}{% trans "Public notes, colour, bonus points and the web address." as hint %}
 	{% include "touchtechnology/admin/_fieldgroup.html" with fields=rest title=title hint=hint folded=True %}
 {% endblock %}
@@ -36,7 +36,7 @@
 	{{ block.super }}
 	{% if object.pk %}
 		{% trans "Ladder" as ladder %}
-		{% include "touchtechnology/admin/_tab.html" with name="ladder" label=ladder %}
+		{% include "touchtechnology/admin/_tab.html" with name="ladder" label=ladder only %}
 	{% endif %}
 {% endblock %}
 

@@ -8,6 +8,8 @@
 	                       (include "touchtechnology/admin/_add.html" with url=... for Add)
 	  modal                dialogs the list needs (such as "Add several")
 	  table-headings       <th> cells (the title is the first)
+	  filter               the box that filters a long list in a tab (include
+	                       "touchtechnology/admin/_filter.html" to always offer it)
 	  table-head-actions   the heading of the actions column (empty when rows have none)
 	  table-columns        <td> cells (the first, class "wb-title-cell", links the object)
 	  row-buttons-extra    buttons always on show in a row (Build, Undo, Up...)
@@ -31,8 +33,11 @@
 {% block modal %}{% endblock modal %}
 
 {% block table %}
+{% block filter %}
+	{% if manager and object_list|length > 8 %}{% include "touchtechnology/admin/_filter.html" %}{% endif %}
+{% endblock filter %}
 <div class="wb-table-wrap">
-<table class="wb-table wb-table-cards">
+<table class="wb-table wb-table-cards" data-wb-sortable>
 	<thead>
 		{% block table-head %}
 		<tr>

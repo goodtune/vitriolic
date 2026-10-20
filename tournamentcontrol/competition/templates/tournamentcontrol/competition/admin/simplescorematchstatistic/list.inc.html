@@ -1,6 +1,8 @@
 {% extends "mvp/list.inc.html" %}
 {% load i18n %}
 
+{% block filter %}{% include "touchtechnology/admin/_filter.html" %}{% endblock %}
+
 {% block table-headings %}
 	<th scope="col">{% trans "Date" %}</th>
 	<th scope="col">{% trans "Competition" %}</th>

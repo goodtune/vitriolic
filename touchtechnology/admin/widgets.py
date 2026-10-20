@@ -117,7 +117,11 @@ def admin_attrs(bound_field, widget):
     # A placeholder that repeats the label says nothing, and hides once the
     # person types; the label is always on show.
     placeholder = widget.attrs.get("placeholder")
-    if placeholder is not None and str(placeholder) == str(bound_field.label):
+    if "placeholder" in widget.attrs and (
+        placeholder is None
+        or str(placeholder) == str(bound_field.label)
+        or kind in ("select", "checks", "radios", "check", "file")
+    ):
         attrs["placeholder"] = False
 
     described = []
@@ -148,9 +152,12 @@ def admin_media(media):
     """``media`` with the remote assets it names swapped for the admin's copies."""
     if not isinstance(media, django_widgets.Media):
         return media or ""
-    js = [SELF_HOSTED.get(str(path), path) for path in media._js]
-    css = {
-        medium: [SELF_HOSTED.get(str(path), path) for path in paths]
-        for medium, paths in media._css.items()
-    }
+
+    def swap(asset):
+        # An asset is a path or (Django 5.2 on) a Script or Stylesheet.
+        path = getattr(asset, "_path", asset)
+        return SELF_HOSTED.get(str(path), asset)
+
+    js = [swap(asset) for asset in media._js]
+    css = {medium: [swap(asset) for asset in assets] for medium, assets in media._css.items()}
     return django_widgets.Media(css=css, js=js)

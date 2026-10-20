@@ -187,33 +187,33 @@ def edit_url(live_server, obj):
 # What some tabs must list, so a tab that is empty in both modes still fails.
 LISTED = {
     "competition": {
-        "seasons-tab": ["season"],
-        "club_roles-tab": ["club_role"],
-        "team_roles-tab": ["team_role"],
+        "seasons-pane": ["season"],
+        "club_roles-pane": ["club_role"],
+        "team_roles-pane": ["team_role"],
     },
     "season": {
-        "exclusions-tab": ["season_exclusion"],
-        "divisions-tab": ["division"],
-        "venues-tab": ["venue"],
-        "timeslots-tab": ["timeslot"],
-        "referees-tab": ["season_referee"],
-        "live_stream_events-tab": ["live_stream_event"],
-        "live_stream_keys-tab": ["live_stream_key"],
+        "exclusions-pane": ["season_exclusion"],
+        "divisions-pane": ["division"],
+        "venues-pane": ["venue"],
+        "timeslots-pane": ["timeslot"],
+        "referees-pane": ["season_referee"],
+        "live_stream_events-pane": ["live_stream_event"],
+        "live_stream_keys-pane": ["live_stream_key"],
     },
-    "venue": {"grounds-tab": ["ground"]},
+    "venue": {"grounds-pane": ["ground"]},
     "division": {
-        "teams-tab": ["team"],
-        "stages-tab": ["stage"],
-        "exclusions-tab": ["division_exclusion"],
+        "teams-pane": ["team"],
+        "stages-pane": ["stage"],
+        "exclusions-pane": ["division_exclusion"],
     },
     "stage": {
-        "pools-tab": ["pool"],
-        "undecided_teams-tab": ["undecided_team"],
-        "matches-tab": ["match"],
+        "pools-pane": ["pool"],
+        "undecided_teams-pane": ["undecided_team"],
+        "matches-pane": ["match"],
     },
-    "team": {"people-tab": ["team_association"]},
-    "club": {"members-tab": ["person"]},
-    "article": {"translations-tab": ["translation"]},
+    "team": {"people-pane": ["team_association"]},
+    "club": {"members-pane": ["person"]},
+    "article": {"translations-pane": ["translation"]},
 }
 
 
@@ -231,17 +231,26 @@ def test_every_tab_lists_the_same_in_both_modes(
 
 @pytest.mark.parametrize("htmx", [False, True], ids=["plain", "htmx"])
 @pytest.mark.parametrize(
-    "name,tab_id", [("club", "members-tab"), ("person", "statistics-tab")]
+    "name,tab_id", [("club", "members-pane"), ("person", "statistics-pane")]
 )
 def test_a_tab_list_can_be_searched_and_sorted(
     authenticated_page: Page, live_server, settings, site, name, tab_id, htmx
 ):
-    """The club and person pages turn their lists into DataTables."""
+    """
+    The lists of a club's people and of a person's statistics sort by any of
+    their columns, and a long list filters as you type.
+    """
     set_mode(settings, htmx)
     page = authenticated_page
     page.goto(edit_url(live_server, site[name]))
     pane = show_tab(page, tab_id)
-    expect(pane.locator(".dataTables_filter input")).to_be_visible()
+    expect(pane.get_by_role("searchbox")).to_be_visible()
+    # A column sorts once there is more than one row to put in order.
+    if pane.locator("tbody tr").count() > 1:
+        pane.locator("thead th button.wb-sort").first.click()
+        expect(pane.locator("thead th[aria-sort]")).to_have_count(1)
+        pane.get_by_role("searchbox").fill("zzz-nobody")
+        expect(pane.locator("tbody tr:visible")).to_have_count(0)
 
 
 def test_choosing_a_club_names_the_team(

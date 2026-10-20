@@ -178,11 +178,10 @@
 					pane.setAttribute("aria-labelledby", tab.id);
 				}
 				tab.addEventListener("click", function (event) {
+					// The address stays as it is; the tab last shown is
+					// remembered for coming back to the page.
 					event.preventDefault();
 					select(list, tab, false);
-					if (history.replaceState) {
-						history.replaceState(null, "", "#" + tab.getAttribute("aria-controls"));
-					}
 				});
 				tab.addEventListener("keydown", function (event) {
 					var index = all.indexOf(tab);
@@ -698,6 +697,11 @@
 				return;
 			}
 			button.setAttribute("aria-haspopup", "dialog");
+			// With scripts the button only opens the dialog, so pressing Enter
+			// in the dialog submits with the dialog's own button.
+			if (button.type === "submit") {
+				button.type = "button";
+			}
 			button.addEventListener("click", function (event) {
 				event.preventDefault();
 				dialog.showModal();
@@ -862,12 +866,90 @@
 		});
 	}
 
+	/* ------------------------------------------------------------------
+	 * Lists that sort by any column, and long lists in a tab that filter as
+	 * you type. The server's order and every row are there without scripts.
+	 */
+
+	function cellValue(row, index) {
+		var cell = row.cells[index];
+		var value = cell ? text(cell) : "";
+		var number = parseFloat(value.replace(/[^0-9.\-]/g, ""));
+		return { text: value.toLowerCase(), number: /^[-0-9.,\s/]+$/.test(value) && !isNaN(number) ? number : null };
+	}
+
+	function sortables(root) {
+		each(root, "table[data-wb-sortable]", function (table) {
+			if (table.dataset.wbReady || !table.tBodies[0]) {
+				return;
+			}
+			table.dataset.wbReady = "1";
+			var body = table.tBodies[0];
+			if (body.rows.length < 2 || body.querySelector(".wb-table-empty")) {
+				return;
+			}
+			each(table, "thead th", function (th) {
+				var label = text(th);
+				if (!label || th.querySelector(".wb-sr")) {
+					return;
+				}
+				var index = th.cellIndex;
+				var button = document.createElement("button");
+				button.type = "button";
+				button.className = "wb-sort";
+				button.textContent = label;
+				th.textContent = "";
+				th.appendChild(button);
+				button.addEventListener("click", function () {
+					var ascending = th.getAttribute("aria-sort") !== "ascending";
+					each(table, "thead th[aria-sort]", function (other) {
+						other.removeAttribute("aria-sort");
+					});
+					th.setAttribute("aria-sort", ascending ? "ascending" : "descending");
+					var rows = Array.prototype.slice.call(body.rows);
+					rows.sort(function (a, b) {
+						var x = cellValue(a, index);
+						var y = cellValue(b, index);
+						var order = x.number !== null && y.number !== null
+							? x.number - y.number
+							: x.text.localeCompare(y.text, undefined, { numeric: true });
+						return ascending ? order : -order;
+					});
+					rows.forEach(function (row) {
+						body.appendChild(row);
+					});
+				});
+			});
+		});
+	}
+
+	function filters(root) {
+		each(root, "input[data-wb-filter]", function (input) {
+			if (input.dataset.wbReady) {
+				return;
+			}
+			input.dataset.wbReady = "1";
+			var scope = input.closest(".wb-pane, .wb-sheet") || document;
+			input.addEventListener("input", function () {
+				var words = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+				each(scope, "table tbody tr", function (row) {
+					var haystack = text(row).toLowerCase();
+					row.hidden = !words.every(function (word) {
+						return haystack.indexOf(word) !== -1;
+					});
+				});
+			});
+		});
+	}
+
 	function enhance(root) {
 		tabs(root);
 		pickers(root);
 		dialogs(root);
 		menus(root);
 		formsets(root);
+		sortables(root);
+		filters(root);
 	}
 
 	menu();
