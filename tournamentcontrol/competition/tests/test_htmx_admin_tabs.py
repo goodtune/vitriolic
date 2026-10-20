@@ -230,8 +230,9 @@ class HtmxTabPaginationTests(TestCase):
         for number in (2, 3):
             href = f"?_htmx_tab=members&page={number}"
             self.assertResponseContains(
-                f'<a href="{href}" hx-get="{href}" hx-target="#members-tab" '
-                f'hx-swap="innerHTML" hx-push-url="false">{number}</a>',
+                f'<a href="{href}" hx-get="{href}" hx-target="#members-pane" '
+                f'hx-swap="innerHTML" hx-push-url="false" '
+                f'aria-label="Page {number}">{number}</a>',
                 html=True,
             )
 
@@ -287,8 +288,10 @@ class HtmxTabAddLinkTests(TestCase):
     def _add_link(self, url_name, *args, type_name):
         url = reverse(url_name, args=args)
         return (
-            f'<a href="{url}" title="Add {type_name}" role="button">'
-            '<i class="fa fa-plus-square"></i></a>'
+            f'<a class="wb-button wb-button-primary wb-button-small" href="{url}">'
+            '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+            '<use href="/static/touchtechnology/admin/workbook/icons.svg#plus"></use>'
+            f"</svg>Add {type_name}</a>"
         )
 
     def test_club_people_tab_traditional_mode(self):

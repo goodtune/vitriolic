@@ -485,7 +485,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @property
     def widgets(self):
         widget_classes = (
-            SeasonProgressWidget,
             BasicResultWidget,
             ProgressStageWidget,
             ScoresheetWidget,
@@ -1088,30 +1087,32 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         season still being set up, and the clubs.
         """
         tasks = []
+        # One query each: the latest day with a result to enter, and the next
+        # day still to come, each with its season.
         awaiting = (
-            matches_require_basic_results()
+            awaiting_results(
+                Match.objects.filter(stage__division__season__complete=False)
+            )
+            .select_related(None)
+            .select_related("stage__division__season")
             .order_by("-date")
-            .values_list("stage__division__season", "date")
             .first()
         )
         if awaiting is not None:
-            season = Season.objects.select_related("competition").get(pk=awaiting[0])
-            count = awaiting_results(
-                Match.objects.filter(stage__division__season=season, date=awaiting[1])
-            ).count()
+            season = awaiting.stage.division.season
             tasks.append(
                 {
                     "label": _("Enter results"),
                     "url": reverse(
                         "admin:fixja:match-results",
-                        args=(season.competition_id, season.pk, awaiting[1].strftime("%Y%m%d")),
+                        args=(
+                            season.competition_id,
+                            season.pk,
+                            awaiting.date.strftime("%Y%m%d"),
+                        ),
                     ),
-                    "note": ngettext(
-                        "%(day)s · %(n)d match waiting",
-                        "%(day)s · %(n)d matches waiting",
-                        count,
-                    )
-                    % {"day": date_format(awaiting[1], "D j M"), "n": count},
+                    "note": "%s · %s"
+                    % (date_format(awaiting.date, "D j M"), season.title),
                     "icon": "list-checks",
                     "priority": 10,
                 }
@@ -1121,20 +1122,25 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 stage__division__season__complete=False,
                 date__gte=timezone.localdate(),
             )
+            .select_related("stage__division__season")
             .order_by("date")
-            .values_list("stage__division__season", "date")
             .first()
         )
         if upcoming is not None:
-            season = Season.objects.get(pk=upcoming[0])
+            season = upcoming.stage.division.season
             tasks.append(
                 {
                     "label": _("Schedule the next match day"),
                     "url": reverse(
                         "admin:fixja:match-schedule",
-                        args=(season.competition_id, season.pk, upcoming[1].strftime("%Y%m%d")),
+                        args=(
+                            season.competition_id,
+                            season.pk,
+                            upcoming.date.strftime("%Y%m%d"),
+                        ),
                     ),
-                    "note": "%s · %s" % (date_format(upcoming[1], "D j M"), season.title),
+                    "note": "%s · %s"
+                    % (date_format(upcoming.date, "D j M"), season.title),
                     "icon": "clock",
                     "priority": 11,
                 }

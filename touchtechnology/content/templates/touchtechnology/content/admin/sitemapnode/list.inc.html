@@ -10,7 +10,7 @@
 {% block table-columns %}
 	<td class="wb-title-cell">
 		{% if obj.is_leaf_node %}{% icon "file-text" %}{% else %}{% icon "folder" %}{% endif %}
-		{% if obj.urls.edit %}<a href="{{ obj.urls.edit }}">{{ obj }}</a>{% else %}<span>{{ obj }}</span>{% endif %}
+		{% if change_perm in object_perms and obj.urls.edit %}<a href="{{ obj.urls.edit }}">{{ obj }}</a>{% else %}<span>{{ obj }}</span>{% endif %}
 	</td>
 	<td data-label="{% trans "Shown" %}">
 		{% if not obj.enabled %}<span class="wb-badge wb-badge-danger">{% trans "Off" %}</span>{% endif %}

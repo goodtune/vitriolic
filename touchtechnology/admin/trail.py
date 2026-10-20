@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from django.apps import apps
-from django.db.models import ForeignKey
+from django.db.models import ForeignKey, Model
 from django.urls import Resolver404, resolve
 from django.utils.encoding import smart_str
 from django.utils.text import capfirst
@@ -63,7 +63,7 @@ def tab_of(parent, child):
     return ""
 
 
-def describe(match, url, site_name):
+def describe(match, url, site_name, known=None):
     """A crumb for the page ``match`` resolved ``url`` to, or ``None``."""
     if match.url_name in SKIPPED:
         return None
@@ -87,19 +87,28 @@ def describe(match, url, site_name):
         ]
         if not keys:
             return None
-        instance = model._default_manager.filter(pk=keys[-1]).first()
+        instance = (known or {}).get((model, str(keys[-1])))
+        if instance is None:
+            instance = model._default_manager.filter(pk=keys[-1]).first()
         if instance is None:
             return None
         return Crumb(str(instance), url, model, "edit")
     return None
 
 
-def build_trail(request, site_name="admin"):
-    """The pages above ``request``'s page, outermost first."""
+def build_trail(request, site_name="admin", context=None):
+    """
+    The pages above ``request``'s page, outermost first. Objects the page's
+    ``context`` already holds are named from it rather than fetched again.
+    """
     if request is None or getattr(request, "resolver_match", None) is None:
         return []
     path = request.path
     parts = [part for part in path.split("/") if part]
+    known = {}
+    for value in (context or {}).values():
+        if isinstance(value, Model) and value.pk is not None:
+            known[(type(value), str(value.pk))] = value
     crumbs = []
     for depth in range(1, len(parts)):
         prefix = "/" + "/".join(parts[:depth]) + "/"
@@ -110,7 +119,7 @@ def build_trail(request, site_name="admin"):
         if not match.namespace.split(":")[0] == site_name:
             continue
         try:
-            crumb = describe(match, prefix, site_name)
+            crumb = describe(match, prefix, site_name, known)
         except Exception:  # noqa: BLE001 - a trail never breaks the page
             logger.exception("could not describe %s", prefix)
             crumb = None

@@ -103,7 +103,7 @@ def trail(context):
     request = context.get("request")
     admin = context.get("admin")
     site_name = getattr(admin, "name", "admin")
-    return {"crumbs": build_trail(request, site_name)}
+    return {"crumbs": build_trail(request, site_name, context.flatten())}
 
 
 @register.filter
