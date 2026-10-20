@@ -608,13 +608,10 @@ img, svg { max-width: 100%; }
 		overscroll-behavior: contain;
 		scrollbar-width: thin;
 	}
-	.wb-node.is-here > .wb-node-row > .wb-node-link,
-	.wb-nav-head[aria-current="page"],
-	.wb-nav-head[aria-current="location"] {
+	.wb-node.is-here > .wb-node-row > .wb-node-link {
 		margin-right: -1rem;
 		border-radius: 8px 0 0 8px;
 	}
-	.wb-nav-head[aria-current="page"], .wb-nav-head[aria-current="location"] { border-radius: 12px 0 0 12px; }
 	html { scroll-padding-top: 1rem; }
 }
 
