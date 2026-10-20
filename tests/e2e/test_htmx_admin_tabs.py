@@ -382,8 +382,10 @@ class TestHtmxTabMode:
         authenticated_page.wait_for_load_state("networkidle")
         assert fetched == []
 
-        links = authenticated_page.locator("[role=tab][aria-selected=false]")
-        tab_id = links.first.get_attribute("aria-controls")
+        # The first pane fetched on demand; the set-up tab is rendered inline.
+        tab_id = authenticated_page.locator(
+            "[data-tab-panel][hx-get]"
+        ).first.get_attribute("id")
         pane = authenticated_page.locator(f"#{tab_id}")
         tab = authenticated_page.locator(f"[role=tab][aria-controls='{tab_id}']")
         details = authenticated_page.locator("[role=tab]").first
