@@ -11,6 +11,9 @@
 
 {% block tab-links %}
 	{{ block.super }}
+	{% if object.pk and division_setup %}
+		<a class="tab" role="tab" id="division-setup-tab-link" href="#division-setup-tab" aria-controls="division-setup-tab" aria-selected="false" tabindex="-1">{% icon "check" %}<span>{% trans "Set-up" %}</span><span class="count" aria-hidden="true">{{ division_setup.done }}/{{ division_setup.total }}</span></a>
+	{% endif %}
 	{% if object.pk %}
 		<a class="tab" role="tab" id="ladder-tab-link" href="#ladder-tab" aria-controls="ladder-tab" aria-selected="false" tabindex="-1">{% icon "ladder" %}<span>{% trans "Ladder" %}</span></a>
 	{% endif %}
@@ -18,6 +21,11 @@
 
 {% block tab-panes %}
 	{{ block.super }}
+	{% if object.pk and division_setup %}
+		<section class="pane" data-tab-panel role="tabpanel" id="division-setup-tab" aria-labelledby="division-setup-tab-link">
+			{% include "touchtechnology/admin/explorer/_setup.html" with setup=division_setup %}
+		</section>
+	{% endif %}
 	{% if object.pk %}
 		<section class="pane" data-tab-panel role="tabpanel" id="ladder-tab" aria-labelledby="ladder-tab-link">
 			{% for stage in object.stages.all %}
