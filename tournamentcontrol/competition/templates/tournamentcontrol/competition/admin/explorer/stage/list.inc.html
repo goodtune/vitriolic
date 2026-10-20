@@ -1,0 +1,30 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block table-headings %}
+	<th>{% trans "Stage" %}</th>
+	<th class="wide-only">{% trans "Short title" %}</th>
+	<th class="num">{% trans "Matches" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td class="wide-only">{{ obj.short_title|default:"&ndash;" }}</td>
+	<td class="num">{{ obj.matches.count }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}
+
+{% block row-buttons-extra %}
+	{% if obj.matches.exists %}
+		<form method="post" action="{{ obj.urls.undo }}" data-confirm="{% blocktrans with count=obj.matches.count %}The {{ count }} matches of “{{ obj }}”, and the results entered for them, will be removed for good.{% endblocktrans %}" data-confirm-title="{% trans "Undo this draw?" %}" data-confirm-label="{% trans "Undo draw" %}">
+			{% csrf_token %}
+			<button type="submit" class="button compact">{% icon "undo" %}<span>{% trans "Undo" %}</span></button>
+		</form>
+	{% else %}
+		<a class="button compact" href="{{ obj.urls.build }}">{% icon "play" %}<span>{% trans "Build" %}</span></a>
+	{% endif %}
+	{% url 'admin:fixja:reorder' 'stage:division' obj.pk "up" as up_url %}
+	{% url 'admin:fixja:reorder' 'stage:division' obj.pk "down" as down_url %}
+	{% include "tournamentcontrol/competition/admin/explorer/_reorder.inc.html" %}
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "touchtechnology/admin/explorer/edit.html" %}
+{% load common %}
+{% load cloudinary %}
+
+{% block form-fieldset %}
+	{% if object.image %}
+		<figure class="scoresheet">{% cloudinary object.image width="800" format="jpg" sign_url=True %}</figure>
+	{% endif %}
+	{{ block.super }}
+{% endblock form-fieldset %}

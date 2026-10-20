@@ -1,0 +1,57 @@
+{% load i18n admin admin_explorer %}
+<nav class="rail" id="rail" aria-label="{% trans "Explorer" %}">
+	<div class="rail-head">
+		<a class="brandmark" href="{% url 'admin:index' %}">
+			{% if brand.logo %}
+				<img src="{{ brand.logo|brand_logo_url }}" alt="{{ brand.name }}">
+			{% else %}
+				<span class="brand-tile" aria-hidden="true">{{ brand.name|initials }}</span>
+				<span class="brand-name">{{ brand.name }}</span>
+			{% endif %}
+		</a>
+		{% if tree %}
+			<button type="button" class="rail-close" aria-controls="rail">{% icon "x" %}<span class="visually-hidden">{% trans "Close the menu" %}</span></button>
+		{% endif %}
+	</div>
+
+	{% if tree %}
+		<div class="rail-scroll">
+			<a class="rail-home" href="{% url 'admin:index' %}"{% if request.path == "/admin/" %} aria-current="page"{% endif %}>{% icon "dashboard" %}<span>{% trans "Dashboard" %}</span></a>
+
+			<ul class="tree" role="list" data-endpoint="{% url 'admin:explorer' %}">
+				{% include "touchtechnology/admin/explorer/explorer/nodes.html" with nodes=tree.roots %}
+			</ul>
+
+			<div class="areas">
+				<h2 class="rail-heading">{% trans "Areas" %}</h2>
+				<ul role="list">
+					{% for node in tree.roots %}
+						<li><a class="area{% if node.on_trail %} on-trail{% endif %}" href="{{ node.url }}">{% icon node.icon %}<span>{{ node.label }}</span></a></li>
+					{% endfor %}
+				</ul>
+			</div>
+
+			{% if tree.drill_key %}
+				<div class="drill" id="drill" data-endpoint="{% url 'admin:explorer' %}" data-trail="{{ tree.trail|join:" " }}" aria-live="polite">
+					{% include "touchtechnology/admin/explorer/explorer/drill.html" %}
+				</div>
+			{% endif %}
+		</div>
+
+		<div class="rail-foot">
+			<span class="avatar" aria-hidden="true">{{ user|initials }}</span>
+			<span class="who">
+				<strong>{{ user.get_full_name|default:user.get_username }}</strong>
+				{% if user.email %}<small>{{ user.email }}</small>{% endif %}
+			</span>
+			{% if user.is_superuser %}
+				<a class="foot-button" href="{% url 'admin:settings:index' %}" title="{% trans "Settings" %}">{% icon "settings" %}<span class="visually-hidden">{% trans "Settings" %}</span></a>
+			{% endif %}
+			{# The sign-out view only accepts POST. #}
+			<form method="post" action="{% url 'admin:logout' %}" class="sign-out">
+				{% csrf_token %}
+				<button type="submit" class="foot-button" title="{% trans "Sign out" %}">{% icon "logout" %}<span class="foot-label">{% trans "Sign out" %}</span></button>
+			</form>
+		</div>
+	{% endif %}
+</nav>

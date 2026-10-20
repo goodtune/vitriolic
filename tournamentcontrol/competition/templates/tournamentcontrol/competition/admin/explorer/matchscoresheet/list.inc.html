@@ -1,0 +1,12 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n cloudinary %}
+
+{% block table-headings %}
+	<th>{% trans "Image" %}</th>
+	<th>{% trans "Score sheet" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td class="thumb">{% cloudinary obj.image crop="thumb" zoom="0.50" width=105 height=150 format="jpg" sign_url=True %}</td>
+	{{ block.super }}
+{% endblock %}

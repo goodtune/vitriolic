@@ -1,0 +1,32 @@
+{% extends "touchtechnology/admin/explorer/form_page.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block page_title %}{% blocktrans with provider=backend.name %}Synchronise with {{ provider }}{% endblocktrans %}{% endblock %}
+{% block page_kind %}{{ season }}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "refresh" %}</span>{% endblock %}
+
+{% block form-actions %}
+	<div class="form-buttons">
+		<a class="button" href="{{ cancel_url }}">{% trans "Cancel" %}</a>
+		<button type="submit" form="edit-form" class="button primary">{% icon "refresh" %}<span>{% trans "Synchronise now" %}</span></button>
+	</div>
+{% endblock %}
+
+{% block form-body %}
+	<p>{% blocktrans with provider=backend.name %}Fetch the current competitions, teams, fixtures and results from {{ provider }} and update this season to match. {{ provider }} is authoritative: divisions, teams and matches that it manages will be created, updated or removed to reflect what it publishes.{% endblocktrans %}</p>
+	<dl class="facts"><dt>{% trans "Source" %}</dt><dd><a href="{{ season.upstream_url }}" target="_blank" rel="noopener">{{ season.upstream_url }}</a></dd></dl>
+
+	{% if renamed_divisions or renamed_teams %}
+		<div class="notice upstream-renamed">
+			<p>{% blocktrans with provider=backend.name %}{{ provider }} has renamed the following records since their names were last reconciled. Their local names are kept by the synchronisation; edit each one to accept the new name or to acknowledge the change and keep yours.{% endblocktrans %}</p>
+			<ul>
+				{% for division in renamed_divisions %}
+					<li><a href="{{ division.urls.edit }}">{{ division.title }}</a> &mdash; {% blocktrans with was=division.upstream_title_synced now=division.upstream_title provider=backend.name %}was &ldquo;{{ was }}&rdquo;, now &ldquo;{{ now }}&rdquo; on {{ provider }}{% endblocktrans %}</li>
+				{% endfor %}
+				{% for team in renamed_teams %}
+					<li><a href="{{ team.urls.edit }}">{{ team.title }}</a> ({{ team.division.title }}) &mdash; {% blocktrans with was=team.upstream_title_synced now=team.upstream_title provider=backend.name %}was &ldquo;{{ was }}&rdquo;, now &ldquo;{{ now }}&rdquo; on {{ provider }}{% endblocktrans %}</li>
+				{% endfor %}
+			</ul>
+		</div>
+	{% endif %}
+{% endblock %}

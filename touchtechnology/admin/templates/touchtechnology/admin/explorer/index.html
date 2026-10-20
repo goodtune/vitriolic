@@ -1,0 +1,22 @@
+{% extends "touchtechnology/admin/explorer/base.html" %}
+{% load i18n dashboard admin admin_explorer %}
+
+{% block page_title %}{% trans "Dashboard" %}{% endblock %}
+{% block page_kind %}{% blocktrans with name=user.first_name|default:user.get_username %}Good to see you, {{ name }}. Here is what is waiting.{% endblocktrans %}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "dashboard" %}</span>{% endblock %}
+
+{% block content %}
+	<div class="cards">
+		<section class="card wide">
+			<h2>{% icon "tree" %}{% trans "Everything you manage" %}</h2>
+			<ul class="folder-view">
+				{% for node in tree.roots %}
+					<li><a href="{{ node.url }}">{% icon node.icon %}<span>{{ node.label }}<small>{% for child in node.children|slice:":4" %}{{ child.label }}{% if not forloop.last %}, {% endif %}{% endfor %}</small></span></a></li>
+				{% endfor %}
+			</ul>
+		</section>
+		{% for widget in admin.dashboard %}
+			{% render widget %}
+		{% endfor %}
+	</div>
+{% endblock %}

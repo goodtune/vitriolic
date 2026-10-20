@@ -1,0 +1,26 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n common admin admin_explorer %}
+
+{% block table-headings %}
+	<th>{% trans "Language" %}</th>
+	<th class="wide-only">{% trans "Headline" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td class="title-cell">
+		{% if change_perm in object_perms %}
+			<a href="{{ obj.urls.edit }}">{% icon "translation" %}<span>{{ obj.locale|language_name }}</span></a>
+		{% else %}
+			<span>{{ obj.locale|language_name }}</span>
+		{% endif %}
+		<span class="tag">{{ obj.locale }}</span>
+	</td>
+	<td class="wide-only">{{ obj.headline }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}3{% endblock %}
+
+{% block row-buttons-items %}
+	<a href="{{ obj.get_absolute_url }}" target="_blank">{% icon "external" %}{% trans "View on the site" %}</a>
+	{{ block.super }}
+{% endblock row-buttons-items %}

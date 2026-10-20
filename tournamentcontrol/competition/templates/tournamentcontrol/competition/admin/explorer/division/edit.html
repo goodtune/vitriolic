@@ -1,0 +1,75 @@
+{% extends "touchtechnology/admin/explorer/edit.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block object-actions %}
+	{% if object.pk %}
+		<a class="button quiet" href="{% url 'admin:fixja:competition:season:division:scorers' object.season.competition_id object.season_id object.pk %}">{% icon "chart" %}<span>{% trans "Leaders" %}</span></a>
+		<a class="button quiet" href="{% url 'admin:fixja:competition:season:division:export-json' object.season.competition_id object.season_id object.pk %}">{% icon "download" %}<span>{% trans "Export" %}</span></a>
+	{% endif %}
+	{{ block.super }}
+{% endblock %}
+
+{% block tab-links %}
+	{{ block.super }}
+	{% if object.pk %}
+		<a class="tab" role="tab" id="ladder-tab-link" href="#ladder-tab" aria-controls="ladder-tab" aria-selected="false" tabindex="-1">{% icon "ladder" %}<span>{% trans "Ladder" %}</span></a>
+	{% endif %}
+{% endblock %}
+
+{% block tab-panes %}
+	{{ block.super }}
+	{% if object.pk %}
+		<section class="pane" data-tab-panel role="tabpanel" id="ladder-tab" aria-labelledby="ladder-tab-link">
+			{% for stage in object.stages.all %}
+				{% with rows=stage.ladder_summary.all %}
+					{% if rows %}
+						{% regroup rows by stage_group as pools %}
+						{% for pool in pools %}
+							<section class="slot">
+								<h2 class="slot-head">{% icon "stage" %}{{ stage.title }}{% if pool.grouper %} <span class="muted">{{ pool.grouper.title }}</span>{% endif %}</h2>
+								<div class="table-wrap">
+									<table class="listing ladder-table">
+										<thead>
+											<tr>
+												<th class="num">#</th>
+												<th>{% trans "Team" %}</th>
+												<th class="num"><abbr title="{% trans "Played" %}">P</abbr></th>
+												<th class="num"><abbr title="{% trans "Won" %}">W</abbr></th>
+												<th class="num"><abbr title="{% trans "Drawn" %}">D</abbr></th>
+												<th class="num"><abbr title="{% trans "Lost" %}">L</abbr></th>
+												<th class="num wide-only"><abbr title="{% trans "Byes" %}">B</abbr></th>
+												<th class="num wide-only"><abbr title="{% trans "Scored" %}">For</abbr></th>
+												<th class="num wide-only"><abbr title="{% trans "Conceded" %}">Ag</abbr></th>
+												<th class="num"><abbr title="{% trans "Difference" %}">+/&minus;</abbr></th>
+												<th class="num"><abbr title="{% trans "Points" %}">Pts</abbr></th>
+											</tr>
+										</thead>
+										<tbody>
+											{% for row in pool.list %}
+												<tr>
+													<td class="num muted">{{ forloop.counter }}</td>
+													<td><a href="{{ row.team.urls.edit }}">{{ row.team }}</a></td>
+													<td class="num">{{ row.played }}</td>
+													<td class="num">{{ row.win }}</td>
+													<td class="num">{{ row.draw }}</td>
+													<td class="num">{{ row.loss }}</td>
+													<td class="num wide-only">{{ row.bye }}</td>
+													<td class="num wide-only">{{ row.score_for }}</td>
+													<td class="num wide-only">{{ row.score_against }}</td>
+													<td class="num">{{ row.difference|floatformat:"0" }}</td>
+													<td class="num strong">{{ row.points|floatformat:"-2" }}</td>
+												</tr>
+											{% endfor %}
+										</tbody>
+									</table>
+								</div>
+							</section>
+						{% endfor %}
+					{% endif %}
+				{% endwith %}
+			{% empty %}
+				<p class="empty-state">{% trans "The ladder fills in as results are entered." %}</p>
+			{% endfor %}
+		</section>
+	{% endif %}
+{% endblock %}

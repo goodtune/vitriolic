@@ -1,0 +1,27 @@
+{% extends "touchtechnology/admin/explorer/edit.html" %}
+{% load i18n admin admin_explorer %}
+
+{# A deployment's own template for one model, built on the admin shell. It adds a tab to the shell's tab list and a pane to its tab content, and leaves everything else to the shell. #}
+
+{% block tab-links %}
+	{{ block.super }}
+	{% if object.pk %}
+		{% include "touchtechnology/admin/explorer/_tab.html" with name="timeline" label=_("Timeline") icon="season" %}
+	{% endif %}
+{% endblock tab-links %}
+
+{% block tab-panes %}
+	{{ block.super }}
+	{% if object.pk %}
+		<section class="pane" data-tab-panel role="tabpanel" id="timeline-tab" aria-labelledby="timeline-tab-link">
+			<h2>{% trans "Timeline" %}</h2>
+			<ol class="timeline">
+				{% for enrolment in object.enrolments.all %}
+					<li><a href="{{ enrolment.urls.edit }}">{{ enrolment.class_group.title }} ({{ enrolment.class_group.year }})</a></li>
+				{% empty %}
+					<li class="muted">{% trans "Not enrolled in any class yet." %}</li>
+				{% endfor %}
+			</ol>
+		</section>
+	{% endif %}
+{% endblock tab-panes %}

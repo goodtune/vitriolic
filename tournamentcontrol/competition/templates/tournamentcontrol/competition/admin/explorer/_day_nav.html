@@ -1,0 +1,41 @@
+{% load i18n admin admin_explorer %}
+{% comment %}
+The tools of one match day, and the way to the day before and after. Every
+page of a day includes it, naming itself in ``day_page``.
+{% endcomment %}
+{% with days=season.matches|dates_of:"date" ymd=date|date:"Ymd" %}{% adjacent days date as near %}
+<div class="day-nav">
+	<nav class="day-switch" aria-label="{% trans "Match days" %}">
+		{% if near.previous %}
+			{% url day_url competition.pk season.pk near.previous|date:"Ymd" as previous_url %}
+			<a class="button quiet icon-only" href="{{ previous_url }}" rel="prev">{% icon "chevron-left" %}<span class="visually-hidden">{% blocktrans with day=near.previous|date:"j F" %}The day before, {{ day }}{% endblocktrans %}</span></a>
+		{% else %}
+			<span class="button quiet icon-only" aria-hidden="true" disabled>{% icon "chevron-left" %}</span>
+		{% endif %}
+		<label class="visually-hidden" for="day-switch">{% trans "Match day" %}</label>
+		<select id="day-switch" data-navigate data-picker="off">
+			{% for day in days %}
+				{% url day_url competition.pk season.pk day|date:"Ymd" as day_url_value %}
+				<option value="{{ day_url_value }}"{% if day == date %} selected{% endif %}>{{ day|date:"D j M Y" }}</option>
+			{% endfor %}
+		</select>
+		{% if near.next %}
+			{% url day_url competition.pk season.pk near.next|date:"Ymd" as next_url %}
+			<a class="button quiet icon-only" href="{{ next_url }}" rel="next">{% icon "chevron-right" %}<span class="visually-hidden">{% blocktrans with day=near.next|date:"j F" %}The day after, {{ day }}{% endblocktrans %}</span></a>
+		{% else %}
+			<span class="button quiet icon-only" aria-hidden="true" disabled>{% icon "chevron-right" %}</span>
+		{% endif %}
+	</nav>
+	<nav class="tabs day-tabs" aria-label="{% trans "This match day" %}">
+		<a class="tab" href="{% url 'admin:fixja:match-results' competition.pk season.pk ymd %}"{% if day_page == "results" %} aria-current="page"{% endif %}>{% icon "results" %}<span>{% trans "Results" %}</span></a>
+		<a class="tab" href="{% url 'admin:fixja:match-schedule' competition.pk season.pk ymd %}"{% if day_page == "schedule" %} aria-current="page"{% endif %}>{% icon "allocate" %}<span>{% trans "Allocate" %}</span></a>
+		<a class="tab" href="{% url 'admin:fixja:match-washout' competition.pk season.pk ymd %}"{% if day_page == "washout" %} aria-current="page"{% endif %}>{% icon "umbrella" %}<span>{% trans "Washout" %}</span></a>
+		<a class="tab" href="{% url 'admin:fixja:match-live-stream' competition.pk season.pk ymd %}"{% if day_page == "live-stream" %} aria-current="page"{% endif %}>{% icon "video" %}<span>{% trans "Live stream" %}</span></a>
+		<span class="tab-gap"></span>
+		<a class="tab" href="{% url 'admin:fixja:match-runsheet' competition.pk season.pk ymd %}">{% icon "clock" %}<span>{% trans "Run sheet" %}</span></a>
+		<a class="tab" href="{% url 'admin:fixja:match-grid' competition.pk season.pk ymd "html" %}">{% icon "stagegroup" %}<span>{% trans "Matrix" %}</span></a>
+		<a class="tab" href="{% url 'admin:fixja:scorecards' competition.pk season.pk ymd "pdf" %}">{% icon "print" %}<span>{% trans "Scorecards" %}</span></a>
+		<a class="tab" href="{% url 'admin:fixja:match-visual-schedule' competition.pk season.pk ymd %}" target="_blank">{% icon "external" %}<span>{% trans "Visual scheduler" %}</span></a>
+	</nav>
+</div>
+{% endwith %}

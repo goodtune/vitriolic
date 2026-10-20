@@ -1,0 +1,5 @@
+{% if tree.trail|length <= 1 %}{% for root in tree.roots %}{% if root.on_trail and root.children|length > 1 %}
+<nav class="sections" aria-label="{{ root.label }}">
+	{% for section in root.children %}<a href="{{ section.url }}"{% if section.on_trail %} aria-current="page"{% endif %}>{{ section.label }}</a>{% endfor %}
+</nav>
+{% endif %}{% endfor %}{% endif %}

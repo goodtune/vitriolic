@@ -1,0 +1,20 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n common admin admin_explorer %}
+
+{% block table-headings %}
+	<th>{% trans "Category" %}</th>
+	<th class="num">{% trans "Articles" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td class="title-cell">
+		{% if change_perm in object_perms %}
+			<a href="{{ obj.urls.edit }}">{% icon "category" %}<span>{{ obj }}</span></a>
+		{% else %}
+			<span>{{ obj }}</span>
+		{% endif %}
+	</td>
+	<td class="num">{{ obj.article_set.count }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}3{% endblock %}

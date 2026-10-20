@@ -1,0 +1,55 @@
+{% extends "touchtechnology/admin/explorer/form_page.html" %}
+{% load i18n tz common admin admin_explorer %}
+
+{% block page_title %}{{ match }}{% endblock %}
+{% block page_kind %}{% with tz=match.play_at.timezone|default:match.stage.division.season.timezone %}{{ match.stage.division }} &ndash; {{ match.datetime|timezone:tz|date:"l j F Y, g:i a" }}{% endwith %}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "chart" %}</span>{% endblock %}
+{% block cancel-url %}{{ match.urls.edit }}{% endblock %}
+
+{% block form-body %}
+	<p class="muted">{% trans "Who played, who scored, and the most valuable player votes." %}</p>
+	<div class="cards">
+		{% for formset in formsets %}
+			{{ formset.management_form }}
+			{% with team=formset.queryset.team %}
+				<section class="card">
+					<h2>{% icon "team" %}{{ team.title }}</h2>
+					{% if not formset.is_valid and formset.non_form_errors %}
+						<div class="form-errors" role="alert">{% icon "alert" %}<ul>{% for error in formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>
+					{% endif %}
+					<div class="table-wrap">
+						<table class="listing stats-table">
+							<thead>
+								<tr>
+									<th class="num">#</th>
+									<th>{% trans "Player" %}</th>
+									<th>{% trans "Played" %}</th>
+									<th>{% trans "Points" %}</th>
+									<th>{% trans "MVP" %}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{% for form in formset %}
+									{% with player=form.instance.player %}
+										<tr{% if form.errors %} class="has-errors"{% endif %}>
+											<td class="num">{{ form.number|widget }}</td>
+											<td>
+												{{ player.first_name }} {{ player.last_name }}
+												{% if form.errors %}<ul class="field-errors">{% for field, errors in form.errors.items %}{% for msg in errors %}<li>{{ msg }}</li>{% endfor %}{% endfor %}</ul>{% endif %}
+											</td>
+											<td>{{ form.played|widget }}</td>
+											<td>{{ form.points|widget }}</td>
+											<td>{{ form.id }}{% if form.mvp %}{{ form.mvp|widget }}{% else %}&ndash;{% endif %}</td>
+										</tr>
+									{% endwith %}
+								{% empty %}
+									<tr><td colspan="5" class="empty-state">{% trans "No player is registered in this team." %}</td></tr>
+								{% endfor %}
+							</tbody>
+						</table>
+					</div>
+				</section>
+			{% endwith %}
+		{% endfor %}
+	</div>
+{% endblock %}

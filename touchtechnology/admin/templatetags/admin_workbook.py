@@ -16,13 +16,13 @@ from django import template
 from django.http import QueryDict
 from django.templatetags.static import static
 from django.urls import NoReverseMatch, reverse
-from django.utils.encoding import smart_str
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 from touchtechnology.admin.explorer import build_tree
+from touchtechnology.admin.helpers import admin_media as _admin_media
+from touchtechnology.admin.helpers import initials as _initials
 from touchtechnology.admin.trail import build_trail
-from touchtechnology.admin.widgets import admin_media as _admin_media
 from touchtechnology.admin.widgets import kind_of, render_field
 
 register = template.Library()
@@ -144,15 +144,7 @@ def is_saved(instance):
 @register.filter
 def initials(user):
     """Up to two letters for ``user``: their initials, or their user name's first."""
-    if user is None:
-        return "?"
-    first = getattr(user, "first_name", "") or ""
-    last = getattr(user, "last_name", "") or ""
-    letters = (first[:1] + last[:1]).upper()
-    if letters:
-        return letters
-    name = smart_str(getattr(user, "get_username", lambda: "")() or "?")
-    return name[:2].upper()
+    return _initials(user, single=2)
 
 
 @register.inclusion_tag("touchtechnology/admin/workbook/_nav.html", takes_context=True)

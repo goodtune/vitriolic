@@ -86,6 +86,7 @@ WORKBOOK_ICONS = MappingProxyType(
         # A section of a component's menu is drawn with its model's icon.
         "section": "model",
         "item": "file",
+        "kinds": MappingProxyType({"page": "file"}),
         "more": "ellipsis",
         "folder": "folder",
     }
@@ -110,6 +111,7 @@ EXPLORER_ICONS = MappingProxyType(
         "model": None,
         "section": "menu",
         "item": "item",
+        "kinds": MappingProxyType({"page": "page"}),
         "more": "more",
         "folder": "folder",
     }

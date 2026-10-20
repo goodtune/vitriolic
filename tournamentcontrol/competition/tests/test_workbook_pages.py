@@ -8,8 +8,9 @@ import datetime
 
 from test_plus import TestCase
 
+from touchtechnology.admin.tests.shells import per_shell
 from touchtechnology.common.tests.factories import UserFactory
-from tournamentcontrol.competition.admin import division_checklist, season_checklist
+from tournamentcontrol.competition.admin import division_setup, season_checklist
 from tournamentcontrol.competition.tests import factories
 
 ICON = (
@@ -24,12 +25,13 @@ def step_html(number, title, url, note, state=""):
     said = "Done:" if state == "is-done" else "To do:"
     return (
         f'<li class="wb-step {state}"><span class="wb-step-mark" aria-hidden="true">'
-        f"{mark}</span><span class=\"wb-step-body\"><span class=\"wb-step-title\">"
+        f'{mark}</span><span class="wb-step-body"><span class="wb-step-title">'
         f'<a href="{url}">{title}</a></span><span class="wb-step-note">'
         f'<span class="wb-sr">{said} </span>{note}</span></span></li>'
     )
 
 
+@per_shell(shells=("workbook",))
 class SeasonChecklistTests(TestCase):
     def setUp(self):
         super().setUp()
@@ -44,7 +46,7 @@ class SeasonChecklistTests(TestCase):
     def test_the_next_step_is_the_first_one_not_done(self):
         checklist = season_checklist(self.season)
         self.assertEqual(
-            [(step["key"], step["done"]) for step in checklist["steps"]],
+            [(step.key, step.done) for step in checklist.steps],
             [
                 ("details", True),
                 ("timeslots", False),
@@ -57,16 +59,14 @@ class SeasonChecklistTests(TestCase):
                 ("results", False),
             ],
         )
-        self.assertEqual(checklist["next"]["key"], "timeslots")
+        self.assertEqual(checklist.next_step.key, "timeslots")
         # The dates set aside are optional: they do not count.
-        self.assertEqual((checklist["done"], checklist["total"]), (2, 8))
+        self.assertEqual((checklist.done, checklist.total), (2, 8))
 
     def test_a_division_without_teams_is_named_and_linked(self):
-        step = season_checklist(self.season)["steps"][5]
-        self.assertEqual(step["note"], "Mixed Open needs teams")
-        self.assertEqual(
-            step["url"], "%s#teams-tab" % self.division.urls["edit"]
-        )
+        step = season_checklist(self.season).steps[5]
+        self.assertEqual(step.detail, "Mixed Open needs teams")
+        self.assertEqual(step.url, "%s#teams-tab" % self.division.urls["edit"])
 
     def test_the_season_page_shows_the_checklist(self):
         with self.login(self.superuser):
@@ -101,6 +101,7 @@ class SeasonChecklistTests(TestCase):
         )
 
 
+@per_shell(shells=("workbook",))
 class DivisionPageTests(TestCase):
     def setUp(self):
         super().setUp()
@@ -117,9 +118,9 @@ class DivisionPageTests(TestCase):
 
     def test_a_division_needs_its_points_before_results(self):
         self.division.points_formula = None
-        steps = division_checklist(self.division)["steps"]
+        steps = division_setup(self.division).steps
         self.assertEqual(
-            (steps[0]["key"], steps[0]["done"], steps[0]["note"]),
+            (steps[0].key, steps[0].done, steps[0].detail),
             ("points", False, "Needed before results can be saved"),
         )
 
@@ -143,8 +144,10 @@ class DivisionPageTests(TestCase):
         )
         ladder = self.get_context("ladders")
         self.assertEqual(
-            [(stage, [[row.team for row in rows] for pool, rows in pools])
-             for stage, pools in ladder],
+            [
+                (stage, [[row.team for row in rows] for pool, rows in pools])
+                for stage, pools in ladder
+            ],
             [(self.stage, [[first, second]])],
         )
 
@@ -163,6 +166,7 @@ class DivisionPageTests(TestCase):
         )
 
 
+@per_shell(shells=("workbook",))
 class HubTests(TestCase):
     def setUp(self):
         super().setUp()
@@ -177,6 +181,7 @@ class HubTests(TestCase):
         )
 
 
+@per_shell(shells=("workbook",))
 class ReturnTests(TestCase):
     """Saving a day's results or allocation returns to the season's match days."""
 
@@ -208,7 +213,7 @@ class ReturnTests(TestCase):
         )
 
 
-
+@per_shell(shells=("workbook",))
 class ClubOfficialsTests(TestCase):
     """A club's page lists its officials and adds another from the tab."""
 
@@ -224,7 +229,10 @@ class ClubOfficialsTests(TestCase):
         self.assertResponseContains(
             '<a class="wb-button wb-button-primary wb-button-small" href="%s">'
             "%sAdd Official</a>"
-            % (self.reverse("admin:fixja:club:clubassociation:add", self.club.pk), ICON % "plus"),
+            % (
+                self.reverse("admin:fixja:club:clubassociation:add", self.club.pk),
+                ICON % "plus",
+            ),
             html=True,
         )
 
@@ -245,6 +253,7 @@ class ClubOfficialsTests(TestCase):
         )
 
 
+@per_shell(shells=("workbook",))
 class TreeTests(TestCase):
     """
     The tree in the rail: the page's own component opened down to where the

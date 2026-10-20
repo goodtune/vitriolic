@@ -1,0 +1,38 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n common admin admin_explorer %}
+
+{% block table-headings %}
+	<th>{% trans "Name" %}</th>
+	{# Registered is the first to go on a narrow screen, last login is kept #}
+	<th class="wide-only">{% trans "Registered" %}</th>
+	<th>{% trans "Last login" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td class="title-cell">
+		{% if change_perm in object_perms %}
+			<a href="{% url 'admin:auth:users:edit' obj.pk %}"><span class="avatar" aria-hidden="true">{{ obj|initials }}</span><span>{{ obj.get_full_name|default:obj.get_username }}</span></a>
+		{% else %}
+			<span class="avatar" aria-hidden="true">{{ obj|initials }}</span> {{ obj.get_full_name|default:obj.get_username }}
+		{% endif %}
+	</td>
+	<td class="wide-only">{{ obj.date_joined|date:"j M Y" }}</td>
+	<td>{% if obj.last_login %}{{ obj.last_login|date:"j M Y" }}{% else %}{% trans "Never" %}{% endif %}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}
+
+{% block row-buttons-items %}
+	{% if change_perm in object_perms %}
+		<a href="{% url 'admin:auth:users:edit' obj.pk %}">{% icon "edit" %}{% trans "Edit" %}</a>
+	{% endif %}
+	{% if add_perm in object_perms %}
+		<a href="{% url 'admin:auth:users:perms' obj.pk %}">{% icon "lock" %}{% trans "Permissions" %}</a>
+	{% endif %}
+	{% if delete_perm in object_perms %}
+		<form method="post" action="{% url 'admin:auth:users:delete' obj.pk %}" data-confirm="{% blocktrans with name=obj.get_full_name|default:obj.get_username %}The account of {{ name }} will be removed for good.{% endblocktrans %}" data-confirm-label="{% trans "Delete" %}">
+			{% csrf_token %}
+			<button type="submit" class="destructive-item">{% icon "trash" %}{% trans "Delete" %}</button>
+		</form>
+	{% endif %}
+{% endblock %}

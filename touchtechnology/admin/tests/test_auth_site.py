@@ -57,24 +57,25 @@ class AuthSiteUserTests(TestCase):
         with self.login(self.superuser):
             self.get("admin:auth:users:list")
             self.response_200()
-            self.assertResponseContains(
-                '<th scope="col" class="wb-hide-narrow">Registered</th>', html=True
-            )
-            self.assertResponseContains('<th scope="col">Last login</th>', html=True)
-            self.assertResponseContains(
-                '<td class="wb-hide-narrow" data-label="Registered">10 Jul 2018</td>',
-                html=True,
-            )
-            self.assertResponseContains(
-                '<td data-label="Last login">19 Sep 2026</td>', html=True
-            )
-            self.assertResponseContains(
-                '<td class="wb-hide-narrow" data-label="Registered">3 Sep 2026</td>',
-                html=True,
-            )
-            self.assertResponseContains(
-                '<td data-label="Last login">Never</td>', html=True
-            )
+            for fragment in self.by_shell(
+                workbook=(
+                    '<th scope="col" class="wb-hide-narrow">Registered</th>',
+                    '<th scope="col">Last login</th>',
+                    '<td class="wb-hide-narrow" data-label="Registered">10 Jul 2018</td>',
+                    '<td data-label="Last login">19 Sep 2026</td>',
+                    '<td class="wb-hide-narrow" data-label="Registered">3 Sep 2026</td>',
+                    '<td data-label="Last login">Never</td>',
+                ),
+                explorer=(
+                    '<th class="wide-only">Registered</th>',
+                    "<th>Last login</th>",
+                    '<td class="wide-only">10 Jul 2018</td>',
+                    "<td>19 Sep 2026</td>",
+                    '<td class="wide-only">3 Sep 2026</td>',
+                    "<td>Never</td>",
+                ),
+            ):
+                self.assertResponseContains(fragment, html=True)
 
     def test_user_create(self):
         self.get_generic_200(

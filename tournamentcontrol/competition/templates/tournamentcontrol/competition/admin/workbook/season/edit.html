@@ -9,7 +9,7 @@
 
 {% block head-actions %}
 	{% if object.pk %}
-		{% for step in checklist.steps %}{% if step.key == "results" and not step.done and step.url|slice:":1" == "/" and "#" not in step.url %}
+		{% for step in setup.steps %}{% if step.key == "results" and not step.done and step.url|slice:":1" == "/" and "#" not in step.url %}
 			<a class="wb-button wb-button-primary" href="{{ step.url }}">{% icon "list-checks" %}{% trans "Enter results" %}</a>
 		{% endif %}{% endfor %}
 		<a class="wb-button" href="{% url 'admin:fixja:competition:season:report' object.competition.pk object.pk %}">{% icon "printer" %}{% trans "Season report" %}</a>
@@ -39,7 +39,7 @@
 	{% if object.pk %}
 		<aside class="wb-aside" aria-label="{% trans "Season set-up" %}">
 			{% trans "Season set-up" as title %}
-			{% include "touchtechnology/admin/workbook/_checklist.html" with checklist=checklist title=title %}
+			{% include "touchtechnology/admin/workbook/_checklist.html" with checklist=setup title=title %}
 		</aside>
 	{% endif %}
 {% endblock %}

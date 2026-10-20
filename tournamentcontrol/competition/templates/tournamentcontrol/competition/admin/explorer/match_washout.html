@@ -1,0 +1,28 @@
+{% extends "touchtechnology/admin/explorer/form_page.html" %}
+{% load i18n common admin admin_explorer %}
+
+{% block page_title %}{% trans "Washout" %}{% endblock %}
+{% block page_kind %}{{ date|date:"l j F Y" }}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "umbrella" %}</span>{% endblock %}
+{% block cancel-url %}{{ season.urls.edit }}#schedule-tab{% endblock %}
+{% block page_nav %}{% include "tournamentcontrol/competition/admin/explorer/_day_nav.html" with day_url="admin:fixja:match-washout" day_page="washout" %}{% endblock %}
+
+{% block form-body %}
+	{{ formset.management_form }}
+	<p class="muted">{% trans "Mark every match cancelled because a ground was closed." %}</p>
+	{% regroup formset.forms by instance.stage.division as grouped %}
+	{% for group in grouped %}
+		<fieldset class="slot">
+			<legend class="slot-head">{% icon "division" %}{{ group.grouper }}</legend>
+			<ul class="check-list">
+				{% for form in group.list %}
+					{% with match=form.instance %}
+						<li class="bye">{{ form.id }}<label for="{{ form.is_washout.id_for_label }}">{{ match|safe }}{% if match.time %} <small class="muted">{{ match.time|time }}{% if match.play_at %}, {{ match.play_at.title }}{% endif %}</small>{% endif %}</label>{{ form.is_washout|widget }}</li>
+					{% endwith %}
+				{% endfor %}
+			</ul>
+		</fieldset>
+	{% empty %}
+		<p class="empty-state">{% trans "Every match on this day has been played or decided." %}</p>
+	{% endfor %}
+{% endblock %}

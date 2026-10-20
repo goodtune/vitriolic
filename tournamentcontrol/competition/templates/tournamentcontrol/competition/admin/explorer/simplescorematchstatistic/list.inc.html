@@ -1,0 +1,24 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	<th>{% trans "Date" %}</th>
+	<th class="wide-only">{% trans "Competition" %}</th>
+	<th>{% trans "Division" %}</th>
+	<th>{% trans "Match" %}</th>
+	<th>{% trans "Played" %}</th>
+	<th class="num">{% trans "Points" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td class="nowrap">{{ obj.match.datetime|date:"j M Y" }}</td>
+	<td class="wide-only">{{ obj.match.stage.division.season.competition }}</td>
+	<td>{{ obj.match.stage.division }}</td>
+	<td>{{ obj.match }}</td>
+	<td>{{ obj.played|yesno|capfirst }}</td>
+	<td class="num">{{ obj.points|default:0 }}</td>
+{% endblock %}
+
+{% block actions %}{% endblock %}
+{% block row-buttons %}{% endblock %}
+{% block table-row-empty %}{% endblock %}

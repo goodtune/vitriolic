@@ -27,7 +27,7 @@
 	{% if object.pk %}
 		<aside class="wb-aside" aria-label="{% trans "Division set-up" %}">
 			{% trans "Division set-up" as title %}
-			{% include "touchtechnology/admin/workbook/_checklist.html" with checklist=checklist title=title %}
+			{% include "touchtechnology/admin/workbook/_checklist.html" with checklist=division_setup title=title %}
 		</aside>
 	{% endif %}
 {% endblock %}

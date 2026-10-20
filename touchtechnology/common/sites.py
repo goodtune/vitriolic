@@ -208,6 +208,9 @@ class Application(object):
         extra_context.update(
             {
                 "model": model,
+                # The object the permissions are of, so the page can say where
+                # it is in the admin.
+                "object": instance,
             }
         )
 

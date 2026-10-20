@@ -2,7 +2,7 @@
 # Screenshot every admin page of a running server at each width, record the
 # flow, and take the flow's rows out of the database again.
 #   shots.sh --name <name> [--base http://127.0.0.1:PORT] [--brand B]
-#            [--htmx-tabs] [--widths 1440,390] [--height 900] [--only a,b]
+#            [--shell S] [--htmx-tabs] [--widths 1440,390] [--height 900] [--only a,b]
 #            [--no-video] [--contact] [--out DIR]
 # The server's pid file, which serve.sh wrote, is the authority for the brand
 # and for whether tabs load over HTMX: a --brand that disagrees with it is
@@ -21,13 +21,14 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() {
-    echo "usage: shots.sh --name <name> [--base URL] [--brand B] [--htmx-tabs] [--widths 1440,390] [--height 900] [--only a,b] [--no-video] [--contact] [--out DIR]" >&2
+    echo "usage: shots.sh --name <name> [--base URL] [--brand B] [--shell S] [--htmx-tabs] [--widths 1440,390] [--height 900] [--only a,b] [--no-video] [--contact] [--out DIR]" >&2
     exit 64
 }
 
 raw_name=""
 base=""
 brand=""
+shell=""
 htmx_flag=""
 widths="1440,390"
 height=900
@@ -40,6 +41,7 @@ while [ "$#" -gt 0 ]; do
         --name) [ "$#" -ge 2 ] || usage; raw_name="$2"; shift 2 ;;
         --base) [ "$#" -ge 2 ] || usage; base="$2"; shift 2 ;;
         --brand) [ "$#" -ge 2 ] || usage; brand="$2"; shift 2 ;;
+        --shell) [ "$#" -ge 2 ] || usage; shell="$2"; shift 2 ;;
         --widths) [ "$#" -ge 2 ] || usage; widths="$2"; shift 2 ;;
         --height) [ "$#" -ge 2 ] || usage; height="$2"; shift 2 ;;
         --only) [ "$#" -ge 2 ] || usage; only="$2"; shift 2 ;;
@@ -97,6 +99,13 @@ if [ "$recorded" -eq 1 ]; then
     server_brand="$(pidfile_value brand)"
     server_htmx="$(pidfile_value htmx_tabs)"
     server_htmx="${server_htmx:-0}"
+    server_shell="$(pidfile_value shell)"
+    server_shell="${server_shell:-workbook}"
+    if [ -n "$shell" ] && [ "$shell" != "$server_shell" ]; then
+        echo "shots.sh: --shell $shell disagrees with the server on port $port, which was started with shell '$server_shell' (pid file $pidfile)" >&2
+        exit 64
+    fi
+    shell="$server_shell"
     if [ -n "$brand" ] && [ "$brand" != "$server_brand" ]; then
         echo "shots.sh: --brand $brand disagrees with the server on port $port, which was started with brand '$server_brand' (pid file $pidfile)" >&2
         exit 64
@@ -113,7 +122,15 @@ else
         exit 64
     fi
     htmx="${htmx_flag:-0}"
+    shell="${shell:-workbook}"
 fi
+case "$shell" in
+    workbook | explorer) ;;
+    *)
+        echo "shots.sh: the shell '$shell' is not a shell (workbook or explorer)" >&2
+        exit 64
+        ;;
+esac
 case "$brand" in
     '' | *[!a-z0-9_-]*)
         echo "shots.sh: the brand '$brand' is not a brand name" >&2
@@ -125,12 +142,12 @@ suffix=""
 if [ "$htmx" = "1" ]; then
     suffix="-htmx"
 fi
-run_dir="${out:-$var/run/$name/$brand$suffix}"
+run_dir="${out:-$var/run/$name/$brand-$shell$suffix}"
 
 # The pages come from the checkout's own admin site and the name's database.
-harness_env "$name" "$brand" "$htmx"
+harness_env "$name" "$brand" "$htmx" "$shell"
 
-shots=("$HARNESS_PYTHON" -m harness.shots --name "$name" --base "$base" --brand "$brand"
+shots=("$HARNESS_PYTHON" -m harness.shots --name "$name" --base "$base" --brand "$brand" --shell "$shell"
     --widths "$widths" --height "$height" --out "$run_dir")
 [ -z "$only" ] || shots+=(--only "$only")
 [ "$video" -eq 1 ] || shots+=(--no-video)

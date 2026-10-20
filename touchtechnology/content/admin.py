@@ -50,7 +50,7 @@ class ContentExplorer(Explorer):
     (After the Explorer entry.)
     """
 
-    ICONS = {"page": "file", "placeholder": "puzzle"}
+    ICONS = {"placeholder": "puzzle"}
 
     def _sitemap_index(self):
         url = str(self.component.reverse("index"))
@@ -72,7 +72,9 @@ class ContentExplorer(Explorer):
 
     def sitemap_nodes(self, request, parent):
         nodes = SitemapNode.objects.filter(self.component.filter, parent=parent)
-        return [self.sitemap_node(node) for node in nodes.select_related("content_type")]
+        return [
+            self.sitemap_node(node) for node in nodes.select_related("content_type")
+        ]
 
     def sitemap_node(self, node):
         kind = getattr(node.content_type, "name", None)
@@ -84,7 +86,7 @@ class ContentExplorer(Explorer):
             key=self.key("x:node:%d" % node.pk),
             label=node.title,
             url=url,
-            icon=self.ICONS.get(kind, "folder"),
+            icon=self.ICONS.get(kind) or self.shell.icons["kinds"].get(kind, "folder"),
             expandable=not node.is_leaf_node(),
         )
 
@@ -106,8 +108,7 @@ class ContentExplorer(Explorer):
             return super().trail(request, context)
         keys = [self.key("s%d" % index)]
         keys += [
-            self.key("x:node:%d" % n.pk)
-            for n in node.get_ancestors(include_self=True)
+            self.key("x:node:%d" % n.pk) for n in node.get_ancestors(include_self=True)
         ]
         return keys
 

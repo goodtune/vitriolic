@@ -198,11 +198,23 @@ def test_prepare_out_keeps_the_html_tab_runs_apart(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
-def test_runs_go_in_a_directory_for_the_brand_and_the_tab_mode(tmp_path, monkeypatch):
+def test_runs_go_in_a_directory_for_the_brand_shell_and_tab_mode(tmp_path, monkeypatch):
     monkeypatch.setenv("VITRIOLIC_HARNESS_VAR", str(tmp_path))
     runs = paths_for("rigtest")["runs"]
-    assert run_directory("rigtest", "forest", False) == runs / "forest"
-    assert run_directory("RigTest", "forest", True) == runs / "forest-htmx"
+    assert run_directory("rigtest", "forest", "workbook", False) == runs / (
+        "forest-workbook"
+    )
+    assert run_directory("RigTest", "forest", "explorer", True) == runs / (
+        "forest-explorer-htmx"
+    )
+
+
+def test_prepare_out_refuses_another_shell(tmp_path):
+    Manifest(name="rigtest", brand="default", shell="explorer", base="x").write(
+        tmp_path / "manifest.json"
+    )
+    with pytest.raises(SystemExit):
+        prepare_out(tmp_path, "rigtest", "default", False, "workbook")
 
 
 def test_only_is_recorded_as_a_sorted_list_none_for_every_page():

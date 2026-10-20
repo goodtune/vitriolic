@@ -1,0 +1,34 @@
+{% extends base %}
+{% load i18n admin admin_explorer %}
+
+{% block page_title %}{{ team.title }}{% endblock %}
+{% block page_kind %}{{ team.division.title }}, {{ team.division.season.short_title|default:team.division.season.title }}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "team" %}</span>{% endblock %}
+{% block page_actions %}<a class="button" href="{% url 'admin:fixja:club:edit' club.pk %}">{% icon "up" %}<span>{% trans "Back to the club" %}</span></a>{% endblock %}
+
+{% block content %}
+	<div class="table-wrap">
+		<table class="listing">
+			<thead>
+				<tr>
+					<th class="num">#</th>
+					<th>{% trans "Person" %}</th>
+					<th>{% trans "Player" %}</th>
+					<th>{% trans "Roles" %}</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for member in team.people.all %}
+					<tr>
+						<td class="num">{{ member.number|default:"&ndash;" }}</td>
+						<td>{{ member.person.get_full_name }}</td>
+						<td>{{ member.is_player|yesno|capfirst }}</td>
+						<td>{% for role in member.roles.all %}<span class="tag">{{ role.name }}</span> {% endfor %}</td>
+					</tr>
+				{% empty %}
+					<tr><td colspan="4" class="empty-state">{% trans "The team has no members yet." %}</td></tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+{% endblock %}

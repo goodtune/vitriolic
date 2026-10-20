@@ -22,8 +22,9 @@ from django.http import (
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
-from django.utils import timezone
+from django.utils import formats, timezone
 from django.utils.formats import date_format
+from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
 from google.auth.exceptions import RefreshError
@@ -32,6 +33,7 @@ from guardian.utils import get_40x_or_None
 
 from touchtechnology.admin.base import AdminComponent, DashboardWidget
 from touchtechnology.admin.explorer import Explorer, Folder, Node, Rel
+from touchtechnology.admin.setup import Setup, Step
 from touchtechnology.common.decorators import (
     csrf_exempt_m,
     staff_login_required_m,
@@ -155,36 +157,7 @@ log = logging.getLogger(__name__)
 
 
 def _step(key, title, done, note, url, optional=False):
-    return {
-        "key": key,
-        "title": title,
-        "done": done,
-        "note": note,
-        "url": url,
-        "optional": optional,
-    }
-
-
-def checklist(steps):
-    """
-    A checklist of ``steps``: how many of the required ones are done, the
-    first step still to do, and the share done as a percentage.
-    """
-    required = [step for step in steps if not step["optional"]]
-    done = sum(1 for step in required if step["done"])
-    following = next(
-        (step for step in steps if not step["done"] and not step["optional"]), None
-    )
-    if following is not None:
-        following["next"] = True
-    return {
-        "steps": steps,
-        "done": done,
-        "total": len(required),
-        "percent": int(round(100 * done / len(required))) if required else 100,
-        "complete": done == len(required),
-        "next": following,
-    }
+    return Step(title, bool(done), note or "", url, optional, key=key)
 
 
 def match_days(season):
@@ -381,7 +354,7 @@ def season_checklist(season):
             ),
         ),
     ]
-    return checklist(steps)
+    return Setup(_("Season set-up"), steps)
 
 
 def division_ladders(division):
@@ -411,7 +384,7 @@ def division_ladders(division):
     return ladders
 
 
-def division_checklist(division):
+def division_setup(division):
     """The jobs that make ``division`` ready to play, in order."""
     edit = str(division.urls["edit"])
     teams = division.teams.count()
@@ -468,7 +441,7 @@ def division_checklist(division):
             str(undrawn[0].urls["build"]) if undrawn else edit + "#stages-tab",
         ),
     ]
-    return checklist(steps)
+    return Setup(_("Division set-up"), steps)
 
 
 class SeasonProgressWidget(DashboardWidget):
@@ -514,6 +487,249 @@ def next_related_factory(model, parent=None, fk_name=None):
         or 0
     )
     return model(order=last + 1, **kw)
+
+
+def _count(n, singular, plural):
+    return ngettext(singular, plural, n) % {"n": n}
+
+
+def season_setup(season, here=True):
+    """What ``season`` still needs before its matches can be played."""
+    edit = str(season.urls["edit"])
+    timeslots = season.timeslots.count()
+    venues = list(season.venues.annotate(ground_count=Count("grounds")))
+    grounds = sum(v.ground_count for v in venues)
+    bare_venue = next((v for v in venues if not v.ground_count), None)
+    exclusions = season.exclusions.count()
+    referees = season.referees.count()
+    divisions = list(
+        season.divisions.annotate(
+            team_count=Count("teams", distinct=True),
+            stage_count=Count("stages", distinct=True),
+            match_count=Count("stages__matches", distinct=True),
+        ).select_related("season")
+    )
+    short_of_teams = next((d for d in divisions if d.team_count < 2), None)
+    without_stage = next((d for d in divisions if not d.stage_count), None)
+    without_draw = next((d for d in divisions if not d.match_count), None)
+    matches = sum(d.match_count for d in divisions)
+    unscheduled = list(
+        Match.objects.filter(stage__division__season=season, is_bye=False)
+        .filter(Q(date__isnull=True) | Q(time__isnull=True) | Q(play_at__isnull=True))
+        .values_list("date", flat=True)
+        .order_by("date")
+    )
+    first_day = next((d for d in unscheduled if d is not None), None)
+
+    def tab(obj, name):
+        return "%s#%s-tab" % (obj.urls["edit"], name)
+
+    steps = [
+        Step(
+            _("Set the dates"),
+            bool(season.start_date),
+            (
+                _("Starts %(date)s")
+                % {"date": formats.date_format(season.start_date, "j F Y")}
+                if season.start_date
+                else _("The draw needs a first day")
+            ),
+            "%s#%s-tab" % (edit, slugify(season._meta.verbose_name)),
+        ),
+        Step(
+            _("Add the kick-off times"),
+            timeslots > 0,
+            (
+                _count(timeslots, "%(n)d time slot", "%(n)d time slots")
+                if timeslots
+                else _("No time slots yet")
+            ),
+            edit + "#timeslots-tab",
+        ),
+        Step(
+            _("Add venues and their grounds"),
+            bool(venues) and bare_venue is None,
+            (
+                _("%(venue)s has no grounds") % {"venue": bare_venue.title}
+                if bare_venue
+                else (
+                    _("%(venues)s, %(grounds)s")
+                    % {
+                        "venues": _count(len(venues), "%(n)d venue", "%(n)d venues"),
+                        "grounds": _count(grounds, "%(n)d ground", "%(n)d grounds"),
+                    }
+                    if venues
+                    else _("No venues yet")
+                )
+            ),
+            tab(bare_venue, "grounds") if bare_venue else edit + "#venues-tab",
+        ),
+        Step(
+            _("Set aside the days with no matches"),
+            exclusions > 0,
+            (
+                _count(exclusions, "%(n)d day set aside", "%(n)d days set aside")
+                if exclusions
+                else _("Holidays and breaks, if there are any")
+            ),
+            edit + "#exclusions-tab",
+            optional=True,
+        ),
+        Step(
+            _("Add the divisions"),
+            bool(divisions),
+            (
+                _count(len(divisions), "%(n)d division", "%(n)d divisions")
+                if divisions
+                else _("No divisions yet; add several at once")
+            ),
+            edit + "#divisions-tab",
+        ),
+        Step(
+            _("Enter the teams"),
+            bool(divisions) and short_of_teams is None,
+            (
+                _("%(division)s has fewer than two teams")
+                % {"division": short_of_teams.title}
+                if short_of_teams
+                else (
+                    _count(
+                        sum(d.team_count for d in divisions),
+                        "%(n)d team",
+                        "%(n)d teams",
+                    )
+                    if divisions
+                    else _("Once there are divisions")
+                )
+            ),
+            tab(short_of_teams, "teams") if short_of_teams else edit + "#divisions-tab",
+        ),
+        Step(
+            _("Add the stages"),
+            bool(divisions) and without_stage is None,
+            (
+                _("%(division)s has no stage") % {"division": without_stage.title}
+                if without_stage
+                else (
+                    _count(
+                        sum(d.stage_count for d in divisions),
+                        "%(n)d stage",
+                        "%(n)d stages",
+                    )
+                    if divisions
+                    else _("Once there are divisions")
+                )
+            ),
+            tab(without_stage, "stages") if without_stage else edit + "#divisions-tab",
+        ),
+        Step(
+            _("Build the draw"),
+            bool(divisions) and without_draw is None,
+            (
+                _("%(division)s has no matches yet") % {"division": without_draw.title}
+                if without_draw
+                else (
+                    _count(matches, "%(n)d match", "%(n)d matches")
+                    if divisions
+                    else _("Once there are stages")
+                )
+            ),
+            tab(without_draw, "stages") if without_draw else edit + "#schedule-tab",
+        ),
+        Step(
+            _("Give every match a time and a ground"),
+            matches > 0 and not unscheduled,
+            (
+                _count(
+                    len(unscheduled),
+                    "%(n)d match to allocate",
+                    "%(n)d matches to allocate",
+                )
+                if unscheduled
+                else _("All allocated") if matches else _("Once the draw is built")
+            ),
+            (
+                reverse(
+                    "admin:fixja:match-schedule",
+                    args=(
+                        season.competition_id,
+                        season.pk,
+                        first_day.strftime("%Y%m%d"),
+                    ),
+                )
+                if first_day
+                else edit + "#schedule-tab"
+            ),
+        ),
+        Step(
+            _("Name the referees"),
+            referees > 0,
+            (
+                _count(referees, "%(n)d referee", "%(n)d referees")
+                if referees
+                else _("The officials who can take a match")
+            ),
+            edit + "#referees-tab",
+            optional=True,
+        ),
+    ]
+    if here:
+        return Setup(_("Season set-up"), steps)
+    return Setup(_("Season set-up"), steps, url=edit + "#setup-tab", here=False)
+
+
+def competition_setup(competition):
+    """What ``competition`` needs before its seasons can be run."""
+    edit = str(competition.urls["edit"])
+    seasons = competition.seasons.count()
+    clubs = competition.clubs.count()
+    club_roles = competition.club_roles.count()
+    team_roles = competition.team_roles.count()
+    steps = [
+        Step(
+            _("Take in the clubs"),
+            clubs > 0,
+            (
+                _count(clubs, "%(n)d club", "%(n)d clubs")
+                if clubs
+                else _("Choose them on the details")
+            ),
+            "%s#%s-tab" % (edit, slugify(competition._meta.verbose_name)),
+        ),
+        Step(
+            _("Add a season"),
+            seasons > 0,
+            (
+                _count(seasons, "%(n)d season", "%(n)d seasons")
+                if seasons
+                else _("No seasons yet")
+            ),
+            edit + "#seasons-tab",
+        ),
+        Step(
+            _("Name the club roles"),
+            club_roles > 0,
+            (
+                _count(club_roles, "%(n)d role", "%(n)d roles")
+                if club_roles
+                else _("President, secretary and the like")
+            ),
+            edit + "#club_roles-tab",
+            optional=True,
+        ),
+        Step(
+            _("Name the team roles"),
+            team_roles > 0,
+            (
+                _count(team_roles, "%(n)d role", "%(n)d roles")
+                if team_roles
+                else _("Captain, coach and the like")
+            ),
+            edit + "#team_roles-tab",
+            optional=True,
+        ),
+    ]
+    return Setup(_("Competition set-up"), steps)
 
 
 def season_days(explorer, request, season):
@@ -586,6 +802,36 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     def __init__(self, app, name="fixja", app_name="competition"):
         super(CompetitionAdminComponent, self).__init__(app, name, app_name)
+
+    def season_progress(self, season, here=True):
+        """
+        How far ``season``'s set-up has got, as the shell guides it: Workbook
+        lists the jobs of a season and its match days, Explorer the steps to
+        the first match (see ``season_checklist`` and ``season_setup``).
+        ``here`` is false on pages of something inside the season, which show
+        only the progress bar (Explorer) or nothing (Workbook).
+        """
+        if self.shell.name == "workbook":
+            return season_checklist(season) if here else None
+        return season_setup(season, here)
+
+    def generic_edit(self, request, *args, extra_context=None, **kwargs):
+        # Every page inside a season shows how far the season's set-up has got.
+        extra_context = {} if extra_context is None else extra_context
+        season = extra_context.get("season")
+        if (
+            request.method == "GET"
+            and "_htmx_tab" not in request.GET
+            and "setup" not in extra_context
+            and isinstance(season, Season)
+            and season.pk
+        ):
+            setup = self.season_progress(season, here=False)
+            if setup is not None:
+                extra_context["setup"] = setup
+        return super().generic_edit(
+            request, *args, extra_context=extra_context, **kwargs
+        )
 
     def dropdowns(self):
         dl = (
@@ -1173,9 +1419,12 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @staff_login_required_m
     def index(self, request, **kwargs):
         """
-        Tournament Control's own page: its jobs, and the seasons in progress
-        with how far each has come.
+        Tournament Control's own page (its jobs, and the seasons in progress
+        with how far each has come) where the shell has landing pages; the
+        list of competitions where it does not.
         """
+        if not self.shell.index_landing:
+            return self.redirect(self.reverse("competition:list"))
         context = dict(kwargs)
         context.update(
             {
@@ -1404,6 +1653,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def edit_competition(self, request, extra_context, competition=None, **kwargs):
         if competition is None:
             competition = next_related_factory(Competition)
+        elif request.method == "GET" and "_htmx_tab" not in request.GET:
+            extra_context["setup"] = competition_setup(competition)
         return self.generic_edit(
             request,
             Competition,
@@ -1437,7 +1688,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         extra_context.setdefault("dates", dates)
         if season.pk:
             extra_context.setdefault("match_days", match_days(season))
-            extra_context.setdefault("checklist", season_checklist(season))
+            if request.method == "GET" and "_htmx_tab" not in request.GET:
+                extra_context.setdefault("setup", self.season_progress(season))
 
         # In the order a season is set up: divisions, then when and where.
         related = (
@@ -1839,7 +2091,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         if division is None:
             division = next_related_factory(Division, season)
         else:
-            extra_context.setdefault("checklist", division_checklist(division))
+            extra_context.setdefault("division_setup", division_setup(division))
             extra_context.setdefault("ladders", division_ladders(division))
 
         return self.generic_edit(
@@ -3720,8 +3972,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 ).append(
                     (
                         pa.number or "",
-                        pa.person.first_name.encode("utf-8").strip(),
-                        pa.person.last_name.encode("utf-8").strip(),
+                        pa.person.first_name.strip(),
+                        pa.person.last_name.strip(),
                         pa.person.date_of_birth,
                         pa.person.email,
                     )

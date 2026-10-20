@@ -1,9 +1,11 @@
 from django.test import override_settings
 from test_plus import TestCase
 
+from touchtechnology.admin.tests.shells import per_shell
 from touchtechnology.common.tests import factories
 
 
+@per_shell
 class AdminLoginTests(TestCase):
     def setUp(self):
         super().setUp()
@@ -14,15 +16,20 @@ class AdminLoginTests(TestCase):
     @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=None)
     def test_login_page_renders(self):
         self.get_check_200("admin:login")
-        self.assertResponseContains(
-            '<div class="wb-gate-brand"><img src="/static/img/logo.png" alt="">'
-            "<span>Administration</span></div>",
-            html=True,
-        )
-        self.assertResponseContains(
-            '<button type="submit" class="wb-button wb-button-primary">Sign in</button>',
-            html=True,
-        )
+        self.assertTemplateUsed(self.last_response, self.shell.template("login.html"))
+        for fragment in self.by_shell(
+            workbook=(
+                '<div class="wb-gate-brand"><img src="/static/img/logo.png" alt="">'
+                "<span>Administration</span></div>",
+                '<button type="submit" class="wb-button wb-button-primary">Sign in</button>',
+            ),
+            explorer=(
+                "<h1>Sign in</h1>",
+                '<p class="lede">to the administration of Administration</p>',
+                '<button type="submit" class="button primary">Sign in</button>',
+            ),
+        ):
+            self.assertResponseContains(fragment, html=True)
 
     def test_anonymous_admin_index_redirects_to_admin_login(self):
         self.get("admin:index")
@@ -77,7 +84,16 @@ class AdminLoginTests(TestCase):
         self.response_200()
         error = self.last_response.context["form"].non_field_errors()[0]
         self.assertResponseContains(
-            f'<ul class="errorlist"><li>{error}</li></ul>', html=True
+            self.by_shell(
+                workbook=f'<ul class="errorlist"><li>{error}</li></ul>',
+                explorer=(
+                    '<div class="form-errors" role="alert">'
+                    '<svg class="icon" aria-hidden="true" focusable="false">'
+                    '<use href="/static/touchtechnology/admin/explorer/img/icons.svg#alert">'
+                    f"</use></svg><div><ul><li>{error}</li></ul></div></div>"
+                ),
+            ),
+            html=True,
         )
 
     def test_signed_in_staff_is_sent_on_from_the_login_page(self):
@@ -114,18 +130,22 @@ class AdminLoginTests(TestCase):
         with self.login(user):
             self.get("admin:login", data={"next": self.reverse("admin:index")})
         self.response_200()
-        self.assertResponseContains(
-            '<p class="wb-message wb-message-warning signed-in-notice">'
-            '<svg class="wb-icon" aria-hidden="true" focusable="false">'
-            '<use href="/static/touchtechnology/admin/workbook/icons.svg#triangle-alert">'
-            "</use></svg><span>You are signed in as visitor, which cannot use the "
-            "administration. Sign in with another account.</span></p>",
-            html=True,
-        )
-        self.assertResponseContains(
-            '<button type="submit" class="wb-button wb-button-primary">Sign in</button>',
-            html=True,
-        )
+        for fragment in self.by_shell(
+            workbook=(
+                '<p class="wb-message wb-message-warning signed-in-notice">'
+                '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+                '<use href="/static/touchtechnology/admin/workbook/icons.svg#triangle-alert">'
+                "</use></svg><span>You are signed in as visitor, which cannot use the "
+                "administration. Sign in with another account.</span></p>",
+                '<button type="submit" class="wb-button wb-button-primary">Sign in</button>',
+            ),
+            explorer=(
+                '<p class="notice signed-in-notice">You are signed in as visitor, '
+                "which cannot use the administration. Sign in with another account.</p>",
+                '<button type="submit" class="button primary">Sign in</button>',
+            ),
+        ):
+            self.assertResponseContains(fragment, html=True)
 
     def test_signed_in_non_staff_is_not_looped(self):
         user = factories.UserFactory.create(username="visitor")

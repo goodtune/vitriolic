@@ -1,0 +1,36 @@
+{% extends "touchtechnology/admin/explorer/edit.html" %}
+{% load i18n common admin admin_explorer %}
+
+{% block page_title %}{% blocktrans with object=formset.instance %}Permissions for {{ object }}{% endblocktrans %}{% endblock %}
+{% block page_kind %}{% blocktrans with type=formset.instance|type %}Who may do what with this {{ type }}{% endblocktrans %}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "lock" %}</span>{% endblock %}
+{% block page_actions %}{% endblock %}
+{% block page_nav %}{% endblock %}
+
+{% block content %}
+	<form action="" method="post">
+		{% csrf_token %}
+		{{ formset.management_form }}
+		{% if formset.non_form_errors %}
+			<div class="form-errors" role="alert">{% icon "alert" %}<ul>{% for error in formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>
+		{% endif %}
+		{% for form in formset %}
+			<fieldset class="form-section" id="{{ form.permission.codename }}-tab">
+				<legend><h2>{% trans form.permission.name %}</h2></legend>
+				<p class="muted">{% blocktrans with permission=form.permission.name|lower type=form.instance|type instance=form.instance %}People and groups who may {{ permission }} for the {{ type }} {{ instance }}.{% endblocktrans %}</p>
+				{% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+				<div class="fields">
+					{% field form.users %}
+					{% field form.groups %}
+				</div>
+			</fieldset>
+		{% endfor %}
+		<div class="form-actions">
+			<button type="submit" class="button primary">{% icon "check" %}<span>{% trans "Save" %}</span></button>
+			<a class="button" href="{{ cancel_url|default:"../.." }}">{% trans "Cancel" %}</a>
+		</div>
+	</form>
+{% endblock %}
+
+{% block extracss %}{{ block.super }}{{ formset.media.css|admin_media }}{% endblock %}
+{% block extrajs %}{{ formset.media.js|admin_media }}{% endblock %}

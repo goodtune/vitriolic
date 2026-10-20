@@ -14,23 +14,11 @@ class AdminFormControlMixin(BootstrapFormControlMixin):
 
     Forms the admin builds dynamically derive from this rather than from the
     public site's mixin, so the admin can change how its forms behave without
-    changing the public forms. The admin draws its controls itself (see
-    ``touchtechnology.admin.widgets``), so the class the public mixin gives
-    each widget for its stylesheet is taken off again here.
+    changing the public forms. The admin's shells draw their controls
+    themselves and rely on no Bootstrap class, so this gives the widgets none.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        for field in getattr(self, "fields", {}).values():
-            classes = [
-                name
-                for name in str(field.widget.attrs.get("class", "")).split()
-                if name != "form-control"
-            ]
-            if classes:
-                field.widget.attrs["class"] = " ".join(classes)
-            else:
-                field.widget.attrs.pop("class", None)
+    control_class = None
 
 
 class UserEditForm(UserMixin, ModelForm):

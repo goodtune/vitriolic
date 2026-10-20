@@ -1,0 +1,5 @@
+{% extends "touchtechnology/admin/explorer/edit.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block page_title %}{% if object|saved %}{{ object.person }}{% else %}{% trans "New official" %}{% endif %}{% endblock %}
+{% block page_kind %}{% if object|saved %}{% blocktrans with club=object.club %}Official of {{ club }}{% endblocktrans %}{% else %}{% trans "Not saved yet" %}{% endif %}{% endblock %}

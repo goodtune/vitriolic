@@ -1,0 +1,26 @@
+{% load i18n admin admin_explorer %}
+<section class="card">
+	<h2>{% icon "results" %}{{ widget.verbose_name }}</h2>
+	<div class="table-wrap">
+		<table class="listing">
+			<thead>
+				<tr>
+					<th>{% trans "Match day" %}</th>
+					<th>{% trans "Kick-off" %}</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for competition, season, date, time in dates_times %}
+					<tr>
+						{% url 'admin:competition:match-results' competition_id=competition season_id=season datestr=date|date:"Ymd" as edit_date %}
+						{% url 'admin:competition:match-results' competition_id=competition season_id=season datestr=date|date:"Ymd" timestr=time|time:"Hi" as edit_time %}
+						<td>{% ifchanged %}<a href="{{ edit_date }}">{{ date|date:"D j M Y" }}</a>{% endifchanged %}</td>
+						<td>{% if time %}<a href="{{ edit_time }}">{{ time|time }}</a>{% endif %}</td>
+					</tr>
+				{% empty %}
+					<tr><td colspan="2" class="empty-state">{% trans "Every match played has its result." %}</td></tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+</section>

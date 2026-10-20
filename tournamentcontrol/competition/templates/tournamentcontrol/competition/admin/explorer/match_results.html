@@ -1,0 +1,89 @@
+{% extends "touchtechnology/admin/explorer/form_page.html" %}
+{% load i18n tz common admin admin_explorer %}
+
+{% block page_title %}{% trans "Results" %}{% endblock %}
+{% block page_kind %}{{ date|date:"l j F Y" }}{% if division %} &ndash; {{ division.title }}{% endif %}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "results" %}</span>{% endblock %}
+{% block cancel-url %}{{ season.urls.edit }}#schedule-tab{% endblock %}
+{% block page_nav %}{% include "tournamentcontrol/competition/admin/explorer/_day_nav.html" with day_url="admin:fixja:match-results" day_page="results" %}{% endblock %}
+
+{% block form-body %}
+	{% timezone season.timezone %}
+		{{ match_formset.management_form }}
+		{{ bye_formset.management_form }}
+		{% if match_formset.non_form_errors %}
+			<div class="form-errors" role="alert">{% icon "alert" %}<ul>{% for error in match_formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>
+		{% endif %}
+
+		{% regroup match_formset.forms by instance.datetime as slots %}
+		{% for slot in slots %}
+			<section class="slot">
+				<h2 class="slot-head">{% icon "clock" %}{% if slot.grouper %}{{ slot.grouper|time }}{% else %}{% trans "No time set" %}{% endif %} <span class="count">{{ slot.list|length }}</span></h2>
+				<div class="table-wrap">
+					<table class="listing results-table">
+						<thead>
+							<tr>
+								<th class="wide-only">{% trans "Ground" %}</th>
+								<th class="wide-only">{% trans "Division" %}</th>
+								<th class="team home">{% trans "Home" %}</th>
+								<th class="score-head" colspan="3">{% trans "Score" %}</th>
+								<th class="team">{% trans "Away" %}</th>
+								<th>{% trans "Forfeit" %}</th>
+							</tr>
+						</thead>
+						<tbody>
+							{% for form in slot.list %}
+								{% with match=form.instance %}
+									{% with home=match.get_home_team away=match.get_away_team %}
+										<tr class="result-row{% if match.home_team_score is not None %} has-result{% endif %}">
+											<td class="wide-only where">{{ form.id }}{{ match.play_at.title|default:"&ndash;" }}</td>
+											<td class="wide-only nowrap">{{ match.stage.division.short_title|default:match.stage.division.title }}</td>
+											<td class="team home">
+												<label for="{{ form.home_team_score.id_for_label }}">{{ home }}</label>
+												<small class="phone-only">{{ match.stage.division.short_title|default:match.stage.division.title }}{% if match.play_at %}, {{ match.play_at.title }}{% endif %}</small>
+											</td>
+											<td class="score">{% if form.home_team_score %}{{ form.home_team_score|widget:"score-input" }}{% endif %}</td>
+											<td class="score-dash" aria-hidden="true">&ndash;</td>
+											<td class="score">{% if form.away_team_score %}{{ form.away_team_score|widget:"score-input" }}{% endif %}</td>
+											<td class="team away"><label for="{{ form.away_team_score.id_for_label }}">{{ away }}</label></td>
+											<td class="forfeit">
+												{% if form.is_forfeit %}
+													<small class="phone-only">{% trans "Forfeit" %}</small>
+													<label class="visually-hidden" for="{{ form.is_forfeit.id_for_label }}">{% blocktrans %}Was {{ home }} v {{ away }} a forfeit?{% endblocktrans %}</label>
+													{{ form.is_forfeit|widget }}
+													<label class="visually-hidden" for="{{ form.forfeit_winner.id_for_label }}">{% blocktrans %}Winner by forfeit of {{ home }} v {{ away }}{% endblocktrans %}</label>
+													{{ form.forfeit_winner|widget }}
+												{% endif %}
+											</td>
+										</tr>
+										{% if form.errors %}
+											<tr class="row-errors"><td colspan="8"><ul class="field-errors">{% for name, errors in form.errors.items %}{% for error in errors %}<li>{{ error }}</li>{% endfor %}{% endfor %}</ul></td></tr>
+										{% endif %}
+									{% endwith %}
+								{% endwith %}
+							{% endfor %}
+						</tbody>
+					</table>
+				</div>
+			</section>
+		{% empty %}
+			<p class="empty-state">{% trans "No match on this day is waiting for a result." %}</p>
+		{% endfor %}
+
+		{% if bye_formset.forms %}
+			<section class="slot">
+				<h2 class="slot-head">{% icon "check" %}{% trans "Byes" %}</h2>
+				<p class="muted">{% trans "A processed bye counts on the ladder as the division says." %}</p>
+				<ul class="check-list">
+					{% for form in bye_formset.forms %}
+						{% with match=form.instance %}
+							{% with home=match.get_home_team away=match.get_away_team %}
+								<li class="bye">{{ form.id }}<label for="{{ form.bye_processed.id_for_label }}">{{ away|default:home }} <small class="muted">{{ match.stage.division.title }}</small></label>{{ form.bye_processed|widget }}</li>
+							{% endwith %}
+						{% endwith %}
+					{% endfor %}
+				</ul>
+			</section>
+		{% endif %}
+	{% endtimezone %}
+{% endblock %}

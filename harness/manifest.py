@@ -59,6 +59,8 @@ class Manifest:
     name: str
     brand: str
     base: str
+    #: The shell the server wore (``workbook`` or ``explorer``).
+    shell: str = "workbook"
     started: str = ""
     finished: str = ""
     pages: list[PageResult] = field(default_factory=list)

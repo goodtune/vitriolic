@@ -1,0 +1,5 @@
+{% extends "touchtechnology/admin/explorer/edit.html" %}
+{% load i18n %}
+
+{% block page_title %}{% if object.pk %}{{ object.date|date:"l j F Y" }}{% else %}{% trans "New exclusion date" %}{% endif %}{% endblock %}
+{% block page_kind %}{% if object.pk %}{% trans "No matches are played on this day" %}{% else %}{% trans "Not saved yet" %}{% endif %}{% endblock %}

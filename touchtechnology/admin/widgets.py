@@ -22,16 +22,6 @@ LEGACY_CLASSES = frozenset(
 #: A select with more choices than this opens a dialog with a search box.
 PICKER_THRESHOLD = 10
 
-#: Remote assets a widget may declare, and the copy the admin serves itself.
-SELF_HOSTED = {
-    "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css": (
-        "touchtechnology/admin/vendor/leaflet/leaflet.css"
-    ),
-    "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js": (
-        "touchtechnology/admin/vendor/leaflet/leaflet.js"
-    ),
-}
-
 
 class AdminLocationWidget(LocationWidget):
     """The location widget with the admin's markup and a self-hosted map."""
@@ -146,21 +136,3 @@ def admin_attrs(bound_field, widget):
 def render_field(bound_field):
     widget = admin_widget(bound_field.field.widget)
     return bound_field.as_widget(widget=widget, attrs=admin_attrs(bound_field, widget))
-
-
-def admin_media(media):
-    """``media`` with the remote assets it names swapped for the admin's copies."""
-    if not isinstance(media, django_widgets.Media):
-        return media or ""
-
-    def swap(asset):
-        # An asset is a path or (Django 5.2 on) a Script or Stylesheet.
-        path = getattr(asset, "_path", asset)
-        return SELF_HOSTED.get(str(path), asset)
-
-    js = [swap(asset) for asset in media._js]
-    css = {
-        medium: [swap(asset) for asset in assets]
-        for medium, assets in media._css.items()
-    }
-    return django_widgets.Media(css=css, js=js)

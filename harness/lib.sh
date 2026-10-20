@@ -36,12 +36,13 @@ harness_name() {
 }
 
 # Export the environment the demo project runs in for this name.
-#   harness_env <name> [brand] [htmx]
+#   harness_env <name> [brand] [htmx] [shell]
 harness_env() {
     local name checkout var
     name="$(harness_name "${1-}")" || return 2
     local brand="${2:-${ADMIN_BRAND:-default}}"
     local htmx="${3:-${HTMX_ADMIN_TABS:-0}}"
+    local shell="${4:-${ADMIN_SHELL:-workbook}}"
     checkout="$(harness_checkout)"
     var="$(harness_var)"
     mkdir -p "$var/media/$name" "$var/log/$name" "$var/run/$name" "$var/state/$name"
@@ -56,6 +57,7 @@ harness_env() {
     export COMPOPS_EVENTS_BACKEND=memory
     export ADMIN_BRAND="$brand"
     export HTMX_ADMIN_TABS="$htmx"
+    export ADMIN_SHELL="$shell"
     export PYTHONUNBUFFERED=1
     # A dummy so the cloudinary library can build image URLs while pages
     # render; nothing is ever uploaded.

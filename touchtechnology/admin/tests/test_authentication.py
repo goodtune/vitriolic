@@ -1,8 +1,10 @@
 from test_plus import TestCase
 
+from touchtechnology.admin.tests.shells import per_shell
 from touchtechnology.common.tests.factories import UserFactory
 
 
+@per_shell
 class AuthenticationTest(TestCase):
 
     def test_admin_login(self):
@@ -26,13 +28,26 @@ class AuthenticationTest(TestCase):
             self.get("admin:index")
         self.response_200()
         token = self.get_context("csrf_token")
+        logout = self.reverse("admin:logout")
         self.assertResponseContains(
-            f'<form method="post" action="{self.reverse("admin:logout")}">'
-            f'<input type="hidden" name="csrfmiddlewaretoken" value="{token}">'
-            '<button type="submit" class="wb-signout" title="Sign out">'
-            '<svg class="wb-icon" aria-hidden="true" focusable="false">'
-            '<use href="/static/touchtechnology/admin/workbook/icons.svg#log-out">'
-            '</use></svg><span class="wb-me-label">Sign out</span></button></form>',
+            self.by_shell(
+                workbook=(
+                    f'<form method="post" action="{logout}">'
+                    f'<input type="hidden" name="csrfmiddlewaretoken" value="{token}">'
+                    '<button type="submit" class="wb-signout" title="Sign out">'
+                    '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+                    '<use href="/static/touchtechnology/admin/workbook/icons.svg#log-out">'
+                    '</use></svg><span class="wb-me-label">Sign out</span></button></form>'
+                ),
+                explorer=(
+                    f'<form method="post" action="{logout}" class="sign-out">'
+                    f'<input type="hidden" name="csrfmiddlewaretoken" value="{token}">'
+                    '<button type="submit" class="foot-button" title="Sign out">'
+                    '<svg class="icon" aria-hidden="true" focusable="false">'
+                    '<use href="/static/touchtechnology/admin/explorer/img/icons.svg#logout">'
+                    '</use></svg><span class="foot-label">Sign out</span></button></form>'
+                ),
+            ),
             html=True,
         )
         self.assertResponseNotContains("logout.js")

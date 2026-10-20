@@ -1,0 +1,6 @@
+{% load admin admin_explorer %}{% comment %}
+One tab of an object's page, for the tab-links block:
+{% include "touchtechnology/admin/explorer/_tab.html" with name="timeline" label=_("Timeline") icon="season" %}
+Its pane, in the tab-panes block, is
+<section class="pane" data-tab-panel role="tabpanel" id="timeline-tab" aria-labelledby="timeline-tab-link">.
+{% endcomment %}<a class="tab" role="tab" id="{{ name }}-tab-link" href="#{{ name }}-tab" aria-controls="{{ name }}-tab" aria-selected="false" tabindex="-1">{% icon icon|default:"item" %}<span>{{ label }}</span>{% if count is not None and count != "" %}<span class="count" aria-hidden="true">{{ count }}</span>{% endif %}</a>
