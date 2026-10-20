@@ -1,8 +1,18 @@
+from unittest import mock
+
+from django.forms import ModelForm
 from django.template.loader import select_template
 from test_plus import TestCase
 
 from touchtechnology.admin.forms import AdminFormControlMixin
+from touchtechnology.common.forms.mixins import BootstrapFormControlMixin
 from touchtechnology.common.tests import factories
+from touchtechnology.content.admin import ContentAdminComponent
+from touchtechnology.news.admin import NewsAdminComponent
+
+
+class SomeOtherMixin:
+    """A deployment's own form base, standing in for AdminFormControlMixin."""
 
 
 class FieldTemplateTests(TestCase):
@@ -46,3 +56,39 @@ class AdminOwnershipTests(TestCase):
         with self.login(self.superuser):
             with self.assertNoLogs("touchtechnology.common.sites", level="ERROR"):
                 self.get_check_200("admin:news:article:add")
+
+
+class RequiredFormBasesTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.superuser = factories.UserFactory.create(is_staff=True, is_superuser=True)
+
+    def test_defaults_accept_the_common_mixin_in_place_of_the_admin_mixin(self):
+        component = NewsAdminComponent.__new__(NewsAdminComponent)
+        bases = component.get_required_form_bases()
+        self.assertEqual(bases[0], BootstrapFormControlMixin)
+        self.assertEqual(bases[1], component.model_form_bases[1])
+
+    def test_overridden_model_form_bases_are_checked_against_themselves(self):
+        # The chunk edit view builds its form from model_form_bases.
+        with mock.patch.object(
+            ContentAdminComponent, "model_form_bases", (SomeOtherMixin, ModelForm)
+        ):
+            with self.login(self.superuser):
+                with self.assertNoLogs("touchtechnology.common.sites", level="ERROR"):
+                    self.get_check_200("admin:content:chunk:add")
+                form = self.last_response.context["form"]
+        self.assertIsInstance(form, SomeOtherMixin)
+
+    def test_form_on_neither_mixin_still_logs_the_error(self):
+        # ArticleForm is explicit, on the common mixin and not the other one.
+        with mock.patch.object(
+            NewsAdminComponent, "model_form_bases", (SomeOtherMixin, ModelForm)
+        ):
+            with self.login(self.superuser):
+                with self.assertLogs(
+                    "touchtechnology.common.sites", level="ERROR"
+                ) as logs:
+                    self.get_check_200("admin:news:article:add")
+        self.assertIn("does not inherit", logs.output[0])
+        self.assertIn("SomeOtherMixin", logs.output[0])
