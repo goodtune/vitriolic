@@ -69,14 +69,20 @@ pidfile_value() {
 }
 
 base_given=0
+no_server=""
 if [ -n "$base" ]; then
     base_given=1
+elif [ -f "$pidfile" ]; then
+    base="http://127.0.0.1:$(pidfile_value port)"
 else
-    if [ ! -f "$pidfile" ]; then
-        echo "shots.sh: nothing answers for '$name': no server is recorded; run serve.sh $name <port> or give --base" >&2
+    no_server="nothing answers for '$name': no server is recorded; run serve.sh $name <port> or give --base"
+    # Without a server there is no base and no pid file to say which brand and
+    # which directory this run is for, unless --brand does.
+    if [ -z "$brand" ]; then
+        echo "shots.sh: $no_server" >&2
         exit 1
     fi
-    base="http://127.0.0.1:$(pidfile_value port)"
+    base="http://127.0.0.1:0"
 fi
 base="${base%/}"
 port="${base##*:}"
@@ -138,6 +144,11 @@ fail_run() {
     (cd "$checkout" && "${shots[@]}" --fail "$1") || true
     exit 1
 }
+
+if [ -n "$no_server" ]; then
+    echo "shots.sh: $no_server" >&2
+    fail_run "$no_server"
+fi
 
 status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$base/admin/login/" || true)"
 if [ "$status" != "200" ]; then
