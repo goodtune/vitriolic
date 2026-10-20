@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.test import override_settings
 from test_plus import TestCase
 
 from touchtechnology.common.tests import factories
@@ -11,6 +12,7 @@ class AdminLoginTests(TestCase):
             username="admin", is_staff=True, is_superuser=True
         )
 
+    @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=None)
     def test_login_page_renders(self):
         self.get_check_200("admin:login")
         self.assertResponseContains("<h1>Administration</h1>", html=True)

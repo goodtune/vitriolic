@@ -6,8 +6,14 @@ from django.core.exceptions import ImproperlyConfigured
 from django.test import RequestFactory, override_settings
 from test_plus import TestCase
 
-from touchtechnology.admin.branding import brand_check, brand_from, get_brand
+from touchtechnology.admin.branding import (
+    COLOUR_KEYS,
+    brand_check,
+    brand_from,
+    get_brand,
+)
 from touchtechnology.common.tests import factories
+from vitriolic.brands import BRANDS
 
 
 def brand_for(request):
@@ -15,6 +21,7 @@ def brand_for(request):
 
 
 class BrandTests(TestCase):
+    @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=None)
     def test_default_brand(self):
         brand = get_brand()
         self.assertEqual(brand.name, "Administration")
@@ -77,11 +84,20 @@ class BrandTests(TestCase):
             brand_from({"colours": {"primary": "#275d8b\n"}})
 
 
+class DemoBrandTests(TestCase):
+    def test_demo_brands_are_valid(self):
+        for name, value in BRANDS.items():
+            with self.subTest(name=name):
+                brand = brand_from(value)
+                self.assertEqual(set(brand.colours), set(COLOUR_KEYS))
+
+
 class ShellTests(TestCase):
     def setUp(self):
         super().setUp()
         self.superuser = factories.UserFactory.create(is_staff=True, is_superuser=True)
 
+    @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=None)
     def test_admin_index_emits_brand_properties(self):
         with self.login(self.superuser):
             self.get_check_200("admin:index")
@@ -108,6 +124,7 @@ class ShellTests(TestCase):
                 '<img src="/static/img/harbour.png" alt="Harbour Touch">', html=True
             )
 
+    @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=None)
     def test_shell_resolves_brand_without_the_context_processor(self):
         templates = copy.deepcopy(settings.TEMPLATES)
         processors = templates[0]["OPTIONS"]["context_processors"]
