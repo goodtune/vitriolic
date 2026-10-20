@@ -1,41 +1,40 @@
 {% extends "mvp/list.inc.html" %}
-{% load i18n %}
+{% load i18n console %}
 
 {% block table-headings %}
-	<th>{% trans "ID" %}</th>
-	<th>{% trans "Date" %}</th>
-	<th>{% trans "Time" %}</th>
-	<th>{% trans "Play at" %}</th>
-	<th>{% trans "Home Team" %}</th>
-	<th>{% trans "Away Team" %}</th>
-	<th>{% trans "Videos" %}</th>
+	<th scope="col">{% trans "Match" %}</th>
+	<th scope="col">{% trans "Date" %}</th>
+	<th scope="col" class="opt">{% trans "Time" %}</th>
+	<th scope="col" class="opt">{% trans "Play at" %}</th>
+	<th scope="col">{% trans "Home Team" %}</th>
+	<th scope="col" class="num">{% trans "Score" %}</th>
+	<th scope="col">{% trans "Away Team" %}</th>
+	<th scope="col" class="num opt-sm">{% trans "Videos" %}</th>
 {% endblock %}
 
 {% block table-columns %}
 	{% trans "TBC" as tbc context "to be confirmed" %}
-	<td>
+	<td class="nowrap">
 		{% if change_perm in object_perms %}
-			<a href="{{ obj.urls.edit }}">{{ obj.label|default:obj.pk }}</a>&nbsp;
+			<a href="{{ obj.urls.edit }}">{{ obj.label|default:obj.pk }}</a>
 		{% else %}
 			<span>{{ obj.label|default:obj.pk }}</span>
 		{% endif %}
+		{% if obj.round %}<span class="sub">{% blocktrans with n=obj.round %}Round {{ n }}{% endblocktrans %}</span>{% endif %}
 	</td>
-	<td>{{ obj.date|default_if_none:tbc }}</td>
-	<td>{{ obj.time|default_if_none:tbc }}</td>
-	<td>{{ obj.play_at|default_if_none:"-" }}</td>
+	<td class="mono nowrap">{{ obj.date|date:"D j M"|default:tbc }}</td>
+	<td class="mono opt">{{ obj.time|time:"H:i"|default:tbc }}</td>
+	<td class="opt">{{ obj.play_at|default_if_none:"–" }}</td>
 	<td>{{ obj.get_home_team_plain }}</td>
+	<td class="num score nowrap">{% if obj.home_team_score is not None %}{{ obj.home_team_score }}–{{ obj.away_team_score }}{% elif obj.is_bye %}<span class="tag">{% trans "Bye" %}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
 	<td>{{ obj.get_away_team_plain }}</td>
-	<td>{{ obj.videos|length }}</td>
+	<td class="num opt-sm">{{ obj.videos|length }}</td>
 {% endblock %}
 
-{% block empty-row-colspan %}7{% endblock %}
+{% block empty-row-colspan %}9{% endblock %}
 
 {% block row-buttons-items %}
-<li role="presentation">
-	<a role="button" href="{{ obj.urls.referees }}">
-		<i class="fa fa-flag fa-fw"></i>
-		{% trans "Referees" %}
-	</a>
-</li>
-{{ block.super }}
+	<li><a href="{{ obj.urls.referees }}">{% icon "whistle" %}{% trans "Referees" %}</a></li>
+	{% if obj.urls.detail %}<li><a href="{{ obj.urls.detail }}">{% icon "chart" %}{% trans "Statistics" %}</a></li>{% endif %}
+	{{ block.super }}
 {% endblock row-buttons-items %}

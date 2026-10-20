@@ -1,53 +1,45 @@
 {% extends "tournamentcontrol/competition/admin/base.html" %}
-{% load i18n %}
-{% load common %}
+{% load i18n common console %}
 
 {% block content %}
-	<div class="heading-block">
-		{% if date %}
-			<h3>{% trans "Progress Teams" %} <span class="pull-right">{{ date|date }}</span></h3>
-		{% else %}
-			<h3>{% trans "Progress Teams" %} <span class="pull-right">{{ stage.division.title }}</span></h3>
-		{% endif %}
-	</div>
+	<header class="page-head">
+		<div class="page-head__text">
+			<p class="page-head__kind">{% trans "Progress teams" %}</p>
+			<h1 class="page-head__title">{% if date %}{{ date|date:"l j F Y" }}{% else %}{{ stage.title }}{% endif %}</h1>
+			<p class="page-head__meta">{{ stage.division.title }}</p>
+		</div>
+	</header>
 
-	<form action="" method="post">
+	<form id="progress-form" class="form-flow" action="" method="post" data-watch novalidate>
 		{% csrf_token %}
 		{{ formset.management_form }}
-		<table class="table table-striped">
-			<thead>
-				<tr class="left">
-					<th class="hidden-xs">{% trans "Stage" %}</th>
-					<th>{% trans "Match" %}</th>
-					<th>{% trans "Home team" %}</th>
-					<th>{% trans "Away team" %}</th>
-				</tr>
-			</thead>
-			<tbody>
-				{% for form in formset.forms %}
-						{% with form.instance as match %}
+		{% url 'admin:competition:competition:season:division:stage:edit' competition.pk season.pk division.pk stage.pk as stage_url %}
+		{% include "tournamentcontrol/competition/admin/_actions.html" with cancel=stage_url %}
+		<div class="table-wrap sheet">
+			<table class="data">
+				<thead>
+					<tr>
+						<th scope="col" class="opt">{% trans "Stage" %}</th>
+						<th scope="col">{% trans "Match" %}</th>
+						<th scope="col">{% trans "Home team" %}</th>
+						<th scope="col">{% trans "Away team" %}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for form in formset.forms %}
+						{% with match=form.instance %}
 							<tr>
-								<td class="hidden-xs">{{ form.id }}{{ match.stage.title }}</td>
-								<td>{% if match.label %}{{ match.label }}{% else %}{% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}{% endif %}</td>
-								{% with match.get_home_team.title|default:match.get_home_team_plain as home_team %}
-									<td class="team {{ match.home_team.club.slug|cssify|default:"tba" }}">{% if form.home_team %}{{ match.get_home_team.title }}<br/>{{ form.home_team }}{% else %}{{ match.get_home_team.title }}{% endif %}</td>
-								{% endwith %}
-								{% with match.get_away_team.title|default:match.get_away_team_plain as away_team %}
-									<td class="team {{ match.away_team.club.slug|cssify|default:"tba" }}">{% if form.away_team %}{{ match.get_away_team.title }}<br/>{{ form.away_team }}{% else %}{{ match.get_away_team.title }}{% endif %}</td>
-								{% endwith %}
+								<td class="opt">{{ form.id }}{{ match.stage.title }}</td>
+								<td class="nowrap">{% if match.label %}{{ match.label }}{% else %}{% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}{% endif %}</td>
+								<td>{{ match.get_home_team.title|default:match.get_home_team_plain }}{% if form.home_team %}{% field form.home_team "" %}{% endif %}</td>
+								<td>{{ match.get_away_team.title|default:match.get_away_team_plain }}{% if form.away_team %}{% field form.away_team "" %}{% endif %}</td>
 							</tr>
 						{% endwith %}
-				{% empty %}
-					<tr>
-						<td colspan="4" class="no_results">{% trans "There are no matches that require progression." %}</td>
-					</tr>
-				{% endfor %}
-			</tbody>
-		</table>
-
-		<div class="buttons">
-			<button type="submit">{% trans "Save" %}</button>
-			<a class="button" href="{% url 'admin:competition:competition:season:division:stage:edit' competition.pk season.pk division.pk stage.pk %}">{% trans "Cancel" %}</a>
+					{% empty %}
+						<tr class="empty"><td colspan="4">{% trans "There are no matches that require progression." %}</td></tr>
+					{% endfor %}
+				</tbody>
+			</table>
 		</div>
 	</form>
 {% endblock %}

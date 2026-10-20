@@ -1,20 +1,21 @@
 {% extends "touchtechnology/admin/edit.html" %}
-{% load common %}
+{% load i18n common %}
+
+{% block page-kind %}{% trans "Build the draw" %} · {% blocktrans with step=wizard.steps.step1 count=wizard.steps.count %}step {{ step }} of {{ count }}{% endblocktrans %}{% endblock %}
+{% block page-title %}{% if stage %}{{ stage.title }}{% else %}{% trans "Draw" %}{% endif %}{% endblock %}
+{% block page-actions %}{% endblock %}
+{% block tab-links %}{% endblock %}
 
 {% block form-fieldset %}
-	<!-- wizard.management_form -->
 	{{ wizard.management_form }}
-
-	<!-- wizard.form.management_form -->
 	{{ wizard.form.management_form }}
+	{% if wizard.form.non_form_errors %}<div class="non-field-errors" role="alert">{{ wizard.form.non_form_errors }}</div>{% endif %}
 
 	{% for form in wizard.form %}
-		<!-- wizard.form[{{ forloop.counter0 }}] -->
-		<fieldset>
-			<legend>{{ form.instance.descriptor|default:form.instance }}</legend>
-			{% for f in form %}
-				{% field f %}
-			{% endfor %}
+		<fieldset class="fieldset">
+			<legend class="fieldset__legend">{{ form.instance.descriptor|default:form.instance }}</legend>
+			{% if form.non_field_errors %}<div class="non-field-errors">{{ form.non_field_errors }}</div>{% endif %}
+			{% for f in form %}{% field f %}{% endfor %}
 		</fieldset>
 	{% endfor %}
 {% endblock %}

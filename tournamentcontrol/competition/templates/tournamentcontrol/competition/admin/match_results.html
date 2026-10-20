@@ -1,131 +1,104 @@
-{% extends "touchtechnology/admin/edit.html" %}
-{% load i18n tz %}
-{% load common %}
+{% extends "tournamentcontrol/competition/admin/base.html" %}
+{% load i18n tz common console %}
 
-{% block tab-links %}
+{% block title %}{% trans "Results" %} {{ date|date:"j M" }} · {{ brand.name }}{% endblock %}
+
+{% block content %}
+	{% trans "Results" as kind %}
+	{% include "tournamentcontrol/competition/admin/_day_head.html" with here="results" %}
+
 	{% timezone season.timezone %}
-		{% for form in match_formset.forms %}
-			{% with match=form.instance %}
-				{% ifchanged match.datetime %}
-					<li class="{% if forloop.first %}active{% endif %}">
-						<a href="#time-{{ match.datetime|date:"Hi" }}-tab" data-toggle="tab">
-							<i class="fa fa-chevron-right fa-fw"></i>
-							&nbsp;{{ match.datetime }}
-						</a>
-					</li>
-				{% endifchanged %}
-			{% endwith %}
-		{% endfor %}
-
-		{% if bye_formset.forms %}
-			<li>
-				<a href="#bye-tab" data-toggle="tab">
-					<i class="fa fa-chevron-right fa-fw"></i>
-					&nbsp;{% trans "Byes" %}
-				</a>
-			</li>
-		{% endif %}
-	{% endtimezone %}
-{% endblock %}
-
-{% block tab-panes %}
-	{% timezone season.timezone %}
-		<div class="heading-block">
-			<h3>{% trans "Results" %}</h3>
-		</div>
-
+	<form id="results-form" class="form-flow results" action="" method="post" data-watch novalidate>
+		{% csrf_token %}
 		{{ match_formset.management_form }}
 		{{ bye_formset.management_form }}
 
-		{% regroup match_formset.forms by instance.datetime as match_forms %}
+		{% include "tournamentcontrol/competition/admin/_actions.html" with cancel=season.urls.edit|add:"#schedule-tab" %}
 
-		{% for tab in match_forms %}
-			<div class="tab-pane {% if forloop.first %}active{% endif %}" id="time-{{ tab.grouper|date:"Hi" }}-tab">
-				{% for form in tab.list %}
-					{% with match=form.instance %}
-						{% with home=match.get_home_team away=match.get_away_team %}
-							<fieldset>
-								<legend>{{ match }}</legend>
+		{% if match_formset.non_form_errors or bye_formset.non_form_errors %}
+			<div class="non-field-errors" role="alert">{{ match_formset.non_form_errors }}{{ bye_formset.non_form_errors }}</div>
+		{% endif %}
 
-								{{ form.id }}
+		{% regroup match_formset.forms by instance.datetime as times %}
 
-								<div class="col-md-4 hidden-sm hidden-xs">
-									<div class="form-group">
-										<label class="control-label col-md-4">{% trans "Play at" %}</label>
-										<div class="col-md-8">
-											<p class="form-control-static">{{ match.play_at.title }}</p>
-										</div>
-									</div>
-									<div class="form-group">
-										<label class="control-label col-md-4">{% trans "Division" %}</label>
-										<div class="col-md-8">
-											<p class="form-control-static">{{ match.stage.division.title }}</p>
-										</div>
-									</div>
-								</div>
+		{% if times|length > 1 or bye_formset.forms %}
+			<nav class="day-nav" aria-label="{% trans "Kick-off times" %}">
+				{% for slot in times %}<a class="btn btn--sm btn--ghost" href="#t{{ slot.grouper|date:"Hi" }}">{% icon "clock" %}<span class="mono">{{ slot.grouper|time:"H:i" }}</span></a>{% endfor %}
+				{% if bye_formset.forms %}<a class="btn btn--sm btn--ghost" href="#byes">{% trans "Byes" %}</a>{% endif %}
+			</nav>
+		{% endif %}
 
-								<div class="col-md-8 col-sm-6 col-xs-6">
-									{% if form.home_team_score %}
-										{% field form.home_team_score %}
+		{% for slot in times %}
+			<section class="time-block" id="t{{ slot.grouper|date:"Hi" }}" aria-labelledby="t{{ slot.grouper|date:"Hi" }}-h">
+				<h2 class="time-block__head" id="t{{ slot.grouper|date:"Hi" }}-h"><span class="mono">{{ slot.grouper|time:"H:i"|default:_("No time") }}</span><span class="muted">{% blocktrans count n=slot.list|length %}{{ n }} match{% plural %}{{ n }} matches{% endblocktrans %}</span></h2>
+				<div class="table-wrap">
+					<table class="data">
+						<thead>
+							<tr>
+								<th scope="col" class="opt">{% trans "Field" %}</th>
+								<th scope="col" class="opt">{% trans "Division" %}</th>
+								<th scope="col" class="num">{% trans "Home" %}</th>
+								<th scope="col" class="num">{% trans "Score" %}</th>
+								<th scope="col" class="vs"><span class="visually-hidden">{% trans "to" %}</span></th>
+								<th scope="col">{% trans "Score" %}</th>
+								<th scope="col">{% trans "Away" %}</th>
+								<th scope="col" class="opt-sm">{% trans "Forfeit" %}</th>
+							</tr>
+						</thead>
+						<tbody>
+							{% for form in slot.list %}
+								{% with match=form.instance %}
+									<tr{% if match.home_team_score is not None %} class="is-done"{% endif %}>
+										<td class="opt nowrap">{{ form.id }}{{ match.play_at.title|default:"–" }}</td>
+										<td class="opt">{{ match.stage.division.short_title|default:match.stage.division.title }}</td>
+										<td class="num team-cell"><label for="{{ form.home_team_score.id_for_label }}">{{ match.get_home_team.title|default:match.get_home_team_plain }}</label></td>
+										<td class="num">{% if form.home_team_score %}{% control form.home_team_score class="score-input" inputmode="numeric" %}{% endif %}</td>
+										<td class="vs" aria-hidden="true">–</td>
+										<td>{% if form.away_team_score %}{% control form.away_team_score class="score-input" inputmode="numeric" %}{% endif %}</td>
+										<td class="team-cell"><label for="{{ form.away_team_score.id_for_label }}">{{ match.get_away_team.title|default:match.get_away_team_plain }}</label></td>
+										<td class="opt-sm">
+											{% if form.is_forfeit %}
+												<div class="forfeit">
+													{% control form.is_forfeit aria_label=_("Forfeit") %}
+													{% control form.forfeit_winner aria_label=_("Forfeit winner") %}
+												</div>
+											{% endif %}
+										</td>
+									</tr>
+									{% if form.errors %}
+										<tr><td colspan="8"><div class="field__error">{% icon "alert" %}<span>{% for field, errors in form.errors.items %}{{ errors|join:" " }} {% endfor %}</span></div></td></tr>
 									{% endif %}
-								</div>
-								<div class="col-md-8 col-sm-6 col-xs-6">
-									{% if form.away_team_score %}
-										{% field form.away_team_score %}
-									{% endif %}
-								</div>
-
-								<div class="clearfix"></div>
-
-								{% if form.is_forfeit %}
-									<div class="col-md-8 col-md-offset-4 col-sm-6 col-sm-offset-0 col-xs-6">
-											{% field form.is_forfeit %}
-									</div>
-									<div class="col-md-8 col-md-offset-4 col-sm-6 col-xs-6">
-										{% field form.forfeit_winner %}
-									</div>
-								{% endif %}
-							</fieldset>
-						{% endwith %}
-					{% endwith %}
-				{% endfor %}
-			</div>
+								{% endwith %}
+							{% endfor %}
+						</tbody>
+					</table>
+				</div>
+			</section>
+		{% empty %}
+			<p class="empty-state">{% trans "No matches on this day need a result." %}</p>
 		{% endfor %}
 
-		<div class="tab-pane" id="bye-tab">
-			<fieldset>
-				<legend>{% blocktrans %}Process byes for {{ date }}{% endblocktrans %}</legend>
-				<p>{% blocktrans %}Process byes to update the ladder as configured.{% endblocktrans %}</p>
-				{% for form in bye_formset.forms %}
-					{% with match=form.instance %}
-						{% with home=match.get_home_team away=match.get_away_team %}
-							{% with team=away|default:home %}
-								{{ form.id }}
-								<div class="col-md-6 col-sm-6">
-									<div class="form-group">
-										<label class="control-label col-md-6">{{ team }}</label>
-										<div class="col-md-6">
-											{{ form.bye_processed }}
-											<p class="help-block">
-												{{ match.stage.division.title }}
-											</p>
-										</div>
-									</div>
-								</div>
-							{% endwith %}
-						{% endwith %}
-					{% endwith %}
-				{% endfor %}
-			</fieldset>
-		</div>
-
-		<div class="clearfix"></div>
-
-		<div class="form-group">
-			<div class="text-center">
-				<button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
-				&nbsp;<a class="btn btn-default" href="{{ season.urls.edit }}">{% trans "Cancel" %}</a>
-			</div> <!-- /.col -->
-		</div>
+		{% if bye_formset.forms %}
+			<section class="time-block" id="byes" aria-labelledby="byes-h">
+				<h2 class="time-block__head" id="byes-h">{% trans "Byes" %} <span class="muted">{% trans "Processing a bye updates the ladder as configured." %}</span></h2>
+				<div class="table-wrap">
+					<table class="data">
+						<thead><tr><th scope="col">{% trans "Team" %}</th><th scope="col">{% trans "Division" %}</th><th scope="col">{% trans "Processed" %}</th></tr></thead>
+						<tbody>
+							{% for form in bye_formset.forms %}
+								{% with match=form.instance %}
+									<tr>
+										<td>{{ form.id }}<label for="{{ form.bye_processed.id_for_label }}">{{ form.bye_processed.label }}</label></td>
+										<td>{{ match.stage.division.title }}</td>
+										<td>{% control form.bye_processed %}</td>
+									</tr>
+								{% endwith %}
+							{% endfor %}
+						</tbody>
+					</table>
+				</div>
+			</section>
+		{% endif %}
+	</form>
 	{% endtimezone %}
 {% endblock %}

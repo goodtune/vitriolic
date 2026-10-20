@@ -2,9 +2,6 @@
 {% load i18n %}
 
 {% block content %}
-	<h1>{% trans "Your PDF was not generated" %}</h1>
-
-	<fieldset>
-		<p><a href="{{ start_again }}">{% trans "Start again" %}</a></p>
-	</fieldset>
+	<header class="page-head"><div class="page-head__text"><p class="page-head__kind">PDF</p><h1 class="page-head__title">{% trans "Your PDF was not generated" %}</h1></div></header>
+	<p><a class="btn btn--primary" href="{{ start_again }}">{% trans "Start again" %}</a></p>
 {% endblock %}

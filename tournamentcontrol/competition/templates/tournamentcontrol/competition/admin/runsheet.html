@@ -1,7 +1,56 @@
-{% extends "tournamentcontrol/competition/runsheet.html" %}
+{% extends "touchtechnology/admin/sheet.html" %}
+{% load i18n tz common console %}
 
-{% block detail_link %}
-	<a href="{% url 'admin:fixja:competition:season:division:stage:match:detail' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}">
-		<span class="glyphicon glyphicon-stats" aria-hidden="true"></span>
-	</a>
+{% block title %}{% blocktrans %}Run sheet · {{ date }}{% endblocktrans %}{% endblock %}
+{% block tools %}
+	<a class="btn btn--sm" href="{% url 'admin:fixja:match-results' season.competition.pk season.pk date|date:"Ymd" %}">{% icon "check" %}{% trans "Results" %}</a>
+	<a class="btn btn--sm" href="{% url 'admin:fixja:match-live-stream' season.competition.pk season.pk date|date:"Ymd" %}">{% icon "video" %}{% trans "Live Stream" %}</a>
+{% endblock %}
+{% block kind %}{% trans "Run Sheet" %}{% endblock %}
+{% block heading-again %}{{ date|date:"l j F Y" }}{% endblock %}
+{% block meta %}<p>{{ season.competition.title }} · {{ season.title }}</p>{% endblock %}
+
+{% block content %}
+	{% timezone season.timezone %}
+	<div class="table-wrap">
+		<table class="data" id="match_list">
+			<thead>
+				<tr>
+					<th scope="col" class="time">{% trans "Time" %}</th>
+					<th scope="col" class="division">{% trans "Division" %}</th>
+					<th scope="col" class="play_at">{% trans "Place" %}</th>
+					<th scope="col" class="team">{% trans "Team 1" %}</th>
+					<th scope="col" class="num">{% trans "Score" %}</th>
+					<th scope="col" class="team">{% trans "Team 2" %}</th>
+					<th scope="col" class="referees">{% trans "Referees" %}</th>
+					<th scope="col" class="actions"><span class="visually-hidden">{% trans "Links" %}</span></th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for match in object_list.playable %}
+					<tr{% ifchanged match.datetime %} class="group-start"{% endifchanged %}>
+						<th scope="row" class="time mono">{% ifchanged match.datetime %}{{ match.datetime|time:"H:i" }}{% endifchanged %}</th>
+						<td class="division">{{ match.stage.division.short_title|default:match.stage.division.title }}</td>
+						<td class="play_at">{{ match.play_at.title }}</td>
+						<td class="team">{{ match.get_home_team.title }}</td>
+						<td class="num score">{% if match.home_team_score is not None %}{{ match.home_team_score }}–{{ match.away_team_score }}{% endif %}</td>
+						<td class="team">{{ match.get_away_team.title }}</td>
+						<td class="referees">{% for ref in match.referees.all %}<div>{{ ref.person.first_name.0 }} {{ ref.person.last_name }}</div>{% endfor %}</td>
+						<td class="actions">
+							<div class="btn-row">
+								{% block detail_link %}<a class="btn btn--sm btn--ghost btn--icon" href="{% url 'admin:fixja:competition:season:division:stage:match:detail' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}" aria-label="{% trans "Statistics" %}">{% icon "chart" %}</a>{% endblock %}
+								{% block referees_link %}<a class="btn btn--sm btn--ghost btn--icon" href="{% url 'admin:fixja:competition:season:division:stage:match:referees' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}" aria-label="{% trans "Referees" %}">{% icon "whistle" %}</a>{% endblock %}
+								{% if match.videos %}<a class="btn btn--sm btn--ghost btn--icon" href="{{ match.videos|first }}" aria-label="{% trans "Video" %}">{% icon "video" %}</a>{% endif %}
+								{% if match.live_stream and not match.live_stream_bind %}<a class="btn btn--sm btn--ghost btn--icon" href="{{ match.urls.edit }}?next={{ request.path }}" aria-label="{% trans "Stream not bound" %}">{% icon "alert" %}</a>{% endif %}
+								{% if match.live_stream and match.external_identifier %}<a class="btn btn--sm btn--ghost btn--icon" href="{% url 'admin:fixja:competition:season:division:stage:match:resync-live-stream' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}" aria-label="{% trans "Resync" %}">{% icon "refresh" %}</a>{% endif %}
+							</div>
+						</td>
+					</tr>
+				{% empty %}
+					<tr class="empty"><td colspan="8">{% trans "No matches on this day." %}</td></tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+	{% endtimezone %}
 {% endblock %}

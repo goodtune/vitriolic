@@ -10,7 +10,7 @@ from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
 from django.db import models
-from django.db.models import Case, F, Q, Sum, When
+from django.db.models import Case, Count, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
 from django.http import (
     Http404,
@@ -205,7 +205,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def render(self, request, templates, context, *args, **kwargs):
         context.update(
             {
-                "base": "tournamentcontrol/rego/admin/base.html",
+                "base": "tournamentcontrol/competition/admin/base.html",
             }
         )
         return super(CompetitionAdminComponent, self).render(
@@ -767,15 +767,50 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @staff_login_required_m
     def index(self, request, **kwargs):
-        messages.warning(
-            request,
-            _(
-                "We're moving a few things around, please "
-                "update any bookmarks you may find that "
-                "have broken."
-            ),
-        )
-        return self.redirect(self.reverse("competition:list"))
+        """
+        The component's own page: where its places are, and every season in
+        progress with its next match day, so a day's work is one click away.
+        """
+        today = timezone.localdate()
+        seasons = []
+        for season in (
+            Season.objects.filter(complete=False)
+            .select_related("competition")
+            .annotate(division_count=Count("divisions", distinct=True))
+            .order_by("competition__order", "order")
+        ):
+            dated = season.matches.filter(date__isnull=False)
+            seasons.append(
+                {
+                    "season": season,
+                    "next_day": dated.filter(date__gte=today)
+                    .order_by("date")
+                    .values_list("date", flat=True)
+                    .first(),
+                    "last_day": dated.filter(date__lt=today)
+                    .order_by("-date")
+                    .values_list("date", flat=True)
+                    .first(),
+                    "awaiting": dated.filter(
+                        date__lt=today,
+                        is_bye=False,
+                        is_washout=False,
+                        home_team_score__isnull=True,
+                        home_team__isnull=False,
+                        away_team__isnull=False,
+                    ).count(),
+                }
+            )
+        context = {
+            "seasons": seasons,
+            "today": today,
+            "competition_count": Competition.objects.count(),
+            "club_count": Club.objects.count(),
+            "format_count": DrawFormat.objects.count(),
+            "awaiting": sum(row["awaiting"] for row in seasons),
+        }
+        context.update(kwargs)
+        return self.render(request, self.template_path("index.html"), context)
 
     @competition_by_pk_m
     @staff_login_required_m
@@ -929,10 +964,30 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         if season is None:
             season = next_related_factory(Season, competition)
             dates = []
+            match_days = []
         else:
             dates = season.matches.dates("date", "day")
+            # Each match day with how many matches it holds and how many of
+            # them have a result, so the schedule shows what is left to do.
+            match_days = (
+                season.matches.filter(date__isnull=False)
+                .values("date")
+                .annotate(
+                    count=Count("pk"),
+                    played=Count(
+                        "pk",
+                        filter=Q(home_team_score__isnull=False)
+                        | Q(is_washout=True)
+                        | Q(is_bye=True, bye_processed=True),
+                    ),
+                    byes=Count("pk", filter=Q(is_bye=True)),
+                )
+                .order_by("date")
+            )
 
         extra_context.setdefault("dates", dates)
+        extra_context.setdefault("match_days", match_days)
+        extra_context.setdefault("today", timezone.localdate())
 
         related = (
             "exclusions",
@@ -1336,6 +1391,18 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def edit_division(self, request, season, extra_context, division=None, **kwargs):
         if division is None:
             division = next_related_factory(Division, season)
+            ladders = []
+        else:
+            # The ladder of each stage that has one, for the division's page.
+            ladders = [
+                (stage, rows)
+                for stage in division.stages.all()
+                for rows in [
+                    list(stage.ladder_summary.select_related("team", "stage_group"))
+                ]
+                if rows
+            ]
+        extra_context.setdefault("ladders", ladders)
 
         return self.generic_edit(
             request,
@@ -2617,7 +2684,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         time=None,
         **kwargs,
     ):
-        redirect_to = reverse("admin:index", current_app=self.app)
+        # Back to the same day, which shows what was saved and what is left.
+        redirect_to = request.get_full_path()
         return super(CompetitionAdminComponent, self).match_results(
             request,
             competition,
@@ -3182,8 +3250,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 ).append(
                     (
                         pa.number or "",
-                        pa.person.first_name.encode("utf-8").strip(),
-                        pa.person.last_name.encode("utf-8").strip(),
+                        pa.person.first_name.strip(),
+                        pa.person.last_name.strip(),
                         pa.person.date_of_birth,
                         pa.person.email,
                     )
@@ -3197,8 +3265,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                         "staff", collections.OrderedDict()
                     ).setdefault(role.name, set()).add(
                         (
-                            pa.person.first_name.encode("utf-8").strip(),
-                            pa.person.last_name.encode("utf-8").strip(),
+                            pa.person.first_name.strip(),
+                            pa.person.last_name.strip(),
                             pa.person.date_of_birth,
                             pa.person.email,
                         )

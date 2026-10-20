@@ -1,28 +1,24 @@
 {% extends "tournamentcontrol/competition/admin/base.html" %}
-{% load i18n common %}
+{% load i18n common console %}
 
-{% block main_content %}
-<div class="box">
-	<h1>{% blocktrans with step=wizard.steps.step1 count=wizard.steps.count %}Produce Scorecards: Step {{ step }} of {{ count }}{% endblocktrans %}</h1>
+{% block content %}
+	<header class="page-head">
+		<div class="page-head__text">
+			<p class="page-head__kind">{% blocktrans with step=wizard.steps.step1 count=wizard.steps.count %}Step {{ step }} of {{ count }}{% endblocktrans %}</p>
+			<h1 class="page-head__title">{% trans "Produce Scorecards" %}</h1>
+		</div>
+	</header>
 
-	{% if wizard.form.non_field_errors %}
-		{{ wizard.form.non_field_errors }}
-	{% endif %}
-
-	<form action="" method="post">{% csrf_token %}
+	<form id="scorecard-form" class="form-flow" action="" method="post">{% csrf_token %}
 		{{ wizard.management_form }}
-		<fieldset>
-			{% for f in wizard.form %}
-				{% field f %}
-			{% endfor %}
-		</fieldset>
-
-		<div class="buttons">
-			<button class="default" type="submit">{% if wizard.steps.current == wizard.steps.last %}{% trans "Generate" %}{% else %}{% trans "Next" %}{% endif %}</button>
-			{% if wizard.steps.prev %}
-				<button name="wizard_prev_step" value="{{ wizard.steps.prev }}">{% trans "Back" %}</button>
-			{% endif %}
+		<div class="actions-bar">
+			<button class="btn btn--primary" type="submit" data-save>{% if wizard.steps.current == wizard.steps.last %}{% icon "print" %}{% trans "Generate" %}{% else %}{% trans "Next" %}{% icon "chevron-right" %}{% endif %}</button>
+			{% if wizard.steps.prev %}<button class="btn" name="wizard_prev_step" value="{{ wizard.steps.prev }}" formnovalidate>{% icon "arrow-left" %}{% trans "Back" %}</button>{% endif %}
+			<a class="btn btn--ghost" href="{% url 'admin:index' %}">{% trans "Cancel" %}</a>
+		</div>
+		<div class="pane--form">
+			{% if wizard.form.non_field_errors %}<div class="non-field-errors" role="alert">{{ wizard.form.non_field_errors }}</div>{% endif %}
+			<fieldset>{% for f in wizard.form %}{% field f %}{% endfor %}</fieldset>
 		</div>
 	</form>
-</div>
 {% endblock %}

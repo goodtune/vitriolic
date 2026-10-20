@@ -1,4 +1,5 @@
 {% extends "tournamentcontrol/calculator/index.html" %}
+{% load i18n %}
 
-{% block switch %}Standard mode{% endblock %}
+{% block switch %}{% trans "Standard mode" %}{% endblock %}
 {% block switch-url %}{% url 'calculator:index' %}{% endblock %}

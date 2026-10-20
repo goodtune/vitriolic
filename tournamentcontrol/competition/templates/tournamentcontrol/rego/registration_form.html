@@ -1,0 +1,48 @@
+{% extends "touchtechnology/admin/sheet.html" %}
+{% load i18n content %}
+
+{% block title %}{% trans "Registration Forms" %} · {{ club.title }}{% endblock %}
+{% block extrahead %}<style>@page { size: A4 landscape; }</style>{% endblock %}
+{% block bar %}{% url 'admin:fixja:club:edit' club.pk as back %}{{ block.super }}{% endblock %}
+{% block kind %}{% trans "Registration Forms" %}{% endblock %}
+{% block heading-again %}{{ club.title }}{% endblock %}
+{% block meta %}<p>{{ competition.title }} · {{ season.title }}</p>{% endblock %}
+
+{% block content %}
+	<div class="notice">{% chunk "registration-form-disclaimer" %}</div>
+	{% for team, sheet in data.items %}
+		<section class="{% if not forloop.first %}page-break{% endif %}">
+			<h2>{{ team.title }} <span class="muted">· {{ team.division.title }}</span></h2>
+			<div class="split">
+				<div class="table-wrap">
+					<table class="data">
+						<thead><tr><th scope="col" class="num">{% trans "No." %}</th><th scope="col">{% trans "First name" %}</th><th scope="col">{% trans "Last name" %}</th><th scope="col">{% trans "Date of birth" %}</th><th scope="col">{% trans "Signature" %}</th></tr></thead>
+						<tbody>
+							{% for number, first_name, last_name, date_of_birth, email in sheet.players %}
+								<tr><td class="num">{{ number }}</td><td>{{ first_name }}</td><td>{{ last_name }}</td><td class="mono">{{ date_of_birth|date:"d/m/Y" }}</td><td style="min-width:140px"></td></tr>
+							{% empty %}
+								<tr class="empty"><td colspan="5">{% trans "No players registered." %}</td></tr>
+							{% endfor %}
+						</tbody>
+					</table>
+				</div>
+				<div class="table-wrap">
+					<table class="data">
+						<thead><tr><th scope="col">{% trans "Role" %}</th><th scope="col">{% trans "Name" %}</th></tr></thead>
+						<tbody>
+							{% for role, people in sheet.staff.items %}
+								{% for first_name, last_name, date_of_birth, email in people %}
+									<tr>{% if forloop.first %}<th scope="row" rowspan="{{ people|length }}">{{ role }}</th>{% endif %}<td>{{ first_name }} {{ last_name }}</td></tr>
+								{% endfor %}
+							{% empty %}
+								<tr class="empty"><td colspan="2">{% trans "No officials named." %}</td></tr>
+							{% endfor %}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</section>
+	{% empty %}
+		<p class="empty-state">{% trans "This club has no teams with people in this season." %}</p>
+	{% endfor %}
+{% endblock %}

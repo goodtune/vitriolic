@@ -2,19 +2,19 @@
 {% load i18n %}
 
 {% block table-headings %}
-	<th>{% trans "Start" %}</th>
-	<th>{% trans "End" %}</th>
-	<th>{% trans "Time" %}</th>
-	<th>{% trans "Duration" %}</th>
-	<th>{% trans "Count" %}</th>
+	<th scope="col">{% trans "First match" %}</th>
+	<th scope="col" class="num">{% trans "Every" %}</th>
+	<th scope="col" class="num">{% trans "Count" %}</th>
+	<th scope="col" class="opt">{% trans "From" %}</th>
+	<th scope="col" class="opt">{% trans "Until" %}</th>
 {% endblock %}
 
 {% block table-columns %}
-	<td>{{ obj.start_date|default_if_none:"-" }}</td>
-	<td>{{ obj.end_date|default_if_none:"-" }}</td>
-	<td>{{ obj.start }}</td>
-	<td>{{ obj.interval }}</td>
-	<td>{{ obj.count }}</td>
+	<td class="mono"><a href="{{ obj.urls.edit }}">{{ obj.start|time:"H:i" }}</a></td>
+	<td class="num">{% blocktrans with n=obj.interval %}{{ n }} min{% endblocktrans %}</td>
+	<td class="num">{{ obj.count }}</td>
+	<td class="opt mono">{{ obj.start_date|date:"j M Y"|default:"–" }}</td>
+	<td class="opt mono">{{ obj.end_date|date:"j M Y"|default:"–" }}</td>
 {% endblock %}
 
 {% block empty-row-colspan %}6{% endblock %}

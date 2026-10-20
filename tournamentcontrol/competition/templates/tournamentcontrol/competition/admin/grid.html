@@ -1,87 +1,58 @@
-{% load i18n static %}
-{% load common %}
-<html>
-<head>
-	<title>{% block page_title %}{{ competition.title }} - {{ season.title }} • {{ date|date }}{% endblock %}</title>
-	{% if not request.is_ajax %}
-		<link rel="stylesheet" href="{% get_static_prefix %}css/reset-min.css" />
-		<link rel="stylesheet" href="{% get_static_prefix %}css/base-min.css" />
-	{% endif %}
+{% extends "touchtechnology/admin/sheet.html" %}
+{% load i18n common %}
 
-	<link rel="stylesheet" href="{% get_static_prefix %}tournamentcontrol/competition/css/vi_grid.css" />
-
-	<style type="text/css">
-		/* timestamp and version number */
-		@page {
-			@bottom-right {
-				content: "{% now "Y-m-d H:i T" %}{% if ver %} (v{{ ver }}){% endif %}";
-				font-size: 1.5em;
-				font-style: italic;
-			}
-		}
-		.match.video {
-			border: 3px solid #900;
-		}
+{% block title %}{% block page_title %}{{ competition.title }} · {{ season.title }} · {{ date|date }}{% endblock %}{% endblock %}
+{% block body_class %}matrix-page{% endblock %}
+{% block extrahead %}
+	<style>
+		@page { size: A4 landscape; @bottom-right { content: "{% now "Y-m-d H:i T" %}{% if ver %} (v{{ ver }}){% endif %}"; font-size: 9pt; } }
 	</style>
+	{% block customcss %}{% endblock %}
+{% endblock %}
+{% block kind %}{% trans "Match matrix" %}{% endblock %}
+{% block heading-again %}{{ competition.title }} · {{ season.title }}{% endblock %}
+{% block meta %}{% if date %}<p>{{ date|date:"l j F Y" }}</p>{% endif %}{% endblock %}
 
-	{% block customcss %}
-		<link rel="stylesheet" href="{% get_static_prefix %}css/vi_grid.css" />
-	{% endblock %}
-</head>
-<body>
+{% block content %}
 	{% for venue in season.venues.all %}
 		{% for date, matrix in matrices.items %}
-			{% if not request.is_ajax %}
-				<h1>{{ date|date }} @ {{ venue }}</h1>
-			{% endif %}
-			<table id="grid">
-				<thead>
-					<tr>
-						<th>&nbsp;</th>
-						{% for place in columns %}
-							{% if place.ground.venue == venue %}
-								<th>{% with title=place.abbreviation|default:place.title %}{% trans title %}{% endwith %}</th>
-							{% endif %}
-						{% endfor %}
-					</tr>
-				</thead>
-				<tfoot>
-					<tr>
-						<td>&nbsp;</td>
-						{% for place in columns %}
-							{% if place.ground.venue == venue %}
-								<th>{% with title=place.abbreviation|default:place.title %}{% trans title %}{% endwith %}</th>
-							{% endif %}
-						{% endfor %}
-					</tr>
-				</tfoot>
-				<tbody>
-					{% for time, data in matrix.items %}
-						<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
-							<th>{{ time|time }}</th>
-							{% for place, matches in data.items %}
+			<h2{% if not forloop.parentloop.first or not forloop.first %} class="page-break"{% endif %}>{{ date|date:"l j F Y" }} · {{ venue }}</h2>
+			<div class="table-wrap">
+				<table class="data matrix" id="grid">
+					<thead>
+						<tr>
+							<th scope="col"><span class="visually-hidden">{% trans "Time" %}</span></th>
+							{% for place in columns %}
 								{% if place.ground.venue == venue %}
-									<td>
-										{% for match in matches %}
-											{% with division=match.stage.division stage=match.stage home=match.get_home_team away=match.get_away_team %}
-												<div class="match {{ division.slug|cssify }}{% if match.videos %} video{% endif %}" data-match="{{ match.pk }}" data-stage="{{ stage.pk }}" data-division="{{ division.pk }}">
-													<h4>{% block division %}{{ division.title|htmlentities }}<br />
-                                                        <small>{{ stage.title|htmlentities }}</small>{% endblock %}</h4>
-													{% if match.label %}
-														<h5>{% trans match.label %}</h5>
-													{% endif %}
-													<p>{% block teams %}{{ home.title|htmlentities }}<br />{{ away.title|htmlentities }}{% endblock %}</p>
-												</div>
-											{% endwith %}
-										{% endfor %}
-									</td>
+									<th scope="col">{% with title=place.abbreviation|default:place.title %}{% trans title %}{% endwith %}</th>
 								{% endif %}
 							{% endfor %}
 						</tr>
-					{% endfor %}
-				</tbody>
-			</table>
+					</thead>
+					<tbody>
+						{% for time, data in matrix.items %}
+							<tr>
+								<th scope="row">{{ time|time:"H:i" }}</th>
+								{% for place, matches in data.items %}
+									{% if place.ground.venue == venue %}
+										<td>
+											{% for match in matches %}
+												{% with division=match.stage.division stage=match.stage home=match.get_home_team away=match.get_away_team %}
+													<div class="matrix-match {{ division.slug|cssify }}{% if match.videos %} video{% endif %}" style="--division: {{ division.get_color }}" data-match="{{ match.pk }}" data-stage="{{ stage.pk }}" data-division="{{ division.pk }}">
+														<h4>{% block division %}{{ division.title }}<small>{{ stage.title }}</small>{% endblock %}</h4>
+														{% if match.label %}<h5>{% trans match.label %}</h5>{% endif %}
+														<p>{% block teams %}{{ home.title }}<br>{{ away.title }}{% endblock %}</p>
+													</div>
+												{% endwith %}
+											{% endfor %}
+										</td>
+									{% endif %}
+								{% endfor %}
+							</tr>
+						{% endfor %}
+					</tbody>
+				</table>
+			</div>
 		{% endfor %}
 	{% endfor %}
-</body>
-</html>
+{% endblock %}

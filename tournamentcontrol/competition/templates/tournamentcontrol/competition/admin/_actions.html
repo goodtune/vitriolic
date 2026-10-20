@@ -1,0 +1,7 @@
+{% load i18n console %}
+{% comment %}A form's Save and Cancel, in the console's one place for them.{% endcomment %}
+<div class="actions-bar">
+	<button type="submit" class="btn btn--primary" data-save>{% icon "check" %}{{ save_label|default:_("Save") }}</button>
+	<a class="btn" href="{{ cancel }}">{% trans "Cancel" %}</a>
+	<span class="actions-bar__hint"><span class="actions-bar__state" hidden>{% trans "Unsaved changes" %} ·</span> <kbd>⌘S</kbd> {% trans "saves" %}</span>
+</div>

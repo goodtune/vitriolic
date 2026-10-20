@@ -1,0 +1,73 @@
+{% extends "tournamentcontrol/competition/admin/base.html" %}
+{% load i18n console %}
+
+{% block title %}{{ component.verbose_name }} · {{ brand.name }}{% endblock %}
+
+{% block content %}
+	<header class="page-head">
+		<div class="page-head__text">
+			<p class="page-head__kind">{% trans "Component" %}</p>
+			<h1 class="page-head__title">{{ component.verbose_name }}</h1>
+			<p class="page-head__meta">{{ today|date:"l j F Y" }}</p>
+		</div>
+		<div class="page-head__actions">
+			<a class="btn btn--primary" href="{% url 'admin:fixja:competition:add' %}">{% icon "plus" %}{% trans "Add competition" %}</a>
+		</div>
+	</header>
+
+	<div class="stat-row">
+		<a class="stat" href="{% url 'admin:fixja:competition:list' %}"><span class="stat__value">{{ competition_count }}</span><span class="stat__label">{% trans "Competitions" %}</span></a>
+		<a class="stat" href="{% url 'admin:fixja:club:list' %}"><span class="stat__value">{{ club_count }}</span><span class="stat__label">{% trans "Clubs" %}</span></a>
+		<a class="stat" href="{% url 'admin:fixja:format:list' %}"><span class="stat__value">{{ format_count }}</span><span class="stat__label">{% trans "Draw formats" %}</span></a>
+		<div class="stat{% if awaiting %} stat--alert{% endif %}"><span class="stat__value">{{ awaiting }}</span><span class="stat__label">{% trans "Played matches without a result" %}</span></div>
+	</div>
+
+	<h2 class="section-title">{% trans "Seasons in progress" %}</h2>
+	<div class="table-wrap">
+		<table class="data">
+			<thead>
+				<tr>
+					<th scope="col">{% trans "Season" %}</th>
+					<th scope="col" class="num opt">{% trans "Divisions" %}</th>
+					<th scope="col">{% trans "Last match day" %}</th>
+					<th scope="col">{% trans "Next match day" %}</th>
+					<th scope="col" class="actions"><span class="visually-hidden">{% trans "Actions" %}</span></th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for row in seasons %}
+					{% with season=row.season %}
+						<tr>
+							<td><a href="{{ season.urls.edit }}">{{ season.title }}</a><span class="sub">{{ season.competition.title }}</span></td>
+							<td class="num opt">{{ season.division_count }}</td>
+							<td>
+								{% if row.last_day %}
+									<a class="mono" href="{% url 'admin:fixja:match-results' season.competition.pk season.pk row.last_day|date:"Ymd" %}">{{ row.last_day|date:"D j M" }}</a>
+									{% if row.awaiting %}<span class="tag tag--warn">{% blocktrans count n=row.awaiting %}{{ n }} result due{% plural %}{{ n }} results due{% endblocktrans %}</span>{% endif %}
+								{% else %}<span class="muted">–</span>{% endif %}
+							</td>
+							<td>{% if row.next_day %}<span class="mono">{{ row.next_day|date:"D j M" }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+							<td class="actions">
+								<div class="btn-row">
+									{% if row.next_day %}
+										<a class="btn btn--sm" href="{% url 'admin:fixja:match-schedule' season.competition.pk season.pk row.next_day|date:"Ymd" %}">{% icon "clock" %}<span class="label">{% trans "Allocate" %}</span></a>
+									{% endif %}
+									<a class="btn btn--sm" href="{{ season.urls.edit }}#schedule-tab">{% icon "calendar" %}<span class="label">{% trans "Schedule" %}</span></a>
+								</div>
+							</td>
+						</tr>
+					{% endwith %}
+				{% empty %}
+					<tr class="empty"><td colspan="5">{% trans "No season is in progress." %}</td></tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+
+	<h2 class="section-title">{% trans "Go to" %}</h2>
+	<div class="links-grid">
+		{% for label, url, fa in component.dropdowns %}
+			<a class="link-card" href="{{ url }}">{% icon "chevron-right" %}<span>{{ label }}</span></a>
+		{% endfor %}
+	</div>
+{% endblock %}

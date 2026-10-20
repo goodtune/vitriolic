@@ -1,46 +1,31 @@
 {% extends base %}
-{% load i18n admin common %}
+{% load i18n console %}
 
 {% block body_class %}{{ block.super }} rego team{% endblock %}
 
-{% block breadcrumbs %}
-	{{ block.super }}
-	<li><a href="{% url 'admin:competition:club:list' %}">{% trans "Clubs" %}</a></li>
-	<li><a href="{% url 'admin:competition:club:edit' club.pk %}">{{ club.title }}</a></li>
-	<li><span>{{ team.division.title }} ({{ team.division.season.short_title|default:team.division.season.title }})</span></li>
-{% endblock %}
-
-{% block main_content %}
-	<div class="box">
-		<h1>{{ team.title }}</h1>
-
-		<table>
-			<thead>
-				<th>#</th>
-				<th>{% trans "Person" %}</th>
-				<th>{% trans "Player" %}</th>
-				<th>{% trans "Roles" %}</th>
-			</thead>
+{% block content %}
+	<header class="page-head">
+		<div class="page-head__text">
+			<p class="page-head__kind">{{ club.title }} · {{ team.division.title }} ({{ team.division.season.short_title|default:team.division.season.title }})</p>
+			<h1 class="page-head__title">{{ team.title }}</h1>
+		</div>
+		<div class="page-head__actions"><a class="btn" href="{% url 'admin:competition:club:edit' club.pk %}">{% trans "Cancel" %}</a></div>
+	</header>
+	<div class="table-wrap">
+		<table class="data">
+			<thead><tr><th scope="col" class="num">#</th><th scope="col">{% trans "Person" %}</th><th scope="col">{% trans "Player" %}</th><th scope="col">{% trans "Roles" %}</th></tr></thead>
 			<tbody>
 				{% for member in team.people.all %}
-					<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
-						<td>{{ member.number|default:"-" }}</td>
+					<tr>
+						<td class="num">{{ member.number|default:"–" }}</td>
 						<td>{{ member.person.get_full_name }}</td>
 						<td>{{ member.is_player|yesno|title }}</td>
-						<td>{% for role in member.roles.all %}{{ role.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+						<td>{% for role in member.roles.all %}<span class="tag">{{ role.name }}</span> {% endfor %}</td>
 					</tr>
 				{% empty %}
-					<tr class="first odd last">
-						<td colspan="5" class="no_results">{% trans "There are no members of this team." %}</td>
-					</tr>
+					<tr class="empty"><td colspan="4">{% trans "There are no members of this team." %}</td></tr>
 				{% endfor %}
 			</tbody>
 		</table>
-
-		<div class="buttons">
-			{% block buttons %}
-            	<a class="button" href="{% url 'admin:competition:club:edit' club.pk %}">{% trans "Cancel" %}</a>
-            {% endblock %}
-		</div>
 	</div>
 {% endblock %}

@@ -1,48 +1,32 @@
-{% extends "mvp/list.split.inc.html" %}
-{% load i18n %}
-{% load competition %}
+{% extends "mvp/list.inc.html" %}
+{% load i18n console %}
 
 {% block table-headings %}
-	<th>{% trans "Name" %}</th>
-	<th>{% trans "Age" %}</th>
-	<th>{% trans "Played" %}</th>
-	<th class="hidden-xs">{% trans "Scored" %}</th>
-	<th class="hidden-xs hidden-sm">{% trans "Debut" %}</th>
+	<th scope="col">{% trans "Name" %}</th>
+	<th scope="col" class="num">{% trans "Age" %}</th>
+	<th scope="col" class="num">{% trans "Played" %}</th>
+	<th scope="col" class="num opt">{% trans "Scored" %}</th>
+	<th scope="col" class="opt-sm">{% trans "Debut" %}</th>
 {% endblock %}
 
 {% block table-columns %}
 	{{ block.super }}
-	<td>{{ obj.age|default_if_none:"-" }}</td>
-	<td data-order="{{ obj.stats_played|default_if_none:0 }}">{{ obj.stats_played|default_if_none:"-" }} / {{ obj.teams_count }}</td>
-	<td class="hidden-xs" data-order="{{ obj.stats_points|default_if_none:0 }}">{{ obj.stats_points|default_if_none:"-" }}</td>
-	<td class="hidden-xs hidden-sm" data-order="{{ obj.debut|date:"U" }}">
-		{{ obj.debut|default_if_none:"-" }}
-	</td>
-{% endblock %}
-
-{% block row-buttons-items %}
-	<li role="presentation">
-		<a role="button" href="{% url 'admin:fixja:club:person:merge' club.pk obj.pk %}">
-			<i class="fa fa-code-fork fa-fw"></i>
-			{% trans "Merge" %}
-		</a>
-	</li>
-	<li role="presentation">
-		<a role="button" href="{% url 'admin:fixja:club:person:transfer' club.pk obj.pk %}">
-			<i class="fa fa-exchange fa-fw"></i>
-			{% trans "Transfer" %}
-		</a>
-	</li>
-	{{ block.super }}
+	<td class="num">{{ obj.age|default_if_none:"–" }}</td>
+	<td class="num">{{ obj.stats_played|default_if_none:"–" }}<span class="muted"> / {{ obj.teams_count }}</span></td>
+	<td class="num opt">{{ obj.stats_points|default_if_none:"–" }}</td>
+	<td class="mono opt-sm">{{ obj.debut|date:"M Y"|default:"–" }}</td>
 {% endblock %}
 
 {% block row-buttons-extra %}
 	{% if obj.user_id %}
-		<a class="btn btn-default btn-sm" role="button" href="{% url 'admin:auth:users:edit' obj.user_id %}">
-			<i class="fa fa-user"></i>
-			<span class="hidden-xs">&nbsp;{% trans "User" %}</span>
-		</a>
+		<a class="btn btn--sm btn--ghost opt" href="{% url 'admin:auth:users:edit' obj.user_id %}">{% icon "user" %}<span class="label">{% trans "User" %}</span></a>
 	{% endif %}
+{% endblock %}
+
+{% block row-buttons-items %}
+	<li><a href="{% url 'admin:fixja:club:person:merge' club.pk obj.pk %}">{% icon "merge" %}{% trans "Merge" %}</a></li>
+	<li><a href="{% url 'admin:fixja:club:person:transfer' club.pk obj.pk %}">{% icon "swap" %}{% trans "Transfer" %}</a></li>
+	{{ block.super }}
 {% endblock %}
 
 {% block empty-row-colspan %}6{% endblock %}

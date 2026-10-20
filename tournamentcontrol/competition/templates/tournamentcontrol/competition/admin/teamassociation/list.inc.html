@@ -1,19 +1,18 @@
 {% extends "mvp/list.inc.html" %}
 {% load i18n %}
-{% load common %}
 
 {% block table-headings %}
-	<th>{% trans "Person" %}</th>
-	<th>{% trans "Number" %}</th>
-	<th>{% trans "Player" %}</th>
-	<th>{% trans "Roles" %}</th>
+	<th scope="col">{% trans "Person" %}</th>
+	<th scope="col" class="num">{% trans "Number" %}</th>
+	<th scope="col">{% trans "Player" %}</th>
+	<th scope="col" class="opt">{% trans "Roles" %}</th>
 {% endblock %}
 
 {% block table-columns %}
 	{{ block.super }}
-	<td>{{ obj.number|default_if_none:"-" }}</td>
+	<td class="num">{{ obj.number|default_if_none:"–" }}</td>
 	<td>{{ obj.is_player|yesno|title }}</td>
-	<td>{% for r in obj.roles.all %}{{ r }}{% if not forloop.last %}<br>{% endif %}{% empty %}-{% endfor %}</td>
+	<td class="opt">{% for r in obj.roles.all %}<span class="tag">{{ r }}</span> {% empty %}–{% endfor %}</td>
 {% endblock %}
 
 {% block empty-row-colspan %}5{% endblock %}

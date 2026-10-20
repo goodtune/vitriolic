@@ -1,66 +1,69 @@
 {% extends "touchtechnology/admin/edit.html" %}
-{% load i18n %}
-{% load common %}
+{% load i18n console %}
 
-{% block content %}
-	<div class="modal modal-styled fade in undo" id="undoModal_stage" tabindex="-1" role="dialog" aria-labelledby="undoModalLabel" aria-hidden="true">
-		<div class="modal-dialog">
-			<div class="modal-content">
-				<div class="modal-header">
-					<button type="button" class="close" data-dismiss="modal" aria-label="Close">
-						<span aria-hidden="true">&times;</span>
-					</button>
-					<h4 class="modal-title" id="undoModalLabel_stage }}">{% trans "Undo" %}</h4>
-				</div>
-
-				<form id="list-inc-modal" method="post">
-					{% csrf_token %}
-
-					<div class="modal-body">
-						<h4>{% trans "Warning" %}</h4>
-
-						{% block undo-warning %}
-							<p>{% blocktrans %}You are about to undo the stage <strong>OBJECT</strong>.{% endblocktrans %}</p>
-							<p>{% trans "This will irreversibly remove those related matches from the site." %}</p>
-							<p>{% trans "Are you certain that you wish to continue?" %}</p>
-						{% endblock undo-warning %}
-					</div>
-
-					<div class="modal-footer">
-						<button type="button" class="btn btn-default" data-dismiss="modal">{% trans "Cancel" %}</button>
-						<button type="submit" class="btn btn-primary">{% trans "Undo" %} {% trans "stage" %}</button>
-					</div>
-				</form>
-			</div>
-		</div>
-	</div>
-
+{% block page-actions %}
+	{% if object.pk %}
+		<a class="btn btn--ghost" href="{% url 'admin:fixja:competition:season:division:scorers' object.season.competition.pk object.season.pk object.pk %}">{% icon "chart" %}{% trans "Leaders" %}</a>
+	{% endif %}
 	{{ block.super }}
 {% endblock %}
 
-{% block extrajs %}
+{% block tab-links %}
 	{{ block.super }}
+	{% if object.pk %}
+		{% trans "Ladder" as label %}
+		{% include "touchtechnology/admin/_tab.html" with pane="ladder-tab" label=label icon="trophy" %}
+	{% endif %}
+{% endblock %}
 
-	<!-- "tournamentcontrol/competition/admin/division/edit.html" -->
-	<script type="text/javascript">
-		// The stages may arrive after the page has loaded (with HTMX admin tabs),
-		// so prepare their undo links as they do.
-		function prepareUndoLinks(root) {
-			$(root).find('a[data-target^="#undoModal"]').attr('href', '#')
-		}
-		prepareUndoLinks(document)
-		document.addEventListener('htmx:load', function(event) {
-			prepareUndoLinks(event.target)
-		})
-
-		$('.modal.undo').on('show.bs.modal', function (event) {
-			var button = $(event.relatedTarget)
-			var title = button.data('title')
-			var action = button.data('action')
-			var modal = $(this)
-			modal.find('.modal-title').text('Undo ' + title)
-			modal.find('.modal-body strong').text(title)
-			modal.find('form').attr('action', action)
-		})
-	</script>
+{% block tab-panes %}
+	{{ block.super }}
+	{% if object.pk %}
+		<section class="pane pane--list" role="tabpanel" id="ladder-tab" aria-labelledby="ladder-tab-label" tabindex="-1">
+			{% for stage, rows in ladders %}
+				{% regroup rows by stage_group as pools %}
+				{% for pool in pools %}
+					<h2 class="section-title">{{ stage.title }}{% if pool.grouper %} · {{ pool.grouper.title }}{% endif %}</h2>
+					<div class="table-wrap">
+						<table class="data">
+							<thead>
+								<tr>
+									<th scope="col" class="num">#</th>
+									<th scope="col">{% trans "Team" %}</th>
+									<th scope="col" class="num"><abbr title="{% trans "Played" %}">P</abbr></th>
+									<th scope="col" class="num"><abbr title="{% trans "Won" %}">W</abbr></th>
+									<th scope="col" class="num"><abbr title="{% trans "Drawn" %}">D</abbr></th>
+									<th scope="col" class="num"><abbr title="{% trans "Lost" %}">L</abbr></th>
+									<th scope="col" class="num opt"><abbr title="{% trans "Byes" %}">B</abbr></th>
+									<th scope="col" class="num opt"><abbr title="{% trans "Points for" %}">F</abbr></th>
+									<th scope="col" class="num opt"><abbr title="{% trans "Points against" %}">A</abbr></th>
+									<th scope="col" class="num"><abbr title="{% trans "Difference" %}">+/−</abbr></th>
+									<th scope="col" class="num"><abbr title="{% trans "Ladder points" %}">Pts</abbr></th>
+								</tr>
+							</thead>
+							<tbody>
+								{% for row in pool.list %}
+									<tr>
+										<td class="num key">{{ forloop.counter }}</td>
+										<td><a href="{{ row.team.urls.edit }}">{{ row.team.title }}</a></td>
+										<td class="num">{{ row.played }}</td>
+										<td class="num">{{ row.win }}</td>
+										<td class="num">{{ row.draw }}</td>
+										<td class="num">{{ row.loss }}</td>
+										<td class="num opt">{{ row.bye }}</td>
+										<td class="num opt">{{ row.score_for }}</td>
+										<td class="num opt">{{ row.score_against }}</td>
+										<td class="num">{{ row.difference|floatformat:"0" }}</td>
+										<td class="num score">{{ row.points|floatformat:"-2" }}</td>
+									</tr>
+								{% endfor %}
+							</tbody>
+						</table>
+					</div>
+				{% endfor %}
+			{% empty %}
+				<p class="empty-state">{% trans "No results yet: the ladder fills in as results are entered." %}</p>
+			{% endfor %}
+		</section>
+	{% endif %}
 {% endblock %}

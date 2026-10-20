@@ -1,27 +1,20 @@
 {% extends "mvp/list.inc.html" %}
-{% load i18n %}
+{% load i18n console %}
 
 {% block table-headings %}
-	<th>{% trans "Title" %}</th>
-	<th>{% trans "Stream key" %}</th>
+	<th scope="col">{% trans "Title" %}</th>
+	<th scope="col">{% trans "Stream key" %}</th>
 {% endblock %}
 
 {% block table-columns %}
 	<td>
 		{% if change_perm in object_perms %}
-			<a href="{{ obj.urls.edit }}">{{ obj.title }}</a>&nbsp;
+			<a href="{{ obj.urls.edit }}">{{ obj.title }}</a>
 		{% else %}
 			<span>{{ obj.title }}</span>
 		{% endif %}
 	</td>
-	<td>
-		{% if obj.external_identifier %}
-			<em class="fa fa-youtube"></em>
-		{% endif %}
-		{% if obj.stream_key %}
-			{{ obj.stream_key }}
-		{% endif %}
-	</td>
+	<td class="mono">{% if obj.external_identifier %}{% icon "video" %} {% endif %}{{ obj.stream_key|default:"" }}</td>
 {% endblock %}
 
 {% block empty-row-colspan %}3{% endblock %}

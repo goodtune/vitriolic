@@ -1,18 +1,16 @@
 {% extends "mvp/list.inc.html" %}
-{% load i18n %}
+{% load i18n console %}
 
 {% block table-headings %}
 	{{ block.super }}
-	<th>{% trans "Teams" %}</th>
-	<th>{% trans "Finals" %}</th>
+	<th scope="col" class="num">{% trans "Teams" %}</th>
+	<th scope="col">{% trans "Finals" %}</th>
 {% endblock table-headings %}
 
 {% block table-columns %}
 	{{ block.super }}
-	<td>{{ obj.teams|default:"-" }}</td>
-	<td>
-		{% if obj.is_final %}
-			<i class="fa fa-trophy"></i>
-		{% endif %}
-	</td>
+	<td class="num">{{ obj.teams|default:"–" }}</td>
+	<td>{% if obj.is_final %}<span class="tag tag--accent">{% icon "trophy" %}{% trans "Finals" %}</span>{% endif %}</td>
 {% endblock table-columns %}
+
+{% block empty-row-colspan %}4{% endblock %}

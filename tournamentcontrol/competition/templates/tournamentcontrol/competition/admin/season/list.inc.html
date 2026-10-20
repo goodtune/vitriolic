@@ -1,43 +1,35 @@
-{% extends "mvp/list.split.inc.html" %}
-{% load i18n %}
+{% extends "mvp/list.inc.html" %}
+{% load i18n console %}
 
 {% block table-headings %}
-{{ block.super }}
-<th class="hidden-sm hidden-xs">{% trans "Mode" %}</th>
-<th class="hidden-sm hidden-xs">{% trans "Start Date" %}</th>
+	{{ block.super }}
+	<th scope="col" class="opt">{% trans "Mode" %}</th>
+	<th scope="col" class="opt">{% trans "Start Date" %}</th>
+	<th scope="col" class="opt-sm">{% trans "State" %}</th>
 {% endblock %}
 
 {% block table-columns %}
-{{ block.super }}
-<td class="hidden-sm hidden-xs">{{ obj.get_mode_display }}</td>
-<td class="hidden-sm hidden-xs">{{ obj.start_date }}</td>
+	{{ block.super }}
+	<td class="opt">{{ obj.get_mode_display }}</td>
+	<td class="opt mono">{{ obj.start_date|date:"j M Y"|default:"–" }}</td>
+	<td class="opt-sm">{% if obj.complete %}<span class="tag">{% trans "Complete" %}</span>{% else %}<span class="tag tag--ok">{% trans "Current" %}</span>{% endif %}</td>
 {% endblock %}
 
-{% block empty-row-colspan %}4{% endblock %}
+{% block empty-row-colspan %}5{% endblock %}
 
 {% block row-buttons-extra %}
-{% if obj.upstream_enabled and obj.upstream_backend %}
-<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:competition:season:upstream-sync' obj.competition.pk obj.pk %}" role="button">
-    <i class="fa fa-refresh"></i>
-    <span class="hidden-xs hidden-sm">&nbsp;{{ obj.upstream_backend.name }}</span>
-</a>
-{% endif %}
-{% if obj.live_stream %}
-<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:competition:season:authorize' obj.competition.pk obj.pk %}" role="button">
-    <i class="fa fa-youtube"></i>
-    <span class="hidden-xs hidden-sm">&nbsp;{% trans "YouTube" %}</span>
-</a>
-{% endif %}
-<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:competition:season:report' obj.competition.pk obj.pk %}" role="button">
-    <i class="fa fa-paperclip"></i>
-    <span class="hidden-xs hidden-sm">&nbsp;{% trans "Report" %}</span>
-</a>
-<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:competition:season:summary' obj.competition.pk obj.pk %}" role="button">
-    <i class="fa fa-certificate"></i>
-    <span class="hidden-xs hidden-sm">&nbsp;{% trans "Registrations" %}</span>
-</a>
-<a class="btn btn-default btn-sm" href="{{ obj.urls.edit }}#schedule-tab" role="button">
-    <i class="fa fa-clock-o"></i>
-    <span class="hidden-xs hidden-sm">&nbsp;{% trans "Schedule" %}</span>
-</a>
+	<a class="btn btn--sm opt" href="{{ obj.urls.edit }}#schedule-tab">{% icon "calendar" %}<span class="label">{% trans "Schedule" %}</span></a>
+{% endblock %}
+
+{% block row-buttons-items %}
+	<li><a href="{{ obj.urls.edit }}#schedule-tab">{% icon "calendar" %}{% trans "Schedule" %}</a></li>
+	<li><a href="{% url 'admin:fixja:competition:season:report' obj.competition.pk obj.pk %}">{% icon "print" %}{% trans "Report" %}</a></li>
+	<li><a href="{% url 'admin:fixja:competition:season:summary' obj.competition.pk obj.pk %}">{% icon "users" %}{% trans "Registrations" %}</a></li>
+	{% if obj.upstream_enabled and obj.upstream_backend %}
+		<li><a href="{% url 'admin:fixja:competition:season:upstream-sync' obj.competition.pk obj.pk %}">{% icon "refresh" %}{{ obj.upstream_backend.name }}</a></li>
+	{% endif %}
+	{% if obj.live_stream %}
+		<li><a href="{% url 'admin:fixja:competition:season:authorize' obj.competition.pk obj.pk %}">{% icon "video" %}{% trans "YouTube" %}</a></li>
+	{% endif %}
+	{{ block.super }}
 {% endblock %}

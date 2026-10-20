@@ -2,9 +2,6 @@
 {% load i18n %}
 
 {% block content %}
-	<h1>{% trans "Please wait..." %}</h1>
-
-	<fieldset>
-		<p>{% block waitfor %}{% endblock %}</p>
-	</fieldset>
+	<header class="page-head"><div class="page-head__text"><p class="page-head__kind">{% trans "Working" %}</p><h1 class="page-head__title">{% trans "Please wait..." %}</h1></div></header>
+	<p class="loading">{% block waitfor %}{% endblock %}</p>
 {% endblock %}

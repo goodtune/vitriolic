@@ -1,37 +1,36 @@
-{% extends "mvp/list.split.inc.html" %}
+{% extends "mvp/list.inc.html" %}
 {% load i18n %}
-{% load competition %}
 
 {% block table-headings %}
-	<th>{% trans "Team" %}</th>
-	<th>{% trans "P" %}</th>
-	<th>{% trans "W" %}</th>
-	<th>{% trans "L" %}</th>
-	<th>{% trans "D" %}</th>
-	<th>{% trans "B" %}</th>
-	<th>{% trans "FW" %}</th>
-	<th>{% trans "FL" %}</th>
-	<th>{% trans "+" %}</th>
-	<th>{% trans "-" %}</th>
-	<th>{% trans "BP" %}</th>
-	<th>{% trans "Pts" %}</th>
+	<th scope="col">{% trans "Team" %}</th>
+	<th scope="col" class="num">{% trans "P" %}</th>
+	<th scope="col" class="num">{% trans "W" %}</th>
+	<th scope="col" class="num">{% trans "L" %}</th>
+	<th scope="col" class="num">{% trans "D" %}</th>
+	<th scope="col" class="num opt">{% trans "B" %}</th>
+	<th scope="col" class="num opt">{% trans "FW" %}</th>
+	<th scope="col" class="num opt">{% trans "FL" %}</th>
+	<th scope="col" class="num">{% trans "+" %}</th>
+	<th scope="col" class="num">{% trans "-" %}</th>
+	<th scope="col" class="num opt">{% trans "BP" %}</th>
+	<th scope="col" class="num">{% trans "Pts" %}</th>
 {% endblock %}
 
 {% block table-columns %}
 	<td>{{ obj.team }}</td>
-	<td>{{ obj.played }}</td>
-	<td>{{ obj.win }}</td>
-	<td>{{ obj.loss }}</td>
-	<td>{{ obj.draw }}</td>
-	<td>{{ obj.bye }}</td>
-	<td>{{ obj.forfeit_for }}</td>
-	<td>{{ obj.forfeit_against }}</td>
-	<td>{{ obj.score_for }}</td>
-	<td>{{ obj.score_against }}</td>
-	<td>{{ obj.bonus_points }}</td>
-	<td>{{ obj.points }}</td>
+	<td class="num">{{ obj.played }}</td>
+	<td class="num">{{ obj.win }}</td>
+	<td class="num">{{ obj.loss }}</td>
+	<td class="num">{{ obj.draw }}</td>
+	<td class="num opt">{{ obj.bye }}</td>
+	<td class="num opt">{{ obj.forfeit_for }}</td>
+	<td class="num opt">{{ obj.forfeit_against }}</td>
+	<td class="num">{{ obj.score_for }}</td>
+	<td class="num">{{ obj.score_against }}</td>
+	<td class="num opt">{{ obj.bonus_points }}</td>
+	<td class="num score">{{ obj.points }}</td>
 {% endblock %}
 
 {% block actions %}{% endblock %}
-{% block row-buttons-items %}{% endblock %}
-{% block table-row-empty %}{% endblock %}
+{% block row-buttons %}{% endblock %}
+{% block table-row-empty %}<tr class="empty"><td colspan="13">{% trans "No ladder yet." %}</td></tr>{% endblock %}

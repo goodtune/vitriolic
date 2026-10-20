@@ -1,0 +1,17 @@
+{% load i18n console %}
+{% comment %}The head of a match day's page: what, which day, and the day's other pages.{% endcomment %}
+<header class="page-head">
+	<div class="page-head__text">
+		<p class="page-head__kind">{{ kind }}</p>
+		<h1 class="page-head__title">{{ date|date:"l j F Y" }}</h1>
+		<p class="page-head__meta">{{ season.competition.title }} · {{ season.title }}{% if division %} · {{ division.title }}{% endif %}</p>
+	</div>
+	<div class="page-head__actions">
+		{% with ymd=date|date:"Ymd" c=season.competition.pk s=season.pk %}
+			{% if here != "results" %}<a class="btn btn--ghost" href="{% url 'admin:fixja:match-results' c s ymd %}">{% icon "check" %}{% trans "Results" %}</a>{% endif %}
+			{% if here != "schedule" %}<a class="btn btn--ghost" href="{% url 'admin:fixja:match-schedule' c s ymd %}">{% icon "clock" %}{% trans "Allocate" %}</a>{% endif %}
+			<a class="btn btn--ghost" href="{% url 'admin:fixja:match-runsheet' c s ymd %}" target="_blank" rel="noopener">{% icon "list" %}{% trans "Run sheet" %}</a>
+			{% if here != "washout" %}<a class="btn btn--ghost" href="{% url 'admin:fixja:match-washout' c s ymd %}">{% icon "rain" %}{% trans "Washout" %}</a>{% endif %}
+		{% endwith %}
+	</div>
+</header>
