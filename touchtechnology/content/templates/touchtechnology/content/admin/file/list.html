@@ -6,8 +6,8 @@
 {% block page_icon %}<span class="title-icon">{% icon "image" %}</span>{% endblock %}
 
 {% block nav-pills-list %}
-	<a class="button" href="#folder-dialog" data-add-many="folder-dialog">{% icon "folder" %}<span>{% trans "New folder" %}</span></a>
-	<a class="button primary" href="#file-dialog" data-add-many="file-dialog">{% icon "upload" %}<span>{% trans "Upload file" %}</span></a>
+	<button type="button" class="button" data-add-many="folder-dialog">{% icon "folder" %}<span>{% trans "New folder" %}</span></button>
+	<button type="button" class="button primary" data-add-many="file-dialog">{% icon "upload" %}<span>{% trans "Upload file" %}</span></button>
 {% endblock %}
 
 {% block content %}

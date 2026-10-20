@@ -315,6 +315,7 @@
 	 */
 
 	var dialog = $('#confirm-dialog');
+	var pending = null;
 
 	document.addEventListener('submit', function (event) {
 		var form = event.target;
@@ -322,19 +323,28 @@
 		if (form.dataset.confirmed) { return; }
 		event.preventDefault();
 		closePopovers();
-		$('#confirm-title', dialog).textContent = form.getAttribute('data-confirm-title') || dialog.getAttribute('data-title') || $('#confirm-title', dialog).textContent;
+		pending = form;
+		$('#confirm-title', dialog).textContent = form.getAttribute('data-confirm-title') || $('#confirm-title', dialog).getAttribute('data-default') || $('#confirm-title', dialog).textContent;
 		$('#confirm-body', dialog).textContent = form.getAttribute('data-confirm');
 		$('#confirm-ok', dialog).textContent = form.getAttribute('data-confirm-label') || 'Delete';
-		dialog.returnValue = '';
-		dialog.onclose = function () {
-			if (dialog.returnValue === 'confirm') {
-				form.dataset.confirmed = '1';
-				HTMLFormElement.prototype.submit.call(form);
-			}
-		};
 		dialog.showModal();
 		$('#confirm-ok', dialog).focus();
 	}, true);
+
+	if (dialog) {
+		// Submit as the button is pressed, so the page starts to change at once.
+		$('#confirm-ok', dialog).addEventListener('click', function (event) {
+			event.preventDefault();
+			var form = pending;
+			pending = null;
+			dialog.close('confirm');
+			if (form) {
+				form.dataset.confirmed = '1';
+				HTMLFormElement.prototype.submit.call(form);
+			}
+		});
+		dialog.addEventListener('close', function () { pending = null; });
+	}
 
 	/* ------------------------------------------------------------------
 	 * Pickers: a select of many options becomes a button that opens a
@@ -517,6 +527,8 @@
 			}
 		}
 
+		// The select stays in the form, hidden; the server checks what it needs.
+		select.removeAttribute('required');
 		select.classList.add('picker-native');
 		select.tabIndex = -1;
 		select.setAttribute('aria-hidden', 'true');

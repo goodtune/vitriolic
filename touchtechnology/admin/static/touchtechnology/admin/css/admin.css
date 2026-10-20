@@ -336,8 +336,8 @@ code, kbd, pre, samp {
 }
 
 .tree .nodes {
-	margin-left: 15px;
-	padding-left: 6px;
+	margin-left: 11px;
+	padding-left: 2px;
 	border-left: 1px solid var(--line);
 }
 
@@ -1437,11 +1437,7 @@ dialog::backdrop {
 
 /* the picker: choosing one (or several) of many, with a search */
 .picker-native {
-	position: absolute !important;
-	width: 1px !important;
-	height: 1px !important;
-	opacity: 0;
-	pointer-events: none;
+	display: none !important;
 }
 
 .picker-button {
@@ -1792,12 +1788,34 @@ dialog::backdrop {
 		justify-content: flex-start;
 	}
 
+	/* every tab in reach: they wrap rather than scroll out of sight */
 	.tabs {
-		margin: 14px -16px 0;
-		padding: 0 8px;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin: 14px 0 0;
+		padding: 0 0 12px;
+		overflow: visible;
 	}
 
-	.tab { padding: 10px 10px 12px; }
+	.tab {
+		padding: 7px 12px;
+		border-radius: 999px;
+		background: var(--surface);
+		box-shadow: inset 0 0 0 1px var(--line);
+		font-size: 14px;
+	}
+
+	.tab[aria-selected="true"],
+	.tab[aria-current="page"] {
+		background: var(--fill);
+		color: var(--on-fill);
+		box-shadow: inset 0 0 0 1px var(--fill-edge);
+	}
+
+	.tab[aria-selected="true"]::after,
+	.tab[aria-current="page"]::after { display: none; }
+
+	.tab[aria-selected="true"] .count { background: color-mix(in oklch, var(--on-fill) 18%, transparent); color: var(--on-fill); }
 
 	.sections {
 		display: flex;
@@ -1892,14 +1910,14 @@ dialog::backdrop {
 		border-right: 0;
 		font-size: 16px;
 		visibility: hidden;
-		transform: translateX(-100%);
-		transition: transform 180ms ease-out, visibility 0s linear 180ms;
+		opacity: 0;
+		transition: opacity 120ms ease-out, visibility 0s linear 120ms;
 	}
 
 	.rail-open .rail {
 		visibility: visible;
-		transform: none;
-		transition: transform 180ms ease-out;
+		opacity: 1;
+		transition: opacity 120ms ease-out;
 	}
 
 	.rail-open body { overflow: hidden; }
@@ -2386,7 +2404,8 @@ legend.slot-head { padding: 0; }
 	.day-nav { margin-left: -16px; margin-right: -16px; padding: 0 8px; }
 	.day-switch { width: 100%; padding: 0 8px 4px; }
 	.day-switch select { flex: 1; }
-	.day-tabs { width: 100%; }
+	.day-tabs { width: 100%; padding: 0 8px 12px; }
+	.day-nav .tab[aria-current="page"]::after { display: none; }
 	.tab-gap { display: none; }
 
 	/* a result is a card: the teams stacked, the scores beside them */
