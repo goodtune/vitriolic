@@ -14,6 +14,7 @@ from touchtechnology.common.decorators import (
     staff_login_required_m,
 )
 from touchtechnology.common.default_settings import SITEMAP_HTTPS_OPTION
+from touchtechnology.common.forms.mixins import BootstrapFormControlMixin
 from touchtechnology.common.sites import Application
 
 
@@ -111,6 +112,10 @@ class AdminComponent(AdminComponentMixin, Application):
     """
 
     model_form_bases = (AdminFormControlMixin, ModelForm)
+    # Dynamic forms are built from model_form_bases (the admin's own mixin,
+    # which subclasses the common one); explicit forms on either mixin satisfy
+    # the inheritance check.
+    required_form_bases = (BootstrapFormControlMixin, ModelForm)
 
     def get_urls(self):
         urlpatterns = [

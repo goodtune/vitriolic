@@ -40,3 +40,9 @@ class AdminOwnershipTests(TestCase):
         for name in ("list.html", "list.inc.html", "list.split.inc.html"):
             origin = select_template(["mvp/%s" % name]).origin.name
             self.assertIn("/touchtechnology/admin/templates/mvp/", origin)
+
+    def test_explicit_form_on_common_mixin_logs_no_error(self):
+        # ArticleForm is an explicit form built on the common mixin.
+        with self.login(self.superuser):
+            with self.assertNoLogs("touchtechnology.common.sites", level="ERROR"):
+                self.get_check_200("admin:news:article:add")
