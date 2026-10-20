@@ -8,12 +8,12 @@ from django.utils.encoding import smart_str
 from modelforms.forms import ModelForm
 
 from touchtechnology.admin.branding import get_brand
+from touchtechnology.admin.forms import AdminFormControlMixin
 from touchtechnology.common.decorators import (
     never_cache_m,
     staff_login_required_m,
 )
 from touchtechnology.common.default_settings import SITEMAP_HTTPS_OPTION
-from touchtechnology.common.forms.mixins import BootstrapFormControlMixin
 from touchtechnology.common.sites import Application
 
 
@@ -110,7 +110,7 @@ class AdminComponent(AdminComponentMixin, Application):
     and backwards compatibility.
     """
 
-    model_form_bases = (BootstrapFormControlMixin, ModelForm)
+    model_form_bases = (AdminFormControlMixin, ModelForm)
 
     def get_urls(self):
         urlpatterns = [
