@@ -17,8 +17,10 @@ from types import SimpleNamespace
 from unittest import mock
 from urllib.parse import parse_qs, urlparse
 
+from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.db import connection
+from django.shortcuts import resolve_url
 from django.test.utils import CaptureQueriesContext, override_settings
 from freezegun import freeze_time
 from google.auth.exceptions import RefreshError
@@ -3065,7 +3067,7 @@ class OAuthFlowTests(AdminFixtureMixin, TestCase):
         response = self.client.get("/o/authorize/", params)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(
-            urlparse(response["Location"]).path, self.reverse("accounts:login")
+            urlparse(response["Location"]).path, str(resolve_url(settings.LOGIN_URL))
         )
 
         self.login(user)

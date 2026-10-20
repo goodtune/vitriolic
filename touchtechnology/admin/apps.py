@@ -6,6 +6,8 @@ from django.core import checks
 from django.utils.module_loading import import_string
 from first import first
 
+from touchtechnology.admin.branding import brand_check
+
 
 class AdminConfig(AppConfig):
     """Registers admin sites and performs application checks."""
@@ -22,6 +24,9 @@ class AdminConfig(AppConfig):
 
         site.register(UsersGroups)
         site.register(Settings)
+
+
+checks.register(brand_check, "config")
 
 
 @checks.register("config")

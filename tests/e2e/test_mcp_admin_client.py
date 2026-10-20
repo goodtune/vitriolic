@@ -97,7 +97,7 @@ class Person:
         response = self.session.get(authorization_url, allow_redirects=False)
         assert response.status_code == 302, response.status_code
         login_url = urljoin(self.base_url, response.headers["Location"])
-        assert urlparse(login_url).path == "/accounts/login/"
+        assert urlparse(login_url).path == "/admin/login/"
         self.session.get(login_url)
         response = self._post(
             login_url, {"username": self.username, "password": self.password}

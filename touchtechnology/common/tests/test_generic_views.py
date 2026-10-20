@@ -8,7 +8,8 @@ from test_plus import TestCase as BTC
 from touchtechnology.common.tests import factories
 
 
-@override_settings(ROOT_URLCONF="example_app.urls")
+# The example urlconf has no admin site to sign in to, only the accounts pages.
+@override_settings(ROOT_URLCONF="example_app.urls", LOGIN_URL="accounts:login")
 class TestCase(BTC):
     def setUp(self):
         self.staff = factories.UserFactory.create(is_staff=True, is_superuser=True)

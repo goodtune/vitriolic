@@ -3,9 +3,19 @@ from django.contrib.auth.models import Group
 from django.utils.translation import gettext_lazy as _
 from modelforms.forms import ModelForm
 
-from touchtechnology.common.forms.mixins import UserMixin
+from touchtechnology.common.forms.mixins import BootstrapFormControlMixin, UserMixin
 
 UserModel = get_user_model()
+
+
+class AdminFormControlMixin(BootstrapFormControlMixin):
+    """
+    The admin's own form base.
+
+    Forms the admin builds dynamically derive from this rather than from the
+    public site's mixin, so the admin can change how its forms behave without
+    changing the public forms.
+    """
 
 
 class UserEditForm(UserMixin, ModelForm):

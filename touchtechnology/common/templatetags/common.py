@@ -391,8 +391,8 @@ def _do_navigation(
     return render_to_string(template_name, context)
 
 
-@register.simple_tag
-def field(bf, label=None):
+@register.simple_tag(takes_context=True)
+def field(context, bf, label=None):
     if not isinstance(bf, BoundField):
         raise TypeError(f"{{% field %}} tag can only be used with BoundFields ({bf})")
 
@@ -426,7 +426,11 @@ def field(bf, label=None):
     else:
         caption = ""
 
-    context = {
+    template_name = context.get(
+        "field_template", "touchtechnology/common/templatetags/field.html"
+    )
+
+    field_context = {
         "f": bf,
         "caption": caption,
         "widget_class_name": widget_class_name,
@@ -434,7 +438,7 @@ def field(bf, label=None):
         "no_label": not bool(label),
     }
 
-    return render_to_string("touchtechnology/common/templatetags/field.html", context)
+    return render_to_string(template_name, field_context)
 
 
 @register.inclusion_tag("touchtechnology/common/templatetags/analytics.html")

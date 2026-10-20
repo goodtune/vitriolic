@@ -7,6 +7,8 @@ from django.urls import path, reverse
 from django.utils.encoding import smart_str
 from modelforms.forms import ModelForm
 
+from touchtechnology.admin.branding import get_brand
+from touchtechnology.admin.forms import AdminFormControlMixin
 from touchtechnology.common.decorators import (
     never_cache_m,
     staff_login_required_m,
@@ -69,6 +71,13 @@ class AdminComponentMixin(object):
             redirect_to = urlunparse(("https", host, path, "", "", ""))
             return HttpResponseRedirect(redirect_to)
 
+        # Resolve the brand here so the shell is branded even when the
+        # ``brand`` context processor has not been configured.
+        context.setdefault("brand", get_brand(request))
+        context.setdefault(
+            "field_template", "touchtechnology/admin/templatetags/field.html"
+        )
+
         return super(AdminComponentMixin, self).render(
             request, templates, context, *args, **kwargs
         )
@@ -102,7 +111,11 @@ class AdminComponent(AdminComponentMixin, Application):
     and backwards compatibility.
     """
 
-    model_form_bases = (BootstrapFormControlMixin, ModelForm)
+    model_form_bases = (AdminFormControlMixin, ModelForm)
+    # Dynamic forms are built from model_form_bases (the admin's own mixin,
+    # which subclasses the common one); explicit forms on either mixin satisfy
+    # the inheritance check.
+    required_form_bases = (BootstrapFormControlMixin, ModelForm)
 
     def get_urls(self):
         urlpatterns = [

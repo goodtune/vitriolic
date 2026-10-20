@@ -56,7 +56,7 @@ class TestBulkCreate:
         page.screenshot(
             path=str(screenshot_dir / "bulk_create_divisions_form.png"), full_page=True
         )
-        page.click('button[type="submit"]')
+        page.click('.content button[type="submit"]')
 
         expect(page).to_have_url(
             f"{live_server.url}{season.urls['edit']}#divisions-tab"
@@ -91,7 +91,7 @@ class TestBulkCreate:
         page.screenshot(
             path=str(screenshot_dir / "bulk_create_teams_form.png"), full_page=True
         )
-        page.click('button[type="submit"]')
+        page.click('.content button[type="submit"]')
 
         expect(page).to_have_url(f"{live_server.url}{division.urls['edit']}#teams-tab")
         expect(page.locator("#teams-tab")).to_contain_text("Charlie")

@@ -7,7 +7,10 @@ import time
 
 import django
 import environ
+from django.core.exceptions import ImproperlyConfigured
 from django.urls import reverse_lazy
+
+from vitriolic.brands import BRANDS
 
 env = environ.Env()
 
@@ -118,6 +121,7 @@ TEMPLATES = [
                 "touchtechnology.common.context_processors.site",
                 "touchtechnology.common.context_processors.tz",
                 "touchtechnology.common.context_processors.htmx_admin_tabs",
+                "touchtechnology.admin.context_processors.brand",
                 # Static files context processor
                 "django.template.context_processors.static",
             ],
@@ -145,6 +149,14 @@ if env("COMPOPS_EVENTS_BACKEND", default="memory") == "redis":
         "tournamentcontrol.competition.compops.events.redis.RedisBackend"
     )
     COMPOPS_EVENTS_OPTIONS = {"url": f"redis://{REDIS_HOST}:{REDIS_PORT}/0"}
+
+# Admin brand. ADMIN_BRAND in the environment names one of the demo brands.
+brand_name = env("ADMIN_BRAND", default="default")
+if brand_name not in BRANDS:
+    raise ImproperlyConfigured(
+        f"ADMIN_BRAND must be one of {', '.join(BRANDS)}, got {brand_name!r}"
+    )
+TOUCHTECHNOLOGY_ADMIN_BRAND = BRANDS[brand_name]
 
 
 # Database
@@ -190,7 +202,7 @@ AUTHENTICATION_BACKENDS = (
     "oauth2_provider.backends.OAuth2Backend",
 )
 
-LOGIN_URL = reverse_lazy("accounts:login")
+LOGIN_URL = reverse_lazy("admin:login")
 
 ANONYMOUS_USER_NAME = "anonymous"
 
