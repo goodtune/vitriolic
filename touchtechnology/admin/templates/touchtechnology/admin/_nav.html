@@ -1,0 +1,30 @@
+{% load i18n admin_ui %}
+<nav class="wb-nav" aria-label="{% trans "Main" %}">
+	{# On a phone: the folder the page is in, one level at a time. #}
+	<div class="wb-drill" id="wb-drill" data-endpoint="{% url 'admin:explorer' %}" data-trail="{{ tree.trail|join:" " }}" aria-live="polite">
+		{% if tree.drill_key %}{% include "touchtechnology/admin/explorer/drill.html" %}{% endif %}
+	</div>
+	<ul class="wb-nav-list wb-tree" role="list" data-endpoint="{% url 'admin:explorer' %}">
+		<li class="wb-nav-entry{% if at_home %} is-active{% endif %}">
+			<div class="wb-nav-row">
+				<a class="wb-nav-head" href="{{ home }}"{% if at_home %} aria-current="page"{% endif %}>{% icon "house" %}<span>{% trans "Home" %}</span></a>
+			</div>
+		</li>
+		{% for entry in entries %}
+			{% with node=entry.root %}
+			<li class="wb-nav-entry{% if entry.active %} is-active{% endif %}">
+				<div class="wb-nav-row">
+					<a class="wb-nav-head" href="{{ entry.url }}"{% if node.current %} aria-current="location"{% elif entry.active %} aria-current="true"{% endif %}>{% icon entry.icon %}<span>{{ entry.label }}</span></a>
+					{% if node.expandable %}
+						<button type="button" class="wb-twisty wb-twisty-head" aria-expanded="{{ node.open|yesno:"true,false" }}" aria-controls="{{ node.dom_id }}" data-node="{{ node.key }}"{% if node.children is None %} data-lazy{% endif %}>{% icon "chevron-right" %}<span class="wb-sr">{% blocktrans with label=entry.label %}Show what is in {{ label }}{% endblocktrans %}</span></button>
+						<button type="button" class="wb-drill-in wb-drill-head-in" data-drill="{{ node.key }}">{% icon "chevron-right" %}<span class="wb-sr">{% blocktrans with label=entry.label %}Show what is in {{ label }}{% endblocktrans %}</span></button>
+					{% endif %}
+				</div>
+				{% if node.expandable %}
+					<ul class="wb-nodes wb-nodes-top" role="list" id="{{ node.dom_id }}"{% if not node.open %} hidden{% endif %}>{% if node.children is not None %}{% include "touchtechnology/admin/explorer/nodes.html" with nodes=node.children parent_key=node.key %}{% endif %}</ul>
+				{% endif %}
+			</li>
+			{% endwith %}
+		{% endfor %}
+	</ul>
+</nav>

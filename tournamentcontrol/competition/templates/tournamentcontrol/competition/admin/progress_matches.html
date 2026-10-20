@@ -1,53 +1,48 @@
 {% extends "tournamentcontrol/competition/admin/base.html" %}
-{% load i18n %}
-{% load common %}
+{% load i18n common admin_ui %}
+
+{% block page_title %}{% trans "Progress teams" %}{% endblock %}
 
 {% block content %}
-	<div class="heading-block">
-		{% if date %}
-			<h3>{% trans "Progress Teams" %} <span class="pull-right">{{ date|date }}</span></h3>
-		{% else %}
-			<h3>{% trans "Progress Teams" %} <span class="pull-right">{{ stage.division.title }}</span></h3>
-		{% endif %}
-	</div>
+	{% trans "Finals and later stages" as eyebrow %}{% trans "Progress teams" as title %}
+	{% if date %}{% blocktrans asvar lede with date=date|date:"l j F Y" %}Choose the teams that go through to each match on {{ date }}.{% endblocktrans %}{% else %}{% blocktrans asvar lede with division=stage.division.title stage=stage.title %}Choose the teams that go through to each match of {{ stage }} in {{ division }}.{% endblocktrans %}{% endif %}
+	{% include "tournamentcontrol/competition/admin/_page_head.html" %}
 
-	<form action="" method="post">
+	<form class="wb-sheet wb-form" action="" method="post">
 		{% csrf_token %}
 		{{ formset.management_form }}
-		<table class="table table-striped">
-			<thead>
-				<tr class="left">
-					<th class="hidden-xs">{% trans "Stage" %}</th>
-					<th>{% trans "Match" %}</th>
-					<th>{% trans "Home team" %}</th>
-					<th>{% trans "Away team" %}</th>
-				</tr>
-			</thead>
-			<tbody>
-				{% for form in formset.forms %}
-						{% with form.instance as match %}
-							<tr>
-								<td class="hidden-xs">{{ form.id }}{{ match.stage.title }}</td>
-								<td>{% if match.label %}{{ match.label }}{% else %}{% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}{% endif %}</td>
-								{% with match.get_home_team.title|default:match.get_home_team_plain as home_team %}
-									<td class="team {{ match.home_team.club.slug|cssify|default:"tba" }}">{% if form.home_team %}{{ match.get_home_team.title }}<br/>{{ form.home_team }}{% else %}{{ match.get_home_team.title }}{% endif %}</td>
-								{% endwith %}
-								{% with match.get_away_team.title|default:match.get_away_team_plain as away_team %}
-									<td class="team {{ match.away_team.club.slug|cssify|default:"tba" }}">{% if form.away_team %}{{ match.get_away_team.title }}<br/>{{ form.away_team }}{% else %}{{ match.get_away_team.title }}{% endif %}</td>
-								{% endwith %}
-							</tr>
-						{% endwith %}
-				{% empty %}
-					<tr>
-						<td colspan="4" class="no_results">{% trans "There are no matches that require progression." %}</td>
-					</tr>
-				{% endfor %}
-			</tbody>
-		</table>
-
-		<div class="buttons">
-			<button type="submit">{% trans "Save" %}</button>
-			<a class="button" href="{% url 'admin:competition:competition:season:division:stage:edit' competition.pk season.pk division.pk stage.pk %}">{% trans "Cancel" %}</a>
+		<div class="wb-formbar">
+			<h2 class="wb-formbar-title">{% trans "Matches" %}</h2>
+			<div class="wb-formbar-actions">
+				<a class="wb-button wb-button-quiet" href="{% url 'admin:competition:competition:season:division:stage:edit' competition.pk season.pk division.pk stage.pk %}">{% trans "Cancel" %}</a>
+				<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
+			</div>
+		</div>
+		{% include "touchtechnology/admin/_problems.html" with form=None %}
+		<div class="wb-matches">
+			{% for form in formset.forms %}
+				{% with match=form.instance %}
+					<div class="wb-match">
+						<div class="wb-match-meta">
+							<strong>{% if match.label %}{{ match.label }}{% else %}{% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}{% endif %}</strong>
+							<span>{{ match.stage.title }}</span>
+							{{ form.id }}
+						</div>
+						<div class="wb-progress-teams">
+							<div class="wb-field">
+								<span class="wb-label">{% trans "Home" %}: {{ match.get_home_team.title|default:match.get_home_team_plain }}</span>
+								{% if form.home_team %}{{ form.home_team|control }}{% endif %}
+							</div>
+							<div class="wb-field">
+								<span class="wb-label">{% trans "Away" %}: {{ match.get_away_team.title|default:match.get_away_team_plain }}</span>
+								{% if form.away_team %}{{ form.away_team|control }}{% endif %}
+							</div>
+						</div>
+					</div>
+				{% endwith %}
+			{% empty %}
+				<p class="wb-empty">{% trans "There are no matches that require progression." %}</p>
+			{% endfor %}
 		</div>
 	</form>
 {% endblock %}

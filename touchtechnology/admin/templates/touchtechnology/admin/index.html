@@ -1,8 +1,40 @@
 {% extends "touchtechnology/admin/base.html" %}
-{% load dashboard %}
+{% load i18n dashboard admin_ui %}
+
+{% block page_title %}{% trans "Home" %}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
 
 {% block content %}
-	{% for widget in admin.dashboard %}
-		{% render widget %}
-	{% endfor %}
+	<header class="wb-hello">
+		<h1>{% if user.first_name %}{% blocktrans with name=user.first_name %}Hello, {{ name }}{% endblocktrans %}{% else %}{% trans "Hello" %}{% endif %}</h1>
+		<p>{% trans "What would you like to do today?" %}</p>
+	</header>
+
+	{% admin_tasks as tasks %}
+	{% if tasks %}
+		<h2 class="wb-sr">{% trans "Jobs" %}</h2>
+		<ul class="wb-tasks">
+			{% for task in tasks %}
+				<li>
+					<a class="wb-task" href="{{ task.url }}">
+						<span class="wb-task-icon">{% icon task.icon|default:"check" %}</span>
+						<span class="wb-task-title">{{ task.label }}</span>
+						{% if task.note %}<span class="wb-task-note">{{ task.note }}</span>{% endif %}
+					</a>
+				</li>
+			{% endfor %}
+		</ul>
+	{% endif %}
+
+	{% block dashboard %}
+		{% with widgets=admin.dashboard %}
+			{% if widgets %}
+				<div class="wb-dashboard">
+					{% for widget in widgets %}
+						{% render widget %}
+					{% endfor %}
+				</div>
+			{% endif %}
+		{% endwith %}
+	{% endblock %}
 {% endblock %}

@@ -1,12 +1,14 @@
 {% extends "mvp/list.inc.html" %}
 {% load i18n %}
 
+{% block table-headings %}<th scope="col">{% trans "Date" %}</th>{% endblock %}
+
 {% block table-columns %}
-	<td>
+	<td class="wb-title-cell">
 		{% if change_perm in object_perms %}
-			<a href="{{ obj.urls.edit }}">{{ obj.date }}</a>
+			<a href="{{ obj.urls.edit }}">{{ obj.date|date:"l j F Y" }}</a>
 		{% else %}
-			<span>{% block delete-data-title %}{{ obj.date }}{% endblock %}</span>
+			<span>{{ obj.date|date:"l j F Y" }}</span>
 		{% endif %}
 	</td>
 {% endblock %}

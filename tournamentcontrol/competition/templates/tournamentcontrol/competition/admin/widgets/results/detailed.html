@@ -1,43 +1,30 @@
-{% load i18n tz %}
-{% load common %}
-<div class="col-lg-8 col-md-12 col-sm-12 hidden-xs">
-	<div class="portlet portlet-table">
-		<div class="portlet-header">
-			<h4 class="portlet-title">{{ widget.verbose_name }}</h4>
-		</div>
-		<div class="portlet-body">
-			<table class="table table-striped table-condensed">
-				<thead>
-					<tr>
-						<th>{% trans "Date" %}</th>
-						<th>{% trans "Division" %}</th>
-						<th class="hidden-sm hidden-xs">{% trans "Round" %}</th>
-						<th>{% trans "Home Team" %}</th>
-						<th>{% trans "Away Team" %}</th>
-						<th></th>
-					</tr>
-				</thead>
-				<tbody>
-					{% for match in matches %}
-						{% with home=match.get_home_team away=match.get_away_team division=match.stage.division %}
-							<tr>
-								<td>{% timezone division.season.timezone %}{{ match.datetime|date:"d/n/Y G:i" }}{% endtimezone %}</td>
-								<td>{{ division.short_title|default:division.title }}</td>
-								<td class="hidden-sm hidden-xs">
-									<span title="{{ match.stage.title }}">{% if match.label %}{{ match.label }}{% else %}{% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}{% endif %}</span>
-								</td>
-								<td class="team {{ home.club.slug|cssify }}">{{ home.short_title|default:home.title }}</td>
-								<td class="team {{ away.club.slug|cssify }}">{{ away.short_title|default:away.title }}</td>
-								<td><a href="{% url 'admin:fixja:competition:season:division:stage:match:detail' division.season.competition.pk division.season.pk division.pk match.stage.pk match.pk %}">{% trans "Edit" %}</a></td>
-							</tr>
-						{% endwith %}
-					{% empty %}
-						<tr class="first odd last">
-							<td colspan="6" class="no_results">{% trans "No matches awaiting detailed result entry." %}</td>
+{% load i18n tz common admin_ui %}
+<section class="wb-sheet wb-sheet-flush wb-widget wb-widget-wide">
+	<div class="wb-sheet-head"><h2>{% icon "chart-bar" %} {{ widget.verbose_name }}</h2></div>
+	<div class="wb-table-wrap">
+		<table class="wb-table wb-table-cards">
+			<thead>
+				<tr>
+					<th scope="col">{% trans "Match" %}</th>
+					<th scope="col">{% trans "Date" %}</th>
+					<th scope="col">{% trans "Division" %}</th>
+					<th scope="col"><span class="wb-sr">{% trans "Actions" %}</span></th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for match in matches|slice:":8" %}
+					{% with home=match.get_home_team away=match.get_away_team division=match.stage.division %}
+						<tr>
+							<td class="wb-title-cell">{{ home.short_title|default:home.title }} v {{ away.short_title|default:away.title }}</td>
+							<td data-label="{% trans "Date" %}">{% timezone division.season.timezone %}{{ match.datetime|date:"D j M, H:i" }}{% endtimezone %}</td>
+							<td data-label="{% trans "Division" %}">{{ division.short_title|default:division.title }} · {% if match.label %}{{ match.label }}{% else %}{% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}{% endif %}</td>
+							<td class="wb-row-actions"><a class="wb-button wb-button-small" href="{% url 'admin:fixja:competition:season:division:stage:match:detail' division.season.competition.pk division.season.pk division.pk match.stage.pk match.pk %}">{% trans "Enter" %}</a></td>
 						</tr>
-					{% endfor %}
-				</tbody>
-			</table>
-		</div>
+					{% endwith %}
+				{% empty %}
+					<tr class="wb-table-empty"><td colspan="4">{% trans "No matches awaiting detailed result entry." %}</td></tr>
+				{% endfor %}
+			</tbody>
+		</table>
 	</div>
-</div>
+</section>

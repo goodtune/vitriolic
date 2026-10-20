@@ -1,23 +1,37 @@
 {% extends "touchtechnology/admin/list.html" %}
-{% load i18n %}
-{% load common mvp_tags %}
-{% load bootstrap3 guardian_tags %}
+{% load i18n common admin_ui %}
 
-{% block content %}
-	<div class="row">
-		<div class="col-md-3 col-sm-3 col-md-push-9 col-sm-push-9">
-			<ul class="nav nav-pills nav-stacked">
-				<li class="active">
-					<a href="#" type="button" data-toggle="modal" data-target="#fileModal">{% trans "Upload file" %}</a>
-				</li>
-				<li>
-					<a href="#" type="button" data-toggle="modal" data-target="#folderModal">{% trans "New folder" %}</a>
-				</li>
-			</ul>
-		</div>
+{% block page_title %}{% trans "Files" %}{% endblock %}
+{% block heading %}{% trans "Files" %}{% endblock %}
+{% block lede %}<p class="wb-lede">{% if path %}<span class="wb-code">/{{ path }}</span>{% else %}{% trans "Pictures and documents the site's pages use." %}{% endif %}</p>{% endblock %}
 
-		<div class="col-md-9 col-sm-9 col-md-pull-3 col-sm-pull-3">
-			{% include list_template|default:"mvp/list.inc.html" %}
-		</div>
-	</div>
+{% block nav-pills-list %}
+	<form method="post" action="" enctype="multipart/form-data" class="wb-inline-form">
+		<button type="button" class="wb-button wb-button-primary" data-wb-dialog="wb-upload">{% icon "upload" %}{% trans "Upload file" %}</button>
+		<dialog class="wb-dialog" id="wb-upload" aria-labelledby="wb-upload-title">
+			<div class="wb-dialog-body">
+				{% csrf_token %}
+				<h2 class="wb-dialog-title" id="wb-upload-title">{% trans "Upload file" %}</h2>
+				<div class="wb-fields">{% for f in file_form %}{% field f %}{% endfor %}</div>
+				<div class="wb-dialog-actions">
+					<button type="button" class="wb-button wb-button-quiet" data-wb-dialog-close>{% trans "Cancel" %}</button>
+					<button type="submit" class="wb-button wb-button-primary">{% trans "Upload file" %}</button>
+				</div>
+			</div>
+		</dialog>
+	</form>
+	<form method="post" action="" class="wb-inline-form">
+		<button type="button" class="wb-button" data-wb-dialog="wb-folder">{% icon "folder" %}{% trans "New folder" %}</button>
+		<dialog class="wb-dialog" id="wb-folder" aria-labelledby="wb-folder-title">
+			<div class="wb-dialog-body">
+				{% csrf_token %}
+				<h2 class="wb-dialog-title" id="wb-folder-title">{% trans "New folder" %}</h2>
+				<div class="wb-fields">{% for f in folder_form %}{% field f %}{% endfor %}</div>
+				<div class="wb-dialog-actions">
+					<button type="button" class="wb-button wb-button-quiet" data-wb-dialog-close>{% trans "Cancel" %}</button>
+					<button type="submit" class="wb-button wb-button-primary">{% trans "Create folder" %}</button>
+				</div>
+			</div>
+		</dialog>
+	</form>
 {% endblock %}

@@ -1,0 +1,18 @@
+{% load i18n admin_ui %}{% if is_paginated %}
+<nav aria-label="{% trans "Pages" %}">
+	<ul class="wb-pagination">
+		{% with current=page.number|default:page %}
+		{% for number in paginator.page_range %}
+			<li>
+				{% if number == current %}
+					<span aria-current="page">{{ number }}</span>
+				{% else %}
+					{% page_query number as query %}
+					<a href="{{ query }}"{% if tab_name %} hx-get="{{ query }}" hx-target="#{{ tab_name }}-pane" hx-swap="innerHTML" hx-push-url="false"{% endif %} aria-label="{% blocktrans %}Page {{ number }}{% endblocktrans %}">{{ number }}</a>
+				{% endif %}
+			</li>
+		{% endfor %}
+		{% endwith %}
+	</ul>
+</nav>
+{% endif %}

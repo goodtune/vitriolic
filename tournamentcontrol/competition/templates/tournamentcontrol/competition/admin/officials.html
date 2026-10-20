@@ -1,66 +1,46 @@
 {% extends base %}
-{% load i18n %}
-{% load common %}
+{% load i18n common admin_ui %}
 
-{% block body_class %}{{ block.super }} rego team{% endblock %}
+{% block page_title %}{% trans "Officials" %} · {{ club.title }}{% endblock %}
 
-{% block extrajs %}
-	{{ block.super }}
-	<script type="text/javascript" src="{{ STATIC_URL }}tournamentcontrol/competition/js/formset.js"></script>
-{% endblock %}
+{% block content %}
+	{% blocktrans asvar eyebrow with club=club.title %}{{ club }} officials{% endblocktrans %}{% blocktrans asvar title with competition=season.competition.title season=season.title %}{{ competition }}, {{ season }}{% endblocktrans %}{% trans "The people who represent the club this season, and what each of them does." as lede %}
+	{% include "tournamentcontrol/competition/admin/_page_head.html" %}
 
-{% block breadcrumbs %}
-	{{ block.super }}
-	<li><a href="{% url 'admin:competition:club:list' %}">{% trans "Clubs" %}</a></li>
-	<li><a href="{% url 'admin:competition:club:edit' club.pk %}">{{ club.title }}</a></li>
-	<li><span>{% trans "Officials" %}</span></li>
-{% endblock %}
-
-{% block main_content %}
-	<div class="box">
-		<h1>{{ season.competition.title }} - {{ season.title }}</h1>
-
-		<form class="formset" action="" method="post">
-			{% csrf_token %}
-
-			{{ formset.management_form }}
-
-			<table>
-				<tbody>
-					{% for form in formset %}
-						<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
-							<td>{{ form.id }}{% field form.person "" %}</td>
-							<td>{% field form.roles "" %}</td>
-							<td>{% field form.DELETE %}</td>
-						</tr>
-					{% empty %}
-						<tr class="first odd last">
-							<td colspan="3" class="no_results">{% trans "There are no officials of this club." %}</td>
-						</tr>
-					{% endfor %}
-				</tbody>
-
-				{% with formset.empty_form as form %}
-					<tfoot class="hidden">
-						<tr class="empty">
-							<td>{{ form.id }}{% field form.person "" %}</td>
-							<td>{% field form.roles "" %}</td>
-							<td>{% field form.DELETE %}</td>
-						</tr>
-					</tfoot>
-				{% endwith %}
-			</table>
-
-			<div id="actions" class="actions">
-				<a class="button add" href="#add">{% trans "Add row" %}</a>
+	<form class="wb-sheet wb-form" action="" method="post" data-wb-formset>
+		{% csrf_token %}
+		{{ formset.management_form }}
+		<div class="wb-formbar">
+			<h2 class="wb-formbar-title">{% trans "Officials" %}</h2>
+			<div class="wb-formbar-actions">
+				<a class="wb-button wb-button-quiet" href="{% url 'admin:competition:club:edit' club.pk %}">{% trans "Cancel" %}</a>
+				<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
 			</div>
+		</div>
+		{% include "touchtechnology/admin/_problems.html" with form=None %}
 
-			<div class="buttons">
-				<button type="submit">{% trans "Save" %}</button>
-                {% block buttons %}
-                    <a class="button" href="{% url 'admin:competition:club:edit' club.pk %}">{% trans "Cancel" %}</a>
-                {% endblock %}
-			</div>
-		</form>
-	</div>
+		<div class="wb-rows" data-wb-formset-rows>
+			{% for form in formset %}
+				<div class="wb-row-form">
+					{{ form.id }}
+					{% field form.person %}
+					{% field form.roles %}
+					{% field form.DELETE %}
+				</div>
+			{% empty %}
+				<p class="wb-empty" data-wb-formset-none>{% trans "There are no officials of this club." %}</p>
+			{% endfor %}
+		</div>
+		<template data-wb-formset-empty>
+			{% with form=formset.empty_form %}
+				<div class="wb-row-form">
+					{{ form.id }}
+					{% field form.person %}
+					{% field form.roles %}
+					{% field form.DELETE %}
+				</div>
+			{% endwith %}
+		</template>
+		<p class="wb-actions"><button type="button" class="wb-button" data-wb-formset-add>{% icon "plus" %}{% trans "Add another official" %}</button></p>
+	</form>
 {% endblock %}

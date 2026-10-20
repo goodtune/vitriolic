@@ -65,7 +65,5 @@ class TournamentPlannerViewTests(TestCase):
             },
         )
         self.response_200()
-        self.assertResponseContains('<h4 class="list-group-item active">Pool 2</h4>')
-        self.assertResponseContains(
-            '<p class="list-group-item">Seed 1 <span class="badge">1</span></p>'
-        )
+        self.assertResponseContains("<h3>Pool 2</h3>")
+        self.assertResponseContains("<li><span>Seed 1</span><strong>1</strong></li>")

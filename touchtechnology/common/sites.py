@@ -577,6 +577,7 @@ class Application(object):
         # Vanilla form processing here, take the post data and files, create
         # an instance of form_class, save and redirect.
         if request.method == "POST":
+            adding = instance is None or instance.pk is None
             form = form_class(data=request.POST, files=request.FILES, **form_kwargs)
             if form.is_valid():
                 replace = dict(
@@ -596,6 +597,9 @@ class Application(object):
                 else:
                     for level, message in unchanged_messages:
                         messages.add_message(request, level, message.format(**replace))
+                # "Save and add another" comes back to an empty form.
+                if adding and "_addanother" in request.POST:
+                    return self.redirect(request.get_full_path())
                 return post_save_redirect
         else:
             form = form_class(**form_kwargs)

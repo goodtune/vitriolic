@@ -1,5 +1,6 @@
 import base64
 import collections
+import datetime
 import functools
 import logging
 import operator
@@ -10,7 +11,7 @@ from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
 from django.db import models
-from django.db.models import Case, F, Q, Sum, When
+from django.db.models import Case, Count, F, Q, Sum, When
 from django.forms.models import _get_foreign_key
 from django.http import (
     Http404,
@@ -22,12 +23,14 @@ from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _, ngettext
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from guardian.utils import get_40x_or_None
 
-from touchtechnology.admin.base import AdminComponent
+from touchtechnology.admin.base import AdminComponent, DashboardWidget
+from touchtechnology.admin.explorer import Explorer, Folder, Node, Rel
 from touchtechnology.common.decorators import (
     csrf_exempt_m,
     staff_login_required_m,
@@ -40,6 +43,7 @@ from tournamentcontrol.competition.dashboard import (
     MostValuableWidget,
     ProgressStageWidget,
     ScoresheetWidget,
+    matches_require_basic_results,
 )
 from tournamentcontrol.competition.decorators import (
     competition_by_pk_m,
@@ -149,6 +153,295 @@ YOUTUBE_AUTH_EXPIRED_MESSAGE = _(
 log = logging.getLogger(__name__)
 
 
+def _step(key, title, done, note, url, optional=False):
+    return {
+        "key": key,
+        "title": title,
+        "done": done,
+        "note": note,
+        "url": url,
+        "optional": optional,
+    }
+
+
+def checklist(steps):
+    """
+    A checklist of ``steps``: how many of the required ones are done, the
+    first step still to do, and the share done as a percentage.
+    """
+    required = [step for step in steps if not step["optional"]]
+    done = sum(1 for step in required if step["done"])
+    following = next(
+        (step for step in steps if not step["done"] and not step["optional"]), None
+    )
+    if following is not None:
+        following["next"] = True
+    return {
+        "steps": steps,
+        "done": done,
+        "total": len(required),
+        "percent": int(round(100 * done / len(required))) if required else 100,
+        "complete": done == len(required),
+        "next": following,
+    }
+
+
+def match_days(season):
+    """Each day of ``season``'s matches, with how far its matches have come."""
+    scheduled = Q(time__isnull=False, play_at__isnull=False) | Q(is_bye=True)
+    played = Q(home_team_score__isnull=False, away_team_score__isnull=False) | Q(
+        is_bye=True, bye_processed=True
+    )
+    rows = (
+        Match.objects.filter(stage__division__season=season, date__isnull=False)
+        .values("date")
+        .annotate(
+            total=Count("pk"),
+            scheduled=Count("pk", filter=scheduled),
+            played=Count("pk", filter=played | Q(is_washout=True)),
+        )
+        .order_by("date")
+    )
+    today = season.local_date()
+    return [dict(row, past=row["date"] <= today) for row in rows]
+
+
+def awaiting_results(matches):
+    """
+    Of ``matches``, those played (or byes whose day has come) without a
+    result, as the home page's widget counts them.
+    """
+    now = timezone.now()
+    return matches_require_basic_results(
+        matches=matches.filter(
+            Q(datetime__lte=now) | Q(is_bye=True, date__lte=timezone.localdate())
+        )
+    )
+
+
+def season_checklist(season):
+    """The jobs that set ``season`` up and run it, in the order they are done."""
+    edit = str(season.urls["edit"])
+    timeslots = season.timeslots.count()
+    venues = season.venues.count()
+    grounds = Ground.objects.filter(venue__season=season).count()
+    exclusions = season.exclusions.count()
+    divisions = list(
+        season.divisions.annotate(
+            team_count=Count("teams", distinct=True),
+            match_count=Count("stages__matches", distinct=True),
+        ).order_by("order")
+    )
+    teams = sum(division.team_count for division in divisions)
+    without_teams = [d for d in divisions if d.team_count < 2]
+    without_draw = [d for d in divisions if not d.match_count]
+    matches = Match.objects.filter(stage__division__season=season)
+    total = matches.count()
+    unscheduled = (
+        matches.exclude(is_bye=True)
+        .filter(Q(date__isnull=True) | Q(time__isnull=True) | Q(play_at__isnull=True))
+        .count()
+    )
+    awaiting = list(awaiting_results(matches).order_by("date").values_list("date", flat=True))
+
+    def division_link(division, tab):
+        return "%s#%s-tab" % (division.urls["edit"], tab)
+
+    steps = [
+        _step(
+            "details",
+            _("Name the season and when it starts"),
+            bool(season.start_date),
+            season.start_date
+            and _("Starts %(date)s") % {"date": date_format(season.start_date, "j F Y")},
+            edit + "#season-tab",
+        ),
+        _step(
+            "timeslots",
+            _("Add the kick-off times"),
+            timeslots > 0,
+            ngettext("%(n)d time slot", "%(n)d time slots", timeslots) % {"n": timeslots}
+            if timeslots
+            else _("When matches can start each day"),
+            edit + "#timeslots-tab",
+        ),
+        _step(
+            "venues",
+            _("Add venues and their grounds"),
+            grounds > 0,
+            _("%(venues)d venues, %(grounds)d grounds")
+            % {"venues": venues, "grounds": grounds}
+            if venues
+            else _("Where the matches are played"),
+            edit + "#venues-tab",
+        ),
+        _step(
+            "exclusions",
+            _("Mark the dates with no matches"),
+            exclusions > 0,
+            ngettext("%(n)d date set aside", "%(n)d dates set aside", exclusions)
+            % {"n": exclusions}
+            if exclusions
+            else _("Public holidays and breaks"),
+            edit + "#exclusions-tab",
+            optional=True,
+        ),
+        _step(
+            "divisions",
+            _("Add the divisions"),
+            bool(divisions),
+            ngettext("%(n)d division", "%(n)d divisions", len(divisions))
+            % {"n": len(divisions)}
+            if divisions
+            else _("Add several at once"),
+            edit + "#divisions-tab",
+        ),
+        _step(
+            "teams",
+            _("Enter the teams"),
+            bool(divisions) and not without_teams,
+            _("%(division)s needs teams") % {"division": without_teams[0].title}
+            if without_teams
+            else ngettext("%(n)d team", "%(n)d teams", teams) % {"n": teams},
+            division_link(without_teams[0], "teams")
+            if without_teams
+            else edit + "#divisions-tab",
+        ),
+        _step(
+            "draw",
+            _("Build the draw"),
+            bool(divisions) and not without_draw,
+            _("%(division)s has no draw yet") % {"division": without_draw[0].title}
+            if without_draw
+            else ngettext("%(n)d match", "%(n)d matches", total) % {"n": total},
+            division_link(without_draw[0], "stages")
+            if without_draw
+            else edit + "#schedule-tab",
+        ),
+        _step(
+            "schedule",
+            _("Give every match a time and a ground"),
+            total > 0 and unscheduled == 0,
+            ngettext(
+                "%(n)d match to schedule", "%(n)d matches to schedule", unscheduled
+            )
+            % {"n": unscheduled}
+            if unscheduled
+            else (_("All scheduled") if total else _("Once the draw is built")),
+            edit + "#schedule-tab",
+        ),
+        _step(
+            "results",
+            _("Enter the results"),
+            total > 0 and not awaiting,
+            ngettext(
+                "%(n)d match waiting for a result",
+                "%(n)d matches waiting for a result",
+                len(awaiting),
+            )
+            % {"n": len(awaiting)}
+            if awaiting
+            else (_("Up to date") if total else _("On each match day")),
+            reverse(
+                "admin:fixja:match-results",
+                args=(season.competition_id, season.pk, awaiting[0].strftime("%Y%m%d")),
+            )
+            if awaiting
+            else edit + "#schedule-tab",
+        ),
+    ]
+    return checklist(steps)
+
+
+def division_ladders(division):
+    """
+    The ladder of each stage of ``division`` that has one, a table per pool:
+    a list of ``(stage, [(pool or None, rows)])``.
+    """
+    ladders = []
+    for stage in division.stages.all():
+        rows = list(
+            stage.ladder_summary.select_related("team", "stage_group").order_by(
+                "stage_group__order", "-points", "-difference", "-percentage", "team__title"
+            )
+        )
+        if not rows:
+            continue
+        pools = []
+        for row in rows:
+            if not pools or pools[-1][0] != row.stage_group:
+                pools.append((row.stage_group, []))
+            pools[-1][1].append(row)
+        ladders.append((stage, pools))
+    return ladders
+
+
+def division_checklist(division):
+    """The jobs that make ``division`` ready to play, in order."""
+    edit = str(division.urls["edit"])
+    teams = division.teams.count()
+    stages = list(division.stages.annotate(match_count=Count("matches")))
+    undrawn = [stage for stage in stages if not stage.match_count]
+    steps = [
+        _step(
+            "points",
+            _("Say how many points a win, draw and loss earn"),
+            bool(division.points_formula),
+            _("Needed before results can be saved")
+            if not division.points_formula
+            else _("Points are set"),
+            edit + "#division-tab",
+        ),
+        _step(
+            "teams",
+            _("Enter the teams"),
+            teams >= 2,
+            ngettext("%(n)d team", "%(n)d teams", teams) % {"n": teams}
+            if teams
+            else _("Add several at once"),
+            edit + "#teams-tab",
+        ),
+        _step(
+            "stages",
+            _("Add the stages"),
+            bool(stages),
+            ngettext("%(n)d stage", "%(n)d stages", len(stages)) % {"n": len(stages)}
+            if stages
+            else _("The rounds, then the finals"),
+            edit + "#stages-tab",
+        ),
+        _step(
+            "draw",
+            _("Build the draw of each stage"),
+            bool(stages) and not undrawn,
+            _("%(stage)s has no draw yet") % {"stage": undrawn[0].title}
+            if undrawn
+            else (_("Every stage is drawn") if stages else _("Once the stages are added")),
+            str(undrawn[0].urls["build"]) if undrawn else edit + "#stages-tab",
+        ),
+    ]
+    return checklist(steps)
+
+
+class SeasonProgressWidget(DashboardWidget):
+    """The seasons in progress on the home page, each with its checklist."""
+
+    verbose_name = _("Seasons in progress")
+    template = "tournamentcontrol/competition/admin/widgets/seasons.html"
+    half = False
+
+    def _get_context(self):
+        seasons = (
+            Season.objects.filter(complete=False, competition__enabled=True)
+            .select_related("competition")
+            .order_by("-start_date")
+        )
+        return {
+            "widget": self,
+            "seasons": [(season, season_checklist(season)) for season in seasons[:4]],
+        }
+
+
 def bulk_create_count(request, default=5):
     """
     The number of blank rows a bulk create view shows, from the ``count``
@@ -175,8 +468,74 @@ def next_related_factory(model, parent=None, fk_name=None):
     return model(order=last + 1, **kw)
 
 
+def season_days(explorer, request, season):
+    """The season's match days, each opening on its results."""
+    return [
+        Node(
+            key=explorer.key("x:day:%s:%s" % (season.pk, day.strftime("%Y%m%d"))),
+            label=date_format(day, "D j M"),
+            url=reverse(
+                "admin:fixja:match-results",
+                args=(season.competition_id, season.pk, day.strftime("%Y%m%d")),
+            ),
+            icon="square-check",
+        )
+        for day in season.matches.dates("date", "day")
+    ]
+
+
+class CompetitionExplorer(Explorer):
+    """
+    Competition, season, division, stage and pool, as the URLs nest them,
+    with a season's venues and match days and a division's teams in folders
+    of their own. A club holds its people. (After the Explorer entry.)
+    """
+
+    branches = {
+        Competition: (Rel("seasons", flat=True),),
+        Season: (
+            Rel("divisions", flat=True),
+            Rel("venues", label=_("Venues"), icon="map-pin"),
+            Folder(
+                "days", _("Match days"), children=season_days, icon="calendar-days"
+            ),
+        ),
+        Division: (
+            Rel("stages", flat=True),
+            Rel("teams", label=_("Teams"), icon="shield"),
+        ),
+        Stage: (Rel("pools", flat=True),),
+        StageGroup: (),
+        Venue: (Rel("grounds", flat=True),),
+        Ground: (),
+        Team: (),
+        UndecidedTeam: (),
+        Match: (),
+        Club: (Rel("members", flat=True),),
+        Person: (),
+        DrawFormat: (),
+    }
+
+    def trail(self, request, context):
+        keys = super().trail(request, context)
+        season, day = context.get("season"), context.get("date")
+        if isinstance(season, Season) and isinstance(day, datetime.date):
+            keys += [
+                self.key("g:competition.season:%s:days" % season.pk),
+                self.key("x:day:%s:%s" % (season.pk, day.strftime("%Y%m%d"))),
+            ]
+        return keys
+
+    def group_node(self, obj, rel, value=None, label=None):
+        node = super().group_node(obj, rel, value, label)
+        if isinstance(obj, Season) and rel.name == "days":
+            node.url = "%s#schedule-tab" % obj.urls["edit"]
+        return node
+
+
 class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     verbose_name = _("Tournament Control")
+    explorer_class = CompetitionExplorer
     unprotected = False
 
     def __init__(self, app, name="fixja", app_name="competition"):
@@ -767,15 +1126,112 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @staff_login_required_m
     def index(self, request, **kwargs):
-        messages.warning(
-            request,
-            _(
-                "We're moving a few things around, please "
-                "update any bookmarks you may find that "
-                "have broken."
-            ),
+        """
+        Tournament Control's own page: its jobs, and the seasons in progress
+        with how far each has come.
+        """
+        context = dict(kwargs)
+        context.update(
+            {
+                "tasks": self.tasks(request),
+                "seasons": self.seasons_in_progress(),
+            }
         )
-        return self.redirect(self.reverse("competition:list"))
+        return self.render(request, self.template_path("index.html"), context)
+
+    def seasons_in_progress(self):
+        """The seasons that are not complete, each with its set-up checklist."""
+        seasons = (
+            Season.objects.filter(complete=False, competition__enabled=True)
+            .select_related("competition")
+            .order_by("-start_date")
+        )
+        return [(season, season_checklist(season)) for season in seasons[:6]]
+
+    def tasks(self, request):
+        """
+        The jobs of a match day and of a season, pointing at the day or the
+        season they are about: results waiting, the next day to schedule, the
+        season still being set up, and the clubs.
+        """
+        tasks = []
+        # One query each: the latest day with a result to enter, and the next
+        # day still to come, each with its season.
+        awaiting = (
+            awaiting_results(
+                Match.objects.filter(stage__division__season__complete=False)
+            )
+            .select_related(None)
+            .select_related("stage__division__season")
+            .order_by("-date")
+            .first()
+        )
+        if awaiting is not None:
+            season = awaiting.stage.division.season
+            tasks.append(
+                {
+                    "label": _("Enter results"),
+                    "url": reverse(
+                        "admin:fixja:match-results",
+                        args=(
+                            season.competition_id,
+                            season.pk,
+                            awaiting.date.strftime("%Y%m%d"),
+                        ),
+                    ),
+                    "note": "%s · %s"
+                    % (date_format(awaiting.date, "D j M"), season.title),
+                    "icon": "list-checks",
+                    "priority": 10,
+                }
+            )
+        upcoming = (
+            Match.objects.filter(
+                stage__division__season__complete=False,
+                date__gte=timezone.localdate(),
+            )
+            .select_related("stage__division__season")
+            .order_by("date")
+            .first()
+        )
+        if upcoming is not None:
+            season = upcoming.stage.division.season
+            tasks.append(
+                {
+                    "label": _("Schedule the next match day"),
+                    "url": reverse(
+                        "admin:fixja:match-schedule",
+                        args=(
+                            season.competition_id,
+                            season.pk,
+                            upcoming.date.strftime("%Y%m%d"),
+                        ),
+                    ),
+                    "note": "%s · %s"
+                    % (date_format(upcoming.date, "D j M"), season.title),
+                    "icon": "clock",
+                    "priority": 11,
+                }
+            )
+        tasks.append(
+            {
+                "label": _("Set up a season"),
+                "url": self.reverse("competition:list"),
+                "note": _("Divisions, teams, venues and the draw"),
+                "icon": "trophy",
+                "priority": 12,
+            }
+        )
+        tasks.append(
+            {
+                "label": _("Keep clubs and people current"),
+                "url": self.reverse("club:list"),
+                "note": _("Clubs, their people and officials"),
+                "icon": "shield",
+                "priority": 13,
+            }
+        )
+        return tasks
 
     @competition_by_pk_m
     @staff_login_required_m
@@ -933,12 +1389,16 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             dates = season.matches.dates("date", "day")
 
         extra_context.setdefault("dates", dates)
+        if season.pk:
+            extra_context.setdefault("match_days", match_days(season))
+            extra_context.setdefault("checklist", season_checklist(season))
 
+        # In the order a season is set up: divisions, then when and where.
         related = (
-            "exclusions",
             "divisions",
-            "venues",
             "timeslots",
+            "venues",
+            "exclusions",
             "referees",
         )
         # Adhoc live stream events and their managed stream keys are only
@@ -1336,6 +1796,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def edit_division(self, request, season, extra_context, division=None, **kwargs):
         if division is None:
             division = next_related_factory(Division, season)
+        else:
+            extra_context.setdefault("checklist", division_checklist(division))
+            extra_context.setdefault("ladders", division_ladders(division))
 
         return self.generic_edit(
             request,
@@ -1982,6 +2445,14 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             args=(competition.pk, season.pk, division.pk),
         )
 
+        # The wizard renders itself, so it is given what the admin's own
+        # pages are: where Cancel goes, and the admin's field template.
+        extra_context = {
+            "cancel_url": str(redirect_to) + "#stages-tab",
+            "field_template": "touchtechnology/admin/templatetags/field.html",
+            "stage": stage,
+            **extra_context,
+        }
         view = DrawGenerationWizard.as_view(
             form_list, extra_context=extra_context, redirect_to=redirect_to, stage=stage
         )
@@ -2035,7 +2506,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 stage.matches.all().delete()
 
         messages.success(request, _("Your draw has been undone."))
-        return self.redirect(division.urls["edit"])
+        return self.redirect(str(division.urls["edit"]) + "#stages-tab")
 
     @competition_by_pk_m
     @staff_login_required_m
@@ -2575,7 +3046,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     "places": places,
                     "timeslots": timeslots,
                 },
-                post_save_redirect=self.redirect(season.urls["edit"]),
+                post_save_redirect=self.redirect(
+                    str(season.urls["edit"]) + "#schedule-tab"
+                ),
                 templates=self.template_path("match/schedule.html"),
                 extra_context=extra_context,
             )
@@ -2617,7 +3090,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         time=None,
         **kwargs,
     ):
-        redirect_to = reverse("admin:index", current_app=self.app)
+        # Back to the season's match days, where this day now shows its results.
+        redirect_to = str(season.urls["edit"]) + "#schedule-tab"
         return super(CompetitionAdminComponent, self).match_results(
             request,
             competition,
@@ -2962,6 +3436,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             form_class=ClubEditForm,
             related=(
                 "members",
+                "staff",
                 "teams",
             ),
             permission_required=True,
@@ -3056,10 +3531,17 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def edit_clubassociation(
         self, request, club, extra_context, clubassociation_id=None, **kwargs
     ):
+        # A new official belongs to the club whose page added it, and saving
+        # returns to that club's officials.
+        instance = (
+            ClubAssociation(club=club) if clubassociation_id is None else None
+        )
         return self.generic_edit(
             request,
             ClubAssociation,
             pk=clubassociation_id,
+            instance=instance,
+            post_save_redirect=self.redirect(str(club.urls["edit"]) + "#staff-tab"),
             form_class=ClubAssociationForm,
             form_kwargs={
                 "user": request.user,

@@ -6,12 +6,13 @@ from django.core.files.storage import default_storage
 from django.db.models import Q
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
-from django.urls import include, path, re_path, resolve, reverse
+from django.urls import NoReverseMatch, include, path, re_path, resolve, reverse
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 from first import first
 
 from touchtechnology.admin.base import AdminComponent
+from touchtechnology.admin.explorer import Explorer, Node
 from touchtechnology.admin.mixins import AdminUrlMixin
 from touchtechnology.common.decorators import (
     require_POST_m,
@@ -42,8 +43,99 @@ from touchtechnology.content.models import (
 logger = logging.getLogger(__name__)
 
 
+class ContentExplorer(Explorer):
+    """
+    The site's pages as the tree they are: the Sitemap section holds the top
+    level of the site, and each folder or page the ones beneath it.
+    (After the Explorer entry.)
+    """
+
+    ICONS = {"page": "file", "placeholder": "puzzle"}
+
+    def _sitemap_index(self):
+        url = str(self.component.reverse("index"))
+        for n, section in enumerate(self.sections()):
+            if section.url == url:
+                return n
+        return None
+
+    def section_node(self, request, index, section):
+        node = super().section_node(request, index, section)
+        if index == self._sitemap_index():
+            node.expandable = True
+        return node
+
+    def section_children(self, request, index):
+        if index == self._sitemap_index():
+            return self.sitemap_nodes(request, None)
+        return super().section_children(request, index)
+
+    def sitemap_nodes(self, request, parent):
+        nodes = SitemapNode.objects.filter(self.component.filter, parent=parent)
+        return [self.sitemap_node(node) for node in nodes.select_related("content_type")]
+
+    def sitemap_node(self, node):
+        kind = getattr(node.content_type, "name", None)
+        try:
+            url = str(node.urls["edit"])
+        except NoReverseMatch:
+            url = None
+        return Node(
+            key=self.key("x:node:%d" % node.pk),
+            label=node.title,
+            url=url,
+            icon=self.ICONS.get(kind, "folder"),
+            expandable=not node.is_leaf_node(),
+        )
+
+    def custom_children(self, request, name, arg):
+        if name == "node":
+            return self.sitemap_nodes(request, int(arg))
+        return []
+
+    def trail(self, request, context):
+        node = None
+        for key in ("node", "pagenode", "object"):
+            if isinstance(context.get(key), SitemapNode) and context[key].pk:
+                node = context[key]
+                break
+        if node is None and request.GET.get("r", "").isdigit():
+            node = SitemapNode.objects.filter(pk=request.GET["r"]).first()
+        index = self._sitemap_index()
+        if node is None or index is None:
+            return super().trail(request, context)
+        keys = [self.key("s%d" % index)]
+        keys += [
+            self.key("x:node:%d" % n.pk)
+            for n in node.get_ancestors(include_self=True)
+        ]
+        return keys
+
+    def parent_key(self, request, local):
+        if local.startswith("x:node:"):
+            node = SitemapNode.objects.filter(pk=local.split(":")[2]).first()
+            if node is not None and node.parent_id:
+                return self.key("x:node:%d" % node.parent_id)
+            index = self._sitemap_index()
+            return self.key("s%d" % index) if index is not None else self.key("")
+        return super().parent_key(request, local)
+
+    def label_of(self, request, local):
+        if local.startswith("x:node:"):
+            node = SitemapNode.objects.filter(pk=local.split(":")[2]).first()
+            return node.title if node else ""
+        return super().label_of(request, local)
+
+    def url_of(self, request, local):
+        if local.startswith("x:node:"):
+            node = SitemapNode.objects.filter(pk=local.split(":")[2]).first()
+            return self.sitemap_node(node).url if node else None
+        return super().url_of(request, local)
+
+
 class ContentAdminComponent(AdminComponent):
     verbose_name = _("Content")
+    explorer_class = ContentExplorer
 
     filter = Q(content_type__app_label="content") | Q(content_type__isnull=True)
 
@@ -142,6 +234,17 @@ class ContentAdminComponent(AdminComponent):
         ]
         return urlpatterns
 
+    def tasks(self, request):
+        return (
+            {
+                "label": _("Edit the website's pages"),
+                "url": self.reverse("index"),
+                "note": _("Pages, menus, files and redirects"),
+                "icon": "file-text",
+                "priority": 21,
+            },
+        )
+
     def dropdowns(self):
         dl = (
             (_("Sitemap"), self.reverse("index"), "sitemap"),
@@ -226,6 +329,9 @@ class ContentAdminComponent(AdminComponent):
             nodes = descendants.filter(self.filter).filter(level=root.level + 1)
         except KeyError:
             nodes = SitemapNode.objects.filter(self.filter).filter(level=0)
+        else:
+            # The folder being looked in, for the page's heading.
+            extra_context.setdefault("root", root)
         return self.generic_list(
             request,
             nodes,

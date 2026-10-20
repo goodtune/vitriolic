@@ -1,41 +1,34 @@
-{% extends "mvp/list.split.inc.html" %}
-{% load i18n %}
+{% extends "mvp/list.inc.html" %}
+{% load i18n admin_ui %}
 
 {% block actions %}
-	<a href="{% url 'admin:fixja:competition:season:json-builder' competition.pk season.pk %}" title="{% trans "JSON Division Builder" %}" role="button">
-		<i class="fa fa-sitemap"></i>
-	</a>
-	<a href="#" title="{% trans "Add several divisions" %}" role="button" data-toggle="modal" data-target="#bulkCreateModal_division">
-		<i class="fa fa-th-list"></i>
-	</a>
-	{{ block.super }}
-{% endblock %}
-
-{% block modal %}
-	{{ block.super }}
 	{% url 'admin:fixja:competition:season:division:bulk' competition.pk season.pk as bulk_url %}
 	{% trans "Add several divisions" as bulk_title %}
 	{% include "tournamentcontrol/competition/admin/bulk_create_modal.inc.html" with name="division" url=bulk_url title=bulk_title %}
+	{{ block.super }}
 {% endblock %}
 
 {% block table-headings %}
 	{{ block.super }}
-	<th>{% trans "Short title" %}</th>
+	<th scope="col">{% trans "Short title" %}</th>
+	<th scope="col" class="wb-num">{% trans "Teams" %}</th>
 {% endblock %}
 
 {% block table-columns %}
 	{{ block.super }}
-	<td>{{ obj.short_title|default:"-" }}</td>
+	<td data-label="{% trans "Short title" %}">{{ obj.short_title }}</td>
+	<td class="wb-num" data-label="{% trans "Teams" %}">{{ obj.teams.count }}</td>
 {% endblock %}
 
-{% block empty-row-colspan %}3{% endblock %}
+{% block empty-row-colspan %}4{% endblock %}
 
-{% block row-buttons-extra %}
-		<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:competition:season:division:scorers' competition.pk season.pk obj.pk %}" role="button">
-			<i class="fa fa-bar-chart"></i>
-			&nbsp;{% trans "Leaders" %}
-		</a>
-		<a class="btn btn-default btn-sm" href="{% url 'admin:fixja:competition:season:division:export-json' competition.pk season.pk obj.pk %}" role="button" title="{% trans "Export as JSON" %}">
-			<i class="fa fa-download"></i>
-		</a>
+{% block row-buttons-items %}
+	{{ block.super }}
+	<li><a href="{% url 'admin:fixja:competition:season:division:scorers' competition.pk season.pk obj.pk %}">{% icon "chart-bar" %}{% trans "Leaders" %}</a></li>
+	<li><a href="{% url 'admin:fixja:competition:season:division:export-json' competition.pk season.pk obj.pk %}">{% icon "download" %}{% trans "Export as JSON" %}</a></li>
+{% endblock %}
+
+{% block table %}
+	{{ block.super }}
+	<p class="wb-muted wb-list-foot">{% icon "file-json" %} <a href="{% url 'admin:fixja:competition:season:json-builder' competition.pk season.pk %}">{% trans "Build divisions from JSON" %}</a></p>
 {% endblock %}

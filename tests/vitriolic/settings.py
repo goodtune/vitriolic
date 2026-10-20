@@ -52,8 +52,6 @@ INSTALLED_APPS = [
     "mptt",
     "cloudinary",
     "guardian",
-    "bootstrap3",
-    "django_gravatar",
     "embed_video",
     "mathfilters",
     "django_htmx",

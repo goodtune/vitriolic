@@ -1,0 +1,10 @@
+{% load admin_ui %}{% comment %}
+	The heading of a page of its own: ``eyebrow``, ``title`` and ``lede``.
+{% endcomment %}
+<header class="wb-head">
+	<div class="wb-head-text">
+		{% if eyebrow %}<p class="wb-eyebrow">{{ eyebrow }}</p>{% endif %}
+		<h1>{{ title }}</h1>
+		{% if lede %}<p class="wb-lede">{{ lede }}</p>{% endif %}
+	</div>
+</header>

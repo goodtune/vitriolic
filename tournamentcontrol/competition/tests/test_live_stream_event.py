@@ -32,6 +32,17 @@ def _http_error(status, message):
     return HttpError(resp=resp, content=message.encode())
 
 
+
+#: The button that copies an event's video link, as its row in the season's
+#: list of events draws it.
+COPY_VIDEO_LINK = (
+    '<button type="button" class="wb-button wb-button-small" '
+    'data-wb-copy="https://youtu.be/adhoc123" data-wb-copied="Copied">'
+    '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+    '<use href="/static/touchtechnology/admin/workbook/icons.svg#link"></use>'
+    "</svg><span>Copy video link</span></button>"
+)
+
 class LiveStreamEventModelTests(TestCase):
     def test_str_is_title(self):
         event = factories.LiveStreamEventFactory.create(title="Opening Ceremony")
@@ -576,9 +587,7 @@ class LiveStreamEventAdminTests(TestCase):
                 event.season.competition_id,
                 event.season_id,
             )
-            self.assertResponseContains(
-                'data-video-url="https://youtu.be/adhoc123"', html=False
-            )
+            self.assertResponseContains(COPY_VIDEO_LINK)
 
     def test_season_edit_hides_copy_video_link_for_removed_broadcast(self):
         event = factories.LiveStreamEventFactory.create(
@@ -592,9 +601,7 @@ class LiveStreamEventAdminTests(TestCase):
                 event.season.competition_id,
                 event.season_id,
             )
-            self.assertResponseNotContains(
-                'data-video-url="https://youtu.be/adhoc123"', html=False
-            )
+            self.assertResponseNotContains(COPY_VIDEO_LINK)
 
     def test_season_edit_hides_events_tab_when_not_live_streamed(self):
         season = factories.SeasonFactory.create(live_stream=False)

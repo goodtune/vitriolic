@@ -1,0 +1,10 @@
+{% load i18n common admin_ui %}{% comment %}
+	A delete button that posts to ``action`` after the person confirms. Give
+	it ``thing`` to say what goes, ``button_label`` for the button and ``redirect``
+	for where to go after. Without scripts it deletes at once.
+{% endcomment %}{% with what=thing|default:obj type=model|type %}
+<form method="post" action="{{ action }}" data-wb-confirm="{% blocktrans %}The {{ type }} “{{ what }}” will be removed for good.{% endblocktrans %}" data-wb-confirm-title="{% blocktrans %}Delete {{ what }}?{% endblocktrans %}" data-wb-confirm-label="{% blocktrans %}Delete {{ type }}{% endblocktrans %}">
+	{% csrf_token %}
+	<button type="submit" class="{{ button_class|default:"wb-danger-item" }}">{% icon "trash-2" %}{{ button_label|default:_("Delete") }}</button>
+</form>
+{% endwith %}

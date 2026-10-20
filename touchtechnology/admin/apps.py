@@ -95,18 +95,4 @@ def touchtechnology_assumptions(app_configs, **kwargs):
             )
         )
 
-    REQUIRED_APPS = {
-        "bootstrap3": "django-bootstrap3",
-        "django_gravatar": "django-gravatar2",
-    }
-
-    for app, package in REQUIRED_APPS.items():
-        if app not in INSTALLED_APPS:
-            errors.append(
-                checks.Critical(
-                    "touchtechnology.admin requires {}".format(package),
-                    hint='Add "{}" to INSTALLED_APPS'.format(app),
-                )
-            )
-
     return errors

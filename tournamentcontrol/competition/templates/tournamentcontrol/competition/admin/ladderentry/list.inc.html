@@ -1,37 +1,37 @@
-{% extends "mvp/list.split.inc.html" %}
+{% extends "mvp/list.inc.html" %}
 {% load i18n %}
-{% load competition %}
 
 {% block table-headings %}
-	<th>{% trans "Team" %}</th>
-	<th>{% trans "P" %}</th>
-	<th>{% trans "W" %}</th>
-	<th>{% trans "L" %}</th>
-	<th>{% trans "D" %}</th>
-	<th>{% trans "B" %}</th>
-	<th>{% trans "FW" %}</th>
-	<th>{% trans "FL" %}</th>
-	<th>{% trans "+" %}</th>
-	<th>{% trans "-" %}</th>
-	<th>{% trans "BP" %}</th>
-	<th>{% trans "Pts" %}</th>
+	<th scope="col">{% trans "Team" %}</th>
+	<th scope="col" class="wb-num"><abbr title="{% trans "Played" %}">{% trans "P" %}</abbr></th>
+	<th scope="col" class="wb-num"><abbr title="{% trans "Won" %}">{% trans "W" %}</abbr></th>
+	<th scope="col" class="wb-num"><abbr title="{% trans "Lost" %}">{% trans "L" %}</abbr></th>
+	<th scope="col" class="wb-num"><abbr title="{% trans "Drawn" %}">{% trans "D" %}</abbr></th>
+	<th scope="col" class="wb-num"><abbr title="{% trans "Byes" %}">{% trans "B" %}</abbr></th>
+	<th scope="col" class="wb-num"><abbr title="{% trans "Forfeits for" %}">{% trans "FW" %}</abbr></th>
+	<th scope="col" class="wb-num"><abbr title="{% trans "Forfeits against" %}">{% trans "FL" %}</abbr></th>
+	<th scope="col" class="wb-num"><abbr title="{% trans "Score for" %}">{% trans "+" %}</abbr></th>
+	<th scope="col" class="wb-num"><abbr title="{% trans "Score against" %}">{% trans "-" %}</abbr></th>
+	<th scope="col" class="wb-num"><abbr title="{% trans "Bonus points" %}">{% trans "BP" %}</abbr></th>
+	<th scope="col" class="wb-num"><abbr title="{% trans "Points" %}">{% trans "Pts" %}</abbr></th>
 {% endblock %}
 
 {% block table-columns %}
-	<td>{{ obj.team }}</td>
-	<td>{{ obj.played }}</td>
-	<td>{{ obj.win }}</td>
-	<td>{{ obj.loss }}</td>
-	<td>{{ obj.draw }}</td>
-	<td>{{ obj.bye }}</td>
-	<td>{{ obj.forfeit_for }}</td>
-	<td>{{ obj.forfeit_against }}</td>
-	<td>{{ obj.score_for }}</td>
-	<td>{{ obj.score_against }}</td>
-	<td>{{ obj.bonus_points }}</td>
-	<td>{{ obj.points }}</td>
+	<td class="wb-title-cell">{{ obj.team }}</td>
+	<td class="wb-num">{{ obj.played }}</td>
+	<td class="wb-num">{{ obj.win }}</td>
+	<td class="wb-num">{{ obj.loss }}</td>
+	<td class="wb-num">{{ obj.draw }}</td>
+	<td class="wb-num">{{ obj.bye }}</td>
+	<td class="wb-num">{{ obj.forfeit_for }}</td>
+	<td class="wb-num">{{ obj.forfeit_against }}</td>
+	<td class="wb-num">{{ obj.score_for }}</td>
+	<td class="wb-num">{{ obj.score_against }}</td>
+	<td class="wb-num">{{ obj.bonus_points }}</td>
+	<td class="wb-num"><strong>{{ obj.points }}</strong></td>
 {% endblock %}
 
 {% block actions %}{% endblock %}
-{% block row-buttons-items %}{% endblock %}
+{% block row-buttons %}{% endblock %}
+{% block table-head-actions %}{% endblock %}
 {% block table-row-empty %}{% endblock %}

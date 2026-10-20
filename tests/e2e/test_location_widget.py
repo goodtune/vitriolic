@@ -61,7 +61,7 @@ def test_location_widget_venue(
     page.wait_for_load_state("networkidle")
     widget.screenshot(path=str(screenshot_dir / "location_widget_venue_moved.png"))
 
-    page.get_by_role("button", name="Save").click()
+    page.get_by_role("button", name="Save", exact=True).first.click()
     page.wait_for_load_state("networkidle")
 
     venue.refresh_from_db()

@@ -1,29 +1,15 @@
 {% extends "touchtechnology/admin/base.html" %}
+{% load i18n admin_ui %}
 
-{% block mainnav %}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
 
 {% block full_content %}
-	<hr class="spacer-md">
-	<hr class="spacer-xs">
-
-	<div class="error-container">
-		<div class="error-code">{% block error-code %}{% endblock %}</div> <!-- /.error-code -->
-
-		<div class="error-details">
-			{% block error-details %}{% endblock %}
-
-			{% block search-form %}
-				<form action="#" class="form">
-					<div class="input-group">
-						<input type="text" class="form-control" placeholder="Search...">
-						<span class="input-group-btn">
-							<button class="btn btn-secondary" type="button">
-								<i class="fa fa-search"></i>
-							</button>
-						</span>
-					</div><!-- /input-group -->
-				</form>
-			{% endblock %}
-		</div> <!-- /.error-details -->
+	<div class="wb-error-page">
+		<p class="wb-error-code">{% block error-code %}{% endblock %}</p>
+		{% block error-details %}{% endblock %}
+		{% block search-form %}{% endblock %}
+		<p class="wb-actions">
+			<a class="wb-button wb-button-primary" href="{% url 'admin:index' %}">{% icon "house" %}{% trans "Go to the home page" %}</a>
+		</p>
 	</div>
 {% endblock %}

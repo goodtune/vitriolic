@@ -35,10 +35,10 @@ class AdminTests(TestCase):
         with self.login(self.superuser):
             self.get("admin:content:index")
             html = """
-                <a role="button" href="/admin/content/application/{}/">
-                    <i class="fa fa-pencil fa-fw"></i>
-                    Edit
-                </a>
+                <a href="/admin/content/application/{}/">
+                    <svg class="wb-icon" aria-hidden="true" focusable="false">
+                        <use href="/static/touchtechnology/admin/workbook/icons.svg#pencil"></use>
+                    </svg>Edit</a>
             """.format(
                 self.root_node.pk
             )

@@ -1,0 +1,25 @@
+{% load i18n admin_ui %}
+<div class="wb-drill-panel" data-node="{{ tree.drill_key }}">
+	<div class="wb-drill-head">
+		{% if tree.drill_parent %}
+			<button type="button" class="wb-drill-up" data-drill="{{ tree.drill_parent }}">{% icon "chevron-left" %}<span>{% blocktrans with label=tree.drill_parent_label %}Up to {{ label }}{% endblocktrans %}</span></button>
+		{% endif %}
+		{% if tree.drill_url %}
+			<a class="wb-drill-title" href="{{ tree.drill_url }}">{{ tree.drill_label }}</a>
+		{% else %}
+			<span class="wb-drill-title">{{ tree.drill_label }}</span>
+		{% endif %}
+	</div>
+	<ul class="wb-drill-list" role="list">
+		{% for node in tree.drill_children %}
+			<li class="{% if node.on_trail %}is-on-trail{% endif %}" data-key="{{ node.key }}">
+				<a class="wb-drill-link" href="{{ node.url|default:"#" }}"{% if node.is_page %} aria-current="page"{% endif %}>{% icon node.icon %}<span>{{ node.label }}</span></a>
+				{% if node.expandable %}
+					<button type="button" class="wb-drill-in" data-drill="{{ node.key }}">{% icon "chevron-right" %}<span class="wb-sr">{% blocktrans with label=node.label %}Show what is in {{ label }}{% endblocktrans %}</span></button>
+				{% endif %}
+			</li>
+		{% empty %}
+			<li class="wb-drill-empty">{% trans "Nothing here yet." %}</li>
+		{% endfor %}
+	</ul>
+</div>

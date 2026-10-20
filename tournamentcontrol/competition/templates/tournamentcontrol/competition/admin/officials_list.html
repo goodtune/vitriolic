@@ -1,40 +1,26 @@
 {% extends base %}
-{% load i18n %}
+{% load i18n admin_ui %}
 
-{% block breadcrumbs %}
-	{{ block.super }}
-	<li><a href="{% url 'admin:competition:club:list' %}">{% trans "Clubs" %}</a></li>
-	<li><a href="{% url 'admin:competition:club:edit' club.pk %}">{{ club.title }}</a></li>
-	<li><span>{% trans "Officials" %}</span></li>
-{% endblock %}
+{% block page_title %}{% trans "Officials" %} · {{ club.title }}{% endblock %}
 
-{% block main_content %}
-	<div class="box">
-		<h1>{{ season.competition.title }} - {{ season.title }}</h1>
+{% block content %}
+	{% blocktrans asvar eyebrow with club=club.title %}{{ club }} officials{% endblocktrans %}{% blocktrans asvar title with competition=season.competition.title season=season.title %}{{ competition }}, {{ season }}{% endblocktrans %}
+	{% include "tournamentcontrol/competition/admin/_page_head.html" %}
 
-		<table>
-			<thead>
-				<th>{% trans "Person" %}</th>
-				<th>{% trans "Roles" %}</th>
-			</thead>
+	<div class="wb-sheet wb-sheet-flush">
+		<table class="wb-table wb-table-cards">
+			<thead><tr><th scope="col">{% trans "Person" %}</th><th scope="col">{% trans "Roles" %}</th></tr></thead>
 			<tbody>
 				{% for player in people.select_related %}
-					<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
-						<td>{{ player.person.get_full_name }}</td>
-						<td>{% for role in player.roles.all %}{{ role.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+					<tr>
+						<td class="wb-title-cell">{{ player.person.get_full_name }}</td>
+						<td data-label="{% trans "Roles" %}">{% for role in player.roles.all %}{{ role.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
 					</tr>
 				{% empty %}
-					<tr class="first odd last">
-						<td colspan="2" class="no_results">{% trans "There are no club officials for this season." %}</td>
-					</tr>
+					<tr class="wb-table-empty"><td colspan="2">{% trans "There are no club officials for this season." %}</td></tr>
 				{% endfor %}
 			</tbody>
 		</table>
-
-		<div class="buttons">
-			{% block buttons %}
-            	<a class="button" href="{% url 'admin:competition:club:edit' club.pk %}">{% trans "Cancel" %}</a>
-            {% endblock %}
-		</div>
 	</div>
+	<p class="wb-actions"><a class="wb-button" href="{% url 'admin:competition:club:edit' club.pk %}">{% icon "arrow-left" %}{% trans "Back to the club" %}</a></p>
 {% endblock %}

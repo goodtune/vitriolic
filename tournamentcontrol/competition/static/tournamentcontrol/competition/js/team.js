@@ -1,6 +1,14 @@
-$(function() {
-	/* name the team after the club it is chosen from */
-	$('#id_club').on('change', function() {
-		$('#id_title').val($(this).find('option:selected').text());
+/* Name a new team after the club it is chosen from. */
+document.addEventListener("DOMContentLoaded", function () {
+	var club = document.getElementById("id_club");
+	var title = document.getElementById("id_title");
+	if (!club || !title) {
+		return;
+	}
+	club.addEventListener("change", function () {
+		var option = club.options[club.selectedIndex];
+		if (option && option.value) {
+			title.value = option.text;
+		}
 	});
 });
