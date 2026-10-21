@@ -19,6 +19,7 @@ from touchtechnology.common.decorators import (
     staff_login_required_m,
 )
 from touchtechnology.common.models import SitemapNode
+from touchtechnology.common.utils import select_template_name
 from touchtechnology.content.forms import (
     FileUploadForm,
     NewFolderForm,
@@ -662,7 +663,9 @@ class ContentAdminComponent(AdminComponent):
             "writable": writable,
             "object_list": object_list,
             "queryset": Page.objects.all(),
-            "list_template": first(self.template_path("list.inc.html", "file")),
+            "list_template": select_template_name(
+                self.template_path("list.inc.html", "file")
+            ),
             "model": namedtuple("file", ()),
         }
         context.update(kwargs)

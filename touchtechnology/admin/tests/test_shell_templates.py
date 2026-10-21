@@ -83,3 +83,11 @@ class IconRoleTests(TestCase):
         self.assertEqual(EXPLORER.icon("days"), "season")
         self.assertEqual(EXPLORER.icon("teams"), "team")
         self.assertEqual(EXPLORER.icon("sitemap"), "sitemap")
+
+
+@per_shell
+class FileManagerTests(TestCase):
+    def test_the_file_list_renders(self):
+        user = factories.UserFactory.create(is_staff=True, is_superuser=True)
+        with self.login(user):
+            self.get_check_200("admin:content:media:list")
