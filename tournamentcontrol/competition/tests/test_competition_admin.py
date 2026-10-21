@@ -20,7 +20,7 @@ from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.admin.branding import get_brand
 from touchtechnology.admin.sites import site
-from touchtechnology.admin.tests.shells import by_shell
+from touchtechnology.admin.tests.shells import by_shell, per_shell
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.dashboard import MostValuableWidget
 from tournamentcontrol.competition.draw.schemas import (
@@ -4055,3 +4055,128 @@ class WizardBrandTests(TestCase):
                     explorer='<img src="/static/img/logo.png" alt="Administration">',
                 ),
             )
+
+
+@per_shell
+class ByeMatchTests(TestCase):
+    """
+    A bye match is named in plain text, "Bye vs Marlins". The admin puts the
+    name of a match where markup is not read as markup: the label of the
+    button that opens its row's menu, the words of the delete confirmation and
+    the title of its own page.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.stage = factories.StageFactory.create(title="Regular Season")
+        self.args = (
+            self.stage.division.season.competition_id,
+            self.stage.division.season_id,
+            self.stage.division_id,
+            self.stage.pk,
+        )
+
+    def bye(self, **teams):
+        return factories.MatchFactory.create(stage=self.stage, is_bye=True, **teams)
+
+    def icon(self, name):
+        css, sprite = self.by_shell(
+            workbook=("wb-icon", "workbook/icons.svg"),
+            explorer=("icon", "explorer/img/icons.svg"),
+        )
+        return (
+            f'<svg class="{css}" aria-hidden="true" focusable="false">'
+            f'<use href="/static/touchtechnology/admin/{sprite}#{name}"></use></svg>'
+        )
+
+    def actions_cell(self, match, name):
+        """The last cell of the match's row on the stage's Matches tab."""
+        namespace = "admin:fixja:competition:season:division:stage:match"
+        referees = self.reverse(f"{namespace}:referees", *self.args, match.pk)
+        edit = self.reverse(f"{namespace}:edit", *self.args, match.pk)
+        delete = self.reverse(f"{namespace}:delete", *self.args, match.pk)
+        csrf = (
+            '<input type="hidden" name="csrfmiddlewaretoken" '
+            f'value="{self.get_context("csrf_token")}">'
+        )
+        return self.by_shell(
+            workbook=(
+                '<td class="wb-row-actions"><div class="wb-row-buttons">'
+                '<button type="button" class="wb-button wb-button-quiet '
+                'wb-button-icon wb-button-small wb-menu-button" '
+                f'popovertarget="wbm-match-{match.pk}" aria-expanded="false" '
+                f'aria-label="More actions for {name}">{self.icon("ellipsis")}'
+                "</button>"
+                f'<div class="wb-menu" popover id="wbm-match-{match.pk}"><ul>'
+                f'<li><a href="{referees}">{self.icon("flag")}Referees</a></li>'
+                f'<li><a href="{edit}">{self.icon("pencil")}Edit</a></li>'
+                '<li class="wb-menu-last">'
+                f'<form method="post" action="{delete}" '
+                f'data-wb-confirm="The match “{name}” will be removed for good." '
+                f'data-wb-confirm-title="Delete {name}?" '
+                'data-wb-confirm-label="Delete match">'
+                f'{csrf}<button type="submit" class="wb-danger-item">'
+                f'{self.icon("trash-2")}Delete</button></form></li>'
+                "</ul></div></div></td>"
+            ),
+            explorer=(
+                '<td class="actions-cell"><div class="row-actions"><div class="menu">'
+                '<button type="button" class="button quiet icon-only compact" '
+                'data-popover aria-expanded="false" '
+                f'aria-controls="row-menu-match-{match.pk}">{self.icon("more")}'
+                f'<span class="visually-hidden">More actions for {name}</span>'
+                "</button>"
+                f'<div class="menu-panel" id="row-menu-match-{match.pk}">'
+                f'<a href="{referees}">{self.icon("referee")}Referees</a>'
+                f'<a href="{edit}">{self.icon("edit")}Edit</a>'
+                f'<form method="post" action="{delete}" '
+                f'data-confirm="The match “{name}” will be removed for good." '
+                'data-confirm-title="Delete this match?" data-confirm-label="Delete">'
+                f'{csrf}<button type="submit" class="destructive-item">'
+                f'{self.icon("trash")}Delete</button></form>'
+                "</div></div></div></td>"
+            ),
+        )
+
+    def test_a_bye_at_home_is_named_in_its_row(self):
+        match = self.bye(home_team=None, away_team__title="Marlins")
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:edit", *self.args
+            )
+        self.assertResponseContains(
+            self.by_shell(
+                workbook='<td data-label="Home">Bye</td>', explorer="<td>Bye</td>"
+            ),
+        )
+        self.assertResponseContains(self.actions_cell(match, "Bye vs Marlins"))
+
+    def test_a_bye_away_is_named_in_its_row(self):
+        match = self.bye(home_team__title="Leopards", away_team=None)
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:edit", *self.args
+            )
+        self.assertResponseContains(
+            self.by_shell(
+                workbook='<td data-label="Away">Bye</td>', explorer="<td>Bye</td>"
+            ),
+        )
+        self.assertResponseContains(self.actions_cell(match, "Leopards vs Bye"))
+
+    def test_the_page_of_a_bye_is_titled_in_plain_text(self):
+        match = self.bye(home_team=None, away_team__title="Marlins")
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:match:edit",
+                *self.args,
+                match.pk,
+            )
+        brand = get_brand().name
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=f"<title>Bye vs Marlins &middot; {brand}</title>",
+                explorer=f"<title>Regular Season &ndash; {brand}</title>",
+            ),
+        )
+        self.assertResponseContains("<h1>Bye vs Marlins</h1>")

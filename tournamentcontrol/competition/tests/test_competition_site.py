@@ -1027,25 +1027,25 @@ class CalendarQueryTests(TestCase):
         )
 
     def test_calendar_with_bye_match(self):
-        """Bye matches with a datetime should appear in the calendar."""
+        """
+        Bye matches with a datetime should appear in the calendar, the bye
+        named in plain text.
+        """
         match = factories.MatchFactory.create(
             stage=self.stage,
             home_team=self.team_a,
             away_team=None,
             is_bye=True,
         )
-        response = self.get(
+        self.get_check_200(
             "competition:calendar",
             competition=self.competition.slug,
             season=self.season.slug,
         )
-        self.response_200(response)
 
-        cal, events = self._parse_events(response)
+        cal, events = self._parse_events(self.last_response)
         event = next(e for e in events if e["uid"] == match.uuid.hex)
-        summary = str(event["summary"])
-        self.assertIn(self.team_a.title, summary)
-        self.assertIn("Bye", summary)
+        self.assertEqual(str(event["summary"]), f"{self.team_a.title} vs Bye")
 
     def test_calendar_with_undecided_team(self):
         """Matches with undecided teams should appear in the calendar."""

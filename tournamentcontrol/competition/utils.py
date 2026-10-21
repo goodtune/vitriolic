@@ -116,7 +116,7 @@ def team_title_case_clause(team):
         ),
         When(
             is_bye=True,
-            then=Value('<span class="bye" title="Bye">Bye</span>'),
+            then=Value("Bye"),
         ),
         default=Value(None, output_field=CharField()),
     )

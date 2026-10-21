@@ -18,7 +18,6 @@ from django.urls import include, path, re_path, reverse
 from django.urls.exceptions import NoReverseMatch
 from django.utils import timezone
 from django.utils.cache import patch_vary_headers
-from django.utils.html import strip_tags
 from django.utils.http import urlencode
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext
@@ -1496,10 +1495,9 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
             # Use SQL-computed title annotations instead of match.title to
             # avoid per-match template rendering and N+1 queries for
-            # undecided teams. strip_tags handles bye matches which include
-            # HTML in the annotation.
-            home = strip_tags(match.home_team_title or "")
-            away = strip_tags(match.away_team_title or "")
+            # undecided teams. The annotations are plain text, a bye too.
+            home = match.home_team_title or ""
+            away = match.away_team_title or ""
             if home and away:
                 summary = f"{home} vs {away}"
             elif home or away:
