@@ -29,7 +29,6 @@ from tournamentcontrol.competition.tests.test_live_stream_transition import (
     youtube_mock,
 )
 
-
 SQUAD = 16
 
 # The screenshots go on the pull request, so the fixture reads like a real
@@ -305,6 +304,44 @@ def test_hold_button_can_be_held_from_the_keyboard(
         compops_page.wait_for_timeout(1700)
         compops_page.keyboard.up("Space")
         expect(compops_page.locator("#lamp")).to_have_text("OFF AIR")
+
+
+def test_hold_button_stays_pressed_when_the_booth_is_updated(
+    compops_page, asgi_live_server, tournament
+):
+    """
+    A push from the event stream does not drop the pressed look mid-hold.
+
+    The stream re-renders the on-air section in place, which resets the
+    button's class. The button is marked once it is held, and an event is
+    published; the push takes the mark away, so waiting for that proves the
+    re-render has happened, and the button must still read as pressed.
+    """
+    with mock.patch(
+        "tournamentcontrol.competition.models.build", return_value=youtube_mock("live")
+    ):
+        compops_page.set_viewport_size({"width": 1024, "height": 768})
+        compops_page.goto(asgi_live_server.url + tournament["booth_path"])
+        button = compops_page.locator("button[data-hold]")
+        expect(compops_page.locator("#lamp")).to_have_text("ON AIR")
+        expect(compops_page.locator(".sse")).not_to_have_class("down")
+        button.focus()
+        compops_page.keyboard.down("Space")
+        expect(button).to_have_class(re.compile(r"\bpressing\b"))
+        button.evaluate("el => el.setAttribute('data-before-push', '')")
+        events.publish(
+            tournament["season"].pk,
+            "stream-changed",
+            actor="e2e",
+            summary="Booth updated",
+            kind="match",
+            id=0,
+            status="live",
+        )
+        expect(button).not_to_have_attribute("data-before-push", "")
+        expect(button).to_have_class(re.compile(r"\bpressing\b"))
+        compops_page.keyboard.up("Space")
+        expect(button).not_to_have_class(re.compile(r"\bpressing\b"))
 
 
 def test_hold_button_ignores_a_tap_of_the_space_bar(
