@@ -89,5 +89,8 @@ class IconRoleTests(TestCase):
 class FileManagerTests(TestCase):
     def test_the_file_list_renders(self):
         user = factories.UserFactory.create(is_staff=True, is_superuser=True)
-        with self.login(user):
+        # The manager lists the storage's folder, which must exist.
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        with self.settings(MEDIA_ROOT=media.name), self.login(user):
             self.get_check_200("admin:content:media:list")
