@@ -30,12 +30,6 @@ from django.urls import URLResolver
 from django.urls.resolvers import RoutePattern
 
 
-def is_staff(request):
-    """Whether the person making the request works in the admin."""
-    user = getattr(request, "user", None)
-    return bool(user is not None and user.is_authenticated and user.is_staff)
-
-
 class ErrorPages(URLResolver):
     """
     The URLs of an admin site, resolved as they would be without this class,
@@ -61,11 +55,11 @@ class ErrorPages(URLResolver):
                 return view(request, *args, **kwargs)
             except Http404:
                 # With debugging on Django describes the page that is missing.
-                if settings.DEBUG or not is_staff(request):
+                if settings.DEBUG or not request.user.is_staff:
                     raise
                 return self.page(request, 404, self.site.shell.not_found_template)
             except PermissionDenied:
-                if not is_staff(request):
+                if not request.user.is_staff:
                     raise
                 return self.page(request, 403, self.site.shell.forbidden_template)
 

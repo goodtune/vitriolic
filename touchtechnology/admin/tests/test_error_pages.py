@@ -41,8 +41,8 @@ class PublicErrorPages:
         self.assertResponseTemplateUsed("http4xx.html")
         self.assertResponseTemplateNotUsed(WORKBOOK.template("base.html"))
         self.assertResponseTemplateNotUsed(EXPLORER.template("base.html"))
-        self.assertResponseContains("<h1>%s</h1>" % code, status_code=code)
-        self.assertResponseContains("<h2>%s</h2>" % title, status_code=code)
+        self.assertResponseContains(f"<h1>{code}</h1>", status_code=code)
+        self.assertResponseContains(f"<h2>{title}</h2>", status_code=code)
 
     def test_an_anonymous_visitor_to_an_unknown_address_is_shown_not_found(self):
         # There is no name for an address that nothing answers.
@@ -98,9 +98,19 @@ class PublicErrorPagesWithAdminFirstTests(PublicErrorPages, TestCase):
         )
 
 
+class ShellErrorPages:
+    """The mark of an error page in each shell, for a test run under either."""
+
+    def error_code(self, code):
+        return self.by_shell(
+            workbook=f'<p class="wb-error-code">{code}</p>',
+            explorer=f'<p class="code">{code}</p>',
+        )
+
+
 @per_shell
 @override_settings(ROOT_URLCONF=ERROR_URLS)
-class AdminErrorPageTests(TestCase):
+class AdminErrorPageTests(ShellErrorPages, TestCase):
     """
     Inside the admin a person who works there is shown the admin's own pages,
     drawn by the shell the admin wears.
@@ -113,26 +123,15 @@ class AdminErrorPageTests(TestCase):
         self.addCleanup(setattr, errors_site, "shell", previous)
         self.staff = factories.UserFactory.create(is_staff=True)
 
-    def assertAdminPage(self, code, title, heading):
-        self.assertResponseTemplateUsed(self.shell.template("%s.html" % code))
+    def assertAdminPage(self, code, heading):
+        self.assertResponseTemplateUsed(self.shell.template(f"{code}.html"))
         self.assertResponseTemplateNotUsed("http4xx.html")
-        self.assertRegex(
-            self.last_response.content.decode(),
-            r"<title>[^<]*%s[^<]*</title>" % title,
-        )
-        self.assertResponseContains(
-            self.by_shell(
-                workbook='<p class="wb-error-code">%s</p>' % code,
-                explorer='<p class="code">%s</p>' % code,
-            ),
-            status_code=code,
-        )
-        self.assertResponseContains("<h1>%s</h1>" % heading, status_code=code)
+        self.assertResponseContains(self.error_code(code), status_code=code)
+        self.assertResponseContains(f"<h1>{heading}</h1>", status_code=code)
 
     def assertNotFoundPage(self):
         self.assertAdminPage(
             404,
-            "Not found",
             self.by_shell(
                 workbook="We could not find that page",
                 explorer="There is nothing at this address",
@@ -140,7 +139,7 @@ class AdminErrorPageTests(TestCase):
         )
 
     def assertForbiddenPage(self):
-        self.assertAdminPage(403, "Forbidden", "You are not permitted to see this")
+        self.assertAdminPage(403, "You are not permitted to see this")
 
     def test_staff_are_shown_the_admin_page_for_a_missing_admin_page(self):
         with self.login(self.staff):
@@ -190,13 +189,13 @@ class AdminErrorPageTests(TestCase):
             self.get("errors:missing")
         self.assert_http_404_not_found()
         self.assertResponseContains(
-            "<title>Page not found at %s</title>" % self.reverse("errors:missing"),
+            f"<title>Page not found at {self.reverse('errors:missing')}</title>",
             status_code=404,
         )
 
 
 @per_shell
-class AnonymousVisitorTests(TestCase):
+class AnonymousVisitorTests(ShellErrorPages, TestCase):
     """The admin's pages are drawn without a person to draw them for."""
 
     def setUp(self):
@@ -218,10 +217,10 @@ class AnonymousVisitorTests(TestCase):
         html = render_to_string(
             self.shell.not_found_template, {"shell": self.shell}, request=self.request
         )
-        self.assertRegex(html, r"<title>[^<]*Not found[^<]*</title>")
+        self.assertInHTML(self.error_code(404), html)
 
     def test_the_forbidden_page_is_drawn(self):
         html = render_to_string(
             self.shell.forbidden_template, {"shell": self.shell}, request=self.request
         )
-        self.assertRegex(html, r"<title>[^<]*Forbidden[^<]*</title>")
+        self.assertInHTML(self.error_code(403), html)
