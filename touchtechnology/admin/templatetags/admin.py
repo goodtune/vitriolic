@@ -7,15 +7,15 @@ from touchtechnology.admin.branding import get_brand
 register = Library()
 
 
-@register.inclusion_tag("touchtechnology/admin/_version.html", takes_context=True)
+@register.simple_tag(takes_context=True)
 def version_string(context):
     component = context.get("component")
     if component is not None:
-        return {"version": component.version}
+        return component.version
     node = context.get("node")
     if node is not None and hasattr(node.object, "site"):
-        return {"version": node.object.site(node).version}
-    return {"version": touchtechnology.admin.__version__}
+        return node.object.site(node).version
+    return touchtechnology.admin.__version__
 
 
 @register.filter

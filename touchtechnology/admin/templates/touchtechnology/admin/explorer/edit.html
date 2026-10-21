@@ -1,0 +1,90 @@
+{% extends "touchtechnology/admin/explorer/base.html" %}
+{% load i18n common mvp_tags admin admin_explorer %}
+
+{% block page_actions %}
+	{% block object-actions %}
+		{% if object|saved %}
+			{% with perms_url=object|admin_url:"perms" %}
+				{% if perms_url %}
+					<a class="button quiet" href="{{ perms_url }}">{% icon "lock" %}<span>{% trans "Permissions" %}</span></a>
+				{% endif %}
+			{% endwith %}
+		{% endif %}
+	{% endblock object-actions %}
+	{% block form-actions %}
+		<div class="form-buttons" data-for-panel="{{ model|type|slugify }}-tab">
+			<a class="button" href="{% block cancel-url %}{{ cancel_url }}{% endblock %}">{% trans "Cancel" %}</a>
+			{% block form-actions-extra %}{% endblock %}
+			<button type="submit" form="edit-form" class="button primary">{% icon "check" %}<span>{% trans "Save" %}</span></button>
+		</div>
+	{% endblock form-actions %}
+{% endblock page_actions %}
+
+{% block page_nav %}
+	{% if setup and object|saved or setup and not setup.here %}{% include "touchtechnology/admin/explorer/_setup_summary.html" %}{% endif %}
+	{% if object|saved %}
+		<div class="tabs" role="tablist" data-tabs aria-label="{% blocktrans with type=model|type %}Parts of this {{ type }}{% endblocktrans %}">
+			{% block tab-links %}
+				<a class="tab" role="tab" id="{{ model|type|slugify }}-tab-link" href="#{{ model|type|slugify }}-tab" aria-controls="{{ model|type|slugify }}-tab" aria-selected="true">{% icon "edit" %}<span>{% trans "Details" %}</span></a>
+				{% if setup.here and object|saved %}<a class="tab" role="tab" id="setup-tab-link" href="#setup-tab" aria-controls="setup-tab" aria-selected="false" tabindex="-1">{% icon "check" %}<span>{% trans "Set-up" %}</span><span class="count" aria-hidden="true">{{ setup.done }}/{{ setup.total }}</span></a>{% endif %}
+				{% for manager, name in object|related:related %}
+					<a class="tab" role="tab" id="{{ name }}-tab-link" href="#{{ name }}-tab" aria-controls="{{ name }}-tab" aria-selected="false" tabindex="-1">{% icon manager|model_icon %}<span>{{ manager.all|plural_label }}</span><span class="count" aria-hidden="true" data-count-of="{{ name }}-tab" hidden></span></a>
+				{% endfor %}
+			{% endblock tab-links %}
+		</div>
+	{% endif %}
+{% endblock page_nav %}
+
+{% block content %}
+	<div class="panels" id="tab-content"{% block panels-attrs %}{% endblock %}>
+		{% block tab-panes %}
+			<section class="pane is-active" data-tab-panel role="tabpanel" id="{{ model|type|slugify }}-tab" aria-labelledby="{{ model|type|slugify }}-tab-link">
+				<form class="{% block form-class %}edit-form{% endblock %}" id="edit-form" action="" method="post" enctype="multipart/form-data">
+					{% csrf_token %}
+					{% block form-errors %}{% include "touchtechnology/admin/explorer/_form_errors.html" %}{% endblock %}
+					{% block form-fieldset %}
+						<fieldset class="fields">
+							{% for f in form %}
+								{% field f %}
+							{% endfor %}
+						</fieldset>
+					{% endblock form-fieldset %}
+				</form>
+			</section>
+
+			{% if setup.here and object|saved %}
+				<section class="pane" data-tab-panel role="tabpanel" id="setup-tab" aria-labelledby="setup-tab-link">
+					{% include "touchtechnology/admin/explorer/_setup.html" %}
+				</section>
+			{% endif %}
+			{% if object|saved %}
+				{% for manager, name in object|related:related %}
+					{% if htmx_admin_tabs %}
+						<section class="pane" data-tab-panel role="tabpanel" id="{{ name }}-tab" aria-labelledby="{{ name }}-tab-link" hx-get="?_htmx_tab={{ name }}" hx-trigger="shown once" hx-swap="innerHTML">
+							<p class="pane-loading">{% icon "refresh" %}{% trans "Loading…" %}</p>
+							<noscript><p>{% trans "This list needs scripts to load." %}</p></noscript>
+						</section>
+					{% else %}
+						<section class="pane" data-tab-panel role="tabpanel" id="{{ name }}-tab" aria-labelledby="{{ name }}-tab-link">
+							{% block mvp-list %}
+								{% with table=templates|default:None %}
+									{% mvp_list manager.all template=manager|mvp_list_template:table %}
+								{% endwith %}
+							{% endblock %}
+						</section>
+					{% endif %}
+				{% endfor %}
+			{% endif %}
+		{% endblock tab-panes %}
+	</div>
+{% endblock %}
+
+{% block extracss %}
+	{{ block.super }}
+	{{ form.media.css|admin_media }}
+{% endblock %}
+
+{% block extrajs %}
+	{{ block.super }}
+	{{ form.media.js|admin_media }}
+{% endblock %}

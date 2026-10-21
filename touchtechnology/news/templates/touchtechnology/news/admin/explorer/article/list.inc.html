@@ -1,0 +1,27 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n common admin admin_explorer %}
+
+{% block table-headings %}
+	<th>{% trans "Headline" %}</th>
+	<th class="wide-only">{% trans "Categories" %}</th>
+	<th>{% trans "Published" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td class="title-cell">
+		{% if change_perm in object_perms %}
+			<a href="{{ obj.urls.edit }}">{% icon "article" %}<span>{{ obj }}</span></a>
+		{% else %}
+			<span>{{ obj }}</span>
+		{% endif %}
+	</td>
+	<td class="wide-only">{% for label in obj.categories.all %}<span class="tag">{{ label }}</span> {% endfor %}</td>
+	<td class="nowrap">{% if obj.published %}{{ obj.published|date:"j M Y" }}{% else %}<span class="tag warn">{% trans "Draft" %}</span>{% endif %}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}
+
+{% block row-buttons-items %}
+	<a href="{{ obj.get_absolute_url }}" target="_blank">{% icon "external" %}{% trans "View on the site" %}</a>
+	{{ block.super }}
+{% endblock row-buttons-items %}

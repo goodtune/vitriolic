@@ -1,0 +1,70 @@
+{% extends "touchtechnology/admin/explorer/base.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block page_title %}{% trans "Leaders" %}{% endblock %}
+{% block page_kind %}{{ division }}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "chart" %}</span>{% endblock %}
+{% block page_actions %}<a class="button" href="{{ division.urls.edit }}">{% icon "up" %}<span>{% trans "Back to the division" %}</span></a>{% endblock %}
+
+{% block content %}
+	<div class="cards">
+		<section class="card">
+			<h2>{% icon "chart" %}{% trans "Point scorers" %}</h2>
+			<div class="table-wrap">
+				<table class="listing">
+					<thead>
+						<tr>
+							<th class="num">#</th>
+							<th>{% trans "Player" %}</th>
+							<th class="wide-only">{% trans "Club" %}</th>
+							<th class="num">{% trans "Played" %}</th>
+							<th class="num">{% trans "Points" %}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{% for person in scorers %}
+							<tr>
+								<td class="num muted">{{ forloop.counter }}</td>
+								<td>{{ person.first_name }} {{ person.last_name }}</td>
+								<td class="wide-only">{{ person.club__title }}</td>
+								<td class="num">{{ person.played|default:0 }}</td>
+								<td class="num strong">{{ person.points|default:0 }}</td>
+							</tr>
+						{% empty %}
+							<tr><td colspan="5" class="empty-state">{% trans "No points scored yet." %}</td></tr>
+						{% endfor %}
+					</tbody>
+				</table>
+			</div>
+		</section>
+		<section class="card">
+			<h2>{% icon "competition" %}{% trans "Most valuable players" %}</h2>
+			<div class="table-wrap">
+				<table class="listing">
+					<thead>
+						<tr>
+							<th class="num">#</th>
+							<th>{% trans "Player" %}</th>
+							<th class="wide-only">{% trans "Club" %}</th>
+							<th class="num">{% trans "Played" %}</th>
+							<th class="num">{% trans "Votes" %}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{% for person in mvp %}
+							<tr>
+								<td class="num muted">{{ forloop.counter }}</td>
+								<td>{{ person.first_name }} {{ person.last_name }}</td>
+								<td class="wide-only">{{ person.club__title }}</td>
+								<td class="num">{{ person.played|default:0 }}</td>
+								<td class="num strong">{{ person.mvp|default:0 }}</td>
+							</tr>
+						{% empty %}
+							<tr><td colspan="5" class="empty-state">{% trans "No votes cast yet." %}</td></tr>
+						{% endfor %}
+					</tbody>
+				</table>
+			</div>
+		</section>
+	</div>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% load i18n %}{% comment %}
+	On a phone the rail is folded away, so a page names the sections of its
+	component at its top, to move between them in one tap.
+{% endcomment %}{% if component %}{% with sections=component.dropdowns %}{% if sections|length > 1 %}
+<nav aria-label="{% blocktrans with name=component.verbose_name %}{{ name }} sections{% endblocktrans %}">
+	<ul class="wb-sections">
+		{% for section in sections %}
+			<li><a href="{{ section.1 }}"{% if section.1 == request.path %} aria-current="page"{% endif %}>{{ section.0 }}</a></li>
+		{% endfor %}
+	</ul>
+</nav>
+{% endif %}{% endwith %}{% endif %}

@@ -3,11 +3,11 @@ from datetime import datetime, timezone
 from django.contrib.auth.models import Group
 from test_plus import TestCase as PlusTestCase
 
+from touchtechnology.admin.tests.shells import per_shell
 from touchtechnology.common.tests import factories
 
 
 class TestCase(PlusTestCase):
-
     def setUp(self):
         super(TestCase, self).setUp()
         self.staff = factories.UserFactory.create(is_staff=True)
@@ -23,8 +23,8 @@ class TestCase(PlusTestCase):
             self.assertTemplateUsed(res, template)
 
 
+@per_shell
 class AuthSiteUserTests(TestCase):
-
     def test_index(self):
         url_name = "admin:auth:index"
 
@@ -39,7 +39,7 @@ class AuthSiteUserTests(TestCase):
             "admin:auth:users:list",
             self.superuser,
             ["model", "object_list"],
-            "touchtechnology/admin/list.html",
+            self.shell.template("list.html"),
         )
 
     def test_user_list_shows_registration_and_last_login_dates(self):
@@ -57,25 +57,32 @@ class AuthSiteUserTests(TestCase):
         with self.login(self.superuser):
             self.get("admin:auth:users:list")
             self.response_200()
-            self.assertResponseContains(
-                '<th class="hidden-xs">Registered</th>', html=True
-            )
-            self.assertResponseContains("<th>Last login</th>", html=True)
-            self.assertResponseContains(
-                '<td class="hidden-xs">10 Jul 2018</td>', html=True
-            )
-            self.assertResponseContains("<td>19 Sep 2026</td>", html=True)
-            self.assertResponseContains(
-                '<td class="hidden-xs">3 Sep 2026</td>', html=True
-            )
-            self.assertResponseContains("<td>Never</td>", html=True)
+            for fragment in self.by_shell(
+                workbook=(
+                    '<th scope="col" class="wb-hide-narrow">Registered</th>',
+                    '<th scope="col">Last login</th>',
+                    '<td class="wb-hide-narrow" data-label="Registered">10 Jul 2018</td>',
+                    '<td data-label="Last login">19 Sep 2026</td>',
+                    '<td class="wb-hide-narrow" data-label="Registered">3 Sep 2026</td>',
+                    '<td data-label="Last login">Never</td>',
+                ),
+                explorer=(
+                    '<th class="wide-only">Registered</th>',
+                    "<th>Last login</th>",
+                    '<td class="wide-only">10 Jul 2018</td>',
+                    "<td>19 Sep 2026</td>",
+                    '<td class="wide-only">3 Sep 2026</td>',
+                    "<td>Never</td>",
+                ),
+            ):
+                self.assertResponseContains(fragment)
 
     def test_user_create(self):
         self.get_generic_200(
             "admin:auth:users:add",
             self.superuser,
             ["model", "form"],
-            "touchtechnology/admin/edit.html",
+            self.shell.template("edit.html"),
         )
 
     def test_user_edit(self):
@@ -83,7 +90,7 @@ class AuthSiteUserTests(TestCase):
             "admin:auth:users:edit",
             self.superuser,
             ["model", "form", "object"],
-            "touchtechnology/admin/edit.html",
+            self.shell.template("edit.html"),
             pk=1,
         )
 
@@ -92,7 +99,7 @@ class AuthSiteUserTests(TestCase):
             "admin:auth:users:perms",
             self.superuser,
             ["model", "formset"],
-            "touchtechnology/admin/permissions.html",
+            self.shell.template("permissions.html"),
             pk=1,
         )
 
@@ -107,10 +114,10 @@ class AuthSiteUserTests(TestCase):
             self.response_302()
 
 
+@per_shell
 class AuthSiteGroupTests(TestCase):
-
     def setUp(self):
-        super(AuthSiteGroupTests, self).setUp()
+        super().setUp()
         self.group_instance = Group.objects.create(name="Group")
 
     def test_group_list(self):
@@ -118,7 +125,7 @@ class AuthSiteGroupTests(TestCase):
             "admin:auth:groups:list",
             self.superuser,
             ["model", "object_list"],
-            "touchtechnology/admin/list.html",
+            self.shell.template("list.html"),
         )
 
     def test_group_create(self):
@@ -126,7 +133,7 @@ class AuthSiteGroupTests(TestCase):
             "admin:auth:groups:add",
             self.superuser,
             ["model", "form"],
-            "touchtechnology/admin/edit.html",
+            self.shell.template("edit.html"),
         )
 
     def test_group_edit(self):
@@ -134,7 +141,7 @@ class AuthSiteGroupTests(TestCase):
             "admin:auth:groups:edit",
             self.superuser,
             ["model", "form", "object"],
-            "touchtechnology/admin/edit.html",
+            self.shell.template("edit.html"),
             pk=self.group_instance.pk,
         )
 
@@ -143,7 +150,7 @@ class AuthSiteGroupTests(TestCase):
             "admin:auth:groups:perms",
             self.superuser,
             ["model", "formset"],
-            "touchtechnology/admin/permissions.html",
+            self.shell.template("permissions.html"),
             pk=self.group_instance.pk,
         )
 

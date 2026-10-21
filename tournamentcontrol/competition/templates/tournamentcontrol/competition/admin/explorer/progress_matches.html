@@ -1,0 +1,44 @@
+{% extends "touchtechnology/admin/explorer/form_page.html" %}
+{% load i18n common admin admin_explorer %}
+
+{% block page_title %}{% trans "Progress teams" %}{% endblock %}
+{% block page_kind %}{% if date %}{{ date|date:"l j F Y" }}{% else %}{{ stage.division.title }}, {{ stage.title }}{% endif %}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "stage" %}</span>{% endblock %}
+{% block cancel-url %}{% url 'admin:competition:competition:season:division:stage:edit' competition.pk season.pk division.pk stage.pk %}{% endblock %}
+
+{% block form-body %}
+	{{ formset.management_form }}
+	<p class="muted">{% trans "Choose the team that takes each place now the earlier matches are decided." %}</p>
+	<div class="table-wrap">
+		<table class="listing">
+			<thead>
+				<tr>
+					<th class="wide-only">{% trans "Stage" %}</th>
+					<th>{% trans "Match" %}</th>
+					<th>{% trans "Home" %}</th>
+					<th>{% trans "Away" %}</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for form in formset.forms %}
+					{% with match=form.instance %}
+						<tr>
+							<td class="wide-only">{{ form.id }}{{ match.stage.title }}</td>
+							<td>{% if match.label %}{{ match.label }}{% else %}{% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}{% endif %}</td>
+							<td>
+								<span class="muted">{{ match.get_home_team.title|default:match.get_home_team_plain }}</span>
+								{% if form.home_team %}<label class="visually-hidden" for="{{ form.home_team.id_for_label }}">{% blocktrans %}Home team of {{ match }}{% endblocktrans %}</label>{{ form.home_team|widget }}{% endif %}
+							</td>
+							<td>
+								<span class="muted">{{ match.get_away_team.title|default:match.get_away_team_plain }}</span>
+								{% if form.away_team %}<label class="visually-hidden" for="{{ form.away_team.id_for_label }}">{% blocktrans %}Away team of {{ match }}{% endblocktrans %}</label>{{ form.away_team|widget }}{% endif %}
+							</td>
+						</tr>
+					{% endwith %}
+				{% empty %}
+					<tr><td colspan="4" class="empty-state">{% trans "No match is waiting for its teams." %}</td></tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+{% endblock %}

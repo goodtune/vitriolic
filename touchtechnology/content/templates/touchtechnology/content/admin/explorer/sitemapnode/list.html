@@ -1,0 +1,12 @@
+{% extends "touchtechnology/admin/explorer/list.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block page_title %}{% trans "Sitemap" %}{% endblock %}
+
+{% block nav-pills-list %}
+	{% if add_perm in model_perms %}
+		<a class="button" href="{% url 'admin:content:folder:add' %}">{% icon "folder" %}<span>{% trans "New folder" %}</span></a>
+		<a class="button" href="{% url 'admin:content:placeholder:add' %}">{% icon "puzzle" %}<span>{% trans "New application" %}</span></a>
+		<a class="button primary" href="{% url 'admin:content:page:add' %}">{% icon "plus" %}<span>{% trans "New page" %}</span></a>
+	{% endif %}
+{% endblock nav-pills-list %}

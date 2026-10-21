@@ -34,11 +34,13 @@ from django.forms.models import (
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.safestring import mark_safe
-from django.utils.translation import gettext_lazy as _, ngettext
+from django.utils.translation import gettext_lazy as _
+from django.utils.translation import ngettext
 from googleapiclient.errors import HttpError
 from modelforms.forms import ModelForm
 from pyparsing import ParseException
 
+from touchtechnology.admin.sites import site as admin_site
 from touchtechnology.common.forms.fields import (
     ModelChoiceField,
     ModelMultipleChoiceField,
@@ -56,13 +58,13 @@ from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
 from tournamentcontrol.competition.draw.algorithms import seeded_tournament
 from tournamentcontrol.competition.draw.builders import build
 from tournamentcontrol.competition.draw.generators import DrawGenerator
+from tournamentcontrol.competition.draw.schemas import DivisionStructure
 from tournamentcontrol.competition.draw.services import (
     draw_generator,
     draw_target_team_count,
     generate_stage_draw,
     suitable_draw_formats,
 )
-from tournamentcontrol.competition.draw.schemas import DivisionStructure
 from tournamentcontrol.competition.exceptions import (
     LiveStreamError,
     LiveStreamTransitionWarning,
@@ -255,7 +257,12 @@ class ThumbnailImageWidget(forms.ClearableFileInput):
     Widget for handling binary image data uploads with integrated preview support.
     """
 
-    template_name = "tournamentcontrol/competition/widgets/thumbnail_image_widget.html"
+    @property
+    def template_name(self):
+        return (
+            "tournamentcontrol/competition/widgets/%s/thumbnail_image_widget.html"
+            % (admin_site.shell.name)
+        )
 
     def format_value(self, value):
         # For binary data, we need to indicate that there's an existing image
@@ -385,9 +392,12 @@ class SeasonTimezoneDateTimeWidget(forms.MultiWidget):
     timezone).
     """
 
-    template_name = (
-        "tournamentcontrol/competition/widgets/season_timezone_datetime_widget.html"
-    )
+    @property
+    def template_name(self):
+        return (
+            "tournamentcontrol/competition/widgets/%s/"
+            "season_timezone_datetime_widget.html" % admin_site.shell.name
+        )
 
     def __init__(self, attrs=None):
         this_year = datetime.date.today().year
@@ -395,12 +405,8 @@ class SeasonTimezoneDateTimeWidget(forms.MultiWidget):
             forms.SelectDateWidget(
                 attrs=attrs, years=range(this_year - 5, this_year + 5)
             ),
-            forms.Select(
-                attrs=attrs, choices=[(h, "%02d" % h) for h in range(24)]
-            ),
-            forms.Select(
-                attrs=attrs, choices=[(m, "%02d" % m) for m in range(60)]
-            ),
+            forms.Select(attrs=attrs, choices=[(h, "%02d" % h) for h in range(24)]),
+            forms.Select(attrs=attrs, choices=[(m, "%02d" % m) for m in range(60)]),
         )
         super().__init__(widgets, attrs)
         self.timezone = None
@@ -652,9 +658,10 @@ class UpstreamTitleMixin:
                 "now": remote,
             }
         else:
-            self.fields["title"].help_text = _(
-                "%(provider)s calls this “%(now)s”."
-            ) % {"provider": provider_name, "now": remote}
+            self.fields["title"].help_text = _("%(provider)s calls this “%(now)s”.") % {
+                "provider": provider_name,
+                "now": remote,
+            }
         if self.instance.title != remote:
             self.fields["upstream_title_reset"] = forms.BooleanField(
                 required=False,
@@ -2405,9 +2412,9 @@ class TeamAssociationForm(UserMixin, ModelForm):
     def __init__(self, team, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["person"].queryset = team.club.members.all()
-        self.fields[
-            "roles"
-        ].queryset = team.division.season.competition.team_roles.all()
+        self.fields["roles"].queryset = (
+            team.division.season.competition.team_roles.all()
+        )
 
     class Meta:
         model = TeamAssociation
@@ -2708,10 +2715,14 @@ class StreamControlForm(forms.Form):
                     try:
                         # Re-attempt without catching warnings
                         match.transition_live_stream(broadcast_status, youtube)
-                        messages.success(request, f"{match}: broadcast is {broadcast_status!r}")
+                        messages.success(
+                            request, f"{match}: broadcast is {broadcast_status!r}"
+                        )
                         # Display any warnings as info messages
                         for warning in w:
-                            if issubclass(warning.category, LiveStreamTransitionWarning):
+                            if issubclass(
+                                warning.category, LiveStreamTransitionWarning
+                            ):
                                 messages.info(request, f"{match}: {warning.message}")
                     except Exception as final_exc:
                         messages.error(request, f"{match}: {final_exc}")

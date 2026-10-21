@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+{% load i18n static admin admin_workbook common %}{% admin_brand as brand %}{% get_current_language as LANGUAGE_CODE %}
+<html lang="{{ LANGUAGE_CODE|default:"en" }}" class="no-js">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>{% block title %}{% block page_title %}{% endblock %}{% if brand %} &middot; {{ brand.name }}{% endif %}{% endblock %}</title>
+	<script>document.documentElement.classList.replace("no-js", "js")</script>
+	<link rel="preload" href="{% static 'touchtechnology/admin/workbook/fonts/atkinson-hyperlegible-next-latin-wght-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
+	<link rel="stylesheet" href="{% static 'touchtechnology/admin/workbook/workbook.css' %}">
+	{% include "touchtechnology/admin/workbook/_brand.html" %}
+	{% block extracss %}{% endblock %}
+</head>
+<body class="{% block body_class %}wb{% endblock %}">
+<a class="wb-skip" href="#main">{% trans "Skip to the page" %}</a>
+
+<div class="wb-shell">
+	{% block mainnav %}
+		{# The phone's bar: the menu and the brand. The rail holds the site's navigation landmark. #}
+		<div class="wb-topbar">
+			<button type="button" class="wb-topbar-menu" aria-expanded="false" aria-controls="wb-rail" data-wb-menu>
+				{% icon "menu" %}<span>{% trans "Menu" %}</span>
+			</button>
+			<a class="wb-topbar-brand" href="{% url 'admin:index' %}">{% if brand.logo %}<img src="{{ brand.logo|brand_logo_url }}" alt="">{% endif %}<span>{{ brand.name }}</span></a>
+		</div>
+
+		<div class="wb-rail" id="wb-rail" data-wb-rail>
+			<div class="wb-rail-inner">
+				<a class="wb-brand" href="{% url 'admin:index' %}">
+					{% if brand.logo %}<img class="wb-brand-logo" src="{{ brand.logo|brand_logo_url }}" alt="">{% endif %}
+					<span class="wb-brand-name">{{ brand.name }}</span>
+				</a>
+				<button type="button" class="wb-rail-close" data-wb-menu-close>{% icon "x" %}<span>{% trans "Close menu" %}</span></button>
+
+				<div class="wb-rail-scroll">{% admin_nav %}</div>
+
+				{% block profile %}
+					<div class="wb-me">
+						<div class="wb-me-who">
+							<span class="wb-avatar" aria-hidden="true">{{ user|initials }}</span>
+							<span class="wb-me-name">{{ user.get_full_name|default:user.get_username }}</span>
+						</div>
+						<ul class="wb-me-links">
+							{% url 'accounts:password_change' as password_url %}
+							{% if password_url %}<li><a href="{{ password_url }}" title="{% trans "Change password" %}">{% icon "key-round" %}<span class="wb-me-label">{% trans "Change password" %}</span></a></li>{% endif %}
+							{% if user.is_superuser %}<li><a href="{% url 'admin:settings:index' %}" title="{% trans "Settings" %}">{% icon "settings" %}<span class="wb-me-label">{% trans "Settings" %}</span></a></li>{% endif %}
+							<li>
+								{# LogoutView only accepts POST since Django 5.0. #}
+								<form method="post" action="{% url 'admin:logout' %}">{% csrf_token %}<button type="submit" class="wb-signout" title="{% trans "Sign out" %}">{% icon "log-out" %}<span class="wb-me-label">{% trans "Sign out" %}</span></button></form>
+							</li>
+						</ul>
+					</div>
+				{% endblock profile %}
+			</div>
+		</div>
+		<div class="wb-scrim" data-wb-menu-close hidden></div>
+	{% endblock mainnav %}
+
+	<main class="wb-main" id="main" tabindex="-1">
+		{% block full_content %}
+			{% block breadcrumbs_outer %}
+				{% block breadcrumbs %}{% trail %}{% endblock %}
+			{% endblock %}
+
+			{% block messages %}
+				{% include "touchtechnology/admin/workbook/_messages.html" %}
+			{% endblock %}
+
+			{% block content %}
+				{% block main_content %}{% endblock main_content %}
+			{% endblock content %}
+		{% endblock full_content %}
+	</main>
+</div>
+
+{% include "touchtechnology/admin/workbook/_dialogs.html" %}
+
+<script src="{% htmx_script %}"></script>
+<script src="{% static 'touchtechnology/admin/workbook/workbook.js' %}"></script>
+{% block extrajs %}{% endblock %}
+</body>
+</html>

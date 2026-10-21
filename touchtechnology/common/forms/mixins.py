@@ -13,6 +13,9 @@ class BootstrapFormControlMixin(object):
     set the bootstrap "form-control" class to the widget of the field.
     """
 
+    #: The class given to each widget; ``None`` gives it none.
+    control_class = "form-control"
+
     def __init__(self, *args, **kwargs):
         super(BootstrapFormControlMixin, self).__init__(*args, **kwargs)
         for field_name in getattr(self, "fields", ()):
@@ -25,8 +28,10 @@ class BootstrapFormControlMixin(object):
 
             # Which widget types don't we want to have the class attribute set
             # to be 'form-control'?
-            if not isinstance(field.widget, (widgets.RadioSelect,)):
-                field.widget.attrs["class"] = "form-control"
+            if self.control_class and not isinstance(
+                field.widget, (widgets.RadioSelect,)
+            ):
+                field.widget.attrs["class"] = self.control_class
 
 
 class UserMixin(BootstrapFormControlMixin):

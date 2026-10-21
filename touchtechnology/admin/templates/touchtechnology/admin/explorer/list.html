@@ -1,0 +1,28 @@
+{% extends "touchtechnology/admin/explorer/base.html" %}
+{% load i18n common admin admin_explorer guardian_tags %}
+
+{% block page_actions %}
+	{% with model_perms=model|hasperm:user %}
+		{% block nav-pills-list %}
+			{% if add_perm in model_perms and create_url %}
+				<a class="button primary" href="{{ create_url }}">{% icon "plus" %}<span>{% blocktrans with type=model|type %}New {{ type }}{% endblocktrans %}</span></a>
+			{% endif %}
+		{% endblock nav-pills-list %}
+	{% endwith %}
+{% endblock page_actions %}
+
+{% block content %}
+	{% block list-search %}
+		{% if searchable %}
+			<form class="search list-head" role="search" method="get" action="">
+				<div class="search-box">
+					{% icon "search" %}
+					<input type="search" name="search" value="{{ search }}" placeholder="{% trans "Search" %}" aria-label="{% blocktrans with types=model|types %}Search {{ types }}{% endblocktrans %}">
+				</div>
+				<button type="submit" class="button">{% trans "Search" %}</button>
+				{% if search %}<a class="button quiet" href="?">{% trans "Clear" %}</a>{% endif %}
+			</form>
+		{% endif %}
+	{% endblock list-search %}
+	{% include list_template|default:"touchtechnology/admin/explorer/list.inc.html" %}
+{% endblock %}

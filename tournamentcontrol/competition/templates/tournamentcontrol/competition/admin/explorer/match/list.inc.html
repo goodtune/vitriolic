@@ -1,0 +1,36 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block table-headings %}
+	<th>{% trans "Match" %}</th>
+	<th>{% trans "Date" %}</th>
+	<th class="wide-only">{% trans "Time" %}</th>
+	<th class="wide-only">{% trans "Ground" %}</th>
+	<th>{% trans "Home" %}</th>
+	<th>{% trans "Away" %}</th>
+	<th class="num wide-only">{% trans "Videos" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	{% trans "TBC" as tbc context "to be confirmed" %}
+	<td class="title-cell">
+		{% if change_perm in object_perms %}
+			<a href="{{ obj.urls.edit }}">{% icon "match" %}<span>{{ obj.label|default:obj.pk }}</span></a>
+		{% else %}
+			<span>{{ obj.label|default:obj.pk }}</span>
+		{% endif %}
+	</td>
+	<td class="nowrap">{{ obj.date|date:"D j M"|default_if_none:tbc }}</td>
+	<td class="wide-only">{{ obj.time|time|default_if_none:tbc }}</td>
+	<td class="wide-only">{{ obj.play_at|default_if_none:"&ndash;" }}</td>
+	<td>{{ obj.get_home_team_plain }}</td>
+	<td>{{ obj.get_away_team_plain }}</td>
+	<td class="num wide-only">{{ obj.videos|length }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}8{% endblock %}
+
+{% block row-buttons-items %}
+	<a href="{{ obj.urls.referees }}">{% icon "referee" %}{% trans "Referees" %}</a>
+	{{ block.super }}
+{% endblock row-buttons-items %}

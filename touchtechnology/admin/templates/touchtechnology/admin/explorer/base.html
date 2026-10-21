@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+{% load i18n static admin admin_explorer common %}{% admin_brand as brand %}{% explorer_tree as tree %}{% get_current_language as LANGUAGE_CODE %}
+<html lang="{{ LANGUAGE_CODE|default:"en" }}" class="no-js">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>{% block title %}{% if tree.here %}{{ tree.here.label }} &ndash; {% endif %}{{ brand.name }}{% endblock %}</title>
+	<script>document.documentElement.classList.replace('no-js', 'js')</script>
+	<link rel="preload" href="{% static 'touchtechnology/admin/explorer/fonts/IBMPlexSans-Variable.woff2' %}" as="font" type="font/woff2" crossorigin>
+	<link rel="stylesheet" href="{% static 'touchtechnology/admin/explorer/css/admin.css' %}">
+	{% include "touchtechnology/admin/explorer/_brand.html" %}
+	<link rel="icon" href="{% static 'touchtechnology/admin/explorer/img/favicon.svg' %}" type="image/svg+xml">
+	{% block extracss %}{% endblock %}
+</head>
+
+<body class="{% block body_class %}admin{% endblock %}">
+<a class="skip-link" href="#main">{% trans "Skip to content" %}</a>
+
+<div class="shell">
+	{% block mainnav %}
+		{% include "touchtechnology/admin/explorer/explorer/rail.html" %}
+	{% endblock mainnav %}
+
+	<div class="page">
+		{% block dock %}
+			{% if tree %}
+				<div class="dock">
+					<button type="button" class="dock-menu" aria-expanded="false" aria-controls="rail">
+						{% icon "menu" %}<span>{% trans "Menu" %}</span>
+					</button>
+					{% if tree.up %}
+						<a class="dock-up" href="{{ tree.up.url }}">
+							{% icon "up" %}<span class="dock-up-label"><small>{% trans "Up to" %}</small> <span>{{ tree.up.label }}</span></span>
+						</a>
+					{% endif %}
+				</div>
+			{% endif %}
+		{% endblock dock %}
+
+		{% block full_content %}
+			<header class="page-head">
+				{% block breadcrumbs_outer %}
+					{% if tree.crumbs %}
+						<nav class="crumbs" aria-label="{% trans "Where you are" %}">
+							<ol>
+								{% for node in tree.crumbs %}
+									<li><a href="{{ node.url|default:"#" }}">{% icon node.icon %}<span>{{ node.label }}</span></a></li>
+								{% endfor %}
+								{% block breadcrumbs %}{% endblock %}
+							</ol>
+						</nav>
+					{% endif %}
+				{% endblock breadcrumbs_outer %}
+
+				<div class="title-row">
+					{% block page_icon %}
+						<span class="title-icon">{% if object %}{% icon object|model_icon %}{% elif model %}{% icon model|model_icon %}{% elif tree.here %}{% icon tree.here.icon %}{% else %}{% icon "home" %}{% endif %}</span>
+					{% endblock page_icon %}
+					<div class="titles">
+						<h1>{% block page_title %}{% if object|saved %}{{ object }}{% elif object %}{% blocktrans with type=object|type %}New {{ type }}{% endblocktrans %}{% elif form %}{% blocktrans with type=model|type %}New {{ type }}{% endblocktrans %}{% elif model %}{{ model|types|capfirst }}{% elif tree.here %}{{ tree.here.label }}{% else %}{{ brand.name }}{% endif %}{% endblock page_title %}</h1>
+						<p class="kind">{% block page_kind %}{% if object|saved %}{{ object|type|capfirst }}{% elif object or form %}{% trans "Not saved yet" %}{% elif paginator.count %}{% blocktrans count counter=paginator.count %}{{ counter }} in all{% plural %}{{ counter }} in all{% endblocktrans %}{% elif object_list %}{% blocktrans count counter=object_list|length %}{{ counter }} in all{% plural %}{{ counter }} in all{% endblocktrans %}{% endif %}{% endblock page_kind %}</p>
+					</div>
+					<div class="page-actions">{% block page_actions %}{% endblock page_actions %}</div>
+				</div>
+
+				{% include "touchtechnology/admin/explorer/_sections.html" %}
+				{% block page_nav %}{% endblock page_nav %}
+			</header>
+
+			{% block messages %}
+				{% include "touchtechnology/admin/explorer/_messages.html" %}
+			{% endblock messages %}
+
+			<main id="main" class="page-body" tabindex="-1">
+				{% block content %}
+					{% block main_content %}{% endblock main_content %}
+				{% endblock content %}
+			</main>
+		{% endblock full_content %}
+
+		<footer class="page-foot">
+			<p>{{ brand.name }}{% if hostname %} <span class="sep">/</span> {{ hostname }}{% endif %}</p>
+		</footer>
+	</div>
+</div>
+
+
+<dialog class="confirm" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+	<form method="dialog">
+		<h2 id="confirm-title" data-default="{% trans "Are you sure?" %}">{% trans "Are you sure?" %}</h2>
+		<p id="confirm-body"></p>
+		<div class="confirm-actions">
+			<button type="submit" value="cancel" class="button">{% trans "Cancel" %}</button>
+			<button type="submit" value="confirm" class="button destructive" id="confirm-ok">{% trans "Delete" %}</button>
+		</div>
+	</form>
+</dialog>
+
+<script src="{% htmx_script %}"></script>
+<script src="{% static 'touchtechnology/admin/explorer/js/admin.js' %}"></script>
+{% block extrajs %}{% endblock %}
+</body>
+</html>

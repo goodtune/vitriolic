@@ -6,12 +6,29 @@ time, ensuring functionality across both modes. Screenshots of each step are
 saved to ``screenshot_dir`` and posted on the pull request.
 """
 
+import re
 from urllib.parse import urljoin
 
 import pytest
 from django.urls import reverse
 from playwright.sync_api import Page, expect
 
+from tests.e2e.shells import (
+    ACTIVE_FORM,
+    EDIT_FORM,
+    LAZY_ONCE,
+    LAZY_PANES,
+    LOADING,
+    PAGER,
+    PAGER_CURRENT,
+    SAVE,
+    SHELL,
+    TABLIST,
+    by_shell,
+    pane_id,
+    tab_control,
+    tab_link,
+)
 from tournamentcontrol.competition.tests import factories
 
 
@@ -87,11 +104,11 @@ class TestTraditionalTabMode:
         authenticated_page.goto(competition_edit_url(live_server, competition))
 
         # Verify tab navigation sidebar is present
-        tab_nav = authenticated_page.locator("#myTab")
+        tab_nav = authenticated_page.locator(TABLIST)
         expect(tab_nav).to_be_visible()
 
-        # Verify the Edit tab link exists with data-toggle="tab"
-        edit_tab = authenticated_page.locator('#myTab a[data-toggle="tab"]').first
+        # Verify the Details tab exists
+        edit_tab = authenticated_page.locator(f"{TABLIST} [role=tab]").first
         expect(edit_tab).to_be_visible()
         shoot(authenticated_page, screenshot_dir, "tabs_traditional_competition_edit")
 
@@ -103,13 +120,11 @@ class TestTraditionalTabMode:
         authenticated_page.goto(competition_edit_url(live_server, competition))
 
         # Verify the form is present
-        form = authenticated_page.locator("form.form-horizontal")
+        form = authenticated_page.locator(EDIT_FORM)
         expect(form).to_be_visible()
 
         # Verify Save button exists
-        save_button = authenticated_page.locator(
-            '.tab-pane.active button[type="submit"]'
-        )
+        save_button = authenticated_page.locator(SAVE)
         expect(save_button).to_be_visible()
         expect(save_button).to_have_text("Save")
 
@@ -122,11 +137,11 @@ class TestTraditionalTabMode:
         authenticated_page.goto(season_edit_url(live_server, competition, season))
 
         # Verify tab navigation exists
-        tab_nav = authenticated_page.locator("#myTab")
+        tab_nav = authenticated_page.locator(TABLIST)
         expect(tab_nav).to_be_visible()
 
         # There should be multiple tabs (edit + related objects)
-        tab_links = authenticated_page.locator('#myTab a[data-toggle="tab"]')
+        tab_links = authenticated_page.locator(f"{TABLIST} [role=tab]")
         expect(tab_links.first).to_be_visible()
         assert tab_links.count() > 1
         shoot(authenticated_page, screenshot_dir, "tabs_traditional_season_edit")
@@ -141,7 +156,7 @@ class TestTraditionalTabMode:
 
         # Get the first related tab link (not the main edit tab)
         related_tabs = authenticated_page.locator(
-            '#myTab li:not(.active) a[data-toggle="tab"]'
+            f"{TABLIST} [role=tab][aria-selected=false]"
         )
         assert related_tabs.count() > 0
 
@@ -166,17 +181,19 @@ class TestTraditionalTabMode:
         authenticated_page.goto(edit_url)
 
         # Click Save without changing anything
-        save_button = authenticated_page.locator(
-            '.tab-pane.active button[type="submit"]'
-        )
+        save_button = authenticated_page.locator(SAVE)
         save_button.click()
 
         # Wait for redirect - should go back to competition list
         authenticated_page.wait_for_load_state("networkidle")
 
-        # Should not stay on the edit page (redirected to parent)
-        current_url = authenticated_page.url
-        assert edit_url not in current_url or ("?r=" in current_url)
+        # Saving nothing goes back to the list of competitions, and says so.
+        expect(authenticated_page).to_have_url(
+            f"{live_server.url}{reverse('admin:fixja:competition:list')}"
+        )
+        expect(authenticated_page.locator("body")).to_contain_text(
+            "Your competition was not changed."
+        )
         shoot(authenticated_page, screenshot_dir, "tabs_traditional_competition_saved")
 
     def test_no_htmx_attributes_in_traditional_mode(
@@ -201,10 +218,14 @@ class TestTraditionalTabMode:
         """Without HTMX the people tab is rendered with the page, in full."""
         url = club_edit_url(live_server, club_data["club"])
         html = authenticated_page.request.get(url).text()
-        assert html.count(", Alice</a>") == len(club_data["members"])
+        if SHELL == "workbook":
+            assert html.count(", Alice</a>") == len(club_data["members"])
         authenticated_page.goto(url)
-        authenticated_page.locator('a[href="#members-tab"]').click()
-        expect(authenticated_page.locator("#members-tab")).to_be_visible()
+        if SHELL == "explorer":
+            rows = authenticated_page.locator("#members-tab tbody tr")
+            expect(rows).to_have_count(len(club_data["members"]))
+        authenticated_page.locator(tab_link("members")).click()
+        expect(authenticated_page.locator(f"#{pane_id('members')}")).to_be_visible()
         shoot(authenticated_page, screenshot_dir, "tabs_traditional_club_people")
 
 
@@ -221,6 +242,13 @@ class TestHtmxTabMode:
     ):
         """HTMX script is loaded when the feature flag is enabled."""
         competition = competition_data["competition"]
+        fetched = []
+        authenticated_page.on(
+            "request",
+            lambda request: (
+                fetched.append(request.url) if "_htmx_tab=" in request.url else None
+            ),
+        )
         authenticated_page.goto(competition_edit_url(live_server, competition))
 
         # Check that the htmx script is present, and that it was served: the
@@ -228,6 +256,14 @@ class TestHtmxTabMode:
         htmx_script = authenticated_page.locator('script[src*="htmx"]')
         expect(htmx_script).to_have_count(1)
         assert authenticated_page.evaluate("typeof htmx") == "object"
+
+        # And that it works: showing a related tab fetches its content.
+        pane = authenticated_page.locator(LAZY_PANES).first
+        tab_id = pane.get_attribute("id")
+        authenticated_page.locator(tab_control(tab_id)).click()
+        expect(pane).to_be_visible()
+        expect(pane.locator(LOADING)).to_have_count(0)
+        assert len(fetched) == 1 and "_htmx_tab=" in fetched[0], fetched
         shoot(authenticated_page, screenshot_dir, "tabs_htmx_competition_edit")
 
     def test_season_edit_has_htmx_attributes(
@@ -239,7 +275,7 @@ class TestHtmxTabMode:
         authenticated_page.goto(season_edit_url(live_server, competition, season))
 
         # Related tab panes should have hx-get attributes
-        htmx_panes = authenticated_page.locator(".tab-pane[hx-get]")
+        htmx_panes = authenticated_page.locator(LAZY_PANES)
         assert htmx_panes.count() > 0
 
     def test_season_edit_lazy_load_attributes(
@@ -251,9 +287,7 @@ class TestHtmxTabMode:
         authenticated_page.goto(season_edit_url(live_server, competition, season))
 
         # Tab panes should have hx-trigger="intersect once"
-        lazy_panes = authenticated_page.locator(
-            '.tab-pane[hx-trigger="intersect once"]'
-        )
+        lazy_panes = authenticated_page.locator(LAZY_ONCE)
         assert lazy_panes.count() > 0
 
     def test_season_edit_form_inside_tab(
@@ -265,9 +299,7 @@ class TestHtmxTabMode:
         authenticated_page.goto(season_edit_url(live_server, competition, season))
 
         # In HTMX mode, form should be inside the active tab pane
-        tab_pane_form = authenticated_page.locator(
-            ".tab-pane.active form.form-horizontal"
-        )
+        tab_pane_form = authenticated_page.locator(ACTIVE_FORM)
         expect(tab_pane_form).to_be_visible()
         shoot(authenticated_page, screenshot_dir, "tabs_htmx_season_edit")
 
@@ -281,21 +313,22 @@ class TestHtmxTabMode:
         authenticated_page.goto(url)
 
         # Click Save
-        save_button = authenticated_page.locator(
-            '.tab-pane.active button[type="submit"]'
-        )
+        save_button = authenticated_page.locator(SAVE)
         expect(save_button).to_be_visible()
         save_button.click()
 
         # Should redirect (primary form save goes to parent)
         authenticated_page.wait_for_load_state("networkidle")
-        current_url = authenticated_page.url
-        # Should redirect to competition edit page
-        season_path = reverse(
-            "admin:fixja:competition:season:edit",
-            args=[competition.pk, season.pk],
+        # Saving nothing returns to the competition's page, and says so.
+        competition_path = reverse(
+            "admin:fixja:competition:edit", args=[competition.pk]
         )
-        assert season_path not in current_url
+        expect(authenticated_page).to_have_url(
+            re.compile(rf"^{re.escape(live_server.url + competition_path)}(#.*)?$")
+        )
+        expect(authenticated_page.locator("body")).to_contain_text(
+            "Your season was not changed."
+        )
         shoot(authenticated_page, screenshot_dir, "tabs_htmx_season_saved")
 
     def test_htmx_tab_content_loads_dynamically(
@@ -311,16 +344,16 @@ class TestHtmxTabMode:
 
         # Nothing is fetched until a tab is shown, so every related pane is
         # still waiting behind its spinner.
-        related_panes = authenticated_page.locator(".tab-pane[hx-get]")
+        related_panes = authenticated_page.locator(LAZY_PANES)
         assert related_panes.count() > 0
         first_pane = related_panes.first
-        expect(first_pane.locator(".fa-spinner")).to_have_count(1)
+        expect(first_pane.locator(LOADING)).to_have_count(1)
 
         # Showing the tab loads its content in place of the spinner.
         tab_id = first_pane.get_attribute("id")
-        authenticated_page.locator(f'a[href="#{tab_id}"]').click()
+        authenticated_page.locator(tab_control(tab_id)).click()
         expect(first_pane).to_be_visible()
-        expect(first_pane.locator(".fa-spinner")).to_have_count(0)
+        expect(first_pane.locator(LOADING)).to_have_count(0)
         shoot(authenticated_page, screenshot_dir, "tabs_htmx_season_tab_loaded")
 
     def test_competition_edit_page_loads(
@@ -331,11 +364,13 @@ class TestHtmxTabMode:
         authenticated_page.goto(competition_edit_url(live_server, competition))
 
         # Page should load without errors
-        tab_nav = authenticated_page.locator("#myTab")
+        tab_nav = authenticated_page.locator(TABLIST)
         expect(tab_nav).to_be_visible()
 
         # Edit tab should be active
-        active_tab = authenticated_page.locator("#myTab li.active")
+        active_tab = authenticated_page.locator(
+            f"{TABLIST} [role=tab][aria-selected=true]"
+        )
         expect(active_tab).to_be_visible()
 
     def test_tab_click_shows_content(
@@ -350,18 +385,20 @@ class TestHtmxTabMode:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Find a related tab link and click it
-        htmx_tabs = authenticated_page.locator("#myTab li:not(.active) a.htmx-tab-link")
+        htmx_tabs = authenticated_page.locator(
+            f"{TABLIST} [role=tab][aria-selected=false]"
+        )
         assert htmx_tabs.count() > 0
 
         first_htmx_tab = htmx_tabs.first
-        tab_id = first_htmx_tab.get_attribute("data-tab-id")
+        tab_id = first_htmx_tab.get_attribute("aria-controls")
         first_htmx_tab.click()
 
         # The target tab pane should now be visible, with its content loaded
         # in place of the spinner.
         target_pane = authenticated_page.locator(f"#{tab_id}")
         expect(target_pane).to_be_visible()
-        expect(target_pane.locator(".fa-spinner")).to_have_count(0)
+        expect(target_pane.locator(LOADING)).to_have_count(0)
         shoot(authenticated_page, screenshot_dir, "tabs_htmx_season_tab_clicked")
 
     def test_tab_is_fetched_once(
@@ -381,13 +418,16 @@ class TestHtmxTabMode:
         authenticated_page.wait_for_load_state("networkidle")
         assert fetched == []
 
-        links = authenticated_page.locator("#myTab li:not(.active) a.htmx-tab-link")
-        tab_id = links.first.get_attribute("data-tab-id")
+        # The first pane fetched on demand (Explorer's set-up tab is rendered
+        # inline, so it is not the first tab).
+        tab_id = authenticated_page.locator(LAZY_PANES).first.get_attribute("id")
         pane = authenticated_page.locator(f"#{tab_id}")
+        tab = authenticated_page.locator(f"[role=tab][aria-controls='{tab_id}']")
+        details = authenticated_page.locator("[role=tab]").first
         for _ in range(2):
-            links.first.click()
+            tab.click()
             expect(pane).to_be_visible()
-            authenticated_page.locator("#myTab li:first-child a.htmx-tab-link").click()
+            details.click()
             expect(pane).to_be_hidden()
         authenticated_page.wait_for_load_state("networkidle")
         assert len(fetched) == 1
@@ -417,18 +457,37 @@ class TestHtmxTabPagination:
         authenticated_page.wait_for_load_state("networkidle")
 
         assert fetched == []
-        expect(
-            authenticated_page.locator(".tab-pane[hx-get] .fa-spinner")
-        ).to_have_count(2)
-        shoot(authenticated_page, screenshot_dir, "club_tabs_waiting")
+        # People, teams and officials each wait to be shown.
+        expect(authenticated_page.locator(f"{LAZY_PANES} {LOADING}")).to_have_count(3)
+        shoot(authenticated_page, screenshot_dir, "club_tabs_waiting_on_details")
 
-        authenticated_page.locator('a[href="#members-tab"]').click()
-        expect(authenticated_page.locator("#members-tab tbody tr")).to_have_count(10)
+        authenticated_page.locator(tab_link("members")).click()
+        expect(
+            authenticated_page.locator(f"#{pane_id('members')} tbody tr")
+        ).to_have_count(10)
         authenticated_page.wait_for_load_state("networkidle")
         assert len(fetched) == 1
         assert "_htmx_tab=members" in fetched[0]
         # The teams tab is still waiting to be shown.
-        expect(authenticated_page.locator("#teams-tab .fa-spinner")).to_have_count(1)
+        expect(
+            authenticated_page.locator(f"#{pane_id('teams')} {LOADING}")
+        ).to_have_count(1)
+
+        # Show the teams tab with its fetch held back, so the picture has the
+        # pane visibly pending, then let it load.
+        def hold(route):
+            authenticated_page.wait_for_timeout(1500)
+            route.continue_()
+
+        authenticated_page.route("**/*_htmx_tab=teams*", hold)
+        authenticated_page.locator(tab_link("teams")).click()
+        pending = authenticated_page.locator(f"#{pane_id('teams')}")
+        expect(pending).to_be_visible()
+        expect(pending.locator(LOADING)).to_be_visible()
+        shoot(authenticated_page, screenshot_dir, "club_tab_pending_while_fetched")
+        expect(pending.locator(LOADING)).to_have_count(0)
+        expect(pending.locator("tbody tr").first).to_be_visible()
+        authenticated_page.unroute("**/*_htmx_tab=teams*", hold)
 
     def test_people_tab_pages(
         self, authenticated_page: Page, live_server, club_data, screenshot_dir
@@ -439,31 +498,37 @@ class TestHtmxTabPagination:
         page.goto(url)
         history_length = page.evaluate("history.length")
 
-        page.locator('a[href="#members-tab"]').click()
-        rows = page.locator("#members-tab tbody tr")
+        page.locator(tab_link("members")).click()
+        rows = page.locator(f"#{pane_id('members')} tbody tr")
         expect(rows).to_have_count(10)
         expect(rows.first).to_contain_text("Member01")
         expect(rows.last).to_contain_text("Member10")
-        expect(page.locator("#members-tab ul.pagination li.current")).to_have_text("1")
+        expect(
+            page.locator(f"#{pane_id('members')} {PAGER} {PAGER_CURRENT}")
+        ).to_have_text("1")
         shoot(page, screenshot_dir, "club_people_page_1")
 
-        page.locator('#members-tab ul.pagination a[href$="page=2"]').click()
+        page.locator(f'#{pane_id("members")} {PAGER} a[href$="page=2"]').click()
         expect(rows.first).to_contain_text("Member11")
         expect(rows.last).to_contain_text("Member20")
-        expect(page.locator("#members-tab ul.pagination li.current")).to_have_text("2")
+        expect(
+            page.locator(f"#{pane_id('members')} {PAGER} {PAGER_CURRENT}")
+        ).to_have_text("2")
         shoot(page, screenshot_dir, "club_people_page_2")
 
-        page.locator('#members-tab ul.pagination a[href$="page=3"]').click()
+        page.locator(f'#{pane_id("members")} {PAGER} a[href$="page=3"]').click()
         expect(rows).to_have_count(5)
         expect(rows.first).to_contain_text("Member21")
         expect(rows.last).to_contain_text("Member25")
-        expect(page.locator("#members-tab ul.pagination li.current")).to_have_text("3")
+        expect(
+            page.locator(f"#{pane_id('members')} {PAGER} {PAGER_CURRENT}")
+        ).to_have_text("3")
         shoot(page, screenshot_dir, "club_people_page_3")
 
         # The tab changed in place: the address and the history did not.
         assert page.url == url
         assert page.evaluate("history.length") == history_length
-        expect(page.locator("#myTab")).to_be_visible()
+        expect(page.locator(TABLIST)).to_be_visible()
 
     def test_teams_tab_pages(
         self, authenticated_page: Page, live_server, club_data, screenshot_dir
@@ -472,14 +537,16 @@ class TestHtmxTabPagination:
         page = authenticated_page
         page.goto(club_edit_url(live_server, club_data["club"]))
 
-        page.locator('a[href="#teams-tab"]').click()
-        rows = page.locator("#teams-tab tbody tr")
+        page.locator(tab_link("teams")).click()
+        rows = page.locator(f"#{pane_id('teams')} tbody tr")
         expect(rows).to_have_count(10)
         shoot(page, screenshot_dir, "club_teams_page_1")
 
-        page.locator('#teams-tab ul.pagination a[href$="page=2"]').click()
+        page.locator(f'#{pane_id("teams")} {PAGER} a[href$="page=2"]').click()
         expect(rows).to_have_count(2)
-        expect(page.locator("#teams-tab ul.pagination li.current")).to_have_text("2")
+        expect(
+            page.locator(f"#{pane_id('teams')} {PAGER} {PAGER_CURRENT}")
+        ).to_have_text("2")
         shoot(page, screenshot_dir, "club_teams_page_2")
 
     def test_a_team_link_leaves_the_club_page(
@@ -492,19 +559,24 @@ class TestHtmxTabPagination:
         page = authenticated_page
         page.goto(club_edit_url(live_server, club_data["club"]))
 
-        page.locator('a[href="#teams-tab"]').click()
-        rows = page.locator("#teams-tab tbody tr")
+        page.locator(tab_link("teams")).click()
+        rows = page.locator(f"#{pane_id('teams')} tbody tr")
         expect(rows).to_have_count(10)
         history_length = page.evaluate("history.length")
 
-        rows.first.locator("button.dropdown-toggle").click()
-        rows.first.get_by_role("button", name="Edit").click()
+        rows.first.get_by_role(
+            "button",
+            name=re.compile(
+                by_shell(workbook="More actions", explorer="^More actions for")
+            ),
+        ).click()
+        rows.first.get_by_role("link", name="Edit").click()
         page.wait_for_url("**/teams/*/")
 
         # The club page is gone: the team's own page has replaced it, in full.
         assert page.evaluate("history.length") == history_length + 1
-        expect(page.locator("#teams-tab")).to_have_count(0)
-        expect(page.locator("#people-tab")).to_have_count(1)
+        expect(page.locator(f"#{pane_id('teams')}")).to_have_count(0)
+        expect(page.locator(f"#{pane_id('people')}")).to_have_count(1)
         shoot(page, screenshot_dir, "club_team_link_leaves_the_page")
 
     def test_pages_are_independent_between_tabs(
@@ -514,16 +586,30 @@ class TestHtmxTabPagination:
         page = authenticated_page
         page.goto(club_edit_url(live_server, club_data["club"]))
 
-        page.locator('a[href="#teams-tab"]').click()
-        expect(page.locator("#teams-tab tbody tr")).to_have_count(10)
-        page.locator('a[href="#members-tab"]').click()
-        expect(page.locator("#members-tab tbody tr")).to_have_count(10)
-        page.locator('#members-tab ul.pagination a[href$="page=2"]').click()
-        expect(page.locator("#members-tab tbody tr").first).to_contain_text("Member11")
+        page.locator(tab_link("teams")).click()
+        expect(page.locator(f"#{pane_id('teams')} tbody tr")).to_have_count(10)
+        page.locator(tab_link("members")).click()
+        expect(page.locator(f"#{pane_id('members')} tbody tr")).to_have_count(10)
+        page.locator(f'#{pane_id("members")} {PAGER} a[href$="page=2"]').click()
+        expect(page.locator(f"#{pane_id('members')} tbody tr").first).to_contain_text(
+            "Member11"
+        )
 
-        page.locator('a[href="#teams-tab"]').click()
-        expect(page.locator("#teams-tab ul.pagination li.current")).to_have_text("1")
-        shoot(page, screenshot_dir, "club_tabs_independent_pages")
+        page.locator(tab_link("teams")).click()
+        expect(
+            page.locator(f"#{pane_id('teams')} {PAGER} {PAGER_CURRENT}")
+        ).to_have_text("1")
+        shoot(page, screenshot_dir, "club_tabs_independent_teams_page_1")
+
+        # The people tab is still on its second page.
+        page.locator(tab_link("members")).click()
+        expect(
+            page.locator(f"#{pane_id('members')} {PAGER} {PAGER_CURRENT}")
+        ).to_have_text("2")
+        expect(page.locator(f"#{pane_id('members')} tbody tr").first).to_contain_text(
+            "Member11"
+        )
+        shoot(page, screenshot_dir, "club_tabs_independent_people_page_2")
 
     def test_primary_contact_offers_only_the_clubs_people(
         self, authenticated_page: Page, live_server, club_data, screenshot_dir
@@ -538,7 +624,24 @@ class TestHtmxTabPagination:
         expect(
             page.locator('select[name="primary"] option', has_text="Outsider")
         ).to_have_count(0)
-        shoot(page, screenshot_dir, "club_edit_primary_contact")
+
+        # Open the chooser itself: it offers the club's people, not the
+        # outsider.
+        field = page.locator('select[name="primary"]').locator(
+            "xpath=ancestor::*[contains(@class, 'field')][1]"
+        )
+        field.locator(
+            by_shell(workbook=".wb-picker", explorer=".picker-button")
+        ).click()
+        dialog = page.get_by_role("dialog")
+        expect(dialog).to_be_visible()
+        offered = dialog.get_by_role("option")
+        expect(offered.first).to_be_visible()
+        labels = [text.strip() for text in offered.all_inner_texts()]
+        for member in club_data["members"]:
+            assert any(str(member) in label for label in labels), (member, labels)
+        assert not any("Outsider" in label for label in labels), labels
+        shoot(page, screenshot_dir, "club_edit_primary_contact_chooser_open")
 
     def test_club_form_saves_with_a_primary_contact(
         self, authenticated_page: Page, live_server, club_data, screenshot_dir
@@ -549,9 +652,9 @@ class TestHtmxTabPagination:
         member = club_data["members"][0]
         page.goto(club_edit_url(live_server, club))
 
-        # Select2 hides the select it replaces.
+        # The chooser hides the select it stands in for.
         page.select_option('select[name="primary"]', str(member.pk), force=True)
-        page.locator('.tab-pane.active button[type="submit"]').click()
+        page.locator(SAVE).click()
         page.wait_for_load_state("networkidle")
 
         club.refresh_from_db()

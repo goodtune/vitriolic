@@ -20,9 +20,22 @@ from guardian.shortcuts import assign_perm
 from test_plus import test as test_plus
 
 from touchtechnology.admin.sites import site
+from touchtechnology.admin.tests.shells import by_shell, per_shell
 from touchtechnology.common.tests.factories import UserFactory
 
 ADD_CLASS_GROUP = "admin:enrolment:classgroup:add"
+
+
+def edit_link(url, text, icon):
+    """A link to an object's page, as the lists draw it."""
+    return by_shell(
+        workbook=f'<a href="{url}">{text}</a>',
+        explorer=(
+            f'<a href="{url}"><svg class="icon" aria-hidden="true" focusable="false">'
+            f'<use href="/static/touchtechnology/admin/explorer/img/icons.svg#{icon}">'
+            f"</use></svg><span>{text}</span></a>"
+        ),
+    )
 
 
 class RegistrationTests(test_plus.TestCase):
@@ -137,7 +150,7 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:schoolyear:list")
             self.assertResponseContains(
-                f'<a href="{self.year.urls["edit"]}">2026</a>', html=True
+                edit_link(self.year.urls["edit"], "2026", "schoolyear")
             )
 
     def test_grade_list(self):
@@ -156,11 +169,10 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:student:list", data={"search": "Ines"})
             self.assertResponseContains(
-                f'<a href="{self.student.urls["edit"]}">Ines Varga</a>', html=True
+                edit_link(self.student.urls["edit"], "Ines Varga", "student")
             )
             self.assertResponseNotContains(
-                f'<a href="{self.outsider.urls["edit"]}">Tomas Lindqvist</a>',
-                html=True,
+                edit_link(self.outsider.urls["edit"], "Tomas Lindqvist", "student"),
             )
 
     def test_year_edit(self):
@@ -171,17 +183,28 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:schoolyear:edit", pk=self.year.pk)
             self.assertResponseContains(
-                '<a href="%s" title="Add" role="button">'
-                '<i class="fa fa-plus-square"></i></a>'
+                by_shell(
+                    workbook=(
+                        '<a class="wb-button wb-button-primary wb-button-small" href="%s">'
+                        '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+                        '<use href="/static/touchtechnology/admin/workbook/icons.svg#plus">'
+                        "</use></svg>Add class group</a>"
+                    ),
+                    explorer=(
+                        '<a class="button primary compact" href="%s">'
+                        '<svg class="icon" aria-hidden="true" focusable="false">'
+                        '<use href="/static/touchtechnology/admin/explorer/img/icons.svg#plus"></use>'
+                        "</svg><span>Add class group</span></a>"
+                    ),
+                )
                 % self.reverse(ADD_CLASS_GROUP, year_id=self.year.pk),
-                html=True,
             )
 
     def test_grade_edit_has_no_link_to_add_a_class_group(self):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:grade:edit", pk=self.grade.pk)
             self.assertResponseContains(
-                f'<a href="{self.group.urls["edit"]}">2C (2026)</a>', html=True
+                edit_link(self.group.urls["edit"], "2C (2026)", "classgroup")
             )
             self.assertNotContains(self.last_response, "/class/add/")
 
@@ -189,7 +212,7 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:teacher:edit", pk=self.teacher.pk)
             self.assertResponseContains(
-                f'<a href="{self.group.urls["edit"]}">2C (2026)</a>', html=True
+                edit_link(self.group.urls["edit"], "2C (2026)", "classgroup")
             )
             self.assertNotContains(self.last_response, "/class/add/")
 
@@ -236,13 +259,22 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:student:edit", pk=self.student.pk)
             self.assertResponseContains(
-                '<a href="#timeline-tab" data-toggle="tab">'
-                '<i class="fa fa-chevron-right fa-fw"></i>&nbsp;Timeline</a>',
-                html=True,
+                by_shell(
+                    workbook=(
+                        '<a class="wb-tab" role="tab" id="timeline-tab" href="#timeline-pane" '
+                        'aria-controls="timeline-pane" aria-selected="false">Timeline</a>'
+                    ),
+                    explorer=(
+                        '<a class="tab" role="tab" id="timeline-tab-link" href="#timeline-tab" '
+                        'aria-controls="timeline-tab" aria-selected="false" tabindex="-1">'
+                        '<svg class="icon" aria-hidden="true" focusable="false">'
+                        '<use href="/static/touchtechnology/admin/explorer/img/icons.svg#season"></use>'
+                        "</svg><span>Timeline</span></a>"
+                    ),
+                ),
             )
             self.assertResponseContains(
                 f'<li><a href="{self.enrolment.urls["edit"]}">2C (2026)</a></li>',
-                html=True,
             )
 
     def test_student_add_has_no_timeline_tab(self):
@@ -389,15 +421,13 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
                 "admin:enrolment:assessment:edit", **self.assessment_kwargs
             )
             self.assertResponseContains(
-                f'<option value="{self.enrolment.pk}">Ines Varga</option>', html=True
+                f'<option value="{self.enrolment.pk}">Ines Varga</option>'
             )
             self.assertResponseContains(
                 f'<option value="{self.classmate_enrolment.pk}">Priya Nair</option>',
-                html=True,
             )
             self.assertResponseNotContains(
                 f'<option value="{self.outsider_enrolment.pk}">Tomas Lindqvist</option>',
-                html=True,
             )
 
     def test_assessment_page_query_count_does_not_grow_with_the_class(self):
@@ -710,3 +740,45 @@ class NestingTests(PermissionDataMixin, test_plus.TestCase):
                         class_group_id=self.other_group.pk,
                     )
                     self.response_404()
+
+
+@per_shell(shells=("explorer",))
+class YearSetupTests(EnrolmentDataMixin, test_plus.TestCase):
+    def test_year_shows_class_without_teacher(self):
+        bare = ClassGroup.objects.create(year=self.year, grade=self.grade, title="2W")
+        with self.login(self.superuser):
+            self.get("admin:enrolment:schoolyear:edit", pk=self.year.pk)
+            self.response_200()
+        self.assertResponseContains(
+            '<p class="setup-detail"><span class="visually-hidden">Still to do:'
+            "</span> %s has no teacher</p>" % bare
+        )
+        self.assertEqual(self.context["setup"].next_step.url, bare.urls["edit"])
+
+    def test_class_shows_year_progress(self):
+        with self.login(self.superuser):
+            self.get(
+                "admin:enrolment:classgroup:edit",
+                year_id=self.year.pk,
+                pk=self.group.pk,
+            )
+            self.response_200()
+        setup = self.context["setup"]
+        self.assertFalse(setup.here)
+        self.assertResponseContains(
+            '<a href="%s#setup-tab"><strong>School year set-up</strong> '
+            "%d of %d done</a>" % (self.year.urls["edit"], setup.done, setup.total)
+        )
+
+    def test_report_card_shows_year_progress(self):
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:enrolment:reportcard:edit",
+                pk=self.report_card.pk,
+                **self.enrolment_kwargs,
+            )
+        setup = self.context["setup"]
+        self.assertResponseContains(
+            '<a href="%s#setup-tab"><strong>School year set-up</strong> '
+            "%d of %d done</a>" % (self.year.urls["edit"], setup.done, setup.total)
+        )

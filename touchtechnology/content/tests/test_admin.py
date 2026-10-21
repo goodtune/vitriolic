@@ -3,6 +3,7 @@ from os.path import dirname, join
 from django.contrib.auth.models import Permission
 from test_plus.test import TestCase
 
+from touchtechnology.admin.tests.shells import by_shell
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.tests.factories import UserFactory
 from touchtechnology.content.models import Placeholder
@@ -34,14 +35,22 @@ class AdminTests(TestCase):
         self.assertLoginRequired("admin:content:index")
         with self.login(self.superuser):
             self.get("admin:content:index")
-            html = """
-                <a role="button" href="/admin/content/application/{}/">
-                    <i class="fa fa-pencil fa-fw"></i>
+            html = by_shell(
+                workbook="""
+                <a href="/admin/content/application/{}/">
+                    <svg class="wb-icon" aria-hidden="true" focusable="false">
+                        <use href="/static/touchtechnology/admin/workbook/icons.svg#pencil"></use>
+                    </svg>Edit</a>
+            """,
+                explorer="""
+                <a href="/admin/content/application/{}/">
+                    <svg class="icon" aria-hidden="true" focusable="false">
+                        <use href="/static/touchtechnology/admin/explorer/img/icons.svg#edit"></use>
+                    </svg>
                     Edit
                 </a>
-            """.format(
-                self.root_node.pk
-            )
+            """,
+            ).format(self.root_node.pk)
             self.assertResponseContains(html)
 
     def test_sitemap_index_staff_user(self):

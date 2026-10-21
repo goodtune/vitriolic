@@ -1,14 +1,21 @@
+import os
+
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.sitemaps.views import sitemap
 from django.urls import include, path
 from oauth2_provider.urls import metadata_urlpatterns
 
+from touchtechnology.admin.shells import DEFAULT_SHELL
 from touchtechnology.admin.sites import site
 from touchtechnology.common.sitemaps import NodeSitemap
 from touchtechnology.common.sites import AccountsSite
 from touchtechnology.news.sites import NewsSite
 from tournamentcontrol.competition.compops.sites import CompOpsSite
+
+# The shell the admin wears: the demo project reads it from the environment so
+# the harness can serve either one.
+site.shell = os.environ.get("ADMIN_SHELL", DEFAULT_SHELL)
 
 accounts = AccountsSite()
 news = NewsSite()

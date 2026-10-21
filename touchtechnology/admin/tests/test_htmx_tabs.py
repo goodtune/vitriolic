@@ -7,6 +7,7 @@ from django.templatetags.static import static
 from django.test import RequestFactory, override_settings
 from test_plus import TestCase
 
+from touchtechnology.admin.tests.shells import per_shell
 from touchtechnology.common.context_processors import htmx_admin_tabs
 from touchtechnology.common.default_settings import (
     HTMX_ADMIN_TABS,
@@ -203,11 +204,10 @@ class HtmxScriptTagTests(TestCase):
         superuser = factories.UserFactory.create(is_staff=True, is_superuser=True)
         with self.login(superuser):
             self.get("admin:auth:users:edit", pk=superuser.pk)
-        self.assertResponseContains(
-            f'<script src="{htmx_script()}"></script>', html=True
-        )
+        self.assertResponseContains(f'<script src="{htmx_script()}"></script>')
 
 
+@per_shell
 class HtmxTabViewTests(TestCase):
     """Tests for HTMX tab content loading via generic_edit."""
 
@@ -221,7 +221,7 @@ class HtmxTabViewTests(TestCase):
             self.get("admin:auth:users:edit", pk=self.superuser.pk)
             self.response_200()
             self.assertTemplateUsed(
-                self.last_response, "touchtechnology/admin/edit.html"
+                self.last_response, self.shell.template("edit.html")
             )
 
     @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
@@ -235,7 +235,7 @@ class HtmxTabViewTests(TestCase):
             )
             self.response_200()
             self.assertTemplateUsed(
-                self.last_response, "touchtechnology/admin/edit.html"
+                self.last_response, self.shell.template("edit.html")
             )
 
     @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
@@ -251,7 +251,7 @@ class HtmxTabViewTests(TestCase):
             self.response_200()
             self.assertTemplateUsed(
                 self.last_response,
-                "touchtechnology/admin/_htmx_tab_empty.html",
+                self.shell.template("_htmx_tab_empty.html"),
             )
 
     def test_edit_view_htmx_tab_ignored_when_flag_off(self):
@@ -265,5 +265,5 @@ class HtmxTabViewTests(TestCase):
             )
             self.response_200()
             self.assertTemplateUsed(
-                self.last_response, "touchtechnology/admin/edit.html"
+                self.last_response, self.shell.template("edit.html")
             )

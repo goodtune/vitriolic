@@ -1,0 +1,10 @@
+{% extends "touchtechnology/admin/explorer/40x.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Not found" %}{% endblock %}
+{% block error-code %}404{% endblock %}
+
+{% block error-details %}
+	<h1>{% trans "There is nothing at this address" %}</h1>
+	<p>{% trans "It may have been removed, or the address may be mistyped. The explorer beside this page shows everything that is here." %}</p>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% load i18n humanize %}
+<div class="image-well">
+	{% if widget.value %}
+		<div class="image-well-current">
+			{% if preview_data_url %}<img src="{{ preview_data_url }}" alt="{% trans 'Current thumbnail' %}">{% endif %}
+			<div>
+				<p class="strong">{% trans "Current thumbnail" %}</p>
+				<p class="muted">{{ mime_type|default:"Image" }}, {{ file_size_bytes|filesizeformat }}</p>
+				{% if preview_failed %}<p class="muted">{% trans "No preview: the format is not one a browser shows." %}</p>{% endif %}
+				{% if widget.clear_checkbox_name %}
+					<label class="check"><input type="checkbox" name="{{ widget.clear_checkbox_name }}" id="{{ widget.clear_checkbox_id }}"> {% trans "Remove it" %}</label>
+				{% endif %}
+			</div>
+		</div>
+		<label class="image-well-label" for="{{ widget.attrs.id }}">{% trans "Replace it with" %}</label>
+		<input type="{{ widget.type }}" name="{{ widget.name }}"{% include "django/forms/widgets/attrs.html" %}>
+	{% else %}
+		<p class="image-well-empty">{% trans "No thumbnail yet" %}</p>
+		<input type="{{ widget.type }}" name="{{ widget.name }}"{% include "django/forms/widgets/attrs.html" %}>
+	{% endif %}
+</div>

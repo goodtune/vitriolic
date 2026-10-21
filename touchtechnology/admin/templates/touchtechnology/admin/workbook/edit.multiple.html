@@ -1,0 +1,21 @@
+{% extends "touchtechnology/admin/workbook/edit.html" %}
+{% load common admin_workbook %}
+
+{% block extracss %}
+	{{ block.super }}
+	{{ formset.media|admin_media }}
+{% endblock extracss %}
+
+{% block form-fieldset %}
+	{% if form %}{{ block.super }}{% endif %}
+
+	{{ formset.management_form }}
+
+	{% for form in formset.forms %}
+		<fieldset class="wb-fields wb-group">
+			{% for f in form %}
+				{% field f %}
+			{% endfor %}
+		</fieldset>
+	{% endfor %}
+{% endblock %}

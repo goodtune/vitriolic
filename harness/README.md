@@ -25,6 +25,7 @@ harness/pg.sh start                     # 1. a temporary PostgreSQL (once per bo
 harness/db.sh demo                      # 2. create the database vitriolic_demo
 harness/seed.sh demo                    # 3. migrate it and fill it with the made-up association
 harness/serve.sh demo 8300              # 4. serve it; prints http://127.0.0.1:8300/admin/
+                                        #    (add --shell explorer for the other shell)
 harness/shots.sh --name demo --contact  # 5. screenshots, the flow video and contact sheets
 harness/contact.sh <run-dir>            # 6. (only to re-tile; step 5 already did)
 harness/stop.sh demo                    # 7. stop the server
@@ -35,9 +36,9 @@ Sign in at `/admin/` as `admin` with the password `password`.
 
 Step 5 takes about 14 minutes: 153 pages and their tabs at two
 widths (554 pictures), then the flow at each width. It prints one line
-per capture and a summary, and writes everything to `run/demo/<brand>/` under
-the state root (`<brand>` is the brand the server was started with, and
-`<brand>-htmx` for a server started with `--htmx-tabs`; the root is
+per capture and a summary, and writes everything to `run/demo/<brand>-<shell>/` under
+the state root (`<brand>` is the brand and `<shell>` the shell the server was
+started with, and `<brand>-<shell>-htmx` for a server started with `--htmx-tabs`; the root is
 `~/.local/state/vitriolic-harness` unless `VITRIOLIC_HARNESS_VAR` says
 otherwise). Use `--only` and
 `--widths` for a quicker look, for example
@@ -64,23 +65,23 @@ run the work in `bash -c '...'`).
 | `pg.sh start\|stop\|status\|psql [name]` | A temporary PostgreSQL cluster in `pg/` in the state root, started with `pg_ctl`, never a service. `start` does nothing when the port already answers. `stop` stops only its own cluster. `psql` opens a shell on the server, or on the database of a name. |
 | `db.sh [--reset] <name>` | Creates `vitriolic_<name>` and records the checkout that owns it. Exit status 3 when another checkout owns it; `--reset` takes it over, drops it and its media, run directory and pid file, and creates it again (it refuses while the name has a live server: stop it first). Prints `DATABASE_URL`. |
 | `seed.sh <name>` | Migrates the database, then seeds it. Safe to run again: it adds only what is missing. About 20 seconds. Prints the number of rows of each model. |
-| `serve.sh <name> <port> [--brand B] [--htmx-tabs]` | Runs `runserver --noreload` in the background and waits up to 30 seconds for the sign-in page. Refuses a port that is taken or a name that already has a server. Writes the pid file, which records the pid, port, brand, tab mode and checkout. |
+| `serve.sh <name> <port> [--brand B] [--shell workbook\|explorer] [--htmx-tabs]` | Runs `runserver --noreload` in the background and waits up to 30 seconds for the sign-in page. `--shell` (default `workbook`) sets `ADMIN_SHELL`, which the demo project hands to `AdminSite`. Refuses a port that is taken or a name that already has a server. Writes the pid file, which records the pid, port, brand, shell, tab mode and checkout. |
 | `stop.sh <name>` | Stops the server of a name, and only while the process is still its `runserver`. Not running is not an error. |
 | `manage.sh <name> <args...>` | Runs the demo project's `manage.py` against the database of a name. |
-| `shots.sh --name N [--base URL] [--brand B] [--htmx-tabs] [--widths 1440,390] [--height 900] [--only a,b\|none] [--no-video] [--contact] [--out DIR]` | Screenshots every page, records the flow, writes `manifest.json`, then removes the flow's rows from the database. Without `--base`, finds the server in the pid file. The pid file decides the brand and the tab mode: a `--brand` that disagrees is refused (exit 64); with `--base` and no pid file for that server, `--brand` is required. |
+| `shots.sh --name N [--base URL] [--brand B] [--shell S] [--htmx-tabs] [--widths 1440,390] [--height 900] [--only a,b\|none] [--no-video] [--contact] [--out DIR]` | Screenshots every page, records the flow, writes `manifest.json`, then removes the flow's rows from the database. Without `--base`, finds the server in the pid file. The pid file decides the brand, the shell and the tab mode: a `--brand` or `--shell` that disagrees is refused (exit 64); with `--base` and no pid file for that server, `--brand` is required (and `--shell`, if it is not `workbook`). |
 | `contact.sh <run-dir> [--width W] [--columns 4] [--tile-width 360] [--out FILE]` | Tiles a run's pictures at one width into one contact sheet. |
 | `test.sh <name> [unit\|e2e] [--] [args...]` | Runs the tests through tox against the harness PostgreSQL, with no Docker. The name's database must exist and be yours. |
 | `python -m harness seed\|pages\|unflow <stamp>` | The Python halves of `seed.sh` and `shots.sh`. Each checks the owner of the database first (exit 3). `unflow` deletes what one run of the flow made. |
 
 Where things are kept, under the state root:
 `pg/` the cluster, `media/<name>/` uploaded files, `log/<name>/server.log`,
-`run/<name>/pid` the server, `run/<name>/<brand>/` a screenshot run
-(`<brand>-htmx/` for a server started with `--htmx-tabs`, so the two modes
-never replace each other), and `state/<name>/pages.json` the pages found for
+`run/<name>/pid` the server, `run/<name>/<brand>-<shell>/` a screenshot run
+(`<brand>-<shell>-htmx/` for a server started with `--htmx-tabs`, so the modes
+and the shells never replace each other), and `state/<name>/pages.json` the pages found for
 the last run.
 
 `shots.sh` refuses to write into a directory that is not an earlier run of the
-same name, brand and tab mode. It replaces an earlier run of its own, and it
+same name, brand, shell and tab mode. It replaces an earlier run of its own, and it
 does so before anything else: a run that fails early (no server, discovery
 failing) leaves an empty directory and a start manifest that says why, never
 the pictures of the run before.
@@ -190,7 +191,7 @@ The manifest also says what kind of run it was, so a partial or stale set can
 be told from a complete one by reading one file: `only` (the page names asked
 for, `null` for all), `widths`, `video`, `expected_pages` (how many pages
 `pages.json` listed), `checkout` and `commit` (where the run was made),
-`htmx_tabs`, `flow_stamps` (for the clean-up below) and `errors` (what went
+`shell`, `htmx_tabs`, `flow_stamps` (for the clean-up below) and `errors` (what went
 wrong with the run itself). It counts as failed when any page or step
 errored, or when fewer pages were captured than `expected_pages` times the
 widths and `--only` was not given.
@@ -312,6 +313,7 @@ seed alone, and runs of one entry or of two can be compared page for page.
 | `CLOUDINARY_URL` | `cloudinary://harness:harness@harness` | A dummy so image tags can build their URLs. Nothing is uploaded. |
 | `VITRIOLIC_DEMO_HOSTNAME` | `demo.example` | The host name the admin footer shows, so a picture never carries the machine's own name. |
 | `ADMIN_BRAND` | `default` | The brand; `serve.sh --brand` sets it for the server. |
+| `ADMIN_SHELL` | `workbook` | The shell the admin wears, `workbook` or `explorer`; `serve.sh --shell` sets it for the server, and `test.sh` passes it through to the tests, which run under it. |
 | `HTMX_ADMIN_TABS` | `0` | Load tabs over HTMX; `serve.sh --htmx-tabs` sets it. |
 | `PLAYWRIGHT_CHROMIUM_EXECUTABLE` | unset | `test.sh e2e` passes it through, to use a browser that is already installed. |
 

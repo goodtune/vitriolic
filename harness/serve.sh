@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run the demo project's dev server for a name, in a chosen brand.
-#   serve.sh <name> <port> [--brand default|forest|sherbet] [--htmx-tabs]
+#   serve.sh <name> <port> [--brand default|forest|sherbet] [--shell workbook|explorer] [--htmx-tabs]
 # Exit status 1 when the port is taken, the name already has a server, or the
 # server does not answer within 30 seconds; 3 when another checkout owns the
 # name's database.
@@ -10,7 +10,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() {
-    echo "usage: serve.sh <name> <port> [--brand default|forest|sherbet] [--htmx-tabs]" >&2
+    echo "usage: serve.sh <name> <port> [--brand default|forest|sherbet] [--shell workbook|explorer] [--htmx-tabs]" >&2
     exit 64
 }
 
@@ -22,12 +22,18 @@ port="$2"
 shift 2
 
 brand=default
+shell=workbook
 htmx=0
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --brand)
             [ "$#" -ge 2 ] || usage
             brand="$2"
+            shift 2
+            ;;
+        --shell)
+            [ "$#" -ge 2 ] || usage
+            shell="$2"
             shift 2
             ;;
         --htmx-tabs)
@@ -45,6 +51,13 @@ case "$brand" in
         exit 64
         ;;
 esac
+case "$shell" in
+    workbook | explorer) ;;
+    *)
+        echo "serve.sh: unknown shell '$shell' (workbook or explorer)" >&2
+        exit 64
+        ;;
+esac
 case "$port" in
     '' | *[!0-9]*)
         echo "serve.sh: the port '$port' is not a number" >&2
@@ -55,7 +68,7 @@ esac
 name="$(harness_name "$raw_name")"
 checkout="$(harness_checkout)"
 var="$(harness_var)"
-harness_env "$name" "$brand" "$htmx"
+harness_env "$name" "$brand" "$htmx" "$shell"
 harness_db_check "$name"
 pidfile="$var/run/$name/pid"
 logfile="$var/log/$name/server.log"
@@ -92,6 +105,7 @@ pid=$!
     echo "pid=$pid"
     echo "port=$port"
     echo "brand=$brand"
+    echo "shell=$shell"
     echo "htmx_tabs=$htmx"
     echo "checkout=$checkout"
 } >"$pidfile"

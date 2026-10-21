@@ -1,0 +1,11 @@
+{% with date=widget.subwidgets.0 hour=widget.subwidgets.1 minute=widget.subwidgets.2 %}
+{# The date on one line and the time on the next, on every screen. #}
+<div class="season-timezone-datetime">
+	<div class="season-timezone-datetime-date">
+		{% include date.template_name with widget=date only %}
+	</div>
+	<div class="season-timezone-datetime-time">
+		{% include hour.template_name with widget=hour only %}<span class="season-timezone-datetime-separator" aria-hidden="true">:</span>{% include minute.template_name with widget=minute only %}
+	</div>
+</div>
+{% endwith %}

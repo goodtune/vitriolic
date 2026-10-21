@@ -1,0 +1,23 @@
+{% extends "touchtechnology/admin/workbook/mvp/list.inc.html" %}
+{% load i18n %}
+
+{% block actions %}{% endblock %}
+
+{% block table-headings %}
+	<th scope="col">{% trans "Team" %}</th>
+	<th scope="col">{% trans "Competition" %}</th>
+	<th scope="col">{% trans "Season" %}</th>
+	<th scope="col">{% trans "Division" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td class="wb-title-cell">{% if obj.urls.edit %}<a href="{{ obj.urls.edit }}">{{ obj.title }}</a>{% else %}{{ obj.title }}{% endif %}</td>
+	<td data-label="{% trans "Competition" %}">{{ obj.division.season.competition.short_title|default:obj.division.season.competition.title }}</td>
+	<td data-label="{% trans "Season" %}">{{ obj.division.season.short_title|default:obj.division.season.title }}</td>
+	<td data-label="{% trans "Division" %}">{{ obj.division.short_title|default:obj.division.title }}</td>
+{% endblock table-columns %}
+
+
+{% block table-row-empty %}<tr class="wb-table-empty"><td colspan="5">{% trans "This club has no teams yet." %}</td></tr>{% endblock %}
+
+{% block empty-row-colspan %}5{% endblock %}

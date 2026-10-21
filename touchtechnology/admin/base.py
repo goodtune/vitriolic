@@ -8,7 +8,10 @@ from django.utils.encoding import smart_str
 from modelforms.forms import ModelForm
 
 from touchtechnology.admin.branding import get_brand
+from touchtechnology.admin.explorer import Explorer
 from touchtechnology.admin.forms import AdminFormControlMixin
+from touchtechnology.admin.shells import ShellTemplatesMixin
+from touchtechnology.admin.sites import site as default_site
 from touchtechnology.common.decorators import (
     never_cache_m,
     staff_login_required_m,
@@ -18,9 +21,16 @@ from touchtechnology.common.forms.mixins import BootstrapFormControlMixin
 from touchtechnology.common.sites import Application
 
 
-class AdminComponentMixin(object):
+class AdminComponentMixin(ShellTemplatesMixin):
     verbose_name = "ExampleComponent"
     visible = True
+    #: The name of the component's icon in the admin's sprite (``None`` picks
+    #: one from the component's ``app_name``).
+    icon = None
+    #: The ``Explorer`` that draws this component's part of the tree in the
+    #: rail. The stock one follows the admin's nested URLs; a subclass may
+    #: name relations, groupings and folders of its own.
+    explorer_class = Explorer
 
     # While adding this new functionality, we'll start out with
     # AdminComponents being unprotected by default, even though we typically
@@ -38,11 +48,27 @@ class AdminComponentMixin(object):
     def current_app(self):
         return self.app
 
+    #: The site this component is registered with (set by ``AdminSite.register``).
+    admin_site = None
+
+    @property
+    def shell(self):
+        """The shell the admin site this component belongs to wears."""
+        site = self.admin_site
+        return site.shell if site is not None else default_site.shell
+
+    def admin_template(self, filename):
+        return self.shell.template(filename)
+
     def _template_path(self, filename, *args):
-        i = super(AdminComponentMixin, self)._template_path(filename, *args)
-        for t in i:
-            yield t
+        """
+        For each place the component's pages may be, the same place without the
+        shell (where a deployment overrides it) first and the shell's own next;
+        the admin's own pages come last, neutral before the shell's.
+        """
+        yield from super()._template_path(filename, *args)
         yield os.path.join("touchtechnology/admin", filename)
+        yield self.shell.template(filename)
 
     @never_cache_m
     @staff_login_required_m
@@ -75,18 +101,45 @@ class AdminComponentMixin(object):
         # ``brand`` context processor has not been configured.
         if "brand" not in context:
             context["brand"] = get_brand(request)
-        context.setdefault(
-            "field_template", "touchtechnology/admin/templatetags/field.html"
-        )
+        context.setdefault("shell", self.shell)
+        context.setdefault("field_template", self.shell.field_template)
 
         return super(AdminComponentMixin, self).render(
             request, templates, context, *args, **kwargs
         )
 
+    def explorer(self):
+        """This component's ``Explorer``."""
+        explorer = getattr(self, "_explorer", None)
+        if explorer is None:
+            explorer = self._explorer = self.explorer_class(self)
+        return explorer
+
     def reverse(self, name, args=(), kwargs={}, prefix=None):
         if prefix is None:
             prefix = self.app
         return super(AdminComponentMixin, self).reverse(name, args, kwargs, prefix)
+
+    def tasks(self, request):
+        """
+        The jobs this component offers on the admin's home page, most common
+        first: an iterable of mappings with ``label``, ``url`` and optionally
+        ``note`` (a line saying more), ``icon`` (a name in the admin's icon
+        sprite) and ``priority`` (lower comes first; 50 when not given). By
+        default, one job: the component itself, naming its sections.
+        """
+        sections = list(self.dropdowns() or ())
+        if not sections:
+            return ()
+        return (
+            {
+                "label": self.verbose_name,
+                "url": sections[0][1],
+                "note": ", ".join(str(section[0]) for section in sections),
+                "icon": getattr(self, "icon", None),
+                "priority": 80,
+            },
+        )
 
     def dropdowns(self):
         """

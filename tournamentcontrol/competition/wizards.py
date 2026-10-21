@@ -229,6 +229,11 @@ class DrawGenerationWizard(SessionWizardView):
     stage = None
     template_name = "tournamentcontrol/competition/admin/draw_generation/wizard.html"
 
+    def get_template_names(self):
+        # The page of the shell the admin wears, which the view was given.
+        shell = self.extra_context["shell"]
+        return shell.names(self.template_name)
+
     def get_form_initial(self, step):
         if step == "0":
             if self.stage.pools.count():

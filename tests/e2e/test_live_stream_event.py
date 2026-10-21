@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from playwright.sync_api import Page, expect
 
+from tests.e2e.shells import EDIT_FORM, by_shell, pane_id, tab_link
 from tournamentcontrol.competition.tests.factories import (
     LiveStreamEventFactory,
     LiveStreamKeyFactory,
@@ -28,9 +29,7 @@ class TestLiveStreamEventForm:
             timezone="Australia/Sydney",
             live_stream=True,
         )
-        stream_key = LiveStreamKeyFactory.create(
-            season=season, title="Roaming Camera"
-        )
+        stream_key = LiveStreamKeyFactory.create(season=season, title="Roaming Camera")
         # The factory would otherwise draw a random start as far back as
         # 2020, which can fall outside the year select's range (current
         # year +/- 5). Anchor the schedule near today so the components
@@ -67,11 +66,19 @@ class TestLiveStreamEventForm:
 
         page.context.grant_permissions(["clipboard-read", "clipboard-write"])
         page.goto(self._season_url(live_server, season))
-        page.locator('a[href="#live_stream_events-tab"]').click()
+        page.locator(tab_link("live_stream_events")).click()
 
-        button = page.locator(".js-copy-video-link")
+        button = by_shell(
+            workbook=page.get_by_role("button", name="Copy video link"),
+            explorer=page.locator(f"#{pane_id('live_stream_events')} [data-copy]"),
+        )
         expect(button).to_be_visible()
         button.click()
+        # Its label says it worked, so find it again by what it copies.
+        button = by_shell(
+            workbook=page.locator("[data-wb-copy]"),
+            explorer=page.locator(f"#{pane_id('live_stream_events')} [data-copy]"),
+        )
 
         # The youtu.be form of the link is now on the clipboard.
         clipboard = page.evaluate("navigator.clipboard.readText()")
@@ -79,8 +86,8 @@ class TestLiveStreamEventForm:
 
         # Visual feedback, and the click must not have navigated away by
         # submitting the season form.
-        expect(button.locator("i")).to_have_class("fa fa-check")
-        expect(page.locator("#live_stream_events-tab")).to_be_visible()
+        expect(button).to_have_text("Copied")
+        expect(page.locator(f"#{pane_id('live_stream_events')}")).to_be_visible()
 
         page.screenshot(
             path=str(screenshot_dir / "live_stream_event_copy_link.png"),
@@ -99,11 +106,11 @@ class TestLiveStreamEventForm:
 
         page.goto(self._season_url(live_server, season))
 
-        expect(page.locator('a[href="#live_stream_events-tab"]')).to_be_attached()
-        expect(page.locator('a[href="#live_stream_keys-tab"]')).to_be_attached()
+        expect(page.locator(tab_link("live_stream_events"))).to_be_attached()
+        expect(page.locator(tab_link("live_stream_keys"))).to_be_attached()
 
-        page.locator('a[href="#live_stream_events-tab"]').click()
-        expect(page.locator("#live_stream_events-tab")).to_contain_text(
+        page.locator(tab_link("live_stream_events")).click()
+        expect(page.locator(f"#{pane_id('live_stream_events')}")).to_contain_text(
             "Opening Ceremony"
         )
         page.screenshot(
@@ -135,7 +142,7 @@ class TestLiveStreamEventForm:
             expect(page.locator(f'select[name="{prefix}_3"]')).to_have_count(0)
 
         # The implied timezone is stated to the user.
-        expect(page.locator(".content form")).to_contain_text(
+        expect(page.locator(EDIT_FORM)).to_contain_text(
             "Local time in Australia/Sydney."
         )
 
@@ -184,8 +191,7 @@ class TestLiveStreamEventForm:
         event = live_stream_season["event"]
 
         page.goto(
-            self._season_url(live_server, season)
-            + f"live-stream-event/{event.pk}/"
+            self._season_url(live_server, season) + f"live-stream-event/{event.pk}/"
         )
 
         start_local = event.start.astimezone(season.timezone)

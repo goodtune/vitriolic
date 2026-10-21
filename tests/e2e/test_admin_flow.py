@@ -3,6 +3,8 @@
 import pytest
 from playwright.sync_api import Page, expect
 
+from tests.e2e.shells import WIDGET_HEADINGS, by_shell
+
 
 class TestAdminFlow:
     """Test the complete admin workflow as specified in the requirements."""
@@ -48,8 +50,9 @@ class TestAdminFlow:
         expect(page).to_have_url(f"{live_server.url}/admin/")
 
         # Check admin dashboard widgets are all loaded
-        expect(page.locator('h4[class="portlet-title"]')).to_have_text(
+        expect(page.locator(WIDGET_HEADINGS)).to_have_text(
             [
+                *by_shell(workbook=[], explorer=["Everything you manage"]),
                 "Awaiting Scores",
                 "Progress Teams",
                 "Season Reports",
@@ -91,7 +94,9 @@ class TestAdminFlow:
         # Navigate to content management (Sitemap)
         page.goto(f"{live_server.url}/admin/content/")
 
-        new_page = page.get_by_role("link", name="New page")
+        new_page = page.get_by_role(
+            "link", name=by_shell(workbook="Add page", explorer="New page")
+        )
         expect(new_page).to_be_visible()
         new_page.click()
 
@@ -100,7 +105,7 @@ class TestAdminFlow:
         page.fill('input[name="parent-form-slug"]', "home")
 
         # Save the page
-        page.click('.content button[type="submit"]')
+        page.get_by_role("button", name="Save", exact=True).first.click()
 
         # Verify the home page was created
         expect(page).to_have_url(f"{live_server.url}/admin/content/")

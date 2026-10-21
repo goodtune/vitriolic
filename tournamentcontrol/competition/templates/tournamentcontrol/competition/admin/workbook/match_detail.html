@@ -1,0 +1,71 @@
+{% extends "tournamentcontrol/competition/admin/workbook/base.html" %}
+{% load i18n tz common admin_workbook %}
+
+{% block page_title %}{% trans "Detailed result" %} · {{ match }}{% endblock %}
+
+{% block content %}
+	<header class="wb-head">
+		<div class="wb-head-text">
+			<p class="wb-eyebrow">{% icon "chart-bar" %}{% trans "Detailed result" %} · {{ match.stage.division }}</p>
+			<h1>{{ match }}</h1>
+			{% with tz=match.play_at.timezone|default:match.stage.division.season.timezone %}
+				<p class="wb-lede">{{ match.datetime|timezone:tz|date:"l j F Y, H:i" }}{% if match.play_at %} · {{ match.play_at.title }}{% endif %}</p>
+			{% endwith %}
+		</div>
+	</header>
+
+	<form class="wb-form" action="" method="post">
+		{% csrf_token %}
+		<div class="wb-sheet">
+			<div class="wb-formbar">
+				<h2 class="wb-formbar-title">{% trans "Who played, who scored" %}</h2>
+				<div class="wb-formbar-actions">
+					<a class="wb-button wb-button-quiet" href="{% url 'admin:index' %}">{% trans "Cancel" %}</a>
+					<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
+				</div>
+			</div>
+			<div class="wb-cards wb-stats">
+				{% for formset in formsets %}
+					{{ formset.management_form }}
+					{% with team=formset.queryset.team %}
+						<section aria-labelledby="team-{{ forloop.counter }}">
+							<h3 id="team-{{ forloop.counter }}">{{ team.title }}</h3>
+							{% if not formset.is_valid and formset.non_form_errors %}
+								<div class="wb-problems" role="alert"><ul>{% for error in formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>
+							{% endif %}
+							<table class="wb-table wb-stat-table">
+								<thead>
+									<tr>
+										<th scope="col" class="wb-num">#</th>
+										<th scope="col">{% trans "Player" %}</th>
+										<th scope="col">{% trans "Played" %}</th>
+										<th scope="col" class="wb-num">{% trans "Points" %}</th>
+										<th scope="col">{% trans "MVP" %}</th>
+									</tr>
+								</thead>
+								<tbody>
+									{% for form in formset %}
+										{% with player=form.instance.player errors=form.errors.items %}
+											<tr{% if errors %} class="wb-has-error"{% endif %}>
+												<td class="wb-num">{{ form.number|control }}</td>
+												<th scope="row">
+													{{ player.first_name }} {{ player.last_name }}
+													{% for field, error_list in errors %}{% for msg in error_list %}<span class="wb-error">{{ msg }}</span>{% endfor %}{% endfor %}
+												</th>
+												<td>{{ form.played|control }}</td>
+												<td class="wb-num">{{ form.points|control }}</td>
+												<td>{{ form.id }}{% if form.mvp %}{{ form.mvp|control }}{% else %}–{% endif %}</td>
+											</tr>
+										{% endwith %}
+									{% empty %}
+										<tr class="wb-table-empty"><td colspan="5">{% trans "There are no registered players in this team." %}</td></tr>
+									{% endfor %}
+								</tbody>
+							</table>
+						</section>
+					{% endwith %}
+				{% endfor %}
+			</div>
+		</div>
+	</form>
+{% endblock %}

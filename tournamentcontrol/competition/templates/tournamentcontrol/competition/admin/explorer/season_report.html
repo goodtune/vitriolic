@@ -1,0 +1,73 @@
+{% extends "touchtechnology/admin/explorer/print.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Season report" %} &ndash; {{ season.title }}{% endblock %}
+{% block heading %}{% trans "Season report" %}{% endblock %}
+{% block subheading %}{{ competition.title }}, {{ season.title }}{% endblock %}
+{% block tools %}<a href="{{ season.urls.edit }}">{% trans "Back to the season" %}</a>{% endblock %}
+
+{% block content %}
+	<h2>{% trans "Club officials" %}</h2>
+	{% regroup season.officials.all by club as officials %}
+	<div class="sheet-scroll">
+		<table>
+			<thead>
+				<tr><th>{% trans "Club" %}</th><th>{% trans "Contact" %}</th><th>{% trans "Roles" %}</th><th>{% trans "Email" %}</th><th>{% trans "Phone" %}</th></tr>
+			</thead>
+			{% for group in officials %}
+				<tbody>
+					{% for official in group.list %}
+						<tr>
+							<th>{% ifchanged group.grouper %}<a href="#{{ group.grouper.slug }}">{{ group.grouper.title }}</a>{% endifchanged %}</th>
+							<td>{{ official.person.get_full_name }}</td>
+							<td>{% for role in official.roles.all %}{{ role.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+							<td>{{ official.person.email|urlize }}</td>
+							<td>{{ official.person.mobile_phone }}</td>
+						</tr>
+					{% endfor %}
+				</tbody>
+			{% empty %}
+				<tbody><tr><td colspan="5" class="empty">{% trans "No club has named its officials yet." %}</td></tr></tbody>
+			{% endfor %}
+		</table>
+	</div>
+
+	<h2>{% trans "Club reports" %}</h2>
+	{% regroup object_list by club as clubs %}
+	{% for group in clubs %}
+		<h3 id="{{ group.grouper.slug|default:"no" }}">{{ group.grouper.title|default:_("No club") }}</h3>
+		<div class="sheet-scroll">
+			<table>
+				<thead>
+					<tr>
+						<th>{% trans "Division" %}</th><th>{% trans "Team" %}</th><th>{% trans "Person" %}</th><th>{% trans "Born" %}</th>
+						<th>{% trans "Mobile" %}</th><th>{% trans "Work phone" %}</th><th>{% trans "Email" %}</th><th>{% trans "Player" %}</th><th>{% trans "Roles" %}</th>
+					</tr>
+				</thead>
+				{% for team in group.list %}
+					<tbody>
+						{% for object in team.people.select_related %}
+							<tr>
+								<th>{% ifchanged team.division %}{{ team.division.title }}{% endifchanged %}</th>
+								<td>{{ team.title }}</td>
+								<td>{{ object.person.get_full_name }}</td>
+								<td class="nowrap">{{ object.person.date_of_birth|default_if_none:"&ndash;" }}</td>
+								<td>{{ object.person.mobile_telephone }}</td>
+								<td>{{ object.person.work_telephone }}</td>
+								<td>{{ object.person.email|urlize }}</td>
+								<td>{% if object.is_player %}{% if object.number %}#{{ object.number }}{% else %}{% trans "TBA" %}{% endif %}{% endif %}</td>
+								<td>{% for role in object.roles.all %}{{ role.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+							</tr>
+						{% empty %}
+							<tr>
+								<th>{{ team.division.title }}</th>
+								<td>{{ team.title }}</td>
+								<td colspan="7" class="empty">{% trans "The club has not sent its registrations yet." %}</td>
+							</tr>
+						{% endfor %}
+					</tbody>
+				{% endfor %}
+			</table>
+		</div>
+	{% endfor %}
+{% endblock %}

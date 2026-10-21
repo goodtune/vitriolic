@@ -1,7 +1,11 @@
 """End-to-end test for Stage reordering functionality in admin interface."""
 
+import re
+
 import pytest
 from playwright.sync_api import Page, expect
+
+from tests.e2e.shells import ROW_MENU, SHELL, pane_id, tab_link
 
 
 class TestStageReordering:
@@ -44,95 +48,53 @@ class TestStageReordering:
         division.test_stages = [stage1, stage2, stage3]
         return division
 
-    def test_stage_reorder_buttons_visible(
-        self, 
-        authenticated_page: Page, 
-        live_server, 
+    def test_moving_a_stage_down_reorders_the_stages(
+        self,
+        authenticated_page: Page,
+        live_server,
         division_with_stages,
-        screenshot_dir
+        screenshot_dir,
     ):
         """
-        Test that Stage reorder buttons exist in the admin UI HTML.
-        
-        This test validates that reorder buttons for stages have been successfully
-        added to the admin interface template:
-        1. Navigates directly to the Division edit page
-        2. Verifies reorder buttons exist in the DOM for all stages
-        3. Captures screenshots documenting the UI changes
-        
-        Note: The buttons are rendered in the HTML but may be in a hidden dropdown
-        menu or collapsed section depending on the admin UI design. This test
-        confirms the template changes are in place and the buttons are in the DOM.
-        
-        Prerequisites:
-        - Authenticated admin user with competition management permissions
-        - Division with multiple stages created via fixtures
-        - Stage admin interface with reorder buttons added to template
-        
-        Expected behavior:
-        - Up and down reorder buttons exist in DOM for each stage  
-        - Buttons have correct href patterns pointing to reorder endpoints
-        - Screenshots capture the admin UI showing stages section
-        
-        Args:
-            authenticated_page: Pre-authenticated Playwright page
-            live_server: Django live server fixture
-            division_with_stages: Division with test stages
-            screenshot_dir: Directory for storing screenshots
+        Open the division's Stages tab, open the first stage's actions (where
+        the shell keeps them behind a menu) and move it down: the stages are
+        then in a new order in the database and the tab lists them that way.
         """
         page = authenticated_page
         division = division_with_stages
-        
-        # Navigate directly to the division edit page using the URL structure
-        competition_id = division.season.competition_id
-        season_id = division.season_id
-        division_id = division.pk
-        
         division_url = (
-            f"{live_server.url}/admin/fixja/competition/{competition_id}/"
-            f"seasons/{season_id}/division/{division_id}/"
+            f"{live_server.url}/admin/fixja/competition/"
+            f"{division.season.competition_id}/seasons/{division.season_id}/"
+            f"division/{division.pk}/"
         )
-        
-        print(f"Navigating to: {division_url}")
-        page.goto(division_url)
-        page.wait_for_load_state("networkidle")
-        
-        # Capture screenshot showing the division page with stages
-        screenshot_before = screenshot_dir / "stage_reorder_admin_ui.png"
-        page.screenshot(path=str(screenshot_before), full_page=True)
-        print(f"✓ Screenshot saved: {screenshot_before}")
-        
-        # Verify reorder buttons exist in the DOM
-        # These buttons were added by our template changes
-        down_buttons = page.locator('a[href*="reorder"][href*="stage:division"][href*="/down"]')
-        up_buttons = page.locator('a[href*="reorder"][href*="stage:division"][href*="/up"]')
-        
-        # We should have 3 stages, so 3 up buttons and 3 down buttons
-        down_count = down_buttons.count()
-        up_count = up_buttons.count()
-        
-        print(f"✓ Found {down_count} down buttons in DOM")
-        print(f"✓ Found {up_count} up buttons in DOM")
-        
-        # Assert buttons exist for all stages
-        assert down_count == 3, f"Expected 3 down buttons, found {down_count}"
-        assert up_count == 3, f"Expected 3 up buttons, found {up_count}"
-        
-        # Verify the buttons have correct href patterns for our stages
-        for i, stage in enumerate(division.test_stages, 1):
-            down_selector = f'a[href*="stage:division"][href*="/{stage.pk}/down"]'
-            up_selector = f'a[href*="stage:division"][href*="/{stage.pk}/up"]'
-            
-            # Verify each stage has its reorder buttons
-            assert page.locator(down_selector).count() == 1, f"Stage {stage.pk} missing down button"
-            assert page.locator(up_selector).count() == 1, f"Stage {stage.pk} missing up button"
-            
-            print(f"✓ Stage {i} ({stage.title}): reorder buttons present")
-        
-        # Get the HTML of one button to show it exists
-        first_down = down_buttons.first
-        button_html = first_down.get_attribute("href")
-        print(f"✓ Example button href: {button_html}")
-        
-        print("✓ Test completed successfully - all reorder buttons present in DOM")
 
+        page.goto(division_url)
+        page.locator(tab_link("stages")).click()
+        pane = page.locator(f"#{pane_id('stages')}")
+        expect(pane).to_be_visible()
+        rows = pane.locator("tbody tr")
+        expect(rows).to_have_count(3)
+        expect(rows.first).to_contain_text("Preliminary")
+        page.screenshot(
+            path=str(screenshot_dir / "stage_reorder_before.png"), full_page=True
+        )
+
+        first = rows.first
+        if SHELL == "workbook":
+            first.get_by_role("button", name=ROW_MENU).click()
+        first.get_by_role("link", name=re.compile(r"Move.*down")).click()
+        page.wait_for_load_state("networkidle")
+
+        titles = list(division.stages.order_by("order").values_list("title", flat=True))
+        assert titles == ["Semi-Finals", "Preliminary", "Finals"], titles
+
+        # The redirect returns to the division; show its Stages tab again.
+        page.goto(division_url)
+        page.locator(tab_link("stages")).click()
+        rows = page.locator(f"#{pane_id('stages')} tbody tr")
+        expect(rows.first).to_contain_text("Semi-Finals")
+        expect(rows.nth(1)).to_contain_text("Preliminary")
+        page.screenshot(
+            path=str(screenshot_dir / "stage_reorder_after_move_down.png"),
+            full_page=True,
+        )

@@ -1,0 +1,113 @@
+{% extends "touchtechnology/admin/workbook/base.html" %}
+{% load i18n common mvp_tags admin_workbook %}
+{% comment %}
+	An object's page: its heading, then its parts as tabs (the form first,
+	then one tab per related list), each part a sheet of its own.
+
+	Blocks a deployment may fill:
+	  page-head          the heading (eyebrow, title, head-actions)
+	  head-actions       buttons beside the title
+	  before-tabs        anything above the tabs (a checklist, a summary)
+	  tab-links          the tabs: include "touchtechnology/admin/workbook/_tab.html" with name, label
+	                     (and count); the tab's id is "<name>-tab"
+	  tab-panes          the panes: <section class="wb-pane wb-sheet" role="tabpanel" id="<name>-pane">
+	  form-fieldset      the fields of the form
+	  form-bar           the bar at the top of the form, kept in view, with Cancel and Save
+	  form-title         its title
+	  form-buttons       the Save button at the foot of the form
+	  cancel-url         where Cancel goes
+	  aside              a column beside the tabs at a desk
+{% endcomment %}
+
+{% block page_title %}{% if object|is_saved %}{{ object }}{% else %}{% blocktrans with type=model|type %}New {{ type }}{% endblocktrans %}{% endif %}{% endblock %}
+
+{% block content %}
+	{% block page-head %}
+		<header class="wb-head">
+			<div class="wb-head-text">
+				<p class="wb-eyebrow">{% block eyebrow %}{{ model|type|capfirst }}{% endblock %}</p>
+				<h1>{% block heading %}{% if object|is_saved %}{{ object }}{% else %}{% blocktrans with type=model|type %}New {{ type }}{% endblocktrans %}{% endif %}{% endblock %}</h1>
+				{% block lede %}{% endblock %}
+			</div>
+			<div class="wb-head-actions">{% block head-actions %}{% endblock %}</div>
+		</header>
+	{% endblock page-head %}
+
+	{% block before-tabs %}{% endblock %}
+
+	<div class="wb-layout{% block layout-class %}{% endblock %}">
+		<div class="wb-tabbed">
+			{% if object|is_saved %}
+				<div class="wb-tabs" role="tablist" data-wb-tabs aria-label="{% blocktrans with type=model|type %}Parts of this {{ type }}{% endblocktrans %}">
+					{% block tab-links %}
+						<a class="wb-tab" role="tab" id="{{ model|type|slugify }}-tab" href="#{{ model|type|slugify }}-pane" aria-controls="{{ model|type|slugify }}-pane" aria-selected="true">{% block edit-tab-label %}{% trans "Details" %}{% endblock %}{% if form.errors %} <span class="wb-tab-error">{% icon "circle-alert" %}</span>{% endif %}</a>
+						{% for manager, name in object|related:related %}
+							{% include "touchtechnology/admin/workbook/_tab.html" with name=name label=manager.all|types|capfirst count=manager|tab_count only %}
+						{% endfor %}
+					{% endblock tab-links %}
+				</div>
+			{% endif %}
+
+			<div class="wb-panes">
+				{% block tab-panes %}
+					<section class="wb-pane wb-sheet" id="{{ model|type|slugify }}-pane"{% if object|is_saved %} role="tabpanel"{% endif %}>
+						<form class="wb-form {% block form-class %}wb-form-wide{% endblock %}" action="" method="post" enctype="multipart/form-data" novalidate>
+							{% csrf_token %}
+							{% block form-bar %}
+								<div class="wb-formbar">
+									<h2 class="wb-formbar-title">{% block form-title %}{% blocktrans with type=model|type|capfirst %}{{ type }} details{% endblocktrans %}{% endblock %}</h2>
+									<div class="wb-formbar-actions">
+										<a class="wb-button wb-button-quiet" href="{% block cancel-url %}{{ cancel_url }}{% endblock %}">{% trans "Cancel" %}</a>
+										<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
+									</div>
+								</div>
+							{% endblock form-bar %}
+							{% include "touchtechnology/admin/workbook/_problems.html" %}
+							{% block form-fieldset %}
+								<div class="wb-fields">
+									{% for f in form %}
+										{% field f %}
+									{% endfor %}
+								</div>
+							{% endblock form-fieldset %}
+							{% block form-buttons %}
+								<div class="wb-formfoot">
+									<div class="wb-actions">
+										<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
+										{% if not object|is_saved and form and not formset and not wizard %}
+											<button type="submit" name="_addanother" value="1" class="wb-button">{% icon "copy-plus" %}{% blocktrans with type=model|type %}Save and add another {{ type }}{% endblocktrans %}</button>
+										{% endif %}
+									</div>
+								</div>
+							{% endblock form-buttons %}
+						</form>
+					</section>
+
+					{% if object|is_saved %}
+						{% for manager, name in object|related:related %}
+							{% if htmx_admin_tabs %}
+								<section class="wb-pane wb-sheet" role="tabpanel" id="{{ name }}-pane" hx-get="?_htmx_tab={{ name }}" hx-trigger="intersect once" hx-swap="innerHTML">
+									<p class="wb-pane-loading">{% trans "Loading…" %}</p>
+								</section>
+							{% else %}
+								<section class="wb-pane wb-sheet" role="tabpanel" id="{{ name }}-pane">
+									{% block mvp-list %}
+										{% with table=templates|default:None %}
+											{% mvp_list manager.all template=manager|mvp_list_template:table %}
+										{% endwith %}
+									{% endblock %}
+								</section>
+							{% endif %}
+						{% endfor %}
+					{% endif %}
+				{% endblock tab-panes %}
+			</div>
+		</div>
+		{% block aside %}{% endblock %}
+	</div>
+{% endblock %}
+
+{% block extracss %}
+	{{ block.super }}
+	{{ form.media|admin_media }}
+{% endblock %}

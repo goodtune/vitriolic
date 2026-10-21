@@ -1,0 +1,24 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block table-headings %}
+	<th>{% trans "Ground" %}</th>
+	<th>{% trans "Abbreviation" %}</th>
+	{% if obj.venue.season.live_stream %}<th>{% trans "Streaming" %}</th>{% endif %}
+{% endblock %}
+
+{% block table-columns %}
+	<td class="title-cell">
+		{% if change_perm in object_perms %}
+			<a href="{{ obj.urls.edit }}">{% icon "ground" %}<span>{{ obj.title|default:obj.pk }}</span></a>
+		{% else %}
+			<span>{{ obj.title|default:obj.pk }}</span>
+		{% endif %}
+	</td>
+	<td>{{ obj.abbreviation|default:"&ndash;" }}</td>
+	{% if obj.venue.season.live_stream %}
+		<td>{% if obj.external_identifier %}<span class="tag good">{% icon "video" %}{{ obj.stream_key }}</span>{% endif %}</td>
+	{% endif %}
+{% endblock %}
+
+{% block empty-row-colspan %}{{ obj.venue.season.live_stream|yesno:"4,3" }}{% endblock %}

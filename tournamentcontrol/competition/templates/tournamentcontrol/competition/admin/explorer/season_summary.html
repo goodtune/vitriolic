@@ -1,0 +1,35 @@
+{% extends "touchtechnology/admin/explorer/print.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Registrations" %} &ndash; {{ season.title }}{% endblock %}
+{% block heading %}{% trans "Registrations" %}{% endblock %}
+{% block subheading %}{{ competition.title }}, {{ season.title }}{% endblock %}
+{% block tools %}<a href="{{ season.urls.edit }}">{% trans "Back to the season" %}</a>{% endblock %}
+
+{% block content %}
+	{% regroup teams by club_id as clubs %}
+	<table>
+		<thead>
+			<tr>
+				<th>{% trans "Club" %}</th>
+				<th>{% trans "Team" %}</th>
+				<th>{% trans "Division" %}</th>
+				<th class="num">{% trans "Players" %}</th>
+				<th class="num">{% trans "Others" %}</th>
+			</tr>
+		</thead>
+		{% for club in clubs %}
+			<tbody>
+				{% for team in club.list %}
+					<tr>
+						<th>{% ifchanged team.club_id %}{{ team.club.title }}{% endifchanged %}</th>
+						<td>{{ team.title }}</td>
+						<td>{{ team.division.title }}</td>
+						<td class="num">{{ team.player_count|default_if_none:0 }}</td>
+						<td class="num">{{ team.non_player_count|default_if_none:0 }}</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+		{% endfor %}
+	</table>
+{% endblock %}

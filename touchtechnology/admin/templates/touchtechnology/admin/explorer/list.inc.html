@@ -1,0 +1,108 @@
+{% load i18n common admin admin_explorer %}
+{% comment %}
+A list of objects: the page of a list, or a pane of an object's page. Extend
+it and fill the blocks to change the columns (table-headings, table-columns),
+the actions above the list (actions), the buttons beside each row
+(row-buttons-extra) and the items of each row's menu (row-buttons-items).
+{% endcomment %}
+{% if manager %}
+	{% block heading %}
+		<div class="list-head">
+			<h2>{{ manager.all|plural_label }}</h2>
+			<div class="list-actions">
+				{% block actions %}
+					{% if create %}
+						<a class="button primary compact" href="{{ create }}">{% icon "plus" %}<span>{% blocktrans with type=model|type %}Add {{ type }}{% endblocktrans %}</span></a>
+					{% endif %}
+				{% endblock actions %}
+			</div>
+		</div>
+	{% endblock heading %}
+{% endif %}
+
+{% block modal %}{% endblock modal %}
+
+{% block table %}
+	<div class="table-wrap">
+		<table class="listing">
+			<thead>
+				{% block table-head %}
+					<tr>
+						{% block table-headings %}
+							<th>{% trans "Name" %}</th>
+						{% endblock table-headings %}
+						<th class="actions-cell"><span class="visually-hidden">{% trans "Actions" %}</span></th>
+					</tr>
+				{% endblock table-head %}
+			</thead>
+			<tbody>
+				{% with checker=queryset|permchecker:user %}
+					{% for obj in object_list %}
+						{% block table-row %}
+							{% with object_perms=obj|checkperm:checker %}
+								<tr>
+									{% block table-columns %}
+										<td class="title-cell">
+											{% if change_perm in object_perms and obj.urls.edit %}
+												<a href="{{ obj.urls.edit }}">{% icon obj|model_icon %}<span>{{ obj }}</span></a>
+											{% else %}
+												<span>{{ obj }}</span>
+											{% endif %}
+										</td>
+									{% endblock table-columns %}
+									<td class="actions-cell">
+										{% block row-buttons %}
+											<div class="row-actions">
+												{% block row-buttons-extra %}{% endblock %}
+												<div class="menu">
+													<button type="button" class="button quiet icon-only compact" data-popover aria-expanded="false" aria-controls="row-menu-{{ model|type|slugify }}-{{ obj.pk }}">{% icon "more" %}<span class="visually-hidden">{% blocktrans %}More actions for {{ obj }}{% endblocktrans %}</span></button>
+													<div class="menu-panel" id="row-menu-{{ model|type|slugify }}-{{ obj.pk }}">
+														{% block row-buttons-items %}
+															{% with detail_url=obj|admin_url:"detail" edit_url=obj|admin_url:"edit" delete_url=obj|admin_url:"delete" perms_url=obj|admin_url:"perms" %}
+																{% if detail_url %}
+																	<a href="{{ detail_url }}">{% icon "eye" %}{% trans "View" %}</a>
+																{% endif %}
+																{% if edit_url and change_perm in object_perms %}
+																	<a href="{{ edit_url }}">{% icon "edit" %}{% trans "Edit" %}</a>
+																{% endif %}
+																{% if perms_url and add_perm in object_perms %}
+																	<a href="{{ perms_url }}">{% icon "lock" %}{% trans "Permissions" %}</a>
+																{% endif %}
+																{% if delete_url and delete_perm in object_perms %}
+																	<form method="post" action="{{ delete_url }}" data-confirm="{% blocktrans with type=model|type %}The {{ type }} “{{ obj }}” will be removed for good.{% endblocktrans %}" data-confirm-title="{% blocktrans with type=model|type %}Delete this {{ type }}?{% endblocktrans %}" data-confirm-label="{% trans "Delete" %}">
+																		{% csrf_token %}
+																		<button type="submit" class="destructive-item">{% icon "trash" %}{% trans "Delete" %}</button>
+																	</form>
+																{% endif %}
+															{% endwith %}
+														{% endblock row-buttons-items %}
+													</div>
+												</div>
+											</div>
+										{% endblock row-buttons %}
+									</td>
+								</tr>
+							{% endwith %}
+						{% endblock table-row %}
+					{% empty %}
+						{% block table-row-empty %}
+							<tr>
+								<td colspan="{% block empty-row-colspan %}2{% endblock %}" class="empty-state">
+									{% if create %}
+										{% blocktrans with types=model|types type=model|type %}No {{ types }} yet. <a href="{{ create }}">Add the first {{ type }}</a>.{% endblocktrans %}
+									{% else %}
+										{% blocktrans with types=model|types %}No {{ types }} yet.{% endblocktrans %}
+									{% endif %}
+								</td>
+							</tr>
+						{% endblock table-row-empty %}
+					{% endfor %}
+				{% endwith %}
+			</tbody>
+		</table>
+	</div>
+{% endblock table %}
+
+{% block pagination %}
+	{% admin_pagination %}
+{% endblock pagination %}

@@ -16,6 +16,7 @@ from touchtechnology.admin.branding import (
     brand_from,
     get_brand,
 )
+from touchtechnology.admin.tests.shells import per_shell
 from touchtechnology.common.tests import factories
 
 
@@ -182,6 +183,7 @@ class DemoBrandTests(TestCase):
                 self.assertEqual(set(brand.colours), set(COLOUR_KEYS))
 
 
+@per_shell
 class ShellTests(TestCase):
     def setUp(self):
         super().setUp()
@@ -195,10 +197,12 @@ class ShellTests(TestCase):
                 "<style>:root{--brand-primary:#275d8b;--brand-secondary:#e8862a;"
                 "--brand-success:#2a8a5c;--brand-warning:#d9a21b;"
                 "--brand-danger:#b8322f;}</style>",
-                html=True,
             )
             self.assertResponseContains(
-                '<img src="/static/img/logo.png" alt="Administration">', html=True
+                self.by_shell(
+                    workbook='<img class="wb-brand-logo" src="/static/img/logo.png" alt="">',
+                    explorer='<img src="/static/img/logo.png" alt="Administration">',
+                ),
             )
 
     @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND={"logo": None})
@@ -206,7 +210,11 @@ class ShellTests(TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:index")
             self.assertResponseContains(
-                '<span class="navbar-brand-text">Administration</span>', html=True
+                self.by_shell(
+                    workbook='<a class="wb-brand" href="/admin/">'
+                    '<span class="wb-brand-name">Administration</span></a>',
+                    explorer='<span class="brand-name">Administration</span>',
+                ),
             )
 
     @override_settings(
@@ -219,7 +227,12 @@ class ShellTests(TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:index")
             self.assertResponseContains(
-                '<img src="/static/img/harbour.png" alt="Harbour Touch">', html=True
+                self.by_shell(
+                    workbook='<a class="wb-brand" href="/admin/">'
+                    '<img class="wb-brand-logo" src="/static/img/harbour.png" alt="">'
+                    '<span class="wb-brand-name">Harbour Touch</span></a>',
+                    explorer='<img src="/static/img/harbour.png" alt="Harbour Touch">',
+                ),
             )
 
     @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=None)
@@ -230,14 +243,24 @@ class ShellTests(TestCase):
         with self.settings(TEMPLATES=templates), self.login(self.superuser):
             self.get_check_200("admin:index")
             self.assertResponseContains(
-                '<img src="/static/img/logo.png" alt="Administration">', html=True
+                self.by_shell(
+                    workbook='<a class="wb-brand" href="/admin/">'
+                    '<img class="wb-brand-logo" src="/static/img/logo.png" alt="">'
+                    '<span class="wb-brand-name">Administration</span></a>',
+                    explorer='<img src="/static/img/logo.png" alt="Administration">',
+                ),
             )
 
     @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=None)
     def test_title_is_the_brand_name(self):
         with self.login(self.superuser):
             self.get_check_200("admin:index")
-            self.assertResponseContains("<title>Administration</title>", html=True)
+            self.assertResponseContains(
+                self.by_shell(
+                    workbook="<title>Home &middot; Administration</title>",
+                    explorer="<title>Administration</title>",
+                ),
+            )
 
     @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=counted_brand)
     def test_callable_brand_is_called_once_across_render_and_processor(self):

@@ -12,6 +12,8 @@ from django.test import override_settings
 from django.urls import reverse
 from test_plus import TestCase
 
+from touchtechnology.admin.shells import DEFAULT_SHELL, get_shell
+from touchtechnology.admin.tests.shells import by_shell
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.admin import SCORECARD_PDF_WAIT
 from tournamentcontrol.competition.tasks import (
@@ -65,7 +67,7 @@ class ScorecardTestCase(TestCase):
         with exactly the given keyword arguments.
         """
         self.prince.assert_called_once()
-        self.assertIn("<html>", self.prince.call_args.args[0])
+        self.assertIn("<html", self.prince.call_args.args[0])
         self.assertEqual(self.prince.call_args.kwargs, kwargs)
 
     def assertRedirectsToAsyncResult(self):
@@ -141,7 +143,7 @@ class DateScorecardTests(ScorecardTestCase):
                 "html",
             )
         self.response_200()
-        self.assertIn("<html>", self.last_response.content.decode("utf8"))
+        self.assertIn("<html", self.last_response.content.decode("utf8"))
         self.prince.assert_not_called()
 
     def test_login_required(self):
@@ -190,7 +192,7 @@ class StageScorecardTests(ScorecardTestCase):
                 "html",
             )
         self.response_200()
-        self.assertIn("<html>", self.last_response.content.decode("utf8"))
+        self.assertIn("<html", self.last_response.content.decode("utf8"))
         self.prince.assert_not_called()
 
     def test_login_required(self):
@@ -241,7 +243,11 @@ class AsyncResultViewTests(ScorecardTestCase):
         self.response_200()
         self.assertResponseHeaders({"Refresh": str(SCORECARD_PDF_WAIT)})
         self.assertResponseContains(
-            "<p>Your scorecards will finish generating shortly.</p>"
+            by_shell(
+                workbook='<p class="wb-pane-loading">'
+                "Your scorecards will finish generating shortly.</p>",
+                explorer="<p>Your scorecards will finish generating shortly.</p>",
+            )
         )
         self.assertNoAsyncResult()
 
@@ -276,13 +282,40 @@ class AsyncResultViewTests(ScorecardTestCase):
         self.response_200()
         self.assertResponseHeaders({"Refresh": None})
         self.assertResponseContains(
-            '<div class="alert alert-danger alert-dismissable">'
-            '<button type="button" class="close" data-dismiss="alert" '
-            'aria-hidden="true">&#215;</button>'
-            "The PDF service didn&#x27;t respond, so your PDF could not be "
-            "generated. Please try again.</div>"
+            by_shell(
+                workbook=(
+                    '<p class="wb-message wb-message-error">'
+                    '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+                    '<use href="/static/touchtechnology/admin/workbook/icons.svg#circle-alert">'
+                    "</use></svg><span>The PDF service didn&#x27;t respond, so your "
+                    "PDF could not be generated. Please try again.</span></p>"
+                ),
+                explorer=(
+                    '<div class="message message-error">'
+                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/explorer/img/icons.svg#alert"></use></svg>'
+                    "<p>The PDF service didn&#x27;t respond, so your PDF could not be "
+                    "generated. Please try again.</p>"
+                    '<button type="button" class="message-close">'
+                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/explorer/img/icons.svg#x"></use></svg>'
+                    '<span class="visually-hidden">Dismiss</span></button></div>'
+                ),
+            )
         )
-        self.assertResponseContains(f'<a href="{self.start_again()}">Start again</a>')
+        self.assertResponseContains(
+            by_shell(
+                workbook=(
+                    f'<a class="wb-button wb-button-primary" href="{self.start_again()}">'
+                    '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+                    '<use href="/static/touchtechnology/admin/workbook/icons.svg#refresh-cw">'
+                    "</use></svg>Start again</a>"
+                ),
+                explorer=(
+                    f'<a class="button primary" href="{self.start_again()}">'
+                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/explorer/img/icons.svg#refresh"></use></svg>'
+                    "<span>Try again</span></a>"
+                ),
+            )
+        )
         self.assertNoAsyncResult()
 
     def test_revoked(self):
@@ -384,7 +417,11 @@ class GeneratePdfScorecardsTaskTests(ScorecardTestCase):
     (including the tenant specific ones) so a signature change is caught.
     """
 
-    templates = ("tournamentcontrol/competition/admin/scorecards.html",)
+    templates = tuple(
+        get_shell(DEFAULT_SHELL).names(
+            "tournamentcontrol/competition/admin/scorecards.html"
+        )
+    )
 
     def test_stage_keyword_arguments(self):
         render = self.capture_context()
@@ -485,7 +522,11 @@ class PdfServiceRetryTests(TestCase):
     these tests turn propagation off and inspect the final result instead.
     """
 
-    templates = ("tournamentcontrol/competition/admin/scorecards.html",)
+    templates = tuple(
+        get_shell(DEFAULT_SHELL).names(
+            "tournamentcontrol/competition/admin/scorecards.html"
+        )
+    )
 
     def setUp(self):
         super().setUp()

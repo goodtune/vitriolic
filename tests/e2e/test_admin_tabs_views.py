@@ -10,12 +10,14 @@ the most the club and person pages show at once.
 """
 
 import datetime
+import re
 from urllib.parse import urljoin
 
 import pytest
 from playwright.sync_api import Page, expect
 
 from tests.e2e.admin_tabs import assert_same_in_both_modes, set_mode, show_tab
+from tests.e2e.shells import by_shell, pane_id
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.content.models import Placeholder
 from touchtechnology.content.tests.factories import RedirectFactory
@@ -187,33 +189,33 @@ def edit_url(live_server, obj):
 # What some tabs must list, so a tab that is empty in both modes still fails.
 LISTED = {
     "competition": {
-        "seasons-tab": ["season"],
-        "club_roles-tab": ["club_role"],
-        "team_roles-tab": ["team_role"],
+        pane_id("seasons"): ["season"],
+        pane_id("club_roles"): ["club_role"],
+        pane_id("team_roles"): ["team_role"],
     },
     "season": {
-        "exclusions-tab": ["season_exclusion"],
-        "divisions-tab": ["division"],
-        "venues-tab": ["venue"],
-        "timeslots-tab": ["timeslot"],
-        "referees-tab": ["season_referee"],
-        "live_stream_events-tab": ["live_stream_event"],
-        "live_stream_keys-tab": ["live_stream_key"],
+        pane_id("exclusions"): ["season_exclusion"],
+        pane_id("divisions"): ["division"],
+        pane_id("venues"): ["venue"],
+        pane_id("timeslots"): ["timeslot"],
+        pane_id("referees"): ["season_referee"],
+        pane_id("live_stream_events"): ["live_stream_event"],
+        pane_id("live_stream_keys"): ["live_stream_key"],
     },
-    "venue": {"grounds-tab": ["ground"]},
+    "venue": {pane_id("grounds"): ["ground"]},
     "division": {
-        "teams-tab": ["team"],
-        "stages-tab": ["stage"],
-        "exclusions-tab": ["division_exclusion"],
+        pane_id("teams"): ["team"],
+        pane_id("stages"): ["stage"],
+        pane_id("exclusions"): ["division_exclusion"],
     },
     "stage": {
-        "pools-tab": ["pool"],
-        "undecided_teams-tab": ["undecided_team"],
-        "matches-tab": ["match"],
+        pane_id("pools"): ["pool"],
+        pane_id("undecided_teams"): ["undecided_team"],
+        pane_id("matches"): ["match"],
     },
-    "team": {"people-tab": ["team_association"]},
-    "club": {"members-tab": ["person"]},
-    "article": {"translations-tab": ["translation"]},
+    "team": {pane_id("people"): ["team_association"]},
+    "club": {pane_id("members"): ["person"]},
+    "article": {pane_id("translations"): ["translation"]},
 }
 
 
@@ -231,17 +233,33 @@ def test_every_tab_lists_the_same_in_both_modes(
 
 @pytest.mark.parametrize("htmx", [False, True], ids=["plain", "htmx"])
 @pytest.mark.parametrize(
-    "name,tab_id", [("club", "members-tab"), ("person", "statistics-tab")]
+    "name,tab_id", [("club", pane_id("members")), ("person", pane_id("statistics"))]
 )
 def test_a_tab_list_can_be_searched_and_sorted(
     authenticated_page: Page, live_server, settings, site, name, tab_id, htmx
 ):
-    """The club and person pages turn their lists into DataTables."""
+    """
+    The lists of a club's people and of a person's statistics sort by any of
+    their columns, and a long list filters as you type.
+    """
     set_mode(settings, htmx)
     page = authenticated_page
     page.goto(edit_url(live_server, site[name]))
     pane = show_tab(page, tab_id)
-    expect(pane.locator(".dataTables_filter input")).to_be_visible()
+    search = pane.get_by_role(
+        "searchbox", name=re.compile(by_shell(workbook="", explorer="^Filter"))
+    )
+    expect(search).to_be_visible()
+    # A column sorts once there is more than one row to put in order.
+    if pane.locator("tbody tr").count() > 1:
+        pane.locator(
+            by_shell(
+                workbook="thead th button.wb-sort", explorer="thead th button.sort"
+            )
+        ).first.click()
+        expect(pane.locator("thead th[aria-sort]")).to_have_count(1)
+        search.fill("zzz-nobody")
+        expect(pane.locator("tbody tr:visible")).to_have_count(0)
 
 
 def test_choosing_a_club_names_the_team(

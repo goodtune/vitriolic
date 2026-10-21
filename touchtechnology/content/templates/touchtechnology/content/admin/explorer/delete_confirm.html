@@ -1,0 +1,24 @@
+{% extends "touchtechnology/admin/explorer/base.html" %}
+{% load i18n common admin admin_explorer %}
+
+{% block page_title %}{% with type=object|type %}{% blocktrans %}Delete this {{ type }}?{% endblocktrans %}{% endwith %}{% endblock %}
+{% block page_kind %}{{ object }}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "trash" %}</span>{% endblock %}
+
+{% block content %}
+	{% with type=object|type %}
+		{% if object.is_leaf_node %}
+			<p>{% blocktrans %}The {{ type }} <strong>{{ object }}</strong> will be removed from the site for good.{% endblocktrans %}</p>
+			<form action="" method="post" class="button-row">
+				{% csrf_token %}
+				<button type="submit" class="button destructive">{% icon "trash" %}<span>{% trans "Delete" %}</span></button>
+				{% block cancel_button %}
+					<a href="{% block cancel_url %}{% url 'admin:content:index' %}{% if object.parent %}?r={{ object.parent.pk }}{% endif %}{% endblock %}" class="button">{% trans "Cancel" %}</a>
+				{% endblock %}
+			</form>
+		{% else %}
+			<p class="notice">{% blocktrans %}The {{ type }} <strong>{{ object }}</strong> has pages inside it. Move or delete them first.{% endblocktrans %}</p>
+			<p><a href="{% url 'admin:content:index' %}{% if object.parent %}?r={{ object.parent.pk }}{% endif %}" class="button">{% trans "Cancel" %}</a></p>
+		{% endif %}
+	{% endwith %}
+{% endblock %}

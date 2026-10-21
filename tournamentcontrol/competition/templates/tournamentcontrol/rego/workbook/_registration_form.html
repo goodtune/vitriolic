@@ -1,0 +1,78 @@
+{% extends "touchtechnology/admin/workbook/print.html" %}
+{% load static common content admin %}
+
+{% block title %}Registration Forms - {{ competition.title }} {{ season.title }} ({{ club.title }}){% endblock %}
+
+{% block extracss %}
+	<style>
+		@page { size: A4 landscape; margin: 1cm 1cm 3cm; }
+		.rf-team, .rf-division { font-family: "Bricolage Grotesque", sans-serif; font-size: 1.4rem; font-weight: 800; }
+		.rf-division { break-before: page; }
+		.logos img { max-height: 3rem; width: auto; }
+		.staff th { vertical-align: top; width: 4cm; }
+		.players td:last-child { width: 6cm; }
+	</style>
+{% endblock %}
+
+{% block back %}<a class="p-button" href="{% url 'admin:fixja:club:edit' club.pk %}">Back to the club</a>{% endblock %}
+
+{% block content %}
+<div class="p-sheet">
+{% chunk "registration-form-disclaimer" %}
+
+{% for team, data in teams.items %}
+	<div class="rf-division division">{{ team.division.title }}</div>
+
+	<div class="rf-team team">{{ team.title }}</div>
+
+	{% block logos_outer %}
+		<div class="logos">
+			{% block logos_img %}
+				{% if brand.logo %}<img src="{{ brand.logo|brand_logo_url }}" alt="{{ brand.name }}">{% endif %}
+			{% endblock %}
+		</div>
+	{% endblock %}
+
+	<table class="p-table staff">
+		<tbody>
+			{% for role, people in data.staff.items %}
+				{% for first_name, last_name, date_of_birth, email in people %}
+					<tr>
+						{% if forloop.first %}
+							<th rowspan="{{ people|length }}">{{ role }}</th>
+						{% endif %}
+						<td>{{ first_name|htmlentities }} {{ last_name|htmlentities }}</td>
+					</tr>
+				{% endfor %}
+			{% endfor %}
+		</tbody>
+	</table>
+
+	<table class="p-table players">
+		<thead>
+			<tr>
+				<th>No.</th>
+				<th>First name</th>
+				<th>Last name</th>
+				<th>Date of birth</th>
+				<th>Email address</th>
+				<th>Signature</th>
+			</tr>
+		</thead>
+
+		<tbody>
+			{% for number, first_name, last_name, date_of_birth, email in data.players %}
+				<tr>
+					<td>{{ number }}</td>
+					<td>{{ first_name|htmlentities }}</td>
+					<td>{{ last_name|htmlentities }}</td>
+					<td>{{ date_of_birth|date:"d/m/Y" }}</td>
+					<td>{{ email }}</td>
+					<td class="signature"></td>
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+{% endfor %}
+</div>
+{% endblock %}

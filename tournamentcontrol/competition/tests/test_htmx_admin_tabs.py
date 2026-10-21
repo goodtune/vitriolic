@@ -2,6 +2,8 @@ from django.test import override_settings
 from django.urls import reverse
 from test_plus import TestCase
 
+from touchtechnology.admin.sites import site
+from touchtechnology.admin.tests.shells import by_shell
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.tests import factories
 
@@ -57,7 +59,7 @@ class HtmxCompetitionTabTests(TestCase):
             self.response_200()
             self.assertTemplateUsed(
                 self.last_response,
-                "touchtechnology/admin/_htmx_tab_empty.html",
+                site.shell.template("_htmx_tab_empty.html"),
             )
 
     def test_competition_htmx_tab_ignored_without_flag(self):
@@ -71,7 +73,7 @@ class HtmxCompetitionTabTests(TestCase):
             )
             self.response_200()
             self.assertTemplateUsed(
-                self.last_response, "touchtechnology/admin/edit.html"
+                self.last_response, site.shell.template("edit.html")
             )
 
     @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
@@ -85,7 +87,7 @@ class HtmxCompetitionTabTests(TestCase):
             )
             self.response_200()
             self.assertTemplateUsed(
-                self.last_response, "touchtechnology/admin/edit.html"
+                self.last_response, site.shell.template("edit.html")
             )
 
 
@@ -115,7 +117,7 @@ class HtmxSeasonTabTests(TestCase):
             )
             self.response_200()
             self.assertTemplateNotUsed(
-                self.last_response, "touchtechnology/admin/edit.html"
+                self.last_response, site.shell.template("edit.html")
             )
 
     @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
@@ -131,7 +133,7 @@ class HtmxSeasonTabTests(TestCase):
             )
             self.response_200()
             self.assertTemplateNotUsed(
-                self.last_response, "touchtechnology/admin/edit.html"
+                self.last_response, site.shell.template("edit.html")
             )
 
     @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
@@ -147,7 +149,7 @@ class HtmxSeasonTabTests(TestCase):
             )
             self.response_200()
             self.assertTemplateNotUsed(
-                self.last_response, "touchtechnology/admin/edit.html"
+                self.last_response, site.shell.template("edit.html")
             )
 
     def test_season_edit_traditional_mode(self):
@@ -196,7 +198,15 @@ class HtmxTabPaginationTests(TestCase):
 
     def _member_link(self, member):
         url = reverse("admin:fixja:club:person:edit", args=[self.club.pk, member.pk])
-        return f'<a href="{url}">{member}</a>'
+        return by_shell(
+            workbook=f'<a href="{url}">{member}</a>',
+            explorer=(
+                f'<a href="{url}">'
+                '<svg class="icon" aria-hidden="true" focusable="false">'
+                '<use href="/static/touchtechnology/admin/explorer/img/icons.svg#person">'
+                f"</use></svg><span>{member}</span></a>"
+            ),
+        )
 
     def _get_club_tab(self, **data):
         with self.login(self.superuser):
@@ -210,29 +220,37 @@ class HtmxTabPaginationTests(TestCase):
 
     def test_first_page_of_members(self):
         self._get_club_tab()
-        self.assertResponseContains(self._member_link(self.members[0]), html=True)
-        self.assertResponseContains(self._member_link(self.members[1]), html=True)
-        self.assertResponseNotContains(self._member_link(self.members[2]), html=True)
+        self.assertResponseContains(self._member_link(self.members[0]))
+        self.assertResponseContains(self._member_link(self.members[1]))
+        self.assertResponseNotContains(self._member_link(self.members[2]))
 
     def test_second_page_of_members(self):
         self._get_club_tab(page=2)
-        self.assertResponseContains(self._member_link(self.members[2]), html=True)
-        self.assertResponseContains(self._member_link(self.members[3]), html=True)
-        self.assertResponseNotContains(self._member_link(self.members[1]), html=True)
+        self.assertResponseContains(self._member_link(self.members[2]))
+        self.assertResponseContains(self._member_link(self.members[3]))
+        self.assertResponseNotContains(self._member_link(self.members[1]))
 
     def test_page_beyond_the_last_is_the_last(self):
         self._get_club_tab(page=99)
-        self.assertResponseContains(self._member_link(self.members[4]), html=True)
-        self.assertResponseNotContains(self._member_link(self.members[3]), html=True)
+        self.assertResponseContains(self._member_link(self.members[4]))
+        self.assertResponseNotContains(self._member_link(self.members[3]))
 
     def test_members_link_to_the_other_pages_of_the_tab(self):
         self._get_club_tab()
         for number in (2, 3):
             href = f"?_htmx_tab=members&page={number}"
             self.assertResponseContains(
-                f'<a href="{href}" hx-get="{href}" hx-target="#members-tab" '
-                f'hx-swap="innerHTML" hx-push-url="false">{number}</a>',
-                html=True,
+                by_shell(
+                    workbook=(
+                        f'<a href="{href}" hx-get="{href}" hx-target="#members-pane" '
+                        f'hx-swap="innerHTML" hx-push-url="false" '
+                        f'aria-label="Page {number}">{number}</a>'
+                    ),
+                    explorer=(
+                        f'<a href="{href}" hx-get="{href}" hx-target="#members-tab" '
+                        f'hx-swap="innerHTML" hx-push-url="false">{number}</a>'
+                    ),
+                ),
             )
 
     def test_only_the_links_to_other_pages_replace_the_tab_pane(self):
@@ -243,7 +261,7 @@ class HtmxTabPaginationTests(TestCase):
         """
         self._get_club_tab()
         self.assertResponseNotContains("hx-boost")
-        self.assertResponseContains(self._member_link(self.members[0]), html=True)
+        self.assertResponseContains(self._member_link(self.members[0]))
 
     def test_pages_are_not_pushed_onto_the_history(self):
         "The pages of a tab are not recorded in the history."
@@ -286,9 +304,19 @@ class HtmxTabAddLinkTests(TestCase):
 
     def _add_link(self, url_name, *args, type_name):
         url = reverse(url_name, args=args)
-        return (
-            f'<a href="{url}" title="Add {type_name}" role="button">'
-            '<i class="fa fa-plus-square"></i></a>'
+        return by_shell(
+            workbook=(
+                f'<a class="wb-button wb-button-primary wb-button-small" href="{url}">'
+                '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+                '<use href="/static/touchtechnology/admin/workbook/icons.svg#plus"></use>'
+                f"</svg>Add {type_name}</a>"
+            ),
+            explorer=(
+                f'<a class="button primary compact" href="{url}">'
+                '<svg class="icon" aria-hidden="true" focusable="false">'
+                '<use href="/static/touchtechnology/admin/explorer/img/icons.svg#plus">'
+                f"</use></svg><span>Add {type_name}</span></a>"
+            ),
         )
 
     def test_club_people_tab_traditional_mode(self):
@@ -299,7 +327,6 @@ class HtmxTabAddLinkTests(TestCase):
             self._add_link(
                 "admin:fixja:club:person:add", self.club.pk, type_name="person"
             ),
-            html=True,
         )
 
     @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
@@ -316,7 +343,6 @@ class HtmxTabAddLinkTests(TestCase):
             self._add_link(
                 "admin:fixja:club:person:add", self.club.pk, type_name="person"
             ),
-            html=True,
         )
 
     @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
@@ -337,5 +363,4 @@ class HtmxTabAddLinkTests(TestCase):
                 self.season.pk,
                 type_name="division",
             ),
-            html=True,
         )

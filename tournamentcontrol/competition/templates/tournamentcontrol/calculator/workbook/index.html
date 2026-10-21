@@ -1,0 +1,67 @@
+{% extends "touchtechnology/admin/workbook/print.html" %}
+{% load i18n common mathfilters %}
+
+{% block title %}{{ node|default:"Model Draw Generator" }}{% endblock %}
+
+{% block extracss %}
+	<style>
+		.c-layout { display: grid; gap: 1.25rem; align-items: start; }
+		@media (min-width: 60rem) { .c-layout { grid-template-columns: minmax(0, 1fr) 20rem; } }
+		.c-form { display: grid; gap: 1rem; }
+		.c-form .wb-field { display: grid; gap: 0.3rem; }
+		.c-form .wb-label { font-weight: 700; }
+		.c-form input, .c-form select { width: 100%; max-width: 24rem; min-height: 2.6rem; padding: 0.4rem 0.7rem; border: 1.5px solid var(--p-soft); border-radius: 10px; font: inherit; }
+		.c-form .wb-help { margin: 0; color: var(--p-soft); font-size: 0.9rem; }
+		.c-form .wb-optional { color: var(--p-soft); font-weight: 400; font-size: 0.85rem; margin-left: 0.4rem; }
+		.c-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+		.c-primary { background: var(--p-accent); border-color: var(--p-accent); color: #fff; }
+		.c-cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
+		.c-cards ul { margin: 0; padding: 0; list-style: none; }
+		.c-cards li { display: flex; justify-content: space-between; padding: 0.3rem 0; border-bottom: 1px solid var(--p-line); }
+	</style>
+{% endblock %}
+
+{% block content %}
+	<h1>{{ node|default:"Model Draw Generator" }}</h1>
+	<div class="c-layout">
+		<form class="p-sheet c-form" action="" method="get">
+			{% with field_template="touchtechnology/admin/workbook/templatetags/field.html" %}
+				{% for f in form %}{% field f %}{% endfor %}
+			{% endwith %}
+			<div class="c-actions">
+				<button type="submit" class="p-button c-primary">{% trans "Calculate" %}</button>
+				<a class="p-button" href="{% block switch-url %}{% url 'calculator:division' %}{% endblock %}">{% block switch %}Live data mode{% endblock %}</a>
+			</div>
+		</form>
+		<aside class="p-sheet">
+			<p>Using this tool you can produce a <em>model</em> draw, designed to be fair and provide best value to participants.</p>
+			<p>You can always tweak the to suit your individual needs, however this will give you a great base from which to start.</p>
+		</aside>
+	</div>
+
+	{% if data %}
+		<h2>{% trans "Pools" %}</h2>
+		<div class="c-cards">
+			{% for pool in data.pools %}
+				<section class="p-sheet">
+					<h3>{% blocktrans with n=forloop.counter %}Pool {{ n }}{% endblocktrans %}</h3>
+					<ul>{% for team in pool %}<li><span>{{ team }}</span>{% if team.order %}<strong>{{ team.order }}</strong>{% endif %}</li>{% endfor %}</ul>
+				</section>
+			{% endfor %}
+		</div>
+
+		{% if form.get_absolute_url %}
+			<p class="p-sheet">This is an actual division, you may like to <a href="{{ form.get_absolute_url }}">see how it <em>was</em> played</a> out.</p>
+		{% endif %}
+
+		<h2>{% trans "Draw formats" %}</h2>
+		<div class="c-cards">
+			{% for format in data.draw_formats %}
+				<section class="p-sheet">
+					<h3>{{ format.label }}</h3>
+					<p>{% if forloop.last %}{% for round in format.format %}{{ round|stringformat:"s"|linebreaksbr }}<br>{% endfor %}{% else %}{{ format.format|linebreaksbr }}{% endif %}</p>
+				</section>
+			{% endfor %}
+		</div>
+	{% endif %}
+{% endblock %}

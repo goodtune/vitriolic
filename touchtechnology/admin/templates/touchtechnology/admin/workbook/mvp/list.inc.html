@@ -1,0 +1,121 @@
+{% load i18n common admin_workbook %}{% comment %}
+	A list of objects: in a tab of their parent's page (``manager`` is set,
+	and the list draws its own heading with the button that adds another) or
+	on a list page of its own.
+
+	Blocks a list may fill:
+	  heading, actions     the heading of a tab's list and its buttons
+	                       (include "touchtechnology/admin/workbook/_add.html" with url=... for Add)
+	  modal                dialogs the list needs (such as "Add several")
+	  table-headings       <th> cells (the title is the first)
+	  filter               the box that filters a long list in a tab (include
+	                       "touchtechnology/admin/workbook/_filter.html" to always offer it)
+	  table-head-actions   the heading of the actions column (empty when rows have none)
+	  table-columns        <td> cells (the first, class "wb-title-cell", links the object)
+	  row-buttons-extra    buttons always on show in a row (Build, Undo, Up...)
+	  row-buttons-items    the row's menu: <li><a href="...">Label</a></li>
+	  row-buttons-delete   the menu's last item, Delete (empty it for none)
+	  delete-data-title    how the object is named when asking to delete it
+	  table-row-empty      what an empty list says
+{% endcomment %}{% firstof create|resolved create_url as create_link %}{% with type=model|type %}
+{% if manager %}
+	{% block heading %}
+		<div class="wb-sheet-head">
+			<h2>{{ manager.all|types|capfirst }}</h2>
+			<div class="wb-actions">
+				{% block actions %}
+					{% if create_link %}{% include "touchtechnology/admin/workbook/_add.html" with url=create_link %}{% endif %}
+				{% endblock actions %}
+			</div>
+		</div>
+	{% endblock %}
+{% endif %}
+
+{% block modal %}{% endblock modal %}
+
+{% block table %}
+{% block filter %}
+	{% if manager and object_list|length > 8 %}{% include "touchtechnology/admin/workbook/_filter.html" %}{% endif %}
+{% endblock filter %}
+<div class="wb-table-wrap">
+<table class="wb-table wb-table-cards" data-wb-sortable>
+	<thead>
+		{% block table-head %}
+		<tr>
+			{% block table-headings %}
+				<th scope="col">{% trans "Title" %}</th>
+			{% endblock %}
+			{% block table-head-actions %}<th scope="col"><span class="wb-sr">{% trans "Actions" %}</span></th>{% endblock %}
+		</tr>
+		{% endblock table-head %}
+	</thead>
+	<tbody>
+		{% with checker=queryset|permchecker:user %}
+		{% for obj in object_list %}
+			{% block table-row %}
+				{% with object_perms=obj|checkperm:checker %}
+					<tr>
+						{% block table-columns %}
+							<td class="wb-title-cell">
+								{% if change_perm in object_perms and obj.urls.edit %}
+									<a href="{{ obj.urls.edit }}">{{ obj }}</a>
+								{% else %}
+									<span>{{ obj }}</span>
+								{% endif %}
+							</td>
+						{% endblock table-columns %}
+
+						<td class="wb-row-actions">
+							{% block row-buttons %}
+								<div class="wb-row-buttons">
+									{% block row-buttons-extra %}{% endblock %}
+									<button type="button" class="wb-button wb-button-quiet wb-button-icon wb-button-small wb-menu-button" popovertarget="wbm-{{ type|slugify }}-{{ obj.pk|slugify }}" aria-expanded="false" aria-label="{% blocktrans with name=obj %}More actions for {{ name }}{% endblocktrans %}">{% icon "ellipsis" %}</button>
+									<div class="wb-menu" popover id="wbm-{{ type|slugify }}-{{ obj.pk|slugify }}">
+										<ul>
+											{% block row-buttons-items %}
+												{% if obj.urls.detail %}
+													<li><a href="{{ obj.urls.detail }}">{% icon "eye" %}{% trans "View" %}</a></li>
+												{% endif %}
+												{% if obj.urls.edit and change_perm in object_perms %}
+													<li><a href="{{ obj.urls.edit }}">{% icon "pencil" %}{% trans "Edit" %}</a></li>
+												{% endif %}
+												{% if obj.urls.perms and add_perm in object_perms %}
+													<li><a href="{{ obj.urls.perms }}">{% icon "lock" %}{% trans "Security" %}</a></li>
+												{% endif %}
+											{% endblock row-buttons-items %}
+											{% block row-buttons-delete %}
+												{% if obj.urls.delete and delete_perm in object_perms %}
+													<li class="wb-menu-last">{% include "touchtechnology/admin/workbook/_delete.html" with action=obj.urls.delete %}</li>
+												{% endif %}
+											{% endblock row-buttons-delete %}
+										</ul>
+									</div>
+								</div>
+							{% endblock %}
+						</td>
+					</tr>
+				{% endwith %}
+			{% endblock table-row %}
+		{% empty %}
+			{% block table-row-empty %}
+				<tr class="wb-table-empty">
+					<td colspan="{% block empty-row-colspan %}2{% endblock %}">
+						{% if create_link %}
+							{% blocktrans %}No {{ type }} yet.{% endblocktrans %} <a href="{{ create_link }}">{% blocktrans %}Add the first {{ type }}{% endblocktrans %}</a>
+						{% else %}
+							{% blocktrans with types=model|types %}There are no {{ types }}.{% endblocktrans %}
+						{% endif %}
+					</td>
+				</tr>
+			{% endblock table-row-empty %}
+		{% endfor %}
+		{% endwith %}
+	</tbody>
+</table>
+</div>
+{% endblock table %}
+
+{% block pagination %}
+	{% include "touchtechnology/admin/workbook/_pagination.html" %}
+{% endblock pagination %}
+{% endwith %}

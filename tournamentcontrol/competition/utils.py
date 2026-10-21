@@ -22,6 +22,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from PIL import Image
 
+from touchtechnology.admin.shells import DEFAULT_SHELL, get_shell
 from touchtechnology.common.prince import prince
 from tournamentcontrol.competition.draw.schemas import (
     MatchDescriptor,
@@ -597,7 +598,11 @@ def generate_fixture_grid(
         dates = season.matches.dates("date", "day")
 
     if templates is None:
-        templates = ["tournamentcontrol/competition/admin/grid.html"]
+        # The admin's callers name the templates of their own shell; this is for
+        # those that do not.
+        templates = get_shell(DEFAULT_SHELL).names(
+            "tournamentcontrol/competition/admin/grid.html"
+        )
 
     if extra_context is None:
         extra_context = {}
@@ -700,12 +705,8 @@ def convert_to_byes(team, from_date):
     """
     released = {"is_bye": True, "time": None, "datetime": None, "play_at": None}
     counted = Q(is_forfeit=True) | Q(is_bye=True, bye_processed=True)
-    home = team.home_games.filter(match_unplayed, date__gte=from_date).exclude(
-        counted
-    )
-    away = team.away_games.filter(match_unplayed, date__gte=from_date).exclude(
-        counted
-    )
+    home = team.home_games.filter(match_unplayed, date__gte=from_date).exclude(counted)
+    away = team.away_games.filter(match_unplayed, date__gte=from_date).exclude(counted)
     pks = list(home.values_list("pk", flat=True)) + list(
         away.values_list("pk", flat=True)
     )
@@ -928,11 +929,7 @@ def matches_timeline(matches_by_date):
         )
         for match in ordered:
             gap = None
-            if (
-                previous is not None
-                and match.datetime is not None
-                and not match.is_bye
-            ):
+            if previous is not None and match.datetime is not None and not match.is_bye:
                 gap = match.datetime - previous.datetime
             item = {
                 "match": match,
@@ -945,10 +942,7 @@ def matches_timeline(matches_by_date):
             if (
                 not next_found
                 and not match.is_bye
-                and (
-                    match.home_team_score is None
-                    or match.away_team_score is None
-                )
+                and (match.home_team_score is None or match.away_team_score is None)
             ):
                 item["is_next"] = True
                 next_found = True

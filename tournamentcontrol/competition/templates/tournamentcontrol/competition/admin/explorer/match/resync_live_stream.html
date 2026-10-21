@@ -1,0 +1,25 @@
+{% extends "touchtechnology/admin/explorer/form_page.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block page_title %}{% trans "Resync the live stream" %}{% endblock %}
+{% block page_kind %}{{ match }}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "video" %}</span>{% endblock %}
+
+{% block form-actions %}
+	<div class="form-buttons">
+		<a class="button" href="{{ cancel_url }}">{% trans "Cancel" %}</a>
+		<button type="submit" form="edit-form" class="button primary"{% if not match.external_identifier or not match.live_stream %} disabled{% endif %}>{% icon "refresh" %}<span>{% trans "Resync now" %}</span></button>
+	</div>
+{% endblock %}
+
+{% block form-body %}
+	<p>{% trans "Push the match's title, description and schedule to its YouTube broadcast, keeping the stream's address." %}</p>
+	{% if match.external_identifier %}
+		<dl class="facts">
+			<dt>{% trans "Match" %}</dt><dd>{{ match }}</dd>
+			<dt>{% trans "Broadcast" %}</dt><dd><code>{{ match.external_identifier }}</code></dd>
+		</dl>
+	{% else %}
+		<p class="notice">{% trans "This match has no broadcast yet, so there is nothing to resync." %}</p>
+	{% endif %}
+{% endblock %}

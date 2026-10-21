@@ -14,8 +14,11 @@ class AdminFormControlMixin(BootstrapFormControlMixin):
 
     Forms the admin builds dynamically derive from this rather than from the
     public site's mixin, so the admin can change how its forms behave without
-    changing the public forms.
+    changing the public forms. The admin's shells draw their controls
+    themselves and rely on no Bootstrap class, so this gives the widgets none.
     """
+
+    control_class = None
 
 
 class UserEditForm(UserMixin, ModelForm):

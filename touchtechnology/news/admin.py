@@ -65,6 +65,17 @@ class NewsAdminComponent(AdminComponent):
         ]
         return urlpatterns
 
+    def tasks(self, request):
+        return (
+            {
+                "label": _("Write a news article"),
+                "url": self.reverse("article:add"),
+                "note": _("Publish it now or later"),
+                "icon": "newspaper",
+                "priority": 20,
+            },
+        )
+
     def dropdowns(self):
         dl = (
             (_("Articles"), self.reverse("article:list"), "newspaper-o"),

@@ -12,7 +12,15 @@ permissions:
 
 jobs:
   e2e-tests:
+    name: e2e-tests (${{ matrix.shell }})
     runs-on: ubuntu-latest
+
+    # The admin is run in each of its shells; each gets its own screenshots,
+    # its own evidence comments and its own artifact.
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [workbook, explorer]
 
     steps:
     - name: Checkout code
@@ -25,9 +33,21 @@ jobs:
 
     - name: Run E2E tests via tox
       env:
-        SCREENSHOTS_DIR: tests/screenshots
+        ADMIN_SHELL: ${{ matrix.shell }}
+        # Absolute: tox runs pytest from tests/, so a relative path would land
+        # under tests/tests/.
+        SCREENSHOTS_DIR: ${{ github.workspace }}/tests/screenshots/${{ matrix.shell }}
       run: |
         uvx tox -e e2e
+
+    - name: Upload screenshots
+      uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: e2e-screenshots-${{ matrix.shell }}
+        path: tests/screenshots/${{ matrix.shell }}/
+        if-no-files-found: ignore
+        retention-days: 14
 
     # Screenshots taken by the E2E tests are posted on the pull request as
     # evidence. `gh pr comment --attach` (GitHub CLI 2.99+) uploads each
@@ -66,11 +86,12 @@ jobs:
         COMMENT_TOKEN: ${{ secrets.E2E_COMMENT_TOKEN }}
         GITHUB_TOKEN: ${{ github.token }}
         OUTCOME: ${{ job.status }}
-        MARKER: "<!-- e2e-screenshots -->"
+        SHELL_NAME: ${{ matrix.shell }}
+        MARKER: "<!-- e2e-screenshots:${{ matrix.shell }} -->"
         PR: ${{ github.event.pull_request.number }}
       run: |
         shopt -s nullglob
-        shots=(tests/screenshots/*.png)
+        shots=(tests/screenshots/${SHELL_NAME}/*.png)
 
         # `gh pr comment --attach` takes at most 50 files, so a run with more
         # screenshots is posted as several comments of up to 40 each.
@@ -100,9 +121,9 @@ jobs:
           {
             echo "$MARKER"
             if [ "$parts" -gt 1 ]; then
-              echo "## E2E screenshots ($((part + 1)) of ${parts})"
+              echo "## E2E screenshots, ${SHELL_NAME} shell ($((part + 1)) of ${parts})"
             else
-              echo "## E2E screenshots"
+              echo "## E2E screenshots, ${SHELL_NAME} shell"
             fi
             echo
             echo "Run [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for ${{ github.event.pull_request.head.sha }}: **${OUTCOME}**"
@@ -130,7 +151,7 @@ jobs:
       uses: actions/upload-artifact@v7
       if: failure()
       with:
-        name: e2e-test-results
+        name: e2e-test-results-${{ matrix.shell }}
         path: |
           .tox/e2e/log/
           tests/test-results/

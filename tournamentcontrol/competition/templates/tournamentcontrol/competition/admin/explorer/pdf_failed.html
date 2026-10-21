@@ -1,0 +1,10 @@
+{% extends "touchtechnology/admin/explorer/base.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block page_title %}{% trans "The PDF was not made" %}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "alert" %}</span>{% endblock %}
+
+{% block content %}
+	<p>{% trans "The service that makes PDFs did not answer in time." %}</p>
+	<p><a class="button primary" href="{{ start_again }}">{% icon "refresh" %}<span>{% trans "Try again" %}</span></a></p>
+{% endblock %}

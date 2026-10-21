@@ -1,0 +1,27 @@
+{% load i18n admin admin_explorer %}
+<section class="card">
+	<h2>{% icon "print" %}{{ widget.verbose_name }}</h2>
+	<div class="table-wrap">
+		<table class="listing">
+			<thead>
+				<tr>
+					<th>{% trans "Division" %}</th>
+					<th>{% trans "Stage" %}</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for stage in stages %}
+					{% with competition=stage.division.season.competition season=stage.division.season division=stage.division %}
+						<tr>
+							<td>{{ division.title }}</td>
+							<td><a target="_blank" href="{% url 'admin:competition:competition:season:division:stage:scorecards' competition.pk season.pk division.pk stage.pk "pdf" %}">{{ stage.title }}</a></td>
+						</tr>
+					{% endwith %}
+				{% empty %}
+					<tr><td colspan="2" class="empty-state">{% trans "No score sheets are waiting to be printed." %}</td></tr>
+				{% endfor %}
+				<tr><td colspan="2"><a href="{% url 'admin:competition:scorecard-report' %}">{% icon "report" %} {% trans "All score sheet reports" %}</a></td></tr>
+			</tbody>
+		</table>
+	</div>
+</section>

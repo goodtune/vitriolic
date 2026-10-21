@@ -1,0 +1,16 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	<th>{% trans "Club" %}</th>
+	<th>{% trans "Abbreviation" %}</th>
+	<th class="num wide-only">{% trans "People" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td>{{ obj.abbreviation|default:"&ndash;" }}</td>
+	<td class="num wide-only">{{ obj.members.count }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}

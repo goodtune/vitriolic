@@ -61,10 +61,16 @@ FOLD_WIDTH = 1440
 LOCAL_SCHEMES = ("data", "blob", "about")
 
 
-def prepare_out(out: Path, name: str, brand: str, htmx_tabs: bool = False) -> None:
+def prepare_out(
+    out: Path,
+    name: str,
+    brand: str,
+    htmx_tabs: bool = False,
+    shell: str = "workbook",
+) -> None:
     """
     Make ``out`` ready for a run: create it, or clear what an earlier run of
-    the same name, brand and tab mode left. Anything else in it is not ours to
+    the same name, brand, shell and tab mode left. Anything else in it is not ours to
     delete.
     """
     out = Path(out)
@@ -76,13 +82,14 @@ def prepare_out(out: Path, name: str, brand: str, htmx_tabs: bool = False) -> No
         previous = Manifest.read(out / "manifest.json")
     except (OSError, ValueError, TypeError):
         previous = None
-    if previous is None or (previous.name, previous.brand, previous.htmx_tabs) != (
-        name,
-        brand,
-        htmx_tabs,
-    ):
+    if previous is None or (
+        previous.name,
+        previous.brand,
+        previous.shell,
+        previous.htmx_tabs,
+    ) != (name, brand, shell, htmx_tabs):
         raise SystemExit(
-            f"refusing to clear {out}: not a previous run of {name}/{brand}"
+            f"refusing to clear {out}: not a previous run of {name}/{brand}/{shell}"
             + (" with HTMX tabs" if htmx_tabs else "")
         )
     for entry in entries:
@@ -493,6 +500,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--base", required=True)
     parser.add_argument("--brand", required=True)
     parser.add_argument(
+        "--shell",
+        default="workbook",
+        choices=("workbook", "explorer"),
+        help="the shell the server wears; the run goes in <brand>-<shell>",
+    )
+    parser.add_argument(
         "--htmx-tabs",
         action="store_true",
         help="the server loads its tabs over HTMX; the run goes in <brand>-htmx",
@@ -543,25 +556,31 @@ def parse_only(text: str) -> list[str] | None:
     return names or None
 
 
-def run_directory(name: str, brand: str, htmx_tabs: bool) -> Path:
-    """Where a run of ``name`` goes: ``<brand>``, or ``<brand>-htmx`` for HTMX tabs."""
-    return paths_for(name)["runs"] / (brand + ("-htmx" if htmx_tabs else ""))
+def run_directory(name: str, brand: str, shell: str, htmx_tabs: bool) -> Path:
+    """
+    Where a run of ``name`` goes: ``<brand>-<shell>``, and ``<brand>-<shell>-htmx``
+    for HTMX tabs.
+    """
+    return paths_for(name)["runs"] / (
+        "%s-%s%s" % (brand, shell, "-htmx" if htmx_tabs else "")
+    )
 
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
     name = normalise(args.name)
-    out = args.out or run_directory(name, args.brand, args.htmx_tabs)
+    out = args.out or run_directory(name, args.brand, args.shell, args.htmx_tabs)
     widths = [int(w) for w in args.widths.split(",") if w]
 
     # Before anything else, so that a run which fails early leaves an empty
     # directory and its start manifest, never the pictures of an earlier run.
-    prepare_out(out, name, args.brand, args.htmx_tabs)
+    prepare_out(out, name, args.brand, args.htmx_tabs, args.shell)
     checkout = Path(__file__).resolve().parents[1]
     manifest_path = out / "manifest.json"
     manifest = Manifest(
         name=name,
         brand=args.brand,
+        shell=args.shell,
         base=args.base.rstrip("/"),
         started=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         widths=widths,

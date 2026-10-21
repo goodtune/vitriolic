@@ -1,0 +1,23 @@
+{% extends "touchtechnology/admin/workbook/mvp/list.inc.html" %}
+{% load i18n common admin_workbook %}
+
+{% block table-headings %}
+	<th scope="col">{% trans "Headline" %}</th>
+	<th scope="col">{% trans "Categories" %}</th>
+	<th scope="col">{% trans "Published" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td class="wb-title-cell">
+		{% if change_perm in object_perms %}<a href="{{ obj.urls.edit }}">{{ obj }}</a>{% else %}<span>{{ obj }}</span>{% endif %}
+	</td>
+	<td data-label="{% trans "Categories" %}">{% for label in obj.categories.all %}<span class="wb-badge">{{ label }}</span> {% empty %}–{% endfor %}</td>
+	<td data-label="{% trans "Published" %}">{% if obj.published %}{{ obj.published|date:"j M Y, H:i" }}{% else %}<span class="wb-badge wb-badge-warn">{% trans "Not yet" %}</span>{% endif %}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}
+
+{% block row-buttons-items %}
+	<li><a href="{{ obj.get_absolute_url }}" target="_blank" rel="noopener">{% icon "external-link" %}{% trans "View on the site" %}</a></li>
+	{{ block.super }}
+{% endblock row-buttons-items %}
