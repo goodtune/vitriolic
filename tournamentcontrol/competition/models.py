@@ -23,6 +23,7 @@ from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.http import Http404, HttpResponse
 from django.db.models import (
+    CheckConstraint,
     Count,
     DateField,
     DateTimeField,
@@ -1056,6 +1057,10 @@ class Division(
                 fields=["slug", "season"],
                 name="competition_division_unique_slug_season",
             ),
+            CheckConstraint(
+                condition=Q(color__regex=r"^#[0-9a-fA-F]{6}$"),
+                name="division_color_valid_hex",
+            ),
         ]
 
     def _get_admin_namespace(self):
@@ -1489,6 +1494,10 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
             UniqueConstraint(
                 fields=["slug", "division"],
                 name="competition_stage_unique_slug_division",
+            ),
+            CheckConstraint(
+                condition=Q(color__regex=r"^#[0-9a-fA-F]{6}$"),
+                name="stage_color_valid_hex",
             ),
         ]
 
