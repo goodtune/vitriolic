@@ -1,4 +1,5 @@
 from unittest import mock
+from urllib.parse import urlencode, urlunsplit
 
 from django.contrib.auth.models import Group
 from django.core.cache import cache
@@ -82,103 +83,120 @@ class SitemapNodeRestrictToGroupsTests(TestCase):
             title="Everyone Area", slug="everyone", parent=home, object=public
         )
 
+        # The names of the URLs for nodes only exist in the URL configuration
+        # the middleware builds for each request, so a node is requested by
+        # its own absolute URL.
+        cls.restricted_url = cls.restricted.get_absolute_url()
+        cls.public_url = cls.public.get_absolute_url()
+
+    def sign_in_url(self, path):
+        """Where the middleware sends a visitor to ``path`` to sign in."""
+        return urlunsplit(
+            ("", "", self.reverse("accounts:login"), urlencode({"next": path}), "")
+        )
+
     def test_anonymous_is_redirected_to_sign_in(self):
-        url = self.restricted.get_absolute_url()
-        sign_in = self.reverse("accounts:login")
+        self.get(self.restricted_url)
 
-        response = self.get(url)
+        self.assert_http_302_found(url=self.sign_in_url(self.restricted_url))
 
-        # ``assertRedirects`` goes on to fetch the sign in page, so the target
-        # of the redirect must exist and be served.
-        self.assertRedirects(response, "%s?next=%s" % (sign_in, url))
+    def test_anonymous_is_redirected_to_a_sign_in_page_that_is_served(self):
+        self.get(self.restricted_url)
+        self.get(self.last_response.url)
+
+        self.assert_http_200_ok()
 
     @override_settings(ROOT_URLCONF="touchtechnology.content.tests.urls")
     def test_anonymous_is_redirected_to_protected_sign_in_without_accounts_site(self):
         # A project that does not mount an ``AccountsSite`` of its own still
-        # has the one the middleware adds to the sitemap under ``p/``.
-        url = self.restricted.get_absolute_url()
+        # has the one the middleware adds to the sitemap under ``p/``, and that
+        # prefix is the middleware's own, so there is no name to reverse.
+        self.get(self.restricted_url)
 
-        response = self.get(url)
+        self.assert_http_302_found(
+            url=urlunsplit(
+                ("", "", "/p/login/", urlencode({"next": self.restricted_url}), "")
+            )
+        )
+        self.get(self.last_response.url)
+        self.assert_http_200_ok()
 
-        self.assertRedirects(response, "/p/login/?next=%s" % url)
+    def test_sign_in_page_returns_the_visitor_to_the_page(self):
+        self.get(self.restricted_url)
+        self.get(self.last_response.url)
 
-    def test_anonymous_sees_sign_in_form_that_returns_to_the_page(self):
-        url = self.restricted.get_absolute_url()
-        sign_in = self.reverse("accounts:login")
-
-        response = self.get(url, follow=True)
-
-        self.assertRedirects(response, "%s?next=%s" % (sign_in, url))
         self.assertResponseContains(
-            '<input type="hidden" name="next" value="%s">' % url, response
+            '<input type="hidden" name="next" value="%s">' % self.restricted_url
         )
 
     def test_member_signs_in_and_lands_on_the_page(self):
         member = self.make_user("member")
         member.groups.add(self.group)
-        url = self.restricted.get_absolute_url()
 
-        response = self.post(
+        self.post(
             "accounts:login",
-            data={"username": "member", "password": "password", "next": url},
+            data={
+                "username": member.username,
+                "password": "password",
+                "next": self.restricted_url,
+            },
         )
-        self.assertRedirects(response, url)
+        self.assert_http_302_found(url=self.restricted_url)
+        self.get(self.restricted_url)
 
-        self.assertResponseContains("<p>Members only copy</p>", self.get(url))
+        self.assert_http_200_ok()
+        self.assertResponseContains("<p>Members only copy</p>")
 
     def test_signed_in_non_member_is_forbidden(self):
         outsider = self.make_user("outsider")
-        url = self.restricted.get_absolute_url()
 
         with self.login(outsider):
-            self.get(url)
+            self.get(self.restricted_url)
 
-        self.response_403()
+        self.assert_http_403_forbidden()
 
     @mock.patch.object(guardian_settings, "RENDER_403", True)
     def test_signed_in_non_member_is_shown_the_403_template(self):
         outsider = self.make_user("outsider")
-        url = self.restricted.get_absolute_url()
 
         with self.login(outsider):
-            response = self.get(url)
+            self.get(self.restricted_url)
 
-        self.response_403()
+        self.assert_http_403_forbidden()
         self.assertResponseTemplateUsed("403.html")
-        self.assertEqual(response["Content-Type"], "text/html; charset=utf-8")
+        self.assertEqual(self.last_response["Content-Type"], "text/html; charset=utf-8")
 
     @mock.patch.object(guardian_settings, "TEMPLATE_403", "missing/403.html")
     @mock.patch.object(guardian_settings, "RENDER_403", True)
     def test_signed_in_non_member_is_forbidden_when_403_template_is_missing(self):
         outsider = self.make_user("outsider")
-        url = self.restricted.get_absolute_url()
 
         with self.login(outsider):
-            self.get(url)
+            self.get(self.restricted_url)
 
-        self.response_403()
+        self.assert_http_403_forbidden()
 
     @mock.patch.object(guardian_settings, "RAISE_403", True)
     def test_signed_in_non_member_is_denied_permission(self):
         outsider = self.make_user("outsider")
-        url = self.restricted.get_absolute_url()
 
         with self.login(outsider):
-            self.get(url)
+            self.get(self.restricted_url)
 
-        self.response_403()
+        self.assert_http_403_forbidden()
 
     def test_member_is_served_the_page(self):
         member = self.make_user("member")
         member.groups.add(self.group)
-        url = self.restricted.get_absolute_url()
 
         with self.login(member):
-            self.get_check_200(url)
+            self.get(self.restricted_url)
 
+        self.assert_http_200_ok()
         self.assertResponseContains("<p>Members only copy</p>")
 
     def test_unrestricted_page_is_served_to_anonymous(self):
-        self.get_check_200(self.public.get_absolute_url())
+        self.get(self.public_url)
 
+        self.assert_http_200_ok()
         self.assertResponseContains("<p>Anyone copy</p>")
