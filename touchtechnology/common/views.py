@@ -1,28 +1,10 @@
-"""[User Facing] Utility views for authentication and preferences."""
-
-from urllib.parse import parse_qsl, urlsplit, urlunsplit
+"""[User Facing] Utility views for preferences."""
 
 from django.http import Http404, HttpResponseRedirect
-from django.shortcuts import redirect, resolve_url
-from django.utils.http import url_has_allowed_host_and_scheme, urlencode
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from touchtechnology.common.forms.tz import SelectTimezoneForm
-
-
-def login(request, to, *args, **kwargs):
-    """
-    Redirects to a login URL preserving query parameters.
-
-    ``to`` may be anything ``redirect`` accepts, including a lazy URL such as
-    ``reverse_lazy("accounts:login")``, which ``urlsplit`` cannot take as is.
-    """
-    scheme, netloc, path, query, fragments = urlsplit(resolve_url(to))
-    query = dict(parse_qsl(query))
-    query.update(kwargs)
-    query = urlencode(query)
-    to = urlunsplit((scheme, netloc, path, query, fragments))
-    return redirect(to)
 
 
 @require_POST

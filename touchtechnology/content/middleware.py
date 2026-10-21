@@ -5,13 +5,14 @@ from importlib.util import module_from_spec
 from urllib.parse import urlunparse
 
 from django.conf import settings
+from django.contrib.auth.views import redirect_to_login
 from django.contrib.sitemaps.views import sitemap
 from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.template import TemplateDoesNotExist
-from django.urls import clear_url_caches, include, path, reverse_lazy
+from django.urls import clear_url_caches, include, path
 from django.utils.deprecation import MiddlewareMixin
 from guardian.conf import settings as guardian_settings
 from mptt.utils import tree_item_iterator
@@ -23,7 +24,6 @@ from touchtechnology.common.default_settings import (
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.sitemaps import NodeSitemap
 from touchtechnology.common.sites import AccountsSite
-from touchtechnology.common.views import login
 from touchtechnology.content.models import Redirect
 from touchtechnology.content.views import dispatch
 
@@ -53,8 +53,8 @@ class SitemapNodeMiddleware(MiddlewareMixin):
 
             # We need a secret set of account urls so we can bounce the user
             # here if the page is protected. As we haven't yet embedded our
-            # url conf (we're in the middle of building it!) this will need
-            # to be found using a reverse_lazy below.
+            # url conf (we're in the middle of building it!) the sign in url is
+            # found by name in process_view, once the request has it.
             try:
                 root = SitemapNode._tree_manager.root_nodes().first()
             except ObjectDoesNotExist:
@@ -203,13 +203,10 @@ class SitemapNodeMiddleware(MiddlewareMixin):
             required = node.restrict_to_groups.all()
 
             if required:
-                next = node.get_absolute_url()
-                to = reverse_lazy("accounts:login")
-
                 # An anonymous user will never be a member of a group, so make
                 # them go off and be authenticated.
                 if request.user.is_anonymous:
-                    return login(request, to=to, next=next)
+                    return redirect_to_login(node.get_absolute_url(), "accounts:login")
 
                 # A user who is not a member of a suitable group should get a
                 # 403 page.
