@@ -10,7 +10,7 @@ from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render
-from django.template import RequestContext, TemplateDoesNotExist
+from django.template import TemplateDoesNotExist
 from django.urls import clear_url_caches, include, path, reverse_lazy
 from django.utils.deprecation import MiddlewareMixin
 from guardian.conf import settings as guardian_settings
@@ -208,7 +208,7 @@ class SitemapNodeMiddleware(MiddlewareMixin):
 
                 # An anonymous user will never be a member of a group, so make
                 # them go off and be authenticated.
-                if request.user.is_anonymous():
+                if request.user.is_anonymous:
                     return login(request, to=to, next=next)
 
                 # A user who is not a member of a suitable group should get a
@@ -217,14 +217,12 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 if set(required).difference(groups):
                     if guardian_settings.RENDER_403:
                         try:
-                            response = render(
+                            return render(
                                 request,
                                 guardian_settings.TEMPLATE_403,
                                 {},
-                                RequestContext(request),
+                                status=403,
                             )
-                            response.status_code = 403
-                            return response
                         except TemplateDoesNotExist as e:
                             if settings.DEBUG:
                                 raise e
