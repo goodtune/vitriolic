@@ -34,7 +34,9 @@ jobs:
     - name: Run E2E tests via tox
       env:
         ADMIN_SHELL: ${{ matrix.shell }}
-        SCREENSHOTS_DIR: tests/screenshots/${{ matrix.shell }}
+        # Absolute: tox runs pytest from tests/, so a relative path would land
+        # under tests/tests/.
+        SCREENSHOTS_DIR: ${{ github.workspace }}/tests/screenshots/${{ matrix.shell }}
       run: |
         uvx tox -e e2e
 
