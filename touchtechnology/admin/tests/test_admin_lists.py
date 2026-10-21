@@ -8,7 +8,7 @@ class RelatedFilterTest(TestCase):
         RelativeFactory.reset_sequence()
         self.template = Template(
             """
-        {% load common mvp_tags %}
+        {% load common admin_lists %}
         {% spaceless %}
             <dl>
                 {% for manager, name in object|related:related %}

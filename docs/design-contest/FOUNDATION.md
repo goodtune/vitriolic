@@ -52,10 +52,10 @@ The public site shares nothing with these; leave
   `get_required_form_bases()`) is what the "your form must inherit from…"
   check compares against; the admin's value accepts either mixin so
   explicit forms on the common mixin do not log errors.
-- **List includes.** `mvp/list.html`, `mvp/list.inc.html`,
-  `mvp/list.split.inc.html` now live under
-  `touchtechnology/admin/templates/mvp/` and are used only by the admin.
-  Rename them if you like; `{% mvp_list %}` is the tag that includes them.
+- **List includes.** `_list.html`, `list.inc.html` and `list.split.inc.html`
+  live in the folder of each shell, under `touchtechnology/admin/templates/`,
+  and are used only by the admin. `{% admin_list %}` (in `{% load admin_lists %}`)
+  is the tag that includes them.
 - **Sign-in.** `admin:login` and `admin:logout` (POST only) are thin
   wrappers of Django's auth views with the admin-owned template
   `touchtechnology/admin/templates/touchtechnology/admin/login.html`. The

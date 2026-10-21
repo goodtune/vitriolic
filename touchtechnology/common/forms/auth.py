@@ -70,7 +70,7 @@ class PermissionForm(ModelForm):
     """
 
     staff_only: bool = True
-    max_checkboxes: int = 7  # Set based on number of rows visible in MVP layout
+    max_checkboxes: int = 7  # Set based on number of rows visible in the admin layout
 
     def __init__(self, permission, *args, **kwargs):
         super(PermissionForm, self).__init__(*args, **kwargs)

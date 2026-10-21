@@ -3231,7 +3231,7 @@ class BackendTests(MessagesTestMixin, TestCase):
 class TeamEditViewQueryTests(TestCase):
     """
     The team edit page in the competition admin renders the team's
-    ``people`` (``TeamAssociation``) list using the ``mvp_list``
+    ``people`` (``TeamAssociation``) list using the ``admin_list``
     template tag. Without prefetching, that produces one
     ``competition_person`` query and one ``competition_teamrole`` query
     per association. Pin the view's query count so the same upper bound

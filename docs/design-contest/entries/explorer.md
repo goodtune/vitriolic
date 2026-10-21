@@ -49,8 +49,7 @@ sherbet carries dark text; focus rings take the secondary colour.
 (`AdminSite(shell="explorer")`).*
 
 - Templates live under `.../admin/explorer/`. Extend
-  `touchtechnology/admin/explorer/list.inc.html` (the `mvp/` names remain as
-  aliases under the same folder); blocks are unchanged, but `row-buttons-items`
+  `touchtechnology/admin/explorer/list.inc.html`; blocks are unchanged, but `row-buttons-items`
   holds links and forms, not `<li>`.
 - A template at the old, shell-neutral path (for example
   `tournamentcontrol/competition/admin/season/edit.html`) still overrides the

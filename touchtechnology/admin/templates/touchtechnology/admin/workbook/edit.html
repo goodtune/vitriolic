@@ -1,5 +1,5 @@
 {% extends "touchtechnology/admin/workbook/base.html" %}
-{% load i18n common mvp_tags admin_workbook %}
+{% load i18n common admin_lists admin_workbook %}
 {% comment %}
 	An object's page: its heading, then its parts as tabs (the form first,
 	then one tab per related list), each part a sheet of its own.
@@ -93,7 +93,7 @@
 								<section class="wb-pane wb-sheet" role="tabpanel" id="{{ name }}-pane">
 									{% block mvp-list %}
 										{% with table=templates|default:None %}
-											{% mvp_list manager.all template=manager|mvp_list_template:table %}
+											{% admin_list manager.all template=manager|admin_list_template:table %}
 										{% endwith %}
 									{% endblock %}
 								</section>

@@ -1,5 +1,5 @@
 {% extends "touchtechnology/content/admin/explorer/base.html" %}
-{% load i18n common mvp_tags admin admin_explorer %}
+{% load i18n common admin_lists admin admin_explorer %}
 
 {% block page_title %}{% if node.pk %}{{ node.title }}{% else %}{% trans "New application" %}{% endif %}{% endblock %}
 {% block page_kind %}{% if node.pk %}{% trans "Application" %}{% else %}{% trans "Not saved yet" %}{% endif %}{% endblock %}

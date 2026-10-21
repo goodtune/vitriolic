@@ -67,9 +67,7 @@ For example, `touchtechnology/admin/edit.related.html` is now
 `touchtechnology/admin/workbook/edit.related.html` and
 `touchtechnology/admin/explorer/edit.related.html`. Two more changed:
 
-- `mvp/list.html`, `mvp/list.inc.html` and `mvp/list.split.inc.html` are now
-  `touchtechnology/admin/<shell>/mvp/list.html`, `.../mvp/list.inc.html` and
-  `.../mvp/list.split.inc.html`.
+- The `mvp` list templates were renamed. See "The `mvp` names are gone" below.
 - `touchtechnology/admin/_version.html` is gone. `{% version_string %}` now
   returns the text itself.
 
@@ -83,6 +81,30 @@ is now at `<template base>/<shell>/<name>`. For example,
 `touchtechnology/content/admin/base.html`. The library keeps no copy at the old
 name.
 
+### The `mvp` names are gone
+
+In 4.x the code that draws a list of related objects was named after the old
+theme. The theme is gone, so the names are gone. The code does the same work.
+Change these names in your project:
+
+| 4.x | 5.0 |
+| --- | --- |
+| `{% load mvp_tags %}` | `{% load admin_lists %}` |
+| `{% mvp_list ... %}` | `{% admin_list ... %}` |
+| the `mvp_list_template` filter | the `admin_list_template` filter |
+| `mvp/list.html` | `touchtechnology/admin/<shell>/_list.html` |
+| `mvp/list.inc.html` | `touchtechnology/admin/<shell>/list.inc.html` |
+| `mvp/list.split.inc.html` | `touchtechnology/admin/<shell>/list.split.inc.html` |
+| `_mvp_related`, `_mvp_select_related`, `_mvp_prefetch_related`, `_mvp_only` and `_mvp_annotate` on a model | `_list_related`, `_list_select_related`, `_list_prefetch_related`, `_list_only` and `_list_annotate` |
+
+The `related` filter keeps its name. The library keeps no copy at an old name.
+A template that loads `mvp_tags` fails with `TemplateSyntaxError`. A template
+that extends `mvp/list.inc.html` fails with `TemplateDoesNotExist`.
+
+A model that still has an `_mvp_*` method gets no error. The admin ignores the
+method, and the lists of that model run the untuned queries. Rename the
+methods.
+
 ### Templates that replace a page
 
 A template of yours that *replaces* a page of the admin is a different case.
@@ -94,7 +116,7 @@ in your project is still chosen. This is how the admin finds `list.html`,
 
 The admin does not search for some pages. It asks for them by name, in the
 folder of the shell: the home page (`index.html`), the sign-in page, the HTMX
-tab fragments and the `mvp` list pages. A template of yours at the 4.x name of
+tab fragments and the list wrapper (`_list.html`). A template of yours at the 4.x name of
 one of these no longer replaces it. Put your template in the folder of the
 shell.
 

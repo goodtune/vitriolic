@@ -144,7 +144,7 @@ KNOWN_PAGE_ERRORS = {
     "Cannot set properties of undefined (setting '_DT_CellIndex')": (
         "known baseline error: the club edit page runs DataTables on every "
         "table, and DataTables 1.10 cannot take the colspan cell of an empty "
-        "list (club/edit.html prepareTables, mvp/list.inc.html table-row-empty)"
+        "list (club/edit.html prepareTables, list.inc.html table-row-empty)"
     ),
 }
 PAGE_ERROR_PREFIX = "uncaught page error: "
