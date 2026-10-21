@@ -27,6 +27,13 @@ def allowed(components, request):
     if components is None:
         return []
 
+    # Nothing is shown to a visitor the admin does not know: the pages the
+    # shell draws for them (an error page, say) have an empty navigation. Nor
+    # may we ask an anonymous user for object permissions, they have none.
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated:
+        return []
+
     def show(t):
         __, module, __, instance, schemas = t
 
