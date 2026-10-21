@@ -11,10 +11,20 @@
 // same hold: the key's auto-repeat is ignored, and releasing the key or
 // moving focus away cancels it. The button's own click, whichever way it
 // comes, never submits.
+//
+// The booth's event stream re-renders the on-air section in place, which
+// resets the button's class to what the server sent. That must not drop the
+// pressed look while the button is still held, so it is put back.
 (function () {
 	var timer = null;
 	var pressed = null;
+	var keeper = new MutationObserver(function () {
+		if (pressed && !pressed.classList.contains("pressing")) {
+			pressed.classList.add("pressing");
+		}
+	});
 	function cancel() {
+		keeper.disconnect();
 		if (timer) { clearTimeout(timer); timer = null; }
 		if (pressed) { pressed.classList.remove("pressing"); pressed = null; }
 	}
@@ -22,6 +32,7 @@
 		cancel();
 		pressed = button;
 		button.classList.add("pressing");
+		keeper.observe(button, { attributes: true, attributeFilter: ["class"] });
 		timer = setTimeout(function () {
 			cancel();
 			button.form.requestSubmit(button);
