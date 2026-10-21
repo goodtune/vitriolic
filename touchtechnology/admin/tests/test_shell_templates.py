@@ -156,7 +156,10 @@ class LegacyNeutralPathTests(TestCase):
                 )
             )
 
-    def test_an_error_page_extending_the_old_40x_is_drawn_by_the_shell(self):
+    def test_a_public_error_page_extending_the_old_40x_is_drawn_by_the_shell(self):
+        # The page of a deployment's public site, which the root 404 handler
+        # renders. The test signs in as staff so that the shell can draw the
+        # admin's navigation.
         templates = {
             "404.html": (
                 '{% extends "40x.html" %}'
@@ -166,7 +169,8 @@ class LegacyNeutralPathTests(TestCase):
             ),
         }
         with deployment_templates(self, templates), self.login(self.superuser):
-            self.get("admin:news:article:translation:add", pk=0)
+            # There is no name for an address that nothing answers.
+            self.get("/no/such/page/")
             self.assert_http_404_not_found()
             self.assertTemplateUsed(self.last_response, self.shell.template("40x.html"))
             self.assertInHTML(
