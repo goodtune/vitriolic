@@ -185,6 +185,11 @@ class TestMatchLiveStream:
 
         # Mobile viewport.
         page.set_viewport_size({"width": 375, "height": 812})
+        # The navigation drawer must be shut, not caught mid-transition over
+        # the content, before the picture is taken.
+        expect(
+            page.locator(by_shell(workbook=".wb-rail", explorer="#rail"))
+        ).to_be_hidden()
         page.screenshot(
             path=str(screenshot_dir / "live_stream_mobile.png"), full_page=True
         )

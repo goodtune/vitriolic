@@ -187,9 +187,13 @@ class TestTraditionalTabMode:
         # Wait for redirect - should go back to competition list
         authenticated_page.wait_for_load_state("networkidle")
 
-        # Should not stay on the edit page (redirected to parent)
-        current_url = authenticated_page.url
-        assert edit_url not in current_url or ("?r=" in current_url)
+        # Saving nothing goes back to the list of competitions, and says so.
+        expect(authenticated_page).to_have_url(
+            f"{live_server.url}{reverse('admin:fixja:competition:list')}"
+        )
+        expect(authenticated_page.locator("body")).to_contain_text(
+            "Your competition was not changed."
+        )
         shoot(authenticated_page, screenshot_dir, "tabs_traditional_competition_saved")
 
     def test_no_htmx_attributes_in_traditional_mode(
@@ -238,6 +242,13 @@ class TestHtmxTabMode:
     ):
         """HTMX script is loaded when the feature flag is enabled."""
         competition = competition_data["competition"]
+        fetched = []
+        authenticated_page.on(
+            "request",
+            lambda request: (
+                fetched.append(request.url) if "_htmx_tab=" in request.url else None
+            ),
+        )
         authenticated_page.goto(competition_edit_url(live_server, competition))
 
         # Check that the htmx script is present, and that it was served: the
@@ -245,6 +256,14 @@ class TestHtmxTabMode:
         htmx_script = authenticated_page.locator('script[src*="htmx"]')
         expect(htmx_script).to_have_count(1)
         assert authenticated_page.evaluate("typeof htmx") == "object"
+
+        # And that it works: showing a related tab fetches its content.
+        pane = authenticated_page.locator(LAZY_PANES).first
+        tab_id = pane.get_attribute("id")
+        authenticated_page.locator(tab_control(tab_id)).click()
+        expect(pane).to_be_visible()
+        expect(pane.locator(LOADING)).to_have_count(0)
+        assert len(fetched) == 1 and "_htmx_tab=" in fetched[0], fetched
         shoot(authenticated_page, screenshot_dir, "tabs_htmx_competition_edit")
 
     def test_season_edit_has_htmx_attributes(
@@ -300,13 +319,16 @@ class TestHtmxTabMode:
 
         # Should redirect (primary form save goes to parent)
         authenticated_page.wait_for_load_state("networkidle")
-        current_url = authenticated_page.url
-        # Should redirect to competition edit page
-        season_path = reverse(
-            "admin:fixja:competition:season:edit",
-            args=[competition.pk, season.pk],
+        # Saving nothing returns to the competition's page, and says so.
+        competition_path = reverse(
+            "admin:fixja:competition:edit", args=[competition.pk]
         )
-        assert season_path not in current_url
+        expect(authenticated_page).to_have_url(
+            re.compile(rf"^{re.escape(live_server.url + competition_path)}(#.*)?$")
+        )
+        expect(authenticated_page.locator("body")).to_contain_text(
+            "Your season was not changed."
+        )
         shoot(authenticated_page, screenshot_dir, "tabs_htmx_season_saved")
 
     def test_htmx_tab_content_loads_dynamically(
@@ -437,7 +459,7 @@ class TestHtmxTabPagination:
         assert fetched == []
         # People, teams and officials each wait to be shown.
         expect(authenticated_page.locator(f"{LAZY_PANES} {LOADING}")).to_have_count(3)
-        shoot(authenticated_page, screenshot_dir, "club_tabs_waiting")
+        shoot(authenticated_page, screenshot_dir, "club_tabs_waiting_on_details")
 
         authenticated_page.locator(tab_link("members")).click()
         expect(
@@ -450,6 +472,22 @@ class TestHtmxTabPagination:
         expect(
             authenticated_page.locator(f"#{pane_id('teams')} {LOADING}")
         ).to_have_count(1)
+
+        # Show the teams tab with its fetch held back, so the picture has the
+        # pane visibly pending, then let it load.
+        def hold(route):
+            authenticated_page.wait_for_timeout(1500)
+            route.continue_()
+
+        authenticated_page.route("**/*_htmx_tab=teams*", hold)
+        authenticated_page.locator(tab_link("teams")).click()
+        pending = authenticated_page.locator(f"#{pane_id('teams')}")
+        expect(pending).to_be_visible()
+        expect(pending.locator(LOADING)).to_be_visible()
+        shoot(authenticated_page, screenshot_dir, "club_tab_pending_while_fetched")
+        expect(pending.locator(LOADING)).to_have_count(0)
+        expect(pending.locator("tbody tr").first).to_be_visible()
+        authenticated_page.unroute("**/*_htmx_tab=teams*", hold)
 
     def test_people_tab_pages(
         self, authenticated_page: Page, live_server, club_data, screenshot_dir
@@ -561,7 +599,17 @@ class TestHtmxTabPagination:
         expect(
             page.locator(f"#{pane_id('teams')} {PAGER} {PAGER_CURRENT}")
         ).to_have_text("1")
-        shoot(page, screenshot_dir, "club_tabs_independent_pages")
+        shoot(page, screenshot_dir, "club_tabs_independent_teams_page_1")
+
+        # The people tab is still on its second page.
+        page.locator(tab_link("members")).click()
+        expect(
+            page.locator(f"#{pane_id('members')} {PAGER} {PAGER_CURRENT}")
+        ).to_have_text("2")
+        expect(page.locator(f"#{pane_id('members')} tbody tr").first).to_contain_text(
+            "Member11"
+        )
+        shoot(page, screenshot_dir, "club_tabs_independent_people_page_2")
 
     def test_primary_contact_offers_only_the_clubs_people(
         self, authenticated_page: Page, live_server, club_data, screenshot_dir
@@ -576,7 +624,24 @@ class TestHtmxTabPagination:
         expect(
             page.locator('select[name="primary"] option', has_text="Outsider")
         ).to_have_count(0)
-        shoot(page, screenshot_dir, "club_edit_primary_contact")
+
+        # Open the chooser itself: it offers the club's people, not the
+        # outsider.
+        field = page.locator('select[name="primary"]').locator(
+            "xpath=ancestor::*[contains(@class, 'field')][1]"
+        )
+        field.locator(
+            by_shell(workbook=".wb-picker", explorer=".picker-button")
+        ).click()
+        dialog = page.get_by_role("dialog")
+        expect(dialog).to_be_visible()
+        offered = dialog.get_by_role("option")
+        expect(offered.first).to_be_visible()
+        labels = [text.strip() for text in offered.all_inner_texts()]
+        for member in club_data["members"]:
+            assert any(str(member) in label for label in labels), (member, labels)
+        assert not any("Outsider" in label for label in labels), labels
+        shoot(page, screenshot_dir, "club_edit_primary_contact_chooser_open")
 
     def test_club_form_saves_with_a_primary_contact(
         self, authenticated_page: Page, live_server, club_data, screenshot_dir

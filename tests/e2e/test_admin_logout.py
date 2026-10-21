@@ -23,11 +23,12 @@ def test_logout_from_the_admin(authenticated_page: Page, live_server, screenshot
     )
     logout = scope.get_by_role("button", name="Sign out")
     expect(logout).to_be_visible()
-    page.screenshot(path=screenshot_dir / "admin_logout_menu.png")
+    page.screenshot(path=screenshot_dir / "admin_logout_button.png")
 
     logout.click()
     expect(page).to_have_url(f"{live_server.url}{reverse('admin:login')}")
     expect(page.get_by_role("button", name="Sign in")).to_be_visible()
+    page.screenshot(path=screenshot_dir / "admin_logout_signed_out.png")
 
     # Signed out: the admin asks for a login again.
     page.goto(f"{live_server.url}{reverse('admin:index')}")
