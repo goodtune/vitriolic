@@ -14,6 +14,11 @@ which, given the nature of Donald Trump's campaign to become American President,
 
 This project will now forever remind me of the day that America shat the bed.
 
+## Upgrading
+
+[Upgrading from 4.x](docs/upgrading.md) lists the admin templates that moved in 5.0 and the four old names that still
+work.
+
 ## Supported Django versions
 
 The aim is to support the current Django LTS release plus the feature releases that follow it. I don't work on this

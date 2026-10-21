@@ -1,0 +1,9 @@
+{% extends shell.template_dir|default:"touchtechnology/admin/workbook"|add:"/base.html" %}
+{% comment %}
+	Kept so a template that extends "touchtechnology/admin/base.html", as it did
+	before the admin had shells, still works. This page adds nothing. It is the
+	base page of the shell the admin wears: the shell in the context, which every
+	page a component renders has, or Workbook, the default shell, when the
+	context has none. Extend that page by its own name instead (see
+	docs/upgrading.md). This file will be removed in a later release.
+{% endcomment %}
