@@ -13,6 +13,7 @@ class CompetitionConfig(AppConfig):
     """Connects signals and admin components for competitions."""
 
     name = "tournamentcontrol.competition"
+    default_auto_field = "django.db.models.AutoField"
 
     def ready(self):
         """Wire up signal handlers, system checks and admin registration."""

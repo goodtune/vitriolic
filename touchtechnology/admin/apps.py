@@ -12,6 +12,7 @@ from touchtechnology.admin.branding import brand_check
 class AdminConfig(AppConfig):
     """Registers admin sites and performs application checks."""
 
+    default_auto_field = "django.db.models.AutoField"
     default_site = "touchtechnology.admin.sites.admin.AdminSite"
     name = "touchtechnology.admin"
     label = "touchtechnology_name"
