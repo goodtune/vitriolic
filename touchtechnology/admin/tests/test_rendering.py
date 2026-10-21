@@ -53,7 +53,7 @@ class AdminOwnershipTests(TestCase):
         for name in ("_list.html", "list.inc.html", "list.split.inc.html"):
             origin = select_template([self.shell.template(name)]).origin.name
             self.assertIn(
-                "/touchtechnology/admin/templates/%s/" % self.shell.template_dir,
+                f"/touchtechnology/admin/templates/{self.shell.template_dir}/",
                 origin,
             )
 
