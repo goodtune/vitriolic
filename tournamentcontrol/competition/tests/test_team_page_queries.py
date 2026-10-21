@@ -143,9 +143,5 @@ class TeamPageQueryTests(TestCase):
             team.slug,
         )
 
-        self.assertResponseContains(
-            '<td class="statistic played">1</td>', html=True
-        )
-        self.assertResponseContains(
-            '<td class="statistic touchdowns">5</td>', html=True
-        )
+        self.assertResponseContains('<td class="statistic played">1</td>')
+        self.assertResponseContains('<td class="statistic touchdowns">5</td>')

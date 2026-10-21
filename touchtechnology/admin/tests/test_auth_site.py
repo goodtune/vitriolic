@@ -75,7 +75,7 @@ class AuthSiteUserTests(TestCase):
                     "<td>Never</td>",
                 ),
             ):
-                self.assertResponseContains(fragment, html=True)
+                self.assertResponseContains(fragment)
 
     def test_user_create(self):
         self.get_generic_200(

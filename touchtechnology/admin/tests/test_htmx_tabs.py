@@ -204,9 +204,7 @@ class HtmxScriptTagTests(TestCase):
         superuser = factories.UserFactory.create(is_staff=True, is_superuser=True)
         with self.login(superuser):
             self.get("admin:auth:users:edit", pk=superuser.pk)
-        self.assertResponseContains(
-            f'<script src="{htmx_script()}"></script>', html=True
-        )
+        self.assertResponseContains(f'<script src="{htmx_script()}"></script>')
 
 
 @per_shell

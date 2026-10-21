@@ -48,6 +48,5 @@ class AuthenticationTest(TestCase):
                     '</use></svg><span class="foot-label">Sign out</span></button></form>'
                 ),
             ),
-            html=True,
         )
         self.assertResponseNotContains("logout.js")

@@ -197,14 +197,12 @@ class ShellTests(TestCase):
                 "<style>:root{--brand-primary:#275d8b;--brand-secondary:#e8862a;"
                 "--brand-success:#2a8a5c;--brand-warning:#d9a21b;"
                 "--brand-danger:#b8322f;}</style>",
-                html=True,
             )
             self.assertResponseContains(
                 self.by_shell(
                     workbook='<img class="wb-brand-logo" src="/static/img/logo.png" alt="">',
                     explorer='<img src="/static/img/logo.png" alt="Administration">',
                 ),
-                html=True,
             )
 
     @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND={"logo": None})
@@ -217,7 +215,6 @@ class ShellTests(TestCase):
                     '<span class="wb-brand-name">Administration</span></a>',
                     explorer='<span class="brand-name">Administration</span>',
                 ),
-                html=True,
             )
 
     @override_settings(
@@ -236,7 +233,6 @@ class ShellTests(TestCase):
                     '<span class="wb-brand-name">Harbour Touch</span></a>',
                     explorer='<img src="/static/img/harbour.png" alt="Harbour Touch">',
                 ),
-                html=True,
             )
 
     @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=None)
@@ -253,7 +249,6 @@ class ShellTests(TestCase):
                     '<span class="wb-brand-name">Administration</span></a>',
                     explorer='<img src="/static/img/logo.png" alt="Administration">',
                 ),
-                html=True,
             )
 
     @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=None)
@@ -265,7 +260,6 @@ class ShellTests(TestCase):
                     workbook="<title>Home &middot; Administration</title>",
                     explorer="<title>Administration</title>",
                 ),
-                html=True,
             )
 
     @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=counted_brand)

@@ -16,7 +16,6 @@ is the shell the test is run under::
                     workbook='<div class="wb-gate-brand">',
                     explorer="<h1>Sign in</h1>",
                 ),
-                html=True,
             )
 """
 

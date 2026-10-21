@@ -29,7 +29,7 @@ class AdminLoginTests(TestCase):
                 '<button type="submit" class="button primary">Sign in</button>',
             ),
         ):
-            self.assertResponseContains(fragment, html=True)
+            self.assertResponseContains(fragment)
 
     def test_anonymous_admin_index_redirects_to_admin_login(self):
         self.get("admin:index")
@@ -93,7 +93,6 @@ class AdminLoginTests(TestCase):
                     f"</use></svg><div><ul><li>{error}</li></ul></div></div>"
                 ),
             ),
-            html=True,
         )
 
     def test_signed_in_staff_is_sent_on_from_the_login_page(self):
@@ -145,7 +144,7 @@ class AdminLoginTests(TestCase):
                 '<button type="submit" class="button primary">Sign in</button>',
             ),
         ):
-            self.assertResponseContains(fragment, html=True)
+            self.assertResponseContains(fragment)
 
     def test_signed_in_non_staff_is_not_looped(self):
         user = factories.UserFactory.create(username="visitor")

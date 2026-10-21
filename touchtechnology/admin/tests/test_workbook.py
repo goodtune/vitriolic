@@ -135,7 +135,6 @@ class RichTextTests(TestCase):
             self.get_check_200("admin:news:article:edit", article.pk)
         self.assertResponseContains(
             '<script src="/static/touchtechnology/common/js/html-editor.js"></script>',
-            html=True,
         )
         self.assertIn(
             '<div class="wb-field wb-field-textarea html_widget">',
@@ -199,7 +198,6 @@ class TrailTests(TestCase):
             '<li class="wb-trail-parent"><a href="/admin/news/article/%d/#translations-tab">'
             "%s<span>Flow Cup begins</span></a></li></ol></nav>"
             % (article.pk, ICON % "arrow-left"),
-            html=True,
         )
 
 
@@ -214,13 +212,12 @@ class HomeTests(TestCase):
     def test_the_home_page_offers_each_components_jobs(self):
         with self.login(self.superuser):
             self.get_check_200("admin:index")
-        self.assertResponseContains("<h1>Hello, Odette</h1>", html=True)
+        self.assertResponseContains("<h1>Hello, Odette</h1>")
         self.assertResponseContains(
             '<a class="wb-task" href="%s"><span class="wb-task-icon">%s</span>'
             '<span class="wb-task-title">Write a news article</span>'
             '<span class="wb-task-note">Publish it now or later</span></a>'
             % (self.reverse("admin:news:article:add"), ICON % "newspaper"),
-            html=True,
         )
 
 
@@ -238,7 +235,6 @@ class AddAnotherTests(TestCase):
         self.assertResponseContains(
             '<button type="submit" name="_addanother" value="1" class="wb-button">'
             "%sSave and add another redirect</button>" % (ICON % "copy-plus"),
-            html=True,
         )
 
     def test_save_and_add_another_returns_to_the_add_form(self):
@@ -267,5 +263,4 @@ class AddAnotherTests(TestCase):
         self.assertResponseNotContains(
             '<button type="submit" name="_addanother" value="1" class="wb-button">'
             "%sSave and add another redirect</button>" % (ICON % "copy-plus"),
-            html=True,
         )

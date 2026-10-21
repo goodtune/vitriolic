@@ -84,7 +84,6 @@ class SeasonChecklistTests(TestCase):
                 "Starts 16 September 2026",
                 "is-done",
             ),
-            html=True,
         )
         self.assertResponseContains(
             step_html(
@@ -93,11 +92,9 @@ class SeasonChecklistTests(TestCase):
                 f"{self.division.urls['edit']}#teams-tab",
                 "Mixed Open needs teams",
             ),
-            html=True,
         )
         self.assertResponseContains(
             '<span class="wb-checklist-next">Next: Add the kick-off times</span>',
-            html=True,
         )
 
 
@@ -140,7 +137,6 @@ class DivisionPageTests(TestCase):
         self.assertResponseContains(
             '<a class="wb-tab" role="tab" id="ladder-tab" href="#ladder-pane" '
             'aria-controls="ladder-pane" aria-selected="false">Ladder</a>',
-            html=True,
         )
         ladder = self.get_context("ladders")
         self.assertEqual(
@@ -177,7 +173,7 @@ class HubTests(TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:fixja:index")
         self.assertResponseContains(
-            f'<h3><a href="{season.urls["edit"]}">Spring 2099</a></h3>', html=True
+            f'<h3><a href="{season.urls["edit"]}">Spring 2099</a></h3>'
         )
 
 
@@ -233,7 +229,6 @@ class ClubOfficialsTests(TestCase):
                 self.reverse("admin:fixja:club:clubassociation:add", self.club.pk),
                 ICON % "plus",
             ),
-            html=True,
         )
 
     def test_adding_an_official_belongs_to_the_club(self):
@@ -279,21 +274,19 @@ class TreeTests(TestCase):
         with self.login(self.superuser):
             edit = self.pool.url_names["edit"]
             self.get_check_200(edit.url_name, *edit.args)
+        self.assertResponseContains(self.node(self.season.competition, "trophy"))
+        self.assertResponseContains(self.node(self.season, "calendar"))
+        self.assertResponseContains(self.node(self.division, "layers"))
+        self.assertResponseContains(self.node(self.stage, "git-merge"))
         self.assertResponseContains(
-            self.node(self.season.competition, "trophy"), html=True
-        )
-        self.assertResponseContains(self.node(self.season, "calendar"), html=True)
-        self.assertResponseContains(self.node(self.division, "layers"), html=True)
-        self.assertResponseContains(self.node(self.stage, "git-merge"), html=True)
-        self.assertResponseContains(
-            self.node(self.pool, "users-round", ' aria-current="page"'), html=True
+            self.node(self.pool, "users-round", ' aria-current="page"')
         )
 
     def test_opening_a_season_lists_its_divisions(self):
         key = "fixja/o:competition.season:%d" % self.season.pk
         with self.login(self.superuser):
             self.get_check_200("admin:explorer", data={"node": key})
-        self.assertResponseContains(self.node(self.division, "layers"), html=True)
+        self.assertResponseContains(self.node(self.division, "layers"))
 
     def test_the_phone_drills_into_a_division(self):
         key = "fixja/o:competition.division:%d" % self.division.pk
@@ -302,7 +295,6 @@ class TreeTests(TestCase):
         self.assertResponseContains(
             f'<a class="wb-drill-title" href="{self.division.urls["edit"]}">'
             f"{self.division.title}</a>",
-            html=True,
         )
 
     def test_an_unknown_component_is_not_found(self):

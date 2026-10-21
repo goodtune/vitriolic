@@ -150,7 +150,7 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:schoolyear:list")
             self.assertResponseContains(
-                edit_link(self.year.urls["edit"], "2026", "schoolyear"), html=True
+                edit_link(self.year.urls["edit"], "2026", "schoolyear")
             )
 
     def test_grade_list(self):
@@ -169,11 +169,10 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:student:list", data={"search": "Ines"})
             self.assertResponseContains(
-                edit_link(self.student.urls["edit"], "Ines Varga", "student"), html=True
+                edit_link(self.student.urls["edit"], "Ines Varga", "student")
             )
             self.assertResponseNotContains(
                 edit_link(self.outsider.urls["edit"], "Tomas Lindqvist", "student"),
-                html=True,
             )
 
     def test_year_edit(self):
@@ -199,14 +198,13 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
                     ),
                 )
                 % self.reverse(ADD_CLASS_GROUP, year_id=self.year.pk),
-                html=True,
             )
 
     def test_grade_edit_has_no_link_to_add_a_class_group(self):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:grade:edit", pk=self.grade.pk)
             self.assertResponseContains(
-                edit_link(self.group.urls["edit"], "2C (2026)", "classgroup"), html=True
+                edit_link(self.group.urls["edit"], "2C (2026)", "classgroup")
             )
             self.assertNotContains(self.last_response, "/class/add/")
 
@@ -214,7 +212,7 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:teacher:edit", pk=self.teacher.pk)
             self.assertResponseContains(
-                edit_link(self.group.urls["edit"], "2C (2026)", "classgroup"), html=True
+                edit_link(self.group.urls["edit"], "2C (2026)", "classgroup")
             )
             self.assertNotContains(self.last_response, "/class/add/")
 
@@ -274,11 +272,9 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
                         "</svg><span>Timeline</span></a>"
                     ),
                 ),
-                html=True,
             )
             self.assertResponseContains(
                 f'<li><a href="{self.enrolment.urls["edit"]}">2C (2026)</a></li>',
-                html=True,
             )
 
     def test_student_add_has_no_timeline_tab(self):
@@ -425,15 +421,13 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
                 "admin:enrolment:assessment:edit", **self.assessment_kwargs
             )
             self.assertResponseContains(
-                f'<option value="{self.enrolment.pk}">Ines Varga</option>', html=True
+                f'<option value="{self.enrolment.pk}">Ines Varga</option>'
             )
             self.assertResponseContains(
                 f'<option value="{self.classmate_enrolment.pk}">Priya Nair</option>',
-                html=True,
             )
             self.assertResponseNotContains(
                 f'<option value="{self.outsider_enrolment.pk}">Tomas Lindqvist</option>',
-                html=True,
             )
 
     def test_assessment_page_query_count_does_not_grow_with_the_class(self):

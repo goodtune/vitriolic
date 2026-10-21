@@ -220,20 +220,20 @@ class HtmxTabPaginationTests(TestCase):
 
     def test_first_page_of_members(self):
         self._get_club_tab()
-        self.assertResponseContains(self._member_link(self.members[0]), html=True)
-        self.assertResponseContains(self._member_link(self.members[1]), html=True)
-        self.assertResponseNotContains(self._member_link(self.members[2]), html=True)
+        self.assertResponseContains(self._member_link(self.members[0]))
+        self.assertResponseContains(self._member_link(self.members[1]))
+        self.assertResponseNotContains(self._member_link(self.members[2]))
 
     def test_second_page_of_members(self):
         self._get_club_tab(page=2)
-        self.assertResponseContains(self._member_link(self.members[2]), html=True)
-        self.assertResponseContains(self._member_link(self.members[3]), html=True)
-        self.assertResponseNotContains(self._member_link(self.members[1]), html=True)
+        self.assertResponseContains(self._member_link(self.members[2]))
+        self.assertResponseContains(self._member_link(self.members[3]))
+        self.assertResponseNotContains(self._member_link(self.members[1]))
 
     def test_page_beyond_the_last_is_the_last(self):
         self._get_club_tab(page=99)
-        self.assertResponseContains(self._member_link(self.members[4]), html=True)
-        self.assertResponseNotContains(self._member_link(self.members[3]), html=True)
+        self.assertResponseContains(self._member_link(self.members[4]))
+        self.assertResponseNotContains(self._member_link(self.members[3]))
 
     def test_members_link_to_the_other_pages_of_the_tab(self):
         self._get_club_tab()
@@ -251,7 +251,6 @@ class HtmxTabPaginationTests(TestCase):
                         f'hx-swap="innerHTML" hx-push-url="false">{number}</a>'
                     ),
                 ),
-                html=True,
             )
 
     def test_only_the_links_to_other_pages_replace_the_tab_pane(self):
@@ -262,7 +261,7 @@ class HtmxTabPaginationTests(TestCase):
         """
         self._get_club_tab()
         self.assertResponseNotContains("hx-boost")
-        self.assertResponseContains(self._member_link(self.members[0]), html=True)
+        self.assertResponseContains(self._member_link(self.members[0]))
 
     def test_pages_are_not_pushed_onto_the_history(self):
         "The pages of a tab are not recorded in the history."
@@ -328,7 +327,6 @@ class HtmxTabAddLinkTests(TestCase):
             self._add_link(
                 "admin:fixja:club:person:add", self.club.pk, type_name="person"
             ),
-            html=True,
         )
 
     @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
@@ -345,7 +343,6 @@ class HtmxTabAddLinkTests(TestCase):
             self._add_link(
                 "admin:fixja:club:person:add", self.club.pk, type_name="person"
             ),
-            html=True,
         )
 
     @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
@@ -366,5 +363,4 @@ class HtmxTabAddLinkTests(TestCase):
                 self.season.pk,
                 type_name="division",
             ),
-            html=True,
         )

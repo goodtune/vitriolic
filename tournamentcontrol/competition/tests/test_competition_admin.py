@@ -447,7 +447,6 @@ class GoodViewTests(TestCase):
                         self.reverse("admin:fixja:competition:list"),
                         ICON % "chevron-right",
                     ),
-                    html=True,
                 )
             else:
                 self.response_302()
@@ -973,11 +972,9 @@ class GoodViewTests(TestCase):
             self.get("admin:fixja:club:edit", club.pk)
             self.response_200()
 
-        self.assertResponseContains(
-            f'<option value="{member.pk}">{member}</option>', html=True
-        )
+        self.assertResponseContains(f'<option value="{member.pk}">{member}</option>')
         self.assertResponseNotContains(
-            f'<option value="{outsider.pk}">{outsider}</option>', html=True
+            f'<option value="{outsider.pk}">{outsider}</option>'
         )
 
     def test_merge_person(self):
@@ -1398,8 +1395,8 @@ class BackendTests(MessagesTestMixin, TestCase):
         expected_scorer_row = row(10)  # points
         expected_mvp_row = row(2)  # votes
 
-        self.assertResponseContains(expected_scorer_row, html=True)
-        self.assertResponseContains(expected_mvp_row, html=True)
+        self.assertResponseContains(expected_scorer_row)
+        self.assertResponseContains(expected_mvp_row)
 
     def test_update_club(self):
         """
@@ -1463,7 +1460,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         </td>
         """,
         )
-        self.assertContains(res, text, html=True)
+        self.assertResponseContains(text, res)
 
         data = {
             "home-0-number": "3",
@@ -1518,7 +1515,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         </div>
         """,
         )
-        self.assertContains(res, text, html=True)
+        self.assertResponseContains(text, res)
 
         data.update(
             {
@@ -4044,13 +4041,11 @@ class WizardBrandTests(TestCase):
                     % stage.title,
                     explorer=f"<title>{stage.title} \u2013 Administration</title>",
                 ),
-                html=True,
             )
             self.assertResponseContains(
                 "<style>:root{--brand-primary:#275d8b;--brand-secondary:#e8862a;"
                 "--brand-success:#2a8a5c;--brand-warning:#d9a21b;"
                 "--brand-danger:#b8322f;}</style>",
-                html=True,
             )
             self.assertResponseContains(
                 by_shell(
@@ -4059,5 +4054,4 @@ class WizardBrandTests(TestCase):
                     '<span class="wb-brand-name">Administration</span></a>',
                     explorer='<img src="/static/img/logo.png" alt="Administration">',
                 ),
-                html=True,
             )
