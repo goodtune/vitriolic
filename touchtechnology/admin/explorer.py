@@ -501,9 +501,13 @@ class Explorer:
         """The saved objects with admin pages that the page's context holds."""
         found, seen = [], set()
         for value in context.values():
-            if not isinstance(value, models.Model) or value.pk is None:
+            # Go by the type, not by ``isinstance``: a lazy object (the ``user``
+            # of every page) answers for the model it stands in for, but its type
+            # is the wrapper, and the explorer reads the model from the type of
+            # what it holds. The page's own object is in the context as itself.
+            if not issubclass(type(value), models.Model) or value.pk is None:
                 continue
-            if not isinstance(value, AdminUrlMixin) or id(value) in seen:
+            if not issubclass(type(value), AdminUrlMixin) or id(value) in seen:
                 continue
             if getattr(value, "_state", None) is not None and value._state.adding:
                 continue

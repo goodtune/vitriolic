@@ -1,15 +1,22 @@
 from datetime import datetime, timezone
+from unittest import mock
 
+from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.utils.functional import SimpleLazyObject
 from test_plus import TestCase as PlusTestCase
 
+from touchtechnology.admin.explorer import Explorer
+from touchtechnology.admin.mixins import AdminUrlMixin
 from touchtechnology.admin.tests.shells import per_shell
+from touchtechnology.admin.trail import models_by_namespace
 from touchtechnology.common.tests import factories
 
 
 class TestCase(PlusTestCase):
     def setUp(self):
-        super(TestCase, self).setUp()
+        super().setUp()
         self.staff = factories.UserFactory.create(is_staff=True)
         self.superuser = factories.UserFactory.create(is_staff=True, is_superuser=True)
 
@@ -163,3 +170,91 @@ class AuthSiteGroupTests(TestCase):
 
             self.post(url_name, pk=self.group_instance.pk)
             self.response_302()
+
+
+def lazy_twice(get_response):
+    """Middleware that wraps ``request.user`` in a second lazy object."""
+
+    def middleware(request):
+        signed_in = request.user
+        request.user = SimpleLazyObject(lambda: signed_in)
+        return get_response(request)
+
+    return middleware
+
+
+class UserAdminUrls(AdminUrlMixin):
+    """What a user model with admin pages of its own takes from the admin."""
+
+    def _get_admin_namespace(self):
+        return "admin:auth:users"
+
+    def _get_url_args(self):
+        return (self.pk,)
+
+    def _get_url_names(self):
+        return ["edit", "delete", "perms"]
+
+
+@per_shell
+class OwnUserRecordTests(TestCase):
+    """
+    Where the user model has admin pages (``AdminUrlMixin``), a user's own
+    record is one of them. ``request.user`` is a lazy object that passes
+    ``isinstance`` for the user model and is the ``user`` of every page's
+    context, but the page's place is the page's own object, which is the real
+    record.
+    """
+
+    def setUp(self):
+        super().setUp()
+        user_model = get_user_model()
+        self.addCleanup(setattr, user_model, "__bases__", user_model.__bases__)
+        user_model.__bases__ = (UserAdminUrls, *user_model.__bases__)
+        # What the admin has remembered of the models with pages was learnt
+        # while the user model had none, and must not outlive this test.
+        models_by_namespace.cache_clear()
+        self.addCleanup(models_by_namespace.cache_clear)
+        for cache in (Explorer._section_cache, Explorer._relation_cache):
+            patcher = mock.patch.dict(cache, clear=True)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def assertPlacedAtTheUser(self, aria_current):
+        """The explorer's tree has the user's own record, and the page is at it."""
+        user = self.superuser
+        url = self.reverse("admin:auth:users:edit", pk=user.pk)
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=(
+                    f'<a class="wb-node-link" href="{url}" title="{user}" '
+                    f'aria-current="{aria_current}"><svg class="wb-icon" '
+                    'aria-hidden="true" focusable="false"><use href="/static/'
+                    'touchtechnology/admin/workbook/icons.svg#user"></use></svg>'
+                    f'<span class="wb-node-label">{user}</span></a>'
+                ),
+                explorer=(
+                    f'<a class="node-link" href="{url}" '
+                    f'aria-current="{aria_current}"><svg class="icon" '
+                    'aria-hidden="true" focusable="false"><use href="/static/'
+                    'touchtechnology/admin/explorer/img/icons.svg#user"></use></svg>'
+                    f'<span class="node-label">{user}</span></a>'
+                ),
+            )
+        )
+
+    def test_the_edit_page(self):
+        with self.login(self.superuser):
+            self.get_check_200("admin:auth:users:edit", self.superuser.pk)
+        self.assertPlacedAtTheUser("page")
+
+    def test_the_permissions_page(self):
+        with self.login(self.superuser):
+            self.get_check_200("admin:auth:users:perms", self.superuser.pk)
+        self.assertPlacedAtTheUser("location")
+
+    def test_the_edit_page_when_the_user_is_wrapped_twice(self):
+        middleware = [*settings.MIDDLEWARE, f"{__name__}.lazy_twice"]
+        with self.settings(MIDDLEWARE=middleware), self.login(self.superuser):
+            self.get_check_200("admin:auth:users:edit", self.superuser.pk)
+        self.assertPlacedAtTheUser("page")
