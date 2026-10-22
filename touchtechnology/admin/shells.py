@@ -16,10 +16,25 @@ site::
 Every template a shell ships lives in a directory of its own, next to the
 neutral path a deployment may use to override it (see
 ``AdminComponentMixin._template_path``): at each level the neutral path is
-tried first, then the shell's directory. The library ships no page at a
-neutral path, so nothing is shadowed, and a deployment's override at the old
-path (``tournamentcontrol/competition/admin/season/edit.html``, say) keeps
-working, for either shell, exactly as it did before shells existed.
+tried first, then the shell's directory. Apart from the four shims described
+below, the library ships no page at a neutral path, so nothing is shadowed.
+
+What keeps working is an override that the admin finds by that search. A
+deployment's ``tournamentcontrol/competition/admin/season/edit.html``, say, is
+chosen for either shell, as it was before shells existed.
+
+What does not keep working, unless it is one of the four, is an override that
+*extends* a page by the neutral name it had in 4.x: that page is no longer
+there. The four are ``touchtechnology/admin/base.html``,
+``touchtechnology/admin/list.html``, ``touchtechnology/admin/edit.html`` and
+``40x.html``, kept for now as shims. A shim holds no markup. It
+extends the page of the same name in the folder of the shell in the context
+(``shell``, which the admin puts there for every page it renders, and the
+``brand`` context processor for every page), or of the default shell when the
+context has none; it follows the shell the site wears and so shadows neither.
+Any other 4.x page that was at a neutral path has moved into the shells'
+folders for good, and an override that extends it needs the new name.
+``docs/upgrading.md`` lists the names.
 """
 
 import os.path
