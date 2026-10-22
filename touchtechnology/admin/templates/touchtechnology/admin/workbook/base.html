@@ -5,7 +5,30 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>{% block title %}{% block page_title %}{% endblock %}{% if brand %} &middot; {{ brand.name }}{% endif %}{% endblock %}</title>
-	<script>document.documentElement.classList.replace("no-js", "js")</script>
+	<script>
+		/* Before the page is drawn: mark it for scripts, and for set-up checklists
+		   the person hid; wbChecklist gives a checklist the fold they chose, else
+		   folds it on a phone (see _checklist.html). */
+		(function (html) {
+			function stored(key) {
+				try { return window.localStorage.getItem(key); } catch (e) { return null; }
+			}
+			html.classList.replace("no-js", "js");
+			if (stored("wb-checklists") === "hidden") {
+				html.setAttribute("data-wb-checklists", "hidden");
+			}
+			window.wbChecklist = function (panel) {
+				var details = panel.querySelector("details[data-wb-checklist]");
+				var chosen = stored("wb-checklist-fold:" + details.getAttribute("data-wb-checklist"));
+				if (chosen) {
+					details.open = chosen === "open";
+				} else if (!window.matchMedia("(min-width: 64rem)").matches) {
+					details.open = false;
+				}
+				details.setAttribute("data-wb-ready", "");
+			};
+		})(document.documentElement);
+	</script>
 	<link rel="preload" href="{% static 'touchtechnology/admin/workbook/fonts/atkinson-hyperlegible-next-latin-wght-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
 	<link rel="stylesheet" href="{% static 'touchtechnology/admin/workbook/workbook.css' %}">
 	{% include "touchtechnology/admin/workbook/_brand.html" %}

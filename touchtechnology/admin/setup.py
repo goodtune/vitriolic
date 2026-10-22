@@ -65,5 +65,15 @@ class Setup:
         return self.done == self.total
 
     @property
+    def folded(self):
+        """
+        Whether the checklist starts folded to its progress bar: when every
+        required step is done, so a finished checklist keeps out of the way.
+        The optional steps may still be undone. A choice the person made in
+        their browser wins over this (see Workbook's ``_checklist.html``).
+        """
+        return self.complete
+
+    @property
     def next_step(self):
         return next((s for s in self.steps if s.next), None)

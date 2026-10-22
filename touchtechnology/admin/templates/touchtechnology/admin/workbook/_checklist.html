@@ -1,25 +1,43 @@
 {% load i18n admin_workbook %}{% comment %}
-	A checklist: give it ``checklist`` (a ``Setup``) and
-	``title``. Each step has a title, a note, a link and whether it is done.
-	Open at a desk; folded to its progress bar on a phone.
+	A checklist: give it ``checklist`` (a ``Setup``), ``title`` and ``kind``,
+	the name the browser remembers its fold by ("season", "division").
+
+	The fold. The server folds it to its progress bar when every required
+	step is done (``Setup.folded``) and opens it otherwise, so it works
+	without scripts. With scripts, it also starts folded on a phone, and a
+	fold the person chose wins over both: a click on the summary keeps it in
+	localStorage as ``wb-checklist-fold:<kind>`` ("open" or "folded"), one
+	choice for every checklist of that kind. ``wbChecklist`` (defined in the
+	page's head) applies it as soon as the panel is parsed; until it has, the
+	stylesheet keeps the steps out of sight, so an open panel never shows
+	only to fold.
+
+	Hiding. "Hide" puts every set-up checklist away: localStorage
+	``wb-checklists`` is "hidden", and the script in the page's head marks
+	the page with it before anything is drawn. The page head's button (see
+	``_checklist_show.html``) brings them back.
 {% endcomment %}
-<details class="wb-sheet wb-checklist" open data-wb-fold-narrow>
-	<summary>
-		<h2 class="wb-checklist-title">{{ title }}</h2>
-		<span class="wb-checklist-toggle" aria-hidden="true">{% icon "chevron-down" %}</span>
-		<span class="wb-checklist-score">{% if checklist.complete %}{% icon "circle-check" %} {% trans "All done" %}{% else %}{% blocktrans with done=checklist.done total=checklist.total %}{{ done }} of {{ total }} done{% endblocktrans %}{% endif %}</span>
-		{% if checklist.next_step and not checklist.complete %}<span class="wb-checklist-next">{% blocktrans with step=checklist.next_step.label %}Next: {{ step }}{% endblocktrans %}</span>{% endif %}
-		<span class="wb-progress" role="progressbar" aria-label="{{ title }}" aria-valuemin="0" aria-valuemax="{{ checklist.total }}" aria-valuenow="{{ checklist.done }}"><span style="--done: {{ checklist.percent }}%"></span></span>
-	</summary>
-	<ol class="wb-steps">
-		{% for step in checklist.steps %}
-			<li class="wb-step{% if step.done %} is-done{% elif step.next %} is-next{% endif %}">
-				<span class="wb-step-mark" aria-hidden="true">{% if step.done %}{% icon "check" %}{% else %}{{ forloop.counter }}{% endif %}</span>
-				<span class="wb-step-body">
-					<span class="wb-step-title"><a href="{{ step.url }}">{{ step.label }}</a>{% if step.optional %}<span class="wb-step-optional">{% trans "optional" %}</span>{% endif %}</span>
-					<span class="wb-step-note"><span class="wb-sr">{% if step.done %}{% trans "Done:" %}{% else %}{% trans "To do:" %}{% endif %} </span>{{ step.detail|default:"" }}</span>
-				</span>
-			</li>
-		{% endfor %}
-	</ol>
-</details>
+<div class="wb-checklist-panel">
+	<button type="button" class="wb-checklist-hide" data-wb-checklist-hide>{% icon "x" %}<span aria-hidden="true">{% trans "Hide" %}</span><span class="wb-sr">{% trans "Hide the set-up checklists" %}</span></button>
+	<details class="wb-sheet wb-checklist" data-wb-checklist="{{ kind }}"{% if not checklist.folded %} open{% endif %}>
+		<summary>
+			<h2 class="wb-checklist-title">{{ title }}</h2>
+			<span class="wb-checklist-toggle" aria-hidden="true">{% icon "chevron-down" %}</span>
+			<span class="wb-checklist-score">{% if checklist.complete %}{% icon "circle-check" %} {% trans "All done" %}{% else %}{% blocktrans with done=checklist.done total=checklist.total %}{{ done }} of {{ total }} done{% endblocktrans %}{% endif %}</span>
+			{% if checklist.next_step and not checklist.complete %}<span class="wb-checklist-next">{% blocktrans with step=checklist.next_step.label %}Next: {{ step }}{% endblocktrans %}</span>{% endif %}
+			<span class="wb-progress" role="progressbar" aria-label="{{ title }}" aria-valuemin="0" aria-valuemax="{{ checklist.total }}" aria-valuenow="{{ checklist.done }}"><span style="--done: {{ checklist.percent }}%"></span></span>
+		</summary>
+		<ol class="wb-steps">
+			{% for step in checklist.steps %}
+				<li class="wb-step{% if step.done %} is-done{% elif step.next %} is-next{% endif %}">
+					<span class="wb-step-mark" aria-hidden="true">{% if step.done %}{% icon "check" %}{% else %}{{ forloop.counter }}{% endif %}</span>
+					<span class="wb-step-body">
+						<span class="wb-step-title"><a href="{{ step.url }}">{{ step.label }}</a>{% if step.optional %}<span class="wb-step-optional">{% trans "optional" %}</span>{% endif %}</span>
+						<span class="wb-step-note"><span class="wb-sr">{% if step.done %}{% trans "Done:" %}{% else %}{% trans "To do:" %}{% endif %} </span>{{ step.detail|default:"" }}</span>
+					</span>
+				</li>
+			{% endfor %}
+		</ol>
+	</details>
+	<script>window.wbChecklist && wbChecklist(document.currentScript.parentNode)</script>
+</div>

@@ -10,6 +10,7 @@
 {% block head-actions %}
 	{% if object.pk %}
 		<a class="wb-button" href="{% url 'admin:fixja:competition:season:division:scorers' object.season.competition_id object.season_id object.pk %}">{% icon "chart-bar" %}{% trans "Leaders" %}</a>
+		{% if division_setup %}{% include "touchtechnology/admin/workbook/_checklist_show.html" %}{% endif %}
 	{% endif %}
 {% endblock %}
 
@@ -27,7 +28,7 @@
 	{% if object.pk %}
 		<aside class="wb-aside" aria-label="{% trans "Division set-up" %}">
 			{% trans "Division set-up" as title %}
-			{% include "touchtechnology/admin/workbook/_checklist.html" with checklist=division_setup title=title %}
+			{% include "touchtechnology/admin/workbook/_checklist.html" with checklist=division_setup title=title kind="division" %}
 		</aside>
 	{% endif %}
 {% endblock %}
