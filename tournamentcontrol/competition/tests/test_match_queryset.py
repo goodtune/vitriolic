@@ -71,3 +71,63 @@ class WithResultStateTests(TestCase):
                 for m in Match.objects.with_result_state().order_by("pk")
             ]
         self.assertEqual(states, [(False, False), (False, False), (True, True)])
+
+
+class ByeTitleTests(TestCase):
+    """
+    A bye is named in plain text, by the model and by the database, so that the
+    name can go anywhere text goes: an attribute, a page title, a feed.
+    """
+
+    def setUp(self):
+        self.stage = factories.StageFactory.create()
+
+    def test_a_bye_at_home_is_named_in_plain_text(self):
+        bye = factories.MatchFactory.create(
+            stage=self.stage, is_bye=True, home_team=None, away_team__title="Marlins"
+        )
+        self.assertEqual(
+            (str(bye), str(bye.get_home_team_plain()), str(bye.get_away_team_plain())),
+            ("Bye vs Marlins", "Bye", "Marlins"),
+        )
+
+    def test_a_bye_away_is_named_in_plain_text(self):
+        bye = factories.MatchFactory.create(
+            stage=self.stage, is_bye=True, home_team__title="Leopards", away_team=None
+        )
+        self.assertEqual(
+            (str(bye), str(bye.get_home_team_plain()), str(bye.get_away_team_plain())),
+            ("Leopards vs Bye", "Leopards", "Bye"),
+        )
+
+    def test_the_side_with_the_bye_is_false(self):
+        """
+        A bye is false and a team is true, so ``away or home`` (and the
+        ``default`` filter) gives the team of a bye on either side.
+        """
+        bye = factories.MatchFactory.create(
+            stage=self.stage, is_bye=True, home_team=None, away_team__title="Marlins"
+        )
+        self.assertEqual(
+            [
+                bool(team)
+                for team in (
+                    bye.get_home_team(),
+                    bye.get_home_team_plain(),
+                    bye.get_away_team(),
+                    bye.get_away_team_plain(),
+                )
+            ],
+            [False, False, True, True],
+        )
+
+    def test_the_database_names_a_bye_in_plain_text(self):
+        bye = factories.MatchFactory.create(
+            stage=self.stage, is_bye=True, home_team__title="Leopards", away_team=None
+        )
+        self.assertEqual(
+            Match.objects.filter(pk=bye.pk)
+            .values_list("home_team_title", "away_team_title")
+            .get(),
+            ("Leopards", "Bye"),
+        )

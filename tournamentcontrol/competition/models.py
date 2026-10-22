@@ -147,7 +147,7 @@ class LadderPointsField(models.TextField):
 
         if form_class is None:
             form_class = LadderPointsFormField
-        return super(LadderPointsField, self).formfield(form_class=form_class, **kwargs)
+        return super().formfield(form_class=form_class, **kwargs)
 
 
 class TwitterField(models.CharField):
@@ -155,7 +155,7 @@ class TwitterField(models.CharField):
         if form_class is None:
             form_class = forms.RegexField
             kwargs.setdefault("regex", r"^@[\w_]+$")
-        return super(TwitterField, self).formfield(form_class=form_class, **kwargs)
+        return super().formfield(form_class=form_class, **kwargs)
 
 
 class OrderedSitemapNode(SitemapNodeBase):
@@ -163,7 +163,7 @@ class OrderedSitemapNode(SitemapNodeBase):
     order = models.PositiveIntegerField(default=1)
 
     def __repr__(self):
-        return "<{}: {}>".format(self.__class__.__name__, self.title)
+        return f"<{self.__class__.__name__}: {self.title}>"
 
     def __str__(self):
         return self.title
@@ -433,7 +433,7 @@ class Person(AdminUrlMixin, models.Model):
 
     @property
     def get_full_name(self):
-        return "{}, {}".format(self.last_name, self.first_name)
+        return f"{self.last_name}, {self.first_name}"
 
     @cached_property
     def age(self):
@@ -624,7 +624,7 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
         }
 
     def __repr__(self):
-        return "<Season: {} - {}>".format(self.competition, self)
+        return f"<Season: {self.competition} - {self}>"
 
     @property
     def upstream_backend(self):
@@ -1828,7 +1828,7 @@ class Team(AdminUrlMixin, UpstreamMixin, OrderedSitemapNode):
         if errors:
             raise ValidationError(errors)
 
-        return super(Team, self).clean()
+        return super().clean()
 
     @cached_property
     def _list_select_related(self):
@@ -1849,13 +1849,8 @@ class Team(AdminUrlMixin, UpstreamMixin, OrderedSitemapNode):
             self.pk,
         )
 
-    def __cmp__(self, other):
-        if self.division_id == other.division_id:
-            return (self.order > other.order) - (self.order < other.order)
-        return (self.division > other.division) - (self.division < other.division)
-
     def __repr__(self):
-        return "<Team: %s>" % self.title
+        return f"<Team: {self.title}>"
 
     def __str__(self):
         return self.title
@@ -2036,15 +2031,19 @@ class Team(AdminUrlMixin, UpstreamMixin, OrderedSitemapNode):
         return res
 
 
-class ByeTeam(object):
-    def __init__(self, title="Bye", *args, **kwargs):
-        super(ByeTeam, self).__init__(*args, **kwargs)
-        self.pk = None
-        self.title = mark_safe(
-            '<span class="bye" title="%s">%s</span>' % (title, title)
-        )
+class ByeTeam:
+    """
+    The side of a bye match that has no team. Its title is plain text: it
+    names the match (``Match.title``) wherever text goes, attributes and
+    page titles too, and the templates escape it like any other title. It is
+    false, so ``away or home`` (and the ``default`` filter) gives the team.
+    """
 
-    def __nonzero__(self):
+    def __init__(self, title="Bye"):
+        self.pk = None
+        self.title = title
+
+    def __bool__(self):
         return False
 
     def __str__(self):
@@ -3022,7 +3021,7 @@ class LadderBase(models.Model):
         abstract = True
 
     def __repr__(self):
-        return "<%s: #%s>" % (self.__class__.__name__, self.pk)
+        return f"<{self.__class__.__name__}: #{self.pk}>"
 
 
 class LadderEntry(LadderBase):
@@ -3038,7 +3037,7 @@ class LadderEntry(LadderBase):
     objects = LadderEntryManager()
 
     def __repr__(self):
-        return "<LadderEntry: #%s>" % self.pk
+        return f"<LadderEntry: #{self.pk}>"
 
 
 class LadderSummary(LadderBase):
@@ -3188,7 +3187,7 @@ class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
         return (self.season.competition_id, self.season_id, self.pk)
 
     def __str__(self):
-        return "#{}".format(self.pk)
+        return f"#{self.pk}"
 
 
 class LiveStreamKey(AdminUrlMixin, models.Model):
@@ -3467,10 +3466,7 @@ class SimpleScoreMatchStatistic(MatchStatisticBase):
             raise ValidationError(errors)
 
     def __repr__(self):
-        return "<Stat #%s: %s, %s, number=%s, played=%s>" % (
-            self.pk,
-            self.match,
-            self.player,
-            self.number,
-            self.played,
+        return (
+            f"<Stat #{self.pk}: {self.match}, {self.player}, "
+            f"number={self.number}, played={self.played}>"
         )

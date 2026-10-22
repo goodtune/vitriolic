@@ -18,7 +18,6 @@ from django.urls import include, path, re_path, reverse
 from django.urls.exceptions import NoReverseMatch
 from django.utils import timezone
 from django.utils.cache import patch_vary_headers
-from django.utils.html import strip_tags
 from django.utils.http import urlencode
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext
@@ -99,7 +98,7 @@ def match_location(place):
         return place.title, coordinates(place)
 
     # Individual playing surfaces are often mapped only at the venue.
-    label = "%s, %s" % (ground.title, ground.venue.title)
+    label = f"{ground.title}, {ground.venue.title}"
     return label, coordinates(ground) or coordinates(ground.venue)
 
 
@@ -157,7 +156,7 @@ def permissions_required(
         return has_permission
 
 
-class CompetitionAdminMixin(object):
+class CompetitionAdminMixin:
     """
     Some administrative functions should be allowed to authenticated users on
     the front-end of the site. As long as we only use primitives from the base
@@ -1482,7 +1481,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                 return self._calendar_response(request, body, archived)
 
         cal = Calendar()
-        cal.add("prodid", "-//Tournament Control//%s//" % request.get_host())
+        cal.add("prodid", f"-//Tournament Control//{request.get_host()}//")
         cal.add("version", "2.0")
 
         # Cache reverse() URL templates per division to avoid calling it for
@@ -1496,10 +1495,9 @@ class CompetitionSite(CompetitionAdminMixin, Application):
 
             # Use SQL-computed title annotations instead of match.title to
             # avoid per-match template rendering and N+1 queries for
-            # undecided teams. strip_tags handles bye matches which include
-            # HTML in the annotation.
-            home = strip_tags(match.home_team_title or "")
-            away = strip_tags(match.away_team_title or "")
+            # undecided teams. The annotations are plain text, a bye too.
+            home = match.home_team_title or ""
+            away = match.away_team_title or ""
             if home and away:
                 summary = f"{home} vs {away}"
             elif home or away:
@@ -1523,7 +1521,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                 # drops the pin on the map in their calendar applications.
                 event.add(
                     "x-apple-structured-location",
-                    vUri("geo:%s,%s" % coordinates),
+                    vUri(f"geo:{coordinates[0]},{coordinates[1]}"),
                     parameters={
                         "VALUE": "URI",
                         "X-ADDRESS": location,

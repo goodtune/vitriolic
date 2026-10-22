@@ -332,9 +332,7 @@ class FrontEndTests(TestCase):
                 division.slug,
                 team.slug,
             )
-            self.assertResponseContains(
-                '<a href="{0}">{1}</a>'.format(href, team.title)
-            )
+            self.assertResponseContains(f'<a href="{href}">{team.title}</a>')
 
     def test_team_calendar(self):
         team = factories.TeamFactory.create()
@@ -349,7 +347,7 @@ class FrontEndTests(TestCase):
             team.slug,
         )
         for opponent in team.division.teams.exclude(pk=team.pk):
-            subject = "{} vs {}".format(team.title, opponent.title)
+            subject = f"{team.title} vs {opponent.title}"
             self.assertResponseContains(subject, html=False)
 
     @unittest.expectedFailure
@@ -379,7 +377,7 @@ class FrontEndTests(TestCase):
             team.division.slug,
         )
         for opponent in team.division.teams.exclude(pk=team.pk):
-            subject = "{} vs {}".format(team.title, opponent.title)
+            subject = f"{team.title} vs {opponent.title}"
             self.assertResponseContains(subject, html=False)
 
     @unittest.expectedFailure
@@ -407,7 +405,7 @@ class FrontEndTests(TestCase):
             team.division.season.slug,
         )
         for opponent in team.division.teams.exclude(pk=team.pk):
-            subject = "{} vs {}".format(team.title, opponent.title)
+            subject = f"{team.title} vs {opponent.title}"
             self.assertResponseContains(subject, html=False)
 
     @unittest.expectedFailure
@@ -551,7 +549,7 @@ class CalendarQueryTests(TestCase):
 
         self.assertEqual(
             str(event["summary"]),
-            "{} vs {}".format(self.team_a.title, self.team_b.title),
+            f"{self.team_a.title} vs {self.team_b.title}",
         )
         self.assertNotIn("location", event)
         self.assertEqual(
@@ -576,13 +574,12 @@ class CalendarQueryTests(TestCase):
         )
         self.assertEqual(
             str(event["url"]),
-            "http://testserver{}".format(expected_path),
+            f"http://testserver{expected_path}",
         )
         self.assertEqual(
             str(event["description"]),
-            "{} ({})\n\nhttp://testserver{}".format(
-                self.division.title, self.stage.title, expected_path
-            ),
+            f"{self.division.title} ({self.stage.title})\n\n"
+            f"http://testserver{expected_path}",
         )
 
     def _event_for_match_at(self, play_at):
@@ -1027,25 +1024,25 @@ class CalendarQueryTests(TestCase):
         )
 
     def test_calendar_with_bye_match(self):
-        """Bye matches with a datetime should appear in the calendar."""
+        """
+        Bye matches with a datetime should appear in the calendar, the bye
+        named in plain text.
+        """
         match = factories.MatchFactory.create(
             stage=self.stage,
             home_team=self.team_a,
             away_team=None,
             is_bye=True,
         )
-        response = self.get(
+        self.get_check_200(
             "competition:calendar",
             competition=self.competition.slug,
             season=self.season.slug,
         )
-        self.response_200(response)
 
-        cal, events = self._parse_events(response)
+        cal, events = self._parse_events(self.last_response)
         event = next(e for e in events if e["uid"] == match.uuid.hex)
-        summary = str(event["summary"])
-        self.assertIn(self.team_a.title, summary)
-        self.assertIn("Bye", summary)
+        self.assertEqual(str(event["summary"]), f"{self.team_a.title} vs Bye")
 
     def test_calendar_with_undecided_team(self):
         """Matches with undecided teams should appear in the calendar."""
@@ -1764,25 +1761,21 @@ class VenueViewTests(TestCase):
 
         # grounds and days are linked from the venue page
         for ground in (self.ground_1, self.ground_2):
-            self.assertResponseContains(
-                'href="%s"'
-                % self.reverse("competition:ground", *self._venue_args(ground.slug)),
-                html=False,
+            ground_url = self.reverse(
+                "competition:ground", *self._venue_args(ground.slug)
             )
+            self.assertResponseContains(f'<a href="{ground_url}">{ground.title}</a>')
         day_url = self.reverse("competition:venue", *self._venue_args("20250314"))
-        self.assertResponseContains('href="%s"' % day_url, html=False)
+        self.assertResponseContains(f'<a href="{day_url}">Fri 14 Mar</a>')
         # each match links to its detail page
-        self.assertResponseContains(
-            'href="%s"'
-            % self.reverse(
-                "competition:match",
-                self.season.competition.slug,
-                self.season.slug,
-                self.division.slug,
-                m1.pk,
-            ),
-            html=False,
+        match_url = self.reverse(
+            "competition:match",
+            self.season.competition.slug,
+            self.season.slug,
+            self.division.slug,
+            m1.pk,
         )
+        self.assertResponseContains(f'<a href="{match_url}">Detail</a>')
 
     def test_venue_single_day(self):
         m1 = self._match(
@@ -1813,10 +1806,8 @@ class VenueViewTests(TestCase):
             [(date(2025, 3, 13), [m1])],
         )
         self.assertEqual(self.context["ground"], self.ground_1)
-        self.assertResponseContains(
-            'href="%s"' % self.reverse("competition:venue", *self._venue_args()),
-            html=False,
-        )
+        venue_url = self.reverse("competition:venue", *self._venue_args())
+        self.assertResponseContains(f'<a href="{venue_url}">{self.venue.title}</a>')
 
     def test_hidden_matches_excluded(self):
         when = datetime(2025, 3, 13, 10, tzinfo=ZoneInfo("UTC"))
@@ -1860,10 +1851,8 @@ class VenueViewTests(TestCase):
         self.assertGoodView(
             "competition:season", self.season.competition.slug, self.season.slug
         )
-        self.assertResponseContains(
-            'href="%s"' % self.reverse("competition:venue", *self._venue_args()),
-            html=False,
-        )
+        venue_url = self.reverse("competition:venue", *self._venue_args())
+        self.assertResponseContains(f'<a href="{venue_url}">{self.venue.title}</a>')
 
     def test_empty_venue(self):
         self.assertGoodView("competition:venue", *self._venue_args())

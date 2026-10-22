@@ -20,7 +20,7 @@ from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.admin.branding import get_brand
 from touchtechnology.admin.sites import site
-from touchtechnology.admin.tests.shells import by_shell
+from touchtechnology.admin.tests.shells import by_shell, per_shell
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.dashboard import MostValuableWidget
 from tournamentcontrol.competition.draw.schemas import (
@@ -94,7 +94,7 @@ def bulk_dialog(url, name, title):
 
 class TestCase(BaseTestCase):
     def setUp(self):
-        super(TestCase, self).setUp()
+        super().setUp()
         self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
 
     def assertGoodEditView(self, viewname, *args, **kwargs):
@@ -117,15 +117,15 @@ class TestCase(BaseTestCase):
     def assertGoodNamespace(self, instance, **kwargs):
         namespace = instance._get_admin_namespace()
         args = instance._get_url_args()
-        self.assertGoodEditView("%s:add" % namespace, *args[:-1], **kwargs)
-        self.assertGoodEditView("%s:edit" % namespace, *args, **kwargs)
-        self.assertGoodDeleteView("%s:delete" % namespace, *args)
+        self.assertGoodEditView(f"{namespace}:add", *args[:-1], **kwargs)
+        self.assertGoodEditView(f"{namespace}:edit", *args, **kwargs)
+        self.assertGoodDeleteView(f"{namespace}:delete", *args)
 
 
 class TemplateTests(TestCase):
     @classmethod
     def setUpClass(cls):
-        super(TemplateTests, cls).setUpClass()
+        super().setUpClass()
         stage1 = factories.StageFactory.create()
         stage2 = factories.StageFactory.create(division=stage1.division, follows=stage1)
         ground = factories.GroundFactory.create(venue__season=stage2.division.season)
@@ -161,7 +161,7 @@ class TemplateTests(TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        super(TemplateTests, cls).tearDownClass()
+        super().tearDownClass()
 
     def test_team_title(self):
         template = Template("{% load common %}{{ team.title|htmlentities }}")
@@ -205,12 +205,10 @@ class TemplateTests(TestCase):
                 "html",
             )
             for fragment in by_shell(
-                workbook=(
-                    "<h4>%s <small>%s</small></h4>" % (self.division, self.stage),
-                ),
+                workbook=(f"<h4>{self.division} <small>{self.stage}</small></h4>",),
                 explorer=(
-                    "<strong>%s</strong>" % self.division,
-                    "<small>%s</small>" % self.stage,
+                    f"<strong>{self.division}</strong>",
+                    f"<small>{self.stage}</small>",
                 ),
             ):
                 self.assertResponseContains(fragment)
@@ -242,14 +240,14 @@ class TemplateTests(TestCase):
             )
             self.assertResponseContains(
                 by_shell(
-                    workbook="<title>Scorecards &middot; %s</title>" % get_brand().name,
+                    workbook=f"<title>Scorecards &middot; {get_brand().name}</title>",
                     explorer="<title>Scorecards</title>",
                 )
             )
+            css = by_shell(workbook="p-card-team team", explorer="team")
             self.assertResponseContains(
-                '<th colspan="5" class="%s">'
+                f'<th colspan="5" class="{css}">'
                 "Chees&eacute;&nbsp;&amp;&nbsp;Crackers</th>"
-                % by_shell(workbook="p-card-team team", explorer="team")
             )
 
     @patch("tournamentcontrol.competition.utils.prince")
@@ -272,14 +270,14 @@ class TemplateTests(TestCase):
         html = mock_prince.call_args.args[0]
         self.assertIn(
             by_shell(
-                workbook="<title>Scorecards \u00b7 %s</title>" % get_brand().name,
+                workbook=f"<title>Scorecards \u00b7 {get_brand().name}</title>",
                 explorer="<title>Scorecards</title>",
             ),
             html,
         )
+        css = by_shell(workbook="p-card-team team", explorer="team")
         self.assertIn(
-            '<th colspan="5" class="%s">Chees\u00e9\u00a0&amp;\u00a0Crackers</th>'
-            % by_shell(workbook="p-card-team team", explorer="team"),
+            f'<th colspan="5" class="{css}">Chees\u00e9\u00a0&amp;\u00a0Crackers</th>',
             html,
         )
 
@@ -440,13 +438,11 @@ class GoodViewTests(TestCase):
             self.get("admin:fixja:index")
             if site.shell.index_landing:
                 self.response_200()
+                url = self.reverse("admin:fixja:competition:list")
                 self.assertResponseContains(
-                    '<a class="wb-task" href="%s"><span class="wb-task-icon">%s</span>'
-                    '<span class="wb-task-title">Competitions</span></a>'
-                    % (
-                        self.reverse("admin:fixja:competition:list"),
-                        ICON % "chevron-right",
-                    ),
+                    f'<a class="wb-task" href="{url}">'
+                    f'<span class="wb-task-icon">{ICON % "chevron-right"}</span>'
+                    '<span class="wb-task-title">Competitions</span></a>',
                 )
             else:
                 self.response_302()
@@ -542,7 +538,7 @@ class GoodViewTests(TestCase):
         match = factories.MatchFactory.create()
         MatchScoreSheet.objects.create(match=match, image="harness/score-sheet")
         with self.login(self.superuser):
-            self.get("%s:edit" % match._get_admin_namespace(), *match._get_url_args())
+            self.get(f"{match._get_admin_namespace()}:edit", *match._get_url_args())
             self.response_200()
 
     def test_pool(self):
@@ -3292,13 +3288,10 @@ class EditViewPermissionTests(TestCase):
                 "admin:fixja:competition:season:edit", *self.season._get_url_args()
             )
             self.response_200()
+            css = by_shell(workbook='class="wb-input" ', explorer="")
             self.assertResponseContains(
-                '<input type="text" name="title" value="%s" maxlength="255" '
-                '%srequired id="id_title">'
-                % (
-                    self.season.title,
-                    by_shell(workbook='class="wb-input" ', explorer=""),
-                )
+                f'<input type="text" name="title" value="{self.season.title}" '
+                f'maxlength="255" {css}required id="id_title">'
             )
 
     def test_object_level_change_permission_is_scoped_to_object(self):
@@ -4037,8 +4030,8 @@ class WizardBrandTests(TestCase):
             self.assertNotIn("brand", self.last_response.context_data)
             self.assertResponseContains(
                 by_shell(
-                    workbook="<title>Build the draw &middot; %s &middot; Administration</title>"
-                    % stage.title,
+                    workbook=f"<title>Build the draw &middot; {stage.title} "
+                    "&middot; Administration</title>",
                     explorer=f"<title>{stage.title} \u2013 Administration</title>",
                 ),
             )
@@ -4055,3 +4048,174 @@ class WizardBrandTests(TestCase):
                     explorer='<img src="/static/img/logo.png" alt="Administration">',
                 ),
             )
+
+
+@per_shell
+class ByeMatchTests(TestCase):
+    """
+    A bye match is named in plain text, "Bye vs Marlins". The admin puts the
+    name of a match where markup is not read as markup: the label of the
+    button that opens its row's menu, the words of the delete confirmation and
+    the title of its own page.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.stage = factories.StageFactory.create(title="Regular Season")
+        self.args = (
+            self.stage.division.season.competition_id,
+            self.stage.division.season_id,
+            self.stage.division_id,
+            self.stage.pk,
+        )
+
+    def bye(self, **kwargs):
+        return factories.MatchFactory.create(stage=self.stage, is_bye=True, **kwargs)
+
+    def results(self, **teams):
+        """The results page of the day of a bye, with only the bye to process."""
+        bye = self.bye(date=date(2026, 10, 8), time=None, datetime=None, **teams)
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:match-results", *self.args[:2], f"{bye.date:%Y%m%d}"
+            )
+        return bye
+
+    def bye_row(self, bye, team):
+        """The bye's row on the results page, named for the team with the bye."""
+        division = self.stage.division.title
+        key = (
+            f'<input type="hidden" name="byes-0-id" value="{bye.pk}" id="id_byes-0-id">'
+        )
+        attrs = self.by_shell(
+            workbook='class="wb-select"', explorer='placeholder="Bye processed"'
+        )
+        select = (
+            f'<select name="byes-0-bye_processed" {attrs} id="id_byes-0-bye_processed">'
+            '<option value="1">Yes</option><option value="0" selected>No</option>'
+            "</select>"
+        )
+        return self.by_shell(
+            workbook=(
+                f'<div class="wb-row-form">{key}'
+                '<div class="wb-field wb-field-select select"><div class="wb-label">'
+                '<label class="field_name" for="id_byes-0-bye_processed">'
+                f"{team}</label></div>"
+                f'<div class="wb-control-wrap">{select}</div></div>'
+                f'<p class="wb-help">{division}</p></div>'
+            ),
+            explorer=(
+                f'<li class="bye">{key}<label for="id_byes-0-bye_processed">{team} '
+                f'<small class="muted">{division}</small></label>{select}</li>'
+            ),
+        )
+
+    def icon(self, name):
+        css, sprite = self.by_shell(
+            workbook=("wb-icon", "workbook/icons.svg"),
+            explorer=("icon", "explorer/img/icons.svg"),
+        )
+        return (
+            f'<svg class="{css}" aria-hidden="true" focusable="false">'
+            f'<use href="/static/touchtechnology/admin/{sprite}#{name}"></use></svg>'
+        )
+
+    def actions_cell(self, match, name):
+        """The last cell of the match's row on the stage's Matches tab."""
+        namespace = "admin:fixja:competition:season:division:stage:match"
+        referees = self.reverse(f"{namespace}:referees", *self.args, match.pk)
+        edit = self.reverse(f"{namespace}:edit", *self.args, match.pk)
+        delete = self.reverse(f"{namespace}:delete", *self.args, match.pk)
+        csrf = (
+            '<input type="hidden" name="csrfmiddlewaretoken" '
+            f'value="{self.get_context("csrf_token")}">'
+        )
+        return self.by_shell(
+            workbook=(
+                '<td class="wb-row-actions"><div class="wb-row-buttons">'
+                '<button type="button" class="wb-button wb-button-quiet '
+                'wb-button-icon wb-button-small wb-menu-button" '
+                f'popovertarget="wbm-match-{match.pk}" aria-expanded="false" '
+                f'aria-label="More actions for {name}">{self.icon("ellipsis")}'
+                "</button>"
+                f'<div class="wb-menu" popover id="wbm-match-{match.pk}"><ul>'
+                f'<li><a href="{referees}">{self.icon("flag")}Referees</a></li>'
+                f'<li><a href="{edit}">{self.icon("pencil")}Edit</a></li>'
+                '<li class="wb-menu-last">'
+                f'<form method="post" action="{delete}" '
+                f'data-wb-confirm="The match “{name}” will be removed for good." '
+                f'data-wb-confirm-title="Delete {name}?" '
+                'data-wb-confirm-label="Delete match">'
+                f'{csrf}<button type="submit" class="wb-danger-item">'
+                f'{self.icon("trash-2")}Delete</button></form></li>'
+                "</ul></div></div></td>"
+            ),
+            explorer=(
+                '<td class="actions-cell"><div class="row-actions"><div class="menu">'
+                '<button type="button" class="button quiet icon-only compact" '
+                'data-popover aria-expanded="false" '
+                f'aria-controls="row-menu-match-{match.pk}">{self.icon("more")}'
+                f'<span class="visually-hidden">More actions for {name}</span>'
+                "</button>"
+                f'<div class="menu-panel" id="row-menu-match-{match.pk}">'
+                f'<a href="{referees}">{self.icon("referee")}Referees</a>'
+                f'<a href="{edit}">{self.icon("edit")}Edit</a>'
+                f'<form method="post" action="{delete}" '
+                f'data-confirm="The match “{name}” will be removed for good." '
+                'data-confirm-title="Delete this match?" data-confirm-label="Delete">'
+                f'{csrf}<button type="submit" class="destructive-item">'
+                f'{self.icon("trash")}Delete</button></form>'
+                "</div></div></div></td>"
+            ),
+        )
+
+    def test_a_bye_at_home_is_named_in_its_row(self):
+        match = self.bye(home_team=None, away_team__title="Marlins")
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:edit", *self.args
+            )
+        self.assertResponseContains(
+            self.by_shell(
+                workbook='<td data-label="Home">Bye</td>', explorer="<td>Bye</td>"
+            ),
+        )
+        self.assertResponseContains(self.actions_cell(match, "Bye vs Marlins"))
+
+    def test_a_bye_away_is_named_in_its_row(self):
+        match = self.bye(home_team__title="Leopards", away_team=None)
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:edit", *self.args
+            )
+        self.assertResponseContains(
+            self.by_shell(
+                workbook='<td data-label="Away">Bye</td>', explorer="<td>Bye</td>"
+            ),
+        )
+        self.assertResponseContains(self.actions_cell(match, "Leopards vs Bye"))
+
+    def test_the_page_of_a_bye_is_titled_in_plain_text(self):
+        match = self.bye(home_team=None, away_team__title="Marlins")
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:match:edit",
+                *self.args,
+                match.pk,
+            )
+        brand = get_brand().name
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=f"<title>Bye vs Marlins &middot; {brand}</title>",
+                explorer=f"<title>Regular Season &ndash; {brand}</title>",
+            ),
+        )
+        self.assertResponseContains("<h1>Bye vs Marlins</h1>")
+
+    def test_the_results_page_names_the_home_team_of_a_bye_away(self):
+        bye = self.results(home_team__title="Leopards", away_team=None)
+        self.assertResponseContains(self.bye_row(bye, "Leopards"))
+
+    def test_the_results_page_names_the_away_team_of_a_bye_at_home(self):
+        bye = self.results(home_team=None, away_team__title="Marlins")
+        self.assertResponseContains(self.bye_row(bye, "Marlins"))

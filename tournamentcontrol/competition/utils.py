@@ -116,7 +116,7 @@ def team_title_case_clause(team):
         ),
         When(
             is_bye=True,
-            then=Value('<span class="bye" title="Bye">Bye</span>'),
+            then=Value("Bye"),
         ),
         default=Value(None, output_field=CharField()),
     )
@@ -129,7 +129,7 @@ class FauxQueryset(list):
     """
 
     def __init__(self, model, team=None, *args, **kwargs):
-        super(FauxQueryset, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         # the team attribute is a legacy from a previous implementation
         # detail, we need to improve this. FIXME.
         self.team = team
@@ -376,7 +376,7 @@ def round_robin_format(
     for round in round_robin(teams, rounds):
         s += "ROUND\n"
         for home, away in round:
-            s += "%s: %s vs %s\n" % (i, home, away)
+            s += f"{i}: {home} vs {away}\n"
             i += 1
     return s.strip()
 
@@ -444,8 +444,8 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
         for pool in range(number_of_pools):
             match = MatchDescriptor(
                 pool + 1,
-                "G%dP1" % (pool + 1),
-                "G%dP2" % (number_of_pools - pool),
+                f"G{pool + 1}P1",
+                f"G{number_of_pools - pool}P2",
                 f"{initial.round_label} {pool + 1}",
             )
             initial.add(match)
@@ -470,8 +470,8 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
         for i in range(matches_this_round):
             match = MatchDescriptor(
                 series[-1].matches[-1].match_id + i + 1,
-                "W%s" % (series[-1].matches[i].match_id),
-                "W%s" % (series[-1].matches[-1 - i].match_id),
+                f"W{series[-1].matches[i].match_id}",
+                f"W{series[-1].matches[-1 - i].match_id}",
                 f"{this_round.round_label} {i + 1}",
             )
             this_round.add(match)
@@ -483,8 +483,8 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
     if bronze_playoff is not None:
         match = MatchDescriptor(
             series[-1].matches[0].match_id + 1,
-            "L%s" % (series[-2].matches[0].match_id),
-            "L%s" % (series[-2].matches[1].match_id),
+            f"L{series[-2].matches[0].match_id}",
+            f"L{series[-2].matches[1].match_id}",
             bronze_playoff,
         )
         series[-1].add(match)
@@ -758,7 +758,7 @@ def regrade(team, to, from_date=None):
 
 def team_and_division(o):
     "For use on Model.team_clashes as label_from_instance argument."
-    return "%s (%s)" % (o.title, o.division.title)
+    return f"{o.title} ({o.division.title})"
 
 
 #
