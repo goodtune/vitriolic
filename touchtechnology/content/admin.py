@@ -8,6 +8,7 @@ from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import NoReverseMatch, include, path, re_path, resolve, reverse
 from django.utils.functional import cached_property
+from django.utils.http import urlencode
 from django.utils.translation import gettext_lazy as _
 from first import first
 
@@ -304,6 +305,10 @@ class ContentAdminComponent(AdminComponent):
     @staff_login_required_m
     def edit_folder(self, request, pk=None, *args, **kwargs):
         form_class = NewSitemapNodeForm if pk is None else SitemapNodeForm
+        # Folders have no list of their own: a new one is found in the sitemap.
+        post_save_redirect = (
+            self.redirect(self.reverse("index")) if pk is None else None
+        )
         return self.generic_edit(
             request,
             SitemapNode,
@@ -311,6 +316,7 @@ class ContentAdminComponent(AdminComponent):
             form_class=form_class,
             related=(),
             permission_required=True,
+            post_save_redirect=post_save_redirect,
             extra_context=kwargs,
         )
 
@@ -319,7 +325,16 @@ class ContentAdminComponent(AdminComponent):
         node = get_object_or_404(SitemapNode, pk=pk)
         if not node.is_leaf_node():
             raise Http404
-        return self.generic_delete(request, SitemapNode, pk=pk, extra_context=kwargs)
+        redirect_to = str(self.reverse("index"))
+        if node.parent_id:
+            redirect_to = f"{redirect_to}?{urlencode({'r': node.parent_id})}"
+        return self.generic_delete(
+            request,
+            SitemapNode,
+            pk=pk,
+            post_delete_redirect=self.redirect(redirect_to),
+            extra_context=kwargs,
+        )
 
     # Page views
 
@@ -551,6 +566,12 @@ class ContentAdminComponent(AdminComponent):
     def ls(self, request, path=None, *args, **kwargs):
         try:
             directories, files = default_storage.listdir(path or ".")
+        except FileNotFoundError as e:
+            # A site nobody has uploaded to has no media folder yet, which is
+            # an empty site's files, not a missing page. A folder in it can be.
+            if path:
+                raise Http404(e)
+            directories, files = [], []
         except OSError as e:
             raise Http404(e)
 

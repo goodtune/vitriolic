@@ -1821,11 +1821,15 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_season(self, request, extra_context, season, **kwargs):
+        post_delete_redirect = self.redirect(
+            season.competition.urls["edit"] + "#seasons-tab"
+        )
         return self.generic_delete(
             request,
             Season,
             pk=season.pk,
             permission_required=True,
+            post_delete_redirect=post_delete_redirect,
             extra_context=extra_context,
         )
 
@@ -2343,19 +2347,12 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def perms_team(self, request, team, **kwargs):
-        competition = kwargs.get("competition")
-        season = kwargs.get("season")
         division = kwargs.get("division")
         return self.generic_permissions(
             request,
             Team,
             instance=team,
-            post_save_redirect="admin:fixja:competition:season:division:team:list",
-            post_save_redirect_args=(
-                competition.pk,
-                season.pk,
-                division.pk,
-            ),
+            post_save_redirect=self.redirect(division.urls["edit"] + "#teams-tab"),
             permission_required=True,
             **kwargs,
         )
