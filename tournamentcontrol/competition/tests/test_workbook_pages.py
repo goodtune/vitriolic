@@ -6,6 +6,7 @@ returns to.
 
 import datetime
 
+from freezegun import freeze_time
 from test_plus import TestCase
 
 from touchtechnology.admin.tests.shells import per_shell
@@ -56,12 +57,84 @@ class SeasonChecklistTests(TestCase):
                 ("teams", False),
                 ("draw", False),
                 ("schedule", False),
-                ("results", False),
             ],
         )
         self.assertEqual(checklist.next_step.key, "timeslots")
         # The dates set aside are optional: they do not count.
-        self.assertEqual((checklist.done, checklist.total), (2, 8))
+        self.assertEqual((checklist.done, checklist.total), (2, 7))
+        self.assertEqual(checklist.folded, False)
+
+    def set_up_season(self):
+        """
+        Everything the checklist asks for, except the optional dates set
+        aside, and a match played last week with no result yet.
+        """
+        factories.SeasonMatchTimeFactory.create(season=self.season)
+        ground = factories.GroundFactory.create(venue__season=self.season)
+        home, away = factories.TeamFactory.create_batch(2, division=self.division)
+        played = datetime.datetime(2026, 9, 16, 18, 0, tzinfo=datetime.UTC)
+        return factories.MatchFactory.create(
+            stage=factories.StageFactory.create(division=self.division),
+            home_team=home,
+            away_team=away,
+            play_at=ground,
+            datetime=played,
+            date=played.date(),
+            time=played.time(),
+        )
+
+    @freeze_time("2026-10-01")
+    def test_a_season_with_only_results_to_enter_is_all_done(self):
+        self.set_up_season()
+        checklist = season_checklist(self.season)
+        self.assertEqual(
+            [(step.key, step.done) for step in checklist.steps],
+            [
+                ("details", True),
+                ("timeslots", True),
+                ("venues", True),
+                ("exclusions", False),
+                ("divisions", True),
+                ("teams", True),
+                ("draw", True),
+                ("schedule", True),
+            ],
+        )
+        self.assertEqual((checklist.done, checklist.total), (7, 7))
+        self.assertEqual(checklist.complete, True)
+        self.assertEqual(checklist.next_step, None)
+        self.assertEqual(checklist.folded, True)
+
+    @freeze_time("2026-10-01")
+    def test_the_season_page_folds_a_finished_checklist(self):
+        self.set_up_season()
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:competition:season:edit",
+                self.season.competition_id,
+                self.season.pk,
+            )
+        self.assertEqual(self.last_response.context["setup"].folded, True)
+        self.assertResponseContains(
+            '<span class="wb-checklist-score">'
+            f'{ICON % "circle-check"} All done</span>',
+        )
+        self.assertResponseContains(
+            '<button type="button" class="wb-button wb-checklist-show" '
+            f'data-wb-checklist-show>{ICON % "clipboard-list"}'
+            "Show set-up checklist</button>",
+        )
+        # Results are not a set-up step, but the page still offers them.
+        url = self.reverse(
+            "admin:fixja:match-results",
+            self.season.competition_id,
+            self.season.pk,
+            "20260916",
+        )
+        self.assertResponseContains(
+            f'<a class="wb-button wb-button-primary" href="{url}">'
+            f'{ICON % "list-checks"}Enter results</a>',
+        )
 
     def test_a_division_without_teams_is_named_and_linked(self):
         step = season_checklist(self.season).steps[5]
@@ -111,6 +184,19 @@ class DivisionPageTests(TestCase):
             self.division.season.competition_id,
             self.division.season_id,
             self.division.pk,
+        )
+
+    def test_the_division_page_can_bring_a_hidden_checklist_back(self):
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:edit", *self.args
+            )
+        # No teams yet, so the checklist starts open.
+        self.assertEqual(self.last_response.context["division_setup"].folded, False)
+        self.assertResponseContains(
+            '<button type="button" class="wb-button wb-checklist-show" '
+            f'data-wb-checklist-show>{ICON % "clipboard-list"}'
+            "Show set-up checklist</button>",
         )
 
     def test_a_division_needs_its_points_before_results(self):

@@ -862,13 +862,54 @@
 	}
 
 	/* ------------------------------------------------------------------
-	 * A checklist is open at a desk and folded on a phone.
+	 * Set-up checklists (_checklist.html): the browser keeps the fold the
+	 * person chose for each kind, and whether they hid them all. The page's
+	 * head applies both before the page is drawn (base.html).
 	 */
 
-	function checklists(root) {
-		each(root, "details[data-wb-fold-narrow]", function (details) {
-			if (!wide.matches) {
-				details.open = false;
+	function checklists() {
+		var html = document.documentElement;
+
+		function keep(key, value) {
+			try {
+				if (value === null) {
+					window.localStorage.removeItem(key);
+				} else {
+					window.localStorage.setItem(key, value);
+				}
+			} catch (e) {
+				// No storage (a private window): the choice lasts for the page.
+			}
+		}
+
+		document.addEventListener("click", function (event) {
+			if (!event.target.closest) {
+				return;
+			}
+			var summary = event.target.closest("details[data-wb-checklist] > summary");
+			if (summary) {
+				// The click is about to toggle it (a key press on the summary
+				// clicks it too).
+				var details = summary.parentNode;
+				keep("wb-checklist-fold:" + details.getAttribute("data-wb-checklist"), details.open ? "folded" : "open");
+				return;
+			}
+			if (event.target.closest("[data-wb-checklist-hide]")) {
+				keep("wb-checklists", "hidden");
+				html.setAttribute("data-wb-checklists", "hidden");
+				var show = document.querySelector("[data-wb-checklist-show]");
+				if (show) {
+					show.focus();
+				}
+				return;
+			}
+			if (event.target.closest("[data-wb-checklist-show]")) {
+				keep("wb-checklists", null);
+				html.removeAttribute("data-wb-checklists");
+				var back = document.querySelector("details[data-wb-checklist] > summary");
+				if (back) {
+					back.focus();
+				}
 			}
 		});
 	}
@@ -1060,7 +1101,7 @@
 	copies();
 	tabLinks();
 	confirms();
-	checklists(document);
+	checklists();
 	enhance(document);
 
 	document.addEventListener("htmx:load", function (event) {

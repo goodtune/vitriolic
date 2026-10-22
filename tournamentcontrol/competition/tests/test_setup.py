@@ -29,6 +29,20 @@ class SetupTests(TestCase):
         self.assertTrue(setup.complete)
         self.assertIsNone(setup.next_step)
 
+    def test_folded_when_every_required_step_is_done(self):
+        cases = [
+            ("every step done", [Step("One", True), Step("Two", True)], True),
+            ("a step to do", [Step("One", True), Step("Two", False)], False),
+            (
+                "only an optional step left",
+                [Step("One", True), Step("Two", False, optional=True)],
+                True,
+            ),
+        ]
+        for name, steps, folded in cases:
+            with self.subTest(name):
+                self.assertEqual(Setup("Set-up", steps).folded, folded)
+
 
 @per_shell(shells=("explorer",))
 class SeasonSetupTests(TestCase):

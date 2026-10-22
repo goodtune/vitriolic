@@ -195,7 +195,12 @@ def awaiting_results(matches):
 
 
 def season_checklist(season):
-    """The jobs that set ``season`` up and run it, in the order they are done."""
+    """
+    The jobs that set ``season`` up, in the order they are done. Entering
+    results is not one of them: it is the work of every match day once the
+    season is set up, offered by the home page's tasks and the Awaiting
+    Scores widget.
+    """
     edit = str(season.urls["edit"])
     timeslots = season.timeslots.count()
     venues = season.venues.count()
@@ -216,9 +221,6 @@ def season_checklist(season):
         matches.exclude(is_bye=True)
         .filter(Q(date__isnull=True) | Q(time__isnull=True) | Q(play_at__isnull=True))
         .count()
-    )
-    awaiting = list(
-        awaiting_results(matches).order_by("date").values_list("date", flat=True)
     )
 
     def division_link(division, tab):
@@ -326,33 +328,6 @@ def season_checklist(season):
                 else (_("All scheduled") if total else _("Once the draw is built"))
             ),
             edit + "#schedule-tab",
-        ),
-        _step(
-            "results",
-            _("Enter the results"),
-            total > 0 and not awaiting,
-            (
-                ngettext(
-                    "%(n)d match waiting for a result",
-                    "%(n)d matches waiting for a result",
-                    len(awaiting),
-                )
-                % {"n": len(awaiting)}
-                if awaiting
-                else (_("Up to date") if total else _("On each match day"))
-            ),
-            (
-                reverse(
-                    "admin:fixja:match-results",
-                    args=(
-                        season.competition_id,
-                        season.pk,
-                        awaiting[0].strftime("%Y%m%d"),
-                    ),
-                )
-                if awaiting
-                else edit + "#schedule-tab"
-            ),
         ),
     ]
     return Setup(_("Season set-up"), steps)
@@ -1691,6 +1666,14 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             extra_context.setdefault("match_days", match_days(season))
             if request.method == "GET" and "_htmx_tab" not in request.GET:
                 extra_context.setdefault("setup", self.season_progress(season))
+                # The first day with a result to enter, for the page's button.
+                extra_context.setdefault(
+                    "results_day",
+                    awaiting_results(season.matches)
+                    .order_by("date")
+                    .values_list("date", flat=True)
+                    .first(),
+                )
 
         # In the order a season is set up: divisions, then when and where.
         related = (

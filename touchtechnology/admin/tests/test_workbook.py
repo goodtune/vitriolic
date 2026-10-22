@@ -1,14 +1,17 @@
 """
 The Workbook interface's own pieces: how a field's control is drawn, where a
-page sits (its trail), the home page's jobs, and Save and add another.
+page sits (its trail), the home page's jobs, the set-up checklist, and Save
+and add another.
 """
 
 from django import forms
 from django.template import Context, Template
+from django.template.loader import render_to_string
 from django.test import RequestFactory
 from django.urls import reverse_lazy
 from test_plus import TestCase
 
+from touchtechnology.admin.setup import Setup, Step
 from touchtechnology.admin.tests.shells import per_shell
 from touchtechnology.common.forms.mixins import BootstrapFormControlMixin
 from touchtechnology.common.forms.widgets import HTMLWidget, LocationWidget
@@ -263,4 +266,79 @@ class AddAnotherTests(TestCase):
         self.assertResponseNotContains(
             '<button type="submit" name="_addanother" value="1" class="wb-button">'
             "%sSave and add another redirect</button>" % (ICON % "copy-plus"),
+        )
+
+
+def checklist_html(kind, open_, optional):
+    """
+    A two-step checklist as ``_checklist.html`` draws it: the first step done,
+    the second (optional or not) still to do.
+    """
+    if optional:
+        score, total, percent, nxt = f"{ICON % 'circle-check'} All done", 1, 100, ""
+        second, badge = "wb-step", '<span class="wb-step-optional">optional</span>'
+    else:
+        score, total, percent = "1 of 2 done", 2, 50
+        nxt = '<span class="wb-checklist-next">Next: Set dates aside</span>'
+        second, badge = "wb-step is-next", ""
+    return (
+        '<div class="wb-checklist-panel">'
+        '<button type="button" class="wb-checklist-hide" data-wb-checklist-hide>'
+        f'{ICON % "x"}<span aria-hidden="true">Hide</span>'
+        '<span class="wb-sr">Hide the set-up checklists</span></button>'
+        f'<details class="wb-sheet wb-checklist" data-wb-checklist="{kind}"'
+        f'{" open" if open_ else ""}>'
+        '<summary><h2 class="wb-checklist-title">Season set-up</h2>'
+        '<span class="wb-checklist-toggle" aria-hidden="true">'
+        f'{ICON % "chevron-down"}</span>'
+        f'<span class="wb-checklist-score">{score}</span>{nxt}'
+        '<span class="wb-progress" role="progressbar" aria-label="Season set-up" '
+        f'aria-valuemin="0" aria-valuemax="{total}" aria-valuenow="1">'
+        f'<span style="--done: {percent}%"></span></span></summary>'
+        '<ol class="wb-steps"><li class="wb-step is-done">'
+        f'<span class="wb-step-mark" aria-hidden="true">{ICON % "check"}</span>'
+        '<span class="wb-step-body"><span class="wb-step-title">'
+        '<a href="/one/">Name it</a></span><span class="wb-step-note">'
+        '<span class="wb-sr">Done: </span>Named</span></span></li>'
+        f'<li class="{second}"><span class="wb-step-mark" aria-hidden="true">2</span>'
+        '<span class="wb-step-body"><span class="wb-step-title">'
+        f'<a href="/two/">Set dates aside</a>{badge}</span>'
+        '<span class="wb-step-note"><span class="wb-sr">To do: </span>Breaks'
+        "</span></span></li></ol></details>"
+        "<script>window.wbChecklist && "
+        "wbChecklist(document.currentScript.parentNode)</script></div>"
+    )
+
+
+@per_shell(shells=("workbook",))
+class ChecklistTests(TestCase):
+    """
+    The set-up checklist starts folded when every required step is done and
+    open otherwise, worked out on the server so it works without scripts.
+    """
+
+    def render(self, kind, optional):
+        steps = [
+            Step("Name it", True, "Named", "/one/"),
+            Step("Set dates aside", False, "Breaks", "/two/", optional=optional),
+        ]
+        return render_to_string(
+            "touchtechnology/admin/workbook/_checklist.html",
+            {
+                "checklist": Setup("Season set-up", steps),
+                "title": "Season set-up",
+                "kind": kind,
+            },
+        )
+
+    def test_a_checklist_with_a_step_to_do_starts_open(self):
+        self.assertHTMLEqual(
+            self.render("season", optional=False),
+            checklist_html("season", open_=True, optional=False),
+        )
+
+    def test_a_checklist_with_only_optional_steps_left_starts_folded(self):
+        self.assertHTMLEqual(
+            self.render("division", optional=True),
+            checklist_html("division", open_=False, optional=True),
         )

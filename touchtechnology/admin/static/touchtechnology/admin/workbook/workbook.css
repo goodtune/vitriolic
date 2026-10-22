@@ -1372,6 +1372,8 @@ select.wb-multi { max-width: 16rem; }
 	list-style: none;
 }
 .wb-checklist > summary::-webkit-details-marker { display: none; }
+/* The sheet clips what overflows it, so the focus ring is drawn inside. */
+.wb-checklist > summary:focus-visible { outline-offset: -4px; border-radius: var(--wb-radius); }
 .wb-checklist-title { margin: 0; font-size: 1.15rem; }
 .wb-checklist-score { color: var(--wb-ink-soft); font-weight: 700; white-space: nowrap; }
 .wb-checklist-next { grid-column: 1 / -1; color: var(--wb-ink-soft); }
@@ -1379,6 +1381,44 @@ select.wb-multi { max-width: 16rem; }
 .wb-checklist-toggle { grid-column: 2; grid-row: 1; }
 .wb-checklist-toggle { display: inline-flex; color: var(--wb-accent); transition: transform 0.15s ease; }
 .wb-checklist[open] .wb-checklist-toggle { transform: rotate(180deg); }
+/* Until the page's script has given it the fold the person chose, a checklist
+ * shows only its summary, so it never shows open and then folds. */
+.js .wb-checklist:not([data-wb-ready]) > :not(summary) { display: none; }
+
+/* Hiding the checklists, and the page head's way back (see _checklist.html). */
+.wb-checklist-panel {
+	--wb-sheet-pad: 1rem;
+	--wb-hide-top: 0.7rem;
+	position: relative;
+}
+@media (min-width: 40rem) { .wb-checklist-panel { --wb-sheet-pad: 1.5rem; } }
+.wb-checklist-hide {
+	position: absolute;
+	z-index: 1;
+	top: var(--wb-hide-top);
+	right: calc(var(--wb-sheet-pad) + 1.75rem);
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	min-height: 2rem;
+	padding: 0 0.6rem;
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	color: var(--wb-ink-soft);
+	font: inherit;
+	font-size: 0.9rem;
+	font-weight: 700;
+	cursor: pointer;
+}
+.wb-checklist-hide:hover { background: var(--wb-accent-tint); color: var(--wb-accent); }
+.js .wb-checklist-title { padding-right: 5rem; }
+.no-js .wb-checklist-hide, .wb-checklist-show { display: none; }
+[data-wb-checklists="hidden"] .wb-checklist-panel { display: none; }
+[data-wb-checklists="hidden"] .wb-checklist-show { display: inline-flex; }
+/* A column that held only the checklist goes, and the page takes its width. */
+[data-wb-checklists="hidden"] .wb-aside:has(> .wb-checklist-panel:only-child) { display: none; }
+[data-wb-checklists="hidden"] .wb-layout-aside:has(> .wb-aside > .wb-checklist-panel:only-child) { grid-template-columns: minmax(0, 1fr); }
 .wb-progress {
 	grid-column: 1 / -1;
 	height: 0.7rem;
@@ -1801,6 +1841,7 @@ h3 + .wb-table-wrap { margin-bottom: 1.5rem; }
 	.wb-tab { min-height: 2.4rem; padding: 0.2rem 0.75rem; font-size: 0.95rem; }
 	.wb-tab-count { min-width: 1.4rem; height: 1.4rem; font-size: 0.75rem; }
 	.wb-checklist > summary { padding: 0.75rem var(--wb-sheet-pad); row-gap: 0.25rem; }
+	.wb-checklist-panel { --wb-hide-top: 0.4rem; }
 	.wb-checklist-title { font-size: 1.05rem; }
 	.wb-checklist-next { font-size: 0.925rem; }
 	.wb-layout-aside { gap: 0.75rem; }
