@@ -27,7 +27,7 @@
 		{% endfor %}
 		<div class="form-actions">
 			<button type="submit" class="button primary">{% icon "check" %}<span>{% trans "Save" %}</span></button>
-			<a class="button" href="{{ cancel_url|default:"../.." }}">{% trans "Cancel" %}</a>
+			<a class="button" href="{{ cancel_url|default:".." }}">{% trans "Cancel" %}</a>
 		</div>
 	</form>
 {% endblock %}
