@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-
-
 import collections
 import html
 import logging
@@ -37,10 +34,10 @@ from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
 from django.template import Template
 from django.template.loader import get_template
 from django.utils import timezone
+from django.utils.formats import date_format, time_format
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
-from django.utils.translation import gettext_lazy as _
-from django.utils.translation import pgettext
+from django.utils.translation import gettext, gettext_lazy as _, pgettext
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -3099,6 +3096,10 @@ class ExclusionDateBase(AdminUrlMixin, models.Model):
         abstract = True
         ordering = ("date",)
 
+    def __str__(self):
+        # The date as the lists of exclusion dates show it.
+        return date_format(self.date, "l j F Y") if self.date else ""
+
 
 class SeasonExclusionDate(ExclusionDateBase):
     season = ForeignKey("Season", related_name="exclusions", on_delete=CASCADE)
@@ -3187,7 +3188,8 @@ class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
         return (self.season.competition_id, self.season_id, self.pk)
 
     def __str__(self):
-        return f"#{self.pk}"
+        # The first kick-off, as the list of time slots shows it.
+        return time_format(self.start, "H:i") if self.start else ""
 
 
 class LiveStreamKey(AdminUrlMixin, models.Model):
@@ -3413,7 +3415,7 @@ class MatchScoreSheet(AdminUrlMixin, models.Model):
         )
 
     def __str__(self):
-        return str(self.image)
+        return gettext("Score sheet for %(match)s") % {"match": self.match}
 
 
 class MatchStatisticBase(models.Model):
