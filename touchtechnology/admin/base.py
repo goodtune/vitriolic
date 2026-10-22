@@ -4,7 +4,6 @@ from urllib.parse import urlunparse
 from django.contrib import messages
 from django.http import HttpResponseRedirect
 from django.urls import path, reverse
-from django.utils.encoding import smart_str
 from modelforms.forms import ModelForm
 
 from touchtechnology.admin.branding import get_brand
@@ -80,16 +79,22 @@ class AdminComponentMixin(ShellTemplatesMixin):
         Ensure that the AdminComponent will redirect the user if it is deemed
         to be hidden for this tenant. Will have no impact on single-tenant
         installs.
+
+        The admin site passes itself to each view of a component as ``admin``,
+        and a view that does not hand it on to its context still gets the site
+        the component is registered with.
         """
-        if hasattr(request, "tenant"):
-            admin = context.get("admin")
-            if admin._hidden_component(self):
-                messages.error(
-                    request,
-                    'Attempt to access component "%s" '
-                    "is not allowed for this tenant." % smart_str(self.verbose_name),
-                )
-                return HttpResponseRedirect(reverse("admin:index"))
+        admin = context.get("admin")
+        if admin is None:
+            admin = context["admin"] = self.admin_site or default_site
+
+        if hasattr(request, "tenant") and admin._hidden_component(self):
+            messages.error(
+                request,
+                f'Attempt to access component "{self.verbose_name}" '
+                "is not allowed for this tenant.",
+            )
+            return HttpResponseRedirect(reverse("admin:index"))
 
         if SITEMAP_HTTPS_OPTION and not request.is_secure():
             host = request.META.get("HTTP_HOST")
