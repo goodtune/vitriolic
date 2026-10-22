@@ -80,6 +80,8 @@ WIDGET_HEADINGS = by_shell(workbook="section.wb-widget h2", explorer="main .card
 
 #: The name of the button that opens the menu of actions of a row.
 ROW_MENU = re.compile(by_shell(workbook="More actions", explorer="^More actions for"))
+#: What the dialog that asks before something is deleted says, under its heading.
+CONFIRM_BODY = by_shell(workbook="[data-wb-confirm-text]", explorer="#confirm-body")
 
 #: The rows of the bulk-create page.
 BULK_ROWS = by_shell(workbook=".wb-bulk-row", explorer="table.bulk-table tbody tr")
