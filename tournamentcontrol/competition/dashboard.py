@@ -1,7 +1,7 @@
 import collections
 import logging
 
-from django.db.models import Count, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.db.models.expressions import RawSQL
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -18,48 +18,65 @@ logger = logging.getLogger(__name__)
 
 def matches_require_basic_results(now=None, matches=None):
     """
-    Matches that have been played (and byes not yet processed) without a
-    result. Matches mirrored from an upstream provider are left out: their
-    results come from the provider, so they are never entered here.
+    Matches waiting for a result: the one definition, shared by the Awaiting
+    Scores widget, the home page's "Enter results" task, the season's set-up
+    checklist and the admin MCP tool ``list_matches_awaiting_results``.
+
+    A match waits once it has kicked off (at or before ``now``) with no score.
+    A bye waits for processing once its season has kicked off a match on the
+    bye's day or later: a bye has no kick-off of its own, and its season's
+    matches say when its day has come where the season is played, whatever
+    the server's clock says. A processed bye never waits (processing leaves
+    its scores empty). Washouts, matches the ladder leaves out, matches in a
+    complete season and matches mirrored from an upstream provider (their
+    results come from the provider, so they are never entered here) never
+    wait.
+
+    ``matches`` narrows the matches looked at (a season's, a day's); the
+    conditions above always apply to it.
     """
     if now is None:
         now = timezone.now()
         now = now.replace(second=0, microsecond=0)
 
     if timezone.is_naive(now):
-        timezone.make_aware(now, timezone.get_default_timezone())
+        now = timezone.make_aware(now, timezone.get_default_timezone())
 
-    # If not provided up front, build a base queryset of matches that take
-    # place prior to "now".
     if matches is None:
-        try:
-            last_bye_date = (
-                Match.objects.filter(datetime__lte=now).dates("date", "day").latest()
-            )
-        except Match.DoesNotExist:
-            last_bye_date = now.date()
-        matches = Match.objects.filter(
-            Q(datetime__lte=now)
-            | Q(is_bye=True, bye_processed=False, date__lte=last_bye_date),
-            stage__division__season__complete=False,
-        )
+        matches = Match.objects.all()
 
-    return matches.filter(
-        home_team_score=None,
-        away_team_score=None,
-        is_washout=False,
-        include_in_ladder=True,
-        upstream_id__isnull=True,
-    ).select_related(
-        "stage__division__season__competition",
-        "play_at",
-        "home_team__club",
-        "home_team__division",
-        "away_team__club",
-        "away_team__division",
-    ).defer(
-        "live_stream_thumbnail_image",
-        "stage__division__season__live_stream_thumbnail_image",
+    kicked_off = Q(is_bye=False, datetime__lte=now)
+    day_played = Exists(
+        Match.objects.filter(
+            stage__division__season=OuterRef("stage__division__season"),
+            datetime__lte=now,
+            date__gte=OuterRef("date"),
+        )
+    )
+    bye_due = Q(is_bye=True, bye_processed=False) & Q(day_played)
+
+    return (
+        matches.filter(
+            kicked_off | bye_due,
+            stage__division__season__complete=False,
+            home_team_score=None,
+            away_team_score=None,
+            is_washout=False,
+            include_in_ladder=True,
+            upstream_id__isnull=True,
+        )
+        .select_related(
+            "stage__division__season__competition",
+            "play_at",
+            "home_team__club",
+            "home_team__division",
+            "away_team__club",
+            "away_team__division",
+        )
+        .defer(
+            "live_stream_thumbnail_image",
+            "stage__division__season__live_stream_thumbnail_image",
+        )
     )
 
 
