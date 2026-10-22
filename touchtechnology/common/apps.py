@@ -7,6 +7,7 @@ class CommonConfig(AppConfig):
     """Loads system checks for shared functionality."""
 
     name = "touchtechnology.common"
+    default_auto_field = "django.db.models.AutoField"
     verbose_name = "Touch Technology Common"
 
     def ready(self):

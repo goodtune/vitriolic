@@ -16,6 +16,7 @@ class ContentConfig(AppConfig):
     """Integrates content admin components and post-migrate hooks."""
 
     name = "touchtechnology.content"
+    default_auto_field = "django.db.models.AutoField"
 
     def ready(self):
         """Register admin component and placeholder handler."""
