@@ -23,19 +23,121 @@ Add `"touchtechnology.common.middleware.DatastarMiddleware"` to
 `ImproperlyConfigured` without it.
 
 The templates use template partials (`{% partialdef %}` and `{% partial %}`)
-without `{% load %}`. Django 6.0 and later need nothing. On Django 5.2 the
-partials come from `django-template-partials`, which a project installs
-itself (a dependency cannot be limited to one Django version, so the extra
-leaves it out and `CompOpsSite()` raises `ImproperlyConfigured` when it is
-missing): add `"template_partials"` to `INSTALLED_APPS` and
-`"template_partials.templatetags.partials"` to the `builtins` in the template
-`OPTIONS`. The app wraps the template loaders for you; if you set `loaders`
-yourself, it replaces them with its own cached list unless you wrap them in
-`("template_partials.loader.Loader", [...])` first.
+without `{% load %}`, and the views render a partial by name, for example
+`day.html#results`. Django 6.0 and later have partials built in and need no
+settings. Django 5.2 needs three settings, set out in
+[Template partials on Django 5.2](#template-partials-on-django-52).
 
 The booth refuses an action with a normal 200 response that carries the
 reason in the lamp. Datastar drops the body of non-200 responses, so a
 refusal that used an error status would never reach the page.
+
+## Template partials on Django 5.2
+
+Skip this section on Django 6.0 and later.
+
+On Django 5.2 the partials come from
+[django-template-partials](https://pypi.org/project/django-template-partials/)
+25.3 or later. Install it yourself. A dependency cannot be limited to one
+Django version, so the `async` extra leaves it out.
+
+Three settings go together, and each fails in its own way when it is missing:
+
+| Setting | When it is missing |
+| --- | --- |
+| `"template_partials"` in `INSTALLED_APPS` | `CompOpsSite()` raises `ImproperlyConfigured` when the URLconf loads |
+| `"template_partials.templatetags.partials"` in the `builtins` of the template `OPTIONS` | the pages fail with `TemplateSyntaxError`: `Invalid block tag ... 'partialdef'` |
+| the template loaders wrapped in `template_partials.loader.Loader` | the live updates fail with `TemplateDoesNotExist`, as they render a partial by name |
+
+### A project that sets no loaders
+
+This is the usual case, with `APP_DIRS` or without it. Add the app and the
+builtins:
+
+```python
+INSTALLED_APPS = [
+    # ...
+    "template_partials",
+]
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "builtins": ["template_partials.templatetags.partials"],
+            "context_processors": [
+                # ...
+            ],
+        },
+    },
+]
+```
+
+Nothing else is needed. When Django starts, the app removes `APP_DIRS` and
+puts the filesystem and app directories loaders, inside a cached loader,
+inside its own loader. It finds the engine by its name, which for
+`DjangoTemplates` is `django`. An entry with a different `NAME` is left alone:
+wrap its loaders as in the next section.
+
+### A project with its own loaders
+
+The app replaces `loaders` that are not wrapped yet. It does this without a
+message, and it uses its own list, so a loader of yours is gone and its
+templates are not found. Wrap your loaders yourself, before you add the app:
+
+```python
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "OPTIONS": {
+            "builtins": ["template_partials.templatetags.partials"],
+            "context_processors": [
+                # ...
+            ],
+            "loaders": [
+                (
+                    "template_partials.loader.Loader",
+                    [
+                        (
+                            "django.template.loaders.cached.Loader",
+                            [
+                                "myproject.loaders.TenantLoader",
+                                "django.template.loaders.filesystem.Loader",
+                                "django.template.loaders.app_directories.Loader",
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+        },
+    },
+]
+```
+
+The app sees that the first loader is its own and leaves the list as it is.
+These rules are easy to break:
+
+- The `template_partials.loader.Loader` entry must be the first loader, and it
+  must be a tuple (or list) of the loader and the loaders it wraps. A cached
+  loader around it, or a plain string, does not work.
+- Put all your loaders inside it, including the cached loader if you use one.
+  A loader outside it never sees the `#name` of a partial.
+- Remove `APP_DIRS`. Django does not accept `APP_DIRS` and `loaders` together.
+  Add `"django.template.loaders.app_directories.Loader"` to the list instead.
+
+### Checks
+
+When the URLconf mounts `CompOpsSite`, `manage.py check` reports a missing
+setting with the lines to add: `tournamentcontrol.competition.E002` for the
+builtins and `E003` for the loaders. The app needs no check, as `CompOpsSite()`
+refuses to mount without it. The check reports nothing on Django 6.0 and later,
+and nothing when the site is not mounted.
+
+It finds the site by its app name, `compops`. A site that you mount under
+another `app_name`, or from a content node (a database row), is not seen. To
+turn a check off, put its id in `SILENCED_SYSTEM_CHECKS`.
 
 ## Who can do what
 

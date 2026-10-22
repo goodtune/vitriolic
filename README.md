@@ -29,4 +29,22 @@ Django 5.2 is the minimum supported version. As of this release, we target and t
 
 The test suite runs against PostgreSQL 15, the oldest release supported by every Django version above.
 
+## Settings the competition sites need
+
+Some pages load template tag libraries that your project has to install. A page whose library is
+missing fails when it renders, with a `TemplateSyntaxError`. `manage.py check` reports the gap at
+start up, with the lines to add, for each site that your URLconf mounts:
+
+| Site | Needs | Check |
+|------|-------|-------|
+| `CompOpsSite` | On Django 5.2 only: `template_partials` in `INSTALLED_APPS`, its tags in the template `builtins` and its loader around your template loaders. [The settings in full][compops-partials]. | `tournamentcontrol.competition.E002` (builtins), `E003` (loaders); `CompOpsSite()` itself refuses to mount without the app |
+| `TournamentCalculatorSite` | `"mathfilters"` in `INSTALLED_APPS`. | `tournamentcontrol.competition.E004` |
+| `CompetitionSite` | `"embed_video"` in `INSTALLED_APPS`, for the match video page. | `tournamentcontrol.competition.W001` (a warning) |
+
+`pip install vitriolic[competition]` installs `django-mathfilters` and `django-embed-video`, but you add them
+to `INSTALLED_APPS` yourself. A site is found by its app name (`compops`, `calculator` and `competition`), so a
+site that you mount under another `app_name` is not checked.
+
+[compops-partials]: https://github.com/goodtune/vitriolic/blob/main/docs/compops.md#template-partials-on-django-52
+
 [wiktionary word of the day]: https://en.wiktionary.org/wiki/Wiktionary:Word_of_the_day
