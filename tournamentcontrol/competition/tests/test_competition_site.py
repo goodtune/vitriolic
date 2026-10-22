@@ -1764,9 +1764,9 @@ class VenueViewTests(TestCase):
             ground_url = self.reverse(
                 "competition:ground", *self._venue_args(ground.slug)
             )
-            self.assertResponseContains(f'href="{ground_url}"', html=False)
+            self.assertResponseContains(f'<a href="{ground_url}">{ground.title}</a>')
         day_url = self.reverse("competition:venue", *self._venue_args("20250314"))
-        self.assertResponseContains(f'href="{day_url}"', html=False)
+        self.assertResponseContains(f'<a href="{day_url}">Fri 14 Mar</a>')
         # each match links to its detail page
         match_url = self.reverse(
             "competition:match",
@@ -1775,7 +1775,7 @@ class VenueViewTests(TestCase):
             self.division.slug,
             m1.pk,
         )
-        self.assertResponseContains(f'href="{match_url}"', html=False)
+        self.assertResponseContains(f'<a href="{match_url}">Detail</a>')
 
     def test_venue_single_day(self):
         m1 = self._match(
@@ -1807,7 +1807,7 @@ class VenueViewTests(TestCase):
         )
         self.assertEqual(self.context["ground"], self.ground_1)
         venue_url = self.reverse("competition:venue", *self._venue_args())
-        self.assertResponseContains(f'href="{venue_url}"', html=False)
+        self.assertResponseContains(f'<a href="{venue_url}">{self.venue.title}</a>')
 
     def test_hidden_matches_excluded(self):
         when = datetime(2025, 3, 13, 10, tzinfo=ZoneInfo("UTC"))
@@ -1852,7 +1852,7 @@ class VenueViewTests(TestCase):
             "competition:season", self.season.competition.slug, self.season.slug
         )
         venue_url = self.reverse("competition:venue", *self._venue_args())
-        self.assertResponseContains(f'href="{venue_url}"', html=False)
+        self.assertResponseContains(f'<a href="{venue_url}">{self.venue.title}</a>')
 
     def test_empty_venue(self):
         self.assertGoodView("competition:venue", *self._venue_args())
