@@ -261,9 +261,9 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         ordering = ("title",)
 
     @cached_property
-    def _mvp_related(self):
+    def _list_related(self):
         """
-        Supercedes _mvp_annotate due to GROUP BY exceptions. Take full control
+        Supercedes _list_annotate due to GROUP BY exceptions. Take full control
         of the query. See the history for the earlier implementation.
         """
         query = (
@@ -330,7 +330,7 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         return res
 
     @cached_property
-    def _mvp_select_related(self):
+    def _list_select_related(self):
         res = {
             "teams": [
                 "division__season__competition",
@@ -339,7 +339,7 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         return res
 
     @cached_property
-    def _mvp_only(self):
+    def _list_only(self):
         res = {
             "teams": [
                 "club",
@@ -414,7 +414,7 @@ class Person(AdminUrlMixin, models.Model):
         return (self.club_id, self.pk)
 
     @cached_property
-    def _mvp_select_related(self):
+    def _list_select_related(self):
         res = {
             "statistics": [
                 "match__stage__division__season__competition",
@@ -614,7 +614,7 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
         return (self.competition_id, self.pk)
 
     @cached_property
-    def _mvp_related(self):
+    def _list_related(self):
         return {
             # live-stream thumbnail blobs are only needed by the thumbnail
             # views, never drag them out of the database for list views.
@@ -1831,11 +1831,11 @@ class Team(AdminUrlMixin, UpstreamMixin, OrderedSitemapNode):
         return super(Team, self).clean()
 
     @cached_property
-    def _mvp_select_related(self):
+    def _list_select_related(self):
         return {"people": ["person"]}
 
     @cached_property
-    def _mvp_prefetch_related(self):
+    def _list_prefetch_related(self):
         return {"people": ["roles"]}
 
     def _get_admin_namespace(self):

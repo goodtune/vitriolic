@@ -19,17 +19,17 @@ register = template.Library()
 
 
 @register.simple_tag(takes_context=True)
-def mvp_list(context, queryset, scope=None, template=None, paginate_by=None):
+def admin_list(context, queryset, scope=None, template=None, paginate_by=None):
     """
     A list of objects, drawn by the list include of the component's shell (see
-    ``mvp_list_context`` for what the include is given).
+    ``admin_list_context`` for what the include is given).
     """
-    context = mvp_list_context(context, queryset, scope, template, paginate_by)
+    context = admin_list_context(context, queryset, scope, template, paginate_by)
     shell = context["component"].shell
-    return loader.get_template(shell.template("mvp/list.html")).template.render(context)
+    return loader.get_template(shell.template("_list.html")).template.render(context)
 
 
-def mvp_list_context(context, queryset, scope=None, template=None, paginate_by=None):
+def admin_list_context(context, queryset, scope=None, template=None, paginate_by=None):
     model, manager = model_and_manager(queryset)
 
     request = context.get("request")
@@ -44,7 +44,7 @@ def mvp_list_context(context, queryset, scope=None, template=None, paginate_by=N
     if template is None:
         paths = component.template_path("list.inc.html", model._meta.model_name)
         # Ensure there is a sensible default so we always find something
-        paths.append(component.admin_template("mvp/list.inc.html"))
+        paths.append(component.admin_template("list.inc.html"))
         logger.debug("template_search=%r", paths)
         template = loader.select_template(paths)
         template_name = template.template.name
@@ -142,11 +142,11 @@ def related(instance, whitelist=None):
         rel[name] = getattr(instance, name)
 
     # improve performance of related queries
-    related = getattr(instance, "_mvp_related", {})
-    annotate = getattr(instance, "_mvp_annotate", {})
-    select_related = getattr(instance, "_mvp_select_related", {})
-    prefetch_related = getattr(instance, "_mvp_prefetch_related", {})
-    only = getattr(instance, "_mvp_only", {})
+    related = getattr(instance, "_list_related", {})
+    annotate = getattr(instance, "_list_annotate", {})
+    select_related = getattr(instance, "_list_select_related", {})
+    prefetch_related = getattr(instance, "_list_prefetch_related", {})
+    only = getattr(instance, "_list_only", {})
 
     for name, manager in rel.items():
         # Prioritise fully customised queries. If you take this route, you're
@@ -167,7 +167,7 @@ def related(instance, whitelist=None):
 
 
 @register.filter
-def mvp_list_template(manager, table=None):
+def admin_list_template(manager, table=None):
     """
     When looping through a list of "related" managers we may need to use an
     alternative template file.

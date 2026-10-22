@@ -49,11 +49,11 @@ class AdminOwnershipTests(TestCase):
             form = self.last_response.context["form"]
             self.assertIsInstance(form, AdminFormControlMixin)
 
-    def test_mvp_list_templates_live_in_admin(self):
-        for name in ("list.html", "list.inc.html", "list.split.inc.html"):
-            origin = select_template([self.shell.template("mvp/%s" % name)]).origin.name
+    def test_list_templates_live_in_admin(self):
+        for name in ("_list.html", "list.inc.html", "list.split.inc.html"):
+            origin = select_template([self.shell.template(name)]).origin.name
             self.assertIn(
-                "/touchtechnology/admin/templates/%s/" % self.shell.template("mvp"),
+                f"/touchtechnology/admin/templates/{self.shell.template_dir}/",
                 origin,
             )
 

@@ -1,5 +1,5 @@
 {% extends "touchtechnology/admin/explorer/base.html" %}
-{% load i18n common mvp_tags admin admin_explorer %}
+{% load i18n common admin_lists admin admin_explorer %}
 
 {% block page_actions %}
 	{% block object-actions %}
@@ -68,7 +68,7 @@
 						<section class="pane" data-tab-panel role="tabpanel" id="{{ name }}-tab" aria-labelledby="{{ name }}-tab-link">
 							{% block mvp-list %}
 								{% with table=templates|default:None %}
-									{% mvp_list manager.all template=manager|mvp_list_template:table %}
+									{% admin_list manager.all template=manager|admin_list_template:table %}
 								{% endwith %}
 							{% endblock %}
 						</section>

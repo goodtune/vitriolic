@@ -30,7 +30,7 @@ from guardian.utils import get_40x_or_None
 from modelforms.forms import ModelForm
 
 from touchtechnology.admin.sites import site as admin_site
-from touchtechnology.admin.templatetags.mvp_tags import related as related_filter
+from touchtechnology.admin.templatetags.admin_lists import related as related_filter
 from touchtechnology.common.decorators import (
     login_required_m,
     node2extracontext,
@@ -321,7 +321,7 @@ class Application(object):
         if list_templates is None:
             list_templates = self.template_path("list.inc.html", model._meta.model_name)
             # Always tack the admin's own version on the end as a fallback.
-            list_templates.append(self.admin_template("mvp/list.inc.html"))
+            list_templates.append(self.admin_template("list.inc.html"))
 
         # Determine the namespace of this Application, so we can construct
         # view names to pass to the template engine to reverse CRUD URI's.
