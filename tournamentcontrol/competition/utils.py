@@ -129,7 +129,7 @@ class FauxQueryset(list):
     """
 
     def __init__(self, model, team=None, *args, **kwargs):
-        super(FauxQueryset, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         # the team attribute is a legacy from a previous implementation
         # detail, we need to improve this. FIXME.
         self.team = team

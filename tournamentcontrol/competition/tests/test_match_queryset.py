@@ -100,6 +100,27 @@ class ByeTitleTests(TestCase):
             ("Leopards vs Bye", "Leopards", "Bye"),
         )
 
+    def test_the_side_with_the_bye_is_false(self):
+        """
+        A bye is false and a team is true, so ``away or home`` (and the
+        ``default`` filter) gives the team of a bye on either side.
+        """
+        bye = factories.MatchFactory.create(
+            stage=self.stage, is_bye=True, home_team=None, away_team__title="Marlins"
+        )
+        self.assertEqual(
+            [
+                bool(team)
+                for team in (
+                    bye.get_home_team(),
+                    bye.get_home_team_plain(),
+                    bye.get_away_team(),
+                    bye.get_away_team_plain(),
+                )
+            ],
+            [False, False, True, True],
+        )
+
     def test_the_database_names_a_bye_in_plain_text(self):
         bye = factories.MatchFactory.create(
             stage=self.stage, is_bye=True, home_team__title="Leopards", away_team=None

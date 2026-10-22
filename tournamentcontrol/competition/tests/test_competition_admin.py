@@ -4076,8 +4076,44 @@ class ByeMatchTests(TestCase):
             self.stage.pk,
         )
 
-    def bye(self, **teams):
-        return factories.MatchFactory.create(stage=self.stage, is_bye=True, **teams)
+    def bye(self, **kwargs):
+        return factories.MatchFactory.create(stage=self.stage, is_bye=True, **kwargs)
+
+    def results(self, **teams):
+        """The results page of the day of a bye, with only the bye to process."""
+        bye = self.bye(date=date(2026, 10, 8), time=None, datetime=None, **teams)
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:match-results", *self.args[:2], f"{bye.date:%Y%m%d}"
+            )
+        return bye
+
+    def bye_row(self, bye, team):
+        """The bye's row on the results page, named for the team with the bye."""
+        division = self.stage.division.title
+        key = f'<input type="hidden" name="byes-0-id" value="{bye.pk}" id="id_byes-0-id">'
+        attrs = self.by_shell(
+            workbook='class="wb-select"', explorer='placeholder="Bye processed"'
+        )
+        select = (
+            f'<select name="byes-0-bye_processed" {attrs} id="id_byes-0-bye_processed">'
+            '<option value="1">Yes</option><option value="0" selected>No</option>'
+            "</select>"
+        )
+        return self.by_shell(
+            workbook=(
+                f'<div class="wb-row-form">{key}'
+                '<div class="wb-field wb-field-select select"><div class="wb-label">'
+                '<label class="field_name" for="id_byes-0-bye_processed">'
+                f"{team}</label></div>"
+                f'<div class="wb-control-wrap">{select}</div></div>'
+                f'<p class="wb-help">{division}</p></div>'
+            ),
+            explorer=(
+                f'<li class="bye">{key}<label for="id_byes-0-bye_processed">{team} '
+                f'<small class="muted">{division}</small></label>{select}</li>'
+            ),
+        )
 
     def icon(self, name):
         css, sprite = self.by_shell(
@@ -4180,3 +4216,11 @@ class ByeMatchTests(TestCase):
             ),
         )
         self.assertResponseContains("<h1>Bye vs Marlins</h1>")
+
+    def test_the_results_page_names_the_home_team_of_a_bye_away(self):
+        bye = self.results(home_team__title="Leopards", away_team=None)
+        self.assertResponseContains(self.bye_row(bye, "Leopards"))
+
+    def test_the_results_page_names_the_away_team_of_a_bye_at_home(self):
+        bye = self.results(home_team=None, away_team__title="Marlins")
+        self.assertResponseContains(self.bye_row(bye, "Marlins"))

@@ -156,7 +156,7 @@ def permissions_required(
         return has_permission
 
 
-class CompetitionAdminMixin(object):
+class CompetitionAdminMixin:
     """
     Some administrative functions should be allowed to authenticated users on
     the front-end of the site. As long as we only use primitives from the base

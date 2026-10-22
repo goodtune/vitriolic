@@ -314,6 +314,33 @@ class ByeTests(ResultsFixture):
         (event,) = events.recent(self.season.pk)
         self.assertEqual(event["type"], "bye-processed")
 
+    def process(self, **teams):
+        """Process a bye of the day and return the event it publishes."""
+        bye = factories.MatchFactory.create(
+            stage=self.stage,
+            date=datetime.date(2026, 10, 8),
+            time=None,
+            datetime=None,
+            is_bye=True,
+            **teams,
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            self.post_score(bye, "", "", bye_processed="on")
+        (event,) = events.recent(self.season.pk)
+        return event
+
+    def test_a_processed_bye_away_names_the_home_team(self):
+        event = self.process(home_team__title="Leopards", away_team=None)
+        self.assertEqual(
+            event["summary"], f"Bye · {self.stage.division.title} · Leopards"
+        )
+
+    def test_a_processed_bye_at_home_names_the_away_team(self):
+        event = self.process(home_team=None, away_team__title="Marlins")
+        self.assertEqual(
+            event["summary"], f"Bye · {self.stage.division.title} · Marlins"
+        )
+
 
 class PermissionOrderTests(ResultsFixture):
     def fresh(self, user):
