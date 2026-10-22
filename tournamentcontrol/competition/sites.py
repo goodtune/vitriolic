@@ -98,7 +98,7 @@ def match_location(place):
         return place.title, coordinates(place)
 
     # Individual playing surfaces are often mapped only at the venue.
-    label = "%s, %s" % (ground.title, ground.venue.title)
+    label = f"{ground.title}, {ground.venue.title}"
     return label, coordinates(ground) or coordinates(ground.venue)
 
 
@@ -1481,7 +1481,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                 return self._calendar_response(request, body, archived)
 
         cal = Calendar()
-        cal.add("prodid", "-//Tournament Control//%s//" % request.get_host())
+        cal.add("prodid", f"-//Tournament Control//{request.get_host()}//")
         cal.add("version", "2.0")
 
         # Cache reverse() URL templates per division to avoid calling it for
@@ -1521,7 +1521,7 @@ class CompetitionSite(CompetitionAdminMixin, Application):
                 # drops the pin on the map in their calendar applications.
                 event.add(
                     "x-apple-structured-location",
-                    vUri("geo:%s,%s" % coordinates),
+                    vUri(f"geo:{coordinates[0]},{coordinates[1]}"),
                     parameters={
                         "VALUE": "URI",
                         "X-ADDRESS": location,

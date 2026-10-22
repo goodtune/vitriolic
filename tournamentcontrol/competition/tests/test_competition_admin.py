@@ -94,7 +94,7 @@ def bulk_dialog(url, name, title):
 
 class TestCase(BaseTestCase):
     def setUp(self):
-        super(TestCase, self).setUp()
+        super().setUp()
         self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
 
     def assertGoodEditView(self, viewname, *args, **kwargs):
@@ -117,15 +117,15 @@ class TestCase(BaseTestCase):
     def assertGoodNamespace(self, instance, **kwargs):
         namespace = instance._get_admin_namespace()
         args = instance._get_url_args()
-        self.assertGoodEditView("%s:add" % namespace, *args[:-1], **kwargs)
-        self.assertGoodEditView("%s:edit" % namespace, *args, **kwargs)
-        self.assertGoodDeleteView("%s:delete" % namespace, *args)
+        self.assertGoodEditView(f"{namespace}:add", *args[:-1], **kwargs)
+        self.assertGoodEditView(f"{namespace}:edit", *args, **kwargs)
+        self.assertGoodDeleteView(f"{namespace}:delete", *args)
 
 
 class TemplateTests(TestCase):
     @classmethod
     def setUpClass(cls):
-        super(TemplateTests, cls).setUpClass()
+        super().setUpClass()
         stage1 = factories.StageFactory.create()
         stage2 = factories.StageFactory.create(division=stage1.division, follows=stage1)
         ground = factories.GroundFactory.create(venue__season=stage2.division.season)
@@ -161,7 +161,7 @@ class TemplateTests(TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        super(TemplateTests, cls).tearDownClass()
+        super().tearDownClass()
 
     def test_team_title(self):
         template = Template("{% load common %}{{ team.title|htmlentities }}")
@@ -205,12 +205,10 @@ class TemplateTests(TestCase):
                 "html",
             )
             for fragment in by_shell(
-                workbook=(
-                    "<h4>%s <small>%s</small></h4>" % (self.division, self.stage),
-                ),
+                workbook=(f"<h4>{self.division} <small>{self.stage}</small></h4>",),
                 explorer=(
-                    "<strong>%s</strong>" % self.division,
-                    "<small>%s</small>" % self.stage,
+                    f"<strong>{self.division}</strong>",
+                    f"<small>{self.stage}</small>",
                 ),
             ):
                 self.assertResponseContains(fragment)
@@ -242,14 +240,14 @@ class TemplateTests(TestCase):
             )
             self.assertResponseContains(
                 by_shell(
-                    workbook="<title>Scorecards &middot; %s</title>" % get_brand().name,
+                    workbook=f"<title>Scorecards &middot; {get_brand().name}</title>",
                     explorer="<title>Scorecards</title>",
                 )
             )
+            css = by_shell(workbook="p-card-team team", explorer="team")
             self.assertResponseContains(
-                '<th colspan="5" class="%s">'
+                f'<th colspan="5" class="{css}">'
                 "Chees&eacute;&nbsp;&amp;&nbsp;Crackers</th>"
-                % by_shell(workbook="p-card-team team", explorer="team")
             )
 
     @patch("tournamentcontrol.competition.utils.prince")
@@ -272,14 +270,14 @@ class TemplateTests(TestCase):
         html = mock_prince.call_args.args[0]
         self.assertIn(
             by_shell(
-                workbook="<title>Scorecards \u00b7 %s</title>" % get_brand().name,
+                workbook=f"<title>Scorecards \u00b7 {get_brand().name}</title>",
                 explorer="<title>Scorecards</title>",
             ),
             html,
         )
+        css = by_shell(workbook="p-card-team team", explorer="team")
         self.assertIn(
-            '<th colspan="5" class="%s">Chees\u00e9\u00a0&amp;\u00a0Crackers</th>'
-            % by_shell(workbook="p-card-team team", explorer="team"),
+            f'<th colspan="5" class="{css}">Chees\u00e9\u00a0&amp;\u00a0Crackers</th>',
             html,
         )
 
@@ -440,13 +438,11 @@ class GoodViewTests(TestCase):
             self.get("admin:fixja:index")
             if site.shell.index_landing:
                 self.response_200()
+                url = self.reverse("admin:fixja:competition:list")
                 self.assertResponseContains(
-                    '<a class="wb-task" href="%s"><span class="wb-task-icon">%s</span>'
-                    '<span class="wb-task-title">Competitions</span></a>'
-                    % (
-                        self.reverse("admin:fixja:competition:list"),
-                        ICON % "chevron-right",
-                    ),
+                    f'<a class="wb-task" href="{url}">'
+                    f'<span class="wb-task-icon">{ICON % "chevron-right"}</span>'
+                    '<span class="wb-task-title">Competitions</span></a>',
                 )
             else:
                 self.response_302()
@@ -542,7 +538,7 @@ class GoodViewTests(TestCase):
         match = factories.MatchFactory.create()
         MatchScoreSheet.objects.create(match=match, image="harness/score-sheet")
         with self.login(self.superuser):
-            self.get("%s:edit" % match._get_admin_namespace(), *match._get_url_args())
+            self.get(f"{match._get_admin_namespace()}:edit", *match._get_url_args())
             self.response_200()
 
     def test_pool(self):
@@ -3292,13 +3288,10 @@ class EditViewPermissionTests(TestCase):
                 "admin:fixja:competition:season:edit", *self.season._get_url_args()
             )
             self.response_200()
+            css = by_shell(workbook='class="wb-input" ', explorer="")
             self.assertResponseContains(
-                '<input type="text" name="title" value="%s" maxlength="255" '
-                '%srequired id="id_title">'
-                % (
-                    self.season.title,
-                    by_shell(workbook='class="wb-input" ', explorer=""),
-                )
+                f'<input type="text" name="title" value="{self.season.title}" '
+                f'maxlength="255" {css}required id="id_title">'
             )
 
     def test_object_level_change_permission_is_scoped_to_object(self):
@@ -4037,8 +4030,8 @@ class WizardBrandTests(TestCase):
             self.assertNotIn("brand", self.last_response.context_data)
             self.assertResponseContains(
                 by_shell(
-                    workbook="<title>Build the draw &middot; %s &middot; Administration</title>"
-                    % stage.title,
+                    workbook=f"<title>Build the draw &middot; {stage.title} "
+                    "&middot; Administration</title>",
                     explorer=f"<title>{stage.title} \u2013 Administration</title>",
                 ),
             )
@@ -4091,7 +4084,9 @@ class ByeMatchTests(TestCase):
     def bye_row(self, bye, team):
         """The bye's row on the results page, named for the team with the bye."""
         division = self.stage.division.title
-        key = f'<input type="hidden" name="byes-0-id" value="{bye.pk}" id="id_byes-0-id">'
+        key = (
+            f'<input type="hidden" name="byes-0-id" value="{bye.pk}" id="id_byes-0-id">'
+        )
         attrs = self.by_shell(
             workbook='class="wb-select"', explorer='placeholder="Bye processed"'
         )

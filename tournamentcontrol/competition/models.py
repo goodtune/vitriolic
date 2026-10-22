@@ -162,7 +162,7 @@ class OrderedSitemapNode(SitemapNodeBase):
     order = models.PositiveIntegerField(default=1)
 
     def __repr__(self):
-        return "<{}: {}>".format(self.__class__.__name__, self.title)
+        return f"<{self.__class__.__name__}: {self.title}>"
 
     def __str__(self):
         return self.title
@@ -432,7 +432,7 @@ class Person(AdminUrlMixin, models.Model):
 
     @property
     def get_full_name(self):
-        return "{}, {}".format(self.last_name, self.first_name)
+        return f"{self.last_name}, {self.first_name}"
 
     @cached_property
     def age(self):
@@ -623,7 +623,7 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
         }
 
     def __repr__(self):
-        return "<Season: {} - {}>".format(self.competition, self)
+        return f"<Season: {self.competition} - {self}>"
 
     @property
     def upstream_backend(self):
@@ -1841,7 +1841,7 @@ class Team(AdminUrlMixin, UpstreamMixin, OrderedSitemapNode):
         )
 
     def __repr__(self):
-        return "<Team: %s>" % self.title
+        return f"<Team: {self.title}>"
 
     def __str__(self):
         return self.title
@@ -3012,7 +3012,7 @@ class LadderBase(models.Model):
         abstract = True
 
     def __repr__(self):
-        return "<%s: #%s>" % (self.__class__.__name__, self.pk)
+        return f"<{self.__class__.__name__}: #{self.pk}>"
 
 
 class LadderEntry(LadderBase):
@@ -3028,7 +3028,7 @@ class LadderEntry(LadderBase):
     objects = LadderEntryManager()
 
     def __repr__(self):
-        return "<LadderEntry: #%s>" % self.pk
+        return f"<LadderEntry: #{self.pk}>"
 
 
 class LadderSummary(LadderBase):
@@ -3178,7 +3178,7 @@ class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
         return (self.season.competition_id, self.season_id, self.pk)
 
     def __str__(self):
-        return "#{}".format(self.pk)
+        return f"#{self.pk}"
 
 
 class LiveStreamKey(AdminUrlMixin, models.Model):
@@ -3457,10 +3457,7 @@ class SimpleScoreMatchStatistic(MatchStatisticBase):
             raise ValidationError(errors)
 
     def __repr__(self):
-        return "<Stat #%s: %s, %s, number=%s, played=%s>" % (
-            self.pk,
-            self.match,
-            self.player,
-            self.number,
-            self.played,
+        return (
+            f"<Stat #{self.pk}: {self.match}, {self.player}, "
+            f"number={self.number}, played={self.played}>"
         )
