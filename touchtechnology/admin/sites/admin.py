@@ -21,6 +21,7 @@ from django.utils.translation import gettext_lazy as _
 
 from touchtechnology.admin import explorer
 from touchtechnology.admin.branding import get_brand
+from touchtechnology.admin.errors import ErrorPages
 from touchtechnology.admin.shells import DEFAULT_SHELL, get_shell
 from touchtechnology.admin.templatetags.admin import allowed
 from touchtechnology.admin.views import AdminLoginView
@@ -113,6 +114,13 @@ class AdminSite(DjangoAdminSite):
             return connection.tenant.hidden_component(component)
         except AttributeError:
             return False
+
+    @property
+    def urls(self):
+        # Django's is ``self.get_urls(), "admin", self.name``. The patterns are
+        # the same, but the site answers what its views refuse with its own
+        # pages (see ``admin.errors``) rather than the public site's.
+        return [ErrorPages(self.get_urls(), self)], "admin", self.name
 
     def get_urls(self):
         urlpatterns = [

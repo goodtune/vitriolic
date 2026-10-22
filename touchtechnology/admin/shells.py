@@ -176,7 +176,7 @@ class Shell:
 
     @property
     def error_template(self):
-        """The page the 403 and 404 handlers extend."""
+        """The page the shell's 403 and 404 pages extend."""
         return self.template("40x.html")
 
     @property
@@ -186,12 +186,12 @@ class Shell:
 
     @property
     def forbidden_template(self):
-        """The page of the 403 handler."""
+        """The page of a refused request (see ``admin.errors``)."""
         return self.template("403.html")
 
     @property
     def not_found_template(self):
-        """The page of the 404 handler."""
+        """The page of a missing one (see ``admin.errors``)."""
         return self.template("404.html")
 
     @property
