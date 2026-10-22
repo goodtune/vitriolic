@@ -1,26 +1,18 @@
 import copy
 import unittest
-from contextlib import contextmanager
 from unittest import mock
 
 import django
-from django.apps import apps
 from django.conf import settings
 from django.core import checks
 from django.template import TemplateDoesNotExist, TemplateSyntaxError
 from django.template.loader import get_template, render_to_string
 from django.test import modify_settings, override_settings
-from django.urls import URLResolver, path
-from django.urls.resolvers import RegexPattern
 from template_partials.apps import wrap_loaders
 from test_plus import TestCase
 
-from tournamentcontrol.competition import checks as site_checks
-from tournamentcontrol.competition.compops.sites import CompOpsSite
-
 PREFIX = "tournamentcontrol.competition."
 
-PARTIALS_APP = "template_partials"
 PARTIALS_BUILTIN = "template_partials.templatetags.partials"
 PARTIALS_LOADER = "template_partials.loader.Loader"
 
@@ -32,7 +24,6 @@ DEFAULT_LOADERS = [FILESYSTEM_LOADER, APP_DIRECTORIES_LOADER]
 # The library's own settings mount the ops site only; the competition app's
 # test URLs mount the competition site and the calculator; the example app
 # mounts none of the three.
-OPS_URLS = "vitriolic.urls"
 COMPETITION_URLS = "tournamentcontrol.competition.tests.urls"
 NO_URLS = "example_app.urls"
 
@@ -40,26 +31,21 @@ SKIP_FROM_DJANGO_6 = unittest.skipIf(
     django.VERSION >= (6, 0), "Django 6.0 has template partials built in"
 )
 
-E002 = checks.Error(
-    "CompOpsSite is mounted, but 'template_partials' is not in INSTALLED_APPS. "
-    "Before Django 6.0 its templates need django-template-partials for "
-    "{% partialdef %} and {% partial %}.",
-    hint='Add "template_partials" to INSTALLED_APPS. See docs/compops.md for '
-    "the template settings that go with it.",
-    id="tournamentcontrol.competition.E002",
-)
+# Behave as Django 5.2 or as 6.0 does, whichever Django runs the tests.
+DJANGO_5 = mock.patch.object(django, "VERSION", (5, 2, 0))
+DJANGO_6 = mock.patch.object(django, "VERSION", (6, 0, 0))
 
-E003 = checks.Error(
+E002 = checks.Error(
     'CompOpsSite is mounted, but "template_partials.templatetags.partials" is '
     "not in the template builtins. Its templates use {% partialdef %} and "
     "{% partial %} without {% load %}.",
     hint='Add "template_partials.templatetags.partials" to "builtins" in the '
     "OPTIONS of the DjangoTemplates entry in TEMPLATES, for example "
     '"builtins": ["template_partials.templatetags.partials"].',
-    id="tournamentcontrol.competition.E003",
+    id="tournamentcontrol.competition.E002",
 )
 
-E004 = checks.Error(
+E003 = checks.Error(
     "CompOpsSite is mounted, but the template loaders are not wrapped in "
     '"template_partials.loader.Loader". It renders fragments by name (for '
     'example "tournamentcontrol/competition/compops/day.html#results"), which '
@@ -70,15 +56,15 @@ E004 = checks.Error(
     '["django.template.loaders.filesystem.Loader", '
     '"django.template.loaders.app_directories.Loader"]. Remove APP_DIRS when '
     "you set loaders. See docs/compops.md.",
-    id="tournamentcontrol.competition.E004",
+    id="tournamentcontrol.competition.E003",
 )
 
-E005 = checks.Error(
+E004 = checks.Error(
     "TournamentCalculatorSite is mounted, but 'mathfilters' is not in "
     "INSTALLED_APPS. Its pages load the mathfilters tag library.",
     hint='Add "mathfilters" to INSTALLED_APPS (django-mathfilters is installed '
     "with vitriolic[competition]).",
-    id="tournamentcontrol.competition.E005",
+    id="tournamentcontrol.competition.E004",
 )
 
 W001 = checks.Warning(
@@ -115,25 +101,6 @@ def templates(builtins=(), loaders=None, app_dirs=False):
     return [config]
 
 
-@contextmanager
-def before_django_6(partials_installed=True):
-    """
-    Behave as Django 5.2 does, whichever Django runs the tests. The partials
-    app is reported present or absent as asked, without loading it: loading it
-    would wrap the loaders of the settings in force, for every later test.
-    """
-    is_installed = apps.is_installed
-
-    def fake(name):
-        if name == PARTIALS_APP:
-            return partials_installed
-        return is_installed(name)
-
-    with mock.patch.object(django, "VERSION", (5, 2, 0)):
-        with mock.patch.object(apps, "is_installed", fake):
-            yield
-
-
 class LibrarySettingsTests(TestCase):
     """The settings the library tests with satisfy every requirement."""
 
@@ -149,39 +116,34 @@ class LibrarySettingsTests(TestCase):
 
 
 class TemplatePartialsTests(TestCase):
-    """CompOpsSite on Django 5.2 needs the app, the builtins and the loader."""
+    """CompOpsSite on Django 5.2 needs the builtins and the loader."""
 
     wrapped = [(PARTIALS_LOADER, DEFAULT_LOADERS)]
 
     @override_settings(TEMPLATES=templates([PARTIALS_BUILTIN], wrapped))
     def test_complete_setup_reports_nothing(self):
-        with before_django_6():
+        with DJANGO_5:
             self.assertEqual(problems(), [])
-
-    @override_settings(TEMPLATES=templates([PARTIALS_BUILTIN], wrapped))
-    def test_missing_app(self):
-        with before_django_6(partials_installed=False):
-            self.assertEqual(problems(), [E002])
 
     @override_settings(TEMPLATES=templates([], wrapped))
     def test_missing_builtin(self):
-        with before_django_6():
-            self.assertEqual(problems(), [E003])
+        with DJANGO_5:
+            self.assertEqual(problems(), [E002])
 
     @override_settings(TEMPLATES=templates([PARTIALS_BUILTIN], DEFAULT_LOADERS))
     def test_project_loaders_not_wrapped(self):
-        with before_django_6():
-            self.assertEqual(problems(), [E004])
+        with DJANGO_5:
+            self.assertEqual(problems(), [E003])
 
     @override_settings(TEMPLATES=templates([PARTIALS_BUILTIN], app_dirs=True))
     def test_app_dirs_project_not_wrapped(self):
-        with before_django_6():
-            self.assertEqual(problems(), [E004])
+        with DJANGO_5:
+            self.assertEqual(problems(), [E003])
 
     @override_settings(TEMPLATES=templates([PARTIALS_BUILTIN]))
     def test_default_loaders_not_wrapped(self):
-        with before_django_6():
-            self.assertEqual(problems(), [E004])
+        with DJANGO_5:
+            self.assertEqual(problems(), [E003])
 
     @override_settings(
         TEMPLATES=templates(
@@ -189,64 +151,51 @@ class TemplatePartialsTests(TestCase):
         )
     )
     def test_loader_must_be_outermost(self):
-        with before_django_6():
-            self.assertEqual(problems(), [E004])
+        with DJANGO_5:
+            self.assertEqual(problems(), [E003])
 
     @override_settings(
         TEMPLATES=templates([PARTIALS_BUILTIN], [[PARTIALS_LOADER, DEFAULT_LOADERS]])
     )
     def test_loader_given_as_a_list(self):
-        with before_django_6():
+        with DJANGO_5:
             self.assertEqual(problems(), [])
 
     @override_settings(TEMPLATES=templates([PARTIALS_BUILTIN], []))
     def test_no_loaders_at_all(self):
-        with before_django_6():
-            self.assertEqual(problems(), [E004])
+        with DJANGO_5:
+            self.assertEqual(problems(), [E003])
 
     @override_settings(TEMPLATES=templates())
     def test_everything_missing_is_reported_piece_by_piece(self):
-        with before_django_6(partials_installed=False):
-            self.assertEqual(problems(), [E002, E003, E004])
+        with DJANGO_5:
+            self.assertEqual(problems(), [E002, E003])
 
     @override_settings(TEMPLATES=templates())
     def test_config_tag(self):
-        with before_django_6(partials_installed=False):
-            self.assertEqual(problems("config"), [E002, E003, E004])
+        with DJANGO_5:
+            self.assertEqual(problems("config"), [E002, E003])
 
     @override_settings(TEMPLATES=templates())
     def test_django_6_has_partials_built_in(self):
-        with mock.patch.object(django, "VERSION", (6, 0, 0)):
-            with mock.patch.object(apps, "is_installed", return_value=False):
-                self.assertEqual(problems(), [])
+        with DJANGO_6:
+            self.assertEqual(problems(), [])
 
     @override_settings(TEMPLATES=templates(), ROOT_URLCONF=NO_URLS)
     def test_ops_site_not_mounted(self):
-        with before_django_6(partials_installed=False):
+        with DJANGO_5:
             self.assertEqual(problems(), [])
-
-    @override_settings(TEMPLATES=templates())
-    def test_subclass_of_the_ops_site_mounted(self):
-        class ProjectOpsSite(CompOpsSite):
-            pass
-
-        resolver = URLResolver(
-            RegexPattern(r"^/"), [path("ops/", ProjectOpsSite().urls)]
-        )
-        with before_django_6(partials_installed=False):
-            with mock.patch.object(site_checks, "get_resolver", return_value=resolver):
-                self.assertEqual(problems(), [E002, E003, E004])
 
     @override_settings(TEMPLATES=templates(), ROOT_URLCONF=COMPETITION_URLS)
     def test_competition_site_and_calculator_do_not_need_partials(self):
-        with before_django_6(partials_installed=False):
+        with DJANGO_5:
             self.assertEqual(problems(), [])
 
     @override_settings(
         TEMPLATES=[{"BACKEND": "django.template.backends.dummy.TemplateStrings"}]
     )
     def test_no_django_templates_engine_to_inspect(self):
-        with before_django_6():
+        with DJANGO_5:
             self.assertEqual(problems(), [])
 
 
@@ -273,7 +222,7 @@ class TemplatePartialsSetupTests(TestCase):
         ):
             with self.assertRaises(TemplateDoesNotExist):
                 render_to_string("page.html#greeting")
-            self.assertEqual(problems(), [E004])
+            self.assertEqual(problems(), [E003])
 
     def test_builtin_left_out(self):
         with override_settings(TEMPLATES=templates([], self.own(True))):
@@ -283,7 +232,7 @@ class TemplatePartialsSetupTests(TestCase):
                 "register or load this tag?",
             ):
                 render_to_string("page.html")
-            self.assertEqual(problems(), [E003])
+            self.assertEqual(problems(), [E002])
 
     def test_project_loaders_wrapped_with_the_cached_loader_inside(self):
         loaders = [(PARTIALS_LOADER, [(CACHED_LOADER, self.own(False))])]
@@ -296,7 +245,7 @@ class TemplatePartialsSetupTests(TestCase):
         with override_settings(TEMPLATES=templates([PARTIALS_BUILTIN], loaders)):
             with self.assertRaises(TemplateDoesNotExist):
                 render_to_string("page.html#greeting")
-            self.assertEqual(problems(), [E004])
+            self.assertEqual(problems(), [E003])
 
     def test_app_installed_for_a_project_with_app_dirs(self):
         with override_settings(TEMPLATES=templates([PARTIALS_BUILTIN], app_dirs=True)):
@@ -330,7 +279,7 @@ class MathfiltersTests(TestCase):
     @override_settings(ROOT_URLCONF=COMPETITION_URLS)
     @modify_settings(INSTALLED_APPS={"remove": ["mathfilters"]})
     def test_missing_app(self):
-        self.assertEqual(problems(), [E005])
+        self.assertEqual(problems(), [E004])
 
     @modify_settings(INSTALLED_APPS={"remove": ["mathfilters"]})
     def test_calculator_not_mounted(self):
@@ -352,7 +301,7 @@ class EmbedVideoTests(TestCase):
     @override_settings(ROOT_URLCONF=COMPETITION_URLS)
     @modify_settings(INSTALLED_APPS={"remove": ["embed_video", "mathfilters"]})
     def test_both_missing(self):
-        self.assertEqual(problems(), [E005, W001])
+        self.assertEqual(problems(), [E004, W001])
 
 
 class NothingMountedTests(TestCase):
@@ -361,12 +310,5 @@ class NothingMountedTests(TestCase):
     @override_settings(TEMPLATES=templates(), ROOT_URLCONF=NO_URLS)
     @modify_settings(INSTALLED_APPS={"remove": ["embed_video", "mathfilters"]})
     def test_nothing_reported(self):
-        with before_django_6(partials_installed=False):
-            self.assertEqual(problems(), [])
-
-    @override_settings(TEMPLATES=templates(), ROOT_URLCONF="no.such.urlconf")
-    @modify_settings(INSTALLED_APPS={"remove": ["embed_video", "mathfilters"]})
-    def test_urlconf_that_does_not_import(self):
-        # The URL checks report it; there is nothing here to look at.
-        with before_django_6(partials_installed=False):
+        with DJANGO_5:
             self.assertEqual(problems(), [])

@@ -131,10 +131,13 @@ These rules are easy to break:
 
 When the URLconf mounts `CompOpsSite`, `manage.py check` reports a missing
 setting with the lines to add: `tournamentcontrol.competition.E002` for the
-app, `E003` for the builtins and `E004` for the loaders. It reports nothing on
-Django 6.0 and later, and nothing when the site is not mounted. A site that is
-mounted from a content node (a database row) is not seen. To turn a check off,
-put its id in `SILENCED_SYSTEM_CHECKS`.
+builtins and `E003` for the loaders. The app needs no check, as `CompOpsSite()`
+refuses to mount without it. The check reports nothing on Django 6.0 and later,
+and nothing when the site is not mounted.
+
+It finds the site by its app name, `compops`. A site that you mount under
+another `app_name`, or from a content node (a database row), is not seen. To
+turn a check off, put its id in `SILENCED_SYSTEM_CHECKS`.
 
 ## Who can do what
 

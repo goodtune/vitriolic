@@ -1,25 +1,17 @@
-import logging
-
 import django
 from django.apps import apps
 from django.conf import settings
 from django.core.checks import Error, Tags, Warning, register
-from django.urls import URLResolver, get_resolver
-
-from touchtechnology.common.sites import Application
-
-logger = logging.getLogger(__name__)
+from django.urls import get_resolver
 
 HTMX_MIDDLEWARE = "django_htmx.middleware.HtmxMiddleware"
 
-# The sites are named, not imported: the ops site needs the "async" extra, and
-# a project that does not mount it must not need that to start.
-COMPOPS_SITE = "tournamentcontrol.competition.compops.sites.CompOpsSite"
-COMPETITION_SITE = "tournamentcontrol.competition.sites.CompetitionSite"
-CALCULATOR_SITE = "tournamentcontrol.competition.sites.TournamentCalculatorSite"
+# The app name each site is mounted under, unless the project gives it another.
+OPS_APP_NAME = "compops"
+COMPETITION_APP_NAME = "competition"
+CALCULATOR_APP_NAME = "calculator"
 
 DJANGO_TEMPLATES = "django.template.backends.django.DjangoTemplates"
-TEMPLATE_PARTIALS = "template_partials"
 PARTIALS_BUILTIN = "template_partials.templatetags.partials"
 PARTIALS_LOADER = "template_partials.loader.Loader"
 
@@ -46,86 +38,28 @@ def check_htmx_middleware(app_configs, **kwargs):
     return errors
 
 
-def sites_in(patterns):
-    """The ``Application`` instances that own the views in ``patterns``."""
-    for pattern in patterns:
-        if isinstance(pattern, URLResolver):
-            yield from sites_in(pattern.url_patterns)
-        else:
-            site = getattr(pattern.callback, "__self__", None)
-            if isinstance(site, Application):
-                yield site
-
-
-def mounted_sites():
-    """
-    The dotted paths of the site classes that ``ROOT_URLCONF`` mounts, with
-    those of their bases, so that a subclass of a site is a site.
-
-    A site is found by the views it serves, so one is mounted however the
-    project names it. A site mounted from a content node is not found: nodes
-    are rows in the database, which a check must not read.
-    """
-    if not getattr(settings, "ROOT_URLCONF", None):
-        return frozenset()
-    try:
-        kinds = {type(site) for site in sites_in(get_resolver().url_patterns)}
-    except Exception as exc:
-        # The URL checks run alongside this one and raise the same error.
-        logger.debug("The URLconf did not load, so no sites are known: %s", exc)
-        return frozenset()
-    return frozenset(
-        f"{cls.__module__}.{cls.__qualname__}" for kind in kinds for cls in kind.__mro__
-    )
-
-
-def django_templates_options():
-    """The ``OPTIONS`` of the first Django template engine, if there is one."""
-    for config in settings.TEMPLATES:
-        if config.get("BACKEND") == DJANGO_TEMPLATES:
-            return config.get("OPTIONS", {})
-    return None
-
-
-def loaders_wrapped(options):
-    """
-    Whether the engine's first loader is the partials loader. That is the one
-    the app looks for before it replaces the loaders, and the only place
-    where it can strip ``#name`` off a template name for the loaders it wraps.
-    """
-    loaders = options.get("loaders")
-    if not isinstance(loaders, (list, tuple)) or not loaders:
-        return False
-    first = loaders[0]
-    return isinstance(first, (list, tuple)) and list(first[:1]) == [PARTIALS_LOADER]
-
-
 def template_partials_problems():
     """
     Before Django 6.0 the ops site's templates need the partials from
-    django-template-partials: the app, its tags as builtins, and its loader
-    around the project's own loaders. Django 6.0 has all of it built in.
+    django-template-partials: its tags as builtins, and its loader around the
+    project's own loaders. Django 6.0 has both built in. The app itself needs
+    no check here, as ``CompOpsSite()`` refuses to mount without it.
     """
     if django.VERSION >= (6, 0):
         return []
 
-    problems = []
-
-    if not apps.is_installed(TEMPLATE_PARTIALS):
-        problems.append(
-            Error(
-                f"CompOpsSite is mounted, but '{TEMPLATE_PARTIALS}' is not in "
-                "INSTALLED_APPS. Before Django 6.0 its templates need "
-                "django-template-partials for {% partialdef %} and {% partial %}.",
-                hint=f'Add "{TEMPLATE_PARTIALS}" to INSTALLED_APPS. See '
-                "docs/compops.md for the template settings that go with it.",
-                id="tournamentcontrol.competition.E002",
-            )
-        )
-
-    options = django_templates_options()
+    options = next(
+        (
+            config.get("OPTIONS", {})
+            for config in settings.TEMPLATES
+            if config.get("BACKEND") == DJANGO_TEMPLATES
+        ),
+        None,
+    )
     if options is None:
-        return problems
+        return []
+
+    problems = []
 
     if PARTIALS_BUILTIN not in options.get("builtins", []):
         problems.append(
@@ -136,11 +70,15 @@ def template_partials_problems():
                 hint=f'Add "{PARTIALS_BUILTIN}" to "builtins" in the OPTIONS of '
                 "the DjangoTemplates entry in TEMPLATES, for example "
                 f'"builtins": ["{PARTIALS_BUILTIN}"].',
-                id="tournamentcontrol.competition.E003",
+                id="tournamentcontrol.competition.E002",
             )
         )
 
-    if not loaders_wrapped(options):
+    # The partials loader must be the first loader: the app looks there before
+    # it replaces the loaders, and it strips "#name" off a template name for
+    # the loaders it wraps, so the others never see the name of a partial.
+    first = (options.get("loaders") or [()])[0]
+    if tuple(first[:1]) != (PARTIALS_LOADER,):
         problems.append(
             Error(
                 "CompOpsSite is mounted, but the template loaders are not wrapped "
@@ -153,44 +91,11 @@ def template_partials_problems():
                 '["django.template.loaders.filesystem.Loader", '
                 '"django.template.loaders.app_directories.Loader"]. Remove '
                 "APP_DIRS when you set loaders. See docs/compops.md.",
-                id="tournamentcontrol.competition.E004",
+                id="tournamentcontrol.competition.E003",
             )
         )
 
     return problems
-
-
-def calculator_problems():
-    """The calculator's pages load the ``mathfilters`` tag library."""
-    if apps.is_installed("mathfilters"):
-        return []
-    return [
-        Error(
-            "TournamentCalculatorSite is mounted, but 'mathfilters' is not in "
-            "INSTALLED_APPS. Its pages load the mathfilters tag library.",
-            hint='Add "mathfilters" to INSTALLED_APPS (django-mathfilters is '
-            "installed with vitriolic[competition]).",
-            id="tournamentcontrol.competition.E005",
-        )
-    ]
-
-
-def match_video_problems():
-    """
-    The match video page loads the ``embed_video`` tag library. A warning, as
-    the rest of the competition site works without it.
-    """
-    if apps.is_installed("embed_video"):
-        return []
-    return [
-        Warning(
-            "CompetitionSite is mounted, but 'embed_video' is not in "
-            "INSTALLED_APPS, so its match video page cannot render.",
-            hint='Add "embed_video" to INSTALLED_APPS (django-embed-video is '
-            "installed with vitriolic[competition]).",
-            id="tournamentcontrol.competition.W001",
-        )
-    ]
 
 
 @register(Tags.templates, "config")
@@ -199,16 +104,43 @@ def check_site_requirements(app_configs, **kwargs):
     Report the apps and template settings that a mounted site needs, where
     leaving them out would fail at render time with a ``TemplateSyntaxError``.
 
-    Only the sites in the project's URLconf are checked, so a project that
-    does not use a site is not asked for what it needs.
+    A site is mounted when its app name is one of the URLconf's, which is what
+    Django's own URL resolver keeps. So a project that does not mount a site
+    is not asked for what it needs. A site mounted under another app name, or
+    from a content node (a database row, which a check must not read), is not
+    seen.
     """
-    mounted = mounted_sites()
+    if not getattr(settings, "ROOT_URLCONF", None):
+        return []
+
+    mounted = get_resolver().app_dict
 
     problems = []
-    if COMPOPS_SITE in mounted:
+
+    if OPS_APP_NAME in mounted:
         problems.extend(template_partials_problems())
-    if CALCULATOR_SITE in mounted:
-        problems.extend(calculator_problems())
-    if COMPETITION_SITE in mounted:
-        problems.extend(match_video_problems())
+
+    if CALCULATOR_APP_NAME in mounted and not apps.is_installed("mathfilters"):
+        problems.append(
+            Error(
+                "TournamentCalculatorSite is mounted, but 'mathfilters' is not in "
+                "INSTALLED_APPS. Its pages load the mathfilters tag library.",
+                hint='Add "mathfilters" to INSTALLED_APPS (django-mathfilters is '
+                "installed with vitriolic[competition]).",
+                id="tournamentcontrol.competition.E004",
+            )
+        )
+
+    # Only a warning: the rest of the competition site works without it.
+    if COMPETITION_APP_NAME in mounted and not apps.is_installed("embed_video"):
+        problems.append(
+            Warning(
+                "CompetitionSite is mounted, but 'embed_video' is not in "
+                "INSTALLED_APPS, so its match video page cannot render.",
+                hint='Add "embed_video" to INSTALLED_APPS (django-embed-video is '
+                "installed with vitriolic[competition]).",
+                id="tournamentcontrol.competition.W001",
+            )
+        )
+
     return problems
