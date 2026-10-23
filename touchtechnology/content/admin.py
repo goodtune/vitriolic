@@ -696,7 +696,7 @@ class ContentAdminComponent(AdminComponent):
             directories, files = default_storage.listdir(path or ".")
         except OSError as e:
             logger.exception("path: %r", path)
-            raise Http404(e[1])
+            raise Http404(e)
 
         class File:
             def __init__(self, path):
