@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """[Developer API] Models used for dynamic content management."""
 
 from importlib import import_module
@@ -37,13 +35,13 @@ class AdminUrlModel(AdminUrlMixin, models.Model):
         abstract = True
 
     def _get_admin_namespace(self):
-        return "admin:content:%s" % self._meta.model_name
+        return f"admin:content:{self._meta.model_name}"
 
     def _get_url_args(self):
         return (self.id,)
 
     def __repr__(self):
-        return "<{}: {}>".format(self.__class__, self)
+        return f"<{self.__class__}: {self}>"
 
 
 class Page(models.Model):
@@ -87,7 +85,7 @@ class Page(models.Model):
     last_modified = DateTimeField(auto_now=True)
 
     def __repr__(self):
-        return "<Page: #{}>".format(self.pk)
+        return f"<Page: #{self.pk}>"
 
     """Reusable fragment of HTML content."""
 
@@ -105,7 +103,7 @@ class Content(models.Model):
     copy = HTMLField(blank=True)
 
     def __repr__(self):
-        return "<Content: #%d>" % self.pk
+        return f"<Content: #{self.pk:d}>"
 
 
 class PageContent(models.Model):
@@ -129,7 +127,7 @@ class PageContent(models.Model):
         ordering = ("sequence",)
 
     def __repr__(self):
-        return "<PageContent: #%d, page=%d>" % (self.pk, self.page.pk)
+        return f"<PageContent: #{self.pk:d}, page={self.page.pk:d}>"
 
 
 class Chunk(AdminUrlModel):
@@ -211,7 +209,7 @@ class Placeholder(models.Model):
             return None
 
     def site(self, node):
-        cache_key = "node%d" % node.pk
+        cache_key = f"node{node.pk}"
         cls = import_string(self.path)
         site = cls(node=node, name=cache_key, **node.kwargs)
         return site
@@ -243,4 +241,4 @@ class Redirect(AdminUrlModel):
     def __str__(self):
         if self.label:
             return self.label
-        return "{src} → {dst}".format(src=self.source_url, dst=self.destination_url)
+        return f"{self.source_url} → {self.destination_url}"
