@@ -21,9 +21,24 @@ from tournamentcontrol.competition.exceptions import (
     LiveStreamError,
     LiveStreamTransitionWarning,
 )
-from tournamentcontrol.competition.rest.v1.club import ClubSerializer
+from tournamentcontrol.competition import models
 from tournamentcontrol.competition.rest.v1.season import PlaceSerializer
 from tournamentcontrol.competition.sites import permissions_required
+
+
+class ClubSerializer(serializers.ModelSerializer):
+    """Minimal club details for nested serialization without hyperlinks."""
+
+    class Meta:
+        model = models.Club
+        fields = (
+            "id",
+            "title",
+            "short_title",
+            "slug",
+            "abbreviation",
+            "status",
+        )
 
 
 class CompetitionSerializer(serializers.ModelSerializer):
