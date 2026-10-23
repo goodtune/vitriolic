@@ -7,10 +7,20 @@ from django.urls.resolvers import _get_cached_resolver, get_ns_resolver
 from guardian.conf import settings as guardian_settings
 from test_plus.test import TestCase
 
+from touchtechnology.admin.tests.tenancy import as_tenant, schema_context
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.tests.factories import UserFactory
 from touchtechnology.content.middleware import DEHYDRATED_URLPATTERNS_KEY
 from touchtechnology.content.models import Page, PageContent
+
+# The project's own cache could be a dummy that keeps nothing, which hides a
+# cached URL tree that is never thrown away, so these tests use a real one.
+URLPATTERNS_CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "touchtechnology.content.tests.urlpatterns",
+    },
+}
 
 
 class SitemapNodeMiddlewareMemoryLeakTest(TestCase):
@@ -172,3 +182,102 @@ class SitemapNodeRestrictToGroupsTests(TestCase):
 
         self.assert_http_200_ok()
         self.assertResponseContains("<p>Anyone copy</p>")
+
+
+class UrlpatternsCacheTestMixin:
+    """
+    The middleware caches the URL tree it builds from the sitemap. Saving or
+    deleting a node throws that tree away, so the next request is served the
+    change rather than the tree from before it.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.home = SitemapNode.objects.create(title="Home", slug="home")
+        cls.home_url = cls.home.get_absolute_url()
+
+    def setUp(self):
+        super().setUp()
+        self.addCleanup(cache.clear)
+
+    def add_page(self, slug, copy):
+        page = Page.objects.create()
+        PageContent.objects.create(page=page, sequence=1, copy=copy)
+        return SitemapNode.objects.create(
+            title=slug.title(), slug=slug, parent=self.home, object=page
+        )
+
+    def add_folder(self, slug):
+        return SitemapNode.objects.create(
+            title=slug.title(), slug=slug, parent=self.home
+        )
+
+
+@override_settings(CACHES=URLPATTERNS_CACHES)
+class UrlpatternsCacheTests(UrlpatternsCacheTestMixin, TestCase):
+    def test_saved_page_is_served_straight_away(self):
+        # A visit before the page exists caches the tree without it.
+        self.get(self.home_url)
+        node = self.add_page("fresh", "<p>Fresh copy</p>")
+
+        self.get(node.get_absolute_url())
+
+        self.assert_http_200_ok()
+        self.assertResponseContains("<p>Fresh copy</p>")
+
+    def test_deleted_folder_is_gone_straight_away(self):
+        folder = self.add_folder("archive")
+        url = folder.get_absolute_url()
+        # A visit to the folder caches the tree with it.
+        self.get(url)
+        folder.delete()
+
+        self.get(url)
+
+        self.assert_http_404_not_found()
+
+
+@as_tenant
+@override_settings(CACHES=URLPATTERNS_CACHES)
+class TenantUrlpatternsCacheTests(UrlpatternsCacheTestMixin, TestCase):
+    """
+    Each tenant's tree is cached apart from the others. Saving or deleting a
+    node throws away the tree of the tenant whose schema it is saved in, and
+    leaves the other tenants' trees alone.
+
+    The tenants share the one schema of the test database, so a node saved
+    for one tenant is in every tenant's tree when that tree is built again.
+    """
+
+    def test_saved_page_is_served_to_its_tenant_straight_away(self):
+        with schema_context("alpha"):
+            self.get(self.home_url)
+            node = self.add_page("fresh", "<p>Fresh copy</p>")
+
+            self.get(node.get_absolute_url())
+
+        self.assert_http_200_ok()
+        self.assertResponseContains("<p>Fresh copy</p>")
+
+    def test_saved_page_leaves_the_other_tenants_tree_alone(self):
+        with schema_context("bravo"):
+            self.get(self.home_url)
+        with schema_context("alpha"):
+            node = self.add_page("fresh", "<p>Fresh copy</p>")
+
+        # The page could only be found for bravo if its tree were built again.
+        with schema_context("bravo"):
+            self.get(node.get_absolute_url())
+
+        self.assert_http_404_not_found()
+
+    def test_deleted_folder_is_gone_for_its_tenant_straight_away(self):
+        with schema_context("alpha"):
+            folder = self.add_folder("archive")
+            url = folder.get_absolute_url()
+            self.get(url)
+            folder.delete()
+
+            self.get(url)
+
+        self.assert_http_404_not_found()
