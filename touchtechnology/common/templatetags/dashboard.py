@@ -1,5 +1,9 @@
+import logging
+
 from django.template import Library
 from django.template.loader import select_template
+
+logger = logging.getLogger(__name__)
 
 register = Library()
 
@@ -12,5 +16,14 @@ def render(context, widget):
     names = shell.names(widget.template) if shell is not None else [widget.template]
     tpl = select_template(names)
     ctx = context.flatten()
-    ctx.update(widget.context)
-    return tpl.render(ctx)
+    try:
+        ctx.update(widget.context)
+        return tpl.render(ctx)
+    except Exception:
+        # One widget that cannot work out what to show must not take the
+        # whole page down with it: leave it out, and say why in the log.
+        logger.exception(
+            "The dashboard widget %r failed and was left out of the page.",
+            str(widget.verbose_name),
+        )
+        return ""

@@ -449,18 +449,23 @@ class CompetitionAdminMixin:
             )
 
         if undecided.exists() and not any(resolvable(match) for match in matches):
-            follows = stage.comes_after
+            try:
+                follows = stage.comes_after
+            except Stage.DoesNotExist:
+                # The first stage of its division has no ladder to choose from.
+                follows = None
 
             ladders = collections.OrderedDict()
-            if follows.pools.count():
-                for pool in follows.pools.all():
+            if follows is not None:
+                if follows.pools.count():
+                    for pool in follows.pools.all():
+                        ladders.setdefault(
+                            pool, pool.ladder_summary.select_related("team__club")
+                        )
+                else:
                     ladders.setdefault(
-                        pool, pool.ladder_summary.select_related("team__club")
+                        None, follows.ladder_summary.select_related("team__club")
                     )
-            else:
-                ladders.setdefault(
-                    None, follows.ladder_summary.select_related("team__club")
-                )
 
             extra_context["ladders"] = ladders
 

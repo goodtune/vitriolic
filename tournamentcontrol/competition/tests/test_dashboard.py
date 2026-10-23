@@ -1,10 +1,13 @@
 import datetime
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
+from django.urls import reverse
 from django.utils import timezone
 from freezegun import freeze_time
 from test_plus import TestCase
 
+from touchtechnology.admin.tests.shells import per_shell
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.dashboard import (
     matches_progression_possible,
@@ -17,7 +20,34 @@ from tournamentcontrol.competition.tests.factories import (
     MatchFactory,
     StageFactory,
     TeamFactory,
+    UndecidedTeamFactory,
 )
+
+
+def knockout(stage, kick_off, final_kick_off):
+    """
+    Two semi finals in ``stage`` and a final between their winners, as a
+    division whose only stage is its finals is drawn.
+    """
+    t1, t2, t3, t4 = TeamFactory.create_batch(4, division=stage.division)
+    semi_1 = MatchFactory.create(
+        stage=stage, home_team=t1, away_team=t4, datetime=kick_off, label="Semi 1"
+    )
+    semi_2 = MatchFactory.create(
+        stage=stage, home_team=t2, away_team=t3, datetime=kick_off, label="Semi 2"
+    )
+    final = MatchFactory.create(
+        stage=stage,
+        home_team=None,
+        away_team=None,
+        home_team_eval="W",
+        home_team_eval_related=semi_1,
+        away_team_eval="W",
+        away_team_eval_related=semi_2,
+        datetime=final_kick_off,
+        label="Final",
+    )
+    return semi_1, semi_2, final
 
 
 class BasicResultTests(TestCase):
@@ -181,3 +211,120 @@ class RequireProgression(TestCase):
         m3.save()
 
         self.assertProgression("before final", [], [], [], {})
+
+    def test_first_stage_of_its_division(self):
+        """
+        A division whose first (here only) stage is a knockout: no stage comes
+        before it to hold its progression back, so the final is ready once its
+        semi finals have results.
+        """
+        dt1 = datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC"))
+        dt2 = datetime.datetime(2019, 7, 15, 10, 30, tzinfo=ZoneInfo("UTC"))
+        finals = StageFactory.create(division__season__timezone="UTC", order=1)
+        semi_1, semi_2, final = knockout(finals, dt1, dt2)
+
+        self.assertProgression(
+            "setup",
+            [
+                (semi_1.home_team.title, semi_1.away_team.title),
+                (semi_2.home_team.title, semi_2.away_team.title),
+            ],
+            [("Winner Semi 1", "Winner Semi 2")],
+            [],  # progress not possible, semi not played
+            {},
+        )
+
+        for match in [semi_1, semi_2]:
+            match.home_team_score = 4
+            match.away_team_score = 3
+            match.save()
+
+        self.assertProgression(
+            "after semis",
+            [],
+            [("Winner Semi 1", "Winner Semi 2")],
+            [final],
+            {finals.division: {finals: [final]}},
+        )
+
+
+@per_shell
+@freeze_time("2019-07-15 09:30 UTC")
+class FirstStageProgressionPageTests(TestCase):
+    """
+    The admin's home page, and the progression page its Progress Teams widget
+    links to, for a stage that is the first of its division.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
+        self.stage = StageFactory.create(division__season__timezone="UTC", order=1)
+
+    def progress_url(self):
+        division = self.stage.division
+        return reverse(
+            "admin:fixja:competition:season:division:stage:progress",
+            args=(
+                division.season.competition_id,
+                division.season_id,
+                division.pk,
+                self.stage.pk,
+            ),
+        )
+
+    def test_home_page_offers_the_final_of_a_first_stage_knockout(self):
+        kick_off = datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC"))
+        semi_1, semi_2, _final = knockout(self.stage, kick_off, kick_off)
+        for match in [semi_1, semi_2]:
+            match.home_team_score = 4
+            match.away_team_score = 3
+            match.save()
+
+        with self.login(self.superuser):
+            self.get_check_200("admin:index")
+        self.assertResponseContains(
+            f'<a href="{self.progress_url()}">{self.stage.title}</a>'
+        )
+
+    def test_undecided_teams_of_a_first_stage(self):
+        undecided = UndecidedTeamFactory.create(stage=self.stage, label="Host")
+        MatchFactory.create(
+            stage=self.stage,
+            home_team=None,
+            home_team_undecided=undecided,
+            datetime=datetime.datetime(2019, 7, 15, 10, 30, tzinfo=ZoneInfo("UTC")),
+        )
+
+        with self.login(self.superuser):
+            self.get_check_200("admin:index")
+            self.assertResponseContains(
+                f'<a href="{self.progress_url()}">{self.stage.title}</a>'
+            )
+            # No stage comes before it, so there is no ladder beside the
+            # places to fill.
+            self.get(self.progress_url())
+            self.response_200()
+            self.assertEqual(self.get_context("ladders"), {})
+
+    def test_a_failing_widget_is_left_out_of_the_home_page(self):
+        """
+        The home page stands when one of its widgets fails: the widget is left
+        out and the failure is logged.
+        """
+        with (
+            self.login(self.superuser),
+            patch(
+                "tournamentcontrol.competition.dashboard.stages_require_progression",
+                side_effect=RuntimeError("progression failed"),
+            ),
+            self.assertLogs("touchtechnology.common.templatetags.dashboard") as logs,
+        ):
+            self.get_check_200("admin:index")
+        (record,) = logs.records
+        self.assertEqual(
+            record.getMessage(),
+            "The dashboard widget 'Progress Teams' failed and was left out of "
+            "the page.",
+        )
+        self.assertEqual(record.exc_info[0], RuntimeError)
