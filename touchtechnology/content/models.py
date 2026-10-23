@@ -2,11 +2,9 @@
 
 """[Developer API] Models used for dynamic content management."""
 
-import logging
 from importlib import import_module
 
 from django.contrib.contenttypes.fields import GenericRelation
-from django.core.cache import caches
 from django.db import models
 from django.db.models import DateTimeField
 from django.utils.module_loading import import_string
@@ -21,20 +19,15 @@ from touchtechnology.common.db.models import (
     TemplatePathField,
 )
 from touchtechnology.content.app_settings import (
-    NODE_CACHE,
     PAGE_CONTENT_CLASSES,
     PAGE_TEMPLATE_BASE,
     PAGE_TEMPLATE_FOLDER,
     PAGE_TEMPLATE_REGEX,
 )
 
-logger = logging.getLogger(__name__)
-
 PAGE_CONTENT_CLASS_CHOICES = zip(PAGE_CONTENT_CLASSES, PAGE_CONTENT_CLASSES)
 
 PAGE_CONTENT_CLASS_DEFAULT = first(PAGE_CONTENT_CLASSES)
-
-SITE_CACHE_KEY = "_site_cache"
 
 
 class AdminUrlModel(AdminUrlMixin, models.Model):
@@ -222,14 +215,6 @@ class Placeholder(models.Model):
         cls = import_string(self.path)
         site = cls(node=node, name=cache_key, **node.kwargs)
         return site
-
-    def invalidate_cache(self):
-        # Since this is forced cache invalidation, we should log it.
-        logger.info("Forced invalidation of Application cache.")
-        cache = caches[NODE_CACHE]
-        return cache.clear()
-
-    invalidate_cache.alters_data = True
 
 
 class Redirect(AdminUrlModel):

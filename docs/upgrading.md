@@ -153,3 +153,23 @@ Bootstrap 3, so check each template that fills a block in both shells. A block
 that a page does not define is ignored without an error.
 
 The full notes for the change are in pull request #392.
+
+## The `NODE_CACHE` setting is gone
+
+5.0 removes the `TOUCHTECHNOLOGY_NODE_CACHE` setting and the
+`Placeholder.invalidate_cache()` method. Nothing has written to that cache
+since 2018, when the sites of the application nodes stopped being cached.
+After an application node was edited, the content admin cleared the whole
+cache. With the default value, `"default"`, that cleared every key of the
+default cache, for every tenant.
+
+The cached URL tree of the sitemap is now thrown away for one tenant at a
+time. It is thrown away when a node, competition, season, club, division or
+team of that tenant is saved or deleted.
+
+Remove `TOUCHTECHNOLOGY_NODE_CACHE` from your settings. If no other code uses
+the cache it named, remove that cache from `CACHES` too. The library ignores
+the setting if you keep it, and shows no error. Code that calls
+`invalidate_cache()` fails with `AttributeError`.
+
+The full notes for the change are in pull request #422.

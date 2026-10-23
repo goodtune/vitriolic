@@ -493,10 +493,6 @@ class ContentAdminComponent(AdminComponent):
                 if instance.parent:
                     redirect_to += "?r=%d" % instance.parent_id
 
-                # post_save_callback if we ever move this to a generic_edit
-                # pattern in future.
-                instance.object.invalidate_cache()
-
                 return HttpResponseRedirect(redirect_to)
         else:
             form = form_class(instance=instance, user=request.user)
