@@ -25,10 +25,12 @@ from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.sitemaps import NodeSitemap
 from touchtechnology.common.sites import AccountsSite
 from touchtechnology.content.models import Redirect
+from touchtechnology.content.utils import (
+    DEHYDRATED_URLPATTERNS_KEY,
+    DEHYDRATED_URLPATTERNS_TIMEOUT,
+    urlpatterns_cache_version,
+)
 from touchtechnology.content.views import dispatch
-
-DEHYDRATED_URLPATTERNS_KEY = "urlpatterns"
-DEHYDRATED_URLPATTERNS_TIMEOUT = 600
 
 logger = logging.getLogger(__name__)
 protect = AccountsSite(name="protect")
@@ -36,17 +38,10 @@ protect = AccountsSite(name="protect")
 
 class SitemapNodeMiddleware(MiddlewareMixin):
     def process_request(self, request):
-        # When working with multiple tenants, we want to shard the cache for
-        # each of them. Use of the version is a nice way to do this as it will
-        # prevent collisions while making the API consistent.
-        v_kw = {}
-        if hasattr(request, "tenant"):
-            v_kw.setdefault("version", request.tenant.schema_name)
-
-        # TODO write a cache backend that will do this automatically, and
-        #      contribute it back to django-tenant-schemas
-
-        dehydrated = cache.get(DEHYDRATED_URLPATTERNS_KEY, [], **v_kw)
+        # Each tenant's tree is cached under its own version, the one that
+        # saving or deleting a node in that tenant throws away.
+        version = urlpatterns_cache_version()
+        dehydrated = cache.get(DEHYDRATED_URLPATTERNS_KEY, [], version=version)
 
         if not dehydrated:
             logging.getLogger("newrelic.cache").debug("RECALCULATE URLCONF")
@@ -154,7 +149,7 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 DEHYDRATED_URLPATTERNS_KEY,
                 dehydrated,
                 timeout=DEHYDRATED_URLPATTERNS_TIMEOUT,
-                **v_kw,
+                version=version,
             )
 
         # Always start with the project wide ROOT_URLCONF and add our sitemap.xml view
@@ -237,7 +232,6 @@ class SitemapNodeMiddleware(MiddlewareMixin):
             path = request.META.get("PATH_INFO")
             redirect_to = urlunparse(("https", host, path, "", "", ""))
             return redirect(redirect_to)
-
 
     def process_response(self, request, response):
         # Each request creates a unique dynamic module for request.urlconf.

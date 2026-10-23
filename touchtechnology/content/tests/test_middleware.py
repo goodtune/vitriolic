@@ -10,8 +10,8 @@ from test_plus.test import TestCase
 from touchtechnology.admin.tests.tenancy import as_tenant, schema_context
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.tests.factories import UserFactory
-from touchtechnology.content.middleware import DEHYDRATED_URLPATTERNS_KEY
 from touchtechnology.content.models import Page, PageContent
+from touchtechnology.content.utils import DEHYDRATED_URLPATTERNS_KEY
 
 # The project's own cache could be a dummy that keeps nothing, which hides a
 # cached URL tree that is never thrown away, so these tests use a real one.
@@ -189,6 +189,9 @@ class UrlpatternsCacheTestMixin:
     The middleware caches the URL tree it builds from the sitemap. Saving or
     deleting a node throws that tree away, so the next request is served the
     change rather than the tree from before it.
+
+    A node's URL has a name only in the tree the middleware builds, so a node
+    is requested by its own absolute URL.
     """
 
     @classmethod
