@@ -103,7 +103,7 @@ class Content(models.Model):
     copy = HTMLField(blank=True)
 
     def __repr__(self):
-        return f"<Content: #{self.pk:d}>"
+        return f"<Content: #{self.pk}>"
 
 
 class PageContent(models.Model):
@@ -127,7 +127,7 @@ class PageContent(models.Model):
         ordering = ("sequence",)
 
     def __repr__(self):
-        return f"<PageContent: #{self.pk:d}, page={self.page.pk:d}>"
+        return f"<PageContent: #{self.pk}, page={self.page_id}>"
 
 
 class Chunk(AdminUrlModel):
