@@ -10,7 +10,6 @@ from django.urls import NoReverseMatch, include, path, re_path, resolve, reverse
 from django.utils.functional import cached_property
 from django.utils.http import urlencode
 from django.utils.translation import gettext_lazy as _
-from first import first
 
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.explorer import Explorer, Node
