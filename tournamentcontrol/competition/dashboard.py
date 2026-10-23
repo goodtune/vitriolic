@@ -147,13 +147,17 @@ def matches_progression_possible():
     is_washout = Q(is_washout=True)
     _stage_cache = {}
     for stage in stages:
-        f = stage.comes_after
         try:
-            _stage_cache[stage.pk] = f.matches.exclude(
+            preceding = stage.comes_after
+        except Stage.DoesNotExist:
+            # The first stage of its division: no stage before it can hold its
+            # progression back (its winners and losers come from its own
+            # matches, see ``Match.eval``).
+            _stage_cache[stage.pk] = 0
+        else:
+            _stage_cache[stage.pk] = preceding.matches.exclude(
                 score_entered | played_bye | is_washout
             ).count()
-        except AttributeError:
-            _stage_cache[stage.pk] = 0
 
     def _can_evaluate(match):
         """
