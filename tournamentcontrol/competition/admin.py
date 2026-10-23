@@ -183,15 +183,10 @@ def match_days(season):
 
 def awaiting_results(matches):
     """
-    Of ``matches``, those played (or byes whose day has come) without a
-    result, as the home page's widget counts them.
+    Of ``matches``, those waiting for a result, exactly as the home page's
+    widget counts them (see ``matches_require_basic_results``).
     """
-    now = timezone.now()
-    return matches_require_basic_results(
-        matches=matches.filter(
-            Q(datetime__lte=now) | Q(is_bye=True, date__lte=timezone.localdate())
-        )
-    )
+    return matches_require_basic_results(matches=matches)
 
 
 def season_checklist(season):

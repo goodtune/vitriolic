@@ -1906,10 +1906,11 @@ class AdminToolset(CompetitionToolset):
         the opponent: the team's side is cleared, the referees are removed
         and the time and ground are released for ``auto_schedule`` /
         ``schedule_matches``; the date is kept, so
-        ``list_matches_awaiting_results`` lists the bye once it has passed
-        and ``record_match_result(bye_processed=true)`` awards the division's
-        bye points. A match whose other side is already empty (two withdrawn
-        teams drawn together, or an unprocessed bye of the team) is deleted.
+        ``list_matches_awaiting_results`` lists the bye once its season has
+        played that day and ``record_match_result(bye_processed=true)``
+        awards the division's bye points. A match whose other side is
+        already empty (two withdrawn teams drawn together, or an unprocessed
+        bye of the team) is deleted.
         Played matches, forfeits and processed byes are kept; with
         ``void_played_results`` they are taken out of the ladder
         (``include_in_ladder=false``) and the ladders rebuilt, so the
@@ -2934,12 +2935,13 @@ class AdminToolset(CompetitionToolset):
         limit: int = 100,
     ) -> dict[str, Any]:
         """
-        Matches that have kicked off (and unprocessed byes) in seasons not
-        yet complete that have no result recorded, as the admin dashboard
-        lists them, oldest first; narrow by season, division or date.
-        Matches mirrored from an upstream provider (MySideline,
-        revolutioniseSPORT) are not listed: their results come from the
-        provider and are never entered here.
+        Matches that have kicked off with no result recorded, and byes not
+        yet processed whose day their season has played, in seasons not yet
+        complete, exactly as the admin dashboard lists them, oldest first;
+        narrow by season, division or date. Processed byes, washouts and
+        matches left out of the ladder are not listed, nor are matches
+        mirrored from an upstream provider (MySideline, revolutioniseSPORT):
+        their results come from the provider and are never entered here.
         """
         self._staff()
         matches = matches_require_basic_results()
