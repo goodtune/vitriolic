@@ -61,6 +61,7 @@ from tournamentcontrol.competition.utils import (
     FauxQueryset,
     legitimate_bye_match,
     matches_timeline,
+    team_awaits_upstream,
     team_needs_progressing,
 )
 
@@ -424,8 +425,10 @@ class CompetitionAdminMixin:
     def progress_teams(
         self, request, competition, season, division, stage, extra_context, **kwargs
     ):
-        matches = stage.matches.filter(team_needs_progressing).exclude(
-            legitimate_bye_match
+        matches = (
+            stage.matches.filter(team_needs_progressing)
+            .exclude(legitimate_bye_match)
+            .exclude(team_awaits_upstream)
         )
         teams = stage.undecided_teams.all()
 

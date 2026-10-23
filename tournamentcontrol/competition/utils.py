@@ -46,6 +46,25 @@ team_needs_progressing = and_(
     Q(stage__division__season__complete=False),
 )
 
+# An undecided team with no formula stands in for a team nothing here can
+# work out: a placeholder.
+home_team_placeholder = Q(home_team__isnull=True, home_team_undecided__formula="")
+away_team_placeholder = Q(away_team__isnull=True, away_team_undecided__formula="")
+
+# A match mirrored from an upstream provider which has yet to name its teams.
+# The sync saves such a match with a placeholder on each side still to be
+# named (see ``upstream.sync``) and fills the team in on a later sync, so the
+# match is not waiting on progression here. Each side either is a placeholder
+# or is not waiting at all: a reference with a formula on a synced match, and
+# a placeholder on a match of our own, both still need progressing.
+team_awaits_upstream = and_(
+    Q(upstream_id__isnull=False),
+    and_(
+        or_(home_team_placeholder, ~home_team_needs_progressing),
+        or_(away_team_placeholder, ~away_team_needs_progressing),
+    ),
+)
+
 legitimate_bye_match = and_(
     Q(is_bye=True), or_(Q(home_team__isnull=False), Q(away_team__isnull=False))
 )

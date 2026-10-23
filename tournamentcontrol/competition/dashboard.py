@@ -10,6 +10,7 @@ from touchtechnology.admin.base import DashboardWidget
 from tournamentcontrol.competition.models import Match, Stage, Team
 from tournamentcontrol.competition.utils import (
     legitimate_bye_match,
+    team_awaits_upstream,
     team_needs_progressing,
 )
 
@@ -121,7 +122,16 @@ def matches_require_details_results(matches=None, include_forfeits=False):
 
 
 def matches_require_progression():
-    matches = Match.objects.filter(team_needs_progressing).exclude(legitimate_bye_match)
+    """
+    Matches with a team still to be decided, in a season not yet complete. A
+    match mirrored from an upstream provider which has yet to name its teams
+    is left out: only the provider can fill them in, on a later sync.
+    """
+    matches = (
+        Match.objects.filter(team_needs_progressing)
+        .exclude(legitimate_bye_match)
+        .exclude(team_awaits_upstream)
+    )
     matches = matches.order_by("stage__division", "stage")
 
     return matches.select_related(
