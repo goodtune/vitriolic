@@ -38,21 +38,21 @@ class AdminTests(TestCase):
         with self.login(self.superuser):
             self.get("admin:content:index")
             html = by_shell(
-                workbook="""
-                <a href="/admin/content/application/{}/">
+                workbook=f"""
+                <a href="/admin/content/application/{self.root_node.pk}/">
                     <svg class="wb-icon" aria-hidden="true" focusable="false">
                         <use href="/static/touchtechnology/admin/workbook/icons.svg#pencil"></use>
                     </svg>Edit</a>
             """,
-                explorer="""
-                <a href="/admin/content/application/{}/">
+                explorer=f"""
+                <a href="/admin/content/application/{self.root_node.pk}/">
                     <svg class="icon" aria-hidden="true" focusable="false">
                         <use href="/static/touchtechnology/admin/explorer/img/icons.svg#edit"></use>
                     </svg>
                     Edit
                 </a>
             """,
-            ).format(self.root_node.pk)
+            )
             self.assertResponseContains(html)
 
     def test_sitemap_index_staff_user(self):
