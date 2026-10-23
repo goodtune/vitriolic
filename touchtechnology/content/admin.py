@@ -10,7 +10,6 @@ from django.urls import NoReverseMatch, include, path, re_path, resolve, reverse
 from django.utils.functional import cached_property
 from django.utils.http import urlencode
 from django.utils.translation import gettext_lazy as _
-from first import first
 
 from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.explorer import Explorer, Node
@@ -85,7 +84,7 @@ class ContentExplorer(Explorer):
         except NoReverseMatch:
             url = None
         return Node(
-            key=self.key("x:node:%d" % node.pk),
+            key=self.key(f"x:node:{node.pk}"),
             label=node.title,
             url=url,
             icon=self.ICONS.get(kind) or self.shell.icons["kinds"].get(kind, "folder"),
@@ -108,9 +107,9 @@ class ContentExplorer(Explorer):
         index = self._sitemap_index()
         if node is None or index is None:
             return super().trail(request, context)
-        keys = [self.key("s%d" % index)]
+        keys = [self.key(f"s{index}")]
         keys += [
-            self.key("x:node:%d" % n.pk) for n in node.get_ancestors(include_self=True)
+            self.key(f"x:node:{n.pk}") for n in node.get_ancestors(include_self=True)
         ]
         return keys
 
@@ -118,9 +117,9 @@ class ContentExplorer(Explorer):
         if local.startswith("x:node:"):
             node = SitemapNode.objects.filter(pk=local.split(":")[2]).first()
             if node is not None and node.parent_id:
-                return self.key("x:node:%d" % node.parent_id)
+                return self.key(f"x:node:{node.parent_id}")
             index = self._sitemap_index()
-            return self.key("s%d" % index) if index is not None else self.key("")
+            return self.key(f"s{index}") if index is not None else self.key("")
         return super().parent_key(request, local)
 
     def label_of(self, request, local):
@@ -143,7 +142,7 @@ class ContentAdminComponent(AdminComponent):
     filter = Q(content_type__app_label="content") | Q(content_type__isnull=True)
 
     def __init__(self, app, name="content", app_name="content"):
-        super(ContentAdminComponent, self).__init__(app, name, app_name)
+        super().__init__(app, name, app_name)
 
     def get_urls(self):
         folder_patterns = (
@@ -364,7 +363,7 @@ class ContentAdminComponent(AdminComponent):
             instance = get_object_or_404(SitemapNode, pk=pk)
             if instance.parent_id:
                 post_save_redirect = self.redirect(
-                    self.reverse("index") + "?r=%d" % instance.parent_id
+                    self.reverse("index") + f"?r={instance.parent_id}"
                 )
         return self.generic_parent_edit_related(
             request,
@@ -395,7 +394,7 @@ class ContentAdminComponent(AdminComponent):
             node.delete()
             redirect_to = self.reverse("index")
             if node.parent:
-                redirect_to += "?r=%d" % node.parent_id
+                redirect_to += f"?r={node.parent_id}"
             return HttpResponseRedirect(redirect_to)
 
         context = {
@@ -491,11 +490,7 @@ class ContentAdminComponent(AdminComponent):
 
                 redirect_to = self.reverse("index")
                 if instance.parent:
-                    redirect_to += "?r=%d" % instance.parent_id
-
-                # post_save_callback if we ever move this to a generic_edit
-                # pattern in future.
-                instance.object.invalidate_cache()
+                    redirect_to += f"?r={instance.parent_id}"
 
                 return HttpResponseRedirect(redirect_to)
         else:
@@ -529,7 +524,7 @@ class ContentAdminComponent(AdminComponent):
                 raise Http404
             redirect_to = reverse("admin:content:index", current_app=self.app)
             if node.parent:
-                redirect_to += "?r=%d" % node.parent_id
+                redirect_to += f"?r={node.parent_id}"
             # if this was not a POST request, we don't make changes to the
             # database, we just display the warning page.
             node.delete()
@@ -628,7 +623,7 @@ class ContentAdminComponent(AdminComponent):
         directories = [_directories(d) for d in directories]
         match = resolve(request.path)
 
-        class FileOrFolder(AdminUrlMixin, object):
+        class FileOrFolder(AdminUrlMixin):
             def __init__(s, pk, name):
                 s.pk = pk
                 s.name = name
@@ -637,7 +632,7 @@ class ContentAdminComponent(AdminComponent):
                 return s.name
 
             def __repr__(s):
-                return "<%s: %s, %r>" % (s.__class__.__name__, s.name, s.urls)
+                return f"<{s.__class__.__name__}: {s.name}, {s.urls!r}>"
 
             def _get_admin_namespace(s):
                 return match.namespace
@@ -654,7 +649,7 @@ class ContentAdminComponent(AdminComponent):
                 args = s._get_url_args()
                 crud = {
                     "detail": default_storage.url(os.path.join(*args)),
-                    "delete": reverse("%s:delete" % namespace, args=args),
+                    "delete": reverse(f"{namespace}:delete", args=args),
                 }
                 return crud
 
@@ -700,9 +695,9 @@ class ContentAdminComponent(AdminComponent):
             directories, files = default_storage.listdir(path or ".")
         except OSError as e:
             logger.exception("path: %r", path)
-            raise Http404(e[1])
+            raise Http404(e)
 
-        class File(object):
+        class File:
             def __init__(self, path):
                 self.path = path
 
@@ -748,7 +743,7 @@ class ContentAdminComponent(AdminComponent):
 
         if request.method == "POST":
             action(fullpath)
-            messages.success(request, 'Successfully deleted %s "%s"' % (tpl, item))
+            messages.success(request, f'Successfully deleted {tpl} "{item}"')
             if path:
                 if cls is Folder:
                     return self.redirect(

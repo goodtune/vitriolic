@@ -91,12 +91,11 @@ class CompetitionConfig(AppConfig):
 
         pre_delete.connect(delete_team, sender=Team)
 
-        # Anything with a slug should also force the sitemap url cache to be purged
-        post_save.connect(utils.invalidate_sitemapnode_urlpatterns, sender=Competition)
-        post_save.connect(utils.invalidate_sitemapnode_urlpatterns, sender=Season)
-        post_save.connect(utils.invalidate_sitemapnode_urlpatterns, sender=Club)
-        post_save.connect(utils.invalidate_sitemapnode_urlpatterns, sender=Division)
-        post_save.connect(utils.invalidate_sitemapnode_urlpatterns, sender=Team)
+        # Anything with a slug should also force the sitemap url cache to be
+        # purged, when it is saved and when it is deleted
+        for model in (Competition, Season, Club, Division, Team):
+            post_save.connect(utils.invalidate_sitemapnode_urlpatterns, sender=model)
+            post_delete.connect(utils.invalidate_sitemapnode_urlpatterns, sender=model)
 
         # Before deleting a match, delete it's LadderEntry and LadderSummary records
         pre_delete.connect(delete_related, sender=Competition)

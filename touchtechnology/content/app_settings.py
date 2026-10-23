@@ -2,7 +2,6 @@ from django.conf import settings
 from first import first
 
 __all__ = (
-    "NODE_CACHE",
     "PAGE_CONTENT_BLOCKS",
     "PAGE_CONTENT_CLASSES",
     "PAGE_TEMPLATE_BASE",
@@ -17,8 +16,6 @@ def S(name, default=None):
 
 project_template_dirs = first(getattr(settings, "TEMPLATES", ()), {}).get("DIRS", [])
 project_template_base = first(project_template_dirs, "templates")
-
-NODE_CACHE = getattr(settings, "TOUCHTECHNOLOGY_NODE_CACHE", "default")
 
 # These settings allow us to determine where page templates live, which allows
 # us not to need to specify each actual template in code.
