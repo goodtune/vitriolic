@@ -1,6 +1,8 @@
+import tempfile
 from os.path import dirname, join
 
 from django.contrib.auth.models import Permission
+from django.test import override_settings
 from test_plus.test import TestCase
 
 from touchtechnology.admin.tests.shells import by_shell
@@ -129,3 +131,25 @@ class GoodViewTests(TestCase):
             # If no ProtectedError is raised, this should succeed
             # If ProtectedError is raised, the generic handler will show an error message
             # This test mainly verifies no code crashes with the new generic handling
+
+
+class MediaDeleteTests(TestCase):
+    """Deleting a file or a folder of the media section."""
+
+    def setUp(self):
+        super().setUp()
+        self.staff = UserFactory.create(is_staff=True)
+
+    def test_a_file_in_a_missing_folder_is_not_found(self):
+        with tempfile.TemporaryDirectory() as root, override_settings(MEDIA_ROOT=root):
+            with self.login(self.staff):
+                self.get(
+                    "admin:content:media:delete", path="gallery/", filename="photo.jpg"
+                )
+        self.assert_http_404_not_found()
+
+    def test_a_missing_folder_is_not_found(self):
+        with tempfile.TemporaryDirectory() as root, override_settings(MEDIA_ROOT=root):
+            with self.login(self.staff):
+                self.get("admin:content:media:delete", path="gallery/")
+        self.assert_http_404_not_found()
