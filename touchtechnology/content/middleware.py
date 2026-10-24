@@ -5,6 +5,7 @@ from importlib.util import module_from_spec
 from urllib.parse import urlunparse
 
 from django.conf import settings
+from django.conf.urls.i18n import is_language_prefix_patterns_used
 from django.contrib.auth.views import redirect_to_login
 from django.contrib.sitemaps.views import sitemap
 from django.core.cache import cache
@@ -235,13 +236,22 @@ class SitemapNodeMiddleware(MiddlewareMixin):
 
     def process_response(self, request, response):
         # Each request creates a unique dynamic module for request.urlconf.
-        # Django's URL system has multiple @functools.cache caches keyed by
-        # the urlconf module or its resolvers (e.g. _get_cached_resolver,
-        # get_ns_resolver). Since our dynamic module is unique per request,
-        # every request adds entries that are never evicted — causing
-        # unbounded memory growth. Use clear_url_caches() to clear all
-        # URL-related caches after each request.
+        # Django has several @functools.cache caches keyed by the urlconf
+        # module or its resolvers, and they never evict an entry. Since our
+        # module is unique per request, each one would keep every request's
+        # module and its whole tree of URL patterns, without limit.
+        #
+        # clear_url_caches() clears the resolver caches (_get_cached_resolver,
+        # get_ns_resolver and get_callable). It does not clear the cache that
+        # LocaleMiddleware fills when it asks whether the urlconf uses
+        # i18n_patterns, and Django has no function that does, so clear it
+        # too. A LocaleMiddleware above this one asks again after this runs,
+        # so it keeps the module of the latest request until the next one.
+        #
+        # Django turns an exception in the view into a response before it
+        # comes back through here, so this runs for those requests as well.
         clear_url_caches()
+        is_language_prefix_patterns_used.cache_clear()
         return response
 
 
