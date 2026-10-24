@@ -2937,16 +2937,6 @@ class CompetitionAdminComponent(AdminComponent):
     def edit_match_detail(self, request, stage, match, extra_context, **kwargs):
         redirect_to = reverse("admin:index")
 
-        conditions = {
-            "home_team__isnull": False,
-            "away_team__isnull": False,
-            "home_team_score__isnull": False,
-            "away_team_score__isnull": False,
-        }
-
-        if match is None:
-            match = get_object_or_404(stage.matches, pk=match.pk, **conditions)
-
         def team_faux_queryset(team):
             # The team's players and their statistics for the match, in two
             # queries rather than two for every player.
