@@ -2,14 +2,12 @@ import collections
 import datetime
 import json
 import logging
-import warnings
 
 import magic
 from dateutil.parser import parse
 from dateutil.rrule import DAILY, WEEKLY
 from django import forms
 from django.conf import settings
-from django.contrib import messages
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.forms import array as PGA
 from django.core.exceptions import ValidationError
@@ -36,7 +34,6 @@ from django.utils import timezone
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
-from googleapiclient.errors import HttpError
 from modelforms.forms import ModelForm
 from pyparsing import ParseException
 
@@ -64,10 +61,6 @@ from tournamentcontrol.competition.draw.services import (
     draw_target_team_count,
     generate_stage_draw,
     suitable_draw_formats,
-)
-from tournamentcontrol.competition.exceptions import (
-    LiveStreamError,
-    LiveStreamTransitionWarning,
 )
 from tournamentcontrol.competition.fields import URLField
 from tournamentcontrol.competition.models import (
@@ -2678,54 +2671,6 @@ class DivisionTournamentScheduleForm(TournamentScheduleForm):
 
     def get_teams(self):
         return self.cleaned_data["team_hook"].teams.order_by("order")
-
-
-class StreamControlForm(forms.Form):
-    status = forms.ChoiceField(
-        label="Live Streaming Control",
-        choices=(
-            ("testing", "Testing"),
-            ("live", "Start streaming"),
-            ("complete", "Stop streaming"),
-        ),
-        widget=forms.RadioSelect,
-        required=True,
-        help_text=mark_safe(
-            "Start streams about 1 minute before matches start.<br/>"
-            "Stop streams about 1 minute after matches conclude."
-        ),
-    )
-
-    def save(self, request, youtube, queryset):
-        broadcast_status = self.cleaned_data["status"]
-
-        for match in queryset:
-            try:
-                # Use the new Match method for live stream transition
-                match.transition_live_stream(broadcast_status, youtube)
-                messages.success(request, f"{match}: broadcast is {broadcast_status!r}")
-            except LiveStreamError as exc:
-                messages.error(request, f"{match}: {exc}")
-            except HttpError as exc:
-                messages.error(request, f"{match}: {exc.reason}")
-            except Exception:
-                # Catch any warnings that are raised as exceptions
-                with warnings.catch_warnings(record=True) as w:
-                    warnings.simplefilter("always")
-                    try:
-                        # Re-attempt without catching warnings
-                        match.transition_live_stream(broadcast_status, youtube)
-                        messages.success(
-                            request, f"{match}: broadcast is {broadcast_status!r}"
-                        )
-                        # Display any warnings as info messages
-                        for warning in w:
-                            if issubclass(
-                                warning.category, LiveStreamTransitionWarning
-                            ):
-                                messages.info(request, f"{match}: {warning.message}")
-                    except Exception as final_exc:
-                        messages.error(request, f"{match}: {final_exc}")
 
 
 class DivisionStructureJSONForm(forms.Form):

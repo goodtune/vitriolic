@@ -15,7 +15,6 @@ from freezegun import freeze_time
 from icalendar import Calendar
 from test_plus import TestCase
 
-from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.draw import schemas
 from tournamentcontrol.competition.draw.builders import build
 from tournamentcontrol.competition.models import Match, Team
@@ -54,36 +53,6 @@ class GoodViewTests(TestCase):
         self.assertGoodView(
             "competition:season-videos", season.competition.slug, season.slug
         )
-
-    def test_stream(self):
-        # Create a superuser to access the login-required stream view
-        superuser = UserFactory.create(is_staff=True, is_superuser=True)
-
-        # Create a season with timezone to test the ZoneInfo fix
-        season = factories.SeasonFactory.create(timezone=ZoneInfo("Australia/Sydney"))
-
-        # Create a ground with live streaming enabled as would happen via edit_match
-        ground = factories.GroundFactory.create(
-            venue__season=season,
-            live_stream=True,
-            external_identifier="ground-stream-123",
-            stream_key="stream-key-456",
-        )
-
-        # Create a single match with proper structure as would be created via edit_match
-        external_id = "test-match-123"
-        factories.MatchFactory.create(
-            stage__division__season=season,
-            external_identifier=external_id,
-            play_at=ground,
-            videos=[f"http://youtu.be/{external_id}"],
-            live_stream_bind=ground.external_identifier,
-        )
-
-        with self.login(superuser):
-            self.assertGoodView(
-                "competition:stream", season.competition.slug, season.slug
-            )
 
     def test_club(self):
         club = factories.ClubFactory.create()
