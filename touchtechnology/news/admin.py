@@ -19,7 +19,7 @@ class NewsAdminComponent(AdminComponent):
     unprotected = False
 
     def __init__(self, app, name="news", app_name="news"):
-        super(NewsAdminComponent, self).__init__(app, name, app_name)
+        super().__init__(app, name, app_name)
 
     def get_urls(self):
         translation_patterns = (
@@ -122,6 +122,7 @@ class NewsAdminComponent(AdminComponent):
 
     # Translations
 
+    @staff_login_required_m
     def edit_translation(self, request, pk, locale=None, **extra_context):
         article = get_object_or_404(Article, pk=pk)
 
@@ -139,10 +140,18 @@ class NewsAdminComponent(AdminComponent):
             extra_context=extra_context,
         )
 
+    @staff_login_required_m
     def delete_translation(self, request, pk, locale, **kwargs):
         instance = get_object_or_404(Translation, article__pk=pk, locale=locale)
-        return self.generic_permissions(request, Translation, instance=instance)
+        return self.generic_delete(
+            request,
+            Translation,
+            pk=instance.pk,
+            permission_required=True,
+            post_delete_redirect=self.redirect(instance.article.urls["edit"]),
+        )
 
+    @staff_login_required_m
     def perms_translation(self, request, pk, locale, **extra_context):
         instance = get_object_or_404(Translation, article__pk=pk, locale=locale)
         return self.generic_permissions(
