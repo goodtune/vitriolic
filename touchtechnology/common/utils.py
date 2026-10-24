@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from django.apps import apps
 from django.core.cache import cache
 from django.core.paginator import Paginator
-from django.db import connection
+from django.db import DEFAULT_DB_ALIAS, connection, connections
 from django.db.models import Model, Q
 from django.http import Http404, HttpRequest
 from django.template.loader import select_template
@@ -260,6 +260,24 @@ def month_slug(value):
     whatever language is active.
     """
     return MONTH_SLUGS[value.month - 1]
+
+
+def get_schema_name(using=DEFAULT_DB_ALIAS):
+    """
+    Return the name of the schema the database connection points at, or
+    ``None`` on a single-tenant site.
+
+    ``django-tenant-schemas`` points the connection at the schema of the
+    request's tenant, or of ``tenant_context`` outside a request. Each tenant
+    has its own tables, so primary keys repeat across tenants, and anything
+    one process shares between them (a cache, an event bus) must carry this
+    name to keep them apart.
+
+    The connection belongs to the calling thread. Under ASGI, the tenant
+    middleware points the connection of the request's sync thread, not the
+    event loop's, so async code reads this through ``sync_to_async``.
+    """
+    return getattr(connections[using], "schema_name", None)
 
 
 def get_base_url(scheme="http"):

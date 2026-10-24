@@ -17,12 +17,12 @@ class MemoryBackend(Backend):
         self._subscribers = collections.defaultdict(set)
         self._recent = collections.defaultdict(collections.deque)
 
-    def publish(self, season_id, event):
-        ring = self._recent[season_id]
+    def publish(self, channel, event):
+        ring = self._recent[channel]
         ring.appendleft(event)
         while len(ring) > int(ACTIVITY_LENGTH):
             ring.pop()
-        for key in list(self._subscribers[season_id]):
+        for key in list(self._subscribers[channel]):
             loop, queue = key
             try:
                 loop.call_soon_threadsafe(queue.put_nowait, event)
@@ -30,13 +30,11 @@ class MemoryBackend(Backend):
                 # The subscriber's loop has closed without unsubscribing; drop
                 # it so one dead subscriber never blocks the others.
                 logger.warning(
-                    "dropping stale compops subscriber for season %s: %s",
-                    season_id,
-                    exc,
+                    "dropping stale compops subscriber on %s: %s", channel, exc
                 )
-                self._subscribers[season_id].discard(key)
+                self._subscribers[channel].discard(key)
 
-    async def subscribe(self, season_id, idle):
+    async def subscribe(self, channel, idle):
         """
         Yield ``None`` once as soon as the subscription is registered, then an
         event dict per event, or ``None`` after ``idle`` seconds without one.
@@ -44,7 +42,7 @@ class MemoryBackend(Backend):
         loop = asyncio.get_running_loop()
         queue = asyncio.Queue()
         key = (loop, queue)
-        self._subscribers[season_id].add(key)
+        self._subscribers[channel].add(key)
         try:
             yield None
             while True:
@@ -53,7 +51,7 @@ class MemoryBackend(Backend):
                 except asyncio.TimeoutError:
                     yield None
         finally:
-            self._subscribers[season_id].discard(key)
+            self._subscribers[channel].discard(key)
 
-    def recent(self, season_id):
-        return list(self._recent[season_id])[: int(ACTIVITY_LENGTH)]
+    def recent(self, channel):
+        return list(self._recent[channel])[: int(ACTIVITY_LENGTH)]

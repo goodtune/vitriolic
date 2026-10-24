@@ -50,12 +50,26 @@ def render(func, *args):
         close_old_connections()
 
 
-async def stream(season_id, snapshot, on_event):
+async def subscribe(season_id):
     """
-    Yield the snapshot, then a patch for every event, with keep-alive
-    comments while idle. ``snapshot`` and ``on_event`` are sync callables
-    run through ``sync_to_async`` (thread sensitive, so they share the
-    request's database connection semantics).
+    Return the subscription to ``season_id`` in the request's tenant.
+
+    The bus names the channel from the schema of the database connection.
+    The tenant middleware points the connection of the request's sync thread
+    at the tenant, and the event loop has a connection of its own, so the
+    channel is named on the request's thread, before the response starts.
+    """
+    return await sync_to_async(events.subscribe)(
+        season_id, idle=float(EVENTS_KEEPALIVE)
+    )
+
+
+async def stream(season_id, feed, snapshot, on_event):
+    """
+    Yield the snapshot, then a patch for every event of the subscription
+    ``feed``, with keep-alive comments while idle. ``snapshot`` and
+    ``on_event`` are sync callables run through ``sync_to_async`` (thread
+    sensitive, so they share the request's database connection semantics).
 
     The subscription is registered before the snapshot is rendered, and
     yields a ready tick as soon as it is, so an event published while the
@@ -66,9 +80,7 @@ async def stream(season_id, snapshot, on_event):
     """
     ready = False
     try:
-        async with aclosing(
-            events.subscribe(season_id, idle=float(EVENTS_KEEPALIVE))
-        ) as feed:
+        async with aclosing(feed):
             async for event in feed:
                 if not ready:
                     ready = True
@@ -106,8 +118,9 @@ def compops_events(site):
         def on_event(event):
             return site.event_fragments(request, season, day, event)
 
+        feed = await subscribe(season.pk)
         return DatastarResponse(
-            stream(season.pk, snapshot, on_event), headers=SSE_HEADERS
+            stream(season.pk, feed, snapshot, on_event), headers=SSE_HEADERS
         )
 
     return view
@@ -139,8 +152,9 @@ def booth_events(site):
                 request, season, ground, pane, match_pk, event
             )
 
+        feed = await subscribe(season.pk)
         return DatastarResponse(
-            stream(season.pk, snapshot, on_event), headers=SSE_HEADERS
+            stream(season.pk, feed, snapshot, on_event), headers=SSE_HEADERS
         )
 
     return view

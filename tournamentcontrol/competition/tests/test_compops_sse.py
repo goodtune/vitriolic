@@ -399,10 +399,10 @@ class CompOpsEventsDisconnectTests(SseFixture, TransactionTestCase):
         self.assertEqual(start["status"], 200)
         await communicator.receive_output(5)  # first body chunk
         backend = events.get_backend()
-        self.assertEqual(len(backend._subscribers[self.season.pk]), 1)
+        self.assertEqual(len(backend._subscribers[f"season:{self.season.pk}"]), 1)
         await communicator.send_input({"type": "http.disconnect"})
         await communicator.wait(5)
-        self.assertEqual(len(backend._subscribers[self.season.pk]), 0)
+        self.assertEqual(len(backend._subscribers[f"season:{self.season.pk}"]), 0)
 
 
 @freeze_time("2026-10-08 10:50 +10:00", real_asyncio=True)

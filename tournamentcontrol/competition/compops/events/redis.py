@@ -5,6 +5,10 @@ Configure it with::
 
     COMPOPS_EVENTS_BACKEND = "tournamentcontrol.competition.compops.events.redis.RedisBackend"
     COMPOPS_EVENTS_OPTIONS = {"url": "redis://localhost:6379/0"}
+
+Season 3 of the ``alpha`` schema publishes on ``compops:alpha:season:3`` and
+keeps its recent events in the list ``compops:alpha:season:3:recent``; a
+single-tenant site uses ``compops:season:3`` and ``compops:season:3:recent``.
 """
 
 import json
@@ -22,28 +26,28 @@ class RedisBackend(Backend):
         self.async_client = async_client or redis_asyncio.Redis.from_url(url)
 
     @staticmethod
-    def _channel(season_id):
-        return f"compops:season:{season_id}"
+    def _channel(channel):
+        return f"compops:{channel}"
 
     @staticmethod
-    def _ring(season_id):
-        return f"compops:season:{season_id}:recent"
+    def _ring(channel):
+        return f"compops:{channel}:recent"
 
-    def publish(self, season_id, event):
+    def publish(self, channel, event):
         payload = json.dumps(event)
         pipe = self.sync.pipeline()
-        pipe.publish(self._channel(season_id), payload)
-        pipe.lpush(self._ring(season_id), payload)
-        pipe.ltrim(self._ring(season_id), 0, int(ACTIVITY_LENGTH) - 1)
+        pipe.publish(self._channel(channel), payload)
+        pipe.lpush(self._ring(channel), payload)
+        pipe.ltrim(self._ring(channel), 0, int(ACTIVITY_LENGTH) - 1)
         pipe.execute()
 
-    async def subscribe(self, season_id, idle):
+    async def subscribe(self, channel, idle):
         """
         Yield ``None`` once as soon as the subscription is registered, then an
         event dict per event, or ``None`` after ``idle`` seconds without one.
         """
         pubsub = self.async_client.pubsub()
-        await pubsub.subscribe(self._channel(season_id))
+        await pubsub.subscribe(self._channel(channel))
         try:
             yield None
             while True:
@@ -56,10 +60,10 @@ class RedisBackend(Backend):
                     yield json.loads(message["data"])
         finally:
             try:
-                await pubsub.unsubscribe(self._channel(season_id))
+                await pubsub.unsubscribe(self._channel(channel))
             finally:
                 await pubsub.aclose()
 
-    def recent(self, season_id):
-        raw = self.sync.lrange(self._ring(season_id), 0, int(ACTIVITY_LENGTH) - 1)
+    def recent(self, channel):
+        raw = self.sync.lrange(self._ring(channel), 0, int(ACTIVITY_LENGTH) - 1)
         return [json.loads(item) for item in raw]

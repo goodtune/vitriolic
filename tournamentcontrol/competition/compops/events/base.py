@@ -12,17 +12,21 @@ class Backend(abc.ABC):
 
     The class named by ``COMPOPS_EVENTS_BACKEND`` is instantiated once per
     process with the keyword arguments in ``COMPOPS_EVENTS_OPTIONS``.
+
+    Each method takes a ``channel``, a string that names one season of one
+    tenant (see ``events.channel``). The backend keeps channels apart and
+    reads nothing more into them.
     """
 
     @abc.abstractmethod
-    def publish(self, season_id, event):
+    def publish(self, channel, event):
         """
         Deliver ``event`` (a JSON-serialisable dict) to every subscriber of
-        ``season_id`` and remember it for ``recent``.
+        ``channel`` and remember it for ``recent``.
         """
 
     @abc.abstractmethod
-    async def subscribe(self, season_id, idle):
+    async def subscribe(self, channel, idle):
         """
         An async generator. Yield ``None`` once as soon as the subscription
         is registered, then an event dict per event, or ``None`` after
@@ -31,8 +35,8 @@ class Backend(abc.ABC):
         yield None
 
     @abc.abstractmethod
-    def recent(self, season_id):
+    def recent(self, channel):
         """
-        Return the most recent events for ``season_id``, newest first, at
+        Return the most recent events for ``channel``, newest first, at
         most ``COMPOPS_ACTIVITY_LENGTH`` of them.
         """

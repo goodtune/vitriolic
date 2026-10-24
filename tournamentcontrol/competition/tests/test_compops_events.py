@@ -97,7 +97,7 @@ class MemoryBackendTests(TestCase):
 
         async def first():
             async for event in events.subscribe(1, idle=5):
-                return event, bool(backend._subscribers[1])
+                return event, bool(backend._subscribers["season:1"])
 
         event, registered = await asyncio.wait_for(first(), timeout=1)
         self.assertIsNone(event)
@@ -108,7 +108,7 @@ class MemoryBackendTests(TestCase):
         closed_loop = asyncio.new_event_loop()
         closed_loop.close()
         stale = (closed_loop, asyncio.Queue())
-        backend._subscribers[1].add(stale)
+        backend._subscribers["season:1"].add(stale)
 
         async def consume():
             async for event in events.subscribe(1, idle=0.5):
@@ -120,7 +120,7 @@ class MemoryBackendTests(TestCase):
         await sync_to_async(self.publish_committed)(1, "score-entered", match=5)
         event = await asyncio.wait_for(task, timeout=2)
         self.assertEqual(event["match"], 5)
-        self.assertNotIn(stale, backend._subscribers[1])
+        self.assertNotIn(stale, backend._subscribers["season:1"])
 
     def test_publish_failure_after_commit_does_not_raise(self):
         with mock.patch.object(
@@ -142,18 +142,18 @@ class RedisBackendTests(TestCase):
     def test_recent_uses_a_bounded_list(self):
         with override_settings(COMPOPS_ACTIVITY_LENGTH=2):
             for n in range(3):
-                self.backend.publish(1, {"type": "x", "match": n})
-        self.assertEqual([e["match"] for e in self.backend.recent(1)], [2, 1])
+                self.backend.publish("season:1", {"type": "x", "match": n})
+        self.assertEqual([e["match"] for e in self.backend.recent("season:1")], [2, 1])
 
     async def test_pubsub_round_trip(self):
         async def consume():
-            async for event in self.backend.subscribe(1, idle=0.05):
+            async for event in self.backend.subscribe("season:1", idle=0.05):
                 if event is not None:
                     return event
 
         task = asyncio.ensure_future(consume())
         await asyncio.sleep(0.05)
-        self.backend.publish(1, {"type": "score-entered", "match": 9})
+        self.backend.publish("season:1", {"type": "score-entered", "match": 9})
         event = await asyncio.wait_for(task, timeout=2)
         self.assertEqual(event["match"], 9)
 
@@ -175,7 +175,7 @@ class RedisBackendTests(TestCase):
         created = self.spy_on_pubsub()
 
         async def first():
-            async for event in self.backend.subscribe(1, idle=5):
+            async for event in self.backend.subscribe("season:1", idle=5):
                 return event, bool(created[0].subscribed)
 
         event, subscribed = await asyncio.wait_for(first(), timeout=1)
@@ -185,7 +185,9 @@ class RedisBackendTests(TestCase):
     async def test_closing_the_subscription_closes_the_pubsub(self):
         created = self.spy_on_pubsub()
 
-        async with contextlib.aclosing(self.backend.subscribe(1, idle=0.05)) as gen:
+        async with contextlib.aclosing(
+            self.backend.subscribe("season:1", idle=0.05)
+        ) as gen:
             await gen.__anext__()
         (pubsub,) = created
         self.assertFalse(pubsub.subscribed)
@@ -194,7 +196,7 @@ class RedisBackendTests(TestCase):
     async def test_pubsub_is_closed_even_if_unsubscribe_fails(self):
         created = self.spy_on_pubsub()
 
-        gen = self.backend.subscribe(1, idle=0.05)
+        gen = self.backend.subscribe("season:1", idle=0.05)
         await gen.__anext__()
         (pubsub,) = created
         with (
@@ -291,9 +293,7 @@ class RedisBackendTenantTests(TenantTestsMixin, TestCase):
         feed = await sync_to_async(self.subscribe_in)("alpha", 3)
         async with contextlib.aclosing(feed):
             await anext(feed)  # subscribed
-            self.assertEqual(
-                self.redis.pubsub_channels(), [b"compops:alpha:season:3"]
-            )
+            self.assertEqual(self.redis.pubsub_channels(), [b"compops:alpha:season:3"])
 
 
 class BackendSelectionTests(TestCase):
