@@ -39,7 +39,7 @@ from touchtechnology.common.decorators import (
     csrf_exempt_m,
     staff_login_required_m,
 )
-from touchtechnology.common.prince import prince
+from touchtechnology.common.prince import PrinceError, prince
 from touchtechnology.common.utils import get_perms_for_model
 from tournamentcontrol.competition.dashboard import (
     BasicResultWidget,
@@ -2992,12 +2992,16 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             )
             return self.redirect(redirect_to)
 
-        return generate_fixture_grid(
-            season,
-            templates=self.template_path("grid.html"),
-            format=mode,
-            extra_context=extra_context,
-        )
+        try:
+            return generate_fixture_grid(
+                season,
+                templates=self.template_path("grid.html"),
+                format=mode,
+                extra_context=extra_context,
+            )
+        except PrinceError:
+            log.exception("PDF for %s was not generated.", request.path)
+            return self.pdf_failed(request, season.urls["edit"], extra_context)
 
     @competition_by_pk_m
     @csrf_exempt_m
@@ -3022,18 +3026,24 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             )
             return self.redirect(redirect_to)
 
-        return generate_fixture_grid(
-            season,
-            templates=self.template_path("grid.html"),
-            format=mode,
-            extra_context=extra_context,
-            dates=[date],
-        )
+        try:
+            return generate_fixture_grid(
+                season,
+                templates=self.template_path("grid.html"),
+                format=mode,
+                extra_context=extra_context,
+                dates=[date],
+            )
+        except PrinceError:
+            log.exception("PDF for %s was not generated.", request.path)
+            return self.pdf_failed(request, season.urls["edit"], extra_context)
 
     def pdf_failed(self, request, start_again, extra_context):
         """
-        The background PDF render failed for good; the error has already been
-        reported by the task, so explain it plainly instead of re-raising.
+        The PDF render failed for good, in the background task or in this
+        request. The error has already been reported, by the task or by the
+        view that caught the ``PrinceError``, so explain it plainly instead
+        of re-raising.
         """
         messages.error(request, PDF_FAILED_MESSAGE)
         context = dict(extra_context, start_again=start_again)
@@ -3985,7 +3995,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         res = TemplateResponse(request, templates, extra_context)
 
         if mode == "pdf":
-            pdf = prince(res.render().content)
+            try:
+                pdf = prince(res.render().content)
+            except PrinceError:
+                log.exception("PDF for %s was not generated.", request.path)
+                return self.pdf_failed(request, club.urls["edit"], extra_context)
             return HttpResponse(pdf, content_type="application/pdf")
 
         return res
