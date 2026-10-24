@@ -18,15 +18,13 @@ from touchtechnology.common.mixins import NodeRelationMixin
 logger = logging.getLogger(__name__)
 
 
-class FauxNodeMeta(object):
+class FauxNodeMeta:
     left_attr = "lft"
     right_attr = "rght"
     level_attr = "level"
 
 
 class FauxNode(NodeRelationMixin):
-    REPR_FMT = "<{class}: {title} ({tree_id}:{lft},{rght})>"
-
     def __init__(
         self,
         app,
@@ -74,20 +72,10 @@ class FauxNode(NodeRelationMixin):
         return all([g(self) == g(other) for g in gttr])
 
     def __repr__(self):
-        attr = (
-            "title",
-            "short_title",
-            "slug",
-            "level",
-            "tree_id",
-            "lft",
-            "rght",
-            "parent",
+        return (
+            f"<{self.__class__.__name__}: {self.title} "
+            f"({self.tree_id}:{self.lft},{self.rght})>"
         )
-        gttr = [attrgetter(a) for a in attr]
-        data = dict(zip(attr, [g(self) for g in gttr]))
-        data["class"] = self.__class__.__name__
-        return self.REPR_FMT.format(**data)
 
     @classmethod
     def equal(cls, iterable, find):
@@ -126,16 +114,18 @@ def create_exclude_filter(queryset):
 
 
 def get_perms_for_model(model, add=False, change=False, delete=False, *extra):
-    tpl = "%s.%%s_%s" % (model._meta.app_label, model._meta.model_name)
+    def perm(action):
+        return f"{model._meta.app_label}.{action}_{model._meta.model_name}"
+
     res = []
     if add:
-        res.append(tpl % "add")
+        res.append(perm("add"))
     if change:
-        res.append(tpl % "change")
+        res.append(perm("change"))
     if delete:
-        res.append(tpl % "delete")
+        res.append(perm("delete"))
     for x in extra:
-        res.append(tpl % x)
+        res.append(perm(x))
     return res
 
 
@@ -292,15 +282,11 @@ def get_base_url(scheme="http"):
         # We have our own pattern of using the `prepend_www` attribute so lets
         # check for it and stick it on the front.
         if getattr(connection.tenant, "prepend_www", False):
-            hostname = "www." + hostname
+            hostname = f"www.{hostname}"
     else:
         site = apps.get_model("sites.Site").objects.get_current()
         hostname = site.domain
-    context = {
-        "scheme": scheme,
-        "hostname": hostname,
-    }
-    return "%(scheme)s://%(hostname)s/" % context
+    return f"{scheme}://{hostname}/"
 
 
 def get_all_perms_for_model_cached(model, ttl=60, **extra):
@@ -309,7 +295,7 @@ def get_all_perms_for_model_cached(model, ttl=60, **extra):
     set on a given model.
     """
     # What are the permissions that this model accepts?
-    cache_key = "model_perms.%s.%s" % (model._meta.app_label, model._meta.model_name)
+    cache_key = f"model_perms.{model._meta.app_label}.{model._meta.model_name}"
     model_perms = cache.get(cache_key)
     logger.debug("model_perms_cache=%s", "MISS" if model_perms is None else "HIT")
     if model_perms is None:

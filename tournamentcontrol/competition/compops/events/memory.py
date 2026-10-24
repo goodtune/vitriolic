@@ -48,7 +48,7 @@ class MemoryBackend(Backend):
             while True:
                 try:
                     yield await asyncio.wait_for(queue.get(), idle)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield None
         finally:
             self._subscribers[channel].discard(key)
