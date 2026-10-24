@@ -173,3 +173,88 @@ the setting if you keep it, and shows no error. Code that calls
 `invalidate_cache()` fails with `AttributeError`.
 
 The full notes for the change are in pull request #422.
+
+## The staff pages of the public site are gone
+
+In 4.x the public competition site (`CompetitionSite`) had pages for staff:
+result entry, per-player statistics, stage progression, live-stream control,
+runsheets and a page where a team member forfeits a match. 5.0 removes them.
+Staff do this work in the admin and in CompOps.
+
+There are no redirects. Below the URL of a season, these paths are now unknown
+paths, and the site returns 404 for them:
+
+| Path | URL name | The page that is gone |
+| --- | --- | --- |
+| `results/` and `results/<YYYYMMDD>/` | `results` | The times that wait for results |
+| `results/<YYYYMMDD>/<HHMM>/` | `match-results` | Result entry for one time |
+| `results/match/<id>/` | `match-details` | Per-player statistics for a match |
+| `results/progress/` | `progression-list` | The stages that wait for progression |
+| `results/progress/<division>/<stage>/` | `progress-teams` | Progression of a stage |
+| `stream/` and `stream/<YYYYMMDD>/` | `stream` | The times that have live streams |
+| `stream/<YYYYMMDD>/<HHMM>/` | `stream-control` | Start, test and stop the live streams of one time |
+| `runsheet/` and `runsheet/<YYYYMMDD>/` | `runsheet` | The runsheet of a day |
+| `forfeit/` | `forfeit-list` | The matches a team member can forfeit |
+| `forfeit/<id>/` | `forfeit` | Forfeit a match |
+
+A template that reverses one of these names fails with `NoReverseMatch`. This
+is true for the full name, such as `{% url "competition:results" ... %}`, and
+for the name made from the application, such as
+`{% url application.name|add:":results" ... %}`. Remove the link.
+
+These templates are gone. A template of yours at one of these names is no
+longer used:
+
+- `tournamentcontrol/competition/results.html`
+- `tournamentcontrol/competition/match_detail.html`
+- `tournamentcontrol/competition/progression_list.html`
+- `tournamentcontrol/competition/progress_matches.html`
+- `tournamentcontrol/competition/stream.html`
+- `tournamentcontrol/competition/runsheet_list.html`
+- `tournamentcontrol/competition/runsheet.html`
+- `tournamentcontrol/competition/forfeit_list.html`
+- `tournamentcontrol/competition/forfeit.html`
+
+The admin's pages with the same file names are in
+`tournamentcontrol/competition/admin/<shell>/`. They stay.
+
+Two names are gone from the Python:
+
+- `StreamControlForm` in `tournamentcontrol.competition.forms`.
+- `CompetitionAdminMixin` in `tournamentcontrol.competition.sites`. The admin's
+  views `day_runsheet`, `match_results`, `edit_match_detail`,
+  `progression_list` and `progress_teams` are now methods of
+  `CompetitionAdminComponent` in `tournamentcontrol.competition.admin`. Their
+  URLs, permissions and templates in the admin did not change.
+
+Issue #310 lists the stream control page as one of the pages that raise an
+error when the YouTube authorisation of a season has expired. That part of
+#310 goes away with the page.
+
+### Where staff do the work now
+
+| The page that is gone | Admin | CompOps |
+| --- | --- | --- |
+| Result entry | Yes. The day's results page (`admin:fixja:match-results`), the Awaiting Scores widget and the season's Schedule tab. | Yes. The results panel of the day page, the page of a time and the page of a match result. |
+| Per-player statistics | Yes. The detailed results of a match (`match:detail`) and the detailed results widget. | Yes. The scorers of a match. |
+| Stage progression | Yes. The season's progression list and the progress page of a stage. | No. |
+| Start, test and stop a live stream | No. The live stream page of a day (`match-live-stream`) sets up the day's streams, and `resync-live-stream` sends them to YouTube again. No page of the admin changes the status of a broadcast. | Yes. The streams page, the stream controls of a time and of a match, and the booth. |
+| Runsheet | Yes. The run sheet of a day (`match-runsheet`), to print. | Yes. The day page. |
+| A team member forfeits a match | Partly. Staff can record a forfeit on the match. A team member has no page that calls `Match.forfeit()` and sends its notifications. | No. |
+
+The REST API can also start, test and stop a broadcast:
+`POST /api/v1/livestreams/<uuid>/transition/`, for a user with
+`competition.change_match`.
+
+There are two more gaps:
+
+- **Scorers who are not staff.** The public pages accepted a user with the
+  permission `competition.change_match`, for all matches or for one match
+  (with `django-guardian`). The user did not have to be staff. Result entry in
+  the admin and in CompOps needs staff status. A volunteer scorer who is not
+  staff can no longer enter results.
+- **CompOps is optional.** A project must mount CompOps (see `docs/compops.md`).
+  Until it does, staff have only the admin, and no page starts or stops a
+  live stream.
+
+The full notes for the change are in pull request #437.
