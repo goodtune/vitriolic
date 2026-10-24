@@ -1,8 +1,9 @@
 from unittest import mock
 
+from django.conf.urls.i18n import is_language_prefix_patterns_used
 from django.contrib.auth.models import Group
 from django.core.cache import cache
-from django.test import override_settings
+from django.test import modify_settings, override_settings
 from django.urls.resolvers import _get_cached_resolver, get_ns_resolver
 from guardian.conf import settings as guardian_settings
 from test_plus.test import TestCase
@@ -55,6 +56,70 @@ class SitemapNodeMiddlewareMemoryLeakTest(TestCase):
             0,
             f"`get_ns_resolver` cache grew by {growth} entries over 10 requests",
         )
+
+
+# Django's documentation puts LocaleMiddleware above this middleware, so it
+# reads request.urlconf again after this middleware has handed back its response.
+@modify_settings(MIDDLEWARE={"prepend": "django.middleware.locale.LocaleMiddleware"})
+class SitemapNodeMiddlewareLocaleMemoryLeakTest(TestCase):
+    """
+    ``LocaleMiddleware`` asks whether each request's URL configuration uses
+    ``i18n_patterns``, and Django caches the answer for every configuration it
+    is asked about, for good. This middleware builds a new configuration for
+    each request, so that cache must not keep one, and its whole tree of URL
+    patterns, for each request.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        # The URL patterns for the sitemap are cached between requests, and
+        # the database is rolled back when the class finishes, so do not leave
+        # nodes behind for the next test class to find.
+        cls.addClassCleanup(cache.delete, DEHYDRATED_URLPATTERNS_KEY)
+
+        home = SitemapNode.objects.create(title="Home", slug="home")
+        page = Page.objects.create()
+        PageContent.objects.create(page=page, sequence=1, copy="<p>About copy</p>")
+        about = SitemapNode.objects.create(
+            title="About", slug="about", parent=home, object=page
+        )
+
+        # A node's URL has a name only in the URL configuration the
+        # middleware builds for each request, so it is requested by its own
+        # absolute URL.
+        cls.home_url = home.get_absolute_url()
+        cls.about_url = about.get_absolute_url()
+
+    def get_pages(self):
+        self.get(self.home_url)
+        self.get(self.about_url)
+        self.get("sitemap")
+
+    def test_language_prefix_cache_does_not_grow_per_request(self):
+        self.get_pages()
+        before = is_language_prefix_patterns_used.cache_info().currsize
+
+        for _ in range(5):
+            self.get_pages()
+
+        self.assertEqual(is_language_prefix_patterns_used.cache_info().currsize, before)
+
+    def test_language_prefix_cache_does_not_grow_when_the_view_raises(self):
+        self.get_pages()
+        before = is_language_prefix_patterns_used.cache_info().currsize
+
+        # Django turns the error into a 500 response before the response goes
+        # back through the middleware, and the test client raises the error
+        # once the response is complete.
+        error = RuntimeError("The page could not be loaded.")
+        with mock.patch(
+            "touchtechnology.content.views.get_object_or_404", side_effect=error
+        ):
+            for _ in range(5):
+                with self.assertRaisesMessage(RuntimeError, str(error)):
+                    self.get(self.about_url)
+
+        self.assertEqual(is_language_prefix_patterns_used.cache_info().currsize, before)
 
 
 @override_settings(LOGIN_URL="accounts:login")
