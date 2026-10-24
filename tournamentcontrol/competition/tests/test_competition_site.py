@@ -1,7 +1,10 @@
+import re
 import unittest
 from datetime import date, datetime, time, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from django.apps import apps
 from django.conf import settings
 from django.core.cache import cache
 from django.db import connection
@@ -1885,3 +1888,110 @@ class VenueViewTests(TestCase):
         other = factories.GroundFactory.create(venue__season=self.season)
         self.get("competition:ground", *self._venue_args(other.slug))
         self.response_404()
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class StaffPagesRemovedTests(TestCase):
+    """
+    The public site had staff pages: result entry, per-player statistics,
+    stage progression, live-stream control, runsheets and a team's own
+    forfeits. They are gone (#424). Staff use the admin and CompOps. Their
+    paths are unknown paths now, for every visitor.
+    """
+
+    user_factory = factories.UserFactory
+
+    #: The URL names of the pages that are gone.
+    names = (
+        "results",
+        "match-results",
+        "match-details",
+        "progression-list",
+        "progress-teams",
+        "stream",
+        "stream-control",
+        "runsheet",
+        "forfeit-list",
+        "forfeit",
+    )
+
+    def setUp(self):
+        self.match = factories.MatchFactory.create(
+            datetime=datetime(2026, 10, 17, 18, 0, tzinfo=ZoneInfo("UTC")),
+            external_identifier="broadcast-1",
+        )
+        stage = self.match.stage
+        season = stage.division.season
+        # The names went with the pages, so nothing reverses to these paths.
+        # They are spelled out below the season's own URL.
+        season_url = self.reverse(
+            "competition:season", season.competition.slug, season.slug
+        )
+        self.paths = [
+            f"{season_url}{page}"
+            for page in (
+                "results/",
+                "results/20261017/",
+                "results/20261017/1800/",
+                f"results/match/{self.match.pk}/",
+                "results/progress/",
+                f"results/progress/{stage.division.slug}/{stage.slug}/",
+                "stream/",
+                "stream/20261017/",
+                "stream/20261017/1800/",
+                "runsheet/",
+                "runsheet/20261017/",
+                "forfeit/",
+                f"forfeit/{self.match.pk}/",
+            )
+        ]
+
+    def test_a_visitor_finds_nothing(self):
+        for path in self.paths:
+            with self.subTest(path=path):
+                self.get(path)
+                self.assert_http_404_not_found()
+
+    def test_a_scorer_in_the_home_team_finds_nothing(self):
+        """
+        The user holds every permission the pages accepted, and plays in the
+        team the forfeit pages would have offered.
+        """
+        scorer = self.make_user(
+            perms=["competition.change_match", "competition.stream_season"]
+        )
+        factories.TeamAssociationFactory.create(
+            team=self.match.home_team,
+            person=factories.PersonFactory.create(
+                user=scorer, club=self.match.home_team.club
+            ),
+        )
+        with self.login(scorer):
+            for path in self.paths:
+                with self.subTest(path=path):
+                    self.get(path)
+                    self.assert_http_404_not_found()
+
+    def test_no_template_links_to_them(self):
+        """
+        A public template names a page in full (``competition:results``) or
+        through its application (``application.name|add:":results"``). The
+        admin's pages of the same names, such as ``admin:fixja:match-results``
+        and ``admin:fixja:match-runsheet``, are in the admin's namespace and
+        stay.
+        """
+        names = "|".join(self.names)
+        reverses = re.compile(rf"""(?:["']competition|\|add:["']):(?:{names})["']""")
+        templates = Path(apps.get_app_config("competition").path, "templates")
+        self.assertEqual(
+            [
+                f"{path.relative_to(templates)}:{number}"
+                for path in sorted(templates.rglob("*"))
+                if path.is_file()
+                for number, line in enumerate(
+                    path.read_text(encoding="utf-8").splitlines(), 1
+                )
+                if reverses.search(line)
+            ],
+            [],
+        )
