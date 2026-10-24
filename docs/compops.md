@@ -189,6 +189,27 @@ streams.
 The `events/` endpoints log and keep streaming when a single push fails to
 render. They also validate their database connection around each push.
 
+## Tenants
+
+On a [django-tenant-schemas](https://pypi.org/project/django-tenant-schemas/)
+site, one event bus serves all the tenants. Each tenant has its own tables,
+so two tenants can have a season with the same id. The bus keeps the events
+of each tenant apart: it names the channel of a season from the schema that
+the database connection points at. For season 3, the Redis backend uses
+these names:
+
+| Site | Channel | Recent events |
+| --- | --- | --- |
+| The tenant with the schema `alpha` | `compops:alpha:season:3` | `compops:alpha:season:3:recent` |
+| A single-tenant site | `compops:season:3` | `compops:season:3:recent` |
+
+An event goes to the tenant whose schema the connection points at when the
+event is published. A request to the site of a tenant points the connection
+at the schema of that tenant. Outside a request, use `tenant_context`, or a
+Celery task that runs in the schema of the tenant. An event that is published
+in the public schema goes to the public schema only, and no tenant's page
+shows it.
+
 ## Broadcast status
 
 `Match.live_stream_status` and `LiveStreamEvent.live_stream_status`
@@ -223,6 +244,36 @@ The task runs in a Celery worker, which is a different process from the web
 server. The memory backend (`MemoryBackend`) cannot send events from one
 process to another, so the pages do not see the changes that the task
 finds. Use the Redis backend (`RedisBackend`) when you schedule the task.
+
+The task checks the seasons of the schema that it runs in. Celery beat sends
+its tasks from the public schema, where the task finds the seasons of no
+tenant. In a multi-tenant project, schedule a task that sends
+`refresh_all_live_stream_status` once for each tenant, in the schema of that
+tenant. With the `CeleryApp` of
+[tenant-schemas-celery](https://pypi.org/project/tenant-schemas-celery/), a
+task that you send in `tenant_context` runs in the schema of that tenant:
+
+```python
+from celery import shared_task
+from tenant_schemas.utils import (
+    get_public_schema_name,
+    get_tenant_model,
+    tenant_context,
+)
+
+from tournamentcontrol.competition.tasks import refresh_all_live_stream_status
+
+
+@shared_task
+def refresh_every_tenants_live_stream_status():
+    tenants = get_tenant_model().objects.exclude(schema_name=get_public_schema_name())
+    for tenant in tenants:
+        with tenant_context(tenant):
+            refresh_all_live_stream_status.delay()
+```
+
+Put this task in `CELERY_BEAT_SCHEDULE` in place of
+`refresh_all_live_stream_status`.
 
 ## Tests
 
