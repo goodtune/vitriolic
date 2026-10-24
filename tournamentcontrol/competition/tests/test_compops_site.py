@@ -12,6 +12,7 @@ from django.utils import timezone
 from freezegun import freeze_time
 from test_plus import TestCase
 
+from touchtechnology.admin.tests.tenancy import schema_context
 from tournamentcontrol.competition.compops import events
 from tournamentcontrol.competition.compops.fragments import render_counts
 from tournamentcontrol.competition.compops import sites
@@ -162,6 +163,30 @@ class DayPageTests(CompOpsFixture):
             '<li class="score-entered"><time>09:15:30</time>'
             "<span>Score · x · priya</span></li>"
         )
+
+    def test_activity_is_kept_to_its_tenant(self):
+        events.reset_backend()
+        self.addCleanup(events.reset_backend)
+        with (
+            freeze_time("2026-10-07 23:15:30+00:00"),
+            schema_context("alpha"),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            events.publish(
+                self.season.pk, "score-entered", actor="priya", summary="Score · x"
+            )
+        with self.login(self.staff):
+            with schema_context("bravo"):
+                self.get("compops:activity", **self.day_kwargs)
+            self.assertResponseContains(
+                '<li id="activity-empty" class="empty">Nothing has happened yet today.</li>'
+            )
+            with schema_context("alpha"):
+                self.get("compops:activity", **self.day_kwargs)
+            self.assertResponseContains(
+                '<li class="score-entered"><time>09:15:30</time>'
+                "<span>Score · x · priya</span></li>"
+            )
 
     def test_count_ids_are_unique_on_the_page(self):
         with self.login(self.staff):

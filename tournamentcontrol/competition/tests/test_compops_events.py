@@ -8,9 +8,17 @@ from django.core.exceptions import ImproperlyConfigured
 from django.test import override_settings
 from test_plus import TestCase
 
+from touchtechnology.admin.tests.tenancy import schema_context
 from tournamentcontrol.competition.compops import events
 from tournamentcontrol.competition.compops.events.memory import MemoryBackend
 from tournamentcontrol.competition.compops.events.redis import RedisBackend
+
+
+async def first_event(feed):
+    """The first event of ``feed``, past its idle ticks."""
+    async for event in feed:
+        if event is not None:
+            return event
 
 
 class MemoryBackendTests(TestCase):
@@ -198,6 +206,94 @@ class RedisBackendTests(TestCase):
             with self.assertRaises(ConnectionError):
                 await gen.aclose()
         aclose.assert_awaited_once()
+
+
+class TenantTestsMixin:
+    """
+    One bus serves every tenant of a django-tenant-schemas site, and season
+    ids repeat across tenants, so each season's events stay in the tenant
+    whose schema the connection points at.
+    """
+
+    def publish_in(self, schema_name, *args, **kwargs):
+        # ``publish`` defers to ``transaction.on_commit``, which touches the
+        # database connection, so async tests must call it from a thread.
+        with schema_context(schema_name), self.captureOnCommitCallbacks(execute=True):
+            events.publish(*args, **kwargs)
+
+    def subscribe_in(self, schema_name, season_id):
+        # ``subscribe`` reads the schema when it is called, so async tests
+        # call it from the thread whose connection they point, as the SSE
+        # views do.
+        with schema_context(schema_name):
+            return events.subscribe(season_id, idle=0.05)
+
+    def recent_in(self, schema_name, season_id):
+        with schema_context(schema_name):
+            return events.recent(season_id)
+
+    def test_recent_is_kept_per_tenant(self):
+        self.publish_in("alpha", 3, "score-entered", actor="priya", summary="alpha")
+        self.publish_in("bravo", 3, "score-entered", actor="sam", summary="bravo")
+        self.assertEqual([e["summary"] for e in self.recent_in("bravo", 3)], ["bravo"])
+        self.assertEqual([e["summary"] for e in self.recent_in("alpha", 3)], ["alpha"])
+
+    async def test_subscriber_receives_its_own_tenants_events_only(self):
+        feed = await sync_to_async(self.subscribe_in)("bravo", 3)
+        async with contextlib.aclosing(feed):
+            await anext(feed)  # registered
+            await sync_to_async(self.publish_in)("alpha", 3, "score-entered", match=5)
+            await sync_to_async(self.publish_in)("bravo", 3, "score-entered", match=6)
+            event = await asyncio.wait_for(first_event(feed), timeout=2)
+        self.assertEqual(event["match"], 6)
+
+
+class MemoryBackendTenantTests(TenantTestsMixin, TestCase):
+    def setUp(self):
+        events.reset_backend()
+        self.addCleanup(events.reset_backend)
+
+
+class RedisBackendTenantTests(TenantTestsMixin, TestCase):
+    def setUp(self):
+        server = fakeredis.FakeServer()
+        self.redis = fakeredis.FakeRedis(server=server)
+        self.enterContext(
+            override_settings(
+                COMPOPS_EVENTS_BACKEND="tournamentcontrol.competition.compops.events.redis.RedisBackend",
+                COMPOPS_EVENTS_OPTIONS={
+                    "url": "redis://unused",
+                    "sync_client": self.redis,
+                    "async_client": fakeredis.FakeAsyncRedis(server=server),
+                },
+            )
+        )
+        events.reset_backend()
+        self.addCleanup(events.reset_backend)
+
+    def test_single_tenant_ring_is_named_for_the_season(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            events.publish(3, "score-entered", match=5)
+        self.assertEqual(self.redis.keys("compops:*"), [b"compops:season:3:recent"])
+
+    def test_tenant_ring_is_named_for_the_schema_and_the_season(self):
+        self.publish_in("alpha", 3, "score-entered", match=5)
+        self.assertEqual(
+            self.redis.keys("compops:*"), [b"compops:alpha:season:3:recent"]
+        )
+
+    async def test_single_tenant_channel_is_named_for_the_season(self):
+        async with contextlib.aclosing(events.subscribe(3, idle=0.05)) as feed:
+            await anext(feed)  # subscribed
+            self.assertEqual(self.redis.pubsub_channels(), [b"compops:season:3"])
+
+    async def test_tenant_channel_is_named_for_the_schema_and_the_season(self):
+        feed = await sync_to_async(self.subscribe_in)("alpha", 3)
+        async with contextlib.aclosing(feed):
+            await anext(feed)  # subscribed
+            self.assertEqual(
+                self.redis.pubsub_channels(), [b"compops:alpha:season:3"]
+            )
 
 
 class BackendSelectionTests(TestCase):

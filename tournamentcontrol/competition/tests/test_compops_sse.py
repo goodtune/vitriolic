@@ -19,6 +19,7 @@ from guardian.shortcuts import assign_perm
 from test_plus import TestCase
 from test_plus.test import BaseTestCase
 
+from touchtechnology.admin.tests.tenancy import schema_context
 from tournamentcontrol.competition.compops import events
 from tournamentcontrol.competition.compops.sites import CompOpsSite
 from tournamentcontrol.competition.tests import factories
@@ -123,6 +124,28 @@ class SseFixture:
 
     async def publish(self, *args, **kwargs):
         await sync_to_async(self.publish_committed)(*args, **kwargs)
+
+    async def publish_in(self, schema_name, *args, **kwargs):
+        """Publish as a request in the tenant ``schema_name`` does."""
+
+        def publish():
+            with schema_context(schema_name):
+                self.publish_committed(*args, **kwargs)
+
+        await sync_to_async(publish)()
+
+    async def point_at(self, schema_name):
+        """
+        Point the requests of the rest of the test at the tenant
+        ``schema_name``. Their sync code runs on the test's thread, so that
+        thread's connection is the one to point; the event loop has a
+        connection of its own, as it does under an ASGI server.
+        """
+
+        def enter():
+            self.enterContext(schema_context(schema_name))
+
+        await sync_to_async(enter)()
 
     async def get(self, url=None, user=None):
         await self.async_client.aforce_login(user or self.staff)
@@ -267,6 +290,21 @@ class CompOpsEventsTests(SseFixture, TestCase):
             self.assertEqual(patched.call_count, 2)
             self.assertIn('data: elements <div id="streams"', pushed)
             self.assertNotIn('id="slot-0800-h"', pushed)
+        finally:
+            await reader.close()
+
+    async def test_another_tenants_events_are_not_pushed(self):
+        await self.point_at("alpha")
+        reader, _ = await self.connect()
+        try:
+            await self.publish_in(
+                "bravo", self.season.pk, "stream-changed", kind="match", id=1
+            )
+            await self.publish_in(
+                "alpha", self.season.pk, "statistics-entered", match=self.match.pk
+            )
+            pushed = await reader.until(LAST_COUNT)
+            self.assertIn('data: elements <div id="scorers"', pushed[0])
         finally:
             await reader.close()
 
@@ -602,6 +640,29 @@ class BoothEventsTests(SseFixture, TestCase):
             pushed = await reader.until('<div id="pane"')
             self.assertEqual(len(pushed), 1)
             self.assertIn('<div id="pane" class="pane leaders">', pushed[0])
+        finally:
+            await reader.close()
+
+    async def test_another_tenants_events_are_not_pushed(self):
+        await self.point_at("alpha")
+        reader, _ = await self.connect_booth(
+            {"pane": "sheets", "match": self.current.pk}
+        )
+        try:
+            await self.publish_in(
+                "bravo",
+                self.season.pk,
+                "stream-changed",
+                kind="match",
+                id=self.current.pk,
+                status="complete",
+            )
+            await self.publish_in(
+                "alpha", self.season.pk, "statistics-entered", match=self.current.pk
+            )
+            pushed = await reader.until('<div id="pane"')
+            self.assertEqual(len(pushed), 1)
+            self.assertIn('<div id="pane" class="pane sheets">', pushed[0])
         finally:
             await reader.close()
 
