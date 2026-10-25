@@ -258,3 +258,10 @@ There are two more gaps:
   live stream.
 
 The full notes for the change are in pull request #437.
+
+## The `en-AU` catalogues are gone
+
+The apps no longer ship `locale/en-AU`. Django never loaded those catalogues,
+because it looks for a directory named `en_AU`, and they held no translations.
+A project that offers `en-au` in `LANGUAGES` sees no change: these apps show
+their source strings, as before.
