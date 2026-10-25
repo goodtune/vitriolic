@@ -1,6 +1,8 @@
 import re
+from unittest import mock
 from urllib.parse import urlparse
 
+from django.contrib.auth import get_user_model
 from django.core import mail
 from test_plus import TestCase
 
@@ -97,6 +99,23 @@ class PasswordResetTests(TestCase):
             self.get_check_200("accounts:profile")
         self.assertResponseContains(
             f"<p>Welcome back {user.first_name} &ndash; this is your personal page.</p>"
+        )
+
+    def test_profile_greets_user_by_short_name(self):
+        """
+        The greeting uses the user model's informal name, ``get_short_name()``.
+        A custom user model can return something other than ``first_name``.
+        """
+        user = self.make_user()
+        with (
+            mock.patch.object(
+                get_user_model(), "get_short_name", autospec=True, return_value="Coach"
+            ),
+            self.login(user),
+        ):
+            self.get_check_200("accounts:profile")
+        self.assertResponseContains(
+            "<p>Welcome back Coach &ndash; this is your personal page.</p>"
         )
 
     def test_password_change(self):

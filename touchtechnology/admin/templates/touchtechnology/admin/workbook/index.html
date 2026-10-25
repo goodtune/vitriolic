@@ -6,7 +6,7 @@
 
 {% block content %}
 	<header class="wb-hello">
-		<h1>{% if user.first_name %}{% blocktrans with name=user.first_name %}Hello, {{ name }}{% endblocktrans %}{% else %}{% trans "Hello" %}{% endif %}</h1>
+		<h1>{% if user.get_short_name %}{% blocktrans with name=user.get_short_name %}Hello, {{ name }}{% endblocktrans %}{% else %}{% trans "Hello" %}{% endif %}</h1>
 		<p>{% trans "What would you like to do today?" %}</p>
 	</header>
 
