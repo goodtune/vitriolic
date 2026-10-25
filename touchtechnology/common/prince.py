@@ -3,6 +3,7 @@ import subprocess
 
 import requests
 from django.conf import settings
+from django.utils.encoding import force_str
 from django.utils.html import strip_spaces_between_tags
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,9 @@ def prince(html, base_url=None, ttl=300, **kwargs):
     logger.debug("base_url: %s", base_url)
     logger.debug("ttl: %s", ttl)
 
+    # A rendered response's content is bytes, in the charset Django encoded
+    # it with; strip_spaces_between_tags() would str() them into their repr.
+    html = force_str(html, settings.DEFAULT_CHARSET)
     logger.debug("content-length: %s", len(html))
     html = strip_spaces_between_tags(html)
     logger.debug("content-length-stripped: %s", len(html))
