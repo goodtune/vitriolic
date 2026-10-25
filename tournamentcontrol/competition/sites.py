@@ -2,13 +2,10 @@ import collections
 import functools
 import hashlib
 import logging
-import operator
 from datetime import date, timedelta
 from operator import or_
 
-from dateutil.relativedelta import relativedelta
 from django.conf import settings
-from django.contrib import messages
 from django.contrib.sitemaps import views as sitemaps_views
 from django.core.cache import cache
 from django.db.models import Case, Count, F, Max, Prefetch, Q, Sum, When
@@ -21,47 +18,30 @@ from django.utils.cache import patch_vary_headers
 from django.utils.http import urlencode
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext
-from django.utils.translation import gettext_lazy as _
 from django.views.decorators.cache import cache_page, patch_cache_control
 from guardian.utils import get_40x_or_None
 from icalendar import Calendar, Event, vUri
 
 from touchtechnology.admin.shells import ShellTemplatesMixin
 from touchtechnology.admin.sites import site as admin_site
-from touchtechnology.common.decorators import login_required_m
 from touchtechnology.common.sites import Application
 from touchtechnology.common.utils import get_perms_for_model
-from tournamentcontrol.competition.dashboard import (
-    matches_require_basic_results,
-    matches_require_details_results,
-)
 from tournamentcontrol.competition.decorators import competition_by_slug_m
 from tournamentcontrol.competition.forms import (
     ConfigurationForm,
     DivisionTournamentScheduleForm,
-    MatchResultFormSet,
-    MatchStatisticFormset,
     MultiConfigurationForm,
-    ProgressMatchesFormSet,
-    ProgressTeamsFormSet,
-    StreamControlForm,
 )
 from tournamentcontrol.competition.models import (
     Competition,
     Ground,
     Match,
-    Person,
     Season,
-    SimpleScoreMatchStatistic,
-    Stage,
     Team,
     Venue,
 )
 from tournamentcontrol.competition.utils import (
-    FauxQueryset,
-    legitimate_bye_match,
     matches_timeline,
-    team_awaits_upstream,
     team_needs_progressing,
 )
 
@@ -157,349 +137,7 @@ def permissions_required(
         return has_permission
 
 
-class CompetitionAdminMixin:
-    """
-    Some administrative functions should be allowed to authenticated users on
-    the front-end of the site. As long as we only use primitives from the base
-    ``touchtechnology.common.sites.Application`` class it will integrate fine
-    with both.
-    """
-
-    def day_runsheet(
-        self, request, season, date, extra_context, templates=None, **kwargs
-    ):
-        matches = season.matches.filter(date=date).order_by(
-            "is_bye", "datetime", "play_at"
-        )
-        templates = self.template_path(
-            "runsheet.html", season.slug, season.competition.slug
-        )
-        return self.generic_list(
-            request,
-            matches,
-            templates=templates,
-            paginate_by=0,
-            permission_required=False,
-            extra_context=extra_context,
-        )
-
-    def match_results(
-        self,
-        request,
-        competition,
-        season,
-        date,
-        extra_context,
-        redirect_to,
-        division=None,
-        time=None,
-        **kwargs,
-    ):
-        matches = (
-            Match.objects.filter(
-                stage__division__season=season,
-                stage__division__season__competition=competition,
-                date=date,
-            )
-            # everything each match's form and row reads, in the one query
-            .select_related(
-                "home_team",
-                "away_team",
-                "home_team_undecided",
-                "away_team_undecided",
-                "home_team_eval_related",
-                "away_team_eval_related",
-                "play_at",
-                "stage__division",
-            ).defer(
-                "live_stream_thumbnail_image",
-                "home_team_eval_related__live_stream_thumbnail_image",
-                "away_team_eval_related__live_stream_thumbnail_image",
-            )
-        )
-
-        if division is not None:
-            matches = matches.filter(stage__division=division)
-
-        # ensure only matches with progressed teams are able to be updated
-        matches = matches.exclude(team_needs_progressing, is_bye=False)
-        matches = matches.exclude(home_team__isnull=True, away_team__isnull=True)
-
-        # FIXME too complex, be verbose so we can all read and understand it
-        if time is not None:
-            base = Q(time=time)
-            bye_kwargs = matches.filter(time=time).values("stage", "round")
-            time_or_byes = functools.reduce(
-                operator.or_, [Q(time__isnull=True, **kw) for kw in bye_kwargs], base
-            )
-            matches = matches.filter(time_or_byes)
-        else:
-            matches = matches.order_by("date", "time", "play_at")
-
-        match_queryset = matches.filter(is_bye=False)
-        bye_queryset = matches.filter(is_bye=True)
-
-        if request.method == "POST":
-            match_formset = MatchResultFormSet(
-                data=request.POST, queryset=match_queryset, prefix="matches"
-            )
-            bye_formset = MatchResultFormSet(
-                data=request.POST, queryset=bye_queryset, prefix="byes"
-            )
-
-            if match_formset.is_valid() and bye_formset.is_valid():
-                match_formset.save()
-                bye_formset.save()
-                messages.success(request, _("Your changes have been saved."))
-                return self.redirect(redirect_to)
-        else:
-            match_formset = MatchResultFormSet(
-                queryset=match_queryset, prefix="matches"
-            )
-            bye_formset = MatchResultFormSet(queryset=bye_queryset, prefix="byes")
-
-        context = {
-            "competition": competition,
-            "season": season,
-            "date": date,
-            "division": division,
-            "match_formset": match_formset,
-            "bye_formset": bye_formset,
-            "matches": matches,
-            "cancel_url": redirect_to,
-        }
-        context.update(extra_context)
-
-        templates = self.template_path("match_results.html")
-        return self.render(request, templates, context)
-
-    def stream_control(
-        self,
-        request,
-        competition,
-        season,
-        date,
-        extra_context,
-        redirect_to,
-        time,
-        **kwargs,
-    ):
-        # FIXME: absolute hack view in order to get this going in time for Euros
-        match_queryset = Match.objects.filter(
-            stage__division__season=season,
-            stage__division__season__competition=competition,
-            date=date,
-            time=time,
-            external_identifier__isnull=False,
-        ).order_by("play_at")
-
-        if request.method == "POST":
-            form = StreamControlForm(data=request.POST)
-
-            if form.is_valid():
-                res = form.save(request, season.youtube, match_queryset)
-                if isinstance(res, HttpResponse):
-                    return res
-                return self.redirect(redirect_to)
-        else:
-            form = StreamControlForm()
-
-        context = {
-            "competition": competition,
-            "season": season,
-            "date": date,
-            "form": form,
-            "matches": match_queryset,
-            "cancel_url": redirect_to,
-        }
-        context.update(extra_context)
-
-        templates = self.template_path("stream_control.html")
-        return self.render(request, templates, context)
-
-    def edit_match_detail(
-        self, request, stage, match, extra_context, redirect_to, **kwargs
-    ):
-        conditions = {
-            "home_team__isnull": False,
-            "away_team__isnull": False,
-            "home_team_score__isnull": False,
-            "away_team_score__isnull": False,
-        }
-
-        if match is None:
-            match = get_object_or_404(stage.matches, pk=match.pk, **conditions)
-
-        def team_faux_queryset(team):
-            # The team's players and their statistics for the match, in two
-            # queries rather than two for every player.
-            stats = FauxQueryset(SimpleScoreMatchStatistic, team=team)
-            players = list(team.people.filter(is_player=True).select_related("person"))
-            entered = {
-                statistic.player_id: statistic
-                for statistic in SimpleScoreMatchStatistic.objects.filter(
-                    match=match, player__in=[player.person_id for player in players]
-                )
-            }
-            for player in players:
-                statistic = entered.get(player.person_id)
-                if statistic is None:
-                    statistic = SimpleScoreMatchStatistic(
-                        match=match,
-                        player=player.person,
-                        number=player.number,
-                        played=1,
-                    )
-                else:
-                    statistic.player = player.person
-                stats.append(statistic)
-            return stats
-
-        home_queryset = team_faux_queryset(match.home_team)
-        away_queryset = team_faux_queryset(match.away_team)
-
-        if request.method == "POST":
-            home = MatchStatisticFormset(
-                data=request.POST,
-                score=match.home_team_score,
-                prefix="home",
-                queryset=home_queryset,
-            )
-
-            away = MatchStatisticFormset(
-                data=request.POST,
-                score=match.away_team_score,
-                prefix="away",
-                queryset=away_queryset,
-            )
-
-            if home.is_valid() and away.is_valid():
-                home.save()
-                away.save()
-                messages.success(request, _("Your changes have been saved."))
-                return self.redirect(redirect_to)
-
-        else:
-            home = MatchStatisticFormset(
-                prefix="home", score=match.home_team_score, queryset=home_queryset
-            )
-            away = MatchStatisticFormset(
-                prefix="away", score=match.away_team_score, queryset=away_queryset
-            )
-
-        context = {
-            "object": match,
-            "formsets": (home, away),
-        }
-        context.update(extra_context)
-
-        templates = self.template_path("match_detail.html")
-        return self.render(request, templates, context)
-
-    def progression_list(self, request, competition, season, extra_context, **kwargs):
-        stages = (
-            Stage.objects.filter(division__season=season, order__gt=1)
-            .select_related("division")
-            .order_by("division__order", "order")
-            .annotate(
-                awaiting_progression=Count(
-                    Case(
-                        When(
-                            Q(matches__home_team__isnull=True)
-                            | Q(matches__away_team__isnull=True),
-                            then=1,
-                        )
-                    )
-                ),
-            )
-        )
-        context = {
-            "competition": competition,
-            "season": season,
-            "stages": stages,
-        }
-        context.update(extra_context)
-        templates = self.template_path("progression_list.html")
-        return self.render(request, templates, context)
-
-    def progress_teams(
-        self, request, competition, season, division, stage, extra_context, **kwargs
-    ):
-        matches = (
-            stage.matches.filter(team_needs_progressing)
-            .exclude(legitimate_bye_match)
-            .exclude(team_awaits_upstream)
-        )
-        teams = stage.undecided_teams.all()
-
-        if not matches:
-            return HttpResponseGone()
-
-        undecided = matches.filter(
-            Q(home_team_undecided__isnull=False, home_team__isnull=True)
-            | Q(away_team_undecided__isnull=False, away_team__isnull=True)
-        )
-
-        # Positional (P1, G1P2) and winner/loser references can be resolved
-        # mechanically from results, whereas an undecided team may depend on
-        # the outcome of matches in this very stage (eg. "Lower placed
-        # qualifier" of two qualifying finals). Always progress the matches
-        # which can be resolved before asking for undecided teams.
-        def resolvable(match):
-            home_team, away_team = match.eval(lazy=True)
-            return (match.home_team is None and isinstance(home_team, Team)) or (
-                match.away_team is None and isinstance(away_team, Team)
-            )
-
-        if undecided.exists() and not any(resolvable(match) for match in matches):
-            try:
-                follows = stage.comes_after
-            except Stage.DoesNotExist:
-                # The first stage of its division has no ladder to choose from.
-                follows = None
-
-            ladders = collections.OrderedDict()
-            if follows is not None:
-                if follows.pools.count():
-                    for pool in follows.pools.all():
-                        ladders.setdefault(
-                            pool, pool.ladder_summary.select_related("team__club")
-                        )
-                else:
-                    ladders.setdefault(
-                        None, follows.ladder_summary.select_related("team__club")
-                    )
-
-            extra_context["ladders"] = ladders
-
-            generic_edit_kwargs = {
-                "formset_class": ProgressTeamsFormSet,
-                "formset_kwargs": {
-                    "stage": stage,
-                },
-                "model_or_manager": teams.model,
-                "templates": self.template_path("progress_teams.html"),
-            }
-        else:
-            generic_edit_kwargs = {
-                "formset_class": ProgressMatchesFormSet,
-                "formset_kwargs": {
-                    "queryset": matches,
-                },
-                "model_or_manager": matches.model,
-                "templates": self.template_path("progress_matches.html"),
-            }
-
-        return self.generic_edit_multiple(
-            request,
-            post_save_redirect=self.redirect(season.urls["edit"]),
-            permission_required=False,
-            extra_context=extra_context,
-            **generic_edit_kwargs,
-        )
-
-
-class CompetitionSite(CompetitionAdminMixin, Application):
+class CompetitionSite(Application):
     kwargs_form_class = ConfigurationForm
 
     def __init__(self, name="competition", app_name="competition", **kwargs):
@@ -509,41 +147,6 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         self._competitions = Competition.objects.filter(enabled=True)
         if "competition" in kwargs and kwargs["competition"]:
             self._competitions = self._competitions.filter(slug=kwargs["competition"])
-
-    def result_urls(self):
-        return [
-            path("", self.results, name="results"),
-            path("match/<int:match>/", self.edit_match_detail, name="match-details"),
-            re_path(r"^(?P<datestr>\d{8})/$", self.results, name="results"),
-            re_path(
-                r"^(?P<datestr>\d{8})/(?P<timestr>\d{4})/$",
-                self.match_results,
-                name="match-results",
-            ),
-            path("progress/", self.progression_list, name="progression-list"),
-            path(
-                "progress/<slug:division>/<slug:stage>/",
-                self.progress_teams,
-                name="progress-teams",
-            ),
-        ]
-
-    def runsheet_urls(self):
-        return [
-            path("", self.runsheet, name="runsheet"),
-            re_path(r"^(?P<datestr>\d{8})/$", self.day_runsheet, name="runsheet"),
-        ]
-
-    def stream_urls(self):
-        return [
-            path("", self.stream, name="stream"),
-            re_path(r"^(?P<datestr>\d{8})/$", self.stream, name="stream"),
-            re_path(
-                r"^(?P<datestr>\d{8})/(?P<timestr>\d{4})/$",
-                self.stream_control,
-                name="stream-control",
-            ),
-        ]
 
     def venue_urls(self):
         return [
@@ -562,8 +165,6 @@ class CompetitionSite(CompetitionAdminMixin, Application):
     def season_urls(self):
         return [
             path("", self.season, name="season"),
-            path("forfeit/", self.forfeit_list, name="forfeit-list"),
-            path("forfeit/<int:match>/", self.forfeit, name="forfeit"),
             path("fixtures/", self.season_fixtures, name="season-fixtures"),
             path("videos/", self.season_videos, name="season-videos"),
             path(
@@ -578,9 +179,6 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             ),
             path("club:<slug:club>/", self.club, name="club"),
             path("club:<slug:club>.ics", self.calendar, name="calendar"),
-            path("results/", include(self.result_urls())),
-            path("runsheet/", include(self.runsheet_urls())),
-            path("stream/", include(self.stream_urls())),
             path("venue/", include(self.venue_urls())),
             path("<slug:division>.ics", self.calendar, name="calendar"),
             path("<slug:division>/", self.division, name="division"),
@@ -720,158 +318,6 @@ class CompetitionSite(CompetitionAdminMixin, Application):
             slug=season.slug,
             templates=templates,
             extra_context=extra_context,
-        )
-
-    @competition_by_slug_m
-    def runsheet(self, request, competition, season, extra_context, **kwargs):
-        context = {"dates": season.matches.dates("date", "day")}
-        context.update(extra_context)
-        templates = self.template_path(
-            "runsheet_list.html", competition.slug, season.slug
-        )
-        return self.render(request, templates, context)
-
-    @competition_by_slug_m
-    def day_runsheet(self, request, season, date, extra_context, **kwargs):
-        return super().day_runsheet(request, season, date, extra_context, **kwargs)
-
-    @competition_by_slug_m
-    @login_required_m
-    def results(self, request, competition, season, extra_context, date=None, **kwargs):
-        has_permission = permissions_required(request, Match, return_403=False)
-        if has_permission is not None:
-            return has_permission
-
-        if date is not None:
-            matches = season.matches.filter(date=date)
-        else:
-            matches = season.matches
-
-        # Allow super-user accounts visibility to look 1 year into the future.
-        if request.user.is_superuser:
-            now = timezone.now() + relativedelta(years=1)
-        else:
-            now = None
-
-        # Filter the list of matches to those which require result entry
-        basic_results = matches_require_basic_results(now, matches)
-        details_results = matches_require_details_results(matches, True)
-
-        context = {
-            "datetimes": [
-                timezone.localtime(each, season.timezone)
-                for each in basic_results.datetimes("datetime", "minute")
-            ],
-            "details": details_results,
-        }
-        context.update(extra_context)
-        templates = self.template_path("results.html", competition.slug, season.slug)
-        return self.render(request, templates, context)
-
-    @competition_by_slug_m
-    @login_required_m
-    def progression_list(self, request, competition, season, **kwargs):
-        return super().progression_list(request, competition, season, **kwargs)
-
-    @competition_by_slug_m
-    @login_required_m
-    def stream(self, request, competition, season, extra_context, date=None, **kwargs):
-        has_permission = permissions_required(request, Match, return_403=False)
-        if has_permission is not None:
-            return has_permission
-
-        if date is not None:
-            matches = season.matches.filter(date=date)
-        else:
-            matches = season.matches
-
-        # Filter the list of matches to those which require streaming control
-        stream_start = matches.exclude(external_identifier__isnull=True)
-
-        context = {
-            "datetimes": [
-                timezone.localtime(each, season.timezone)
-                for each in stream_start.datetimes("datetime", "minute")
-            ],
-        }
-        context.update(extra_context)
-        templates = self.template_path("stream.html", competition.slug, season.slug)
-        return self.render(request, templates, context)
-
-    @competition_by_slug_m
-    @login_required_m
-    def match_results(
-        self, request, competition, season, date, time, extra_context, **kwargs
-    ):
-        has_permission = permissions_required(request, Match, return_403=False)
-        if has_permission is not None:
-            return has_permission
-        redirect_to = self.reverse("results", args=(competition.slug, season.slug))
-        return super().match_results(
-            request,
-            competition=competition,
-            season=season,
-            date=date,
-            time=time,
-            extra_context=extra_context,
-            redirect_to=redirect_to,
-            **kwargs,
-        )
-
-    @competition_by_slug_m
-    @login_required_m
-    def stream_control(
-        self, request, competition, season, date, time, extra_context, **kwargs
-    ):
-        has_permission = permissions_required(request, Match, return_403=False)
-        if has_permission is not None:
-            return has_permission
-        redirect_to = self.reverse("stream", args=(competition.slug, season.slug))
-        return super().stream_control(
-            request,
-            competition=competition,
-            season=season,
-            date=date,
-            time=time,
-            extra_context=extra_context,
-            redirect_to=redirect_to,
-            **kwargs,
-        )
-
-    @login_required_m
-    @competition_by_slug_m
-    def edit_match_detail(self, request, match, extra_context, **kwargs):
-        has_permission = permissions_required(
-            request, Match, instance=match, return_403=False
-        )
-        if has_permission is not None:
-            return has_permission
-        redirect_to = self.reverse(
-            "results",
-            args=(
-                match.stage.division.season.competition.slug,
-                match.stage.division.season.slug,
-            ),
-        )
-        return super().edit_match_detail(
-            request,
-            stage=match.stage,
-            match=match,
-            extra_context=extra_context,
-            redirect_to=redirect_to,
-            **kwargs,
-        )
-
-    @competition_by_slug_m
-    @login_required_m
-    def progress_teams(
-        self, request, competition, season, division, stage, extra_context, **kwargs
-    ):
-        has_permission = permissions_required(request, Match, return_403=False)
-        if has_permission is not None:
-            return has_permission
-        return super().progress_teams(
-            request, competition, season, division, stage, extra_context, **kwargs
         )
 
     @competition_by_slug_m
@@ -1644,122 +1090,6 @@ class CompetitionSite(CompetitionAdminMixin, Application):
         # return self.generic_list(request, match.videos,
         #                          templates=templates,
         #                          extra_context=extra_context)
-
-    @login_required_m
-    @competition_by_slug_m
-    def forfeit_list(self, request, competition, season, extra_context, **kwargs):
-        """
-        List the matches that the visitor is permitted to forfeit. Must only
-        show matches for teams that they are a registered member of (either as
-        a player or other role).
-        """
-        try:
-            teams = request.user.person.teams
-        except Person.DoesNotExist:
-            raise Http404
-
-        matches = season.matches.filter(Q(home_team=teams) | Q(away_team=teams))
-
-        context = {
-            "matches": matches,
-        }
-        context.update(extra_context)
-
-        templates = self.template_path("forfeit_list.html")
-        return self.render(request, templates, context)
-
-    @login_required_m
-    @competition_by_slug_m
-    def forfeit(self, request, competition, season, extra_context, match, **kwargs):
-        """
-        View that will allow a team member to forfeit a match they are due to
-        be playing in.
-        """
-        try:
-            teams = request.user.person.teams
-        except Person.DoesNotExist:
-            raise Http404
-
-        matches = season.matches.filter(Q(home_team=teams) | Q(away_team=teams))
-
-        redirect = self.redirect(
-            self.reverse(
-                "forfeit-list",
-                kwargs={
-                    "competition": competition.slug,
-                    "season": season.slug,
-                },
-            )
-        )
-
-        if match not in matches:
-            messages.add_message(
-                request,
-                messages.ERROR,
-                "Attempting to forfeit a match you are not involved in.",
-            )
-            return redirect
-
-        # decide which team to forfeit
-        if match.home_team in teams and match.away_team in teams:
-            messages.add_message(
-                request,
-                messages.WARNING,
-                _(
-                    "You are a member of both teams for this match, please "
-                    "contact the competition manager."
-                ),
-            )
-            return redirect
-
-        elif match.home_team in teams:
-            team = match.home_team
-        elif match.away_team in teams:
-            team = match.away_team
-        else:
-            messages.add_message(
-                request,
-                messages.ERROR,
-                _(
-                    "You are not a member of either team, please contact the "
-                    "competition manager."
-                ),
-            )
-            return redirect
-
-        if request.method == "POST":
-            # use the forfeit API to advise who made lodged the forfeit
-            UNABLE_TO_POST = _(
-                "Unable to post forfeit, please contact the competition manager."
-            )
-            try:
-                success = match.forfeit(team, request.user.person)
-            except AssertionError:
-                # logger.exception("Failed precondition checks")
-                messages.add_message(request, messages.ERROR, UNABLE_TO_POST)
-
-            if success:
-                messages.add_message(
-                    request,
-                    messages.INFO,
-                    _(
-                        "The match has been forfeit, notifications will be sent "
-                        "to affected parties shortly."
-                    ),
-                )
-            else:
-                messages.add_message(request, messages.ERROR, UNABLE_TO_POST)
-
-            return redirect
-
-        context = {
-            "match": match,
-            "team": team,
-        }
-        context.update(extra_context)
-
-        templates = self.template_path("forfeit.html")
-        return self.render(request, templates, context)
 
     @competition_by_slug_m
     def season_thumbnail(

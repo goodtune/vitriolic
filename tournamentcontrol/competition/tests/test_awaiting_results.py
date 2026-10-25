@@ -14,11 +14,9 @@ import datetime
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
-from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from freezegun import freeze_time
-from guardian.shortcuts import assign_perm
 from test_plus import TestCase
 
 from touchtechnology.admin.tests.shells import per_shell
@@ -321,48 +319,3 @@ class TimeZoneTests(AwaitingResultsMixin, TestCase):
         # Saturday 10:30 in Auckland, still Friday on the server.
         with freeze_time("2026-10-23 21:30:00"):
             self.assertAwaiting([waiting], seasons=[stage.division.season])
-
-
-@freeze_time(NOW)
-@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
-class PublicResultsPageTests(AwaitingResultsMixin, TestCase):
-    """
-    The public site's result entry page lists the kick-off times waiting for a
-    result. A superuser also sees the year ahead, so results can be entered
-    early.
-    """
-
-    def setUp(self):
-        super().setUp()
-        stage = season_stage(SYDNEY, title="Spring 2026")
-        self.season = stage.division.season
-        kick_off(stage, datetime.date(2026, 10, 17), datetime.time(18, 0))
-        kick_off(stage, datetime.date(2026, 10, 31), datetime.time(19, 0))
-        self.scorer = UserFactory.create()
-        assign_perm("competition.change_match", self.scorer)
-
-    def time_html(self, datestr, timestr, label):
-        url = reverse(
-            "competition:match-results",
-            kwargs={
-                "competition": self.season.competition.slug,
-                "season": self.season.slug,
-                "datestr": datestr,
-                "timestr": timestr,
-            },
-        )
-        return f'<li><a href="{url}">{label}</a></li>'
-
-    def test_a_scorer_sees_the_matches_played_a_superuser_the_year_ahead(self):
-        with self.login(self.scorer):
-            self.get_check_200(
-                "competition:results", self.season.competition.slug, self.season.slug
-            )
-        self.assertResponseContains(self.time_html("20261017", "1800", "6 p.m."))
-        self.assertResponseNotContains(self.time_html("20261031", "1900", "7 p.m."))
-        with self.login(self.superuser):
-            self.get_check_200(
-                "competition:results", self.season.competition.slug, self.season.slug
-            )
-        self.assertResponseContains(self.time_html("20261017", "1800", "6 p.m."))
-        self.assertResponseContains(self.time_html("20261031", "1900", "7 p.m."))

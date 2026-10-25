@@ -891,7 +891,7 @@ class GoodViewTests(TestCase):
                     data[f"form-{i}-away_team"] = str(away.pk)
 
             self.post(url.url_name, *url.args, data=data)
-            self.response_302()
+            self.assert_http_302_found(url=str(division.season.urls["edit"]))
 
             for match in (qual_1, qual_2, semi_1, semi_2):
                 match.refresh_from_db()
@@ -945,6 +945,44 @@ class GoodViewTests(TestCase):
             # Nothing left to progress.
             self.get(url.url_name, *url.args)
             self.response_410()
+
+    def test_progression_list(self):
+        rounds = factories.StageFactory.create(order=1)
+        finals = factories.StageFactory.create(
+            division=rounds.division, order=2, follows=rounds
+        )
+        factories.MatchFactory.create(
+            stage=finals,
+            home_team=None,
+            home_team_eval="P1",
+            away_team=None,
+            away_team_eval="P2",
+        )
+        season = finals.division.season
+        self.assertLoginRequired(
+            "admin:fixja:competition:season:progression-list",
+            season.competition_id,
+            season.pk,
+        )
+        with self.login(self.superuser):
+            self.assertGoodView(
+                "admin:fixja:competition:season:progression-list",
+                season.competition_id,
+                season.pk,
+            )
+        url = self.reverse(
+            "admin:fixja:competition:season:division:stage:progress",
+            season.competition_id,
+            season.pk,
+            finals.division_id,
+            finals.pk,
+        )
+        self.assertResponseContains(
+            by_shell(
+                workbook=f'<a href="{url}">Progress teams</a>',
+                explorer=f'<a href="{url}">Place the teams</a>',
+            )
+        )
 
     def test_edit_person(self):
         person = factories.PersonFactory.create()
