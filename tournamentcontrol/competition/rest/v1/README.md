@@ -33,20 +33,26 @@ The live streaming API provides standalone endpoints for managing YouTube live s
 #### Match Listing
 **Endpoint**: `GET /api/v1/livestreams/`
 
-Lists all matches with live streaming capabilities, grouped by date.
+Lists all matches with live streaming capabilities in paginated format.
 
 **Parameters:**
 - `date__gte` (query, optional) - Filter matches from date (YYYY-MM-DD format)
 - `date__lte` (query, optional) - Filter matches to date (YYYY-MM-DD format)
 - `season_id` (query, optional) - Filter by specific season ID
+- `page` (query, optional) - Page number (default: 1)
+- `page_size` (query, optional) - Number of results per page (default: 20, max: 100)
 
 **Response Format:**
 ```json
 {
-  "2023-06-15": [
+  "count": 42,
+  "next": "http://example.com/api/v1/livestreams/?page=2",
+  "previous": null,
+  "results": [
     {
       "id": 123,
       "uuid": "123e4567-e89b-12d3-a456-426614174000",
+      "url": "http://example.com/api/v1/livestreams/123e4567-e89b-12d3-a456-426614174000/",
       "round": "Round 1",
       "date": "2023-06-15", 
       "time": "14:00:00",
@@ -58,16 +64,9 @@ Lists all matches with live streaming capabilities, grouped by date.
         "title": "Team Alpha",
         "slug": "team-alpha",
         "club": {
+          "id": 10,
           "title": "Alpha Sports Club",
-          "short_title": "Alpha SC",
-          "slug": "alpha-sports-club",
-          "abbreviation": "ASC",
-          "status": "active",
-          "url": "http://example.com/api/v1/clubs/alpha-sports-club/",
-          "facebook": "https://facebook.com/alphasc",
-          "twitter": "https://twitter.com/alphasc", 
-          "youtube": "https://youtube.com/alphasc",
-          "website": "https://alphasc.com"
+          "slug": "alpha-sports-club"
         }
       },
       "away_team": {
@@ -75,16 +74,9 @@ Lists all matches with live streaming capabilities, grouped by date.
         "title": "Team Beta",
         "slug": "team-beta",
         "club": {
+          "id": 11,
           "title": "Beta Athletic Club",
-          "short_title": "Beta AC",
-          "slug": "beta-athletic-club",
-          "abbreviation": "BAC",
-          "status": "active",
-          "url": "http://example.com/api/v1/clubs/beta-athletic-club/",
-          "facebook": null,
-          "twitter": null,
-          "youtube": null, 
-          "website": "https://betaac.com"
+          "slug": "beta-athletic-club"
         }
       },
       "home_team_score": 15,
@@ -92,40 +84,33 @@ Lists all matches with live streaming capabilities, grouped by date.
       "stage": {
         "id": 1,
         "title": "Regular Season",
-        "slug": "regular-season", 
-        "division": {
-          "id": 1,
-          "title": "Premier Division",
-          "slug": "premier-division",
-          "season": {
-            "id": 1,
-            "title": "2023 Championship Season",
-            "slug": "2023",
-            "competition": {
-              "id": 1,
-              "title": "National Touch Championship", 
-              "slug": "national-championship"
-            }
-          }
-        }
+        "slug": "regular-season"
       },
-      "play_at": {
+      "division": {
+        "id": 1,
+        "title": "Premier Division",
+        "slug": "premier-division"
+      },
+      "season": {
+        "id": 1,
+        "title": "2023 Championship Season",
+        "slug": "2023"
+      },
+      "competition": {
+        "id": 1,
+        "title": "National Touch Championship", 
+        "slug": "national-championship"
+      },
+      "venue": {
         "id": 1,
         "title": "Main Field",
-        "address": "123 Sports Complex Drive",
-        "latitude": -33.8688,
-        "longitude": 151.2093,
-        "suburb": "Sydney",
-        "state": "NSW",
-        "postcode": "2000"
+        "abbreviation": "MF"
       },
       "external_identifier": "youtube_broadcast_123",
       "live_stream": true,
       "live_stream_bind": "rtmp_stream_key",
       "live_stream_thumbnail": "/media/livestream/thumbnails/match_123.jpg"
-    }
-  ],
-  "2023-06-16": [
+    },
     {
       "id": 124,
       "uuid": "234f5678-f90c-23e4-b567-537725285111",
@@ -134,6 +119,12 @@ Lists all matches with live streaming capabilities, grouped by date.
   ]
 }
 ```
+
+**Notes:**
+- The response is paginated with 20 matches per page by default
+- Each match includes a `url` field for retrieving full details
+- Nested objects (stage, division, season, competition, club) only include minimal fields (id, title, slug)
+- For full details of nested resources, use their respective API endpoints (e.g., `/api/v1/clubs/{slug}/`)
 
 #### Match Detail
 **Endpoint**: `GET /api/v1/livestreams/{uuid}/`
