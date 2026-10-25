@@ -37,6 +37,7 @@ from django.utils import timezone
 from django.utils.formats import date_format, time_format
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
+from django.utils.text import format_lazy
 from django.utils.translation import gettext, gettext_lazy as _, pgettext
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
@@ -91,6 +92,12 @@ from tournamentcontrol.competition.upstream import (
     UpstreamURLError,
     get_backend_for_identifier,
     get_backend_for_url,
+)
+from tournamentcontrol.competition.upstream.backends.mysideline import (
+    MySidelineBackend,
+)
+from tournamentcontrol.competition.upstream.backends.revolutionise import (
+    RevolutioniseBackend,
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
@@ -184,14 +191,16 @@ class Competition(AdminUrlMixin, OrderedSitemapNode):
         blank=True,
         null=True,
         verbose_name=_("Upstream URL"),
-        help_text=_(
-            "The organisation's page on the competition management provider "
-            "that publishes its draws, for example "
-            "https://tfa.mysideline.com.au/competitions/association/6338 "
-            "(MySideline) or https://www.revolutionise.com.au/ccha/games "
-            "(revolutioniseSPORT). Seasons that name an upstream URL are then "
-            "synchronised from the provider, which is authoritative for their "
-            "divisions, teams, fixtures and results."
+        help_text=format_lazy(
+            _(
+                "The organisation's page on the competition management provider "
+                "that publishes its draws, for example {mysideline} (MySideline) "
+                "or {revolutionise} (revolutioniseSPORT). Seasons that name an "
+                "upstream URL are then synchronised from the provider, which is "
+                "authoritative for their divisions, teams, fixtures and results."
+            ),
+            mysideline=MySidelineBackend.competition_url_example,
+            revolutionise=RevolutioniseBackend.competition_url_example,
         ),
     )
 
@@ -567,13 +576,16 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
         blank=True,
         null=True,
         verbose_name=_("Upstream URL"),
-        help_text=_(
-            "The page on the provider that lists this season's draws: the "
-            "association page filtered to a year on MySideline (for example "
-            "https://tfa.mysideline.com.au/competitions/association/6338"
-            "?season=2026&seasonTag=2) or a competition's draws page on "
-            "revolutioniseSPORT (https://www.revolutionise.com.au/ccha/games/25527). "
-            "Required for synchronisation when the competition has an upstream URL."
+        help_text=format_lazy(
+            _(
+                "The page on the provider that lists this season's draws: the "
+                "association page filtered to a year on MySideline (for example "
+                "{mysideline}) or a competition's draws page on revolutioniseSPORT "
+                "({revolutionise}). Required for synchronisation when the "
+                "competition has an upstream URL."
+            ),
+            mysideline=MySidelineBackend.season_url_example,
+            revolutionise=RevolutioniseBackend.season_url_example,
         ),
     )
 
