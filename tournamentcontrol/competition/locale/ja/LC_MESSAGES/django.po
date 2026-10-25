@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-25 19:27+0000\n"
+"POT-Creation-Date: 2026-10-25 20:21+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -925,247 +925,240 @@ msgid_plural ""
 msgstr[0] ""
 msgstr[1] ""
 
-#: migrations/0033_matchscoresheet.py:31 models.py:3402
-#: templates/tournamentcontrol/competition/admin/explorer/matchscoresheet/list.inc.html:5
-#: templates/tournamentcontrol/competition/admin/workbook/matchscoresheet/list.inc.html:5
-msgid "Image"
-msgstr ""
-
-#: models.py:186 models.py:569
+#: models.py:193 models.py:578
 msgid "Upstream URL"
 msgstr ""
 
-#: models.py:188
+#: models.py:196
+#, python-brace-format
 msgid ""
 "The organisation's page on the competition management provider that "
-"publishes its draws, for example https://tfa.mysideline.com.au/competitions/"
-"association/6338 (MySideline) or https://www.revolutionise.com.au/ccha/games "
-"(revolutioniseSPORT). Seasons that name an upstream URL are then "
-"synchronised from the provider, which is authoritative for their divisions, "
-"teams, fixtures and results."
-msgstr ""
-
-#: models.py:224
-msgid "Official Twitter name for use in social \"mentions\""
+"publishes its draws, for example {mysideline} (MySideline) or "
+"{revolutionise} (revolutioniseSPORT). Seasons that name an upstream URL are "
+"then synchronised from the provider, which is authoritative for their "
+"divisions, teams, fixtures and results."
 msgstr ""
 
 #: models.py:233
-msgid "Primary contact"
-msgstr ""
-
-#: models.py:235
-msgid "Appears on the front-end with other club information."
-msgstr ""
-
-#: models.py:241
-msgid "Position"
+msgid "Official Twitter name for use in social \"mentions\""
 msgstr ""
 
 #: models.py:242
+msgid "Primary contact"
+msgstr ""
+
+#: models.py:244
+msgid "Appears on the front-end with other club information."
+msgstr ""
+
+#: models.py:250
+msgid "Position"
+msgstr ""
+
+#: models.py:251
 msgid "Position of the primary contact"
 msgstr ""
 
-#: models.py:247
+#: models.py:256
 msgid "Optional 3-letter abbreviation to be used on scoreboards."
 msgstr ""
 
-#: models.py:254
+#: models.py:263
 msgid "Current status of the club."
 msgstr ""
 
-#: models.py:475
+#: models.py:484
 msgid "Your official <em>hash tag</em> for social media promotions."
 msgstr ""
 
-#: models.py:484
+#: models.py:493
 msgid ""
 "Used by the draw wizard to help you set your match dates & times "
 "automatically."
 msgstr ""
 
-#: models.py:492
+#: models.py:501
 msgid ""
 "Set to No if you do not wish to keep scoring or most valuable player "
 "statistics."
 msgstr ""
 
-#: models.py:500
+#: models.py:509
 msgid "MVP public at"
 msgstr ""
 
-#: models.py:502
+#: models.py:511
 msgid ""
 "The time when the results of the MVP voting will be made public on the "
 "website. Leave blank to show at all times."
 msgstr ""
 
-#: models.py:535
+#: models.py:544
 msgid ""
 "Set to indicate this season is in the past. Optimises progression "
 "calculations."
 msgstr ""
 
-#: models.py:543
+#: models.py:552
 msgid ""
 "Set to prevent the iCalendar feature for this season. Will hide icon in "
 "front-end and disable functionality. Batch process may disable after last "
 "match of tournament has taken place."
 msgstr ""
 
-#: models.py:552
+#: models.py:561
 msgid "Enable experimental views"
 msgstr ""
 
-#: models.py:554
+#: models.py:563
 msgid ""
 "Set to expose experimental spectator views (fixtures navigator, team "
 "timeline) for this season. When unset those views return Not Found, so "
 "existing seasons are unaffected."
 msgstr ""
 
-#: models.py:571
+#: models.py:581
+#, python-brace-format
 msgid ""
 "The page on the provider that lists this season's draws: the association "
-"page filtered to a year on MySideline (for example https://"
-"tfa.mysideline.com.au/competitions/association/6338?season=2026&seasonTag=2) "
-"or a competition's draws page on revolutioniseSPORT (https://"
-"www.revolutionise.com.au/ccha/games/25527). Required for synchronisation "
-"when the competition has an upstream URL."
+"page filtered to a year on MySideline (for example {mysideline}) or a "
+"competition's draws page on revolutioniseSPORT ({revolutionise}). Required "
+"for synchronisation when the competition has an upstream URL."
 msgstr ""
 
-#: models.py:585
+#: models.py:597
 msgid ""
 "When a team advises they are forfeiting, notify the opposition team plus "
 "these people."
 msgstr ""
 
-#: models.py:1003
+#: models.py:1015
 msgid "Points system"
 msgstr ""
 
-#: models.py:1014
+#: models.py:1026
 msgid ""
 "In Tournament mode, specify how many matches per day should be scheduled by "
 "the automatic draw generator."
 msgstr ""
 
-#: models.py:1023
+#: models.py:1035
 msgid ""
 "Marking a division as draft will prevent matches from being visible in the "
 "front-end."
 msgstr ""
 
-#: models.py:1032
+#: models.py:1044
 msgid "Color"
 msgstr ""
 
-#: models.py:1034
+#: models.py:1046
 msgid ""
 "Color for division in the visual scheduler. Affects the left border of match "
 "cards and division headers."
 msgstr ""
 
-#: models.py:1040 models.py:1474
+#: models.py:1052 models.py:1486
 msgid "Enter a valid hex color code (e.g., #ff5733)"
 msgstr ""
 
-#: models.py:1409
+#: models.py:1421
 msgid ""
 "When progressing teams into this stage, which earlier stage should be used "
 "for determining positions.<br>Default is the immediately preceeding stage."
 msgstr ""
 
-#: models.py:1421
+#: models.py:1433
 msgid ""
 "Set this to <b>No</b> if this stage does not need to keep a competition "
 "ladder.<br>Usually set to No for a Final Series or a Knockout stage."
 msgstr ""
 
-#: models.py:1432
+#: models.py:1444
 msgid ""
 "In stages with multiple pools, adjust points in the smaller groups to "
 "compensate for the reduced opportunity to score points.<br>You "
 "<strong>should</strong> also set 0 points for Bye matches."
 msgstr ""
 
-#: models.py:1446
+#: models.py:1458
 msgid ""
 "Set this to <b>Yes</b> if this stage should carry over values from the "
 "previous stage."
 msgstr ""
 
-#: models.py:1457
+#: models.py:1469
 msgid ""
 "Set this to <b>No</b> if this stage does not need to keep track of MVP "
 "points.<br>Usually set to No for a Final Series."
 msgstr ""
 
-#: models.py:1466
+#: models.py:1478
 msgid "Background Color"
 msgstr ""
 
-#: models.py:1468
+#: models.py:1480
 msgid ""
 "Background color for matches in the visual scheduler. Used to highlight "
 "matches of increased importance."
 msgstr ""
 
-#: models.py:1636
+#: models.py:1648
 msgid ""
 "Set this to <b>Yes</b> if the ladder for this pool should carry over values "
 "from the previous stage.<br>Will only apply for matches played against teams "
 "that are now in this group."
 msgstr ""
 
-#: models.py:1738
+#: models.py:1750
 msgid ""
 "When the team name is locked, the team manager will not be able to change "
 "their team name.<br>As a tournament manager you can always change the names."
 msgstr ""
 
-#: models.py:1763 models.py:2075 models.py:2440
+#: models.py:1775 models.py:2087 models.py:2452
 #: templates/tournamentcontrol/competition/admin/workbook/team/list.inc.html:16
 #: templates/tournamentcontrol/competition/admin/workbook/team/list.inc.html:22
 msgid "Pool"
 msgstr ""
 
-#: models.py:1774
+#: models.py:1786
 msgid "Start after"
 msgstr ""
 
-#: models.py:1776
+#: models.py:1788
 msgid ""
 "Specify the earliest time that this team can play. Leave blank for no "
 "preference."
 msgstr ""
 
-#: models.py:1784
+#: models.py:1796
 msgid "Start before"
 msgstr ""
 
-#: models.py:1786
+#: models.py:1798
 msgid ""
 "Specify the latest time that this team can play. Leave blank for no "
 "preference."
 msgstr ""
 
-#: models.py:1794
+#: models.py:1806
 msgid "Don't clash"
 msgstr ""
 
-#: models.py:1797
+#: models.py:1809
 msgid "Select any teams that must not play at the same time."
 msgstr ""
 
-#: models.py:1822
+#: models.py:1834
 msgid "Team name must be unique in this division."
 msgstr ""
 
-#: models.py:2174
+#: models.py:2186
 msgid "Official"
 msgstr ""
 
-#: models.py:2175
+#: models.py:2187
 #: templates/tournamentcontrol/competition/admin/explorer/officials.html:4
 #: templates/tournamentcontrol/competition/admin/explorer/officials_list.html:4
 #: templates/tournamentcontrol/competition/admin/workbook/officials.html:4
@@ -1174,27 +1167,27 @@ msgstr ""
 msgid "Officials"
 msgstr ""
 
-#: models.py:2292
+#: models.py:2304
 msgid "referee"
 msgstr ""
 
-#: models.py:2687
+#: models.py:2699
 msgid "This date is before the start of the season."
 msgstr ""
 
-#: models.py:2691
+#: models.py:2703
 msgid "This date has been excluded for this season."
 msgstr ""
 
-#: models.py:2695
+#: models.py:2707
 msgid "This date has been excluded for this division."
 msgstr ""
 
-#: models.py:2700
+#: models.py:2712
 msgid "This pool is not in the selected division"
 msgstr ""
 
-#: models.py:2752 templates/tournamentcontrol/competition/_place_matches.html:4
+#: models.py:2764 templates/tournamentcontrol/competition/_place_matches.html:4
 #: templates/tournamentcontrol/competition/_season_fixtures_day.html:3
 #: templates/tournamentcontrol/competition/admin/explorer/scorecards.html:23
 #: templates/tournamentcontrol/competition/admin/explorer/signon.html:21
@@ -1211,63 +1204,69 @@ msgctxt "abbreviation: to be advised"
 msgid "TBA"
 msgstr ""
 
-#: models.py:3214
+#: models.py:3226
 msgid ""
 "Identify this stream key — for example the camera or production position "
 "that will use it."
 msgstr ""
 
-#: models.py:3264
+#: models.py:3276
 msgid "Title of the broadcast on the YouTube platform."
 msgstr ""
 
-#: models.py:3268
+#: models.py:3280
 msgid "Description of the broadcast on the YouTube platform."
 msgstr ""
 
-#: models.py:3272
+#: models.py:3284
 msgid "Scheduled start"
 msgstr ""
 
-#: models.py:3273
+#: models.py:3285
 msgid "When the live stream is scheduled to commence."
 msgstr ""
 
-#: models.py:3276
+#: models.py:3288
 msgid "Scheduled finish"
 msgstr ""
 
-#: models.py:3277
+#: models.py:3289
 msgid "When the live stream is scheduled to conclude."
 msgstr ""
 
-#: models.py:3283
+#: models.py:3295
 msgid ""
 "Set to No to remove the scheduled broadcast from the YouTube platform while "
 "keeping this event for your records. The broadcast cannot be reinstated once "
 "removed."
 msgstr ""
 
-#: models.py:3296
+#: models.py:3308
 msgid ""
 "The stream key the camera or encoder operator should use to deliver video "
 "for this event."
 msgstr ""
 
-#: models.py:3348
+#: models.py:3360
 msgid "The scheduled finish must be after the scheduled start."
 msgstr ""
 
-#: models.py:3353
+#: models.py:3365
 msgid "This stream key does not belong to this season."
 msgstr ""
 
-#: models.py:3418
+#: models.py:3414
+#: templates/tournamentcontrol/competition/admin/explorer/matchscoresheet/list.inc.html:5
+#: templates/tournamentcontrol/competition/admin/workbook/matchscoresheet/list.inc.html:5
+msgid "Image"
+msgstr ""
+
+#: models.py:3430
 #, python-format
 msgid "Score sheet for %(match)s"
 msgstr ""
 
-#: models.py:3450
+#: models.py:3462
 #: templates/tournamentcontrol/competition/admin/explorer/division/edit.html:52
 #: templates/tournamentcontrol/competition/admin/explorer/ladderentry/list.inc.html:16
 #: templates/tournamentcontrol/competition/admin/explorer/match_detail.html:27
@@ -1281,21 +1280,21 @@ msgstr ""
 msgid "Points"
 msgstr ""
 
-#: models.py:3451
+#: models.py:3463
 #: templates/tournamentcontrol/competition/admin/explorer/match_detail.html:28
 #: templates/tournamentcontrol/competition/admin/workbook/match_detail.html:43
 msgid "MVP"
 msgstr ""
 
-#: models.py:3459
+#: models.py:3471
 msgid "A person who did not play cannot score points."
 msgstr ""
 
-#: models.py:3462
+#: models.py:3474
 msgid "A person who did not play cannot earn MVP points."
 msgstr ""
 
-#: models.py:3465
+#: models.py:3477
 msgid "A person who played must have a shirt number."
 msgstr ""
 
