@@ -43,5 +43,11 @@ msgfmt --check -o /dev/null <app>/locale/<locale>/LC_MESSAGES/django.po
 Django does not use a fuzzy entry. A translator must examine it and remove the
 mark.
 
+The header of each catalogue gives `Project-Id-Version: vitriolic`, the
+language and its plural rule. `makemessages` keeps these fields. It copies
+`POT-Creation-Date` and `Report-Msgid-Bugs-To` from the template that it
+makes, so leave `Report-Msgid-Bugs-To` empty. Report a problem with a
+translation at <https://github.com/goodtune/vitriolic/issues>.
+
 Do not run `compilemessages` as part of this work. A decision to compile the
 `.mo` files is a separate change (see issue #449).
