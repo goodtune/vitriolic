@@ -2935,6 +2935,16 @@ class CompetitionAdminComponent(AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def edit_match_detail(self, request, stage, match, extra_context, **kwargs):
+        if not match.statistics_ready:
+            messages.warning(
+                request,
+                _(
+                    "Player statistics can be entered once both teams are "
+                    "known and the result is in."
+                ),
+            )
+            return self.redirect(match.urls["edit"])
+
         redirect_to = reverse("admin:index")
 
         def team_faux_queryset(team):

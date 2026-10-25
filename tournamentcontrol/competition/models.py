@@ -2841,6 +2841,19 @@ class Match(
     winner = property(lambda self: self._winner_loser("W"))
     loser = property(lambda self: self._winner_loser("L"))
 
+    @property
+    def statistics_ready(self):
+        """
+        Whether the players' statistics can be entered: both teams are known
+        and both scores are in. A bye has no opponent, so it never is.
+        """
+        return None not in (
+            self.home_team_id,
+            self.away_team_id,
+            self.home_team_score,
+            self.away_team_score,
+        )
+
     def eval(self, lazy=False):
         """
         Attempt to populate the `home_team` and `away_team` fields as
