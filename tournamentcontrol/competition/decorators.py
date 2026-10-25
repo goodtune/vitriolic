@@ -222,7 +222,6 @@ def competition_by_slug(f, *a, **kw):
         match_pk = kwargs.pop("match", None)
 
         datestr = kwargs.pop("datestr", None)
-        timestr = kwargs.pop("timestr", None)
 
         # see if there is an original node, we might need it later
         o_node = kwargs.pop("node", None)
@@ -359,22 +358,6 @@ def competition_by_slug(f, *a, **kw):
                     select_params=(division.pk,),
                 )
 
-            elif season_slug and match_pk:
-                match = get_object_or_404(
-                    Match.objects.select_related(
-                        "stage__division__season__competition"
-                    ).defer(
-                        "live_stream_thumbnail_image",
-                        "stage__division__season__live_stream_thumbnail_image",
-                    ),
-                    pk=match_pk,
-                    stage__division__season__slug=season_slug,
-                    stage__division__season__competition__in=allowed,
-                )
-                season = match.stage.division.season
-                competition = season.competition
-                kwargs["match"] = match
-
             elif season_slug:
                 season = get_object_or_404(
                     Season.objects.select_related("competition").defer(
@@ -445,8 +428,6 @@ def competition_by_slug(f, *a, **kw):
                 kwargs["date"] = parse(datestr).date()
             except ValueError:
                 raise Http404("Invalid date.")
-            if timestr:
-                kwargs["time"] = datetime.time(*time.strptime(timestr, "%H%M")[3:5])
 
         logger.debug("o_node = {0}".format(o_node))
 

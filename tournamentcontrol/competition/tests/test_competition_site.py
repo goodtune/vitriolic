@@ -1,3 +1,4 @@
+import io
 import re
 import unittest
 from datetime import date, datetime, time, timedelta
@@ -13,6 +14,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from freezegun import freeze_time
 from icalendar import Calendar
+from PIL import Image
 from test_plus import TestCase
 
 from tournamentcontrol.competition.draw import schemas
@@ -1450,6 +1452,80 @@ class SeasonThumbnailTests(TestCase):
             self.division.slug,
             self.match.pk,
         )
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class ThumbnailViewTests(TestCase):
+    """
+    The public site serves the live-stream thumbnail of a season and of a
+    match, in full and resized. The match has its own image, so the match
+    view shows that it found the match and not only its season.
+    """
+
+    @staticmethod
+    def png(size, colour):
+        image = io.BytesIO()
+        Image.new("RGB", size, colour).save(image, format="PNG")
+        return image.getvalue()
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season_image = cls.png((64, 36), "red")
+        cls.match_image = cls.png((48, 48), "blue")
+        cls.match = factories.MatchFactory.create(
+            live_stream_thumbnail_image=cls.match_image,
+            stage__division__season__live_stream_thumbnail_image=cls.season_image,
+        )
+        cls.division = cls.match.stage.division
+        cls.season = cls.division.season
+        cls.competition = cls.season.competition
+
+    def assertImageSize(self, size):
+        self.assertEqual(Image.open(io.BytesIO(self.last_response.content)).size, size)
+
+    def test_season_thumbnail(self):
+        self.get_check_200(
+            "competition:season-thumbnail",
+            competition=self.competition.slug,
+            season=self.season.slug,
+        )
+        self.assertResponseHeaders({"Content-Type": "image/png"})
+        self.assertEqual(self.last_response.content, self.season_image)
+
+    def test_season_thumbnail_resized(self):
+        self.get_check_200(
+            "competition:season-thumbnail",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            width=32,
+            height=32,
+        )
+        self.assertResponseHeaders({"Content-Type": "image/jpeg"})
+        self.assertImageSize((32, 18))
+
+    def test_match_thumbnail(self):
+        self.get_check_200(
+            "competition:match-thumbnail",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            division=self.division.slug,
+            match=self.match.pk,
+        )
+        self.assertResponseHeaders({"Content-Type": "image/png"})
+        self.assertEqual(self.last_response.content, self.match_image)
+
+    def test_match_thumbnail_resized(self):
+        self.get_check_200(
+            "competition:match-thumbnail",
+            competition=self.competition.slug,
+            season=self.season.slug,
+            division=self.division.slug,
+            match=self.match.pk,
+            width=24,
+            height=24,
+        )
+        self.assertResponseHeaders({"Content-Type": "image/jpeg"})
+        self.assertImageSize((24, 24))
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")

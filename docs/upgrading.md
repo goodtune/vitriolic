@@ -232,6 +232,22 @@ Three names are gone from the Python:
   `CompetitionAdminComponent` in `tournamentcontrol.competition.admin`. Their
   URLs, permissions and templates in the admin did not change.
 
+The decorator `competition_by_slug` (and `competition_by_slug_m`) in
+`tournamentcontrol.competition.decorators` no longer does two things that only
+the removed pages used:
+
+- It finds the `match` only when the URL also names the `division`. Before, a
+  URL with a season and a match, but no division, gave the view the match. Now
+  the view gets no `match`. This is what already happens to a `team` or a
+  `stage` without a division.
+- It does not change `timestr` into `time`. The view gets `timestr`, the
+  string from the URL.
+
+If a subclass of `CompetitionSite` has URLs like these, its view must find the
+match or parse the time itself. Give the match URL argument a name other than
+`match`, or do not decorate that view with `competition_by_slug_m`, because
+the decorator removes `match` from the arguments.
+
 Issue #310 lists the stream control page as one of the pages that raise an
 error when the YouTube authorisation of a season has expired. That part of
 #310 goes away with the page.
