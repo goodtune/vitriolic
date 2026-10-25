@@ -2,7 +2,6 @@
 
 import datetime
 import re
-import threading
 from unittest import mock
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
@@ -14,7 +13,6 @@ from faker import Faker
 from playwright.sync_api import expect
 
 from tournamentcontrol.competition.compops import events
-from tournamentcontrol.competition.compops.sites import CompOpsSite
 from tournamentcontrol.competition.models import TeamAssociation
 from tournamentcontrol.competition.tests.factories import (
     GroundFactory,
@@ -512,23 +510,19 @@ def test_scorers_are_validated_then_saved(
 def test_a_single_score_is_refused_in_its_row(
     compops_page, asgi_live_server, tournament, screenshot_dir
 ):
-    # Hold the event stream's first push until the refusal has been shown,
-    # the order the test meets by chance when the page loads quickly.
-    refused = threading.Event()
-    snapshot_fragments = CompOpsSite.snapshot_fragments
+    """
+    A result with one score is refused, and its row says why.
 
-    def late_snapshot(site, *args):
-        refused.wait(10)
-        return snapshot_fragments(site, *args)
-
-    with mock.patch.object(CompOpsSite, "snapshot_fragments", late_snapshot):
-        compops_page.goto(asgi_live_server.url + tournament["day_path"])
-        row = compops_page.locator(f"#match-{tournament['match'].pk}")
-        row.locator('input[name="home_team_score"]').fill("3")
-        row.locator('button[type="submit"]').click()
-        expect(row.locator(".errorlist li")).to_have_text("Both scores are required.")
-        refused.set()
-        wait_for_snapshot(compops_page, tournament["season"])
+    The page can finish loading before its event stream sends the first
+    push, which re-renders the results with unbound forms and so removes the
+    error of a refusal shown before it. A person cannot save that fast, but
+    the test can, so it waits for the stream to catch up before it types.
+    """
+    compops_page.goto(asgi_live_server.url + tournament["day_path"])
+    wait_for_snapshot(compops_page, tournament["season"])
+    row = compops_page.locator(f"#match-{tournament['match'].pk}")
+    row.locator('input[name="home_team_score"]').fill("3")
+    row.locator('button[type="submit"]').click()
     expect(row.locator(".errorlist li")).to_have_text("Both scores are required.")
     expect(row.locator('input[name="home_team_score"]')).to_have_value("3")
     compops_page.screenshot(
