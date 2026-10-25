@@ -83,7 +83,7 @@ class CssifyTest(TestCase):
 
 class NavigationTest(TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpTestData(cls):
         cls.home = SitemapNode.objects.create(title="Home Page", slug="home")
         cls.about = SitemapNode.objects.create(title="About Us", slug="about")
         cls.about_people = SitemapNode.objects.create(
@@ -102,10 +102,6 @@ class NavigationTest(TestCase):
             parent=cls.about_people,
             hidden_from_navigation=True,
         )
-
-    @classmethod
-    def tearDownClass(cls):
-        pass
 
     def test_basic(self):
         template = Template("{% load common %}{% navigation %}")
@@ -137,7 +133,7 @@ class NavigationTest(TestCase):
 
     def test_the_children_of_a_hidden_node_are_hidden_too(self):
         """
-        The nodes created here are added to the ones in ``setUpClass``::
+        The nodes created here are added to the ones in ``setUpTestData``::
 
             Home Page
             About Us
