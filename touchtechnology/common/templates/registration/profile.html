@@ -11,7 +11,7 @@
 	{% block before %}{% endblock %}
 
 	{% block profile_content %}
-		<p>{% blocktrans with name=user.first_name %}Welcome back {{ name }} &ndash; this is your personal page.{% endblocktrans %}</p>
+		<p>{% blocktrans with name=user.get_short_name %}Welcome back {{ name }} &ndash; this is your personal page.{% endblocktrans %}</p>
 
 		{% block profile_form %}
 			<form class="fields" action="" method="post">

@@ -2,7 +2,7 @@
 {% load i18n dashboard admin admin_explorer %}
 
 {% block page_title %}{% trans "Dashboard" %}{% endblock %}
-{% block page_kind %}{% blocktrans with name=user.first_name|default:user.get_username %}Good to see you, {{ name }}. Here is what is waiting.{% endblocktrans %}{% endblock %}
+{% block page_kind %}{% blocktrans with name=user.get_short_name|default:user.get_username %}Good to see you, {{ name }}. Here is what is waiting.{% endblocktrans %}{% endblock %}
 {% block page_icon %}<span class="title-icon">{% icon "dashboard" %}</span>{% endblock %}
 
 {% block content %}
