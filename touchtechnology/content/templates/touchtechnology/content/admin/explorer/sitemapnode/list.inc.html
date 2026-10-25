@@ -34,5 +34,7 @@
 
 {% block row-buttons-items %}
 	<a href="{{ obj.get_absolute_url }}" target="_blank">{% icon "external" %}{% trans "View on the site" %}</a>
+	{# A node is what it holds; its model's name would call every one a folder. #}
+	{% if obj.content_type.model == "page" %}{% trans "page" as kind %}{% elif obj.content_type.model == "placeholder" %}{% trans "application" as kind %}{% else %}{% trans "folder" as kind %}{% endif %}
 	{{ block.super }}
 {% endblock row-buttons-items %}
