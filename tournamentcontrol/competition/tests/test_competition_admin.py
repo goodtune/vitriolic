@@ -6,6 +6,7 @@ from unittest.mock import ANY, MagicMock, PropertyMock, patch
 from zoneinfo import ZoneInfo
 
 import cloudinary
+import responses
 from dateutil.rrule import DAILY
 from django.conf import settings
 from django.contrib import messages
@@ -1179,6 +1180,27 @@ class GoodViewTests(TestCase):
                 team.division.season.pk,
                 "html",
             )
+
+    @override_settings(PRINCE_SERVER="pdf.example.com")
+    def test_registration_form_pdf(self):
+        """
+        The PDF server gets the form's HTML, not the repr of the bytes the
+        rendered form holds (#438), and the view answers with the PDF.
+        """
+        club = factories.ClubFactory.create()
+        team = factories.TeamFactory.create(club=club)
+        season = team.division.season
+        season.competition.clubs.add(club)
+        with self.login(self.superuser), responses.RequestsMock() as pdf_service:
+            pdf_service.post("https://pdf.example.com/", body=b"%PDF-1.4 fake")
+            self.get("admin:fixja:club:registration-form", club.pk, season.pk, "pdf")
+            # The calls are cleared when the mock is stopped.
+            self.assertEqual(
+                pdf_service.calls[0].request.body[:15], b"<!DOCTYPE html>"
+            )
+        self.assert_http_200_ok()
+        self.assertResponseHeaders({"Content-Type": "application/pdf"})
+        self.assertEqual(self.last_response.content, b"%PDF-1.4 fake")
 
     def test_officials(self):
         club = factories.ClubFactory.create()
