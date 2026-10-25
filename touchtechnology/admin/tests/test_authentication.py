@@ -1,3 +1,6 @@
+from unittest import mock
+
+from django.contrib.auth import get_user_model
 from test_plus import TestCase
 
 from touchtechnology.admin.tests.shells import per_shell
@@ -50,3 +53,51 @@ class AuthenticationTest(TestCase):
             ),
         )
         self.assertResponseNotContains("logout.js")
+
+    def test_admin_home_greets_user_by_short_name(self):
+        """
+        The home page greets the user by the user model's informal name,
+        ``get_short_name()``. A custom user model can return something other
+        than ``first_name``.
+        """
+        user = UserFactory.create(is_staff=True, is_superuser=True)
+        with (
+            mock.patch.object(
+                get_user_model(), "get_short_name", autospec=True, return_value="Coach"
+            ),
+            self.login(user),
+        ):
+            self.get_check_200("admin:index")
+        self.assertResponseContains(
+            self.by_shell(
+                workbook="<h1>Hello, Coach</h1>",
+                explorer=(
+                    '<p class="kind">'
+                    "Good to see you, Coach. Here is what is waiting.</p>"
+                ),
+            ),
+        )
+
+    def test_admin_home_greets_user_without_short_name(self):
+        """
+        With no short name the workbook says a plain hello and the explorer
+        falls back to the username.
+        """
+        user = UserFactory.create(is_staff=True, is_superuser=True)
+        with (
+            mock.patch.object(
+                get_user_model(), "get_short_name", autospec=True, return_value=""
+            ),
+            self.login(user),
+        ):
+            self.get_check_200("admin:index")
+        self.assertResponseContains(
+            self.by_shell(
+                workbook="<h1>Hello</h1>",
+                explorer=(
+                    '<p class="kind">'
+                    f"Good to see you, {user.get_username()}. "
+                    "Here is what is waiting.</p>"
+                ),
+            ),
+        )
