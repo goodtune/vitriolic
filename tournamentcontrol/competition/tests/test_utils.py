@@ -342,6 +342,22 @@ class StageGroupPositionTests(TestCase):
         ):
             utils.stage_group_position(stage2, "S1G2P1")
 
+    def test_stage_group_position_in_a_first_stage_raises_index_error(self):
+        """
+        A formula with no stage in it refers to the stage before; the first
+        stage of a division has none, as a division of two stages has no
+        stage 3.
+        """
+        stage = StageFactory.create(title="Finals", order=1)
+        for formula in ("P1", "G1P2"):
+            with self.subTest(formula):
+                with self.assertRaisesRegex(
+                    IndexError,
+                    rf"^{formula} refers to the stage before Finals, the first "
+                    r"stage of its division$",
+                ):
+                    utils.stage_group_position(stage, formula)
+
     def test_stage_group_position_with_valid_pool_succeeds(self):
         """
         Test that stage_group_position works correctly when the pool exists.

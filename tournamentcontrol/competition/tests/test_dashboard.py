@@ -307,6 +307,30 @@ class FirstStageProgressionPageTests(TestCase):
             self.response_200()
             self.assertEqual(self.get_context("ladders"), {})
 
+    def test_undecided_team_named_by_a_position_in_a_first_stage(self):
+        """
+        A place named by a position (G1P2) refers to the stage before, which a
+        first stage does not have: the place is shown as written, and any team
+        of the division may fill it.
+        """
+        home, away = TeamFactory.create_batch(2, division=self.stage.division)
+        MatchFactory.create(
+            stage=self.stage,
+            home_team=None,
+            home_team_undecided=UndecidedTeamFactory.create(
+                stage=self.stage, formula="G1P2", label=""
+            ),
+            away_team=away,
+            datetime=datetime.datetime(2019, 7, 15, 10, 30, tzinfo=ZoneInfo("UTC")),
+        )
+
+        with self.login(self.superuser):
+            self.get(self.progress_url())
+        self.response_200()
+        (form,) = self.get_context("formset").forms
+        self.assertEqual(form.instance.title, "G1P2")
+        self.assertCountEqual(form.fields["team"].queryset, [home, away])
+
     def test_a_failing_widget_is_left_out_of_the_home_page(self):
         """
         The home page stands when one of its widgets fails: the widget is left

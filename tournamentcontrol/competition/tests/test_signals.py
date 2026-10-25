@@ -127,6 +127,55 @@ class BonusPointsFormulaTests(TestCase):
         )
 
 
+class FirstStageCarryLadderTests(TestCase):
+    """
+    A stage or pool set to carry over points carries them from the stage
+    before. The first stage of a division has none, so it carries nothing and
+    its ladder counts its own results.
+    """
+
+    def assertLadder(self, match):
+        self.assertCountEqual(
+            [
+                (match.home_team_id, 1, 1, 0, 5, 2, 3),
+                (match.away_team_id, 1, 0, 1, 2, 5, 1),
+            ],
+            LadderSummary.objects.filter(stage=match.stage).values_list(
+                "team", "played", "win", "loss", "score_for", "score_against", "points"
+            ),
+        )
+
+    def test_stage_carries_nothing(self):
+        stage = factories.StageFactory.create(order=1, carry_ladder=True)
+        self.assertLadder(
+            factories.MatchFactory.create(
+                stage=stage, home_team_score=5, away_team_score=2
+            )
+        )
+
+    def test_pool_carries_nothing(self):
+        pool = factories.StageGroupFactory.create(stage__order=1, carry_ladder=True)
+        self.assertLadder(
+            factories.MatchFactory.create(
+                stage=pool.stage,
+                stage_group=pool,
+                home_team_score=5,
+                away_team_score=2,
+            )
+        )
+
+    def test_stage_of_a_pool_carries_nothing(self):
+        stage = factories.StageFactory.create(order=1, carry_ladder=True)
+        self.assertLadder(
+            factories.MatchFactory.create(
+                stage=stage,
+                stage_group=factories.StageGroupFactory.create(stage=stage),
+                home_team_score=5,
+                away_team_score=2,
+            )
+        )
+
+
 class CombinedAgeGradeLadderTests(TestCase):
     """
     Model the "Mens 50/55" structure used at Euros 2026.

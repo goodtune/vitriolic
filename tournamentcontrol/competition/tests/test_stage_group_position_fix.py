@@ -12,6 +12,7 @@ from tournamentcontrol.competition.tests.factories import (
     StageFactory,
     StageGroupFactory,
     TeamFactory,
+    UndecidedTeamFactory,
 )
 from tournamentcontrol.competition.utils import stage_group_position_re
 
@@ -321,6 +322,78 @@ class ExplicitStageEvalTests(TestCase):
             away_team_eval_related=None,
         )
         self.assertEqual(match.eval(), ({"title": "Winner"}, {"title": "Loser"}))
+
+
+class FirstStageReferenceTests(TestCase):
+    """
+    A position with no stage in it (P1, G1P2) is a place on the ladder of the
+    stage before. The first stage of a division has no stage before it, so
+    the reference names nothing: it is shown as written, as a reference that
+    cannot be read is, and never resolves to a team.
+    """
+
+    def setUp(self):
+        self.stage = StageFactory.create(order=1)
+        self.teams = TeamFactory.create_batch(2, division=self.stage.division)
+
+    def test_reference_is_shown_as_written(self):
+        match = MatchFactory.create(
+            stage=self.stage,
+            home_team=None,
+            away_team=None,
+            home_team_eval="P1",
+            away_team_eval="G1P2",
+        )
+        self.assertEqual(match.get_home_team(), {"title": "P1"})
+        self.assertEqual(match.get_away_team(), {"title": "G1P2"})
+        self.assertEqual(match.get_home_team_plain(), "P1")
+        self.assertEqual(match.get_away_team_plain(), "G1P2")
+        self.assertEqual(str(match), "P1 vs G1P2")
+
+    def test_undecided_team_is_shown_as_its_formula(self):
+        home = UndecidedTeamFactory.create(stage=self.stage, formula="G1P2", label="")
+        away = UndecidedTeamFactory.create(stage=self.stage, formula="P1", label="")
+        match = MatchFactory.create(
+            stage=self.stage,
+            home_team=None,
+            away_team=None,
+            home_team_undecided=home,
+            away_team_undecided=away,
+        )
+        self.assertEqual(str(home), "G1P2")
+        self.assertEqual(match.get_home_team(), {"title": "G1P2"})
+        self.assertEqual(match.get_away_team_plain(), "P1")
+        self.assertEqual(str(match), "G1P2 vs P1")
+
+    def test_undecided_team_may_be_any_team_of_the_division(self):
+        undecided = UndecidedTeamFactory.create(
+            stage=self.stage, formula="G1P2", label=""
+        )
+        self.assertCountEqual(undecided.choices.all(), self.teams)
+
+    def test_eval_leaves_the_position_unresolved(self):
+        """
+        ``eval`` resolves the winner of a match in the same stage, but not a
+        position: there is no stage before to take it from, and this stage's
+        own ladder is not that stage.
+        """
+        semi = MatchFactory.create(
+            stage=self.stage,
+            home_team=self.teams[0],
+            away_team=self.teams[1],
+            home_team_score=5,
+            away_team_score=2,
+            label="Semi 1",
+        )
+        final = MatchFactory.create(
+            stage=self.stage,
+            home_team=None,
+            away_team=None,
+            home_team_eval="W",
+            home_team_eval_related=semi,
+            away_team_eval="P1",
+        )
+        self.assertEqual(final.eval(), (self.teams[0], {"title": "P1"}))
 
 
 class StageGroupPositionIntegrationTests(TestCase):
