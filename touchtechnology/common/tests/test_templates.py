@@ -108,21 +108,19 @@ class NavigationTest(TestCase):
         value = template.render(Context())
         self.assertHTMLEqual(
             value,
-            """
+            f"""
             <ul class="navigation">
-                <li class="root first NoneType" id="node{}">
+                <li class="root first NoneType" id="node{self.home.pk}">
                     <a href="/">Home Page</a>
                 </li>
-                <li class=" has_children NoneType" id="node{}">
+                <li class=" has_children NoneType" id="node{self.about.pk}">
                     <a href="/about/">About Us</a>
                 </li>
-                <li class=" last NoneType" id="node{}">
+                <li class=" last NoneType" id="node{self.contact.pk}">
                     <a href="/contact/">Contact Us</a>
                 </li>
             </ul>
-            """.format(
-                self.home.pk, self.about.pk, self.contact.pk
-            ),
+            """,
         )
 
     def test_a_tag_makes_a_single_query(self):
@@ -201,21 +199,19 @@ class NavigationTest(TestCase):
         value = template.render(context)
         self.assertHTMLEqual(
             value,
-            """
+            f"""
             <ul class="navigation">
-                <li class="root first NoneType" id="node{}">
+                <li class="root first NoneType" id="node{self.home.pk}">
                     <a href="/">Home Page</a>
                 </li>
-                <li class=" has_children NoneType" id="node{}">
+                <li class=" has_children NoneType" id="node{self.about.pk}">
                     <a href="/about/">About Us</a>
                 </li>
-                <li class=" current last NoneType" id="node{}">
+                <li class=" current last NoneType" id="node{self.contact.pk}">
                     <a href="/contact/">Contact Us</a>
                 </li>
             </ul>
-            """.format(
-                self.home.pk, self.about.pk, self.contact.pk
-            ),
+            """,
         )
 
     def test_start_stop(self):
@@ -223,33 +219,28 @@ class NavigationTest(TestCase):
         value = template.render(Context())
         self.assertHTMLEqual(
             value,
-            """
+            f"""
             <ul class="navigation">
-                <li class="root first NoneType" id="node{}">
+                <li class="root first NoneType" id="node{self.home.pk}">
                     <a href="/">Home Page</a>
                 </li>
-                <li class=" has_children NoneType" id="node{}">
+                <li class=" has_children NoneType" id="node{self.about.pk}">
                     <a href="/about/">About Us</a>
                     <ul class="navigation">
-                        <li class=" has_children first NoneType" id="node{}">
+                        <li class=" has_children first NoneType"
+                            id="node{self.about_people.pk}">
                             <a href="/about/people/">Our People</a>
                         </li>
-                        <li class=" last NoneType" id="node{}">
+                        <li class=" last NoneType" id="node{self.about_work.pk}">
                             <a href="/about/work/">Our Work</a>
                         </li>
                     </ul>
                 </li>
-                <li class=" NoneType last" id="node{}">
+                <li class=" NoneType last" id="node{self.contact.pk}">
                     <a href="/contact/">Contact Us</a>
                 </li>
             </ul>
-            """.format(
-                self.home.pk,
-                self.about.pk,
-                self.about_people.pk,
-                self.about_work.pk,
-                self.contact.pk,
-            ),
+            """,
         )
 
 
@@ -423,9 +414,9 @@ class QueryStringTest(TestCase):
         url = self.url._replace(query=urlencode(self.query, True))
         self.get(urlunparse(url))
 
-        link = '<a href="?year={year}&amp;page={page}">{page}</a>'
-        self.assertResponseContains(link.format(page=2, **self.query))
-        self.assertResponseNotContains(link.format(page=3, **self.query))
+        year = self.query["year"]
+        self.assertResponseContains(f'<a href="?year={year}&amp;page=2">2</a>')
+        self.assertResponseNotContains(f'<a href="?year={year}&amp;page=3">3</a>')
 
         self.assertResponseContains('<span id="5">5</span>')
         self.assertResponseNotContains('<span id="9">9</span>')
@@ -435,9 +426,9 @@ class QueryStringTest(TestCase):
         url = self.url._replace(query=urlencode(query, True))
         self.get(urlunparse(url))
 
-        link = '<a href="?year={year}&amp;page={page}">{page}</a>'
-        self.assertResponseContains(link.format(page=2, **self.query))
-        self.assertResponseNotContains(link.format(page=3, **self.query))
+        year = self.query["year"]
+        self.assertResponseContains(f'<a href="?year={year}&amp;page=2">2</a>')
+        self.assertResponseNotContains(f'<a href="?year={year}&amp;page=3">3</a>')
 
         self.assertResponseNotContains('<span id="5">5</span>')
         self.assertResponseContains('<span id="9">9</span>')
