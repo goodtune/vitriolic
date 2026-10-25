@@ -262,6 +262,23 @@ class DeleteConfirmationTests(TestCase):
                     )
                 )
 
+    def test_the_list_of_applications_links_each_to_its_edit_page(self):
+        edit = self.reverse("admin:content:real_placeholder:edit", self.news.pk)
+        with self.login(self.superuser):
+            self.get_check_200("admin:content:real_placeholder:list")
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=f'<a href="{edit}">News</a>',
+                explorer=f'<a href="{edit}">{self.icon("puzzle")}<span>News</span></a>',
+            )
+        )
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=f'<li><a href="{edit}">{self.icon("pencil")}Edit</a></li>',
+                explorer=f'<a href="{edit}">{self.icon("edit")}Edit</a>',
+            )
+        )
+
     def test_the_list_of_applications_offers_to_delete_one(self):
         with self.login(self.superuser):
             self.get_check_200("admin:content:real_placeholder:list")
