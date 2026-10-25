@@ -24,7 +24,7 @@ from playwright.sync_api import Page, expect
 
 from tests.e2e.admin_delete import CASES, UNLINKED, Case
 from tests.e2e.admin_tabs import show_tab
-from tests.e2e.shells import CONFIRM_BODY, ROW_MENU, SHELL, by_shell, pane_id
+from tests.e2e.shells import CONFIRM_BODY, ROW_MENU, by_shell, pane_id
 
 #: What Django calls an object that has no ``__str__``: ``Thing object (7)``.
 DEFAULT_NAME = re.compile(r"object \(.*\)")
@@ -96,10 +96,6 @@ def test_the_confirmation_names_the_object(
 
     row.get_by_role("button", name=ROW_MENU).click()
     delete = row.get_by_role("button", name="Delete", exact=True)
-    if SHELL in case.unoffered:
-        # Nothing to confirm: the row's menu has no way to delete it.
-        expect(delete).to_have_count(0)
-        return
     expect(delete).to_be_visible()
     # The row posts to the route the case is for.
     action = urlparse(delete.locator("xpath=ancestor::form").get_attribute("action"))

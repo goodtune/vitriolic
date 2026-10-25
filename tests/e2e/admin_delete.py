@@ -64,8 +64,6 @@ class Case:
     #: The title and text that one shell shows, when they are not the usual.
     workbook: tuple[str, str] | None = None
     explorer: tuple[str, str] | None = None
-    #: The shells whose row menu has no Delete for it, so no confirmation.
-    unoffered: tuple[str, ...] = ()
 
     def __repr__(self):
         return self.id
@@ -501,14 +499,12 @@ CASES = [
         "Round robin of four",
         make_draw_format,
     ),
-    # The kind of a node of the sitemap comes from ``SitemapNode``'s verbose
-    # name, so the confirmation calls a page and an application a folder.
-    Case("page", "admin:content:page", "folder", "About us", make_page),
+    Case("page", "admin:content:page", "page", "About us", make_page),
     Case("folder", "admin:content:folder", "folder", "Archive", make_folder),
     Case(
         "application",
         "admin:content:placeholder",
-        "folder",
+        "application",
         "News",
         make_application,
     ),
@@ -525,7 +521,6 @@ CASES = [
         "placeholder",
         "News",
         make_placeholder,
-        unoffered=("explorer",),
     ),
     Case("chunk", "admin:content:chunk", "chunk", "footer", make_chunk),
     # The Explorer names no kind of thing, and has no title for these.
@@ -537,11 +532,10 @@ CASES = [
         make_file,
         explorer=("Are you sure?", "“minutes.pdf” will be removed for good."),
     ),
-    # The kind of a row of the Workbook's file list is the list's, a file.
     Case(
         "media-folder",
         "admin:content:media",
-        "file",
+        "folder",
         "reports",
         make_media_folder,
         explorer=("Are you sure?", "“reports” will be removed for good."),
