@@ -14,6 +14,7 @@ from test_plus import TestCase
 
 from touchtechnology.admin.shells import DEFAULT_SHELL, get_shell
 from touchtechnology.admin.tests.shells import by_shell
+from touchtechnology.common.prince import PrinceError
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.admin import SCORECARD_PDF_WAIT
 from tournamentcontrol.competition.tasks import (
@@ -24,6 +25,50 @@ from tournamentcontrol.competition.tests import factories
 
 FAKE_PDF = b"%PDF-1.4 fake scorecards"
 UTC = ZoneInfo("UTC")
+
+
+class PdfFailedAssertions:
+    def assertPdfFailed(self, start_again):
+        """
+        The PDF was not generated: the page says so plainly and offers a way
+        to start again, rather than raising a server error.
+        """
+        self.response_200()
+        self.assertResponseContains(
+            by_shell(
+                workbook=(
+                    '<p class="wb-message wb-message-error">'
+                    '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+                    '<use href="/static/touchtechnology/admin/workbook/icons.svg#circle-alert">'
+                    "</use></svg><span>The PDF service didn&#x27;t respond, so your "
+                    "PDF could not be generated. Please try again.</span></p>"
+                ),
+                explorer=(
+                    '<div class="message message-error">'
+                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/explorer/img/icons.svg#alert"></use></svg>'
+                    "<p>The PDF service didn&#x27;t respond, so your PDF could not be "
+                    "generated. Please try again.</p>"
+                    '<button type="button" class="message-close">'
+                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/explorer/img/icons.svg#x"></use></svg>'
+                    '<span class="visually-hidden">Dismiss</span></button></div>'
+                ),
+            )
+        )
+        self.assertResponseContains(
+            by_shell(
+                workbook=(
+                    f'<a class="wb-button wb-button-primary" href="{start_again}">'
+                    '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+                    '<use href="/static/touchtechnology/admin/workbook/icons.svg#refresh-cw">'
+                    "</use></svg>Start again</a>"
+                ),
+                explorer=(
+                    f'<a class="button primary" href="{start_again}">'
+                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/explorer/img/icons.svg#refresh"></use></svg>'
+                    "<span>Try again</span></a>"
+                ),
+            )
+        )
 
 
 class ScorecardTestCase(TestCase):
@@ -207,7 +252,7 @@ class StageScorecardTests(ScorecardTestCase):
         self.prince.assert_not_called()
 
 
-class AsyncResultViewTests(ScorecardTestCase):
+class AsyncResultViewTests(PdfFailedAssertions, ScorecardTestCase):
     """
     The polling views read the task state straight from the result backend.
     They must never build an ``AsyncResult``: when one is ready, or garbage
@@ -279,43 +324,8 @@ class AsyncResultViewTests(ScorecardTestCase):
         again, rather than re-raising the background error as a server error.
         """
         self.poll(states.FAILURE, requests.HTTPError("504 Server Error"))
-        self.response_200()
+        self.assertPdfFailed(self.start_again())
         self.assertResponseHeaders({"Refresh": None})
-        self.assertResponseContains(
-            by_shell(
-                workbook=(
-                    '<p class="wb-message wb-message-error">'
-                    '<svg class="wb-icon" aria-hidden="true" focusable="false">'
-                    '<use href="/static/touchtechnology/admin/workbook/icons.svg#circle-alert">'
-                    "</use></svg><span>The PDF service didn&#x27;t respond, so your "
-                    "PDF could not be generated. Please try again.</span></p>"
-                ),
-                explorer=(
-                    '<div class="message message-error">'
-                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/explorer/img/icons.svg#alert"></use></svg>'
-                    "<p>The PDF service didn&#x27;t respond, so your PDF could not be "
-                    "generated. Please try again.</p>"
-                    '<button type="button" class="message-close">'
-                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/explorer/img/icons.svg#x"></use></svg>'
-                    '<span class="visually-hidden">Dismiss</span></button></div>'
-                ),
-            )
-        )
-        self.assertResponseContains(
-            by_shell(
-                workbook=(
-                    f'<a class="wb-button wb-button-primary" href="{self.start_again()}">'
-                    '<svg class="wb-icon" aria-hidden="true" focusable="false">'
-                    '<use href="/static/touchtechnology/admin/workbook/icons.svg#refresh-cw">'
-                    "</use></svg>Start again</a>"
-                ),
-                explorer=(
-                    f'<a class="button primary" href="{self.start_again()}">'
-                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/explorer/img/icons.svg#refresh"></use></svg>'
-                    "<span>Try again</span></a>"
-                ),
-            )
-        )
         self.assertNoAsyncResult()
 
     def test_revoked(self):
@@ -582,14 +592,48 @@ class PdfServiceRetryTests(TestCase):
         self.reply(504)
         result = self.generate_scorecards()
         self.assertEqual(result.state, "FAILURE")
-        self.assertIsInstance(result.result, requests.HTTPError)
+        self.assertIsInstance(result.result, PrinceError)
+        self.assertEqual(result.result.__cause__.response.status_code, 504)
         self.assertEqual(len(self.pdf_service.calls), 3)
+
+    def test_timeout_gives_up_after_two_retries(self):
+        """
+        A PDF service that never answers fails the render after the retries,
+        each one logged, and the stage's matches stay waiting to be printed.
+        """
+        self.stage.matches_needing_printing.set([self.match])
+        self.reply(requests.ReadTimeout("read timed out"))
+        with self.assertLogs("tournamentcontrol.competition.tasks", "WARNING") as logs:
+            result = generate_pdf_scorecards.delay(
+                match_pks=[self.match.pk],
+                templates=self.templates,
+                extra_context={},
+                stage_pk=self.stage.pk,
+            )
+        self.assertEqual(result.state, "FAILURE")
+        self.assertIsInstance(result.result, PrinceError)
+        self.assertIsInstance(result.result.__cause__, requests.ReadTimeout)
+        self.assertEqual(len(self.pdf_service.calls), 3)
+        failed = "Remote PDF generation via pdf.example.com failed: read timed out"
+        self.assertEqual(
+            logs.output,
+            [
+                "WARNING:tournamentcontrol.competition.tasks:"
+                f"PDF service failed ({failed}), retrying in 3s.",
+                "WARNING:tournamentcontrol.competition.tasks:"
+                f"PDF service failed ({failed}), retrying in 6s.",
+                "WARNING:tournamentcontrol.competition.tasks:"
+                f"PDF service failed ({failed}), giving up after 2 retries.",
+            ],
+        )
+        self.assertCountEqual(self.stage.matches_needing_printing.all(), [self.match])
 
     def test_client_error_not_retried(self):
         self.reply(400)
         result = self.generate_scorecards()
         self.assertEqual(result.state, "FAILURE")
-        self.assertIsInstance(result.result, requests.HTTPError)
+        self.assertIsInstance(result.result, PrinceError)
+        self.assertEqual(result.result.__cause__.response.status_code, 400)
         self.assertEqual(len(self.pdf_service.calls), 1)
 
     # The grid task takes a Season instance, which the eager ``delay`` would
@@ -605,8 +649,79 @@ class PdfServiceRetryTests(TestCase):
         self.reply(404)
         result = generate_pdf_grid.apply(args=(self.season, {}))
         self.assertEqual(result.state, "FAILURE")
-        self.assertIsInstance(result.result, requests.HTTPError)
+        self.assertIsInstance(result.result, PrinceError)
+        self.assertEqual(result.result.__cause__.response.status_code, 404)
         self.assertEqual(len(self.pdf_service.calls), 1)
+
+
+@override_settings(PRINCE_SERVER="pdf.example.com")
+class PdfServiceTimeoutViewTests(PdfFailedAssertions, TestCase):
+    """
+    The admin views that make their PDF within the request give up on a PDF
+    service that does not answer in time (#427). They log the failure and
+    show the "PDF was not generated" page, rather than hold the worker or
+    raise a server error.
+    """
+
+    user_factory = factories.SuperUserFactory
+
+    def setUp(self):
+        super().setUp()
+        self.superuser = self.make_user()
+        self.pdf_service = responses.RequestsMock()
+        self.pdf_service.start()
+        self.addCleanup(self.pdf_service.reset)
+        self.addCleanup(self.pdf_service.stop)
+        self.pdf_service.post(PDF_SERVICE, body=requests.ReadTimeout("read timed out"))
+
+    def get_pdf(self, url_name, *args):
+        """
+        Ask for the PDF as a superuser. The PDF service is asked once and the
+        failure is logged once, as an error that carries the ``PrinceError``.
+        """
+        with (
+            self.login(self.superuser),
+            self.assertLogs("tournamentcontrol.competition.admin", "ERROR") as logs,
+        ):
+            self.get(url_name, *args)
+        self.assertEqual(len(self.pdf_service.calls), 1)
+        self.assertEqual(
+            [record.getMessage() for record in logs.records],
+            [f"PDF for {self.reverse(url_name, *args)} was not generated."],
+        )
+        self.assertIsInstance(logs.records[0].exc_info[1], PrinceError)
+
+    def test_season_grid(self):
+        season = factories.SeasonFactory.create()
+        self.get_pdf(
+            "admin:fixja:competition:season:match-grid",
+            season.competition_id,
+            season.pk,
+            "pdf",
+        )
+        self.assertPdfFailed(season.urls["edit"])
+
+    def test_day_grid(self):
+        match = factories.MatchFactory.create(
+            datetime=datetime(2017, 2, 13, 10, 0, tzinfo=UTC)
+        )
+        season = match.stage.division.season
+        self.get_pdf(
+            "admin:fixja:match-grid",
+            season.competition_id,
+            season.pk,
+            "20170213",
+            "pdf",
+        )
+        self.assertPdfFailed(season.urls["edit"])
+
+    def test_registration_form(self):
+        club = factories.ClubFactory.create()
+        team = factories.TeamFactory.create(club=club)
+        season = team.division.season
+        season.competition.clubs.add(club)
+        self.get_pdf("admin:fixja:club:registration-form", club.pk, season.pk, "pdf")
+        self.assertPdfFailed(club.urls["edit"])
 
 
 class ScorecardReportWizardTests(ScorecardTestCase):

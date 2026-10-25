@@ -39,7 +39,7 @@ from touchtechnology.common.decorators import (
     csrf_exempt_m,
     staff_login_required_m,
 )
-from touchtechnology.common.prince import prince
+from touchtechnology.common.prince import PrinceError, prince
 from touchtechnology.common.utils import get_perms_for_model
 from tournamentcontrol.competition.dashboard import (
     BasicResultWidget,
@@ -219,7 +219,7 @@ def season_checklist(season):
     )
 
     def division_link(division, tab):
-        return "%s#%s-tab" % (division.urls["edit"], tab)
+        return f"{division.urls['edit']}#{tab}-tab"
 
     steps = [
         _step(
@@ -493,7 +493,7 @@ def season_setup(season, here=True):
     first_day = next((d for d in unscheduled if d is not None), None)
 
     def tab(obj, name):
-        return "%s#%s-tab" % (obj.urls["edit"], name)
+        return f"{obj.urls['edit']}#{name}-tab"
 
     steps = [
         Step(
@@ -505,7 +505,7 @@ def season_setup(season, here=True):
                 if season.start_date
                 else _("The draw needs a first day")
             ),
-            "%s#%s-tab" % (edit, slugify(season._meta.verbose_name)),
+            f"{edit}#{slugify(season._meta.verbose_name)}-tab",
         ),
         Step(
             _("Add the kick-off times"),
@@ -665,7 +665,7 @@ def competition_setup(competition):
                 if clubs
                 else _("Choose them on the details")
             ),
-            "%s#%s-tab" % (edit, slugify(competition._meta.verbose_name)),
+            f"{edit}#{slugify(competition._meta.verbose_name)}-tab",
         ),
         Step(
             _("Add a season"),
@@ -707,7 +707,7 @@ def season_days(explorer, request, season):
     """The season's match days, each opening on its results."""
     return [
         Node(
-            key=explorer.key("x:day:%s:%s" % (season.pk, day.strftime("%Y%m%d"))),
+            key=explorer.key(f"x:day:{season.pk}:{day:%Y%m%d}"),
             label=date_format(day, "D j M"),
             url=reverse(
                 "admin:fixja:match-results",
@@ -754,15 +754,15 @@ class CompetitionExplorer(Explorer):
         season, day = context.get("season"), context.get("date")
         if isinstance(season, Season) and isinstance(day, datetime.date):
             keys += [
-                self.key("g:competition.season:%s:days" % season.pk),
-                self.key("x:day:%s:%s" % (season.pk, day.strftime("%Y%m%d"))),
+                self.key(f"g:competition.season:{season.pk}:days"),
+                self.key(f"x:day:{season.pk}:{day:%Y%m%d}"),
             ]
         return keys
 
     def group_node(self, obj, rel, value=None, label=None):
         node = super().group_node(obj, rel, value, label)
         if isinstance(obj, Season) and rel.name == "days":
-            node.url = "%s#schedule-tab" % obj.urls["edit"]
+            node.url = f"{obj.urls['edit']}#schedule-tab"
         return node
 
 
@@ -772,7 +772,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     unprotected = False
 
     def __init__(self, app, name="fixja", app_name="competition"):
-        super(CompetitionAdminComponent, self).__init__(app, name, app_name)
+        super().__init__(app, name, app_name)
 
     def season_progress(self, season, here=True):
         """
@@ -827,12 +827,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def render(self, request, templates, context, *args, **kwargs):
         context.update(
             {
-                "base": "tournamentcontrol/rego/admin/%s/base.html" % self.shell.name,
+                "base": f"tournamentcontrol/rego/admin/{self.shell.name}/base.html",
             }
         )
-        return super(CompetitionAdminComponent, self).render(
-            request, templates, context, *args, **kwargs
-        )
+        return super().render(request, templates, context, *args, **kwargs)
 
     def get_urls(self):
         stub_urls = (
@@ -1445,8 +1443,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                             awaiting.date.strftime("%Y%m%d"),
                         ),
                     ),
-                    "note": "%s · %s"
-                    % (date_format(awaiting.date, "D j M"), season.title),
+                    "note": f"{date_format(awaiting.date, 'D j M')} · {season.title}",
                     "icon": "list-checks",
                     "priority": 10,
                 }
@@ -1473,8 +1470,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                             upcoming.date.strftime("%Y%m%d"),
                         ),
                     ),
-                    "note": "%s · %s"
-                    % (date_format(upcoming.date, "D j M"), season.title),
+                    "note": f"{date_format(upcoming.date, 'D j M')} · {season.title}",
                     "icon": "clock",
                     "priority": 11,
                 }
@@ -1538,7 +1534,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         competition = extra_context.get("competition")
         queryset = model.objects.filter(competition=competition)
         post_delete_redirect = self.redirect(
-            competition.urls["edit"] + "#%s_roles-tab" % cls
+            f"{competition.urls['edit']}#{cls}_roles-tab"
         )
         return self.generic_delete(
             request,
@@ -2935,7 +2931,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @staff_login_required_m
     def edit_match_detail(self, request, stage, match, extra_context, **kwargs):
         redirect_to = reverse("admin:index")
-        return super(CompetitionAdminComponent, self).edit_match_detail(
+        return super().edit_match_detail(
             request,
             stage=stage,
             match=match,
@@ -2963,9 +2959,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def day_runsheet(self, request, season, date, extra_context, **kwargs):
-        return super(CompetitionAdminComponent, self).day_runsheet(
-            request, season, date, extra_context, **kwargs
-        )
+        return super().day_runsheet(request, season, date, extra_context, **kwargs)
 
     @competition_by_pk_m
     @csrf_exempt_m
@@ -2992,12 +2986,16 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             )
             return self.redirect(redirect_to)
 
-        return generate_fixture_grid(
-            season,
-            templates=self.template_path("grid.html"),
-            format=mode,
-            extra_context=extra_context,
-        )
+        try:
+            return generate_fixture_grid(
+                season,
+                templates=self.template_path("grid.html"),
+                format=mode,
+                extra_context=extra_context,
+            )
+        except PrinceError:
+            log.exception("PDF for %s was not generated.", request.path)
+            return self.pdf_failed(request, season.urls["edit"], extra_context)
 
     @competition_by_pk_m
     @csrf_exempt_m
@@ -3022,18 +3020,24 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             )
             return self.redirect(redirect_to)
 
-        return generate_fixture_grid(
-            season,
-            templates=self.template_path("grid.html"),
-            format=mode,
-            extra_context=extra_context,
-            dates=[date],
-        )
+        try:
+            return generate_fixture_grid(
+                season,
+                templates=self.template_path("grid.html"),
+                format=mode,
+                extra_context=extra_context,
+                dates=[date],
+            )
+        except PrinceError:
+            log.exception("PDF for %s was not generated.", request.path)
+            return self.pdf_failed(request, season.urls["edit"], extra_context)
 
     def pdf_failed(self, request, start_again, extra_context):
         """
-        The background PDF render failed for good; the error has already been
-        reported by the task, so explain it plainly instead of re-raising.
+        The PDF render failed for good, in the background task or in this
+        request. The error has already been reported, by the task or by the
+        view that caught the ``PrinceError``, so explain it plainly instead
+        of re-raising.
         """
         messages.error(request, PDF_FAILED_MESSAGE)
         context = dict(extra_context, start_again=start_again)
@@ -3373,7 +3377,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     ):
         # Back to the season's match days, where this day now shows its results.
         redirect_to = str(season.urls["edit"]) + "#schedule-tab"
-        return super(CompetitionAdminComponent, self).match_results(
+        return super().match_results(
             request,
             competition,
             season,
@@ -3975,17 +3979,21 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         extra_context["data"] = data
 
         templates = [
-            "tournamentcontrol/rego/%s/%s/registration_form.html"
-            % (competition.slug, season.slug),
-            "tournamentcontrol/rego/%s/registration_form.html" % (competition.slug,),
+            f"tournamentcontrol/rego/{competition.slug}/{season.slug}/"
+            "registration_form.html",
+            f"tournamentcontrol/rego/{competition.slug}/registration_form.html",
             "tournamentcontrol/rego/registration_form.html",
-            "tournamentcontrol/rego/%s/registration_form.html" % self.shell.name,
+            f"tournamentcontrol/rego/{self.shell.name}/registration_form.html",
         ]
 
         res = TemplateResponse(request, templates, extra_context)
 
         if mode == "pdf":
-            pdf = prince(res.render().content)
+            try:
+                pdf = prince(res.render().content)
+            except PrinceError:
+                log.exception("PDF for %s was not generated.", request.path)
+                return self.pdf_failed(request, club.urls["edit"], extra_context)
             return HttpResponse(pdf, content_type="application/pdf")
 
         return res

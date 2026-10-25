@@ -15,6 +15,7 @@ from django.utils import timezone
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 
+from touchtechnology.common.prince import PrinceError
 from tournamentcontrol.competition.compops.status import refresh_season_status
 from tournamentcontrol.competition.models import (
     LiveStreamEvent,
@@ -649,17 +650,26 @@ def delete_youtube_stream(season_pk, external_identifier):
 def _is_transient_pdf_error(exc):
     """
     A timeout, a connection error or a 5xx from the PDF service is worth
-    retrying; a 4xx or anything else will fail the same way again.
+    retrying; a 4xx or anything else will fail the same way again. The
+    ``PrinceError`` carries the ``requests`` exception as its cause.
     """
-    if isinstance(exc, (requests.Timeout, requests.ConnectionError)):
+    cause = exc.__cause__
+    if isinstance(cause, (requests.Timeout, requests.ConnectionError)):
         return True
-    if isinstance(exc, requests.HTTPError) and exc.response is not None:
-        return exc.response.status_code >= 500
+    if isinstance(cause, requests.HTTPError) and cause.response is not None:
+        return cause.response.status_code >= 500
     return False
 
 
 def _retry_transient_pdf_error(task, exc):
     if not _is_transient_pdf_error(exc):
+        raise exc
+    if task.request.retries >= task.max_retries:
+        logger.warning(
+            "PDF service failed (%s), giving up after %s retries.",
+            exc,
+            task.request.retries,
+        )
         raise exc
     countdown = PDF_RENDER_RETRY_DELAY * 2**task.request.retries
     logger.warning("PDF service failed (%s), retrying in %ss.", exc, countdown)
@@ -723,7 +733,7 @@ def generate_pdf_scorecards(
         data = generate_scorecards(
             matches, templates, "pdf", extra_context, stage, **kwargs
         )
-    except requests.RequestException as exc:
+    except PrinceError as exc:
         _retry_transient_pdf_error(self, exc)
     # We can't JSON encode bytes, so we need to base64 encode the
     # PDF document before handing it back to the result backend.
@@ -742,7 +752,7 @@ def generate_pdf_grid(self, season, extra_context, date=None, templates=None):
             extra_context=extra_context,
             http_response=False,  # Get bytes back, not a response object
         )
-    except requests.RequestException as exc:
+    except PrinceError as exc:
         _retry_transient_pdf_error(self, exc)
     # We can't JSON encode bytes, so we need to base64 encode the
     # PDF document before handing it back to the result backend.
