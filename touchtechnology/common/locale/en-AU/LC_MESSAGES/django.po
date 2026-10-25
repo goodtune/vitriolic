@@ -412,11 +412,7 @@ msgstr ""
 
 #: templates/registration/_profile.html:13
 #, python-format
-msgid ""
-"\n"
-"\t\t\t<p>Welcome back %(user.first_name)s &ndash; this is your personal page."
-"</p>\n"
-"\t\t"
+msgid "Welcome back %(name)s &ndash; this is your personal page."
 msgstr ""
 
 #: templates/registration/_profile.html:31

@@ -1,6 +1,3 @@
-# encoding=utf8
-
-
 import re
 from urllib.parse import urlparse
 
@@ -61,6 +58,8 @@ url_re = re.compile(
 
 
 class PasswordResetTests(TestCase):
+    user_factory = factories.UserFactory
+
     def setUp(self):
         self.staff = factories.UserFactory.create(is_staff=True, is_superuser=True)
         self.regular = factories.UserFactory.create()
@@ -90,6 +89,14 @@ class PasswordResetTests(TestCase):
         )
         self.assertResponseContains(
             '<script src="/static/touchtechnology/common/js/logout.js"></script>'
+        )
+
+    def test_profile_greets_user_by_first_name(self):
+        user = self.make_user()
+        with self.login(user):
+            self.get_check_200("accounts:profile")
+        self.assertResponseContains(
+            f"<p>Welcome back {user.first_name} &ndash; this is your personal page.</p>"
         )
 
     def test_password_change(self):
