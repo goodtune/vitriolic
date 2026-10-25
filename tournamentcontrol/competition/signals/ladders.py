@@ -126,10 +126,20 @@ def team_ladder_entry_aggregation(sender, instance, created=None, *args, **kwarg
         return
 
     # if we are carrying points from the previous stage then we'll need to add
-    # them here.
+    # them here. The first stage of a division has no stage before it, so it
+    # carries nothing.
+
+    previous = None
+    if instance.match.stage.carry_ladder or (
+        instance.match.stage_group and instance.match.stage_group.carry_ladder
+    ):
+        try:
+            previous = instance.match.stage.comes_after
+        except ObjectDoesNotExist:
+            logger.debug("First stage of its division, nothing to carry.")
 
     base = SumDict()
-    if instance.match and instance.match.stage_group:
+    if previous is not None and instance.match.stage_group:
         home_pks = instance.match.stage_group.matches.values_list(
             "home_team", flat=True
         )
@@ -144,7 +154,7 @@ def team_ladder_entry_aggregation(sender, instance, created=None, *args, **kwarg
             logger.debug("Pool match, group statistics only.")
             base += instance.team.ladder_entries.filter(
                 match__include_in_ladder=True,
-                match__stage=instance.match.stage.comes_after,
+                match__stage=previous,
                 opponent__in=opponent_pks,
             ).aggregate(**aggregate_kw)
 
@@ -154,26 +164,26 @@ def team_ladder_entry_aggregation(sender, instance, created=None, *args, **kwarg
             logger.debug("Pool match, all stage statistics.")
             base += instance.team.ladder_entries.filter(
                 match__include_in_ladder=True,
-                match__stage=instance.match.stage.comes_after,
+                match__stage=previous,
             ).aggregate(**aggregate_kw)
 
-    elif instance.match.stage.carry_ladder:
+    elif previous is not None:
         # when the preceeding stage had Pools, this stage does not have any
         # Pools, and carry_ladder is set, then we would bring forward the
         # statistics from matches played with other teams in the stage.
-        if instance.match.stage.comes_after.pools.count():
+        if previous.pools.count():
             base += instance.team.ladder_entries.filter(
                 match__include_in_ladder=True,
-                match__stage=instance.match.stage.comes_after,
+                match__stage=previous,
                 opponent__in=instance.match.stage.teams,
             ).aggregate(**aggregate_kw)
 
         # when there are no Pools and the stage has carry_ladder set we bring
         # forward the ladder_summary instead.
         else:
-            base += instance.team.ladder_summary.filter(
-                stage=instance.match.stage.comes_after
-            ).aggregate(**aggregate_kw)
+            base += instance.team.ladder_summary.filter(stage=previous).aggregate(
+                **aggregate_kw
+            )
 
     aggregate = base + instance.team.ladder_entries.filter(
         match__include_in_ladder=True,
