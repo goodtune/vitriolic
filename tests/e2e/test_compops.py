@@ -510,7 +510,16 @@ def test_scorers_are_validated_then_saved(
 def test_a_single_score_is_refused_in_its_row(
     compops_page, asgi_live_server, tournament, screenshot_dir
 ):
+    """
+    A result with one score is refused, and its row says why.
+
+    The page can finish loading before its event stream sends the first
+    push, which re-renders the results with unbound forms and so removes the
+    error of a refusal shown before it. A person cannot save that fast, but
+    the test can, so it waits for the stream to catch up before it types.
+    """
     compops_page.goto(asgi_live_server.url + tournament["day_path"])
+    wait_for_snapshot(compops_page, tournament["season"])
     row = compops_page.locator(f"#match-{tournament['match'].pk}")
     row.locator('input[name="home_team_score"]').fill("3")
     row.locator('button[type="submit"]').click()
