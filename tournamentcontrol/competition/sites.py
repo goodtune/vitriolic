@@ -19,13 +19,11 @@ from django.utils.http import urlencode
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext
 from django.views.decorators.cache import cache_page, patch_cache_control
-from guardian.utils import get_40x_or_None
 from icalendar import Calendar, Event, vUri
 
 from touchtechnology.admin.shells import ShellTemplatesMixin
 from touchtechnology.admin.sites import site as admin_site
 from touchtechnology.common.sites import Application
-from touchtechnology.common.utils import get_perms_for_model
 from tournamentcontrol.competition.decorators import competition_by_slug_m
 from tournamentcontrol.competition.forms import (
     ConfigurationForm,
@@ -102,39 +100,6 @@ CALENDAR_ARCHIVE_CACHE_TTL = getattr(
 # How long the rendered archived feed is kept in Django's cache; short enough
 # that a correction to an old match reaches subscribers within a day.
 CALENDAR_ARCHIVE_RENDER_TTL = 86400
-
-
-def permissions_required(
-    request,
-    model,
-    instance=None,
-    return_403=True,
-    accept_global_perms=True,
-    create=False,
-    perms=None,
-):
-    # If no perms are specified, build sensible default using built in
-    # permission types that come batteries included with Django.
-    if perms is None:
-        perms = get_perms_for_model(model, change=True)
-
-        # When we're doing a creation we should have permission to create the object.
-        if create:
-            perms = get_perms_for_model(model, add=True)
-
-    # Determine the user's permission to edit this object using the
-    # get_40x_or_None - saves decorating view method with
-    # @permission_required_or_403
-    has_permission = get_40x_or_None(
-        request,
-        perms,
-        obj=instance,
-        return_403=return_403,
-        accept_global_perms=accept_global_perms,
-    )
-
-    if has_permission is not None:
-        return has_permission
 
 
 class CompetitionSite(Application):

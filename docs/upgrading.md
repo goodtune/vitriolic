@@ -218,9 +218,14 @@ longer used:
 The admin's pages with the same file names are in
 `tournamentcontrol/competition/admin/<shell>/`. They stay.
 
-Two names are gone from the Python:
+Three names are gone from the Python:
 
 - `StreamControlForm` in `tournamentcontrol.competition.forms`.
+- `permissions_required` in `tournamentcontrol.competition.sites`. Nothing in
+  the library called it. Code that imports it fails with `ImportError`. To
+  check a permission in a view of your own, call
+  `guardian.utils.get_40x_or_None`, which it wrapped, or give
+  `permission_required=True` to a `generic_*` view of an `Application`.
 - `CompetitionAdminMixin` in `tournamentcontrol.competition.sites`. The admin's
   views `day_runsheet`, `match_results`, `edit_match_detail`,
   `progression_list` and `progress_teams` are now methods of

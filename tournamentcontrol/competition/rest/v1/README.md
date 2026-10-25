@@ -264,7 +264,7 @@ reverse('v1:competition:livestream-transition', kwargs={
 ### ViewSet Architecture
 - **Base Class**: `ReadOnlyModelViewSet` for list/detail operations
 - **Custom Actions**: `@action` decorator for transition endpoint
-- **Permissions**: Custom permission checking using `permissions_required`
+- **Permissions**: `check_permissions` requires `IsAuthenticated` and the global `competition.change_match` permission
 - **Serialization**: Context-aware serializers for nested relationships
 
 ### Query Optimization
