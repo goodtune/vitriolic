@@ -19,6 +19,7 @@ from guardian.shortcuts import assign_perm
 from test_plus import TestCase
 from test_plus.test import BaseTestCase
 
+from touchtechnology.admin.tests.tenancy import schema_context
 from tournamentcontrol.competition.compops import events
 from tournamentcontrol.competition.compops.sites import CompOpsSite
 from tournamentcontrol.competition.tests import factories
@@ -123,6 +124,28 @@ class SseFixture:
 
     async def publish(self, *args, **kwargs):
         await sync_to_async(self.publish_committed)(*args, **kwargs)
+
+    async def publish_in(self, schema_name, *args, **kwargs):
+        """Publish as a request in the tenant ``schema_name`` does."""
+
+        def publish():
+            with schema_context(schema_name):
+                self.publish_committed(*args, **kwargs)
+
+        await sync_to_async(publish)()
+
+    async def point_at(self, schema_name):
+        """
+        Point the requests of the rest of the test at the tenant
+        ``schema_name``. Their sync code runs on the test's thread, so that
+        thread's connection is the one to point; the event loop has a
+        connection of its own, as it does under an ASGI server.
+        """
+
+        def enter():
+            self.enterContext(schema_context(schema_name))
+
+        await sync_to_async(enter)()
 
     async def get(self, url=None, user=None):
         await self.async_client.aforce_login(user or self.staff)
@@ -270,6 +293,21 @@ class CompOpsEventsTests(SseFixture, TestCase):
         finally:
             await reader.close()
 
+    async def test_another_tenants_events_are_not_pushed(self):
+        await self.point_at("alpha")
+        reader, _ = await self.connect()
+        try:
+            await self.publish_in(
+                "bravo", self.season.pk, "stream-changed", kind="match", id=1
+            )
+            await self.publish_in(
+                "alpha", self.season.pk, "statistics-entered", match=self.match.pk
+            )
+            pushed = await reader.until(LAST_COUNT)
+            self.assertIn('data: elements <div id="scorers"', pushed[0])
+        finally:
+            await reader.close()
+
     async def test_connections_are_validated_around_a_push(self):
         reader, _ = await self.connect()
         try:
@@ -361,10 +399,10 @@ class CompOpsEventsDisconnectTests(SseFixture, TransactionTestCase):
         self.assertEqual(start["status"], 200)
         await communicator.receive_output(5)  # first body chunk
         backend = events.get_backend()
-        self.assertEqual(len(backend._subscribers[self.season.pk]), 1)
+        self.assertEqual(len(backend._subscribers[f"season:{self.season.pk}"]), 1)
         await communicator.send_input({"type": "http.disconnect"})
         await communicator.wait(5)
-        self.assertEqual(len(backend._subscribers[self.season.pk]), 0)
+        self.assertEqual(len(backend._subscribers[f"season:{self.season.pk}"]), 0)
 
 
 @freeze_time("2026-10-08 10:50 +10:00", real_asyncio=True)
@@ -602,6 +640,29 @@ class BoothEventsTests(SseFixture, TestCase):
             pushed = await reader.until('<div id="pane"')
             self.assertEqual(len(pushed), 1)
             self.assertIn('<div id="pane" class="pane leaders">', pushed[0])
+        finally:
+            await reader.close()
+
+    async def test_another_tenants_events_are_not_pushed(self):
+        await self.point_at("alpha")
+        reader, _ = await self.connect_booth(
+            {"pane": "sheets", "match": self.current.pk}
+        )
+        try:
+            await self.publish_in(
+                "bravo",
+                self.season.pk,
+                "stream-changed",
+                kind="match",
+                id=self.current.pk,
+                status="complete",
+            )
+            await self.publish_in(
+                "alpha", self.season.pk, "statistics-entered", match=self.current.pk
+            )
+            pushed = await reader.until('<div id="pane"')
+            self.assertEqual(len(pushed), 1)
+            self.assertIn('<div id="pane" class="pane sheets">', pushed[0])
         finally:
             await reader.close()
 

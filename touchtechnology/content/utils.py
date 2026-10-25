@@ -6,12 +6,13 @@ from importlib import import_module
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db import DEFAULT_DB_ALIAS, connections
+from django.db import DEFAULT_DB_ALIAS
 from django.db.models.signals import post_delete, post_save
 from django.db.utils import DatabaseError
 from django.utils.module_loading import import_string
 
 from touchtechnology.common.models import SitemapNode
+from touchtechnology.common.utils import get_schema_name
 from touchtechnology.content.app_settings import TENANT_MEDIA_PUBLIC
 from touchtechnology.content.models import Placeholder
 
@@ -83,7 +84,7 @@ def urlpatterns_cache_version(using=DEFAULT_DB_ALIAS):
     also the schema a node is saved to, so a save throws away the tree of the
     tenant it changed. A single-tenant site uses the cache's default version.
     """
-    return getattr(connections[using], "schema_name", None)
+    return get_schema_name(using)
 
 
 def invalidate_sitemapnode_urlpatterns(
