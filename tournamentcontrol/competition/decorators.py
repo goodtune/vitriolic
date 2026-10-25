@@ -2,6 +2,7 @@ import datetime
 import inspect
 import logging
 import time
+from functools import wraps
 from urllib.parse import ParseResult
 
 from dateutil.parser import parse
@@ -9,7 +10,6 @@ from django.db.models import Count, Prefetch
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
-from django.utils.functional import wraps
 
 from tournamentcontrol.competition.models import (
     Club,
@@ -429,9 +429,9 @@ def competition_by_slug(f, *a, **kw):
             except ValueError:
                 raise Http404("Invalid date.")
 
-        logger.debug("o_node = {0}".format(o_node))
+        logger.debug("o_node = %s", o_node)
 
-        logger.debug('kwargs["node"] = {node}'.format(node=o_node))
+        logger.debug('kwargs["node"] = %s', o_node)
 
         extra_context = kwargs.pop("extra_context", {})
         extra_context.update(kwargs)
