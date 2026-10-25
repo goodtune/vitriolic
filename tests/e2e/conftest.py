@@ -174,7 +174,10 @@ def _login(page, base_url, username):
 
 
 @pytest.fixture
-def compops_page(page, asgi_live_server, compops_user):
+def compops_page(asgi_live_server, page, compops_user):
+    # The server is set up before the page, so it is torn down after it: the
+    # browser closes the page's event stream before the server stops, and
+    # the server does not wait out its graceful timeout and cancel it.
     _login(page, asgi_live_server.url, "compops")
     return page
 
