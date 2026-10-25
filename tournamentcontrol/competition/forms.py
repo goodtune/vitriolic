@@ -103,7 +103,6 @@ from tournamentcontrol.competition.upstream import (
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
-    ThumbnailPreview,
     create_thumbnail_preview,
     legitimate_bye_match,
     match_unplayed,
@@ -226,9 +225,9 @@ class LadderPointsField(forms.MultiValueField):
 
     def compress(self, data_list):
         parts = [
-            "{}*{}".format(*each)
-            for each in zip(data_list, valid_ladder_identifiers)
-            if each[0]
+            f"{points}*{identifier}"
+            for points, identifier in zip(data_list, valid_ladder_identifiers)
+            if points
         ]
         return " + ".join(parts)
 
@@ -242,7 +241,7 @@ class SelectDateTimeWidget(SelectDateTimeWidgetBase):
         """
         if value:
             value = parse(value)
-        return super(SelectDateTimeWidget, self).decompress(value)
+        return super().decompress(value)
 
 
 class ThumbnailImageWidget(forms.ClearableFileInput):
@@ -253,8 +252,8 @@ class ThumbnailImageWidget(forms.ClearableFileInput):
     @property
     def template_name(self):
         return (
-            "tournamentcontrol/competition/widgets/%s/thumbnail_image_widget.html"
-            % (admin_site.shell.name)
+            f"tournamentcontrol/competition/widgets/{admin_site.shell.name}/"
+            "thumbnail_image_widget.html"
         )
 
     def format_value(self, value):
@@ -388,8 +387,8 @@ class SeasonTimezoneDateTimeWidget(forms.MultiWidget):
     @property
     def template_name(self):
         return (
-            "tournamentcontrol/competition/widgets/%s/"
-            "season_timezone_datetime_widget.html" % admin_site.shell.name
+            f"tournamentcontrol/competition/widgets/{admin_site.shell.name}/"
+            "season_timezone_datetime_widget.html"
         )
 
     def __init__(self, attrs=None):
@@ -398,8 +397,8 @@ class SeasonTimezoneDateTimeWidget(forms.MultiWidget):
             forms.SelectDateWidget(
                 attrs=attrs, years=range(this_year - 5, this_year + 5)
             ),
-            forms.Select(attrs=attrs, choices=[(h, "%02d" % h) for h in range(24)]),
-            forms.Select(attrs=attrs, choices=[(m, "%02d" % m) for m in range(60)]),
+            forms.Select(attrs=attrs, choices=[(h, f"{h:02d}") for h in range(24)]),
+            forms.Select(attrs=attrs, choices=[(m, f"{m:02d}") for m in range(60)]),
         )
         super().__init__(widgets, attrs)
         self.timezone = None
@@ -427,10 +426,10 @@ class SeasonTimezoneDateTimeField(forms.MultiValueField):
         fields = (
             forms.DateField(),
             forms.TypedChoiceField(
-                coerce=int, choices=[(h, "%02d" % h) for h in range(24)]
+                coerce=int, choices=[(h, f"{h:02d}") for h in range(24)]
             ),
             forms.TypedChoiceField(
-                coerce=int, choices=[(m, "%02d" % m) for m in range(60)]
+                coerce=int, choices=[(m, f"{m:02d}") for m in range(60)]
             ),
         )
         super().__init__(fields, **kwargs)
@@ -454,7 +453,7 @@ class SeasonTimezoneDateTimeField(forms.MultiValueField):
         return None
 
 
-class ConstructFormMixin(object):
+class ConstructFormMixin:
     """
     When a custom FormSet requires the ability to pass keyword arguments to a
     child form, we can simply define the ``get_defaults`` method to return a
@@ -467,7 +466,7 @@ class ConstructFormMixin(object):
     def _construct_form(self, i, **kwargs):
         defaults = self.get_defaults()
         defaults.update(kwargs)
-        return super(ConstructFormMixin, self)._construct_form(i, **defaults)
+        return super()._construct_form(i, **defaults)
 
     @property
     def empty_form(self):
@@ -609,7 +608,7 @@ class PersonMergeForm(PersonEditForm):
     def save(self, *args, **kwargs):
         from tournamentcontrol.competition.merge import merge_model_objects
 
-        keep = super(PersonMergeForm, self).save(*args, **kwargs)
+        keep = super().save(*args, **kwargs)
         return merge_model_objects(
             keep, list(self.cleaned_data["merge"]), self.cleaned_data["keep_old"]
         )
@@ -850,7 +849,7 @@ class GroundFormSet(BaseGroundFormSet):
     def _construct_form(self, i, **kwargs):
         if i >= self.initial_form_count():
             kwargs["instance"] = self.model(order=i + 1)
-        return super(GroundFormSet, self)._construct_form(i, **kwargs)
+        return super()._construct_form(i, **kwargs)
 
 
 class DivisionForm(UpstreamTitleMixin, SuperUserSlugMixin, ModelForm):
@@ -1100,7 +1099,7 @@ class StageGroupForm(SuperUserSlugMixin, ModelForm):
                 self.instance.undecided_teams.set(self.cleaned_data.get("teams"))
             else:
                 self.instance.teams.set(self.cleaned_data.get("teams"))
-        return super(StageGroupForm, self).save(*args, **kwargs)
+        return super().save(*args, **kwargs)
 
     class Meta:
         model = StageGroup
@@ -1139,7 +1138,7 @@ class StageGroupFormSet(ConstructFormMixin, BaseStageGroupFormSet):
     def _construct_form(self, i, **kwargs):
         if i >= self.initial_form_count():
             kwargs["instance"] = self.model(stage=self.stage, order=i + 1)
-        return super(StageGroupFormSet, self)._construct_form(i, **kwargs)
+        return super()._construct_form(i, **kwargs)
 
 
 class UndecidedTeamForm(UserMixin, ModelForm):
@@ -1676,7 +1675,7 @@ class DrawGenerationMatchFormSet(BaseDrawGenerationMatchFormSet):
 
     def add_fields(self, form, index):
         """A hook for adding extra fields on to each form instance."""
-        super(DrawGenerationMatchFormSet, self).add_fields(form, index)
+        super().add_fields(form, index)
         if self.can_delete:
             form.fields[DELETION_FIELD_NAME] = BooleanChoiceField(
                 label=_("Skip"), required=False
@@ -1767,13 +1766,13 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
             'MatchResultForm.save: updated fields "%s"', '", "'.join(sorted(changed))
         )
 
-        saved = super(MatchResultForm, self).save(*args, **kwargs)
+        saved = super().save(*args, **kwargs)
 
         # Announce the result only once it is written, so receivers (and
         # anything they notify) see the saved state.
         if changed:
             for rec, res in score_updated.send_robust(sender=self, match=self.instance):
-                receiver = "%s.%s" % (rec.__module__, rec.__name__)
+                receiver = f"{rec.__module__}.{rec.__name__}"
                 try:
                     if isinstance(res, Exception):
                         raise res
@@ -1862,12 +1861,10 @@ class LiveStreamEventForm(BootstrapFormControlMixin, ModelForm):
         # Times are always expressed in the season's timezone; it is implied
         # rather than asked for.
         tz = self.instance.season.timezone or timezone.get_current_timezone()
+        local_time = _("Local time in %s.") % tz
         for name in ("start", "stop"):
             self.fields[name].timezone = tz
-            self.fields[name].help_text = "{} {}".format(
-                self.fields[name].help_text,
-                _("Local time in %s.") % tz,
-            )
+            self.fields[name].help_text = f"{self.fields[name].help_text} {local_time}"
 
 
 class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
@@ -2105,9 +2102,7 @@ class RescheduleDateFormSet(ConstructFormMixin, RescheduleDateFormSetBase):
         return {"matches": self.matches}
 
     def _construct_form(self, i, **kwargs):
-        return super(RescheduleDateFormSet, self)._construct_form(
-            i, date=self.dates[i], **kwargs
-        )
+        return super()._construct_form(i, date=self.dates[i], **kwargs)
 
     def save(self, *args, **kwargs):
         update = {}
@@ -2189,7 +2184,7 @@ class ProgressMatchesForm(BaseMatchFormMixin, ModelForm):
 
     def save(self, *args, **kwargs):
         self.instance.stage.matches_needing_printing.add(self.instance)
-        return super(ProgressMatchesForm, self).save(*args, **kwargs)
+        return super().save(*args, **kwargs)
 
     class Meta:
         model = Match
@@ -2232,7 +2227,7 @@ class ProgressTeamsFormSet(BaseProgressTeamsFormSet):
         super().__init__(*args, **kwargs)
 
     def get_queryset(self):
-        qs = super(ProgressTeamsFormSet, self).get_queryset()
+        qs = super().get_queryset()
         return qs.filter(stage=self.stage)
 
     def clean(self):
@@ -2251,7 +2246,7 @@ class ProgressTeamsFormSet(BaseProgressTeamsFormSet):
                     )
 
     def save(self, *args, **kwargs):
-        res = super(ProgressTeamsFormSet, self).save(*args, **kwargs)
+        res = super().save(*args, **kwargs)
         self.stage.matches_needing_printing.set(
             self.stage.matches.exclude(legitimate_bye_match)
         )
@@ -2308,7 +2303,7 @@ class DrawGenerationForm(BootstrapFormControlMixin, forms.Form):
         return rounds
 
     def clean(self):
-        data = super(DrawGenerationForm, self).clean()
+        data = super().clean()
         try:
             matches = self.get_matches()
         except AttributeError:
@@ -2339,7 +2334,7 @@ DrawGenerationFormSetBase = formset_factory(
 class DrawGenerationFormSet(BootstrapFormControlMixin, DrawGenerationFormSetBase):
     def add_fields(self, form, index):
         """A hook for adding extra fields on to each form instance."""
-        super(DrawGenerationFormSet, self).add_fields(form, index)
+        super().add_fields(form, index)
         if self.can_delete:
             form.fields[DELETION_FIELD_NAME] = BooleanChoiceField(
                 label=_("Skip"), required=False
@@ -2649,10 +2644,8 @@ class DivisionTournamentScheduleForm(TournamentScheduleForm):
             .distinct()
             .select_related()
         ),
-        label_from_instance=lambda o: "{} - {} - {}".format(
-            o.season.competition.title,
-            o.season.title,
-            o.title,
+        label_from_instance=lambda o: (
+            f"{o.season.competition.title} - {o.season.title} - {o.title}"
         ),
         label="Division",
     )
