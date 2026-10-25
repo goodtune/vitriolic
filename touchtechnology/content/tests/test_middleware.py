@@ -91,9 +91,14 @@ class SitemapNodeMiddlewareLocaleMemoryLeakTest(TestCase):
         cls.about_url = about.get_absolute_url()
 
     def get_pages(self):
+        # Each page must be served by the URL tree built from these nodes, or
+        # the requests would measure some other tree.
         self.get(self.home_url)
+        self.assert_http_200_ok()
         self.get(self.about_url)
+        self.assertResponseContains("<p>About copy</p>")
         self.get("sitemap")
+        self.assert_http_200_ok()
 
     def test_language_prefix_cache_does_not_grow_per_request(self):
         self.get_pages()
