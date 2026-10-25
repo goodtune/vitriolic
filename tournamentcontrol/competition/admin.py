@@ -234,7 +234,7 @@ def season_checklist(season):
             season.start_date
             and _("Starts %(date)s")
             % {"date": date_format(season.start_date, "j F Y")},
-            edit + "#season-tab",
+            f"{edit}#season-tab",
         ),
         _step(
             "timeslots",
@@ -246,7 +246,7 @@ def season_checklist(season):
                 if timeslots
                 else _("When matches can start each day")
             ),
-            edit + "#timeslots-tab",
+            f"{edit}#timeslots-tab",
         ),
         _step(
             "venues",
@@ -258,7 +258,7 @@ def season_checklist(season):
                 if venues
                 else _("Where the matches are played")
             ),
-            edit + "#venues-tab",
+            f"{edit}#venues-tab",
         ),
         _step(
             "exclusions",
@@ -270,7 +270,7 @@ def season_checklist(season):
                 if exclusions
                 else _("Public holidays and breaks")
             ),
-            edit + "#exclusions-tab",
+            f"{edit}#exclusions-tab",
             optional=True,
         ),
         _step(
@@ -283,7 +283,7 @@ def season_checklist(season):
                 if divisions
                 else _("Add several at once")
             ),
-            edit + "#divisions-tab",
+            f"{edit}#divisions-tab",
         ),
         _step(
             "teams",
@@ -297,7 +297,7 @@ def season_checklist(season):
             (
                 division_link(without_teams[0], "teams")
                 if without_teams
-                else edit + "#divisions-tab"
+                else f"{edit}#divisions-tab"
             ),
         ),
         _step(
@@ -312,7 +312,7 @@ def season_checklist(season):
             (
                 division_link(without_draw[0], "stages")
                 if without_draw
-                else edit + "#schedule-tab"
+                else f"{edit}#schedule-tab"
             ),
         ),
         _step(
@@ -327,7 +327,7 @@ def season_checklist(season):
                 if unscheduled
                 else (_("All scheduled") if total else _("Once the draw is built"))
             ),
-            edit + "#schedule-tab",
+            f"{edit}#schedule-tab",
         ),
     ]
     return Setup(_("Season set-up"), steps)
@@ -376,7 +376,7 @@ def division_setup(division):
                 if not division.points_formula
                 else _("Points are set")
             ),
-            edit + "#division-tab",
+            f"{edit}#division-tab",
         ),
         _step(
             "teams",
@@ -387,7 +387,7 @@ def division_setup(division):
                 if teams
                 else _("Add several at once")
             ),
-            edit + "#teams-tab",
+            f"{edit}#teams-tab",
         ),
         _step(
             "stages",
@@ -399,7 +399,7 @@ def division_setup(division):
                 if stages
                 else _("The rounds, then the finals")
             ),
-            edit + "#stages-tab",
+            f"{edit}#stages-tab",
         ),
         _step(
             "draw",
@@ -414,7 +414,7 @@ def division_setup(division):
                     else _("Once the stages are added")
                 )
             ),
-            str(undrawn[0].urls["build"]) if undrawn else edit + "#stages-tab",
+            str(undrawn[0].urls["build"]) if undrawn else f"{edit}#stages-tab",
         ),
     ]
     return Setup(_("Division set-up"), steps)
@@ -520,7 +520,7 @@ def season_setup(season, here=True):
                 if timeslots
                 else _("No time slots yet")
             ),
-            edit + "#timeslots-tab",
+            f"{edit}#timeslots-tab",
         ),
         Step(
             _("Add venues and their grounds"),
@@ -538,7 +538,7 @@ def season_setup(season, here=True):
                     else _("No venues yet")
                 )
             ),
-            tab(bare_venue, "grounds") if bare_venue else edit + "#venues-tab",
+            tab(bare_venue, "grounds") if bare_venue else f"{edit}#venues-tab",
         ),
         Step(
             _("Set aside the days with no matches"),
@@ -548,7 +548,7 @@ def season_setup(season, here=True):
                 if exclusions
                 else _("Holidays and breaks, if there are any")
             ),
-            edit + "#exclusions-tab",
+            f"{edit}#exclusions-tab",
             optional=True,
         ),
         Step(
@@ -559,7 +559,7 @@ def season_setup(season, here=True):
                 if divisions
                 else _("No divisions yet; add several at once")
             ),
-            edit + "#divisions-tab",
+            f"{edit}#divisions-tab",
         ),
         Step(
             _("Enter the teams"),
@@ -578,7 +578,7 @@ def season_setup(season, here=True):
                     else _("Once there are divisions")
                 )
             ),
-            tab(short_of_teams, "teams") if short_of_teams else edit + "#divisions-tab",
+            tab(short_of_teams, "teams") if short_of_teams else f"{edit}#divisions-tab",
         ),
         Step(
             _("Add the stages"),
@@ -596,7 +596,7 @@ def season_setup(season, here=True):
                     else _("Once there are divisions")
                 )
             ),
-            tab(without_stage, "stages") if without_stage else edit + "#divisions-tab",
+            tab(without_stage, "stages") if without_stage else f"{edit}#divisions-tab",
         ),
         Step(
             _("Build the draw"),
@@ -610,7 +610,7 @@ def season_setup(season, here=True):
                     else _("Once there are stages")
                 )
             ),
-            tab(without_draw, "stages") if without_draw else edit + "#schedule-tab",
+            tab(without_draw, "stages") if without_draw else f"{edit}#schedule-tab",
         ),
         Step(
             _("Give every match a time and a ground"),
@@ -634,7 +634,7 @@ def season_setup(season, here=True):
                     ),
                 )
                 if first_day
-                else edit + "#schedule-tab"
+                else f"{edit}#schedule-tab"
             ),
         ),
         Step(
@@ -645,13 +645,13 @@ def season_setup(season, here=True):
                 if referees
                 else _("The officials who can take a match")
             ),
-            edit + "#referees-tab",
+            f"{edit}#referees-tab",
             optional=True,
         ),
     ]
     if here:
         return Setup(_("Season set-up"), steps)
-    return Setup(_("Season set-up"), steps, url=edit + "#setup-tab", here=False)
+    return Setup(_("Season set-up"), steps, url=f"{edit}#setup-tab", here=False)
 
 
 def competition_setup(competition):
@@ -680,7 +680,7 @@ def competition_setup(competition):
                 if seasons
                 else _("No seasons yet")
             ),
-            edit + "#seasons-tab",
+            f"{edit}#seasons-tab",
         ),
         Step(
             _("Name the club roles"),
@@ -690,7 +690,7 @@ def competition_setup(competition):
                 if club_roles
                 else _("President, secretary and the like")
             ),
-            edit + "#club_roles-tab",
+            f"{edit}#club_roles-tab",
             optional=True,
         ),
         Step(
@@ -701,7 +701,7 @@ def competition_setup(competition):
                 if team_roles
                 else _("Captain, coach and the like")
             ),
-            edit + "#team_roles-tab",
+            f"{edit}#team_roles-tab",
             optional=True,
         ),
     ]
@@ -1801,7 +1801,7 @@ class CompetitionAdminComponent(AdminComponent):
     @staff_login_required_m
     def delete_season(self, request, extra_context, season, **kwargs):
         post_delete_redirect = self.redirect(
-            season.competition.urls["edit"] + "#seasons-tab"
+            f"{season.competition.urls['edit']}#seasons-tab"
         )
         return self.generic_delete(
             request,
@@ -1898,7 +1898,7 @@ class CompetitionAdminComponent(AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_timeslot(self, request, season, pk, **kwargs):
-        post_delete_redirect = self.redirect(season.urls["edit"] + "#timeslots-tab")
+        post_delete_redirect = self.redirect(f"{season.urls['edit']}#timeslots-tab")
         return self.generic_delete(
             request,
             SeasonMatchTime,
@@ -1927,7 +1927,7 @@ class CompetitionAdminComponent(AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_seasonexclusiondate(self, request, season, pk, **kwargs):
-        post_delete_redirect = self.redirect(season.urls["edit"] + "#exclusions-tab")
+        post_delete_redirect = self.redirect(f"{season.urls['edit']}#exclusions-tab")
         return self.generic_delete(
             request,
             season.exclusions,
@@ -1974,7 +1974,7 @@ class CompetitionAdminComponent(AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_venue(self, request, season, venue, extra_context=None, **kwargs):
-        post_delete_redirect = self.redirect(season.urls["edit"] + "#venues-tab")
+        post_delete_redirect = self.redirect(f"{season.urls['edit']}#venues-tab")
         return self.generic_delete(
             request,
             Venue,
@@ -2059,7 +2059,7 @@ class CompetitionAdminComponent(AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_ground(self, request, venue, ground, extra_context=None, **kwargs):
-        post_delete_redirect = self.redirect(venue.urls["edit"] + "#grounds-tab")
+        post_delete_redirect = self.redirect(f"{venue.urls['edit']}#grounds-tab")
         return self.generic_delete(
             request,
             Ground,
@@ -2105,11 +2105,11 @@ class CompetitionAdminComponent(AdminComponent):
                 DivisionBulkCreateForm, bulk_create_count(request)
             ),
             formset_kwargs={"parent": season},
-            post_save_redirect=self.redirect(season.urls["edit"] + "#divisions-tab"),
+            post_save_redirect=self.redirect(f"{season.urls['edit']}#divisions-tab"),
             templates=self.template_path("bulk_create.html", "division"),
             permission_required=True,
             extra_context={
-                "cancel_url": season.urls["edit"] + "#divisions-tab",
+                "cancel_url": f"{season.urls['edit']}#divisions-tab",
                 **extra_context,
             },
         )
@@ -2117,7 +2117,7 @@ class CompetitionAdminComponent(AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_division(self, request, season, division, **kwargs):
-        post_delete_redirect = self.redirect(season.urls["edit"] + "#divisions-tab")
+        post_delete_redirect = self.redirect(f"{season.urls['edit']}#divisions-tab")
         return self.generic_delete(
             request,
             Division,
@@ -2170,7 +2170,7 @@ class CompetitionAdminComponent(AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_divisionexclusiondate(self, request, division, pk, **kwargs):
-        post_delete_redirect = self.redirect(division.urls["edit"] + "#exclusions-tab")
+        post_delete_redirect = self.redirect(f"{division.urls['edit']}#exclusions-tab")
         return self.generic_delete(
             request,
             division.exclusions,
@@ -2212,7 +2212,7 @@ class CompetitionAdminComponent(AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_stage(self, request, division, stage, **kwargs):
-        post_delete_redirect = self.redirect(division.urls["edit"] + "#stages-tab")
+        post_delete_redirect = self.redirect(f"{division.urls['edit']}#stages-tab")
         return self.generic_delete(
             request,
             division.stages,
@@ -2247,7 +2247,7 @@ class CompetitionAdminComponent(AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_pool(self, request, stage, pool, **kwargs):
-        post_delete_redirect = self.redirect(stage.urls["edit"] + "#pools-tab")
+        post_delete_redirect = self.redirect(f"{stage.urls['edit']}#pools-tab")
         return self.generic_delete(
             request,
             stage.pools,
@@ -2308,7 +2308,7 @@ class CompetitionAdminComponent(AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def bulk_create_team(self, request, division, extra_context, **kwargs):
-        division_url = division.urls["edit"] + "#teams-tab"
+        division_url = f"{division.urls['edit']}#teams-tab"
         return self.generic_bulk_create(
             request,
             Team,
@@ -2331,7 +2331,7 @@ class CompetitionAdminComponent(AdminComponent):
             request,
             Team,
             instance=team,
-            post_save_redirect=self.redirect(division.urls["edit"] + "#teams-tab"),
+            post_save_redirect=self.redirect(f"{division.urls['edit']}#teams-tab"),
             permission_required=True,
             **kwargs,
         )
@@ -2398,7 +2398,7 @@ class CompetitionAdminComponent(AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_teamassociation(self, request, team, pk, **kwargs):
-        post_delete_redirect = self.redirect(team.urls["edit"] + "#people-tab")
+        post_delete_redirect = self.redirect(f"{team.urls['edit']}#people-tab")
         return self.generic_delete(
             request,
             team.people,
@@ -2432,7 +2432,7 @@ class CompetitionAdminComponent(AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_seasonreferee(self, request, season, pk, **kwargs):
-        post_delete_redirect = self.redirect(season.urls["edit"] + "#officials-tab")
+        post_delete_redirect = self.redirect(f"{season.urls['edit']}#officials-tab")
         return self.generic_delete(
             request,
             season.referees,
@@ -2502,7 +2502,7 @@ class CompetitionAdminComponent(AdminComponent):
             pre_save_callback=pre_save_callback,
             post_save_callback=post_save_callback,
             post_save_redirect=self.redirect(
-                season.urls["edit"] + "#live_stream_events-tab"
+                f"{season.urls['edit']}#live_stream_events-tab"
             ),
             permission_required=True,
             extra_context=extra_context,
@@ -2570,7 +2570,7 @@ class CompetitionAdminComponent(AdminComponent):
     @staff_login_required_m
     def delete_livestreamevent(self, request, season, pk, **kwargs):
         post_delete_redirect = self.redirect(
-            season.urls["edit"] + "#live_stream_events-tab"
+            f"{season.urls['edit']}#live_stream_events-tab"
         )
         if request.method == "POST":
             event = get_object_or_404(season.live_stream_events, pk=pk)
@@ -2669,7 +2669,7 @@ class CompetitionAdminComponent(AdminComponent):
             always_save=season.live_stream,
             pre_save_callback=pre_save_callback,
             post_save_redirect=self.redirect(
-                season.urls["edit"] + "#live_stream_keys-tab"
+                f"{season.urls['edit']}#live_stream_keys-tab"
             ),
             permission_required=True,
             extra_context=extra_context,
@@ -2679,7 +2679,7 @@ class CompetitionAdminComponent(AdminComponent):
     @staff_login_required_m
     def delete_livestreamkey(self, request, season, pk, **kwargs):
         post_delete_redirect = self.redirect(
-            season.urls["edit"] + "#live_stream_keys-tab"
+            f"{season.urls['edit']}#live_stream_keys-tab"
         )
         if request.method == "POST":
             stream_key = get_object_or_404(season.live_stream_keys, pk=pk)
@@ -2717,7 +2717,7 @@ class CompetitionAdminComponent(AdminComponent):
         # The wizard renders itself, so it is given what the admin's own
         # pages are: where Cancel goes, and the admin's field template.
         extra_context = {
-            "cancel_url": str(redirect_to) + "#stages-tab",
+            "cancel_url": f"{redirect_to}#stages-tab",
             "field_template": self.shell.field_template,
             "shell": self.shell,
             "stage": stage,
@@ -2776,7 +2776,7 @@ class CompetitionAdminComponent(AdminComponent):
                 stage.matches.all().delete()
 
         messages.success(request, _("Your draw has been undone."))
-        return self.redirect(str(division.urls["edit"]) + "#stages-tab")
+        return self.redirect(f"{division.urls['edit']}#stages-tab")
 
     @competition_by_pk_m
     @staff_login_required_m
@@ -2923,7 +2923,7 @@ class CompetitionAdminComponent(AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_match(self, request, stage, match, **kwargs):
-        post_delete_redirect = self.redirect(stage.urls["edit"] + "#matches-tab")
+        post_delete_redirect = self.redirect(f"{stage.urls['edit']}#matches-tab")
         return self.generic_delete(
             request,
             stage.matches,
@@ -3497,9 +3497,7 @@ class CompetitionAdminComponent(AdminComponent):
                     "places": places,
                     "timeslots": timeslots,
                 },
-                post_save_redirect=self.redirect(
-                    str(season.urls["edit"]) + "#schedule-tab"
-                ),
+                post_save_redirect=self.redirect(f"{season.urls['edit']}#schedule-tab"),
                 templates=self.template_path("match/schedule.html"),
                 extra_context=extra_context,
             )
@@ -3542,7 +3540,7 @@ class CompetitionAdminComponent(AdminComponent):
         **kwargs,
     ):
         # Back to the season's match days, where this day now shows its results.
-        redirect_to = str(season.urls["edit"]) + "#schedule-tab"
+        redirect_to = f"{season.urls['edit']}#schedule-tab"
 
         matches = (
             Match.objects.filter(
@@ -4064,7 +4062,7 @@ class CompetitionAdminComponent(AdminComponent):
             ClubAssociation,
             pk=clubassociation_id,
             instance=instance,
-            post_save_redirect=self.redirect(str(club.urls["edit"]) + "#staff-tab"),
+            post_save_redirect=self.redirect(f"{club.urls['edit']}#staff-tab"),
             form_class=ClubAssociationForm,
             form_kwargs={
                 "user": request.user,
