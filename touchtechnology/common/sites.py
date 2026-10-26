@@ -58,7 +58,7 @@ class AlreadyRegistered(Exception):
     pass
 
 
-class Application(object):
+class Application:
     kwargs_form_class = None
     model_form_bases = (ModelForm,)
     required_form_bases = None
@@ -1076,6 +1076,7 @@ class Application(object):
         permission_required=False,
         accept_global_perms=True,
         return_403=None,
+        pre_delete_callback=lambda o: None,
         **kwargs,
     ):
 
@@ -1118,6 +1119,12 @@ class Application(object):
         if post_delete_redirect is None:
             redirect_to = urljoin(request.path, "../..")
             post_delete_redirect = self.redirect(redirect_to)
+
+        # Once the person may delete it, the view may still refuse to, as
+        # ``pre_save_callback`` may refuse a save: its response is sent instead.
+        refused = pre_delete_callback(instance)
+        if isinstance(refused, HttpResponse):
+            return refused
 
         try:
             instance.delete()
@@ -1197,7 +1204,7 @@ class Application(object):
 
 class AccountsSite(Application):
     def __init__(self, name="accounts", app_name="accounts", *args, **kwargs):
-        super(AccountsSite, self).__init__(name=name, app_name=app_name)
+        super().__init__(name=name, app_name=app_name)
         self.profile_form_class = kwargs.pop("profile_form_class", PROFILE_FORM_CLASS)
         self.user_model = get_user_model()
 
@@ -1205,7 +1212,7 @@ class AccountsSite(Application):
     def set_password_form(self):
         class SetPasswordForm(forms.SetPasswordForm):
             def __init__(slf, user, *a, **kw):
-                super(SetPasswordForm, slf).__init__(user, *a, **kw)
+                super().__init__(user, *a, **kw)
                 if user:
                     slf.user = self.user_model.objects.get(pk=user.pk)
 
@@ -1215,7 +1222,7 @@ class AccountsSite(Application):
     def password_change_form(self):
         class PasswordChangeForm(forms.PasswordChangeForm):
             def __init__(slf, user, *a, **kw):
-                super(PasswordChangeForm, slf).__init__(user, *a, **kw)
+                super().__init__(user, *a, **kw)
                 if user:
                     slf.user = self.user_model.objects.get(pk=user.pk)
 

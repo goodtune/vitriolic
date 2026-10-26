@@ -457,8 +457,35 @@ class ContentAdminComponent(AdminComponent):
 
     @staff_login_required_m
     def delete_placeholder_x(self, request, pk, *args, **kwargs):
+        def refuse_while_mounted(placeholder):
+            # Deleting an application deletes every node of the sitemap that
+            # mounts it (``Placeholder.nodes`` is a GenericRelation), so the
+            # person takes those out of the sitemap first.
+            nodes = placeholder.nodes.all()
+            if not nodes:
+                return None
+            messages.error(
+                request,
+                _(
+                    "“%(name)s” was not deleted: the sitemap still uses it at "
+                    "%(nodes)s. Delete those from the sitemap first."
+                )
+                % {
+                    "name": placeholder,
+                    "nodes": ", ".join(
+                        f"{node} ({node.get_absolute_url()})" for node in nodes
+                    ),
+                },
+            )
+            return self.redirect(self.reverse("real_placeholder:list"))
+
         return self.generic_delete(
-            request, Placeholder, pk=pk, permission_required=True, extra_context=kwargs
+            request,
+            Placeholder,
+            pk=pk,
+            permission_required=True,
+            pre_delete_callback=refuse_while_mounted,
+            extra_context=kwargs,
         )
 
     @staff_login_required_m
