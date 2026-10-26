@@ -46,7 +46,9 @@ This is a Python based repository, it provides a Django reusable application tha
 10. **Permission and Security Guidelines**:
     - Protected views must use the same permission level as related functionality (e.g., stream views)
     - Always test both authorized and unauthorized access to protected endpoints
-    - Use `@login_required_m` and `permissions_required()` for consistent security patterns
+    - Admin views: decorate with `@staff_login_required_m` (`touchtechnology/common/decorators.py`) and pass `permission_required=True` to the `generic_*` view (`generic_list`, `generic_edit`, `generic_delete`, ...), which checks the model's permissions, global or on the object, with `django-guardian`
+    - A view that does not end in a `generic_*` view checks with `guardian.utils.get_40x_or_None`, as `_confirm_youtube_destroyed` in `tournamentcontrol/competition/admin.py` does
+    - CompOps views use `staff_required` and the checks in `tournamentcontrol/competition/compops/permissions.py`
 
 ## Test Writing Best Practices
 

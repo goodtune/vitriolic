@@ -218,14 +218,35 @@ longer used:
 The admin's pages with the same file names are in
 `tournamentcontrol/competition/admin/<shell>/`. They stay.
 
-Two names are gone from the Python:
+Three names are gone from the Python:
 
 - `StreamControlForm` in `tournamentcontrol.competition.forms`.
+- `permissions_required` in `tournamentcontrol.competition.sites`. Nothing in
+  the library called it. Code that imports it fails with `ImportError`. To
+  check a permission in a view of your own, call
+  `guardian.utils.get_40x_or_None`, which it wrapped, or give
+  `permission_required=True` to a `generic_*` view of an `Application`.
 - `CompetitionAdminMixin` in `tournamentcontrol.competition.sites`. The admin's
   views `day_runsheet`, `match_results`, `edit_match_detail`,
   `progression_list` and `progress_teams` are now methods of
   `CompetitionAdminComponent` in `tournamentcontrol.competition.admin`. Their
   URLs, permissions and templates in the admin did not change.
+
+The decorator `competition_by_slug` (and `competition_by_slug_m`) in
+`tournamentcontrol.competition.decorators` no longer does two things that only
+the removed pages used:
+
+- It finds the `match` only when the URL also names the `division`. Before, a
+  URL with a season and a match, but no division, gave the view the match. Now
+  the view gets no `match`. This is what already happens to a `team` or a
+  `stage` without a division.
+- It does not change `timestr` into `time`. The view gets `timestr`, the
+  string from the URL.
+
+If a subclass of `CompetitionSite` has URLs like these, its view must find the
+match or parse the time itself. Give the match URL argument a name other than
+`match`, or do not decorate that view with `competition_by_slug_m`, because
+the decorator removes `match` from the arguments.
 
 Issue #310 lists the stream control page as one of the pages that raise an
 error when the YouTube authorisation of a season has expired. That part of

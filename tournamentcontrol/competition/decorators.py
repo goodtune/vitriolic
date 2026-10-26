@@ -2,6 +2,7 @@ import datetime
 import inspect
 import logging
 import time
+from functools import wraps
 from urllib.parse import ParseResult
 
 from dateutil.parser import parse
@@ -9,7 +10,6 @@ from django.db.models import Count, Prefetch
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
-from django.utils.functional import wraps
 
 from tournamentcontrol.competition.models import (
     Club,
@@ -222,7 +222,6 @@ def competition_by_slug(f, *a, **kw):
         match_pk = kwargs.pop("match", None)
 
         datestr = kwargs.pop("datestr", None)
-        timestr = kwargs.pop("timestr", None)
 
         # see if there is an original node, we might need it later
         o_node = kwargs.pop("node", None)
@@ -359,22 +358,6 @@ def competition_by_slug(f, *a, **kw):
                     select_params=(division.pk,),
                 )
 
-            elif season_slug and match_pk:
-                match = get_object_or_404(
-                    Match.objects.select_related(
-                        "stage__division__season__competition"
-                    ).defer(
-                        "live_stream_thumbnail_image",
-                        "stage__division__season__live_stream_thumbnail_image",
-                    ),
-                    pk=match_pk,
-                    stage__division__season__slug=season_slug,
-                    stage__division__season__competition__in=allowed,
-                )
-                season = match.stage.division.season
-                competition = season.competition
-                kwargs["match"] = match
-
             elif season_slug:
                 season = get_object_or_404(
                     Season.objects.select_related("competition").defer(
@@ -445,12 +428,10 @@ def competition_by_slug(f, *a, **kw):
                 kwargs["date"] = parse(datestr).date()
             except ValueError:
                 raise Http404("Invalid date.")
-            if timestr:
-                kwargs["time"] = datetime.time(*time.strptime(timestr, "%H%M")[3:5])
 
-        logger.debug("o_node = {0}".format(o_node))
+        logger.debug("o_node = %s", o_node)
 
-        logger.debug('kwargs["node"] = {node}'.format(node=o_node))
+        logger.debug('kwargs["node"] = %s', o_node)
 
         extra_context = kwargs.pop("extra_context", {})
         extra_context.update(kwargs)
