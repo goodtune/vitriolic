@@ -1338,7 +1338,9 @@ select.wb-multi { max-width: 16rem; }
 	cursor: pointer;
 }
 .wb-menu li > a:hover, .wb-menu li > button:hover, .wb-menu li > form > button:hover { background: var(--wb-accent-tint); }
-.wb-menu li form { margin: 0; }
+/* A form in the menu is a block, not inline as in the row's buttons: an inline
+   form around the block of its button is hit before the button. */
+.wb-menu li form { margin: 0; display: block; }
 .wb-menu .wb-danger-item, .wb-menu .wb-danger-item:hover { color: var(--wb-danger); }
 .wb-menu hr { margin: 0.3rem 0.4rem; border: 0; border-top: 1px solid var(--wb-line); }
 

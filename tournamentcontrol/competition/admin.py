@@ -35,8 +35,10 @@ from guardian.utils import get_40x_or_None
 from touchtechnology.admin.base import AdminComponent, DashboardWidget
 from touchtechnology.admin.explorer import Explorer, Folder, Node, Rel
 from touchtechnology.admin.setup import Setup, Step
+from touchtechnology.admin.trail import tab_of
 from touchtechnology.common.decorators import (
     csrf_exempt_m,
+    require_POST_m,
     staff_login_required_m,
 )
 from touchtechnology.common.prince import PrinceError, PrinceUnavailable, prince
@@ -1342,12 +1344,8 @@ class CompetitionAdminComponent(AdminComponent):
         return urlpatterns
 
     @staff_login_required_m
+    @require_POST_m
     def reorder(self, request, model, pk, direction, parent=None, **kwargs):
-        # Determine where to redirect back to following the reordering
-        redirect_to = request.META.get("HTTP_REFERER", None)
-        if redirect_to is None:
-            raise Http404
-
         # Reconstruct the object from the keyword arguments
         cls = apps.get_model("competition", model)
         obj = cls.objects.get(pk=pk)
@@ -1394,7 +1392,12 @@ class CompetitionAdminComponent(AdminComponent):
             % dict(model=cls._meta.verbose_name, title=obj.title, direction=direction),
         )
 
-        return self.redirect(redirect_to)
+        # Return to the list the arrows are in: the tab of the parent's page
+        # that lists the object, or the object's own page without a parent.
+        if parent is None:
+            return self.redirect(obj.urls["edit"])
+        owner = getattr(obj, parent)
+        return self.redirect(f"{owner.urls['edit']}{tab_of(type(owner), cls)}")
 
     @staff_login_required_m
     def index(self, request, **kwargs):

@@ -14,7 +14,7 @@ from django.db import connection
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
-from django.urls import path, re_path, reverse_lazy
+from django.urls import path, re_path, reverse, reverse_lazy
 from django.utils.encoding import smart_str
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
@@ -25,7 +25,7 @@ from touchtechnology.admin.errors import ErrorPages
 from touchtechnology.admin.shells import DEFAULT_SHELL, get_shell
 from touchtechnology.admin.templatetags.admin import allowed
 from touchtechnology.admin.views import AdminLoginView
-from touchtechnology.common.decorators import staff_login_required_m
+from touchtechnology.common.decorators import require_POST_m, staff_login_required_m
 from touchtechnology.common.models import SitemapNode
 
 logger = logging.getLogger(__name__)
@@ -244,8 +244,12 @@ class AdminSite(DjangoAdminSite):
         return response
 
     @staff_login_required_m
+    @require_POST_m
     def reorder(self, request, id, direction, *args, **kwargs):
         node = get_object_or_404(SitemapNode, pk=id)
-        getattr(node, "move_%s" % direction)()
-        redirect_to = request.META.get("HTTP_REFERER", self.reverse("index"))
-        return HttpResponseRedirect(redirect_to)
+        getattr(node, f"move_{direction}")()
+        # Back to the list of the folder the node is in.
+        query = {"r": node.parent_id} if node.parent_id else None
+        return HttpResponseRedirect(
+            reverse(f"{self.name}:content:index", query=query, current_app=self.name)
+        )
