@@ -3,6 +3,7 @@ from test_plus import TestCase
 from touchtechnology.admin.tests.links import LinksMixin
 from touchtechnology.admin.tests.shells import per_shell
 from touchtechnology.common.tests.factories import UserFactory
+from tournamentcontrol.competition.models import MatchScoreSheet
 from tournamentcontrol.competition.tests import factories
 
 
@@ -72,7 +73,10 @@ class CompetitionLinksTests(LinksMixin, TestCase):
 
 
 class CompetitionRedirectsTests(TestCase):
-    """Deleting a season, or saving a team's permissions, ends on a page."""
+    """
+    Deleting a season or a score sheet, or saving a team's permissions, ends on
+    a page.
+    """
 
     def setUp(self):
         super().setUp()
@@ -87,6 +91,26 @@ class CompetitionRedirectsTests(TestCase):
                 season.pk,
             )
         self.assert_http_302_found(url=f"{season.competition.urls['edit']}#seasons-tab")
+
+    def test_deleting_a_score_sheet_returns_to_the_match(self):
+        # A match's score sheets have no list of their own: they are a tab of
+        # the match's page.
+        match = factories.MatchFactory.create()
+        scoresheet = MatchScoreSheet.objects.create(
+            match=match, image="harness/score-sheet"
+        )
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:division:stage:match:"
+                "matchscoresheet:delete",
+                *scoresheet._get_url_args(),
+            )
+            self.assert_http_302_found(url=f"{match.urls['edit']}#scoresheets-tab")
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:match:edit",
+                *match._get_url_args(),
+            )
+        self.assertCountEqual(match.scoresheets.all(), [])
 
     def test_saving_the_permissions_of_a_team_returns_to_the_division(self):
         team = factories.TeamFactory.create()
