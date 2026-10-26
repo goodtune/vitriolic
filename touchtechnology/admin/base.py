@@ -221,6 +221,12 @@ class DashboardWidget:
 
     @classmethod
     def show(cls):
+        """
+        Whether the widget has anything to show. The home page asks before it
+        draws the widget (``AdminSite.dashboard``) and leaves it out when the
+        answer is false. Asked of the class: the page instantiates only the
+        widgets it draws.
+        """
         return True
 
     def _get_context(self):
