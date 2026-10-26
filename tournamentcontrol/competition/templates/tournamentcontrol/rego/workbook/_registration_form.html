@@ -20,7 +20,7 @@
 <div class="p-sheet">
 {% chunk "registration-form-disclaimer" %}
 
-{% for team, data in teams.items %}
+{% for team, sheet in data.items %}
 	<div class="rf-division division">{{ team.division.title }}</div>
 
 	<div class="rf-team team">{{ team.title }}</div>
@@ -35,7 +35,7 @@
 
 	<table class="p-table staff">
 		<tbody>
-			{% for role, people in data.staff.items %}
+			{% for role, people in sheet.staff.items %}
 				{% for first_name, last_name, date_of_birth, email in people %}
 					<tr>
 						{% if forloop.first %}
@@ -61,7 +61,7 @@
 		</thead>
 
 		<tbody>
-			{% for number, first_name, last_name, date_of_birth, email in data.players %}
+			{% for number, first_name, last_name, date_of_birth, email in sheet.players %}
 				<tr>
 					<td>{{ number }}</td>
 					<td>{{ first_name|htmlentities }}</td>
