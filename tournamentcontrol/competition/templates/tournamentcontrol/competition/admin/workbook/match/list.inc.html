@@ -32,3 +32,9 @@
 	<li><a href="{{ obj.urls.referees }}">{% icon "flag" %}{% trans "Referees" %}</a></li>
 	{{ block.super }}
 {% endblock row-buttons-items %}
+
+{% block row-buttons-detail %}
+	{% if obj.statistics_ready %}
+		<li><a href="{{ obj.urls.detail }}">{% icon "chart-bar" %}{% trans "Statistics" %}</a></li>
+	{% endif %}
+{% endblock row-buttons-detail %}
