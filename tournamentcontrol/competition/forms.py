@@ -1162,8 +1162,6 @@ class UndecidedTeamForm(UserMixin, ModelForm):
         }
 
     def clean_formula(self):
-        # TODO move to general clean and insert error back on field so that
-        # validation of `label` is not impacted by this.
         formula = self.cleaned_data.get("formula").upper()
         if formula and not stage_group_position_re.match(formula):
             raise forms.ValidationError(_("This is not a valid team formula."))
@@ -1172,16 +1170,18 @@ class UndecidedTeamForm(UserMixin, ModelForm):
             raise forms.ValidationError(error)
         return formula
 
-    def clean_label(self):
-        formula = self.cleaned_data.get("formula")
-        label = self.cleaned_data.get("label")
-        if formula:
-            label = ""
-        elif not label:
-            raise forms.ValidationError(
-                _("You must specify a label when formula is blank.")
+    def clean(self):
+        data = super().clean() or self.cleaned_data
+        if data.get("formula"):
+            # The formula names the team, so the label is not saved.
+            data["label"] = ""
+        elif not self.has_error("formula") and not data.get("label"):
+            # Only a formula that is blank, not one that was refused, needs a
+            # label in its place.
+            self.add_error(
+                "label", _("You must specify a label when formula is blank.")
             )
-        return label
+        return data
 
 
 class TeamForm(UpstreamTitleMixin, SuperUserSlugMixin, ModelForm):
