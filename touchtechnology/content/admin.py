@@ -1,5 +1,6 @@
 import logging
 import os
+from collections import namedtuple
 
 from django.contrib import messages
 from django.core.files.storage import default_storage
@@ -341,16 +342,18 @@ class ContentAdminComponent(AdminComponent):
     def list_pages(self, request, **extra_context):
         try:
             root = SitemapNode.objects.get(pk=request.GET["r"])
-            descendants = root.get_descendants()
-            nodes = descendants.filter(self.filter).filter(level=root.level + 1)
         except KeyError:
-            nodes = SitemapNode.objects.filter(self.filter).filter(level=0)
+            nodes = SitemapNode.objects.filter(level=0)
         else:
+            # Each row's parent is this very ``root``, so a row's address is
+            # the folder's and its own slug: the folder's is worked out once.
+            root._cached_absolute_url = root.get_absolute_url()
+            nodes = root.children.all()
             # The folder being looked in, for the page's heading.
             extra_context.setdefault("root", root)
         return self.generic_list(
             request,
-            nodes,
+            nodes.filter(self.filter).select_related("content_type"),
             paginate_by=0,
             permission_required=True,
             extra_context=extra_context,
@@ -667,7 +670,6 @@ class ContentAdminComponent(AdminComponent):
         object_list = [Folder(d[0], d[1]) for d in directories] + [
             File(f, f) for f in files
         ]
-        from collections import namedtuple
 
         context = {
             "path": path,
