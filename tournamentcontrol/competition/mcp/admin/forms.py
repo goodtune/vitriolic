@@ -15,6 +15,7 @@ from tournamentcontrol.competition.models import Match, SeasonMatchTime
 from tournamentcontrol.competition.utils import (
     first_stage_position_error,
     stage_group_position_re,
+    zero_position_error,
 )
 
 EVAL_FIELDS = (
@@ -47,10 +48,10 @@ def position_eval_error(stage, team_eval):
             "(stage 1, pool 1, position 2), W or L."
         )
     stage_number, group_number, position = syntax.groups()
-    if "0" in (stage_number, group_number, position):
-        return f"{team_eval}: stage, pool and position numbers start at 1."
-    # The rule the admin site's forms apply too.
-    error = first_stage_position_error(stage, team_eval)
+    # The rules the admin site's forms apply too.
+    error = zero_position_error(team_eval) or first_stage_position_error(
+        stage, team_eval
+    )
     if error:
         return error
     # Resolved as ``utils.stage_group_position`` resolves it when the

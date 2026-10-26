@@ -105,9 +105,11 @@ from tournamentcontrol.competition.utils import (
     FauxQueryset,
     create_thumbnail_preview,
     first_stage_position_error,
+    first_stage_position_message,
     legitimate_bye_match,
     match_unplayed,
     time_choice,
+    zero_position_error,
 )
 
 logger = logging.getLogger(__name__)
@@ -1162,26 +1164,28 @@ class UndecidedTeamForm(UserMixin, ModelForm):
         }
 
     def clean_formula(self):
-        # TODO move to general clean and insert error back on field so that
-        # validation of `label` is not impacted by this.
         formula = self.cleaned_data.get("formula").upper()
         if formula and not stage_group_position_re.match(formula):
             raise forms.ValidationError(_("This is not a valid team formula."))
-        error = first_stage_position_error(self.instance.stage, formula)
+        error = zero_position_error(formula) or first_stage_position_error(
+            self.instance.stage, formula
+        )
         if error:
             raise forms.ValidationError(error)
         return formula
 
-    def clean_label(self):
-        formula = self.cleaned_data.get("formula")
-        label = self.cleaned_data.get("label")
-        if formula:
-            label = ""
-        elif not label:
-            raise forms.ValidationError(
-                _("You must specify a label when formula is blank.")
+    def clean(self):
+        data = super().clean() or self.cleaned_data
+        if data.get("formula"):
+            # The formula names the team, so the label is not saved.
+            data["label"] = ""
+        elif not self.has_error("formula") and not data.get("label"):
+            # Only a formula that is blank, not one that was refused, needs a
+            # label in its place.
+            self.add_error(
+                "label", _("You must specify a label when formula is blank.")
             )
-        return label
+        return data
 
 
 class TeamForm(UpstreamTitleMixin, SuperUserSlugMixin, ModelForm):
@@ -2748,7 +2752,29 @@ class DivisionStructureJSONForm(forms.Form):
                 "A division of that name already exists in this season."
             )
 
+        errors = self._first_stage_position_errors(structure)
+        if errors:
+            raise forms.ValidationError(errors)
+
         return json_data
+
+    def _first_stage_position_errors(self, structure):
+        """
+        The positions in the first stage's draw formats that name the stage
+        before it, once each. The division will have no stage before its
+        first, so they name no team; the undecided-team form and the draw
+        wizard refuse them too (``first_stage_position_error``).
+        """
+        first = structure.stages[0]
+        references = dict.fromkeys(
+            reference
+            for text in structure.stage_draw_formats(first)
+            for round in draw_generator(None, text).rounds
+            for descriptor in round.matches
+            for reference in (descriptor.home_team, descriptor.away_team)
+        )
+        errors = [first_stage_position_message(first.title, ref) for ref in references]
+        return [error for error in errors if error]
 
     def get_division_structure(self):
         """Get the validated DivisionStructure instance."""

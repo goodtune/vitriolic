@@ -28,7 +28,7 @@ __all__ = (
 )
 
 
-class MakeDirectoryMixin(object):
+class MakeDirectoryMixin:
     def makedirs(self, name, path=None):
         parts = [p for p in [self.location, path, name] if p]
         directory = os.path.join(*parts)
@@ -47,14 +47,14 @@ class MakeDirectoryMixin(object):
         os.rmdir(directory)
 
 
-class OverwriteMixin(object):
+class OverwriteMixin:
     def get_available_name(self, name):
         while self.exists(name):
             self.delete(name)
         return name
 
 
-class WalkMixin(object):
+class WalkMixin:
     def walk(self, top=None):
         """
         Generator that returns tuples similar to the built-in `os.walk`, but
@@ -86,12 +86,27 @@ class WalkMixin(object):
 class FileSystemStorage(
     MakeDirectoryMixin, WalkMixin, TenantStorageMixin, FileSystemStorageBase
 ):
-    def __init__(self, location=STORAGE_FOLDER, base_url=STORAGE_URL, *args, **kwargs):
-        super(FileSystemStorage, self).__init__(*args, **kwargs)
-        if location is not None:
-            self.location = os.path.join(self.location, location)
-        if base_url is not None:
-            self.base_url = urljoin(self.base_url, base_url)
+    """
+    Django's storage, keeping the site's files in the folder that
+    ``TOUCHTECHNOLOGY_STORAGE_FOLDER`` names inside ``MEDIA_ROOT`` and serving
+    them from the URL that ``TOUCHTECHNOLOGY_STORAGE_URL`` names inside
+    ``MEDIA_URL``. Without those settings it is ``MEDIA_ROOT`` and ``MEDIA_URL``
+    themselves. A ``location`` or ``base_url`` given to it takes the setting's
+    place.
+    """
+
+    def __init__(self, location=None, base_url=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if location is None:
+            location = STORAGE_FOLDER
+        if base_url is None:
+            base_url = STORAGE_URL
+        # The settings are lazy objects: an unset one is not ``None`` but
+        # false, and ``os.path.join`` wants the value, not the object.
+        if location:
+            self.location = os.path.join(self.location, str(location))
+        if base_url:
+            self.base_url = urljoin(self.base_url, str(base_url))
 
     def writable(self, path):
         if not self.exists(self.path(path)):
@@ -106,16 +121,16 @@ class ResizedImageFieldFile(ImageFieldFile):
         self.background = background
         field = instance._meta.get_field(field_name)
         path, filename = os.path.split(getattr(instance, field_name).name)
-        dim = "%sx%s" % (self.maxwidth, self.maxheight)
-        name = os.path.join(path, dim, "%s.jpg" % instance.pk)
-        super(ResizedImageFieldFile, self).__init__(instance, field, name)
+        dim = f"{self.maxwidth}x{self.maxheight}"
+        name = os.path.join(path, dim, f"{instance.pk}.jpg")
+        super().__init__(instance, field, name)
 
     def regenerate(self):
         image_field = getattr(self.instance, self.field_name)
         if not self.storage.exists(image_field):
             logger.warning(
-                'Original file "{0}" does not exist, failed to '
-                "regenerate sized image.".format(image_field)
+                'Original file "%s" does not exist, failed to regenerate sized image.',
+                image_field,
             )
             return
 

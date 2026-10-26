@@ -503,6 +503,20 @@ class ExplicitStageReferenceTests(TestCase):
         self.assertEqual(match.get_away_team_plain(), "S0G1P1")
         self.assertEqual(match.eval(), ({"title": "S9P1"}, {"title": "S0G1P1"}))
 
+    def test_undecided_team_with_a_zero_is_shown_as_its_formula(self):
+        """
+        Stages and pools are numbered from one, so ``S0`` and ``G0`` name
+        none: the team is shown as written and may be any team of the
+        division, as for a stage or pool past the last.
+        """
+        for formula in ("S0P1", "G0P1"):
+            with self.subTest(formula=formula):
+                undecided = UndecidedTeamFactory.create(
+                    stage=self.semis, formula=formula, label=""
+                )
+                self.assertEqual(str(undecided), formula)
+                self.assertCountEqual(undecided.choices.all(), self.teams)
+
     def test_first_stage_names_its_own_ladder(self):
         """
         ``S1P1`` in the first stage is first place on that stage's ladder,
