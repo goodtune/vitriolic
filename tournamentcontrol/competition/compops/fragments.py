@@ -16,6 +16,8 @@ PAGES = {
             "scorers_count",
             "scorers_modal",
             "streams",
+            "ground_stream",
+            "season_event",
             "stream_buttons",
             "streams_count",
             "activity",
