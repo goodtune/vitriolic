@@ -391,7 +391,7 @@ class ApplicationListObjectPermissionTests(ApplicationListMixin, TestCase):
         # Asking what this person may do over the list as a whole costs the
         # same for any number of rows: the Explorer asks once more, for the
         # import path's column.
-        self.assertListQueries(self.editor, self.by_shell(workbook=22, explorer=23))
+        self.assertListQueries(self.editor, self.by_shell(workbook=12, explorer=13))
 
     def test_each_row_shows_how_many_pages_mount_it(self):
         self.assertPagesShown(self.editor)

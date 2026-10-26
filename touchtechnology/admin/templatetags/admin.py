@@ -18,11 +18,30 @@ def version_string(context):
     return touchtechnology.admin.__version__
 
 
+def _app_labels_granted(request):
+    """
+    The applications ``request.user`` holds a permission in, over one object
+    or through a group: asked of the database once for the request, however
+    many components the menu weighs and however often the page asks.
+    """
+    labels = getattr(request, "_admin_app_labels", None)
+    if labels is None:
+        user = request.user
+        objects = user.userobjectpermission_set.values_list(
+            "permission__content_type__app_label", flat=True
+        )
+        groups = user.groups.values_list(
+            "permissions__content_type__app_label", flat=True
+        )
+        labels = request._admin_app_labels = set(objects.union(groups))
+    return labels
+
+
 @register.filter
 def allowed(components, request):
     """
     Given a list of components, return only those which are accessible to the
-    specified user. Used to hide options from the tab-bar in the admin UI.
+    specified user. Used to hide options from the admin's menu.
     """
     if components is None:
         return []
@@ -50,14 +69,7 @@ def allowed(components, request):
         if request.user.has_module_perms(module):
             return True
 
-        if request.user.userobjectpermission_set.filter(
-            permission__content_type__app_label=module
-        ):
-            return True
-
-        if request.user.groups.filter(
-            permissions__content_type__app_label=module
-        ).distinct():
+        if module in _app_labels_granted(request):
             return True
 
         # FIXME once all applications are protected, swap this for False.
