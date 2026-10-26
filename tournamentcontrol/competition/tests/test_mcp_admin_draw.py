@@ -1522,6 +1522,11 @@ class MatchEvalTests(DemoMixin, TestCase):
                 "numbers start at 1.",
             ),
             (
+                {"home_team_eval": "S01P1"},
+                "Validation failed: home_team_eval: S01P1: stage, pool and position "
+                "numbers have no leading zero.",
+            ),
+            (
                 {"home_team_eval": "X1"},
                 "Validation failed: home_team_eval: X1 is not an eval: use P1 "
                 "(position on the ladder of the previous stage), G2P3 (position 3 "
