@@ -104,6 +104,7 @@ from tournamentcontrol.competition.upstream import (
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
     create_thumbnail_preview,
+    first_stage_position_error,
     legitimate_bye_match,
     match_unplayed,
     time_choice,
@@ -1166,6 +1167,9 @@ class UndecidedTeamForm(UserMixin, ModelForm):
         formula = self.cleaned_data.get("formula").upper()
         if formula and not stage_group_position_re.match(formula):
             raise forms.ValidationError(_("This is not a valid team formula."))
+        error = first_stage_position_error(self.instance.stage, formula)
+        if error:
+            raise forms.ValidationError(error)
         return formula
 
     def clean_label(self):
@@ -2310,7 +2314,26 @@ class DrawGenerationForm(BootstrapFormControlMixin, forms.Form):
             logger.exception("Can't build draw without a format selection.")
         else:
             data.setdefault("matches", matches)
+            self._clean_positions(matches)
         return data
+
+    def _clean_positions(self, matches):
+        """Refuse a format whose positions name no team on this stage."""
+        stage = (
+            self.instance.stage
+            if isinstance(self.instance, StageGroup)
+            else self.instance
+        )
+        team_evals = dict.fromkeys(
+            team_eval
+            for match in matches
+            for team_eval in (match.home_team_eval, match.away_team_eval)
+            if team_eval
+        )
+        for team_eval in team_evals:
+            error = first_stage_position_error(stage, team_eval)
+            if error:
+                self.add_error("format", error)
 
     def get_matches(self):
         format = self.cleaned_data.get("format")

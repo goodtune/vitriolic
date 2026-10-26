@@ -572,6 +572,29 @@ def stage_group_position(stage, formula):
     return s, g, p
 
 
+def first_stage_position_error(stage, formula):
+    """
+    Why the position ``formula`` names no team when a match or an undecided
+    team of ``stage`` uses it, or ``None`` when this rule allows it. A
+    position with no stage in it (``P1``, ``G1P2``) is a place on the ladder
+    of the stage ``stage`` comes after, as ``stage_group_position`` resolves
+    it, and the first stage of a division comes after none. A position that
+    names its stage (``S1G1P1``) and a winner or loser (``W``, ``L``) are not
+    this rule's to refuse.
+    """
+    match = stage_group_position_re.match(formula)
+    if match is None or match["stage"] is not None:
+        return None
+    try:
+        stage.comes_after
+    except stage.DoesNotExist:
+        return _(
+            "%(formula)s refers to the stage before this one, but %(stage)s is "
+            "the first stage of the division."
+        ) % {"formula": formula, "stage": stage.title}
+    return None
+
+
 #
 # Scorecards
 #
