@@ -279,9 +279,7 @@ class NonFileSystemStorageMediaDeleteTests(IconMixin, TestCase):
             override_settings(
                 STORAGES={
                     **settings.STORAGES,
-                    "default": {
-                        "BACKEND": "django.core.files.storage.InMemoryStorage"
-                    },
+                    "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
                 },
             )
         )
@@ -480,7 +478,10 @@ class MediaPermissionTests(MediaStorageMixin, DeleteFormMixin, TestCase):
                 f'<div class="wb-menu" popover id="wbm-file-{row}"><ul>'
                 f'{"".join(f"<li>{item}</li>" for item in items)}</ul></div>'
             ),
-            explorer=f'<div class="menu-panel" id="file-menu-{row}">{"".join(items)}</div>',
+            explorer=(
+                f'<div class="menu-panel" id="file-menu-{row}">'
+                f'{"".join(items)}</div>'
+            ),
         )
 
     def view_link(self, name):
@@ -502,7 +503,9 @@ class MediaPermissionTests(MediaStorageMixin, DeleteFormMixin, TestCase):
         self.assertLoginRequired(
             "admin:content:media:delete", "reports/", "minutes.pdf", method="post"
         )
-        self.assertEqual(default_storage.listdir("reports"), (["2026"], ["minutes.pdf"]))
+        self.assertEqual(
+            default_storage.listdir("reports"), (["2026"], ["minutes.pdf"])
+        )
 
     def test_a_superuser_lists_and_deletes_files(self):
         superuser = SuperUserFactory.create(username="superuser")
@@ -541,7 +544,9 @@ class MediaPermissionTests(MediaStorageMixin, DeleteFormMixin, TestCase):
             self.assert_http_403_forbidden()
             self.post("admin:content:media:delete", "reports/", "minutes.pdf")
             self.assert_http_403_forbidden()
-        self.assertEqual(default_storage.listdir("reports"), (["2026"], ["minutes.pdf"]))
+        self.assertEqual(
+            default_storage.listdir("reports"), (["2026"], ["minutes.pdf"])
+        )
 
     def test_a_person_who_may_view_files_sees_them_without_delete(self):
         viewer = self.make_user("viewer", perms=["content.view_file"])
@@ -564,7 +569,9 @@ class MediaPermissionTests(MediaStorageMixin, DeleteFormMixin, TestCase):
             self.assert_http_403_forbidden()
             self.post("admin:content:media:delete", "reports/2026/")
             self.assert_http_403_forbidden()
-        self.assertEqual(default_storage.listdir("reports"), (["2026"], ["minutes.pdf"]))
+        self.assertEqual(
+            default_storage.listdir("reports"), (["2026"], ["minutes.pdf"])
+        )
 
     def test_a_person_who_may_delete_files_is_offered_to(self):
         deleter = self.make_user(
