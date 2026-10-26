@@ -9,13 +9,22 @@
 {% block table-columns %}
 	<td class="title-cell">
 		{% if change_perm in object_perms %}
-			<a href="{{ obj.urls.edit }}">{% icon "puzzle" %}<span>{{ obj }}</span></a>
+			{% url 'admin:content:real_placeholder:edit' obj.pk as edit_url %}
+			<a href="{{ edit_url }}">{% icon "puzzle" %}<span>{{ obj }}</span></a>
 		{% else %}
 			<span>{{ obj }}</span>
 		{% endif %}
 		{% if obj.nodes.count %}<span class="tag">{% blocktrans count count=obj.nodes.count %}{{ count }} page{% plural %}{{ count }} pages{% endblocktrans %}</span>{% endif %}
 	</td>
 	{% if add_perm in model|hasperm:user %}<td class="wide-only"><code>{{ obj.path }}</code></td>{% endif %}
+{% endblock %}
+
+{% block row-buttons-items %}
+	{# An application has no ``urls`` of its own, so the list's menu would be empty. #}
+	{% url 'admin:content:real_placeholder:edit' obj.pk as edit_url %}
+	{% url 'admin:content:real_placeholder:delete' obj.pk as delete_url %}
+	{% if change_perm in object_perms %}<a href="{{ edit_url }}">{% icon "edit" %}{% trans "Edit" %}</a>{% endif %}
+	{% if delete_perm in object_perms %}{% include "touchtechnology/admin/explorer/_delete.html" with action=delete_url %}{% endif %}
 {% endblock %}
 
 {% block empty-row-colspan %}3{% endblock %}

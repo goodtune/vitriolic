@@ -29,7 +29,10 @@
 						{% block row-buttons-items %}
 							{% if obj.urls.detail %}<li><a href="{{ obj.urls.detail }}">{% icon "eye" %}{% trans "View" %}</a></li>{% endif %}
 							{% if obj.urls.edit %}<li><a href="{{ obj.urls.edit }}">{% icon "folder-open" %}{% trans "Open" %}</a></li>{% endif %}
-							{% if obj.urls.delete %}<li>{% include "touchtechnology/admin/workbook/_delete.html" with action=obj.urls.delete thing=obj %}</li>{% endif %}
+							{% if obj.urls.delete %}
+								{% if obj.icon == "folder" %}{% trans "folder" as kind %}{% else %}{% trans "file" as kind %}{% endif %}
+								<li>{% include "touchtechnology/admin/workbook/_delete.html" with action=obj.urls.delete thing=obj %}</li>
+							{% endif %}
 						{% endblock row-buttons-items %}
 					</ul>
 				</div>

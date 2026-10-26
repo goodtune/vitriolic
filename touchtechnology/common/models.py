@@ -179,18 +179,27 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         except AttributeError:
             pass
 
-        parts = [
-            ancestor.slug
-            for ancestor in self.get_ancestors(include_self=True)
-            if not (ancestor.is_root_node() and ancestor.slug == SITEMAP_ROOT)
-        ]
+        if not self.is_root_node() and SitemapNode.parent.is_cached(self):
+            # The parent is at hand (a list of its children has it), and so
+            # is its address: there is no need to ask for every ancestor.
+            path = join(self.parent.get_absolute_url(), self.slug)
+        else:
+            # A node at the top of the tree is the whole of its line.
+            ancestors = (
+                [self] if self.is_root_node() else self.get_ancestors(include_self=True)
+            )
+            parts = [
+                ancestor.slug
+                for ancestor in ancestors
+                if not (ancestor.is_root_node() and ancestor.slug == SITEMAP_ROOT)
+            ]
 
-        path = "/"
+            path = "/"
 
-        try:
-            path += join(*parts)
-        except TypeError:
-            logger.debug("SITEMAP_ROOT=%r", self)
+            try:
+                path += join(*parts)
+            except TypeError:
+                logger.debug("SITEMAP_ROOT=%r", self)
 
         if settings.APPEND_SLASH and not path.endswith("/"):
             path += "/"
@@ -229,14 +238,14 @@ class SitemapNode(NodeRelationMixin, SitemapNodeBase):
         # touchtechnology.admin application, but you probably won't be using
         # the .urls API if that isn't true anyway!
         try:
-            namespace = "admin:content:" + self.content_type.name
+            namespace = f"admin:content:{self.content_type.name}"
         except AttributeError:
             namespace = "admin:content:folder"
         args = (self.id,)
         crud = {
-            "edit": reverse_lazy("%s:edit" % namespace, args=args),
-            "delete": reverse_lazy("%s:delete" % namespace, args=args),
-            "perms": reverse_lazy("%s:perms" % namespace, args=args),
+            "edit": reverse_lazy(f"{namespace}:edit", args=args),
+            "delete": reverse_lazy(f"{namespace}:delete", args=args),
+            "perms": reverse_lazy(f"{namespace}:perms", args=args),
         }
         return crud
 

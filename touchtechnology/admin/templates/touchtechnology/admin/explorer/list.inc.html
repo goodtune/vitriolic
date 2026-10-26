@@ -69,10 +69,7 @@ the actions above the list (actions), the buttons beside each row
 																	<a href="{{ perms_url }}">{% icon "lock" %}{% trans "Permissions" %}</a>
 																{% endif %}
 																{% if delete_url and delete_perm in object_perms %}
-																	<form method="post" action="{{ delete_url }}" data-confirm="{% blocktrans with type=model|type %}The {{ type }} “{{ obj }}” will be removed for good.{% endblocktrans %}" data-confirm-title="{% blocktrans with type=model|type %}Delete this {{ type }}?{% endblocktrans %}" data-confirm-label="{% trans "Delete" %}">
-																		{% csrf_token %}
-																		<button type="submit" class="destructive-item">{% icon "trash" %}{% trans "Delete" %}</button>
-																	</form>
+																	{% include "touchtechnology/admin/explorer/_delete.html" with action=delete_url %}
 																{% endif %}
 															{% endwith %}
 														{% endblock row-buttons-items %}
