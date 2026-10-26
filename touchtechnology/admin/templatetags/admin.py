@@ -41,7 +41,8 @@ def _app_labels_granted(request):
 def allowed(components, request):
     """
     Given a list of components, return only those which are accessible to the
-    specified user. Used to hide options from the admin's menu.
+    specified user. Used to hide options from the admin's menu, and their
+    widgets from its home page (``AdminSite.dashboard``).
     """
     if components is None:
         return []
