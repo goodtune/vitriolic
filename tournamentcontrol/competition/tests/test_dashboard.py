@@ -30,15 +30,15 @@ from tournamentcontrol.competition.tests.factories import (
     UndecidedTeamFactory,
 )
 
-#: The widgets the competition puts on the admin's home page: the title of
-#: each, and its icon in the Workbook and the Explorer.
-WIDGETS = (
-    ("Awaiting Scores", "list-checks", "results"),
-    ("Progress Teams", "layers", "stage"),
-    ("Season Reports", "printer", "print"),
-    ("Awaiting Detailed Results", "chart-bar", "chart"),
-    ("Awaiting MVP Points", "chart-bar", "chart"),
-)
+#: The widgets the competition puts on the admin's home page: the icon of each,
+#: by its title, in the Workbook and the Explorer.
+WIDGETS = {
+    "Awaiting Scores": {"workbook": "list-checks", "explorer": "results"},
+    "Progress Teams": {"workbook": "layers", "explorer": "stage"},
+    "Season Reports": {"workbook": "printer", "explorer": "print"},
+    "Awaiting Detailed Results": {"workbook": "chart-bar", "explorer": "chart"},
+    "Awaiting MVP Points": {"workbook": "chart-bar", "explorer": "chart"},
+}
 
 
 class OpenCompetitionAdminComponent(CompetitionAdminComponent):
@@ -398,13 +398,12 @@ class HomePageMixin(MenuMixin):
     def widget_headings(self, *titles):
         """
         The heading of each of the competition's widgets, or of those named by
-        ``titles``, as the shell draws it.
+        ``titles``, as the shell draws it. A title the competition has no widget
+        for is an error, so a test cannot assert nothing by mistake.
         """
         return [
-            f"<h2>{self.icon(self.by_shell(workbook=workbook, explorer=explorer))}"
-            f"{title}</h2>"
-            for title, workbook, explorer in WIDGETS
-            if not titles or title in titles
+            f"<h2>{self.icon(self.by_shell(**WIDGETS[title]))}{title}</h2>"
+            for title in titles or WIDGETS
         ]
 
     def assertWidgetsShown(self, *titles):
