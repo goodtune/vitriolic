@@ -87,8 +87,6 @@ class Page(models.Model):
     def __repr__(self):
         return f"<Page: #{self.pk}>"
 
-    """Reusable fragment of HTML content."""
-
 
 class Content(models.Model):
     """Reusable fragment of HTML content."""
