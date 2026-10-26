@@ -7,6 +7,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.html import escape
 from freezegun import freeze_time
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
@@ -15,6 +16,11 @@ from test_plus import TestCase
 from tournamentcontrol.competition.compops import events, streams
 from tournamentcontrol.competition.models import LiveStreamEvent, Match
 from tournamentcontrol.competition.tests import factories
+from tournamentcontrol.competition.tests.test_compops_results import (
+    DATASTAR,
+    HELD,
+    element_patches,
+)
 from tournamentcontrol.competition.tests.test_live_stream_transition import (
     YOUTUBE_SEASON,
     youtube_mock,
@@ -303,6 +309,157 @@ class MatchTransitionTests(StreamsFixture):
         body = b"".join(response.streaming_content).decode()
         self.assertIn("quota", body)
         self.assertEqual(events.recent(self.season.pk), [])
+
+
+class HeldStreamTests(StreamsFixture):
+    """
+    A block of the streams column that shows why an action was refused is
+    held: a re-render of the whole column (the event stream's snapshot, the
+    layout toggle, a push about another stream) leaves it as it is. A refused
+    block is sent alone and whole, in replace mode; an action that goes
+    through sends the column with no block held.
+    """
+
+    def refusing(self, reason):
+        """A YouTube service that refuses every transition with ``reason``."""
+        service = youtube_mock("testing")
+        service.liveBroadcasts.return_value.transition.return_value.execute.side_effect = HttpError(
+            resp=mock.Mock(status=403, reason=reason), content=b""
+        )
+        return service
+
+    def openings(self):
+        """The patches of the last response as (mode, opening tag)."""
+        return [
+            (mode, html.splitlines()[0])
+            for mode, html in element_patches(self.last_response)
+        ]
+
+    def column(self):
+        """The mode and the html of the patch to the streams column."""
+        (patch,) = (
+            (mode, html)
+            for mode, html in element_patches(self.last_response)
+            if html.startswith('<div id="streams"')
+        )
+        return patch
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_a_refused_action_holds_its_ground_with_the_reason(self, build):
+        build.return_value = self.refusing("quota")
+        with (
+            self.login(self.streamer),
+            self.assertLogs("tournamentcontrol.competition.compops.streams"),
+        ):
+            self.post(
+                "compops:match-stream",
+                match_pk=self.current.pk,
+                status="live",
+                extra=DATASTAR,
+                **self.kw,
+            )
+        self.assert_http_200_ok()
+        ((mode, html),) = element_patches(self.last_response)
+        self.assertEqual(mode, "replace")
+        self.assertEqual(
+            html.splitlines()[0],
+            f'<div id="stream-{self.field1.pk}" class="stream" {HELD}>',
+        )
+        message = f"{streams.describe(self.current)}: quota"
+        self.assertInHTML(f'<p class="warn">{escape(message)}</p>', html, count=1)
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_a_refused_whole_slot_holds_each_ground_refused(self, build):
+        build.return_value = self.refusing("quota")
+        field2 = factories.GroundFactory.create(
+            venue=self.field1.venue, title="Field 2", live_stream=True
+        )
+        self.make(
+            self.current.stage,
+            10,
+            40,
+            play_at=field2,
+            live_stream=True,
+            external_identifier="yt-field-2",
+        )
+        with (
+            self.login(self.streamer),
+            self.assertLogs("tournamentcontrol.competition.compops.streams"),
+        ):
+            self.post(
+                "compops:slot-stream",
+                slot_key="1040",
+                status="live",
+                extra=DATASTAR,
+                **self.kw,
+            )
+        self.assertEqual(
+            self.openings(),
+            [
+                (
+                    "replace",
+                    f'<div id="stream-{self.field1.pk}" class="stream" {HELD}>',
+                ),
+                ("replace", f'<div id="stream-{field2.pk}" class="stream" {HELD}>'),
+            ],
+        )
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_a_refused_event_action_holds_the_event_with_the_reason(self, build):
+        build.return_value = self.refusing("quota")
+        with (
+            self.login(self.streamer),
+            self.assertLogs("tournamentcontrol.competition.compops.streams"),
+        ):
+            self.post(
+                "compops:event-stream",
+                event_pk=self.event.pk,
+                status="testing",
+                extra=DATASTAR,
+                **self.kw,
+            )
+        ((mode, html),) = element_patches(self.last_response)
+        self.assertEqual(mode, "replace")
+        self.assertEqual(
+            html.splitlines()[0],
+            f'<div id="event-{self.event.pk}" class="stream" {HELD}>',
+        )
+        message = f"{streams.describe(self.event)}: quota"
+        self.assertInHTML(f'<p class="warn">{escape(message)}</p>', html, count=1)
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_an_action_that_goes_through_releases_every_block(self, build):
+        build.return_value = youtube_mock("testing")
+        with self.login(self.streamer), self.captureOnCommitCallbacks(execute=True):
+            self.post(
+                "compops:match-stream",
+                match_pk=self.current.pk,
+                status="live",
+                extra=DATASTAR,
+                **self.kw,
+            )
+        mode, html = self.column()
+        self.assertEqual(mode, "outer")
+        self.assertIn(
+            f'<div id="stream-{self.field1.pk}" class="stream">', html.splitlines()
+        )
+        self.assertIn(
+            f'<div id="event-{self.event.pk}" class="stream">', html.splitlines()
+        )
+
+    def test_the_layout_toggle_holds_every_block(self):
+        with self.login(self.streamer):
+            self.post("compops:layout", extra=DATASTAR, **self.kw)
+        ((mode, html),) = element_patches(self.last_response)
+        self.assertEqual(mode, "outer")
+        self.assertIn(
+            f'<div id="stream-{self.field1.pk}" class="stream" {HELD}>',
+            html.splitlines(),
+        )
+        self.assertIn(
+            f'<div id="event-{self.event.pk}" class="stream" {HELD}>',
+            html.splitlines(),
+        )
 
 
 class LockedTransitionTests(StreamsFixture):
