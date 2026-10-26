@@ -18,7 +18,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.template import RequestContext
 from django.template.loader import render_to_string
 from django.template.response import TemplateResponse
-from django.urls import NoReverseMatch, path, reverse, reverse_lazy
+from django.urls import NoReverseMatch, is_valid_path, path, reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.utils.http import urlencode
@@ -154,6 +154,22 @@ class Application:
     def redirect(self, *args, **kwargs):
         "Thin wrapper around django.shortcuts.redirect to save on imports"
         return redirect(*args, **kwargs)
+
+    def redirect_up(self, request, relative):
+        """
+        Redirect to the page ``relative`` (``..`` or ``../..``) leads to from
+        the one requested or, when no view answers there, the nearest page
+        above it. Objects nested under another with no list of their own (a
+        match's score sheets) go back to the page of the object they are in.
+        """
+        # As CommonMiddleware does: resolve the path without the script name,
+        # and redirect to the address with it.
+        urlconf = getattr(request, "urlconf", None)
+        url = urljoin(request.path_info, relative)
+        while url != "/" and not is_valid_path(url, urlconf):
+            url = urljoin(url, "..")
+        script_name = request.path.removesuffix(request.path_info)
+        return self.redirect(f"{script_name}{url}")
 
     def _template_path(self, filename, *args):
         args = list(reversed([a for a in args if a]))
@@ -516,8 +532,11 @@ class Application:
             extra_context = {}
 
         if post_save_redirect is None:
-            redirect_to = urljoin(request.path, "..") if pk is None else request.path
-            post_save_redirect = self.redirect(redirect_to)
+            post_save_redirect = (
+                self.redirect_up(request, "..")
+                if pk is None
+                else self.redirect(request.path)
+            )
 
         # Implement permission checking for specified object instance, throw
         # an HTTP 403 (using django-guardian configuration) when the user is
@@ -725,8 +744,7 @@ class Application:
             formset_class = modelformset_factory(model, extra=0, fields=formset_fields)
 
         if post_save_redirect is None:
-            redirect_to = urljoin(request.path, "..")
-            post_save_redirect = self.redirect(redirect_to)
+            post_save_redirect = self.redirect_up(request, "..")
 
         # Vanilla formset processing here, take the post data and files, create
         # an instance of formset_class, save and redirect.
@@ -1022,8 +1040,7 @@ class Application:
             )
 
         if post_save_redirect is None:
-            redirect_to = urljoin(request.path, "..")
-            post_save_redirect = self.redirect(redirect_to)
+            post_save_redirect = self.redirect_up(request, "..")
 
         # Vanilla formset processing here, take the post data and files, create
         # an instance of formset_class, save and redirect.
@@ -1117,8 +1134,7 @@ class Application:
                 return has_permission
 
         if post_delete_redirect is None:
-            redirect_to = urljoin(request.path, "../..")
-            post_delete_redirect = self.redirect(redirect_to)
+            post_delete_redirect = self.redirect_up(request, "../..")
 
         # Once the person may delete it, the view may still refuse to, as
         # ``pre_save_callback`` may refuse a save: its response is sent instead.
