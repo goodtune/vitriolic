@@ -117,6 +117,7 @@ class MenuQueryTests(TestCase):
     What the home page costs a member of staff who holds no permission in a
     protected component's application: the same whether they hold an object
     permission elsewhere or nothing, and however many components there are.
+    None of it is spent on the widgets of a component the menu does not show.
     """
 
     user_factory = StaffFactory
@@ -134,7 +135,7 @@ class MenuQueryTests(TestCase):
             self.get_check_200("admin:index")
             # The person's permissions in the applications of the components
             # are asked for once, whichever shell draws the menu.
-            with self.assertNumQueries(12):
+            with self.assertNumQueries(6):
                 self.get("admin:index")
 
     def test_a_person_with_an_object_permission(self):

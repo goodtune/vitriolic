@@ -7,8 +7,15 @@ from django.utils import timezone
 from freezegun import freeze_time
 from test_plus import TestCase
 
+from touchtechnology.admin.sites import site
 from touchtechnology.admin.tests.shells import per_shell
-from touchtechnology.common.tests.factories import UserFactory
+from touchtechnology.admin.tests.test_menu import COMPONENTS, MenuMixin
+from touchtechnology.common.tests.factories import (
+    StaffFactory,
+    SuperUserFactory,
+    UserFactory,
+)
+from tournamentcontrol.competition.admin import CompetitionAdminComponent
 from tournamentcontrol.competition.dashboard import (
     matches_progression_possible,
     matches_require_basic_results,
@@ -22,6 +29,27 @@ from tournamentcontrol.competition.tests.factories import (
     TeamFactory,
     UndecidedTeamFactory,
 )
+
+#: The widgets the competition puts on the admin's home page: the title of
+#: each, and its icon in the Workbook and the Explorer.
+WIDGETS = (
+    ("Awaiting Scores", "list-checks", "results"),
+    ("Progress Teams", "layers", "stage"),
+    ("Season Reports", "printer", "print"),
+    ("Awaiting Detailed Results", "chart-bar", "chart"),
+    ("Awaiting MVP Points", "chart-bar", "chart"),
+)
+
+
+class OpenCompetitionAdminComponent(CompetitionAdminComponent):
+    """
+    The competition's component without its protection, for a test to
+    register: the menu shows it to every member of staff. It links to the
+    competition's pages, as the site's addresses were settled before the test
+    runs.
+    """
+
+    unprotected = True
 
 
 def knockout(stage, kick_off, final_kick_off):
@@ -352,3 +380,63 @@ class FirstStageProgressionPageTests(TestCase):
             "the page.",
         )
         self.assertEqual(record.exc_info[0], RuntimeError)
+
+
+class HomePageMixin(MenuMixin):
+    def widget_headings(self):
+        """The heading of each of the competition's widgets, as the shell draws it."""
+        return [
+            f"<h2>{self.icon(self.by_shell(workbook=workbook, explorer=explorer))}"
+            f"{title}</h2>"
+            for title, workbook, explorer in WIDGETS
+        ]
+
+    def assertWidgetsShown(self):
+        """The home page shows each of the competition's widgets, once."""
+        for heading in self.widget_headings():
+            with self.subTest(shown=heading):
+                self.assertResponseContains(heading, count=1)
+
+    def assertWidgetsHidden(self):
+        """The home page shows none of the competition's widgets."""
+        for heading in self.widget_headings():
+            with self.subTest(hidden=heading):
+                self.assertResponseNotContains(heading)
+
+
+@per_shell
+class SuperuserHomePageTests(HomePageMixin, TestCase):
+    user_factory = SuperUserFactory
+
+    def test_every_widget_is_shown(self):
+        self.assertMenu(self.make_user("superuser"), *COMPONENTS)
+        self.assertWidgetsShown()
+
+
+@per_shell
+class StaffHomePageTests(HomePageMixin, TestCase):
+    """
+    The home page shows the competition's widgets to the people its menu shows
+    the competition to, and to no one else.
+    """
+
+    user_factory = StaffFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.staff = cls.make_user("staff")
+        cls.organiser = cls.make_user("organiser", perms=["competition.change_match"])
+
+    def test_a_permission_over_the_application(self):
+        self.assertMenu(self.organiser, "content", "competition")
+        self.assertWidgetsShown()
+
+    def test_no_permission(self):
+        self.assertMenu(self.staff, "content")
+        self.assertWidgetsHidden()
+
+    def test_an_unprotected_component(self):
+        site.register(OpenCompetitionAdminComponent)
+        self.addCleanup(site.unregister, OpenCompetitionAdminComponent)
+        self.assertMenu(self.staff, "content", "competition")
+        self.assertWidgetsShown()
