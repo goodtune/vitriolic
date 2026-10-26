@@ -4162,7 +4162,7 @@ class MatchDetailNotReadyTests(MatchRowMixin, TestCase):
     def statistics_link(self, match):
         url = self.reverse(self.detail, *match._get_url_args())
         return self.by_shell(
-            workbook=f'<a href="{url}">{ICON % "chart-bar"}Detail</a>',
+            workbook=f'<a href="{url}">{self.icon("chart-bar")}Detail</a>',
             explorer=f'<a href="{url}">Statistics</a>',
         )
 
