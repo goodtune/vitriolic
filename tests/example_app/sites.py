@@ -97,6 +97,17 @@ class TestGenericViewsSite(Application):
         )
 
     def get_urls(self):
+        # The relatives of an object nest under it without a list of their own.
+        relative_urls = (
+            [
+                path("add/", self.add_relative, name="add"),
+                path("<int:pk>/delete/", self.delete_relative, name="delete"),
+                path("edit/", self.edit_multiple_relative, name="edit"),
+                path("bulk-create/", self.bulk_create_relative, name="bulk_create"),
+            ],
+            self.app_name,
+        )
+
         vanilla_urls = (
             [
                 path("", self.list, name="list"),
@@ -107,6 +118,10 @@ class TestGenericViewsSite(Application):
                 path("<int:pk>/perms/", self.perms, name="perms"),
                 path("edit/", self.edit_multiple, name="edit"),
                 path("bulk-create/", self.bulk_create, name="bulk_create"),
+                path(
+                    "<int:parent>/relative/",
+                    include(relative_urls, namespace="relative"),
+                ),
             ],
             self.app_name,
         )
@@ -161,6 +176,33 @@ class TestGenericViewsSite(Application):
     def bulk_create(self, request, **extra_context):
         return self.generic_bulk_create(
             request, TestDateTimeField, extra_context=extra_context
+        )
+
+    def add_relative(self, request, parent, **extra_context):
+        return self.generic_edit(
+            request,
+            Relative,
+            instance=Relative(link_id=parent),
+            form_fields=("name",),
+            extra_context=extra_context,
+        )
+
+    def delete_relative(self, request, parent, pk, **kwargs):
+        return self.generic_delete(
+            request, Relative.objects.filter(link_id=parent), pk=pk, **kwargs
+        )
+
+    def edit_multiple_relative(self, request, parent, **extra_context):
+        return self.generic_edit_multiple(
+            request,
+            Relative.objects.filter(link_id=parent),
+            formset_fields=("name",),
+            extra_context=extra_context,
+        )
+
+    def bulk_create_relative(self, request, parent, **extra_context):
+        return self.generic_bulk_create(
+            request, Relative, extra_context=extra_context
         )
 
     def list_with_perms(self, request, **extra_context):
