@@ -108,6 +108,7 @@ from tournamentcontrol.competition.utils import (
     legitimate_bye_match,
     match_unplayed,
     time_choice,
+    zero_position_error,
 )
 
 logger = logging.getLogger(__name__)
@@ -1165,7 +1166,9 @@ class UndecidedTeamForm(UserMixin, ModelForm):
         formula = self.cleaned_data.get("formula").upper()
         if formula and not stage_group_position_re.match(formula):
             raise forms.ValidationError(_("This is not a valid team formula."))
-        error = first_stage_position_error(self.instance.stage, formula)
+        error = zero_position_error(formula) or first_stage_position_error(
+            self.instance.stage, formula
+        )
         if error:
             raise forms.ValidationError(error)
         return formula

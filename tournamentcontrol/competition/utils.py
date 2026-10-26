@@ -563,6 +563,11 @@ def stage_group_position(stage, formula):
                 "of its division"
             ) from None
     else:
+        # Stages are numbered from one, so S0 names none, as a number past
+        # the last stage does.
+        if int(s) == 0:
+            logger.warning("Invalid stage %r for division %r", s, stage.division)
+            raise IndexError(f"Invalid stage {s} for division {stage.division}")
         try:
             s = stage.division.stages.all()[int(s) - 1]
         except IndexError:
@@ -574,7 +579,8 @@ def stage_group_position(stage, formula):
         logger.debug("No group specified in formula %r", formula)
     else:
         pools = s.pools.all().order_by("order")
-        if pools.count() >= int(g):
+        # Pools are numbered from one too, so G0 names none.
+        if 1 <= int(g) <= pools.count():
             try:
                 g = pools[int(g) - 1]
             except IndexError:
@@ -617,6 +623,22 @@ def first_stage_position_error(stage, formula):
             "the first stage of the division."
         ) % {"formula": formula, "stage": stage.title}
     return None
+
+
+def zero_position_error(formula):
+    """
+    Why the position ``formula`` names no team when one of its numbers is a
+    zero (``S0P1``, ``G0P1``, ``P0``), or ``None`` when none is: stages,
+    pools and positions are numbered from one, as ``stage_group_position``
+    counts them. A formula the pattern does not read is not this rule's to
+    refuse.
+    """
+    match = stage_group_position_re.match(formula)
+    if match is None or 0 not in [int(n) for n in match.groups() if n is not None]:
+        return None
+    return _("%(formula)s: stage, pool and position numbers start at 1.") % {
+        "formula": formula
+    }
 
 
 #
