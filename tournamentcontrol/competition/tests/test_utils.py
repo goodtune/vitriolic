@@ -358,6 +358,23 @@ class StageGroupPositionTests(TestCase):
                 ):
                     utils.stage_group_position(stage, formula)
 
+    def test_stage_group_position_with_a_zero_raises_index_error(self):
+        """
+        Stages and pools are numbered from one: ``S0`` and ``G0`` name none,
+        as a number past the last does.
+        """
+        division = DivisionFactory.create()
+        stage1 = StageFactory.create(division=division, order=1)
+        StageGroupFactory.create(stage=stage1)
+        stage2 = StageFactory.create(division=division, order=2)
+
+        with self.assertRaisesRegex(IndexError, r"^Invalid stage 0 for division "):
+            utils.stage_group_position(stage2, "S0P1")
+        with self.assertRaisesRegex(
+            IndexError, r"^Invalid group 0 for stage .* \(stage has 1 pools\)$"
+        ):
+            utils.stage_group_position(stage2, "G0P1")
+
     def test_stage_group_position_with_valid_pool_succeeds(self):
         """
         Test that stage_group_position works correctly when the pool exists.
