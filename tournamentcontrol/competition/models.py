@@ -3074,6 +3074,10 @@ class LadderEntry(LadderBase):
 
     objects = LadderEntryManager()
 
+    class Meta:
+        # A match's entries are made home team first.
+        ordering = ("pk",)
+
     def __repr__(self):
         return f"<LadderEntry: #{self.pk}>"
 
@@ -3164,7 +3168,7 @@ class SeasonExclusionDate(ExclusionDateBase):
 class DivisionExclusionDate(ExclusionDateBase):
     division = ForeignKey("Division", related_name="exclusions", on_delete=CASCADE)
 
-    class Meta:
+    class Meta(ExclusionDateBase.Meta):
         constraints = [
             UniqueConstraint(
                 fields=["division", "date"],
@@ -3220,6 +3224,7 @@ class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
     end_date = DateField(verbose_name="Until", blank=True, null=True)
 
     class Meta:
+        ordering = ("start",)
         verbose_name = "time slot"
 
     def _get_admin_namespace(self):
@@ -3441,6 +3446,11 @@ class MatchScoreSheet(AdminUrlMixin, models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     match = models.ForeignKey(Match, related_name="scoresheets", on_delete=CASCADE)
     image = CloudinaryField(verbose_name=_("Image"))
+
+    class Meta:
+        # Nothing records when a score sheet was uploaded; the key settles the
+        # order all the same.
+        ordering = ("pk",)
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:division:stage:match:matchscoresheet"
