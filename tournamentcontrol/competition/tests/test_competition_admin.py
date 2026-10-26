@@ -4527,10 +4527,11 @@ class MatchDetailPermissionTests(MatchRowMixin, TestCase):
         assign_perm("competition.change_match", self.staff, theirs)
         season = self.stage.division.season
         # The sheet asks for the person's permissions on the day's matches
-        # once, not once a row.
+        # once, not once a row; and a row with neither link does not walk to
+        # its competition for their URLs.
         with (
             self.login(self.staff),
-            self.assertNumQueries(self.by_shell(workbook=23, explorer=23)),
+            self.assertNumQueries(self.by_shell(workbook=21, explorer=21)),
         ):
             self.get_check_200(
                 "admin:fixja:match-runsheet",
@@ -4609,8 +4610,9 @@ class RefereeAppointmentsPermissionTests(MatchRowMixin, TestCase):
         assign_perm("competition.change_match", self.staff, theirs)
         season = self.stage.division.season
         # The gate reads the permissions the sheet asks for once for the day's
-        # matches, so the sheet costs what it did.
-        with self.login(self.staff), self.assertNumQueries(23):
+        # matches, and the row without the link does not walk to its
+        # competition for the URL: two queries fewer than when every row did.
+        with self.login(self.staff), self.assertNumQueries(21):
             self.get_check_200(
                 "admin:fixja:match-runsheet",
                 season.competition_id,
