@@ -11,16 +11,14 @@ Add ``LinksMixin`` to a test case and call ``follow_links`` with the page::
         def test_the_season_page(self):
             with self.login(self.superuser):
                 self.follow_links("admin:fixja:competition:season:edit", 1, 2)
+
+No link of the admin acts when it is followed: whatever changes something (a
+Delete, an arrow that moves a row) is a form that posts.
 """
 
-import re
 from urllib.parse import urljoin, urlsplit
 
 from bs4 import BeautifulSoup
-
-#: Links that act when they are followed (a reorder arrow moves an object), so a
-#: test that only wants to know where a link leads must leave them alone.
-ACTS = re.compile(r"/reorder/")
 
 
 class LinksMixin:
@@ -49,7 +47,6 @@ class LinksMixin:
             link = urlsplit(urljoin(page, href))._replace(fragment="").geturl()
             if (
                 not link.startswith(admin)
-                or ACTS.search(link)
                 or link in self.followed_links
                 or link == page
             ):
