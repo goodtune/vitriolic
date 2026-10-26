@@ -209,11 +209,40 @@ class CompOpsEventsTests(SseFixture, TestCase):
                 adjusted=False,
             )
             pushed = "".join(await reader.until(LAST_ACTIVITY))
-            self.assertIn(f'data: elements <div id="match-{self.match.pk}"', pushed)
+            # The row the event is about is not held: the push updates it.
+            self.assertIn(
+                f'data: elements <div id="match-{self.match.pk}" class="row">',
+                pushed.splitlines(),
+            )
             self.assertIn('data: elements <div id="slot-0800-h"', pushed)
             self.assertNotIn('data: elements <div id="slot-0800" class="slot"', pushed)
             self.assertIn('data: elements <span id="results-count"', pushed)
             self.assertIn('data: elements <ul id="activity"', pushed)
+        finally:
+            await reader.close()
+
+    async def test_the_snapshot_passes_over_the_rows_a_person_holds(self):
+        # Datastar's morph leaves a row alone only when the page's row and the
+        # snapshot's both carry data-ignore-morph, so the snapshot marks every
+        # row and the page marks the rows the person holds.
+        when = timezone.make_aware(datetime.datetime(2026, 10, 8, 9), TZ)
+        done = await sync_to_async(factories.MatchFactory.create)(
+            stage=self.stage,
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            home_team_score=3,
+            away_team_score=1,
+        )
+        reader, snapshot = await self.connect()
+        try:
+            rows = snapshot[0].splitlines()
+            for match in (self.match, done):
+                self.assertIn(
+                    f'data: elements <div id="match-{match.pk}" class="row" '
+                    'data-ignore-morph data-preserve-attr="data-ignore-morph">',
+                    rows,
+                )
         finally:
             await reader.close()
 

@@ -2,6 +2,8 @@
 
 import datetime
 import re
+import threading
+from contextlib import contextmanager
 from unittest import mock
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
@@ -13,7 +15,8 @@ from faker import Faker
 from playwright.sync_api import expect
 
 from tournamentcontrol.competition.compops import events
-from tournamentcontrol.competition.models import TeamAssociation
+from tournamentcontrol.competition.compops.sites import CompOpsSite
+from tournamentcontrol.competition.models import Match, TeamAssociation
 from tournamentcontrol.competition.tests.factories import (
     GroundFactory,
     MatchFactory,
@@ -46,9 +49,12 @@ def wait_for_snapshot(page, season):
     """
     Wait until the day page has been brought up to date by its event stream.
 
-    The stream's first push re-renders the lists, wiping a score typed before
-    it lands. Pages cannot tell when that is, so publish an event and wait for
-    it to show in the activity feed: the push carrying it follows the snapshot.
+    The stream's first push, the snapshot, re-renders the lists. It keeps a
+    score being typed and leaves alone the rows a person is working in, so it
+    discards nothing; a test waits for it to act on a page that is up to date,
+    or to see what the snapshot did. Pages cannot tell when that is, so
+    publish an event and wait for it to show in the activity feed: the push
+    carrying it follows the snapshot.
     """
     expect(page.locator(".sse")).not_to_have_class("down")
     events.publish(
@@ -61,6 +67,26 @@ def wait_for_snapshot(page, season):
         status="live",
     )
     expect(page.locator("#activity li", has_text="Page connected")).to_have_count(1)
+
+
+@contextmanager
+def snapshot_held():
+    """
+    Hold the day page's snapshot back until the block ends, so it lands on
+    whatever the block did, as the snapshot of a reconnect does.
+    """
+    release = threading.Event()
+    snapshot_fragments = CompOpsSite.snapshot_fragments
+
+    def late_snapshot(site, *args):
+        release.wait(10)
+        return snapshot_fragments(site, *args)
+
+    with mock.patch.object(CompOpsSite, "snapshot_fragments", late_snapshot):
+        try:
+            yield
+        finally:
+            release.set()
 
 
 def midday_zone(now):
@@ -513,10 +539,10 @@ def test_a_single_score_is_refused_in_its_row(
     """
     A result with one score is refused, and its row says why.
 
-    The page can finish loading before its event stream sends the first
-    push, which re-renders the results with unbound forms and so removes the
-    error of a refusal shown before it. A person cannot save that fast, but
-    the test can, so it waits for the stream to catch up before it types.
+    The test waits for the event stream's first push before it types, so the
+    refusal is made on a page that is up to date, as a person makes it.
+    test_a_refusal_keeps_its_error_when_the_snapshot_lands_after_it covers
+    the push landing after the refusal.
     """
     compops_page.goto(asgi_live_server.url + tournament["day_path"])
     wait_for_snapshot(compops_page, tournament["season"])
@@ -527,6 +553,108 @@ def test_a_single_score_is_refused_in_its_row(
     expect(row.locator('input[name="home_team_score"]')).to_have_value("3")
     compops_page.screenshot(
         path=str(screenshot_dir / "compops_result_validation.png"), full_page=True
+    )
+
+
+def test_a_refusal_keeps_its_error_when_the_snapshot_lands_after_it(
+    compops_page, asgi_live_server, tournament, screenshot_dir
+):
+    """
+    A refused result keeps its error, and its score, when the event stream's
+    snapshot lands after the refusal, as the snapshot of a reconnect does.
+
+    The snapshot re-renders the results with unbound forms. The test holds it
+    back until the refusal is on the page, then lets it through, waits for it,
+    and finishes the result to show the row still works.
+    """
+    with snapshot_held():
+        compops_page.goto(asgi_live_server.url + tournament["day_path"])
+        row = compops_page.locator(f"#match-{tournament['match'].pk}")
+        row.locator('input[name="home_team_score"]').fill("3")
+        row.locator('button[type="submit"]').click()
+        expect(row.locator(".errorlist li")).to_have_text("Both scores are required.")
+    wait_for_snapshot(compops_page, tournament["season"])
+    expect(row.locator(".errorlist li")).to_have_text("Both scores are required.")
+    expect(row.locator('input[name="home_team_score"]')).to_have_value("3")
+    compops_page.screenshot(
+        path=str(screenshot_dir / "compops_result_error_kept.png"), full_page=True
+    )
+    row.locator('input[name="away_team_score"]').fill("2")
+    row.locator('button[type="submit"]').click()
+    expect(row.locator(".score")).to_have_text("3 – 2")
+    expect(row.locator(".errorlist")).to_have_count(0)
+
+
+def test_an_open_edit_stays_open_when_the_snapshot_lands_after_it(
+    compops_page, asgi_live_server, tournament, screenshot_dir
+):
+    """
+    An entered result opened for editing stays open, with the score being
+    typed, when the event stream's snapshot lands after it, as the snapshot
+    of a reconnect does.
+
+    The snapshot renders the result as entered, with its Edit link. The test
+    holds it back until the row is open and a score typed, then lets it
+    through, waits for it, and saves to show the row still works.
+    """
+    scored = tournament["scored"]
+    with snapshot_held():
+        compops_page.goto(asgi_live_server.url + tournament["day_path"])
+        # A slot whose results are all in is folded.
+        compops_page.locator(f"#slot-{scored.time:%H%M}-h").click()
+        row = compops_page.locator(f"#match-{scored.pk}")
+        row.locator("a", has_text="Edit").click()
+        row.locator('input[name="home_team_score"]').fill("2")
+    wait_for_snapshot(compops_page, tournament["season"])
+    expect(row.locator('input[name="home_team_score"]')).to_have_value("2")
+    expect(row.locator('input[name="away_team_score"]')).to_have_value("0")
+    expect(row.locator("a", has_text="✕")).to_be_visible()
+    compops_page.screenshot(
+        path=str(screenshot_dir / "compops_edit_kept.png"), full_page=True
+    )
+    row.locator('button[type="submit"]').click()
+    expect(row.locator(".score")).to_have_text("2 – 0")
+
+
+def test_a_reconnect_brings_the_page_up_to_date_around_the_rows_being_worked_on(
+    compops_page, asgi_live_server, tournament, screenshot_dir
+):
+    """
+    A reconnect of the event stream sends the snapshot again. It brings the
+    rows nobody is working in up to date, and leaves an open Edit and a
+    refused result as they are.
+
+    A page that is hidden closes its stream and reopens it when it is shown,
+    as a phone does when it sleeps; the test fires that event. The upcoming
+    match is given a result the stream is not told about, so only the
+    snapshot can show it: it also shows that the first snapshot did not mark
+    the rows it updated as held.
+    """
+    match, scored, upcoming = (
+        tournament["match"],
+        tournament["scored"],
+        tournament["upcoming"],
+    )
+    compops_page.goto(asgi_live_server.url + tournament["day_path"])
+    wait_for_snapshot(compops_page, tournament["season"])
+    refused = compops_page.locator(f"#match-{match.pk}")
+    refused.locator('input[name="home_team_score"]').fill("3")
+    refused.locator('button[type="submit"]').click()
+    expect(refused.locator(".errorlist li")).to_have_text("Both scores are required.")
+    # A slot whose results are all in is folded.
+    compops_page.locator(f"#slot-{scored.time:%H%M}-h").click()
+    editing = compops_page.locator(f"#match-{scored.pk}")
+    editing.locator("a", has_text="Edit").click()
+    editing.locator('input[name="home_team_score"]').fill("2")
+    Match.objects.filter(pk=upcoming.pk).update(home_team_score=4, away_team_score=1)
+    compops_page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    expect(compops_page.locator(f"#match-{upcoming.pk} .score")).to_have_text("4 – 1")
+    expect(refused.locator(".errorlist li")).to_have_text("Both scores are required.")
+    expect(refused.locator('input[name="home_team_score"]')).to_have_value("3")
+    expect(editing.locator('input[name="home_team_score"]')).to_have_value("2")
+    expect(editing.locator("a", has_text="✕")).to_be_visible()
+    compops_page.screenshot(
+        path=str(screenshot_dir / "compops_reconnect_keeps_work.png"), full_page=True
     )
 
 
