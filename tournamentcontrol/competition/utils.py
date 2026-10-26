@@ -14,7 +14,19 @@ from zoneinfo import ZoneInfo
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
-from django.db.models import Case, CharField, Exists, F, Func, OuterRef, Q, Value, When
+from django.db.models import (
+    Case,
+    CharField,
+    Count,
+    Exists,
+    F,
+    Func,
+    OuterRef,
+    Q,
+    Subquery,
+    Value,
+    When,
+)
 from django.db.models.functions import Cast, Concat
 from django.http import HttpResponse
 from django.template.loader import select_template
@@ -94,6 +106,60 @@ legitimate_bye_match = and_(
 )
 
 match_unplayed = or_(Q(home_team_score__isnull=True), Q(away_team_score__isnull=True))
+
+# A match whose part in its stage's ladder is settled: both scores are in, its
+# bye has been processed, or it was washed out. A ladder is complete once every
+# match of its stage is.
+match_decided = or_(
+    Q(home_team_score__isnull=False, away_team_score__isnull=False),
+    or_(Q(is_bye=True, bye_processed=True), Q(is_washout=True)),
+)
+
+
+def team_awaits_own_ladder():
+    """
+    A match with a side still to be decided which names a place on the ladder
+    of the match's own stage, while that ladder is open. ``Match.eval`` fills
+    ``S1P1`` from the first stage of the division whatever stage the match is
+    in, as the ladder stands when it is asked, so a match in that stage is
+    not progressed until every match of the stage which can be played has
+    been decided. A match waiting on progression itself does not hold the
+    ladder open: it is what the progression is for, and holding two such
+    matches back for each other would progress neither.
+
+    A function, where its neighbours are ``Q`` objects: ``models`` imports
+    this module, so ``Match`` and ``Stage`` can only be looked up once the
+    apps are ready.
+    """
+    Match = apps.get_model("competition", "Match")
+    Stage = apps.get_model("competition", "Stage")
+    # The number of the match's stage in its division, counting from one as
+    # ``Match.eval`` and ``Stage._title_stages`` do.
+    number = Subquery(
+        Stage.objects.filter(
+            division=OuterRef("stage__division"), order__lte=OuterRef("stage__order")
+        )
+        .order_by()
+        .values("division")
+        .annotate(number=Count("pk"))
+        .values("number")
+    )
+    own_ladder = Concat(Value("^S"), Cast(number, CharField()), Value(r"(G\d+)?P\d+$"))
+    names_own_ladder = (
+        Q(home_team__isnull=True, home_team_eval__regex=own_ladder)
+        | Q(home_team__isnull=True, home_team_undecided__formula__regex=own_ladder)
+        | Q(away_team__isnull=True, away_team_eval__regex=own_ladder)
+        | Q(away_team__isnull=True, away_team_undecided__formula__regex=own_ladder)
+    )
+    # The default manager annotates team titles through outer joins which the
+    # subquery has no use for.
+    ladder_open = Exists(
+        Match._base_manager.filter(stage=OuterRef("stage"))
+        .exclude(match_decided)
+        .exclude(team_needs_progressing)
+    )
+    return Q(names_own_ladder, ladder_open)
+
 
 stage_group_position_re = re.compile(
     r"""

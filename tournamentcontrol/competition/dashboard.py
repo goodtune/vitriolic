@@ -10,6 +10,8 @@ from touchtechnology.admin.base import DashboardWidget
 from tournamentcontrol.competition.models import Match, Stage, Team, UndecidedTeam
 from tournamentcontrol.competition.utils import (
     legitimate_bye_match,
+    match_decided,
+    team_awaits_own_ladder,
     team_awaits_upstream,
     team_needs_progressing,
 )
@@ -148,7 +150,13 @@ def matches_require_progression():
 
 
 def matches_progression_possible():
-    matches = matches_require_progression()
+    """
+    The matches waiting on progression which can be progressed now: the
+    ladder each draws a team from is complete, and a side can be filled from
+    it or by hand. A match which names a place on its own stage's ladder
+    waits until that ladder is complete too (``team_awaits_own_ladder``).
+    """
+    matches = matches_require_progression().exclude(team_awaits_own_ladder())
 
     # cache which stages have all their matches played or byes marked played,
     # and which hold a place a person can fill (an undecided team of our own:
@@ -163,9 +171,6 @@ def matches_progression_possible():
             )
         )
     )
-    score_entered = Q(home_team_score__isnull=False, away_team_score__isnull=False)
-    played_bye = Q(is_bye=True, bye_processed=True)
-    is_washout = Q(is_washout=True)
     _stage_cache = {}
     _places_cache = {}
     for stage in stages:
@@ -178,9 +183,7 @@ def matches_progression_possible():
             # matches, see ``Match.eval``).
             _stage_cache[stage.pk] = 0
         else:
-            _stage_cache[stage.pk] = preceding.matches.exclude(
-                score_entered | played_bye | is_washout
-            ).count()
+            _stage_cache[stage.pk] = preceding.matches.exclude(match_decided).count()
 
     def _can_evaluate(match):
         """
