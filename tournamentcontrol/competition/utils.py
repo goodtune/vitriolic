@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
-from django.db.models import Case, CharField, F, Func, Q, Value, When
+from django.db.models import Case, CharField, Exists, F, Func, OuterRef, Q, Value, When
 from django.db.models.functions import Cast, Concat
 from django.http import HttpResponse
 from django.template.loader import select_template
@@ -64,6 +64,30 @@ team_awaits_upstream = and_(
         or_(away_team_placeholder, ~away_team_needs_progressing),
     ),
 )
+
+
+def undecided_team_awaits_upstream():
+    """
+    The undecided team behind ``team_awaits_upstream``: the sync's
+    placeholder. It has no formula, and it stands on matches mirrored from an
+    upstream provider and on no match of our own, so only the provider can
+    name its team; the next sync writes over any team chosen for it here.
+
+    A function, where its neighbours are ``Q`` objects: ``models`` imports
+    this module, so ``Match`` can only be looked up once the apps are ready.
+    """
+    Match = apps.get_model("competition", "Match")
+    # The default manager annotates team titles through outer joins which the
+    # subqueries have no use for.
+    matches = Match._base_manager.filter(
+        Q(home_team_undecided=OuterRef("pk")) | Q(away_team_undecided=OuterRef("pk"))
+    )
+    return Q(
+        Exists(matches.filter(upstream_id__isnull=False)),
+        ~Exists(matches.filter(upstream_id__isnull=True)),
+        formula="",
+    )
+
 
 legitimate_bye_match = and_(
     Q(is_bye=True), or_(Q(home_team__isnull=False), Q(away_team__isnull=False))
