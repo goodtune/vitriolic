@@ -201,9 +201,7 @@ class TestGenericViewsSite(Application):
         )
 
     def bulk_create_relative(self, request, parent, **extra_context):
-        return self.generic_bulk_create(
-            request, Relative, extra_context=extra_context
-        )
+        return self.generic_bulk_create(request, Relative, extra_context=extra_context)
 
     def list_with_perms(self, request, **extra_context):
         return self.generic_list(
