@@ -28,8 +28,8 @@ WIN_LOSE = ("W", "L")
 
 
 def _teams_in(node):
-    """How many teams a stage or pool holds (decided or not)."""
-    return max(node.teams.count(), node.undecided_teams.count())
+    """How many teams a stage or pool holds (decided, or undecided of our own)."""
+    return max(node.teams.count(), node.undecided_teams.of_our_own().count())
 
 
 def position_eval_error(stage, team_eval):

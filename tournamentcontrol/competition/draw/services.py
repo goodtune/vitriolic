@@ -23,13 +23,20 @@ DrawTarget = Union[Stage, StageGroup]
 def draw_target_team_count(target: Optional[DrawTarget]) -> int:
     """
     The number of teams a draw for ``target`` is built for: the teams of a
-    first stage or pool, otherwise the undecided teams waiting on an earlier
-    stage (whichever is non-zero first, as the wizard has always counted).
+    first stage or pool, otherwise the undecided teams of our own waiting on
+    an earlier stage (whichever is non-zero first, as the wizard has always
+    counted).
     """
     if isinstance(target, Stage):
-        return first((target.teams.count(), target.undecided_teams.count()), default=0)
+        return first(
+            (target.teams.count(), target.undecided_teams.of_our_own().count()),
+            default=0,
+        )
     if isinstance(target, StageGroup):
-        return first((target.undecided_teams.count(), target.teams.count()), default=0)
+        return first(
+            (target.undecided_teams.of_our_own().count(), target.teams.count()),
+            default=0,
+        )
     return 0
 
 

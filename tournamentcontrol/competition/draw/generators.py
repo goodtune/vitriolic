@@ -71,7 +71,7 @@ def tournament_date_generator(stage, start_date=None, games_per_day=None):
             yield date
 
 
-class MatchCollection(object):
+class MatchCollection:
     def __init__(self):
         self.keyed = {}
         self.iterable = []
@@ -127,7 +127,7 @@ class MatchCollection(object):
             match.save()
 
 
-class DrawGenerator(object):
+class DrawGenerator:
     """
     DrawGenerator parses tournament draw format strings and generates Match objects.
 
@@ -210,13 +210,13 @@ class DrawGenerator(object):
         teams = {}
         if isinstance(stage, Stage):
             if stage.order > 1:
-                queryset = stage.undecided_teams.all()
+                queryset = stage.undecided_teams.of_our_own()
             else:
                 queryset = stage.division.teams.all()
             teams = dict(enumerate(self._stable(queryset)))
         elif isinstance(stage, StageGroup):
             if stage.stage.order > 1:
-                queryset = stage.undecided_teams.all()
+                queryset = stage.undecided_teams.of_our_own()
             else:
                 queryset = stage.teams.all()
             teams = dict(enumerate(self._stable(queryset)))
@@ -368,8 +368,9 @@ class DrawGenerator(object):
                     errors.add(line)
                 keys.add(match_id)
         if errors:
+            lines = ", ".join([str(e) for e in errors])
             raise ValueError(
-                "Draw formula is invalid: line(s) '%s' are not "
-                "in the correct format." % ", ".join([str(e) for e in errors])
+                f"Draw formula is invalid: line(s) '{lines}' are not "
+                "in the correct format."
             )
         return True

@@ -23,6 +23,7 @@ from django.utils import timezone
 from tournamentcontrol.competition.utils import (
     team_needs_progressing,
     team_title_case_clause,
+    undecided_team_awaits_upstream,
 )
 
 
@@ -90,6 +91,19 @@ class StageQuerySet(QuerySet):
                 ),
             )
         )
+
+
+class UndecidedTeamQuerySet(QuerySet):
+    def of_our_own(self):
+        """
+        The undecided teams a person can act on here: all but the upstream
+        sync's placeholder (``undecided_team_awaits_upstream`` in ``utils``),
+        which only the provider can name. The progression page, the home
+        page, the match and pool forms and the draw all read
+        ``stage.undecided_teams.of_our_own()``, so the placeholder is left out
+        in one place.
+        """
+        return self.exclude(undecided_team_awaits_upstream())
 
 
 class MatchQuerySet(QuerySet):

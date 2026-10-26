@@ -1068,7 +1068,7 @@ class StageGroupForm(SuperUserSlugMixin, ModelForm):
             initial = queryset = Team.objects.none()
         elif self.instance.stage.order > 1 and not self.instance.teams.count():
             self._undecided = True
-            queryset = self.instance.stage.undecided_teams.exclude(
+            queryset = self.instance.stage.undecided_teams.of_our_own().exclude(
                 stage_group__in=other_pools
             )
             initial = self.instance.undecided_teams.all()
@@ -1330,8 +1330,10 @@ class BaseMatchFormMixin(BootstrapFormControlMixin):
 
         # set the queryset of the `home_team` and `away_team` fields
         team_ids = self.instance.stage.division.teams.values_list("id", flat=True)
-        undecided_team_ids = self.instance.stage.undecided_teams.values_list(
-            "id", flat=True
+        undecided_team_ids = (
+            self.instance.stage.undecided_teams.of_our_own().values_list(
+                "id", flat=True
+            )
         )
 
         for prefix in ("home", "away"):
@@ -1470,13 +1472,12 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
 
         # remove team fields depending on if we are editing a match with known
         # teams, undecided teams, or teams that still need to be evaluated.
-        if not self.instance.home_team and self.instance.stage.undecided_teams.count():
+        undecided = self.instance.stage.undecided_teams.of_our_own().exists()
+
+        if not self.instance.home_team and undecided:
             self.fields.pop("home_team", None)
 
-        if (
-            not self.instance.home_team_undecided
-            and not self.instance.stage.undecided_teams.count()
-        ):
+        if not self.instance.home_team_undecided and not undecided:
             self.fields.pop("home_team_undecided", None)
             try:
                 empty_label = self.instance.get_home_team()["title"]
@@ -1484,13 +1485,10 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
                 empty_label = "---"
             self.fields["home_team"].empty_label = empty_label
 
-        if not self.instance.away_team and self.instance.stage.undecided_teams.count():
+        if not self.instance.away_team and undecided:
             self.fields.pop("away_team", None)
 
-        if (
-            not self.instance.away_team_undecided
-            and not self.instance.stage.undecided_teams.count()
-        ):
+        if not self.instance.away_team_undecided and not undecided:
             self.fields.pop("away_team_undecided", None)
             try:
                 empty_label = self.instance.get_away_team()["title"]
