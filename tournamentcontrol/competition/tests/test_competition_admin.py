@@ -2,6 +2,7 @@ import base64
 import copy
 import unittest
 from datetime import date, datetime, time
+from itertools import count
 from unittest.mock import ANY, MagicMock, PropertyMock, patch
 from zoneinfo import ZoneInfo
 
@@ -10,6 +11,7 @@ import responses
 from dateutil.rrule import DAILY
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.contenttypes.models import ContentType
 from django.contrib.messages.test import MessagesTestMixin
 from django.db import connection
 from django.template import Context, Template
@@ -4233,6 +4235,40 @@ class MatchRowMixin(IconMixin):
             explorer=f'<a href="{url}">Statistics</a>',
         )
 
+    def back_to_sheet(self, name, match):
+        """
+        The URL of the match's page ``name``, which sends the person back to
+        the run sheet of the match's day.
+        """
+        season = match.stage.division.season
+        sheet = self.reverse(
+            "admin:fixja:match-runsheet",
+            season.competition_id,
+            season.pk,
+            f"{match.date:%Y%m%d}",
+        )
+        namespace = "admin:fixja:competition:season:division:stage:match"
+        # The sheet writes its own path after "?next=" as it is, which
+        # reverse(query=) would percent-encode.
+        return f"{self.reverse(f'{namespace}:{name}', *match._get_url_args())}?next={sheet}"
+
+    def resync_link(self, match):
+        """The run sheet's link that re-pushes the match's broadcast to YouTube."""
+        url = self.back_to_sheet("resync-live-stream", match)
+        return self.by_shell(
+            workbook=f'<a href="{url}">{self.icon("refresh-cw")}Resync</a>',
+            explorer=f'<a href="{url}">Resync</a>',
+        )
+
+    def stream_link(self, match, icon, label):
+        """
+        The Workbook run sheet's link to the match's page about its stream:
+        "Fix stream" for a broadcast without a stream key, "Stream?" for a
+        match on a camera ground that is not being streamed.
+        """
+        url = self.back_to_sheet("edit", match)
+        return f'<a href="{url}">{self.icon(icon)}{label}</a>'
+
 
 class MatchUrlsTests(TestCase):
     """A match names its pages in the admin, its statistics page among them."""
@@ -4518,6 +4554,180 @@ class MatchDetailPermissionTests(MatchRowMixin, TestCase):
             )
         )
         self.assertResponseContains(self.statistics_link(other), count=0)
+
+
+class StreamedMatchMixin(MatchRowMixin):
+    """A season set up to stream to YouTube, with a camera on one ground."""
+
+    user_factory = StaffFactory
+
+    def setUp(self):
+        super().setUp()
+        self.stage = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_project_id="test-project-123",
+            division__season__live_stream_client_id="test-client-id",
+            division__season__live_stream_client_secret="test-client-secret",
+        )
+        self.camera = factories.GroundFactory.create(
+            venue__season=self.stage.division.season, live_stream=True
+        )
+        self.staff = self.make_user("staff")
+        # YouTube's broadcast identifiers are unique.
+        self.broadcasts = count(1)
+
+    def match(self, **kwargs):
+        """A match on the camera ground at 14:00 UTC on 1 May 2025."""
+        return factories.MatchFactory.create(
+            **{
+                "stage": self.stage,
+                "play_at": self.camera,
+                "date": date(2025, 5, 1),
+                "time": time(14, 0),
+                "datetime": datetime(2025, 5, 1, 14, 0, tzinfo=ZoneInfo("UTC")),
+                **kwargs,
+            }
+        )
+
+    def streamed(self, **kwargs):
+        """A match whose broadcast is scheduled and bound to a stream key."""
+        return self.match(
+            live_stream=True,
+            live_stream_bind="yt-bound-abc",
+            external_identifier=f"yt-broadcast-{next(self.broadcasts)}",
+            **kwargs,
+        )
+
+    def get_run_sheet(self, queries):
+        """The run sheet of 1 May 2025, as the member of staff sees it."""
+        season = self.stage.division.season
+        # guardian looks up the matches' content type once a process and
+        # keeps it, so look it up first: the count must not depend on which
+        # test runs first.
+        ContentType.objects.get_for_model(Match)
+        with self.login(self.staff), self.assertNumQueries(queries):
+            self.get_check_200(
+                "admin:fixja:match-runsheet",
+                season.competition_id,
+                season.pk,
+                "20250501",
+            )
+
+
+@per_shell
+class ResyncLiveStreamPermissionTests(MessagesTestMixin, StreamedMatchMixin, TestCase):
+    """
+    A match's broadcast is re-pushed to YouTube by whoever may change the
+    match, as its own page asks. The resync page refuses anyone else, and the
+    run sheet offers Resync only to those who may use it.
+    """
+
+    resync = "admin:fixja:competition:season:division:stage:match:resync-live-stream"
+
+    def test_login_required(self):
+        match = self.streamed()
+        self.assertLoginRequired(self.resync, *match._get_url_args())
+
+    @patch("tournamentcontrol.competition.admin.sync_live_stream")
+    def test_staff_without_change_match_is_refused(self, mock_sync_live_stream):
+        match = self.streamed()
+        with self.login(self.staff):
+            self.get(self.resync, *match._get_url_args())
+            self.assert_http_403_forbidden()
+            self.post(self.resync, *match._get_url_args())
+            self.assert_http_403_forbidden()
+        mock_sync_live_stream.s.assert_not_called()
+
+    @patch("tournamentcontrol.competition.admin.sync_live_stream")
+    def test_change_match_on_another_match_is_refused(self, mock_sync_live_stream):
+        match = self.streamed()
+        assign_perm("competition.change_match", self.staff, self.streamed())
+        with self.login(self.staff):
+            self.post(self.resync, *match._get_url_args())
+            self.assert_http_403_forbidden()
+        mock_sync_live_stream.s.assert_not_called()
+
+    @patch("tournamentcontrol.competition.admin.sync_live_stream")
+    def test_change_match_on_the_match_queues_the_resync(self, mock_sync_live_stream):
+        match = self.streamed()
+        assign_perm("competition.change_match", self.staff, match)
+        with self.login(self.staff):
+            self.get(self.resync, *match._get_url_args())
+            self.assert_http_200_ok()
+            self.post(self.resync, *match._get_url_args())
+            self.assert_http_302_found(url=str(self.stage.urls["edit"]))
+        self.assertResponseMessages(
+            [
+                messages.Message(
+                    messages.SUCCESS, "YouTube live stream resync has been queued."
+                )
+            ]
+        )
+        mock_sync_live_stream.s.assert_called_once_with(match.pk, base_url=ANY)
+        mock_sync_live_stream.s.return_value.apply_async.assert_called_once_with()
+
+    def test_change_match_on_every_match_opens_the_page(self):
+        match = self.streamed()
+        assign_perm("competition.change_match", self.staff)
+        with self.login(self.staff):
+            self.get_check_200(self.resync, *match._get_url_args())
+
+    def test_run_sheet_offers_resync_to_those_who_may_change_the_match(self):
+        theirs = self.streamed(home_team__title="Leopards")
+        other = self.streamed(home_team__title="Sharks")
+        assign_perm("competition.change_match", self.staff, theirs)
+        # The gate reads the permissions the sheet asks for once for the day's
+        # matches. Under Workbook the row without the links no longer asks
+        # whether its ground has a camera; the sheet's other per-row queries
+        # (stage, division, place, referees, and the season and competition
+        # for the Referees link) are older than the gate.
+        self.get_run_sheet(self.by_shell(workbook=26, explorer=25))
+        self.assertResponseContains(self.resync_link(theirs), count=1)
+        # The other match is on the sheet, without the link.
+        self.assertResponseContains(
+            self.by_shell(
+                workbook="<td>Sharks</td>", explorer='<td class="team">Sharks</td>'
+            )
+        )
+        self.assertResponseContains(self.resync_link(other), count=0)
+
+
+@per_shell(shells=("workbook",))
+class StreamLinksPermissionTests(StreamedMatchMixin, TestCase):
+    """
+    The Workbook run sheet's "Fix stream" and "Stream?" links open the match's
+    page, which asks for ``change_match``, so they are offered only to those
+    who may change the match. The Explorer sheet has no such links.
+    """
+
+    def test_fix_stream_is_offered_to_those_who_may_change_the_match(self):
+        # Streaming, but not yet bound to a stream key.
+        theirs = self.match(live_stream=True, home_team__title="Leopards")
+        other = self.match(live_stream=True, home_team__title="Sharks")
+        assign_perm("competition.change_match", self.staff, theirs)
+        # Neither row asks whether its ground has a camera: it is streaming.
+        self.get_run_sheet(25)
+        self.assertResponseContains(
+            self.stream_link(theirs, "triangle-alert", "Fix stream"), count=1
+        )
+        self.assertResponseContains("<td>Sharks</td>")
+        self.assertResponseContains(
+            self.stream_link(other, "triangle-alert", "Fix stream"), count=0
+        )
+
+    def test_stream_prompt_is_offered_to_those_who_may_change_the_match(self):
+        # On a camera ground, not streamed.
+        theirs = self.match(home_team__title="Leopards")
+        other = self.match(home_team__title="Sharks")
+        assign_perm("competition.change_match", self.staff, theirs)
+        # Only the row that may offer the link asks whether its ground has a
+        # camera.
+        self.get_run_sheet(26)
+        self.assertResponseContains(
+            self.stream_link(theirs, "pencil", "Stream?"), count=1
+        )
+        self.assertResponseContains("<td>Sharks</td>")
+        self.assertResponseContains(self.stream_link(other, "pencil", "Stream?"), count=0)
 
 
 @per_shell(shells=("explorer",))
