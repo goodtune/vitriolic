@@ -6,6 +6,7 @@ import pytest
 from playwright.sync_api import Page, expect
 
 from tests.e2e.shells import ROW_MENU, SHELL, pane_id, tab_link
+from tournamentcontrol.competition.tests import factories
 
 
 class TestStageReordering:
@@ -19,8 +20,6 @@ class TestStageReordering:
         Returns:
             Division: A division with three stages in order
         """
-        from tournamentcontrol.competition.tests import factories
-        
         # Create a complete hierarchy: Competition -> Season -> Division
         division = factories.DivisionFactory.create(title="Under 12")
         
@@ -57,16 +56,13 @@ class TestStageReordering:
     ):
         """
         Open the division's Stages tab, open the first stage's actions (where
-        the shell keeps them behind a menu) and move it down: the stages are
-        then in a new order in the database and the tab lists them that way.
+        the shell keeps them behind a menu) and move it down: the arrow posts,
+        the stages are then in a new order in the database, and the browser
+        is back on the Stages tab, which lists them that way.
         """
         page = authenticated_page
         division = division_with_stages
-        division_url = (
-            f"{live_server.url}/admin/fixja/competition/"
-            f"{division.season.competition_id}/seasons/{division.season_id}/"
-            f"division/{division.pk}/"
-        )
+        division_url = f"{live_server.url}{division.urls['edit']}"
 
         page.goto(division_url)
         page.locator(tab_link("stages")).click()
@@ -82,15 +78,13 @@ class TestStageReordering:
         first = rows.first
         if SHELL == "workbook":
             first.get_by_role("button", name=ROW_MENU).click()
-        first.get_by_role("link", name=re.compile(r"Move.*down")).click()
+        first.get_by_role("button", name=re.compile(r"Move.*down")).click()
+        expect(page).to_have_url(f"{division_url}#stages-tab")
         page.wait_for_load_state("networkidle")
 
         titles = list(division.stages.order_by("order").values_list("title", flat=True))
         assert titles == ["Semi-Finals", "Preliminary", "Finals"], titles
 
-        # The redirect returns to the division; show its Stages tab again.
-        page.goto(division_url)
-        page.locator(tab_link("stages")).click()
         rows = page.locator(f"#{pane_id('stages')} tbody tr")
         expect(rows.first).to_contain_text("Semi-Finals")
         expect(rows.nth(1)).to_contain_text("Preliminary")
