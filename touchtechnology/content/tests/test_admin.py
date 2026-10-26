@@ -451,6 +451,51 @@ class SitemapListTests(ArrowMixin, TestCase):
                 action = self.reverse("admin:reorder", press.pk, direction)
                 self.assertResponseContains(self.arrow(action, direction, "Press"))
 
+    def plain_title_cell(self, node):
+        """The first cell of ``node``'s row, for a person who may not edit it."""
+        return self.by_shell(
+            workbook=(
+                f'<td class="wb-title-cell">{self.icon("folder")}'
+                f"<span>{node.title}</span></td>"
+            ),
+            explorer=(
+                f'<td class="title-cell"><a href="{node.urls["edit"]}">'
+                f'{self.icon("folder")}<span>{node.title}</span></a></td>'
+            ),
+        )
+
+    def test_a_person_who_may_not_change_the_nodes_sees_no_arrows(self):
+        """
+        A member of staff who may add to the sitemap sees its nodes, but has
+        no arrow to move one they may not change.
+        """
+        press = SitemapNode.objects.create(title="Press", slug="press")
+        viewer = StaffFactory.create(username="viewer")
+        assign_perm("common.add_sitemapnode", viewer)
+        with self.login(viewer):
+            self.get_check_200("admin:content:index")
+        self.assertResponseContains(self.plain_title_cell(press))
+        for direction in ("up", "down"):
+            with self.subTest(direction):
+                action = self.reverse("admin:reorder", press.pk, direction)
+                self.assertResponseNotContains(self.arrow(action, direction, "Press"))
+
+    def test_the_arrows_are_drawn_for_the_nodes_the_person_may_change(self):
+        press = SitemapNode.objects.create(title="Press", slug="press")
+        archive = SitemapNode.objects.create(title="Archive", slug="archive")
+        editor = StaffFactory.create(username="editor")
+        assign_perm("common.add_sitemapnode", editor)
+        assign_perm("common.change_sitemapnode", editor, press)
+        with self.login(editor):
+            self.get_check_200("admin:content:index")
+        self.assertResponseContains(self.plain_title_cell(archive))
+        for direction in ("up", "down"):
+            with self.subTest(direction):
+                action = self.reverse("admin:reorder", press.pk, direction)
+                self.assertResponseContains(self.arrow(action, direction, "Press"))
+                action = self.reverse("admin:reorder", archive.pk, direction)
+                self.assertResponseNotContains(self.arrow(action, direction, "Archive"))
+
 
 class ApplicationListMixin(IconMixin):
     """

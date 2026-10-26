@@ -26,6 +26,8 @@
 
 {% block row-buttons-items %}
 	{{ block.super }}
-	<li><form method="post" action="{% url 'admin:competition:reorder' model="team" parent="division" pk=obj.pk direction="up" %}">{% csrf_token %}<button type="submit">{% icon "arrow-up" %}{% trans "Move up" %}</button></form></li>
-	<li><form method="post" action="{% url 'admin:competition:reorder' model="team" parent="division" pk=obj.pk direction="down" %}">{% csrf_token %}<button type="submit">{% icon "arrow-down" %}{% trans "Move down" %}</button></form></li>
+	{% if change_perm in object_perms %}
+		<li><form method="post" action="{% url 'admin:competition:reorder' model="team" parent="division" pk=obj.pk direction="up" %}">{% csrf_token %}<button type="submit">{% icon "arrow-up" %}{% trans "Move up" %}</button></form></li>
+		<li><form method="post" action="{% url 'admin:competition:reorder' model="team" parent="division" pk=obj.pk direction="down" %}">{% csrf_token %}<button type="submit">{% icon "arrow-down" %}{% trans "Move down" %}</button></form></li>
+	{% endif %}
 {% endblock %}

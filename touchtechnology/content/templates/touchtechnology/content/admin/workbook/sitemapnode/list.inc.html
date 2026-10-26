@@ -29,8 +29,10 @@
 
 {% block row-buttons-items %}
 	{{ block.super }}
-	<li><form method="post" action="{% url 'admin:reorder' obj.pk "up" %}">{% csrf_token %}<button type="submit">{% icon "arrow-up" %}{% trans "Move up" %}</button></form></li>
-	<li><form method="post" action="{% url 'admin:reorder' obj.pk "down" %}">{% csrf_token %}<button type="submit">{% icon "arrow-down" %}{% trans "Move down" %}</button></form></li>
+	{% if change_perm in object_perms %}
+		<li><form method="post" action="{% url 'admin:reorder' obj.pk "up" %}">{% csrf_token %}<button type="submit">{% icon "arrow-up" %}{% trans "Move up" %}</button></form></li>
+		<li><form method="post" action="{% url 'admin:reorder' obj.pk "down" %}">{% csrf_token %}<button type="submit">{% icon "arrow-down" %}{% trans "Move down" %}</button></form></li>
+	{% endif %}
 	<li><a href="{{ obj.get_absolute_url }}" target="_blank" rel="noopener">{% icon "external-link" %}{% trans "View on the site" %}</a></li>
 {% endblock row-buttons-items %}
 

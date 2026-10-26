@@ -18,6 +18,7 @@ from django.urls import path, re_path, reverse, reverse_lazy
 from django.utils.encoding import smart_str
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
+from guardian.utils import get_40x_or_None
 
 from touchtechnology.admin import explorer
 from touchtechnology.admin.branding import get_brand
@@ -27,6 +28,7 @@ from touchtechnology.admin.templatetags.admin import allowed
 from touchtechnology.admin.views import AdminLoginView
 from touchtechnology.common.decorators import require_POST_m, staff_login_required_m
 from touchtechnology.common.models import SitemapNode
+from touchtechnology.common.utils import get_perms_for_model
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +249,17 @@ class AdminSite(DjangoAdminSite):
     @require_POST_m
     def reorder(self, request, id, direction, *args, **kwargs):
         node = get_object_or_404(SitemapNode, pk=id)
+        # Only a person who may change the node may move it, as with the
+        # Edit item beside its arrows.
+        has_permission = get_40x_or_None(
+            request,
+            get_perms_for_model(SitemapNode, change=True),
+            obj=node,
+            return_403=True,
+            accept_global_perms=True,
+        )
+        if has_permission is not None:
+            return has_permission
         getattr(node, f"move_{direction}")()
         # Back to the list of the folder the node is in.
         query = {"r": node.parent_id} if node.parent_id else None
