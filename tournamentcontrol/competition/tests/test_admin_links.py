@@ -2,7 +2,8 @@ from test_plus import TestCase
 
 from touchtechnology.admin.tests.links import LinksMixin
 from touchtechnology.admin.tests.shells import per_shell
-from touchtechnology.common.tests.factories import UserFactory
+from touchtechnology.common.tests.factories import StaffFactory, UserFactory
+from tournamentcontrol.competition.models import MatchScoreSheet
 from tournamentcontrol.competition.tests import factories
 
 
@@ -125,3 +126,56 @@ class CompetitionRedirectsTests(TestCase):
                 data={"form-TOTAL_FORMS": 0, "form-INITIAL_FORMS": 0},
             )
         self.assert_http_302_found(url=f"{team.division.urls['edit']}#teams-tab")
+
+
+class ScoreSheetDeleteTests(TestCase):
+    """
+    A match's score sheets have no list of their own: they are a tab of the
+    match's page, so deleting one returns there.
+    """
+
+    user_factory = StaffFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.match = factories.MatchFactory.create()
+        cls.scoresheet = MatchScoreSheet.objects.create(
+            match=cls.match, image="harness/score-sheet"
+        )
+        cls.deleter = cls.make_user(
+            "deleter",
+            perms=["competition.delete_matchscoresheet", "competition.change_match"],
+        )
+        cls.editor = cls.make_user("editor", perms=["competition.change_match"])
+
+    def delete_scoresheet(self, match):
+        """Post the delete of the score sheet through the address of ``match``."""
+        self.post(
+            "admin:fixja:competition:season:division:stage:match:"
+            "matchscoresheet:delete",
+            *match._get_url_args(),
+            self.scoresheet.pk,
+        )
+
+    def test_deleting_returns_to_the_match(self):
+        with self.login(self.deleter):
+            self.delete_scoresheet(self.match)
+            self.assert_http_302_found(url=f"{self.match.urls['edit']}#scoresheets-tab")
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:match:edit",
+                *self.match._get_url_args(),
+            )
+        self.assertCountEqual(self.match.scoresheets.all(), [])
+
+    def test_deleting_through_another_match_is_not_found(self):
+        other = factories.MatchFactory.create(stage=self.match.stage)
+        with self.login(self.deleter):
+            self.delete_scoresheet(other)
+        self.assert_http_404_not_found()
+        self.assertEqual(self.match.scoresheets.count(), 1)
+
+    def test_deleting_needs_the_permission(self):
+        with self.login(self.editor):
+            self.delete_scoresheet(self.match)
+        self.assert_http_403_forbidden()
+        self.assertCountEqual(self.match.scoresheets.all(), [self.scoresheet])
