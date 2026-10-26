@@ -6,7 +6,7 @@ This directory is for the testing of this project and covers both unit tests and
 
 ### Unit Tests
 
-- **Framework**: Django's built-in test framework with `coverage` and `django-test-plus`
+- **Framework**: Django's built-in test framework with `django-test-plus`
 - **Location**: App tests are in the `touchtechnology` and `tournamentcontrol` directories, with `example_app` used to provide models and factories for testing the reusable components.
 - **Purpose**: Test individual components, models, views, and business logic
 - **Execution**: Run via `tox -e dj{version}-py{version}` (e.g., `tox -e dj52-py311`) for the full suite for a specific Django/Python combination

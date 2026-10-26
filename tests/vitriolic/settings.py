@@ -183,14 +183,13 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-# Use modern, secure password hashers. MD5PasswordHasher was used previously for
-# test speed but using production-grade hashers ensures compatibility with Django 4.0+
-# and prevents ImportError with deprecated hashers like SHA1PasswordHasher.
-# PBKDF2PasswordHasher is Django's default and provides good security.
-# PBKDF2SHA1PasswordHasher is included for backward compatibility with older passwords.
+# The test suite hashes a password for every user a factory creates and
+# verifies one on every login. Django's default PBKDF2 hasher runs over a
+# million iterations per hash, which was about 60% of the suite's run time
+# in CI. MD5PasswordHasher is what the Django documentation recommends for
+# tests and is still shipped in Django 5.2 and 6.x.
 PASSWORD_HASHERS = [
-    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
-    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+    "django.contrib.auth.hashers.MD5PasswordHasher",
 ]
 
 AUTHENTICATION_BACKENDS = (

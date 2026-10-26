@@ -47,7 +47,6 @@ dev = [
 ]
 test = [
     "babel==2.17.0",
-    "coverage",
     "django-environ",
     "django-template-partials>=25.3",
     "django-test-plus",
