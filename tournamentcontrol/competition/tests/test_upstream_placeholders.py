@@ -9,6 +9,10 @@ home page's Progress Teams widget) and the stage's progression page leave it
 out, by ``team_awaits_upstream`` in ``utils``. Only that placeholder is left
 out: an undecided team with a formula on a synced match, and a placeholder
 shaped undecided team on a match of our own, still need progressing.
+
+Nor is the placeholder a place to fill on the progression page of a stage
+which also holds undecided teams of our own: the next sync would write over
+whatever team was chosen for it.
 """
 
 import datetime
@@ -18,7 +22,7 @@ from freezegun import freeze_time
 from test_plus import TestCase
 
 from touchtechnology.admin.tests.shells import per_shell
-from touchtechnology.common.tests.factories import UserFactory
+from touchtechnology.common.tests.factories import SuperUserFactory, UserFactory
 from tournamentcontrol.competition.dashboard import (
     matches_progression_possible,
     matches_require_progression,
@@ -66,6 +70,15 @@ def synced_placeholder(stage, upstream_id):
         upstream_id=upstream_id,
         datetime=KICK_OFF,
     )
+
+
+def place_to_fill(stage, **kwargs):
+    """An undecided team of our own, on the home side of a match of our own."""
+    undecided = UndecidedTeamFactory.create(stage=stage, **kwargs)
+    MatchFactory.create(
+        stage=stage, home_team=None, home_team_undecided=undecided, datetime=KICK_OFF
+    )
+    return undecided
 
 
 @freeze_time(NOW)
@@ -265,3 +278,124 @@ class UpstreamPlaceholderPageTests(TestCase):
             f'<input type="hidden" name="form-0-id" value="{final.pk}" '
             'id="id_form-0-id">'
         )
+
+
+@per_shell
+@freeze_time(NOW)
+class UpstreamPlaceholderPlacesTests(TestCase):
+    """
+    The places to fill on the progression page of a stage which holds the
+    sync's placeholder beside undecided teams of our own. The next sync would
+    write over whatever team was chosen for the placeholder, so it is not
+    offered; every undecided team of our own still is.
+    """
+
+    user_factory = SuperUserFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = cls.make_user("superuser")
+        cls.stage = StageFactory.create(division__season__timezone="UTC", order=1)
+        cls.placeholder = synced_placeholder(
+            cls.stage, "mysideline:1"
+        ).home_team_undecided
+
+    def get_places(self, stage):
+        """Open the progression page of ``stage``: the places it offers."""
+        progress = stage.url_names["progress"]
+        with self.login(self.superuser):
+            self.get_check_200(progress.url_name, *progress.args)
+        return [form.instance for form in self.get_context("formset").forms]
+
+    def label(self, row, title):
+        """The label of the place in ``row`` of the page."""
+        return self.by_shell(
+            workbook=(
+                f'<label for="id_form-{row}-team" class="field_name">{title}</label>'
+            ),
+            explorer=(
+                f'<label class="field-label" for="id_form-{row}-team">{title}</label>'
+            ),
+        )
+
+    def assertPlacesQueries(self, places, queries):
+        """
+        Open the progression page of a stage with ``places`` of our own beside
+        the placeholder, in ``queries``. The places are one query, whatever
+        their number; each place still costs the evaluation of its match and
+        the teams it may be filled with.
+        """
+        for number in range(1, places + 1):
+            place_to_fill(self.stage, label=f"Place {number}", formula="")
+        progress = self.stage.url_names["progress"]
+        with self.login(self.superuser), self.assertNumQueries(queries):
+            self.get(progress.url_name, *progress.args)
+        self.assert_http_200_ok()
+        self.assertResponseContains(
+            '<input type="hidden" name="form-TOTAL_FORMS" '
+            f'value="{places}" id="id_form-TOTAL_FORMS">'
+        )
+
+    def test_the_placeholder_is_not_a_place_to_fill(self):
+        """
+        Beside a place of our own, the sync's placeholder is not offered. Its
+        formula is empty, so had it been offered it would be the first row.
+        """
+        ours = place_to_fill(self.stage, label="", formula="G1P2")
+        self.assertEqual(self.get_places(self.stage), [ours])
+        self.assertResponseContains(self.label(0, "G1P2"))
+        self.assertResponseNotContains(self.label(0, TBA_LABEL))
+
+    def test_places_of_our_own_are_all_offered(self):
+        """A stage without the placeholder offers every undecided team."""
+        stage = StageFactory.create(division__season__timezone="UTC", order=1)
+        host = place_to_fill(stage, label="Host", formula="")
+        position = place_to_fill(stage, label="", formula="G1P2")
+        self.assertCountEqual(self.get_places(stage), [host, position])
+        self.assertResponseContains(self.label(0, "Host"))
+        self.assertResponseContains(self.label(1, "G1P2"))
+
+    def test_a_tba_of_our_own_is_a_place_to_fill(self):
+        """
+        An undecided team of our own shaped like the placeholder (labelled
+        "TBA", no formula) is offered: a match of our own stands on it.
+        """
+        ours = place_to_fill(self.stage, label=TBA_LABEL, formula="")
+        self.assertEqual(self.get_places(self.stage), [ours])
+        self.assertResponseContains(
+            '<input type="hidden" name="form-TOTAL_FORMS" value="1" '
+            'id="id_form-TOTAL_FORMS">'
+        )
+        self.assertResponseContains(
+            f'<input type="hidden" name="form-0-id" value="{ours.pk}" '
+            'id="id_form-0-id">'
+        )
+
+    def test_the_placeholder_on_a_match_of_our_own_is_a_place_to_fill(self):
+        """
+        Once a match of our own stands on the sync's placeholder as well,
+        filling it is ours to do, and it is offered.
+        """
+        MatchFactory.create(
+            stage=self.stage,
+            home_team=None,
+            home_team_undecided=self.placeholder,
+            datetime=KICK_OFF,
+        )
+        self.assertEqual(self.get_places(self.stage), [self.placeholder])
+        self.assertResponseContains(self.label(0, TBA_LABEL))
+
+    def test_an_undecided_team_on_no_match_is_offered(self):
+        """
+        An undecided team which no match stands on is offered, as before: no
+        match of the provider's says the sync owns it.
+        """
+        unused = UndecidedTeamFactory.create(stage=self.stage, label="Host")
+        ours = place_to_fill(self.stage, label="", formula="G1P2")
+        self.assertCountEqual(self.get_places(self.stage), [unused, ours])
+
+    def test_queries_for_one_place(self):
+        self.assertPlacesQueries(1, self.by_shell(workbook=24, explorer=23))
+
+    def test_queries_for_six_places(self):
+        self.assertPlacesQueries(6, self.by_shell(workbook=44, explorer=38))

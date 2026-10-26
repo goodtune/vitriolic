@@ -144,6 +144,7 @@ from tournamentcontrol.competition.utils import (
     match_unplayed,
     team_awaits_upstream,
     team_needs_progressing,
+    undecided_team_awaits_upstream,
 )
 from tournamentcontrol.competition.wizards import DrawGenerationWizard
 
@@ -3065,7 +3066,7 @@ class CompetitionAdminComponent(AdminComponent):
             .exclude(legitimate_bye_match)
             .exclude(team_awaits_upstream)
         )
-        teams = stage.undecided_teams.all()
+        teams = stage.undecided_teams.exclude(undecided_team_awaits_upstream())
 
         if not matches:
             return HttpResponseGone()
@@ -3110,6 +3111,7 @@ class CompetitionAdminComponent(AdminComponent):
             generic_edit_kwargs = {
                 "formset_class": ProgressTeamsFormSet,
                 "formset_kwargs": {
+                    "queryset": teams,
                     "stage": stage,
                 },
                 "model_or_manager": teams.model,
