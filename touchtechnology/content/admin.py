@@ -4,7 +4,7 @@ from collections import namedtuple
 
 from django.contrib import messages
 from django.core.files.storage import default_storage
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import NoReverseMatch, include, path, re_path, resolve, reverse
@@ -443,7 +443,8 @@ class ContentAdminComponent(AdminComponent):
     def list_placeholders(self, request, *args, **kwargs):
         return self.generic_list(
             request,
-            Placeholder,
+            # Each row shows how many nodes of the sitemap mount it.
+            Placeholder.objects.annotate(node_count=Count("nodes")),
             paginate_by=0,
             permission_required=True,
             extra_context=kwargs,

@@ -1,9 +1,12 @@
 {% extends "touchtechnology/admin/explorer/list.inc.html" %}
 {% load i18n common admin admin_explorer %}
 
+{# Whether the person may add applications is asked once, not once a row. #}
+{% block table %}{% with model_perms=model|hasperm:user %}{{ block.super }}{% endwith %}{% endblock %}
+
 {% block table-headings %}
 	<th>{% trans "Application" %}</th>
-	{% if add_perm in model|hasperm:user %}<th class="wide-only">{% trans "Import path" %}</th>{% endif %}
+	{% if add_perm in model_perms %}<th class="wide-only">{% trans "Import path" %}</th>{% endif %}
 {% endblock %}
 
 {% block table-columns %}
@@ -14,9 +17,9 @@
 		{% else %}
 			<span>{{ obj }}</span>
 		{% endif %}
-		{% if obj.nodes.count %}<span class="tag">{% blocktrans count count=obj.nodes.count %}{{ count }} page{% plural %}{{ count }} pages{% endblocktrans %}</span>{% endif %}
+		{% if obj.node_count %}<span class="tag">{% blocktrans count count=obj.node_count %}{{ count }} page{% plural %}{{ count }} pages{% endblocktrans %}</span>{% endif %}
 	</td>
-	{% if add_perm in model|hasperm:user %}<td class="wide-only"><code>{{ obj.path }}</code></td>{% endif %}
+	{% if add_perm in model_perms %}<td class="wide-only"><code>{{ obj.path }}</code></td>{% endif %}
 {% endblock %}
 
 {% block row-buttons-items %}

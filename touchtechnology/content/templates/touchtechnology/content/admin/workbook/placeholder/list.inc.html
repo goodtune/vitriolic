@@ -12,7 +12,7 @@
 		{% url 'admin:content:real_placeholder:edit' obj.pk as edit_url %}
 		{% if change_perm in object_perms %}<a href="{{ edit_url }}">{{ obj }}</a>{% else %}<span>{{ obj }}</span>{% endif %}
 	</td>
-	<td class="wb-num" data-label="{% trans "Pages" %}">{{ obj.nodes.count }}</td>
+	<td class="wb-num" data-label="{% trans "Pages" %}">{{ obj.node_count }}</td>
 	<td data-label="{% trans "Import Path" %}"><span class="wb-code">{{ obj.path }}</span></td>
 {% endblock %}
 
