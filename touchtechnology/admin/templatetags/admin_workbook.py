@@ -22,6 +22,7 @@ from django.utils.safestring import mark_safe
 from touchtechnology.admin.explorer import build_tree
 from touchtechnology.admin.helpers import admin_media as _admin_media
 from touchtechnology.admin.helpers import initials as _initials
+from touchtechnology.admin.templatetags.admin import allowed
 from touchtechnology.admin.trail import build_trail
 from touchtechnology.admin.widgets import kind_of, render_field
 
@@ -147,6 +148,24 @@ def initials(user):
     return _initials(user, single=2)
 
 
+@register.simple_tag(takes_context=True)
+def admin_tree(context):
+    """
+    The explorer for the page (see ``touchtechnology.admin.explorer``), worked
+    out once per request: the rail draws it, and a page's sections are read
+    from it.
+    """
+    request = context.get("request")
+    admin = context.get("admin") or default_site()
+    if request is None or admin is None:
+        return None
+    tree = getattr(request, "_admin_explorer", None)
+    if tree is None:
+        components = allowed(admin.get_components(), request)
+        tree = request._admin_explorer = build_tree(request, context, components)
+    return tree
+
+
 @register.inclusion_tag("touchtechnology/admin/workbook/_nav.html", takes_context=True)
 def admin_nav(context, placement="rail"):
     """
@@ -155,8 +174,6 @@ def admin_nav(context, placement="rail"):
     down to where the page is; the others open when asked. On a phone the
     same tree is a drill-down at the folder the page is in.
     """
-    from touchtechnology.admin.templatetags.admin import allowed
-
     request = context.get("request")
     admin = context.get("admin") or default_site()
     path = request.path if request is not None else ""
@@ -164,10 +181,7 @@ def admin_nav(context, placement="rail"):
     tree = None
     if admin is not None and request is not None:
         components = allowed(admin.get_components(), request)
-        tree = getattr(request, "_admin_explorer", None)
-        if tree is None:
-            tree = build_tree(request, context, components)
-            request._admin_explorer = tree
+        tree = admin_tree(context)
         roots = {node.key: node for node in tree.roots}
         for verbose_name, __, url, component, __ in components:
             if not component.visible:
@@ -203,8 +217,6 @@ def admin_tasks(context):
     The jobs the home page offers: each component the person may use names
     its own (``AdminComponentMixin.tasks``), in the order of the menu.
     """
-    from touchtechnology.admin.templatetags.admin import allowed
-
     request = context.get("request")
     admin = context.get("admin") or default_site()
     if admin is None or request is None:

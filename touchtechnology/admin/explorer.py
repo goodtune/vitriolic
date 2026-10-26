@@ -128,6 +128,8 @@ class _Section:
     url: str
     icon: str
     model: type | None = None
+    #: The permission a person needs to be shown the section, or ``None``.
+    permission: str | None = None
 
 
 class Explorer:
@@ -169,6 +171,11 @@ class Explorer:
     # Sections
 
     def sections(self):
+        """
+        Every section of the component's menu, in order. A section is shown
+        to a person who holds the permission it names (see ``shown``); a
+        node's key is the section's place here, whoever is asking.
+        """
         found = []
         for entry in self.component.dropdowns():
             label, url = entry[0], str(entry[1])
@@ -181,9 +188,19 @@ class Explorer:
                         str(label), self.shell.section_icon(entry, model)
                     ),
                     model=model,
+                    permission=entry[3] if len(entry) > 3 else None,
                 )
             )
         return found
+
+    def shown(self, request, section):
+        """
+        Whether ``request.user`` is shown ``section``: everyone is, unless it
+        names a permission (``content.view_file``) they do not hold.
+        """
+        return section.permission is None or request.user.has_perm(
+            section.permission
+        )
 
     def section_model(self, url):
         """
@@ -329,6 +346,7 @@ class Explorer:
                 return [
                     self.section_node(request, n, section)
                     for n, section in enumerate(self.sections())
+                    if self.shown(request, section)
                 ]
             if local.startswith("s"):
                 return self.section_children(request, int(local[1:]))

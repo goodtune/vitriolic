@@ -38,7 +38,6 @@ ICON_ALIASES = {
     "sort-numeric-asc": "grade",
     "graduation-cap": "student",
     "users": "group",
-    "folder-open": "image",
     "pencil-square-o": "chunk",
     "reply": "redirect",
     "puzzle-piece": "puzzle",
