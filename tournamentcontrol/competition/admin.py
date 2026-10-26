@@ -39,7 +39,7 @@ from touchtechnology.common.decorators import (
     csrf_exempt_m,
     staff_login_required_m,
 )
-from touchtechnology.common.prince import PrinceError, prince
+from touchtechnology.common.prince import PrinceError, PrinceUnavailable, prince
 from touchtechnology.common.utils import get_perms_for_model
 from tournamentcontrol.competition.dashboard import (
     BasicResultWidget,
@@ -150,6 +150,12 @@ SCORECARD_PDF_WAIT = getattr(settings, "TOURNAMENTCONTROL_SCORECARD_PDF_WAIT", 5
 PDF_FAILED_MESSAGE = _(
     "The PDF service didn't respond, so your PDF could not be generated. "
     "Please try again."
+)
+
+# Shown when the PDF binary cannot be run, so trying again will not help.
+PDF_UNAVAILABLE_MESSAGE = _(
+    "PDF dependencies are unavailable, so your PDF could not be generated. "
+    "Trying again will not help; ask an administrator to check the PDF setup."
 )
 
 # Shown when the season's stored OAuth2 refresh token is expired or revoked
@@ -3169,9 +3175,9 @@ class CompetitionAdminComponent(AdminComponent):
                 format=mode,
                 extra_context=extra_context,
             )
-        except PrinceError:
+        except PrinceError as exc:
             log.exception("PDF for %s was not generated.", request.path)
-            return self.pdf_failed(request, season.urls["edit"], extra_context)
+            return self.pdf_failed(request, season.urls["edit"], extra_context, exc)
 
     @competition_by_pk_m
     @csrf_exempt_m
@@ -3204,18 +3210,22 @@ class CompetitionAdminComponent(AdminComponent):
                 extra_context=extra_context,
                 dates=[date],
             )
-        except PrinceError:
+        except PrinceError as exc:
             log.exception("PDF for %s was not generated.", request.path)
-            return self.pdf_failed(request, season.urls["edit"], extra_context)
+            return self.pdf_failed(request, season.urls["edit"], extra_context, exc)
 
-    def pdf_failed(self, request, start_again, extra_context):
+    def pdf_failed(self, request, start_again, extra_context, error):
         """
-        The PDF render failed for good, in the background task or in this
-        request. The error has already been reported, by the task or by the
-        view that caught the ``PrinceError``, so explain it plainly instead
-        of re-raising.
+        The PDF render failed for good with ``error``, in the background task
+        or in this request. The error has already been reported, by the task
+        or by the view that caught the ``PrinceError``, so explain it plainly
+        instead of re-raising. A ``PrinceUnavailable`` will fail again, so the
+        message does not ask the person to try again.
         """
-        messages.error(request, PDF_FAILED_MESSAGE)
+        if isinstance(error, PrinceUnavailable):
+            messages.error(request, PDF_UNAVAILABLE_MESSAGE)
+        else:
+            messages.error(request, PDF_FAILED_MESSAGE)
         context = dict(extra_context, start_again=start_again)
         templates = self.template_path("pdf_failed.html")
         return self.render(request, templates, context)
@@ -3230,7 +3240,7 @@ class CompetitionAdminComponent(AdminComponent):
 
         if meta["status"] == states.FAILURE:
             start_again = kwargs["season"].urls["edit"]
-            return self.pdf_failed(request, start_again, extra_context)
+            return self.pdf_failed(request, start_again, extra_context, meta["result"])
 
         if meta["status"] in states.PROPAGATE_STATES:
             raise meta["result"]
@@ -3880,7 +3890,7 @@ class CompetitionAdminComponent(AdminComponent):
 
         if meta["status"] == states.FAILURE:
             start_again = self.reverse("scorecard-report")
-            return self.pdf_failed(request, start_again, extra_context)
+            return self.pdf_failed(request, start_again, extra_context, meta["result"])
 
         if meta["status"] in states.PROPAGATE_STATES:
             raise meta["result"]
@@ -4232,9 +4242,9 @@ class CompetitionAdminComponent(AdminComponent):
         if mode == "pdf":
             try:
                 pdf = prince(res.render().content)
-            except PrinceError:
+            except PrinceError as exc:
                 log.exception("PDF for %s was not generated.", request.path)
-                return self.pdf_failed(request, club.urls["edit"], extra_context)
+                return self.pdf_failed(request, club.urls["edit"], extra_context, exc)
             return HttpResponse(pdf, content_type="application/pdf")
 
         return res

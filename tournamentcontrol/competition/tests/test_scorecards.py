@@ -1,5 +1,7 @@
 import base64
+import tempfile
 from datetime import date, datetime, time
+from pathlib import Path
 from unittest.mock import ANY, patch
 from zoneinfo import ZoneInfo
 
@@ -13,8 +15,8 @@ from django.urls import reverse
 from test_plus import TestCase
 
 from touchtechnology.admin.shells import DEFAULT_SHELL, get_shell
-from touchtechnology.admin.tests.shells import by_shell
-from touchtechnology.common.prince import PrinceError
+from touchtechnology.admin.tests.shells import by_shell, per_shell
+from touchtechnology.common.prince import PrinceError, prince
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.admin import SCORECARD_PDF_WAIT
 from tournamentcontrol.competition.tasks import (
@@ -26,28 +28,47 @@ from tournamentcontrol.competition.tests import factories
 FAKE_PDF = b"%PDF-1.4 fake scorecards"
 UTC = ZoneInfo("UTC")
 
+#: What the "PDF was not generated" page says, when trying again may help.
+PDF_FAILED = (
+    "The PDF service didn&#x27;t respond, so your PDF could not be generated. "
+    "Please try again."
+)
+#: What it says when ``PRINCE_BINARY`` cannot be run, and trying again won't.
+PDF_UNAVAILABLE = (
+    "PDF dependencies are unavailable, so your PDF could not be generated. "
+    "Trying again will not help; ask an administrator to check the PDF setup."
+)
+
+
+def without_binary(test):
+    """
+    For the rest of ``test``, make PDFs with no server and a ``PRINCE_BINARY``
+    that names a path with nothing there. Return the path.
+    """
+    binary = Path(test.enterContext(tempfile.TemporaryDirectory()), "prince")
+    test.enterContext(test.settings(PRINCE_SERVER=None, PRINCE_BINARY=str(binary)))
+    return binary
+
 
 class PdfFailedAssertions:
-    def assertPdfFailed(self, start_again):
+    def assertPdfFailed(self, start_again, message=PDF_FAILED):
         """
-        The PDF was not generated: the page says so plainly and offers a way
-        to start again, rather than raising a server error.
+        The PDF was not generated: the page says so plainly, with ``message``,
+        and offers a way to start again, rather than raising a server error.
         """
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertResponseContains(
             by_shell(
                 workbook=(
                     '<p class="wb-message wb-message-error">'
                     '<svg class="wb-icon" aria-hidden="true" focusable="false">'
                     '<use href="/static/touchtechnology/admin/workbook/icons.svg#circle-alert">'
-                    "</use></svg><span>The PDF service didn&#x27;t respond, so your "
-                    "PDF could not be generated. Please try again.</span></p>"
+                    f"</use></svg><span>{message}</span></p>"
                 ),
                 explorer=(
                     '<div class="message message-error">'
                     '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/explorer/img/icons.svg#alert"></use></svg>'
-                    "<p>The PDF service didn&#x27;t respond, so your PDF could not be "
-                    "generated. Please try again.</p>"
+                    f"<p>{message}</p>"
                     '<button type="button" class="message-close">'
                     '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/explorer/img/icons.svg#x"></use></svg>'
                     '<span class="visually-hidden">Dismiss</span></button></div>'
@@ -328,6 +349,21 @@ class AsyncResultViewTests(PdfFailedAssertions, ScorecardTestCase):
         self.assertResponseHeaders({"Refresh": None})
         self.assertNoAsyncResult()
 
+    def test_failed_unavailable(self):
+        """
+        A render that failed because the PDF binary cannot be run says that
+        trying again will not help. The task failed with the error ``prince``
+        raised, as the result backend gives it back.
+        """
+        without_binary(self)
+        with self.assertRaises(PrinceError) as raised:
+            prince("<html></html>")
+        backend = generate_pdf_scorecards.backend
+        stored = backend.prepare_exception(raised.exception)
+        self.poll(states.FAILURE, backend.exception_to_python(stored))
+        self.assertPdfFailed(self.start_again(), PDF_UNAVAILABLE)
+        self.assertNoAsyncResult()
+
     def test_revoked(self):
         with self.assertRaises(TaskRevokedError):
             self.poll(states.REVOKED, TaskRevokedError("revoked"))
@@ -525,7 +561,8 @@ PDF_SERVICE = "https://pdf.example.com/"
 class PdfServiceRetryTests(TestCase):
     """
     The PDF tasks retry a render that the remote PDF service failed with a
-    timeout, a connection error or a 5xx, but not a 4xx.
+    timeout, a connection error or a 5xx, but not a 4xx, nor one that failed
+    because the PDF binary cannot be run.
 
     Eager tasks retry inline, without waiting for the countdown, but only when
     eager errors are not propagated; otherwise ``Retry`` itself is raised. So
@@ -569,6 +606,23 @@ class PdfServiceRetryTests(TestCase):
             extra_context={},
             season_pk=self.season.pk,
         )
+
+    def assertBinaryMissingNotRetried(self, render):
+        """
+        A PDF binary that cannot be run will not run on a retry either, so the
+        render fails at once: the binary is tried, and its failure logged,
+        once.
+        """
+        binary = without_binary(self)
+        with self.assertLogs("touchtechnology.common.prince", "ERROR") as logs:
+            result = render()
+        self.assertEqual(
+            [record.getMessage() for record in logs.records],
+            [f"PDF binary {binary} cannot be run: No such file or directory"],
+        )
+        self.assertEqual(result.state, "FAILURE")
+        self.assertIsInstance(result.result, PrinceError)
+        self.assertIsInstance(result.result.__cause__, FileNotFoundError)
 
     def test_timeout_then_success(self):
         self.reply(requests.Timeout("timed out"), 200)
@@ -636,6 +690,9 @@ class PdfServiceRetryTests(TestCase):
         self.assertEqual(result.result.__cause__.response.status_code, 400)
         self.assertEqual(len(self.pdf_service.calls), 1)
 
+    def test_binary_missing_not_retried(self):
+        self.assertBinaryMissingNotRetried(self.generate_scorecards)
+
     # The grid task takes a Season instance, which the eager ``delay`` would
     # reject as not JSON serializable, so these call ``apply`` directly.
 
@@ -653,21 +710,69 @@ class PdfServiceRetryTests(TestCase):
         self.assertEqual(result.result.__cause__.response.status_code, 404)
         self.assertEqual(len(self.pdf_service.calls), 1)
 
+    def test_grid_binary_missing_not_retried(self):
+        self.assertBinaryMissingNotRetried(
+            lambda: generate_pdf_grid.apply(args=(self.season, {}))
+        )
 
-@override_settings(PRINCE_SERVER="pdf.example.com")
-class PdfServiceTimeoutViewTests(PdfFailedAssertions, TestCase):
+
+class PdfFailedViewTests(PdfFailedAssertions):
     """
-    The admin views that make their PDF within the request give up on a PDF
-    service that does not answer in time (#427). They log the failure and
-    show the "PDF was not generated" page, rather than hold the worker or
-    raise a server error.
+    The admin views that make their PDF within the request. When the PDF
+    fails, each shows the "PDF was not generated" page with ``message``,
+    rather than raise a server error. A subclass makes the PDF fail, and
+    ``get_pdf`` asks for it as the superuser.
     """
 
     user_factory = factories.SuperUserFactory
+    message = PDF_FAILED
 
     def setUp(self):
         super().setUp()
         self.superuser = self.make_user()
+
+    def test_season_grid(self):
+        season = factories.SeasonFactory.create()
+        self.get_pdf(
+            "admin:fixja:competition:season:match-grid",
+            season.competition_id,
+            season.pk,
+            "pdf",
+        )
+        self.assertPdfFailed(season.urls["edit"], self.message)
+
+    def test_day_grid(self):
+        match = factories.MatchFactory.create(
+            datetime=datetime(2017, 2, 13, 10, 0, tzinfo=UTC)
+        )
+        season = match.stage.division.season
+        self.get_pdf(
+            "admin:fixja:match-grid",
+            season.competition_id,
+            season.pk,
+            "20170213",
+            "pdf",
+        )
+        self.assertPdfFailed(season.urls["edit"], self.message)
+
+    def test_registration_form(self):
+        club = factories.ClubFactory.create()
+        team = factories.TeamFactory.create(club=club)
+        season = team.division.season
+        season.competition.clubs.add(club)
+        self.get_pdf("admin:fixja:club:registration-form", club.pk, season.pk, "pdf")
+        self.assertPdfFailed(club.urls["edit"], self.message)
+
+
+@override_settings(PRINCE_SERVER="pdf.example.com")
+class PdfServiceTimeoutViewTests(PdfFailedViewTests, TestCase):
+    """
+    The views give up on a PDF service that does not answer in time (#427).
+    They log the failure and show the page, rather than hold the worker.
+    """
+
+    def setUp(self):
+        super().setUp()
         self.pdf_service = responses.RequestsMock()
         self.pdf_service.start()
         self.addCleanup(self.pdf_service.reset)
@@ -691,37 +796,24 @@ class PdfServiceTimeoutViewTests(PdfFailedAssertions, TestCase):
         )
         self.assertIsInstance(logs.records[0].exc_info[1], PrinceError)
 
-    def test_season_grid(self):
-        season = factories.SeasonFactory.create()
-        self.get_pdf(
-            "admin:fixja:competition:season:match-grid",
-            season.competition_id,
-            season.pk,
-            "pdf",
-        )
-        self.assertPdfFailed(season.urls["edit"])
 
-    def test_day_grid(self):
-        match = factories.MatchFactory.create(
-            datetime=datetime(2017, 2, 13, 10, 0, tzinfo=UTC)
-        )
-        season = match.stage.division.season
-        self.get_pdf(
-            "admin:fixja:match-grid",
-            season.competition_id,
-            season.pk,
-            "20170213",
-            "pdf",
-        )
-        self.assertPdfFailed(season.urls["edit"])
+@per_shell
+class PrinceUnavailableViewTests(PdfFailedViewTests, TestCase):
+    """
+    Without a PDF server, the views run ``PRINCE_BINARY``. When it cannot be
+    run, the page says the PDF dependencies are unavailable, and does not ask
+    the person to try again (#440).
+    """
 
-    def test_registration_form(self):
-        club = factories.ClubFactory.create()
-        team = factories.TeamFactory.create(club=club)
-        season = team.division.season
-        season.competition.clubs.add(club)
-        self.get_pdf("admin:fixja:club:registration-form", club.pk, season.pk, "pdf")
-        self.assertPdfFailed(club.urls["edit"])
+    message = PDF_UNAVAILABLE
+
+    def setUp(self):
+        super().setUp()
+        without_binary(self)
+
+    def get_pdf(self, url_name, *args):
+        with self.login(self.superuser):
+            self.get(url_name, *args)
 
 
 class ScorecardReportWizardTests(ScorecardTestCase):

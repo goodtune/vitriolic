@@ -11,9 +11,24 @@ logger = logging.getLogger(__name__)
 
 class PrinceError(Exception):
     """
-    The PDF server did not make the PDF: it could not be reached, it did not
+    The PDF was not made.
+
+    With ``PRINCE_SERVER``, the server could not be reached, it did not
     answer within ``PRINCE_TIMEOUT``, or it answered with an error status.
     The ``requests`` exception is the ``__cause__``.
+
+    Without it, ``PRINCE_BINARY`` did not finish within the read timeout, or
+    it exited with an error status. The ``subprocess`` exception is the
+    ``__cause__``. If the binary could not be run at all, the error is a
+    ``PrinceUnavailable``.
+    """
+
+
+class PrinceUnavailable(PrinceError):
+    """
+    ``PRINCE_BINARY`` could not be run: it is missing, or it is not
+    executable. The ``OSError`` is the ``__cause__``. Trying again will not
+    help; the site's setup must change.
     """
 
 
@@ -21,7 +36,8 @@ def prince(html, base_url=None, ttl=300, **kwargs):
     SERVER = getattr(settings, "PRINCE_SERVER", None)
     BINARY = getattr(settings, "PRINCE_BINARY", "/usr/local/bin/prince")
     # Seconds to wait for the PDF server: (connect, read). Without a timeout
-    # requests waits for ever, and so does the worker that called us.
+    # requests waits for ever, and so does the worker that called us. The
+    # binary has nothing to connect to, so it gets the read timeout.
     TIMEOUT = getattr(settings, "PRINCE_TIMEOUT", (5, 60))
 
     if base_url is None:
@@ -73,11 +89,22 @@ def prince(html, base_url=None, ttl=300, **kwargs):
         command += ["-"]
         logger.debug("command: %s", " ".join(command))
 
-        p = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        out, err = p.communicate(html.encode("utf8"))
+        # A single number is the whole timeout, as it is for requests.
+        timeout = TIMEOUT[1] if isinstance(TIMEOUT, tuple) else TIMEOUT
+        try:
+            # On a timeout, run() kills the binary and waits for it to exit.
+            out = subprocess.run(
+                command,
+                input=html.encode("utf8"),
+                stdout=subprocess.PIPE,
+                timeout=timeout,
+                check=True,
+            ).stdout
+        except OSError as exc:
+            logger.error("PDF binary %s cannot be run: %s", BINARY, exc.strerror)
+            raise PrinceUnavailable(f"Local PDF generation failed: {exc}") from exc
+        except subprocess.SubprocessError as exc:
+            raise PrinceError(f"Local PDF generation failed: {exc}") from exc
         logger.info("Local PDF generation complete.")
-
-        if err:
-            logger.error(err)
 
     return out
