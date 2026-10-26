@@ -48,6 +48,31 @@ class CompetitionLinksTests(LinksMixin, TestCase):
                 selector="nav a",
             )
 
+    def test_every_link_of_a_division_moves_nothing(self):
+        """
+        Following every link of a division's page leaves its stages and teams
+        in their order: the arrows that move them are forms that post.
+        """
+        stages = [
+            factories.StageFactory.create(division=self.division, order=n)
+            for n in (1, 2)
+        ]
+        teams = [
+            self.team,
+            factories.TeamFactory.create(
+                division=self.division, order=self.team.order + 1
+            ),
+        ]
+        with self.login(self.superuser):
+            self.follow_links(
+                "admin:fixja:competition:season:division:edit",
+                self.competition.pk,
+                self.season.pk,
+                self.division.pk,
+            )
+        self.assertEqual(list(self.division.stages.all()), stages)
+        self.assertEqual(list(self.division.teams.all()), teams)
+
     def test_the_permissions_of_a_competition(self):
         with self.login(self.superuser):
             self.follow_links("admin:fixja:competition:perms", self.competition.pk)

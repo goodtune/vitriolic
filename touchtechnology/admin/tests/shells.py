@@ -19,7 +19,8 @@ is the shell the test is run under::
             )
 
 Add ``IconMixin`` to such a case for ``self.icon(name)``, the markup of an icon
-in the shell the test runs under.
+in the shell the test runs under, or ``ArrowMixin`` for that and
+``self.arrow(...)``, the markup of an arrow that moves a row of a list.
 """
 
 import sys
@@ -68,6 +69,36 @@ class IconMixin:
         return (
             f'<svg class="{css}" aria-hidden="true" focusable="false">'
             f'<use href="/static/touchtechnology/admin/{sprite}#{name}"></use></svg>'
+        )
+
+
+class ArrowMixin(IconMixin):
+    """
+    The arrows that move a row of a list up or down, in the shell a
+    ``per_shell`` test runs under. Each is a form that posts with the token of
+    the page that drew it, so ask after getting that page.
+    """
+
+    def arrow(self, action, direction, name):
+        """The arrow that posts to ``action`` to move ``name`` ``direction``."""
+        csrf = (
+            '<input type="hidden" name="csrfmiddlewaretoken" '
+            f'value="{self.get_context("csrf_token")}">'
+        )
+        label = f"Move {direction}"
+        icon = self.icon(f"arrow-{direction}")
+        return self.by_shell(
+            workbook=(
+                f'<li><form method="post" action="{action}">{csrf}'
+                f'<button type="submit">{icon}{label}</button></form></li>'
+            ),
+            explorer=(
+                f'<form method="post" action="{action}">{csrf}'
+                '<button type="submit" class="button quiet icon-only compact" '
+                f'title="{label}">{icon}'
+                f'<span class="visually-hidden">Move {name} {direction}</span>'
+                "</button></form>"
+            ),
         )
 
 

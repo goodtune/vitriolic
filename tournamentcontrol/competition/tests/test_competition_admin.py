@@ -21,8 +21,8 @@ from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.admin.branding import get_brand
 from touchtechnology.admin.sites import site
-from touchtechnology.admin.tests.shells import by_shell, per_shell
-from touchtechnology.common.tests.factories import UserFactory
+from touchtechnology.admin.tests.shells import ArrowMixin, by_shell, per_shell
+from touchtechnology.common.tests.factories import SuperUserFactory, UserFactory
 from tournamentcontrol.competition.dashboard import MostValuableWidget
 from tournamentcontrol.competition.draw.schemas import (
     DivisionStructure,
@@ -283,151 +283,121 @@ class TemplateTests(TestCase):
         )
 
 
+@per_shell
+class ReorderTests(ArrowMixin, BaseTestCase):
+    """
+    The arrows of a division's stages and of its teams: each is a form that
+    posts, moves the row past its neighbour and returns to the tab it is in.
+    Following the address moves nothing.
+    """
+
+    user_factory = SuperUserFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = cls.make_user("superuser")
+        cls.division = factories.DivisionFactory.create()
+        cls.stages = [
+            factories.StageFactory.create(division=cls.division, title=title, order=n)
+            for n, title in enumerate(("Pool play", "Semi-finals", "Finals"), 1)
+        ]
+        cls.teams = [
+            factories.TeamFactory.create(division=cls.division, title=title, order=n)
+            for n, title in enumerate(("Ants", "Bees", "Cats"), 1)
+        ]
+
+    def test_a_visitor_is_asked_to_sign_in(self):
+        self.assertLoginRequired(
+            "admin:fixja:reorder", "stage:division", self.stages[1].pk, "down"
+        )
+
+    def test_each_row_has_arrows_that_post(self):
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:edit",
+                self.division.season.competition_id,
+                self.division.season_id,
+                self.division.pk,
+            )
+        lists = (("stage:division", self.stages), ("team:division", self.teams))
+        for route, rows in lists:
+            for obj in rows:
+                for direction in ("up", "down"):
+                    with self.subTest(obj=obj.title, direction=direction):
+                        action = self.reverse(
+                            "admin:fixja:reorder", route, obj.pk, direction
+                        )
+                        self.assertResponseContains(
+                            self.arrow(action, direction, obj.title)
+                        )
+
+    def test_moving_a_stage_down_returns_to_the_stages(self):
+        pool_play, semi_finals, finals = self.stages
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:division", semi_finals.pk, "down")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")
+            self.get_check_200(self.last_response.url)
+        self.assertEqual(
+            list(self.division.stages.all()), [pool_play, finals, semi_finals]
+        )
+
+    def test_moving_a_stage_up_returns_to_the_stages(self):
+        pool_play, semi_finals, finals = self.stages
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:division", semi_finals.pk, "up")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")
+            self.get_check_200(self.last_response.url)
+        self.assertEqual(
+            list(self.division.stages.all()), [semi_finals, pool_play, finals]
+        )
+
+    def test_moving_a_team_down_returns_to_the_teams(self):
+        ants, bees, cats = self.teams
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "team:division", ants.pk, "down")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#teams-tab")
+            self.get_check_200(self.last_response.url)
+        self.assertEqual(list(self.division.teams.all()), [bees, ants, cats])
+
+    def test_an_address_without_a_parent_returns_to_the_object(self):
+        stage = self.stages[0]
+        pools = [
+            factories.StageGroupFactory.create(stage=stage, order=n) for n in (1, 2)
+        ]
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stagegroup", pools[0].pk, "down")
+            self.assert_http_302_found(url=pools[0].urls["edit"])
+            self.get_check_200(self.last_response.url)
+        self.assertEqual(list(stage.pools.all()), pools[::-1])
+
+    def test_following_the_address_moves_nothing(self):
+        with self.login(self.superuser):
+            self.get("admin:fixja:reorder", "stage:division", self.stages[1].pk, "down")
+        self.assert_http_405_method_not_allowed()
+        self.assertEqual(list(self.division.stages.all()), self.stages)
+
+    def test_the_first_stage_cannot_move_up(self):
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:division", self.stages[0].pk, "up")
+        self.assert_http_404_not_found()
+        self.assertEqual(list(self.division.stages.all()), self.stages)
+
+    def test_the_last_stage_cannot_move_down(self):
+        last = self.stages[-1]
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:division", last.pk, "down")
+        self.assert_http_404_not_found()
+        self.assertEqual(list(self.division.stages.all()), self.stages)
+
+    def test_a_stage_moves_only_up_or_down(self):
+        middle = self.stages[1]
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:division", middle.pk, "left")
+        self.assert_http_404_not_found()
+        self.assertEqual(list(self.division.stages.all()), self.stages)
+
+
 class GoodViewTests(TestCase):
-    def test_reorder_down(self):
-        stage = factories.StageFactory.create()
-        pool_a, pool_b, pool_c = factories.StageGroupFactory.create_batch(
-            stage=stage, size=3
-        )
-
-        with self.login(self.superuser):
-            # Without a HTTP_REFERER set this should throw a 404
-            self.get("admin:fixja:reorder", "stagegroup", pool_b.pk, "down")
-            self.response_404()
-
-            # The first time we try to shift this down it will work because it
-            # isn't last in it's set.
-            self.get(
-                "admin:fixja:reorder",
-                "stagegroup",
-                pool_b.pk,
-                "down",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_302()
-
-            # This time, however, it should fail because we're now last.
-            self.get(
-                "admin:fixja:reorder",
-                "stagegroup",
-                pool_b.pk,
-                "down",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_404()
-
-    def test_reorder_up(self):
-        stage = factories.StageFactory.create()
-        pool_a, pool_b, pool_c = factories.StageGroupFactory.create_batch(
-            stage=stage, size=3
-        )
-
-        with self.login(self.superuser):
-            # Without a HTTP_REFERER set this should throw a 404
-            self.get("admin:fixja:reorder", "stagegroup", pool_b.pk, "up")
-            self.response_404()
-
-            # The first time we try to shift this up it will work because it
-            # isn't first in it's set.
-            self.get(
-                "admin:fixja:reorder",
-                "stagegroup",
-                pool_b.pk,
-                "up",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_302()
-
-            # This time, however, it should fail because we're now first.
-            self.get(
-                "admin:fixja:reorder",
-                "stagegroup",
-                pool_b.pk,
-                "up",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_404()
-
-    def test_reorder_left(self):
-        stage = factories.StageFactory.create()
-        pool_a, pool_b, pool_c = factories.StageGroupFactory.create_batch(
-            stage=stage, size=3
-        )
-
-        with self.login(self.superuser):
-            # A direction of "left" is invalid and should throw a 404
-            self.get(
-                "admin:fixja:reorder",
-                pool_b.pk,
-                "left",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_404()
-
-    def test_stage_reorder_down(self):
-        division = factories.DivisionFactory.create()
-        stage_a = factories.StageFactory.create(division=division, order=1)
-        stage_b = factories.StageFactory.create(division=division, order=2)
-        stage_c = factories.StageFactory.create(division=division, order=3)
-
-        with self.login(self.superuser):
-            # Without a HTTP_REFERER set this should throw a 404
-            self.get("admin:fixja:reorder", "stage:division", stage_b.pk, "down")
-            self.response_404()
-
-            # The first time we try to shift this down it will work because it
-            # isn't last in it's set.
-            self.get(
-                "admin:fixja:reorder",
-                "stage:division",
-                stage_b.pk,
-                "down",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_302()
-
-            # This time, however, it should fail because we're now last.
-            self.get(
-                "admin:fixja:reorder",
-                "stage:division",
-                stage_b.pk,
-                "down",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_404()
-
-    def test_stage_reorder_up(self):
-        division = factories.DivisionFactory.create()
-        stage_a = factories.StageFactory.create(division=division, order=1)
-        stage_b = factories.StageFactory.create(division=division, order=2)
-        stage_c = factories.StageFactory.create(division=division, order=3)
-
-        with self.login(self.superuser):
-            # Without a HTTP_REFERER set this should throw a 404
-            self.get("admin:fixja:reorder", "stage:division", stage_b.pk, "up")
-            self.response_404()
-
-            # The first time we try to shift this up it will work because it
-            # isn't first in it's set.
-            self.get(
-                "admin:fixja:reorder",
-                "stage:division",
-                stage_b.pk,
-                "up",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_302()
-
-            # This time, however, it should fail because we're now first.
-            self.get(
-                "admin:fixja:reorder",
-                "stage:division",
-                stage_b.pk,
-                "up",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_404()
-
     def test_index(self):
         """
         Where the shell has landing pages Tournament Control opens on its own

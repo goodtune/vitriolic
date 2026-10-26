@@ -8,7 +8,12 @@ from django.test import override_settings
 from guardian.shortcuts import assign_perm
 from test_plus.test import TestCase
 
-from touchtechnology.admin.tests.shells import IconMixin, by_shell, per_shell
+from touchtechnology.admin.tests.shells import (
+    ArrowMixin,
+    IconMixin,
+    by_shell,
+    per_shell,
+)
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.tests.factories import (
     StaffFactory,
@@ -165,7 +170,7 @@ class MediaDeleteTests(TestCase):
 
 
 @per_shell
-class SitemapListTests(IconMixin, TestCase):
+class SitemapListTests(ArrowMixin, TestCase):
     """The sitemap list: what each row shows, and what the page costs to draw."""
 
     user_factory = SuperUserFactory
@@ -292,6 +297,15 @@ class SitemapListTests(IconMixin, TestCase):
         ):
             with self.subTest(node.title):
                 self.assertResponseContains(self.title_cell(node, route, icon))
+
+    def test_each_row_has_arrows_that_post(self):
+        press = SitemapNode.objects.create(title="Press", slug="press")
+        with self.login(self.superuser):
+            self.get_check_200("admin:content:index")
+        for direction in ("up", "down"):
+            with self.subTest(direction):
+                action = self.reverse("admin:reorder", press.pk, direction)
+                self.assertResponseContains(self.arrow(action, direction, "Press"))
 
 
 class ApplicationListMixin(IconMixin):
