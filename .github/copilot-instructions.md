@@ -78,7 +78,7 @@ This is a Python based repository, it provides a Django reusable application tha
 - **Content validation**: Use `self.assertResponseContains(...)` to check for HTML fragments
   - **Always assert a full HTML fragment** (e.g. the whole `<td>` or `<input>` element) and never pass an `html=` argument; `html=False` searches for bare text, which can keep matching after a regression because the text appears somewhere unrelated on the page
 - **URL Testing**: Always use named URLs with `self.reverse("url_name", args...)` - never hardcode URL strings
-  - `self.reverse()` passes every keyword argument on as a URL kwarg, so it cannot take `query=`; for a query string use `from django.urls import reverse` and `reverse("url_name", query={...})`
+  - **Query strings**: on a request, pass `data=` and the client builds the query string: `self.get("url_name", data={"r": pk})`. `self.reverse()` and the request helpers pass every other keyword argument on as a URL kwarg, so `query=` raises `NoReverseMatch`; the `extra=` keyword is the request environment (headers), not the URL. Only when the URL string itself is needed, such as `assert_http_302_found(url=...)`, use `from django.urls import reverse` and `reverse("url_name", query={...})`
 
 ### Model Field Guidelines
 - **UndecidedTeam models**: Don't set both `label` and `formula` - use one or the other as per form validation
