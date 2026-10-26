@@ -47,7 +47,9 @@
 						<td>
 							<div class="r-links">
 								{% block detail_link %}
-									<a href="{% url 'admin:fixja:competition:season:division:stage:match:detail' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}">{% icon "chart-bar" %}{% trans "Detail" %}</a>
+									{% if match.statistics_ready %}
+										<a href="{% url 'admin:fixja:competition:season:division:stage:match:detail' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}">{% icon "chart-bar" %}{% trans "Detail" %}</a>
+									{% endif %}
 								{% endblock %}
 								{% block referees_link %}
 									<a href="{% url 'admin:fixja:competition:season:division:stage:match:referees' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">{% icon "flag" %}{% trans "Referees" %}</a>

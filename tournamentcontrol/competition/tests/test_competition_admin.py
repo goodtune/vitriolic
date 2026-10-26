@@ -3902,6 +3902,109 @@ class MatchDetailQueryTests(TestCase):
         )
 
 
+@per_shell
+class MatchDetailNotReadyTests(TestCase):
+    """
+    The players' statistics of a match are entered once both teams are known
+    and the result is in: each side's points must add up to its score. Until
+    then the statistics page sends the person to the match's page with a
+    message saying why, and the run sheet does not link to it.
+    """
+
+    detail = "admin:fixja:competition:season:division:stage:match:detail"
+
+    def setUp(self):
+        super().setUp()
+        self.stage = factories.StageFactory.create()
+
+    def match(self, **kwargs):
+        return factories.MatchFactory.create(
+            stage=self.stage, date=date(2025, 5, 1), **kwargs
+        )
+
+    def assertSentToMatch(self, match):
+        self.assert_http_302_found(url=str(match.urls["edit"]))
+        self.assertResponseMessages(
+            [
+                messages.Message(
+                    messages.WARNING,
+                    "Player statistics can be entered once both teams are "
+                    "known and the result is in.",
+                )
+            ]
+        )
+
+    def statistics_link(self, match):
+        url = self.reverse(self.detail, *match._get_url_args())
+        return self.by_shell(
+            workbook=f'<a href="{url}">{ICON % "chart-bar"}Detail</a>',
+            explorer=f'<a href="{url}">Statistics</a>',
+        )
+
+    def test_match_without_result(self):
+        match = self.match()
+        with self.login(self.superuser):
+            self.get(self.detail, *match._get_url_args())
+        self.assertSentToMatch(match)
+
+    def test_bye(self):
+        match = self.match(is_bye=True, away_team=None, bye_processed=True)
+        with self.login(self.superuser):
+            self.get(self.detail, *match._get_url_args())
+        self.assertSentToMatch(match)
+
+    def test_undecided_team(self):
+        # The scores are in, so only the team still to be decided stops it.
+        match = self.match(
+            home_team=None,
+            home_team_undecided=factories.UndecidedTeamFactory.create(
+                stage=self.stage
+            ),
+            home_team_score=2,
+            away_team_score=1,
+        )
+        with self.login(self.superuser):
+            self.get(self.detail, *match._get_url_args())
+        self.assertSentToMatch(match)
+
+    def test_post_saves_nothing(self):
+        match = self.match()
+        factories.TeamAssociationFactory.create(
+            is_player=True, team=match.home_team, person__club=match.home_team.club
+        )
+        data = {
+            "home-TOTAL_FORMS": "1",
+            "home-INITIAL_FORMS": "1",
+            "home-MAX_NUM_FORMS": "1000",
+            "home-0-id": "",
+            "home-0-number": "7",
+            "home-0-played": "1",
+            "home-0-points": "0",
+            "home-0-mvp": "0",
+            "away-TOTAL_FORMS": "0",
+            "away-INITIAL_FORMS": "0",
+            "away-MAX_NUM_FORMS": "1000",
+        }
+        with self.login(self.superuser):
+            self.post(self.detail, *match._get_url_args(), data=data)
+        self.assertSentToMatch(match)
+        self.assertCountEqual(match.statistics.all(), [])
+
+    def test_run_sheet_links_only_matches_with_a_result(self):
+        played = self.match(home_team_score=3, away_team_score=1)
+        unplayed = self.match()
+        season = self.stage.division.season
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:match-runsheet",
+                season.competition_id,
+                season.pk,
+                "20250501",
+            )
+        self.assertResponseContains(self.statistics_link(played), count=1)
+        self.assertResponseContains(self.statistics_link(unplayed), count=0)
+
+
 class DashboardQueryTests(TestCase):
     """
     The dashboard lists matches awaiting results and the stages with

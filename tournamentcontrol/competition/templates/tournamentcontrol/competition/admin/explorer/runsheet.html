@@ -34,8 +34,8 @@
 							<td class="team">{{ match.get_away_team.title|htmlentities }}{% if match.away_team_score is not None %} <strong>{{ match.away_team_score }}</strong>{% endif %}</td>
 							<td>{% for ref in match.referees.all %}{{ ref.person.first_name.0 }} {{ ref.person.last_name }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
 							<td class="nowrap">
-								<a href="{% url 'admin:fixja:competition:season:division:stage:match:detail' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}">{% trans "Statistics" %}</a>
-								&middot; <a href="{% url 'admin:fixja:competition:season:division:stage:match:referees' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">{% trans "Referees" %}</a>
+								{% if match.statistics_ready %}<a href="{% url 'admin:fixja:competition:season:division:stage:match:detail' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}">{% trans "Statistics" %}</a> &middot;{% endif %}
+								<a href="{% url 'admin:fixja:competition:season:division:stage:match:referees' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">{% trans "Referees" %}</a>
 								{% if match.videos %}&middot; <a href="{{ match.videos|first }}">{% trans "Video" %}</a>{% endif %}
 								{% if match.live_stream and match.external_identifier %}&middot; <a href="{% url 'admin:fixja:competition:season:division:stage:match:resync-live-stream' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">{% trans "Resync" %}</a>{% endif %}
 							</td>
