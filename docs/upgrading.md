@@ -298,6 +298,8 @@ ask the database with `exists()`, or not at all. A `show()` that raises takes
 the home page down; the guard that leaves out a widget whose `context` fails
 does not cover `show()`.
 
+The full notes for the change are in pull request #531.
+
 ## The `en-AU` catalogues are gone
 
 The apps no longer ship `locale/en-AU`. Django never loaded those catalogues,
