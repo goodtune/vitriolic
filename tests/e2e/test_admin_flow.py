@@ -4,6 +4,7 @@ import pytest
 from playwright.sync_api import Page, expect
 
 from tests.e2e.shells import WIDGET_HEADINGS, by_shell
+from tournamentcontrol.competition.tests.factories import MatchFactory
 
 
 class TestAdminFlow:
@@ -17,15 +18,21 @@ class TestAdminFlow:
         - Login form is properly displayed
         - Authentication with valid credentials succeeds
         - Redirect to admin dashboard occurs
-        - Dashboard widgets load correctly
+        - Dashboard widgets load correctly, and a widget with nothing to show
+          is left out until it has something
 
         Prerequisites:
         - Admin user fixture provides valid superuser credentials
         - Django admin interface is properly configured
+        - No match awaits a detailed result when the test starts
 
         Expected behavior:
         - Login form accepts credentials and redirects to /admin/
-        - Dashboard displays expected widget titles for tournament management
+        - Dashboard displays the widget titles for tournament management,
+          without Awaiting Detailed Results: on an empty site it has nothing
+          to show
+        - Once a match has a result and no detailed result yet, Awaiting
+          Detailed Results is drawn in its place among the widgets
 
         Args:
             page: Playwright page fixture
@@ -49,7 +56,27 @@ class TestAdminFlow:
         # Verify successful login - should redirect to admin dashboard
         expect(page).to_have_url(f"{live_server.url}/admin/")
 
-        # Check admin dashboard widgets are all loaded
+        # Check admin dashboard widgets are all loaded. Awaiting Detailed
+        # Results is left out: no match awaits a detailed result on an empty
+        # site, so it has nothing to show.
+        expect(page.locator(WIDGET_HEADINGS)).to_have_text(
+            [
+                *by_shell(workbook=[], explorer=["Everything you manage"]),
+                "Awaiting Scores",
+                "Progress Teams",
+                "Season Reports",
+                "Awaiting MVP Points",
+            ]
+        )
+
+        # A match with a result in a season that records statistics, and no
+        # detailed result yet, gives the widget something to show.
+        MatchFactory.create(
+            home_team_score=5,
+            away_team_score=3,
+            stage__division__season__statistics=True,
+        )
+        page.reload()
         expect(page.locator(WIDGET_HEADINGS)).to_have_text(
             [
                 *by_shell(workbook=[], explorer=["Everything you manage"]),
