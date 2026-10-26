@@ -22,7 +22,11 @@ from test_plus import TestCase as BaseTestCase
 from touchtechnology.admin.branding import get_brand
 from touchtechnology.admin.sites import site
 from touchtechnology.admin.tests.shells import ArrowMixin, IconMixin, by_shell, per_shell
-from touchtechnology.common.tests.factories import SuperUserFactory, UserFactory
+from touchtechnology.common.tests.factories import (
+    StaffFactory,
+    SuperUserFactory,
+    UserFactory,
+)
 from tournamentcontrol.competition.dashboard import MostValuableWidget
 from tournamentcontrol.competition.draw.schemas import (
     DivisionStructure,
@@ -284,11 +288,13 @@ class TemplateTests(TestCase):
 
 
 @per_shell
-class ReorderTests(ArrowMixin, BaseTestCase):
+class ReorderTests(MessagesTestMixin, ArrowMixin, BaseTestCase):
     """
     The arrows of a division's stages and of its teams: each is a form that
     posts, moves the row past its neighbour and returns to the tab it is in.
-    Following the address moves nothing.
+    Following the address moves nothing. A row has arrows, and may be moved,
+    only by a person who may change it; a move off either end of the list
+    changes nothing.
     """
 
     user_factory = SuperUserFactory
@@ -305,20 +311,33 @@ class ReorderTests(ArrowMixin, BaseTestCase):
             factories.TeamFactory.create(division=cls.division, title=title, order=n)
             for n, title in enumerate(("Ants", "Bees", "Cats"), 1)
         ]
+        # Two members of staff who may open the division and add to its
+        # lists, so every row is drawn for them: the editor may also change
+        # the second stage and the second team, the viewer nothing.
+        cls.viewer = StaffFactory.create(username="viewer")
+        cls.editor = StaffFactory.create(username="editor")
+        for user in (cls.viewer, cls.editor):
+            assign_perm("competition.change_division", user, cls.division)
+            assign_perm("competition.add_stage", user)
+            assign_perm("competition.add_team", user)
+        assign_perm("competition.change_stage", cls.editor, cls.stages[1])
+        assign_perm("competition.change_team", cls.editor, cls.teams[1])
 
-    def test_a_visitor_is_asked_to_sign_in(self):
-        self.assertLoginRequired(
-            "admin:fixja:reorder", "stage:division", self.stages[1].pk, "down"
+    def get_division(self):
+        self.get_check_200(
+            "admin:fixja:competition:season:division:edit",
+            self.division.season.competition_id,
+            self.division.season_id,
+            self.division.pk,
         )
 
-    def test_each_row_has_arrows_that_post(self):
-        with self.login(self.superuser):
-            self.get_check_200(
-                "admin:fixja:competition:season:division:edit",
-                self.division.season.competition_id,
-                self.division.season_id,
-                self.division.pk,
-            )
+    def title_cell(self, obj):
+        """The first cell of ``obj``'s row, for a person who may not edit it."""
+        css = self.by_shell(workbook="wb-title-cell", explorer="title-cell")
+        return f'<td class="{css}"><span>{obj.title}</span></td>'
+
+    def assertArrows(self, assertion):
+        """``assertion`` holds for both arrows of every stage and every team."""
         lists = (("stage:division", self.stages), ("team:division", self.teams))
         for route, rows in lists:
             for obj in rows:
@@ -327,15 +346,87 @@ class ReorderTests(ArrowMixin, BaseTestCase):
                         action = self.reverse(
                             "admin:fixja:reorder", route, obj.pk, direction
                         )
-                        self.assertResponseContains(
-                            self.arrow(action, direction, obj.title)
-                        )
+                        assertion(self.arrow(action, direction, obj.title))
+
+    def test_a_visitor_is_asked_to_sign_in(self):
+        self.assertLoginRequired(
+            "admin:fixja:reorder", "stage:division", self.stages[1].pk, "down"
+        )
+
+    def test_each_row_has_arrows_that_post(self):
+        with self.login(self.superuser):
+            self.get_division()
+        self.assertArrows(self.assertResponseContains)
+
+    def test_a_person_who_may_not_change_the_rows_sees_no_arrows(self):
+        with self.login(self.viewer):
+            self.get_division()
+        for obj in (*self.stages, *self.teams):
+            with self.subTest(obj=obj.title):
+                self.assertResponseContains(self.title_cell(obj))
+        self.assertArrows(self.assertResponseNotContains)
+
+    def test_the_arrows_are_drawn_for_the_rows_the_person_may_change(self):
+        pool_play, semi_finals, finals = self.stages
+        ants, bees, cats = self.teams
+        with self.login(self.editor):
+            self.get_division()
+        for route, obj in (("stage:division", semi_finals), ("team:division", bees)):
+            for direction in ("up", "down"):
+                with self.subTest(obj=obj.title, direction=direction):
+                    action = self.reverse("admin:fixja:reorder", route, obj.pk, direction)
+                    self.assertResponseContains(self.arrow(action, direction, obj.title))
+        for route, obj in (
+            ("stage:division", pool_play),
+            ("stage:division", finals),
+            ("team:division", ants),
+            ("team:division", cats),
+        ):
+            for direction in ("up", "down"):
+                with self.subTest(obj=obj.title, direction=direction):
+                    self.assertResponseContains(self.title_cell(obj))
+                    action = self.reverse("admin:fixja:reorder", route, obj.pk, direction)
+                    self.assertResponseNotContains(
+                        self.arrow(action, direction, obj.title)
+                    )
+
+    def test_a_person_who_may_not_change_a_stage_may_not_move_it(self):
+        with self.login(self.viewer):
+            self.post("admin:fixja:reorder", "stage:division", self.stages[1].pk, "down")
+        self.assert_http_403_forbidden()
+        self.assertEqual(list(self.division.stages.all()), self.stages)
+
+    def test_a_person_who_may_change_a_stage_moves_it(self):
+        pool_play, semi_finals, finals = self.stages
+        with self.login(self.editor):
+            self.post("admin:fixja:reorder", "stage:division", semi_finals.pk, "down")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")
+            self.get_check_200(self.last_response.url)
+        self.assertEqual(
+            list(self.division.stages.all()), [pool_play, finals, semi_finals]
+        )
+
+    def test_the_permission_to_move_a_stage_is_that_stage_s(self):
+        pool_play = self.stages[0]
+        with self.login(self.editor):
+            self.post("admin:fixja:reorder", "stage:division", pool_play.pk, "down")
+        self.assert_http_403_forbidden()
+        self.assertEqual(list(self.division.stages.all()), self.stages)
 
     def test_moving_a_stage_down_returns_to_the_stages(self):
         pool_play, semi_finals, finals = self.stages
         with self.login(self.superuser):
             self.post("admin:fixja:reorder", "stage:division", semi_finals.pk, "down")
             self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")
+            self.assertMessages(
+                self.last_response,
+                [
+                    messages.Message(
+                        messages.INFO,
+                        'The stage "Semi-finals" has been reordered down the list.',
+                    )
+                ],
+            )
             self.get_check_200(self.last_response.url)
         self.assertEqual(
             list(self.division.stages.all()), [pool_play, finals, semi_finals]
@@ -376,16 +467,41 @@ class ReorderTests(ArrowMixin, BaseTestCase):
         self.assert_http_405_method_not_allowed()
         self.assertEqual(list(self.division.stages.all()), self.stages)
 
-    def test_the_first_stage_cannot_move_up(self):
+    def test_moving_the_first_stage_up_returns_to_the_stages_unchanged(self):
+        first = self.stages[0]
         with self.login(self.superuser):
-            self.post("admin:fixja:reorder", "stage:division", self.stages[0].pk, "up")
-        self.assert_http_404_not_found()
+            self.post("admin:fixja:reorder", "stage:division", first.pk, "up")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")
+            self.assertMessages(self.last_response, [])
         self.assertEqual(list(self.division.stages.all()), self.stages)
 
-    def test_the_last_stage_cannot_move_down(self):
+    def test_moving_the_last_stage_down_returns_to_the_stages_unchanged(self):
         last = self.stages[-1]
         with self.login(self.superuser):
             self.post("admin:fixja:reorder", "stage:division", last.pk, "down")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")
+            self.assertMessages(self.last_response, [])
+        self.assertEqual(list(self.division.stages.all()), self.stages)
+
+    def test_a_model_that_is_not_in_an_order_is_not_found(self):
+        for model in ("ladder", "match"):
+            with self.subTest(model=model), self.login(self.superuser):
+                self.post(
+                    "admin:fixja:reorder", f"{model}:division", self.stages[1].pk, "down"
+                )
+                self.assert_http_404_not_found()
+        self.assertEqual(list(self.division.stages.all()), self.stages)
+
+    def test_a_stage_that_does_not_exist_is_not_found(self):
+        gone = self.stages[-1].pk + 1
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:division", gone, "down")
+        self.assert_http_404_not_found()
+        self.assertEqual(list(self.division.stages.all()), self.stages)
+
+    def test_a_parent_the_model_does_not_have_is_not_found(self):
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:league", self.stages[1].pk, "down")
         self.assert_http_404_not_found()
         self.assertEqual(list(self.division.stages.all()), self.stages)
 
