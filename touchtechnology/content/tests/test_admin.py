@@ -146,7 +146,8 @@ class GoodViewTests(TestCase):
 class MediaStorageMixin:
     """
     Keeps the media of each test in a folder of its own, in the project's
-    storage: Django's own cannot remove a folder.
+    storage: Django's own cannot remove a folder. The storage is given its
+    location, as it cannot make one when ``STORAGE_FOLDER`` is not set.
     """
 
     def setUp(self):
@@ -165,26 +166,44 @@ class MediaStorageMixin:
         )
 
 
-class MediaDeleteTests(TestCase):
+class MediaDeleteTests(MediaStorageMixin, TestCase):
     """Deleting a file or a folder of the media section."""
+
+    user_factory = StaffFactory
 
     def setUp(self):
         super().setUp()
-        self.staff = UserFactory.create(is_staff=True)
+        self.staff = self.make_user("staff")
 
     def test_a_file_in_a_missing_folder_is_not_found(self):
-        with tempfile.TemporaryDirectory() as root, override_settings(MEDIA_ROOT=root):
-            with self.login(self.staff):
-                self.get(
-                    "admin:content:media:delete", path="gallery/", filename="photo.jpg"
-                )
+        with self.login(self.staff):
+            self.get(
+                "admin:content:media:delete", path="gallery/", filename="photo.jpg"
+            )
         self.assert_http_404_not_found()
 
     def test_a_missing_folder_is_not_found(self):
-        with tempfile.TemporaryDirectory() as root, override_settings(MEDIA_ROOT=root):
-            with self.login(self.staff):
-                self.get("admin:content:media:delete", path="gallery/")
+        with self.login(self.staff):
+            self.get("admin:content:media:delete", path="gallery/")
         self.assert_http_404_not_found()
+
+    def test_deleting_a_file_goes_back_to_its_folder(self):
+        default_storage.save("reports/minutes.pdf", ContentFile(b"%PDF-1.4"))
+        with self.login(self.staff):
+            self.post("admin:content:media:delete", "reports/", "minutes.pdf")
+        self.assert_http_302_found(
+            url=self.reverse("admin:content:media:edit", "reports/")
+        )
+        self.assertEqual(default_storage.listdir("reports"), ([], []))
+
+    def test_deleting_a_folder_goes_back_to_the_folder_it_was_in(self):
+        default_storage.makedirs("reports/2026")
+        with self.login(self.staff):
+            self.post("admin:content:media:delete", "reports/2026/")
+        self.assert_http_302_found(
+            url=self.reverse("admin:content:media:edit", "reports/")
+        )
+        self.assertEqual(default_storage.listdir("reports"), ([], []))
 
 
 @per_shell
