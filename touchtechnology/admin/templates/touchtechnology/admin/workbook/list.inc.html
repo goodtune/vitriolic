@@ -14,6 +14,7 @@
 	  table-columns        <td> cells (the first, class "wb-title-cell", links the object)
 	  row-buttons-extra    buttons always on show in a row (Build, Undo, Up...)
 	  row-buttons-items    the row's menu: <li><a href="...">Label</a></li>
+	  row-buttons-detail   the menu's View item, for an object with a detail page
 	  row-buttons-delete   the menu's last item, Delete (empty it for none)
 	  delete-data-title    how the object is named when asking to delete it
 	  table-row-empty      what an empty list says
@@ -73,9 +74,11 @@
 									<div class="wb-menu" popover id="wbm-{{ type|slugify }}-{{ obj.pk|slugify }}">
 										<ul>
 											{% block row-buttons-items %}
-												{% if obj.urls.detail %}
-													<li><a href="{{ obj.urls.detail }}">{% icon "eye" %}{% trans "View" %}</a></li>
-												{% endif %}
+												{% block row-buttons-detail %}
+													{% if obj.urls.detail %}
+														<li><a href="{{ obj.urls.detail }}">{% icon "eye" %}{% trans "View" %}</a></li>
+													{% endif %}
+												{% endblock row-buttons-detail %}
 												{% if obj.urls.edit and change_perm in object_perms %}
 													<li><a href="{{ obj.urls.edit }}">{% icon "pencil" %}{% trans "Edit" %}</a></li>
 												{% endif %}
