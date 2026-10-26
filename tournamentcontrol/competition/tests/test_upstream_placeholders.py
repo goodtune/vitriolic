@@ -12,7 +12,10 @@ shaped undecided team on a match of our own, still need progressing.
 
 Nor is the placeholder a place to fill on the progression page of a stage
 which also holds undecided teams of our own: the next sync would write over
-whatever team was chosen for it.
+whatever team was chosen for it. For the same reason it is not an undecided
+team anywhere a person chooses one: it does not make a match of our own
+progressable, the match and pool forms do not offer it, and a draw is built
+for the undecided teams of our own without it.
 """
 
 import datetime
@@ -28,10 +31,21 @@ from tournamentcontrol.competition.dashboard import (
     matches_require_progression,
     stages_require_progression,
 )
+from tournamentcontrol.competition.draw.services import (
+    draw_generator,
+    draw_target_team_count,
+    generate_stage_draw,
+)
+from tournamentcontrol.competition.forms import MatchEditForm
+from tournamentcontrol.competition.mcp.admin.forms import position_eval_error
+from tournamentcontrol.competition.models import Match
 from tournamentcontrol.competition.tests.factories import (
+    DrawFormatFactory,
     MatchFactory,
     SeasonFactory,
     StageFactory,
+    StageGroupFactory,
+    TeamFactory,
     UndecidedTeamFactory,
 )
 from tournamentcontrol.competition.tests.upstream import (
@@ -45,6 +59,7 @@ from tournamentcontrol.competition.upstream.types import (
     RemoteMatch,
     RemoteTeam,
 )
+from tournamentcontrol.competition.utils import round_robin_format
 
 PROGRESS = "admin:fixja:competition:season:division:stage:progress"
 
@@ -79,6 +94,37 @@ def place_to_fill(stage, **kwargs):
         stage=stage, home_team=None, home_team_undecided=undecided, datetime=KICK_OFF
     )
     return undecided
+
+
+def unresolved_final(stage):
+    """
+    A final of our own, between the winner of a semi final of ours which is
+    yet to be played and a team: it waits on progression, and nothing can
+    resolve it until the semi final has a result.
+    """
+    semi = MatchFactory.create(stage=stage, datetime=KICK_OFF, label="Semi")
+    return MatchFactory.create(
+        stage=stage,
+        home_team=None,
+        home_team_eval="W",
+        home_team_eval_related=semi,
+        datetime=KICK_OFF,
+        label="Final",
+    )
+
+
+def finals_after(first):
+    """
+    A finals stage after ``first``, holding the sync's placeholder beside
+    four undecided teams of our own, the top four of the stage before.
+    """
+    finals = StageFactory.create(division=first.division, title="Finals", order=2)
+    finals.placeholder = synced_placeholder(finals, "mysideline:2").home_team_undecided
+    finals.places = [
+        UndecidedTeamFactory.create(stage=finals, formula=f"P{position}", label="")
+        for position in range(1, 5)
+    ]
+    return finals
 
 
 @freeze_time(NOW)
@@ -195,6 +241,55 @@ class UpstreamPlaceholderTests(TestCase):
         )
         self.assertNothingToProgress()
 
+    def test_a_final_of_our_own_is_not_progressable_for_the_placeholder(self):
+        """
+        A final of our own whose semi final is unplayed, on a stage whose only
+        undecided team is the placeholder: it waits on progression, but the
+        placeholder is not a place a person can fill, so there is nothing to
+        progress on the stage yet.
+        """
+        stage = StageFactory.create(division__season__timezone="UTC", order=1)
+        synced_placeholder(stage, "mysideline:1")
+        final = unresolved_final(stage)
+        self.assertCountEqual(matches_require_progression(), [final])
+        self.assertCountEqual(matches_progression_possible(), [])
+        self.assertEqual(stages_require_progression(), {})
+
+    def test_a_place_of_our_own_makes_the_stage_progressable(self):
+        """
+        Beside a place of our own the stage is progressable, as before: the
+        page which fills the place can be opened, and it lists the final too.
+        """
+        stage = StageFactory.create(division__season__timezone="UTC", order=1)
+        synced_placeholder(stage, "mysideline:1")
+        final = unresolved_final(stage)
+        host = place_to_fill(stage, label="Host", formula="")
+        self.assertCountEqual(
+            matches_progression_possible(),
+            [final, stage.matches.get(home_team_undecided=host)],
+        )
+
+    def assertProgressionQueries(self, finals, queries):
+        """
+        Work out what can be progressed, with ``finals`` finals of our own
+        beside the placeholder, in ``queries``: whether a stage holds a place
+        to fill is asked once for each stage, not once for each match. Each
+        final still costs the evaluation of its own sides.
+        """
+        stage = StageFactory.create(division__season__timezone="UTC", order=1)
+        synced_placeholder(stage, "mysideline:1")
+        for __ in range(finals):
+            unresolved_final(stage)
+        with self.assertNumQueries(queries):
+            possible = matches_progression_possible()
+        self.assertCountEqual(possible, [])
+
+    def test_queries_for_one_final(self):
+        self.assertProgressionQueries(1, 5)
+
+    def test_queries_for_four_finals(self):
+        self.assertProgressionQueries(4, 8)
+
 
 @per_shell
 @freeze_time(NOW)
@@ -221,7 +316,7 @@ class UpstreamPlaceholderPageTests(TestCase):
             self.stage.pk,
         )
 
-    def test_home_page_has_no_stage_to_progress(self):
+    def assertHomePageHasNoStageToProgress(self):
         with self.login(self.superuser):
             self.get_check_200("admin:index")
         self.assertResponseContains(
@@ -238,6 +333,17 @@ class UpstreamPlaceholderPageTests(TestCase):
                 ),
             )
         )
+
+    def test_home_page_has_no_stage_to_progress(self):
+        self.assertHomePageHasNoStageToProgress()
+
+    def test_home_page_has_no_stage_to_progress_for_a_final_of_our_own(self):
+        """
+        A final of our own whose semi final is unplayed does not make the stage
+        one to progress: the placeholder is not a place a person can fill.
+        """
+        unresolved_final(self.stage)
+        self.assertHomePageHasNoStageToProgress()
 
     def test_progression_page_has_nothing_to_progress(self):
         """
@@ -399,3 +505,186 @@ class UpstreamPlaceholderPlacesTests(TestCase):
 
     def test_queries_for_six_places(self):
         self.assertPlacesQueries(6, self.by_shell(workbook=44, explorer=38))
+
+
+@per_shell
+@freeze_time(NOW)
+class UpstreamPlaceholderMatchFormTests(TestCase):
+    """
+    The match pages of a stage holding the sync's placeholder. It is not an
+    undecided team a person can choose for a match: on a division synced from
+    the provider (one stage, whose only undecided team is the placeholder) a
+    match of our own is between teams of the division, and beside an undecided
+    team of our own the placeholder is never among the undecided choices.
+    """
+
+    user_factory = SuperUserFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = cls.make_user("superuser")
+        cls.stage = StageFactory.create(division__season__timezone="UTC", order=1)
+        cls.placeholder = synced_placeholder(
+            cls.stage, "mysideline:1"
+        ).home_team_undecided
+        cls.teams = TeamFactory.create_batch(2, division=cls.stage.division)
+
+    def get_form(self, match, view):
+        """Open the ``view`` page of ``match``: the form it offers."""
+        lookup = match.url_names[view]
+        with self.login(self.superuser):
+            self.get_check_200(lookup.url_name, *lookup.args)
+        return self.get_context("form")
+
+    def assertTeamFields(self, form):
+        """``form`` offers the teams of the division, and no undecided team."""
+        self.assertCountEqual(form.fields["home_team"].queryset, self.teams)
+        self.assertCountEqual(form.fields["away_team"].queryset, self.teams)
+        self.assertEqual(
+            [name for name in form.fields if name.endswith("_undecided")], []
+        )
+
+    def test_adding_a_match_of_our_own_offers_the_teams(self):
+        self.assertTeamFields(self.get_form(Match(stage=self.stage), "add"))
+
+    def test_editing_a_match_of_our_own_offers_the_teams(self):
+        home, away = self.teams
+        match = MatchFactory.create(
+            stage=self.stage, home_team=home, away_team=away, datetime=KICK_OFF
+        )
+        self.assertTeamFields(self.get_form(match, "edit"))
+        self.assertResponseContains(
+            f'<option value="{home.pk}" selected>{home.title}</option>'
+        )
+
+    def test_the_placeholder_is_not_an_undecided_choice(self):
+        """
+        Beside a place of our own the undecided fields are offered, and ours
+        is their only choice.
+        """
+        host = place_to_fill(self.stage, label="Host", formula="")
+        form = self.get_form(self.stage.matches.get(home_team_undecided=host), "edit")
+        self.assertCountEqual(form.fields["home_team_undecided"].queryset, [host])
+        self.assertCountEqual(form.fields["away_team_undecided"].queryset, [host])
+        self.assertResponseContains(
+            f'<option value="{host.pk}" selected>{host.title}</option>'
+        )
+        self.assertResponseNotContains(
+            f'<option value="{self.placeholder.pk}">{TBA_LABEL}</option>'
+        )
+
+    def test_queries(self):
+        """
+        Whether the stage holds an undecided team of our own is asked once:
+        the stage's teams and undecided teams are queried as the form is
+        rendered, not as it is built.
+        """
+        host = place_to_fill(self.stage, label="Host", formula="")
+        match = self.stage.matches.get(home_team_undecided=host)
+        with self.assertNumQueries(1):
+            MatchEditForm(instance=match)
+
+
+@per_shell
+@freeze_time(NOW)
+class UpstreamPlaceholderPoolFormTests(TestCase):
+    """
+    The pool page of a finals stage holding the sync's placeholder beside
+    undecided teams of our own: the placeholder cannot be put in a pool, as
+    the provider will never name its team.
+    """
+
+    user_factory = SuperUserFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = cls.make_user("superuser")
+        first = StageFactory.create(division__season__timezone="UTC", order=1)
+        cls.finals = finals_after(first)
+        cls.pool = StageGroupFactory.create(stage=cls.finals, title="Pool A")
+
+    def test_the_placeholder_is_not_offered_to_a_pool(self):
+        edit = self.pool.url_names["edit"]
+        with self.login(self.superuser):
+            self.get_check_200(edit.url_name, *edit.args)
+        self.assertCountEqual(
+            self.get_context("form").fields["teams"].queryset, self.finals.places
+        )
+
+
+@freeze_time(NOW)
+class UpstreamPlaceholderDrawTests(TestCase):
+    """
+    A draw for a finals stage holding the sync's placeholder beside undecided
+    teams of our own is built for ours alone: the format's numbered teams map
+    onto them, the count the draw is built for is theirs, and a position past
+    them is refused.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.first = StageFactory.create(division__season__timezone="UTC", order=1)
+        cls.finals = finals_after(cls.first)
+
+    def test_numbered_teams_map_onto_our_undecided_teams(self):
+        generator = draw_generator(self.finals, round_robin_format(4))
+        self.assertEqual(dict(generator.teams), dict(enumerate(self.finals.places)))
+
+    def test_a_draw_stands_on_our_undecided_teams_only(self):
+        matches = generate_stage_draw(
+            self.finals, round_robin_format(4), datetime.date(2019, 7, 20)
+        )
+        self.assertEqual(len(matches), 6)
+        self.assertCountEqual(
+            {match.home_team_undecided for match in matches}
+            | {match.away_team_undecided for match in matches},
+            self.finals.places,
+        )
+
+    def test_a_pool_draw_stands_on_our_undecided_teams_only(self):
+        """
+        The placeholder, were it in a pool, is not a team of the pool's draw.
+        """
+        pool = StageGroupFactory.create(stage=self.finals, title="Pool A")
+        top_two = self.finals.places[:2]
+        pool.undecided_teams.set([self.finals.placeholder, *top_two])
+        generator = draw_generator(pool, round_robin_format(2))
+        self.assertEqual(dict(generator.teams), dict(enumerate(top_two)))
+        self.assertEqual(draw_target_team_count(pool), 2)
+
+    def test_the_draw_is_built_for_our_undecided_teams(self):
+        self.assertEqual(draw_target_team_count(self.finals), 4)
+
+    def test_a_position_past_our_undecided_teams_is_refused(self):
+        after = StageFactory.create(division=self.first.division, order=3)
+        self.assertEqual(position_eval_error(after, "P4"), None)
+        self.assertEqual(
+            position_eval_error(after, "P5"),
+            "P5 refers to position 5, but Finals has 4 teams.",
+        )
+
+
+@per_shell
+@freeze_time(NOW)
+class UpstreamPlaceholderDrawWizardTests(TestCase):
+    """
+    The draw generation page of a finals stage holding the sync's placeholder
+    beside four undecided teams of our own offers the formats for four teams.
+    """
+
+    user_factory = SuperUserFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = cls.make_user("superuser")
+        first = StageFactory.create(division__season__timezone="UTC", order=1)
+        cls.finals = finals_after(first)
+        cls.four = DrawFormatFactory.create(teams=4)
+        DrawFormatFactory.create(teams=6)
+
+    def test_formats_for_our_undecided_teams_are_offered(self):
+        build = self.finals.url_names["build"]
+        with self.login(self.superuser):
+            self.get_check_200(build.url_name, *build.args)
+        (form,) = self.get_context("form").forms
+        self.assertCountEqual(form.fields["format"].queryset, [self.four])
