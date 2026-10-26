@@ -22,6 +22,33 @@ from tournamentcontrol.competition.tests import factories
 
 TZ = ZoneInfo("Australia/Brisbane")
 
+DATASTAR = {"headers": {"Datastar-Request": "true"}}
+
+# The mark of a row the person is working in; see match_row in day.html.
+HELD = 'data-ignore-morph data-preserve-attr="data-ignore-morph"'
+
+
+def element_patches(response):
+    """
+    The element patches of a Datastar response, in order, as (mode, html).
+    The mode is "outer", a morph, unless the patch names another.
+    """
+    patches = []
+    body = b"".join(response.streaming_content).decode()
+    for event in body.split("\n\n"):
+        kind, *lines = event.splitlines() or [""]
+        if kind != "event: datastar-patch-elements":
+            continue
+        mode, html = "outer", []
+        for line in lines:
+            name, _, value = line.removeprefix("data: ").partition(" ")
+            if name == "mode":
+                mode = value
+            elif name == "elements":
+                html.append(value)
+        patches.append((mode, "\n".join(html).strip()))
+    return patches
+
 
 @freeze_time("2026-10-08 00:00 +10:00")
 class ResultsFixture(TestCase):
@@ -288,6 +315,111 @@ class EditScoreTests(ResultsFixture):
             f"Forfeit · {self.stage.division.title} · "
             f"{forfeit.home_team.title} v {forfeit.away_team.title} → "
             f"{forfeit.away_team.title}",
+        )
+
+
+class HeldRowTests(ResultsFixture):
+    """
+    A row the person is working in, an open Edit or a refused save, is held:
+    a re-render of the whole list (the event stream's snapshot, the layout
+    toggle) leaves it as it is. A held row is sent whole, in replace mode,
+    and a row the server changes is morphed back to an unheld one.
+    """
+
+    def row_patch(self, match):
+        """The mode and the html of the patch to ``match``'s row."""
+        (patch,) = (
+            (mode, html)
+            for mode, html in element_patches(self.last_response)
+            if html.startswith(f'<div id="match-{match.pk}"')
+        )
+        return patch
+
+    def test_a_refused_save_holds_its_row_with_the_error(self):
+        with self.login(self.staff):
+            self.post(
+                "compops:match-result",
+                match_pk=self.match.pk,
+                data={"home_team_score": 5, "away_team_score": ""},
+                extra=DATASTAR,
+                **self.kw,
+            )
+        mode, html = self.row_patch(self.match)
+        self.assertEqual(mode, "replace")
+        self.assertEqual(
+            html.splitlines()[0], f'<div id="match-{self.match.pk}" class="row" {HELD}>'
+        )
+        self.assertInHTML(
+            '<ul class="errorlist"><li>Both scores are required.</li></ul>',
+            html,
+            count=1,
+        )
+
+    def test_an_open_edit_holds_its_row(self):
+        done = self.make(8, home_team_score=3, away_team_score=1)
+        with self.login(self.staff):
+            self.get(
+                "compops:match-result-edit",
+                match_pk=done.pk,
+                extra=DATASTAR,
+                **self.kw,
+            )
+        mode, html = self.row_patch(done)
+        self.assertEqual(mode, "replace")
+        self.assertEqual(
+            html.splitlines()[0], f'<div id="match-{done.pk}" class="row" {HELD}>'
+        )
+
+    def test_a_saved_result_is_morphed_into_an_unheld_row(self):
+        with self.login(self.staff):
+            self.post(
+                "compops:match-result",
+                match_pk=self.match.pk,
+                data={"home_team_score": 5, "away_team_score": 4},
+                extra=DATASTAR,
+                **self.kw,
+            )
+        mode, html = self.row_patch(self.match)
+        self.assertEqual(mode, "outer")
+        self.assertEqual(
+            html.splitlines()[0], f'<div id="match-{self.match.pk}" class="row">'
+        )
+
+    def test_cancelling_an_edit_morphs_the_row_back_unheld(self):
+        done = self.make(8, home_team_score=3, away_team_score=1)
+        with self.login(self.staff):
+            self.get(
+                "compops:match-result", match_pk=done.pk, extra=DATASTAR, **self.kw
+            )
+        mode, html = self.row_patch(done)
+        self.assertEqual(mode, "outer")
+        self.assertEqual(
+            html.splitlines()[0], f'<div id="match-{done.pk}" class="row">'
+        )
+
+    def test_the_page_holds_no_row(self):
+        done = self.make(8, home_team_score=3, away_team_score=1)
+        with self.login(self.staff):
+            self.get("compops:day", **self.kw)
+        edit = self.url("match-result-edit", match_pk=done.pk)
+        self.assertResponseContains(
+            f'<div id="match-{done.pk}" class="row">'
+            f'<div class="g"><b>—</b><span>{self.stage.division.title}</span></div>'
+            f'<span class="team home">{done.home_team.title}</span>'
+            '<span class="score">3 – 1</span>'
+            f'<span class="team away">{done.away_team.title}</span>'
+            f'<span class="acts"><a class="btn sm" href="{edit}" '
+            f"data-on:click__prevent=\"@get('{edit}')\">Edit</a></span>"
+            "</div>"
+        )
+
+    def test_the_layout_toggle_leaves_held_rows_alone(self):
+        with self.login(self.staff):
+            self.post("compops:layout", extra=DATASTAR, **self.kw)
+        ((mode, html),) = element_patches(self.last_response)
+        self.assertEqual(mode, "outer")
+        self.assertIn(
+            f'<div id="match-{self.match.pk}" class="row" {HELD}>', html.splitlines()
         )
 
 
