@@ -1584,9 +1584,7 @@ class CompetitionAdminComponent(AdminComponent):
             MatchScoreSheet,
             pk=pk,
             permission_required=True,
-            post_delete_redirect=self.redirect(
-                f"{match.urls['edit']}#scoresheets-tab"
-            ),
+            post_delete_redirect=self.redirect(f"{match.urls['edit']}#scoresheets-tab"),
         )
 
     @staff_login_required_m

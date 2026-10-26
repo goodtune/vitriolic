@@ -6,9 +6,7 @@ from touchtechnology.common.sites import Application
 
 class TestDateTimeFieldSite(Application):
     def __init__(self, name="datetime", app_name="datetime", *args, **kwargs):
-        super(TestDateTimeFieldSite, self).__init__(
-            name=name, app_name=app_name, *args, **kwargs
-        )
+        super().__init__(*args, name=name, app_name=app_name, **kwargs)
 
     def get_urls(self):
         urlpatterns = [
@@ -22,9 +20,7 @@ class TestDateTimeFieldSite(Application):
 
 class TestQueryStringSite(Application):
     def __init__(self, name="querystring", app_name="querystring", *args, **kwargs):
-        super(TestQueryStringSite, self).__init__(
-            name=name, app_name=app_name, *args, **kwargs
-        )
+        super().__init__(*args, name=name, app_name=app_name, **kwargs)
 
     def get_urls(self):
         urlpatterns = [
@@ -48,9 +44,7 @@ class TestQueryStringSite(Application):
 
 class TestContextProcessorsSite(Application):
     def __init__(self, name="context", app_name="context", *args, **kwargs):
-        super(TestContextProcessorsSite, self).__init__(
-            name=name, app_name=app_name, *args, **kwargs
-        )
+        super().__init__(*args, name=name, app_name=app_name, **kwargs)
 
     def get_urls(self):
         urlpatterns = [
@@ -72,9 +66,7 @@ class TestContextProcessorsSite(Application):
 
 class TestPaginationSite(Application):
     def __init__(self, name="pagination", app_name="pagination", *args, **kwargs):
-        super(TestPaginationSite, self).__init__(
-            name=name, app_name=app_name, *args, **kwargs
-        )
+        super().__init__(*args, name=name, app_name=app_name, **kwargs)
 
     def get_urls(self):
         urlpatterns = [
@@ -92,9 +84,7 @@ class TestPaginationSite(Application):
 
 class TestGenericViewsSite(Application):
     def __init__(self, name="generic", app_name="generic", *args, **kwargs):
-        super(TestGenericViewsSite, self).__init__(
-            name=name, app_name=app_name, *args, **kwargs
-        )
+        super().__init__(*args, name=name, app_name=app_name, **kwargs)
 
     def get_urls(self):
         # The relatives of an object nest under it without a list of their own.

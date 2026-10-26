@@ -63,10 +63,9 @@ class GenericEditTests(TestCase):
             "datetime_1": "9:00",
             "datetime_2": "UTC",
         }
-        res = self.post("generic:vanilla:add", data=data)
+        self.post("generic:vanilla:add", data=data)
         self.assertEqual(1, TestDateTimeField.objects.count())
-        self.response_302()
-        self.assertRedirects(res, self.reverse("generic:vanilla:list"))
+        self.assert_http_302_found(url=self.reverse("generic:vanilla:list"))
 
         self.assertGoodView("generic:vanilla:list")
         self.assertResponseContains("<li>2015-01-01 09:00:00+00:00</li>")
@@ -95,7 +94,7 @@ class GenericEditTests(TestCase):
 
 class GenericDeleteTests(TestCase):
     def setUp(self):
-        super(GenericDeleteTests, self).setUp()
+        super().setUp()
         self.object = TestDateTimeFieldFactory.create()
 
     def test_vanilla(self):
@@ -118,7 +117,7 @@ class GenericDeleteTests(TestCase):
 
 class GenericPermissionsTests(TestCase):
     def setUp(self):
-        super(GenericPermissionsTests, self).setUp()
+        super().setUp()
         self.object = TestDateTimeFieldFactory.create()
 
     def test_vanilla(self):
@@ -132,17 +131,13 @@ class GenericPermissionsTests(TestCase):
         with self.login(self.staff):
             self.assertGoodView("generic:vanilla:perms", self.object.pk)
             self.response_200()
-            self.assertResponseContains(
-                """
+            self.assertResponseContains(f"""
                 <p>
                     Control who <em>can change test date time field</em>
                     for the test date time field
-                    <strong>{}</strong>.
+                    <strong>{self.object}</strong>.
                 </p>
-            """.format(
-                    self.object
-                )
-            )
+            """)
 
 
 class GenericEditMultipleTests(TestCase):
@@ -165,10 +160,9 @@ class GenericEditMultipleTests(TestCase):
             "form-1-datetime_1": "9:00",
             "form-1-datetime_2": "UTC",
         }
-        res = self.post("generic:vanilla:edit", data=data)
+        self.post("generic:vanilla:edit", data=data)
         self.assertEqual(2, TestDateTimeField.objects.count())
-        self.response_302()
-        self.assertRedirects(res, self.reverse("generic:vanilla:list"))
+        self.assert_http_302_found(url=self.reverse("generic:vanilla:list"))
 
         self.assertGoodView("generic:vanilla:list")
         self.assertResponseContains(
@@ -233,8 +227,7 @@ class GenericBulkCreateTests(TestCase):
 
         self.post("generic:vanilla:bulk_create", data=data)
         # Should create 2 objects (form-2 was empty)
-        self.response_302()
-        self.assertRedirects(self.last_response, self.reverse("generic:vanilla:list"))
+        self.assert_http_302_found(url=self.reverse("generic:vanilla:list"))
 
         # Verify the objects were created correctly
         self.assertQuerySetEqual(
