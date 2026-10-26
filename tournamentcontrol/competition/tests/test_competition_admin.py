@@ -21,7 +21,7 @@ from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.admin.branding import get_brand
 from touchtechnology.admin.sites import site
-from touchtechnology.admin.tests.shells import ArrowMixin, by_shell, per_shell
+from touchtechnology.admin.tests.shells import ArrowMixin, IconMixin, by_shell, per_shell
 from touchtechnology.common.tests.factories import SuperUserFactory, UserFactory
 from tournamentcontrol.competition.dashboard import MostValuableWidget
 from tournamentcontrol.competition.draw.schemas import (
@@ -4014,13 +4014,96 @@ class MatchDetailQueryTests(TestCase):
         )
 
 
+class MatchRowMixin(IconMixin):
+    """The menu of a match's row on its stage's Matches tab."""
+
+    def actions_cell(self, match, name, statistics=False):
+        """
+        The last cell of the match's row, named ``name``. Its menu offers
+        Statistics when the players' statistics of the match can be entered.
+        """
+        namespace = "admin:fixja:competition:season:division:stage:match"
+        args = match._get_url_args()
+        referees = self.reverse(f"{namespace}:referees", *args)
+        detail = self.reverse(f"{namespace}:detail", *args)
+        edit = self.reverse(f"{namespace}:edit", *args)
+        delete = self.reverse(f"{namespace}:delete", *args)
+        csrf = (
+            '<input type="hidden" name="csrfmiddlewaretoken" '
+            f'value="{self.get_context("csrf_token")}">'
+        )
+        workbook_statistics, explorer_statistics = (
+            (
+                f'<li><a href="{detail}">{self.icon("chart-bar")}Statistics</a></li>',
+                f'<a href="{detail}">{self.icon("chart")}Statistics</a>',
+            )
+            if statistics
+            else ("", "")
+        )
+        return self.by_shell(
+            workbook=(
+                '<td class="wb-row-actions"><div class="wb-row-buttons">'
+                '<button type="button" class="wb-button wb-button-quiet '
+                'wb-button-icon wb-button-small wb-menu-button" '
+                f'popovertarget="wbm-match-{match.pk}" aria-expanded="false" '
+                f'aria-label="More actions for {name}">{self.icon("ellipsis")}'
+                "</button>"
+                f'<div class="wb-menu" popover id="wbm-match-{match.pk}"><ul>'
+                f'<li><a href="{referees}">{self.icon("flag")}Referees</a></li>'
+                f"{workbook_statistics}"
+                f'<li><a href="{edit}">{self.icon("pencil")}Edit</a></li>'
+                '<li class="wb-menu-last">'
+                f'<form method="post" action="{delete}" '
+                f'data-wb-confirm="The match “{name}” will be removed for good." '
+                f'data-wb-confirm-title="Delete {name}?" '
+                'data-wb-confirm-label="Delete match">'
+                f'{csrf}<button type="submit" class="wb-danger-item">'
+                f'{self.icon("trash-2")}Delete</button></form></li>'
+                "</ul></div></div></td>"
+            ),
+            explorer=(
+                '<td class="actions-cell"><div class="row-actions"><div class="menu">'
+                '<button type="button" class="button quiet icon-only compact" '
+                'data-popover aria-expanded="false" '
+                f'aria-controls="row-menu-match-{match.pk}">{self.icon("more")}'
+                f'<span class="visually-hidden">More actions for {name}</span>'
+                "</button>"
+                f'<div class="menu-panel" id="row-menu-match-{match.pk}">'
+                f'<a href="{referees}">{self.icon("referee")}Referees</a>'
+                f"{explorer_statistics}"
+                f'<a href="{edit}">{self.icon("edit")}Edit</a>'
+                f'<form method="post" action="{delete}" '
+                f'data-confirm="The match “{name}” will be removed for good." '
+                'data-confirm-title="Delete this match?" data-confirm-label="Delete">'
+                f'{csrf}<button type="submit" class="destructive-item">'
+                f'{self.icon("trash")}Delete</button></form>'
+                "</div></div></div></td>"
+            ),
+        )
+
+
+class MatchUrlsTests(TestCase):
+    """A match names its pages in the admin, its statistics page among them."""
+
+    def test_detail_is_the_statistics_page(self):
+        match = factories.MatchFactory.create()
+        self.assertEqual(
+            str(match.urls["detail"]),
+            self.reverse(
+                "admin:fixja:competition:season:division:stage:match:detail",
+                *match._get_url_args(),
+            ),
+        )
+
+
 @per_shell
-class MatchDetailNotReadyTests(TestCase):
+class MatchDetailNotReadyTests(MatchRowMixin, TestCase):
     """
     The players' statistics of a match are entered once both teams are known
     and the result is in: each side's points must add up to its score. Until
     then the statistics page sends the person to the match's page with a
-    message saying why, and the run sheet does not link to it.
+    message saying why, and neither the run sheet nor the match's row menu
+    links to it.
     """
 
     detail = "admin:fixja:competition:season:division:stage:match:detail"
@@ -4049,7 +4132,7 @@ class MatchDetailNotReadyTests(TestCase):
     def statistics_link(self, match):
         url = self.reverse(self.detail, *match._get_url_args())
         return self.by_shell(
-            workbook=f'<a href="{url}">{ICON % "chart-bar"}Detail</a>',
+            workbook=f'<a href="{url}">{self.icon("chart-bar")}Detail</a>',
             explorer=f'<a href="{url}">Statistics</a>',
         )
 
@@ -4115,6 +4198,96 @@ class MatchDetailNotReadyTests(TestCase):
             )
         self.assertResponseContains(self.statistics_link(played), count=1)
         self.assertResponseContains(self.statistics_link(unplayed), count=0)
+
+    def test_row_menu_offers_statistics_only_with_a_result(self):
+        played = self.match(
+            home_team__title="Leopards",
+            away_team__title="Marlins",
+            home_team_score=3,
+            away_team_score=1,
+        )
+        unplayed = self.match(home_team__title="Sharks", away_team__title="Eagles")
+        bye = self.match(
+            home_team__title="Hawks", is_bye=True, away_team=None, bye_processed=True
+        )
+        undecided = self.match(
+            home_team=None,
+            home_team_undecided=factories.UndecidedTeamFactory.create(
+                stage=self.stage, label="Winner SF1"
+            ),
+            away_team__title="Lions",
+            home_team_score=2,
+            away_team_score=1,
+        )
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:edit",
+                *self.stage._get_url_args(),
+            )
+        self.assertResponseContains(
+            self.actions_cell(played, "Leopards vs Marlins", statistics=True)
+        )
+        self.assertResponseContains(self.actions_cell(unplayed, "Sharks vs Eagles"))
+        self.assertResponseContains(self.actions_cell(bye, "Hawks vs Bye"))
+        self.assertResponseContains(self.actions_cell(undecided, "Winner SF1 vs Lions"))
+
+
+@per_shell(shells=("explorer",))
+class MatchPageStatisticsTests(IconMixin, TestCase):
+    """
+    Explorer's page of a match has a Statistics button beside Referees once
+    the players' statistics of the match can be entered: both teams are known
+    and the result is in. A bye never has one.
+    """
+
+    namespace = "admin:fixja:competition:season:division:stage:match"
+
+    def button(self, match, name, icon, label):
+        url = self.reverse(f"{self.namespace}:{name}", *match._get_url_args())
+        return (
+            f'<a class="button quiet" href="{url}">{self.icon(icon)}'
+            f"<span>{label}</span></a>"
+        )
+
+    def get_match_page(self, **kwargs):
+        match = factories.MatchFactory.create(**kwargs)
+        with self.login(self.superuser):
+            self.get_check_200(f"{self.namespace}:edit", *match._get_url_args())
+        self.assertResponseContains(
+            self.button(match, "referees", "referee", "Referees")
+        )
+        return match
+
+    def test_match_with_a_result(self):
+        match = self.get_match_page(home_team_score=3, away_team_score=1)
+        self.assertResponseContains(
+            self.button(match, "detail", "chart", "Statistics"), count=1
+        )
+
+    def test_match_without_a_result(self):
+        match = self.get_match_page()
+        self.assertResponseContains(
+            self.button(match, "detail", "chart", "Statistics"), count=0
+        )
+
+    def test_bye(self):
+        match = self.get_match_page(is_bye=True, away_team=None, bye_processed=True)
+        self.assertResponseContains(
+            self.button(match, "detail", "chart", "Statistics"), count=0
+        )
+
+    def test_undecided_team(self):
+        stage = factories.StageFactory.create()
+        match = self.get_match_page(
+            stage=stage,
+            home_team=None,
+            home_team_undecided=factories.UndecidedTeamFactory.create(stage=stage),
+            home_team_score=2,
+            away_team_score=1,
+        )
+        self.assertResponseContains(
+            self.button(match, "detail", "chart", "Statistics"), count=0
+        )
 
 
 class DashboardQueryTests(TestCase):
@@ -4304,7 +4477,7 @@ class WizardBrandTests(TestCase):
 
 
 @per_shell
-class ByeMatchTests(TestCase):
+class ByeMatchTests(MatchRowMixin, TestCase):
     """
     A bye match is named in plain text, "Bye vs Marlins". The admin puts the
     name of a match where markup is not read as markup: the label of the
@@ -4360,65 +4533,6 @@ class ByeMatchTests(TestCase):
             explorer=(
                 f'<li class="bye">{key}<label for="id_byes-0-bye_processed">{team} '
                 f'<small class="muted">{division}</small></label>{select}</li>'
-            ),
-        )
-
-    def icon(self, name):
-        css, sprite = self.by_shell(
-            workbook=("wb-icon", "workbook/icons.svg"),
-            explorer=("icon", "explorer/img/icons.svg"),
-        )
-        return (
-            f'<svg class="{css}" aria-hidden="true" focusable="false">'
-            f'<use href="/static/touchtechnology/admin/{sprite}#{name}"></use></svg>'
-        )
-
-    def actions_cell(self, match, name):
-        """The last cell of the match's row on the stage's Matches tab."""
-        namespace = "admin:fixja:competition:season:division:stage:match"
-        referees = self.reverse(f"{namespace}:referees", *self.args, match.pk)
-        edit = self.reverse(f"{namespace}:edit", *self.args, match.pk)
-        delete = self.reverse(f"{namespace}:delete", *self.args, match.pk)
-        csrf = (
-            '<input type="hidden" name="csrfmiddlewaretoken" '
-            f'value="{self.get_context("csrf_token")}">'
-        )
-        return self.by_shell(
-            workbook=(
-                '<td class="wb-row-actions"><div class="wb-row-buttons">'
-                '<button type="button" class="wb-button wb-button-quiet '
-                'wb-button-icon wb-button-small wb-menu-button" '
-                f'popovertarget="wbm-match-{match.pk}" aria-expanded="false" '
-                f'aria-label="More actions for {name}">{self.icon("ellipsis")}'
-                "</button>"
-                f'<div class="wb-menu" popover id="wbm-match-{match.pk}"><ul>'
-                f'<li><a href="{referees}">{self.icon("flag")}Referees</a></li>'
-                f'<li><a href="{edit}">{self.icon("pencil")}Edit</a></li>'
-                '<li class="wb-menu-last">'
-                f'<form method="post" action="{delete}" '
-                f'data-wb-confirm="The match “{name}” will be removed for good." '
-                f'data-wb-confirm-title="Delete {name}?" '
-                'data-wb-confirm-label="Delete match">'
-                f'{csrf}<button type="submit" class="wb-danger-item">'
-                f'{self.icon("trash-2")}Delete</button></form></li>'
-                "</ul></div></div></td>"
-            ),
-            explorer=(
-                '<td class="actions-cell"><div class="row-actions"><div class="menu">'
-                '<button type="button" class="button quiet icon-only compact" '
-                'data-popover aria-expanded="false" '
-                f'aria-controls="row-menu-match-{match.pk}">{self.icon("more")}'
-                f'<span class="visually-hidden">More actions for {name}</span>'
-                "</button>"
-                f'<div class="menu-panel" id="row-menu-match-{match.pk}">'
-                f'<a href="{referees}">{self.icon("referee")}Referees</a>'
-                f'<a href="{edit}">{self.icon("edit")}Edit</a>'
-                f'<form method="post" action="{delete}" '
-                f'data-confirm="The match “{name}” will be removed for good." '
-                'data-confirm-title="Delete this match?" data-confirm-label="Delete">'
-                f'{csrf}<button type="submit" class="destructive-item">'
-                f'{self.icon("trash")}Delete</button></form>'
-                "</div></div></div></td>"
             ),
         )
 

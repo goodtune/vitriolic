@@ -2605,7 +2605,7 @@ class Match(
         )
 
     def _get_url_names(self):
-        return super()._get_url_names() + ["referees", "resync-live-stream"]
+        return super()._get_url_names() + ["detail", "referees", "resync-live-stream"]
 
     def get_date(self, tzinfo):
         dt = self.get_datetime(tzinfo)
