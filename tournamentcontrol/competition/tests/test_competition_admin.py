@@ -22,7 +22,11 @@ from test_plus import TestCase as BaseTestCase
 from touchtechnology.admin.branding import get_brand
 from touchtechnology.admin.sites import site
 from touchtechnology.admin.tests.shells import ArrowMixin, IconMixin, by_shell, per_shell
-from touchtechnology.common.tests.factories import SuperUserFactory, UserFactory
+from touchtechnology.common.tests.factories import (
+    StaffFactory,
+    SuperUserFactory,
+    UserFactory,
+)
 from tournamentcontrol.competition.dashboard import MostValuableWidget
 from tournamentcontrol.competition.draw.schemas import (
     DivisionStructure,
@@ -4015,19 +4019,26 @@ class MatchDetailQueryTests(TestCase):
 
 
 class MatchRowMixin(IconMixin):
-    """The menu of a match's row on its stage's Matches tab."""
+    """
+    The menu of a match's row on its stage's Matches tab, and the run sheet's
+    link to its statistics page.
+    """
 
-    def actions_cell(self, match, name, statistics=False):
+    detail = "admin:fixja:competition:season:division:stage:match:detail"
+
+    def actions_cell(self, match, name, statistics=False, edit=True, delete=True):
         """
         The last cell of the match's row, named ``name``. Its menu offers
-        Statistics when the players' statistics of the match can be entered.
+        Statistics when the players' statistics of the match can be entered
+        and the person may change the match, and Edit and Delete to those who
+        may change and delete it.
         """
         namespace = "admin:fixja:competition:season:division:stage:match"
         args = match._get_url_args()
         referees = self.reverse(f"{namespace}:referees", *args)
         detail = self.reverse(f"{namespace}:detail", *args)
-        edit = self.reverse(f"{namespace}:edit", *args)
-        delete = self.reverse(f"{namespace}:delete", *args)
+        edit_url = self.reverse(f"{namespace}:edit", *args)
+        delete_url = self.reverse(f"{namespace}:delete", *args)
         csrf = (
             '<input type="hidden" name="csrfmiddlewaretoken" '
             f'value="{self.get_context("csrf_token")}">'
@@ -4040,6 +4051,32 @@ class MatchRowMixin(IconMixin):
             if statistics
             else ("", "")
         )
+        workbook_edit, explorer_edit = (
+            (
+                f'<li><a href="{edit_url}">{self.icon("pencil")}Edit</a></li>',
+                f'<a href="{edit_url}">{self.icon("edit")}Edit</a>',
+            )
+            if edit
+            else ("", "")
+        )
+        workbook_delete, explorer_delete = (
+            (
+                '<li class="wb-menu-last">'
+                f'<form method="post" action="{delete_url}" '
+                f'data-wb-confirm="The match “{name}” will be removed for good." '
+                f'data-wb-confirm-title="Delete {name}?" '
+                'data-wb-confirm-label="Delete match">'
+                f'{csrf}<button type="submit" class="wb-danger-item">'
+                f'{self.icon("trash-2")}Delete</button></form></li>',
+                f'<form method="post" action="{delete_url}" '
+                f'data-confirm="The match “{name}” will be removed for good." '
+                'data-confirm-title="Delete this match?" data-confirm-label="Delete">'
+                f'{csrf}<button type="submit" class="destructive-item">'
+                f'{self.icon("trash")}Delete</button></form>',
+            )
+            if delete
+            else ("", "")
+        )
         return self.by_shell(
             workbook=(
                 '<td class="wb-row-actions"><div class="wb-row-buttons">'
@@ -4050,15 +4087,7 @@ class MatchRowMixin(IconMixin):
                 "</button>"
                 f'<div class="wb-menu" popover id="wbm-match-{match.pk}"><ul>'
                 f'<li><a href="{referees}">{self.icon("flag")}Referees</a></li>'
-                f"{workbook_statistics}"
-                f'<li><a href="{edit}">{self.icon("pencil")}Edit</a></li>'
-                '<li class="wb-menu-last">'
-                f'<form method="post" action="{delete}" '
-                f'data-wb-confirm="The match “{name}” will be removed for good." '
-                f'data-wb-confirm-title="Delete {name}?" '
-                'data-wb-confirm-label="Delete match">'
-                f'{csrf}<button type="submit" class="wb-danger-item">'
-                f'{self.icon("trash-2")}Delete</button></form></li>'
+                f"{workbook_statistics}{workbook_edit}{workbook_delete}"
                 "</ul></div></div></td>"
             ),
             explorer=(
@@ -4070,15 +4099,17 @@ class MatchRowMixin(IconMixin):
                 "</button>"
                 f'<div class="menu-panel" id="row-menu-match-{match.pk}">'
                 f'<a href="{referees}">{self.icon("referee")}Referees</a>'
-                f"{explorer_statistics}"
-                f'<a href="{edit}">{self.icon("edit")}Edit</a>'
-                f'<form method="post" action="{delete}" '
-                f'data-confirm="The match “{name}” will be removed for good." '
-                'data-confirm-title="Delete this match?" data-confirm-label="Delete">'
-                f'{csrf}<button type="submit" class="destructive-item">'
-                f'{self.icon("trash")}Delete</button></form>'
+                f"{explorer_statistics}{explorer_edit}{explorer_delete}"
                 "</div></div></div></td>"
             ),
+        )
+
+    def statistics_link(self, match):
+        """The run sheet's link to the match's statistics page."""
+        url = self.reverse(self.detail, *match._get_url_args())
+        return self.by_shell(
+            workbook=f'<a href="{url}">{self.icon("chart-bar")}Detail</a>',
+            explorer=f'<a href="{url}">Statistics</a>',
         )
 
 
@@ -4106,8 +4137,6 @@ class MatchDetailNotReadyTests(MatchRowMixin, TestCase):
     links to it.
     """
 
-    detail = "admin:fixja:competition:season:division:stage:match:detail"
-
     def setUp(self):
         super().setUp()
         self.stage = factories.StageFactory.create()
@@ -4127,13 +4156,6 @@ class MatchDetailNotReadyTests(MatchRowMixin, TestCase):
                     "known and the result is in.",
                 )
             ]
-        )
-
-    def statistics_link(self, match):
-        url = self.reverse(self.detail, *match._get_url_args())
-        return self.by_shell(
-            workbook=f'<a href="{url}">{self.icon("chart-bar")}Detail</a>',
-            explorer=f'<a href="{url}">Statistics</a>',
         )
 
     def test_match_without_result(self):
@@ -4232,15 +4254,157 @@ class MatchDetailNotReadyTests(MatchRowMixin, TestCase):
         self.assertResponseContains(self.actions_cell(undecided, "Winner SF1 vs Lions"))
 
 
+@per_shell
+class MatchDetailPermissionTests(MatchRowMixin, TestCase):
+    """
+    The players' statistics of a match are entered by whoever may change the
+    match: ``change_match`` on the match, or on every match, as the match's
+    own page asks. The statistics page refuses anyone else, and the row menu
+    and the run sheet offer it only to those who may open it.
+    """
+
+    user_factory = StaffFactory
+
+    def setUp(self):
+        super().setUp()
+        self.stage = factories.StageFactory.create()
+        self.staff = self.make_user("staff")
+
+    def match(self, **kwargs):
+        """A match on 1 May 2025 with its result in, 3-0 to the home side."""
+        return factories.MatchFactory.create(
+            **{
+                "stage": self.stage,
+                "date": date(2025, 5, 1),
+                "home_team_score": 3,
+                "away_team_score": 0,
+                **kwargs,
+            }
+        )
+
+    def statistics(self, match):
+        """One home player, who scored the home side's three points."""
+        factories.TeamAssociationFactory.create(
+            is_player=True, team=match.home_team, person__club=match.home_team.club
+        )
+        return {
+            "home-TOTAL_FORMS": "1",
+            "home-INITIAL_FORMS": "1",
+            "home-MAX_NUM_FORMS": "1000",
+            "home-0-id": "",
+            "home-0-number": "7",
+            "home-0-played": "1",
+            "home-0-points": "3",
+            "home-0-mvp": "0",
+            "away-TOTAL_FORMS": "0",
+            "away-INITIAL_FORMS": "0",
+            "away-MAX_NUM_FORMS": "1000",
+        }
+
+    def test_login_required(self):
+        match = self.match()
+        self.assertLoginRequired(self.detail, *match._get_url_args())
+
+    def test_staff_without_change_match_is_refused(self):
+        match = self.match()
+        data = self.statistics(match)
+        with self.login(self.staff):
+            self.get(self.detail, *match._get_url_args())
+            self.assert_http_403_forbidden()
+            self.post(self.detail, *match._get_url_args(), data=data)
+            self.assert_http_403_forbidden()
+        self.assertCountEqual(match.statistics.all(), [])
+
+    def test_change_match_on_another_match_is_refused(self):
+        match = self.match()
+        assign_perm("competition.change_match", self.staff, self.match())
+        with self.login(self.staff):
+            self.get(self.detail, *match._get_url_args())
+            self.assert_http_403_forbidden()
+
+    def test_refused_before_the_result_is_looked_at(self):
+        # Someone who may not change the match is refused, not sent to the
+        # match's page to be told its result is not in.
+        match = self.match(home_team_score=None, away_team_score=None)
+        with self.login(self.staff):
+            self.get(self.detail, *match._get_url_args())
+            self.assert_http_403_forbidden()
+
+    def test_change_match_on_the_match_enters_statistics(self):
+        match = self.match()
+        data = self.statistics(match)
+        assign_perm("competition.change_match", self.staff, match)
+        with self.login(self.staff):
+            self.get(self.detail, *match._get_url_args())
+            self.assert_http_200_ok()
+            self.post(self.detail, *match._get_url_args(), data=data)
+            self.assert_http_302_found(url=self.reverse("admin:index"))
+        self.assertEqual(match.statistics.get().points, 3)
+
+    def test_change_match_on_every_match_opens_the_page(self):
+        match = self.match()
+        assign_perm("competition.change_match", self.staff)
+        with self.login(self.staff):
+            self.get(self.detail, *match._get_url_args())
+            self.assert_http_200_ok()
+
+    def test_row_menu_offers_statistics_to_those_who_may_change_the_match(self):
+        # The stage's Matches tab lists the matches the person may act on at
+        # all. They may change the first and delete the second, so both rows
+        # are drawn, and Statistics is offered with Edit, not with Delete.
+        theirs = self.match(home_team__title="Leopards", away_team__title="Marlins")
+        other = self.match(home_team__title="Sharks", away_team__title="Eagles")
+        assign_perm("competition.change_stage", self.staff, self.stage)
+        assign_perm("competition.change_match", self.staff, theirs)
+        assign_perm("competition.delete_match", self.staff, other)
+        with self.login(self.staff):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:edit",
+                *self.stage._get_url_args(),
+            )
+        self.assertResponseContains(
+            self.actions_cell(
+                theirs, "Leopards vs Marlins", statistics=True, delete=False
+            )
+        )
+        self.assertResponseContains(
+            self.actions_cell(other, "Sharks vs Eagles", edit=False)
+        )
+
+    def test_run_sheet_offers_statistics_to_those_who_may_change_the_match(self):
+        theirs = self.match(home_team__title="Leopards")
+        other = self.match(home_team__title="Sharks")
+        assign_perm("competition.change_match", self.staff, theirs)
+        season = self.stage.division.season
+        with self.login(self.staff):
+            self.get_check_200(
+                "admin:fixja:match-runsheet",
+                season.competition_id,
+                season.pk,
+                "20250501",
+            )
+        self.assertResponseContains(self.statistics_link(theirs), count=1)
+        # The other match is on the sheet, without the link.
+        self.assertResponseContains(
+            self.by_shell(
+                workbook="<td>Sharks <strong>3</strong></td>",
+                explorer='<td class="team">Sharks <strong>3</strong></td>',
+            )
+        )
+        self.assertResponseContains(self.statistics_link(other), count=0)
+
+
 @per_shell(shells=("explorer",))
 class MatchPageStatisticsTests(IconMixin, TestCase):
     """
     Explorer's page of a match has a Statistics button beside Referees once
     the players' statistics of the match can be entered: both teams are known
-    and the result is in. A bye never has one.
+    and the result is in. A bye never has one. The page itself, and so the
+    button, is for those who may change the match.
     """
 
     namespace = "admin:fixja:competition:season:division:stage:match"
+    user_factory = StaffFactory
 
     def button(self, match, name, icon, label):
         url = self.reverse(f"{self.namespace}:{name}", *match._get_url_args())
@@ -4288,6 +4452,22 @@ class MatchPageStatisticsTests(IconMixin, TestCase):
         self.assertResponseContains(
             self.button(match, "detail", "chart", "Statistics"), count=0
         )
+
+    def test_change_match_on_the_match_shows_the_button(self):
+        match = factories.MatchFactory.create(home_team_score=3, away_team_score=1)
+        staff = self.make_user("staff")
+        assign_perm("competition.change_match", staff, match)
+        with self.login(staff):
+            self.get_check_200(f"{self.namespace}:edit", *match._get_url_args())
+        self.assertResponseContains(
+            self.button(match, "detail", "chart", "Statistics"), count=1
+        )
+
+    def test_without_change_match_the_page_is_refused(self):
+        match = factories.MatchFactory.create(home_team_score=3, away_team_score=1)
+        with self.login(self.make_user("staff")):
+            self.get(f"{self.namespace}:edit", *match._get_url_args())
+            self.assert_http_403_forbidden()
 
 
 class DashboardQueryTests(TestCase):
