@@ -143,6 +143,9 @@ class Translation(AdminUrlModel):
                 name="news_translation_unique_article_locale",
             ),
         ]
+        # The translations are listed an article at a time, where the locale
+        # alone settles the order.
+        ordering = ("locale",)
 
 
 class Category(AdminUrlModel):
@@ -174,6 +177,7 @@ class Category(AdminUrlModel):
     objects = CategoryQuerySet.as_manager()
 
     class Meta:
+        ordering = ("title",)
         verbose_name_plural = "categories"
 
     def clean(self):
