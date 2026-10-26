@@ -144,6 +144,7 @@ from tournamentcontrol.competition.utils import (
     generate_scorecards,
     legitimate_bye_match,
     match_unplayed,
+    team_awaits_own_ladder,
     team_awaits_upstream,
     team_needs_progressing,
 )
@@ -3103,6 +3104,7 @@ class CompetitionAdminComponent(AdminComponent):
             stage.matches.filter(team_needs_progressing)
             .exclude(legitimate_bye_match)
             .exclude(team_awaits_upstream)
+            .exclude(team_awaits_own_ladder())
         )
         teams = stage.undecided_teams.of_our_own()
 

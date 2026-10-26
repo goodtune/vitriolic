@@ -352,7 +352,9 @@ class RequireProgression(TestCase):
         rounds = StageFactory.create(division__season__timezone="UTC", order=1)
         finals = StageFactory.create(division=rounds.division, order=2)
         t1, t2, t3, t4 = TeamFactory.create_batch(4, division=rounds.division)
-        decide(MatchFactory.create(stage=rounds, home_team=t1, away_team=t2, datetime=dt1))
+        decide(
+            MatchFactory.create(stage=rounds, home_team=t1, away_team=t2, datetime=dt1)
+        )
         semi = MatchFactory.create(
             stage=finals, home_team=t1, away_team=t4, datetime=dt1, label="Semi"
         )
@@ -400,7 +402,9 @@ class RequireProgression(TestCase):
         rounds = StageFactory.create(division__season__timezone="UTC", order=1)
         finals = StageFactory.create(division=rounds.division, order=2)
         t1, t2, t3, t4 = TeamFactory.create_batch(4, division=rounds.division)
-        decide(MatchFactory.create(stage=rounds, home_team=t1, away_team=t2, datetime=dt1))
+        decide(
+            MatchFactory.create(stage=rounds, home_team=t1, away_team=t2, datetime=dt1)
+        )
         MatchFactory.create(stage=finals, home_team=t3, away_team=t4, datetime=dt1)
         final = MatchFactory.create(
             stage=finals,
