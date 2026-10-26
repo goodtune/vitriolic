@@ -28,6 +28,8 @@
 
 {% block row-buttons-items %}
 	{{ block.super }}
-	<li><form method="post" action="{% url 'admin:fixja:reorder' 'stage:division' obj.pk "up" %}">{% csrf_token %}<button type="submit">{% icon "arrow-up" %}{% trans "Move up" %}</button></form></li>
-	<li><form method="post" action="{% url 'admin:fixja:reorder' 'stage:division' obj.pk "down" %}">{% csrf_token %}<button type="submit">{% icon "arrow-down" %}{% trans "Move down" %}</button></form></li>
+	{% if change_perm in object_perms %}
+		<li><form method="post" action="{% url 'admin:fixja:reorder' 'stage:division' obj.pk "up" %}">{% csrf_token %}<button type="submit">{% icon "arrow-up" %}{% trans "Move up" %}</button></form></li>
+		<li><form method="post" action="{% url 'admin:fixja:reorder' 'stage:division' obj.pk "down" %}">{% csrf_token %}<button type="submit">{% icon "arrow-down" %}{% trans "Move down" %}</button></form></li>
+	{% endif %}
 {% endblock %}

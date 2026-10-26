@@ -24,7 +24,9 @@ class SitemapMoveTest(TestCase):
         cls.superuser = cls.make_user("superuser")
         cls.root = SitemapNodeFactory.create()
         cls.children = SitemapNodeFactory.create_batch(parent=cls.root, size=4)
-        # A member of staff who may change the first child only.
+        # Two members of staff: the editor may change the first child only,
+        # the viewer nothing.
+        cls.viewer = StaffFactory.create(username="viewer")
         cls.editor = StaffFactory.create(username="editor")
         assign_perm("common.change_sitemapnode", cls.editor, cls.children[0])
 
@@ -32,7 +34,7 @@ class SitemapMoveTest(TestCase):
         self.assertLoginRequired("admin:reorder", self.children[0].pk, "down")
 
     def test_a_person_who_may_not_change_a_node_may_not_move_it(self):
-        with self.login(StaffFactory.create(username="viewer")):
+        with self.login(self.viewer):
             self.post("admin:reorder", self.children[0].pk, "down")
         self.assert_http_403_forbidden()
         self.assertEqual(list(self.root.get_children()), self.children)
@@ -46,7 +48,7 @@ class SitemapMoveTest(TestCase):
         )
         self.assertEqual(list(self.root.get_children()), [second, first, *rest])
 
-    def test_the_permission_to_move_a_node_is_that_node_s(self):
+    def test_the_permission_to_move_a_node_is_checked_on_that_node(self):
         with self.login(self.editor):
             self.post("admin:reorder", self.children[1].pk, "down")
         self.assert_http_403_forbidden()

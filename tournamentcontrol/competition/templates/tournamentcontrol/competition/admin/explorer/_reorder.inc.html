@@ -1,3 +1,9 @@
-{% load i18n admin admin_explorer %}
+{% load i18n admin admin_explorer %}{% comment %}
+	The arrows that move a row of a list (``obj``) up and down, posting to
+	``up_url`` and ``down_url``. Drawn only for a person who may change the
+	row, as its Edit item is.
+{% endcomment %}
+{% if change_perm in object_perms %}
 <form method="post" action="{{ up_url }}">{% csrf_token %}<button type="submit" class="button quiet icon-only compact" title="{% trans "Move up" %}">{% icon "arrow-up" %}<span class="visually-hidden">{% blocktrans %}Move {{ obj }} up{% endblocktrans %}</span></button></form>
 <form method="post" action="{{ down_url }}">{% csrf_token %}<button type="submit" class="button quiet icon-only compact" title="{% trans "Move down" %}">{% icon "arrow-down" %}<span class="visually-hidden">{% blocktrans %}Move {{ obj }} down{% endblocktrans %}</span></button></form>
+{% endif %}

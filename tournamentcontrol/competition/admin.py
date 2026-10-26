@@ -10,6 +10,7 @@ from celery import states
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
+from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 from django.db.models import Case, Count, F, Prefetch, Q, Sum, When
 from django.forms.models import _get_foreign_key
@@ -111,6 +112,7 @@ from tournamentcontrol.competition.models import (
     LiveStreamKey,
     Match,
     MatchScoreSheet,
+    OrderedSitemapNode,
     Person,
     Place,
     Season,
@@ -1347,9 +1349,32 @@ class CompetitionAdminComponent(AdminComponent):
     @staff_login_required_m
     @require_POST_m
     def reorder(self, request, model, pk, direction, parent=None, **kwargs):
-        # Reconstruct the object from the keyword arguments
-        cls = apps.get_model("competition", model)
-        obj = cls.objects.get(pk=pk)
+        # Reconstruct the object from the keyword arguments: a model that is
+        # kept in an order, the parent (a foreign key of it) whose rows are
+        # listed together, and one of those rows. Any other address is stale
+        # or hand-made, and is not found.
+        try:
+            cls = apps.get_model("competition", model)
+            field = cls._meta.get_field(parent) if parent is not None else None
+        except (LookupError, FieldDoesNotExist):
+            raise Http404
+        if not issubclass(cls, OrderedSitemapNode):
+            raise Http404
+        if field is not None and not isinstance(field, models.ForeignKey):
+            raise Http404
+        obj = get_object_or_404(cls, pk=pk)
+
+        # Only a person who may change the object may move it, as with the
+        # Edit item beside its arrows.
+        has_permission = get_40x_or_None(
+            request,
+            get_perms_for_model(cls, change=True),
+            obj=obj,
+            return_403=True,
+            accept_global_perms=True,
+        )
+        if has_permission is not None:
+            return has_permission
 
         # Determine the neighbouring order values based on direction
         if direction == "up":
@@ -1364,34 +1389,36 @@ class CompetitionAdminComponent(AdminComponent):
         if parent is not None:
             queryset = queryset.filter(**{str(parent): getattr(obj, parent)})
 
-        # We can't reorder the first item up or the last item down; throw
-        # a 404 when trying to do so.
-        if queryset.count() != 2:
-            raise Http404
+        # The first item has nothing above it and the last nothing below it:
+        # a move off either end changes nothing and goes back to the list.
+        if queryset.count() == 2:
+            # Swap the order value of the two neighbours and write to db.
+            # 1) Hang onto the original ordering of a and b
+            a, b = queryset
+            ao, bo = a.order, b.order
 
-        # Swap the order value of the two neighbours and write to db.
-        # 1) Hang onto the original ordering of a and b
-        a, b = queryset
-        ao, bo = a.order, b.order
+            # 2) Set a.order to 0 to allow b.order to assume that value
+            a.order = 0
+            a.save()
 
-        # 2) Set a.order to 0 to allow b.order to assume that value
-        a.order = 0
-        a.save()
+            # 3) Assign the new value to b.order
+            b.order = ao
+            b.save()
 
-        # 3) Assign the new value to b.order
-        b.order = ao
-        b.save()
+            # 4) Assign the new value to a.order
+            a.order = bo
+            a.save()
 
-        # 4) Assign the new value to a.order
-        a.order = bo
-        a.save()
-
-        fmt = _('The %(model)s "%(title)s" has been reordered %(direction)s the list.')
-        messages.info(
-            request,
-            fmt
-            % dict(model=cls._meta.verbose_name, title=obj.title, direction=direction),
-        )
+            fmt = _(
+                'The %(model)s "%(title)s" has been reordered %(direction)s the list.'
+            )
+            messages.info(
+                request,
+                fmt
+                % dict(
+                    model=cls._meta.verbose_name, title=obj.title, direction=direction
+                ),
+            )
 
         # Return to the list the arrows are in: the tab of the parent's page
         # that lists the object, or the object's own page without a parent.

@@ -374,25 +374,33 @@ class ReorderTests(MessagesTestMixin, ArrowMixin, BaseTestCase):
         for route, obj in (("stage:division", semi_finals), ("team:division", bees)):
             for direction in ("up", "down"):
                 with self.subTest(obj=obj.title, direction=direction):
-                    action = self.reverse("admin:fixja:reorder", route, obj.pk, direction)
-                    self.assertResponseContains(self.arrow(action, direction, obj.title))
+                    action = self.reverse(
+                        "admin:fixja:reorder", route, obj.pk, direction
+                    )
+                    self.assertResponseContains(
+                        self.arrow(action, direction, obj.title)
+                    )
         for route, obj in (
             ("stage:division", pool_play),
             ("stage:division", finals),
             ("team:division", ants),
             ("team:division", cats),
         ):
+            with self.subTest(obj=obj.title):
+                self.assertResponseContains(self.title_cell(obj))
             for direction in ("up", "down"):
                 with self.subTest(obj=obj.title, direction=direction):
-                    self.assertResponseContains(self.title_cell(obj))
-                    action = self.reverse("admin:fixja:reorder", route, obj.pk, direction)
+                    action = self.reverse(
+                        "admin:fixja:reorder", route, obj.pk, direction
+                    )
                     self.assertResponseNotContains(
                         self.arrow(action, direction, obj.title)
                     )
 
     def test_a_person_who_may_not_change_a_stage_may_not_move_it(self):
+        semi_finals = self.stages[1]
         with self.login(self.viewer):
-            self.post("admin:fixja:reorder", "stage:division", self.stages[1].pk, "down")
+            self.post("admin:fixja:reorder", "stage:division", semi_finals.pk, "down")
         self.assert_http_403_forbidden()
         self.assertEqual(list(self.division.stages.all()), self.stages)
 
@@ -406,7 +414,7 @@ class ReorderTests(MessagesTestMixin, ArrowMixin, BaseTestCase):
             list(self.division.stages.all()), [pool_play, finals, semi_finals]
         )
 
-    def test_the_permission_to_move_a_stage_is_that_stage_s(self):
+    def test_the_permission_to_move_a_stage_is_checked_on_that_stage(self):
         pool_play = self.stages[0]
         with self.login(self.editor):
             self.post("admin:fixja:reorder", "stage:division", pool_play.pk, "down")
@@ -484,10 +492,11 @@ class ReorderTests(MessagesTestMixin, ArrowMixin, BaseTestCase):
         self.assertEqual(list(self.division.stages.all()), self.stages)
 
     def test_a_model_that_is_not_in_an_order_is_not_found(self):
+        semi_finals = self.stages[1]
         for model in ("ladder", "match"):
             with self.subTest(model=model), self.login(self.superuser):
                 self.post(
-                    "admin:fixja:reorder", f"{model}:division", self.stages[1].pk, "down"
+                    "admin:fixja:reorder", f"{model}:division", semi_finals.pk, "down"
                 )
                 self.assert_http_404_not_found()
         self.assertEqual(list(self.division.stages.all()), self.stages)

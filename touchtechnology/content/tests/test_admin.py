@@ -494,9 +494,7 @@ class SitemapListTests(ArrowMixin, TestCase):
                 action = self.reverse("admin:reorder", press.pk, direction)
                 self.assertResponseContains(self.arrow(action, direction, "Press"))
                 action = self.reverse("admin:reorder", archive.pk, direction)
-                self.assertResponseNotContains(
-                    self.arrow(action, direction, "Archive")
-                )
+                self.assertResponseNotContains(self.arrow(action, direction, "Archive"))
 
 
 class ApplicationListMixin(IconMixin):
