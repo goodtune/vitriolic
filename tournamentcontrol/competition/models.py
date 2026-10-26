@@ -1564,8 +1564,9 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
         raise Stage.DoesNotExist
 
     # A page listing matches names every team still to be decided, and each
-    # name needs the stage before this one, its pools and how many stages
-    # follow it. These remember the answers for this instance, so a list whose
+    # name needs the stage it is a place in (the stage before this one, or the
+    # stage its formula names), that stage's pools and how many stages follow
+    # it. These remember the answers for this instance, so a list whose
     # matches share one ``Stage`` asks once per stage rather than once per
     # team. Only for naming teams: anything that changes stages uses the
     # attributes above.
@@ -1578,6 +1579,12 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
             return self.comes_after
         except Stage.DoesNotExist:
             return None
+
+    @cached_property
+    def _title_stages(self):
+        # The stages of the division, in order: ``S1`` in a formula is the
+        # first of them, as ``Match.eval`` reads it.
+        return list(self.division.stages.all())
 
     @cached_property
     def _title_pools(self):
@@ -2760,7 +2767,7 @@ class Match(
             match = stage_group_position_re.match(team_eval)
             if not match:
                 raise AttributeError("Invalid stage_group_position pattern")
-            stage, group, position = match.groups()
+            selected, group, position = match.groups()
         except (AttributeError, TypeError):
             if not team_undecided and self.is_bye:
                 return ByeTeam()
@@ -2775,10 +2782,19 @@ class Match(
                 return {"title": title}
             stage = group = position = None
         else:
-            stage = self.stage._title_comes_after
+            if selected is None:
+                # A place on the ladder of the stage before.
+                stage = self.stage._title_comes_after
+            else:
+                # A place on the ladder of the stage the formula names, as
+                # ``eval`` reads it. Stages are numbered from one.
+                stages = self.stage._title_stages
+                number = int(selected)
+                stage = stages[number - 1] if 0 < number <= len(stages) else None
             if stage is None:
-                # A place on the ladder of the stage before, in the first
-                # stage of a division: it names nothing, so show it as written.
+                # The stage before the first stage of a division, or a stage
+                # the division does not have: it names nothing, so show it as
+                # written.
                 if plain:
                     return team_eval
                 return {"title": team_eval}
