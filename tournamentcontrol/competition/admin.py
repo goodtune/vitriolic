@@ -11,7 +11,7 @@ from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
 from django.db import models
-from django.db.models import Case, Count, F, Q, Sum, When
+from django.db.models import Case, Count, F, Prefetch, Q, Sum, When
 from django.forms.models import _get_foreign_key
 from django.http import (
     Http404,
@@ -4198,8 +4198,30 @@ class CompetitionAdminComponent(AdminComponent):
     ):
         data = collections.OrderedDict()
 
+        # Each team's players and staff, loaded for all the teams at once:
+        # the same filters and ordering as a query for each team (#470).
+        teams = teams.select_related("division").prefetch_related(
+            Prefetch(
+                "people",
+                queryset=TeamAssociation.objects.filter(
+                    is_player=True, person__isnull=False
+                ).select_related("person"),
+                to_attr="players",
+            ),
+            Prefetch(
+                "people",
+                queryset=TeamAssociation.objects.filter(
+                    roles__isnull=False, person__isnull=False
+                )
+                .order_by("roles__id", "person__last_name", "person__first_name")
+                .select_related("person")
+                .prefetch_related("roles"),
+                to_attr="staff",
+            ),
+        )
+
         for team in teams:
-            for pa in team.people.filter(is_player=True, person__isnull=False):
+            for pa in team.players:
                 data.setdefault(team, collections.OrderedDict()).setdefault(
                     "players", []
                 ).append(
@@ -4212,9 +4234,7 @@ class CompetitionAdminComponent(AdminComponent):
                     )
                 )
 
-            for pa in team.people.filter(
-                roles__isnull=False, person__isnull=False
-            ).order_by("roles__id", "person__last_name", "person__first_name"):
+            for pa in team.staff:
                 for role in pa.roles.all():
                     data.setdefault(team, collections.OrderedDict()).setdefault(
                         "staff", collections.OrderedDict()

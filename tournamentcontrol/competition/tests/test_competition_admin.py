@@ -1389,6 +1389,51 @@ class RegistrationFormTests(TestCase):
         self.assertResponseHeaders({"Content-Type": "application/pdf"})
         self.assertEqual(self.last_response.content, b"%PDF-1.4 fake")
 
+    #: The HTML form's queries, however many teams and people it lists (#470):
+    #: the teams with their divisions, the players, the staff and the staff's
+    #: roles are a query each.
+    QUERIES = 16
+
+    def add_people(self, *teams):
+        """Give each team three players, and two staff with two roles each."""
+        roles = factories.TeamRoleFactory.create_batch(
+            2, competition=self.season.competition
+        )
+        for team in teams:
+            factories.TeamAssociationFactory.create_batch(
+                3, team=team, person__club=self.club
+            )
+            for staff in factories.TeamAssociationFactory.create_batch(
+                2, team=team, is_player=False, person__club=self.club
+            ):
+                staff.roles.add(*roles)
+
+    def assertQueries(self):
+        with self.login(self.superuser), self.assertNumQueries(self.QUERIES):
+            self.get(
+                "admin:fixja:club:registration-form",
+                self.club.pk,
+                self.season.pk,
+                "html",
+            )
+        self.assert_http_200_ok()
+
+    def test_queries_one_team(self):
+        self.add_people(self.team)
+        self.assertQueries()
+
+    def test_queries_three_teams(self):
+        self.add_people(
+            self.team,
+            *(
+                factories.TeamFactory.create(
+                    club=self.club, division=self.team.division, title=title
+                )
+                for title in ("Dolphins", "Sharks")
+            ),
+        )
+        self.assertQueries()
+
 
 class BackendTests(MessagesTestMixin, TestCase):
     def setUp(self):
