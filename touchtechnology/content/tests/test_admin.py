@@ -9,6 +9,7 @@ from django.test import override_settings
 from guardian.shortcuts import assign_perm
 from test_plus.test import TestCase
 
+from touchtechnology.admin.tests.lists import unordered_pages_fail
 from touchtechnology.admin.tests.shells import IconMixin, by_shell, per_shell
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.tests.factories import (
@@ -16,7 +17,7 @@ from touchtechnology.common.tests.factories import (
     SuperUserFactory,
     UserFactory,
 )
-from touchtechnology.content.models import Page, Placeholder
+from touchtechnology.content.models import Chunk, Page, Placeholder
 from touchtechnology.content.tests import factories
 
 NEWS_SITE = "touchtechnology.news.sites.NewsSite"
@@ -141,6 +142,25 @@ class GoodViewTests(TestCase):
             # If no ProtectedError is raised, this should succeed
             # If ProtectedError is raised, the generic handler will show an error message
             # This test mainly verifies no code crashes with the new generic handling
+
+
+@per_shell
+class ChunkListTests(TestCase):
+    """The list of chunks, shown a page at a time."""
+
+    user_factory = SuperUserFactory
+
+    def test_the_chunks_are_listed_by_slug(self):
+        superuser = self.make_user("superuser")
+        footer = Chunk.objects.create(slug="footer")
+        banner = Chunk.objects.create(slug="banner")
+        sidebar = Chunk.objects.create(slug="sidebar")
+        with unordered_pages_fail(), self.login(superuser):
+            self.get("admin:content:chunk:list")
+        self.assert_http_200_ok()
+        self.assertEqual(
+            list(self.get_context("object_list")), [banner, footer, sidebar]
+        )
 
 
 class MediaStorageMixin:
