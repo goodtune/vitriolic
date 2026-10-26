@@ -91,9 +91,10 @@ class PrinceBinaryTests(SimpleTestCase):
     Without ``PRINCE_SERVER``, ``prince`` pipes the HTML through the binary
     named by ``PRINCE_BINARY``. It must not wait for ever on a binary that
     never finishes (#440), and a failure must reach the caller as a
-    ``PrinceError``, the same as a failure of the PDF server.
+    ``PrinceError``, the same as a failure of the PDF server. So must a
+    binary that is missing or cannot be run.
 
-    Each test makes ``PRINCE_BINARY`` a shell script.
+    Each test makes ``PRINCE_BINARY`` a shell script, or leaves the path empty.
     """
 
     #: Longer than any timeout these tests set.
@@ -123,6 +124,26 @@ class PrinceBinaryTests(SimpleTestCase):
         """The hung binary was killed and reaped: its process is gone."""
         with self.assertRaises(ProcessLookupError):
             os.kill(int(self.pid.read_text()), 0)
+
+    def assertCannotRun(self, cause, errno, reason):
+        """
+        The binary could not be run at all. Only a change to the site's setup
+        will fix that, so the error names the path and is logged.
+        """
+        with (
+            self.assertLogs("touchtechnology.common.prince", "ERROR") as logs,
+            self.assertRaises(PrinceError) as raised,
+        ):
+            prince("<html></html>")
+        self.assertEqual(
+            str(raised.exception),
+            f"Local PDF generation failed: [Errno {errno}] {reason}: '{self.binary}'",
+        )
+        self.assertIsInstance(raised.exception.__cause__, cause)
+        self.assertEqual(
+            [record.getMessage() for record in logs.records],
+            [f"PDF binary {self.binary} cannot be run: {reason}"],
+        )
 
     def test_pdf(self):
         self.install("exec cat")
@@ -172,3 +193,12 @@ class PrinceBinaryTests(SimpleTestCase):
             "returned non-zero exit status 3.",
         )
         self.assertEqual(raised.exception.__cause__.returncode, 3)
+
+    def test_missing(self):
+        """Nothing was installed at ``PRINCE_BINARY``."""
+        self.assertCannotRun(FileNotFoundError, 2, "No such file or directory")
+
+    def test_not_executable(self):
+        self.install("exec cat")
+        self.binary.chmod(0o644)
+        self.assertCannotRun(PermissionError, 13, "Permission denied")
