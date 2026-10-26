@@ -4250,7 +4250,8 @@ class MatchRowMixin(IconMixin):
         namespace = "admin:fixja:competition:season:division:stage:match"
         # The sheet writes its own path after "?next=" as it is, which
         # reverse(query=) would percent-encode.
-        return f"{self.reverse(f'{namespace}:{name}', *match._get_url_args())}?next={sheet}"
+        url = self.reverse(f"{namespace}:{name}", *match._get_url_args())
+        return f"{url}?next={sheet}"
 
     def resync_link(self, match):
         """The run sheet's link that re-pushes the match's broadcast to YouTube."""
@@ -4727,7 +4728,9 @@ class StreamLinksPermissionTests(StreamedMatchMixin, TestCase):
             self.stream_link(theirs, "pencil", "Stream?"), count=1
         )
         self.assertResponseContains("<td>Sharks</td>")
-        self.assertResponseContains(self.stream_link(other, "pencil", "Stream?"), count=0)
+        self.assertResponseContains(
+            self.stream_link(other, "pencil", "Stream?"), count=0
+        )
 
 
 @per_shell(shells=("explorer",))
