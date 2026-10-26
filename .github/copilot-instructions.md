@@ -26,17 +26,21 @@ This is a Python based repository, it provides a Django reusable application tha
 2. Maintain existing code structure and organization
 3. Write unit tests for new functionality.
     - Always use `django-test-plus` style tests.
-    - Avoid `assertTrue` and `assertFalse` in favor of `assertEqual` and `assertNotEqual`.
-4. Use `tox` for running tests across supported Python versions
-5. **Continuous Improvement**: During any code review iteration, continuously evolve this instructions file to incorporate new guidance and reaffirm established patterns based on reviewer feedback. **When updating this file, also update `CLAUDE.md` to maintain synchronization with the summary overview.**
+    - Avoid `assertTrue` and `assertFalse` in favor of `assertEqual` with the expected value. `assertNotEqual` is not a substitute; see the Assertion Guidelines below.
     - Use `assertCountEqual` to check lists and querysets.
+4. Use `tox` for running tests across supported Python versions
+    - Before opening a PR, run the environment with no selector (`tox -e <env>` alone), as CI does. Module order changes what leaks between tests, so a module that passes on its own can fail in the full run.
+5. **Continuous Improvement**: During any code review iteration, continuously evolve this instructions file to incorporate new guidance and reaffirm established patterns based on reviewer feedback. **When updating this file, also update `CLAUDE.md` to maintain synchronization with the summary overview.**
 6. **Imports and Dependencies**: 
     - **All imports must be at the head of the file** - never place import statements inside functions or methods
     - Never use try/except for imports of required dependencies - imports should be at the head of the file
     - Only use inline imports to avoid circular import issues
-7. **Logging Guidelines**:
-    - Use printf-style interpolation for log messages instead of f-strings for better performance
-    - Example: `logger.info("Message with %s and %s", var1, var2)` not `logger.info(f"Message with {var1} and {var2}")`
+7. **String Building and Logging**:
+    - Build strings with f-strings, never `%` or `.format()`, with three exceptions:
+        - Logger calls take printf-style lazy arguments: `logger.info("Message with %s and %s", var1, var2)` not `logger.info(f"Message with {var1} and {var2}")`, so the message is only formatted when it is emitted
+        - SQL placeholders stay as `%s` for the database driver to fill in
+        - Translatable strings are passed to `_()` with their placeholders intact, and formatted afterwards, so the catalogue entry is stable
+    - Modernise `%`, `.format()` and `super(Class, self)` only in files the PR already modifies; do not open unrelated files to do it
 8. **Template Conventions**:
     - Use `self.template_path()` method to find templates instead of hardcoding template paths
     - Follow existing patterns for template path construction
@@ -56,19 +60,25 @@ This is a Python based repository, it provides a Django reusable application tha
 - **Always assert positive expected outcomes** - don't settle for "not failing" tests or negative assertions
 - **No ambiguous testing** - all responses must be predictable, assert for exact expected values, not what should not happen
 - **Avoid intermediate variables** - use assertions directly instead of assigning to temporary variables first
-- **Never use `assertIsNotNone()`, `assertNotEqual()`, or `!= 404`** - assert for the specific expected value instead
+- **Never use `assertIsNotNone()`, `assertNotEqual()`, or `!= 404`** - assert for the specific expected value instead; this is why item 3 above does not offer `assertNotEqual` as an alternative to `assertFalse`
 - **Use `assertEqual()` with expected values** - verify exact expected results, not just "anything but X"
 - **Test the actual behavior** - ensure tests validate what the code should do, not just that it doesn't crash
 
 ### Django Test Plus Patterns
 - **User creation**: Use the `make_user()` utility function in combination with the `user_factory` attribute
   - **Admin users**: Set the `user_factory` to `SuperUserFactory`
-- **Authentication**: Use `self.login(self.user)` approach 
+- **Authentication**: Use `self.login(self.user)` approach
 - **HTTP requests**: Use `self.get(named_url, *args)` instead of direct client calls or manual URL construction
-- **Response validation**: Use `self.response_XXX()` to check status codes
+  - **No assigned response**: never write `response = self.get(...)`; the helpers below read `self.last_response` themselves
+  - `self.get_check_200("url_name", *args)` fetches and checks the status in one call
+- **Response validation**: Use `self.assert_http_###_name()` to check status codes (`self.assert_http_200_ok()`, `self.assert_http_403_forbidden()`, ...); never read `.status_code` yourself
+  - **Redirects**: `self.assert_http_302_found(url=...)`, not `assertRedirects`
+  - **Login required**: `self.assertLoginRequired("url_name", *args)`
+  - **Headers**: `self.assertResponseHeaders({"Header": "value"})`
 - **Content validation**: Use `self.assertResponseContains(...)` to check for HTML fragments
-  - **Always assert a full HTML fragment** (e.g. the whole `<td>` or `<input>` element) and never pass `html=False` to search for bare text; a bare string can keep matching after a regression because the text appears somewhere unrelated on the page
+  - **Always assert a full HTML fragment** (e.g. the whole `<td>` or `<input>` element) and never pass an `html=` argument; `html=False` searches for bare text, which can keep matching after a regression because the text appears somewhere unrelated on the page
 - **URL Testing**: Always use named URLs with `self.reverse("url_name", args...)` - never hardcode URL strings
+  - `self.reverse()` passes every keyword argument on as a URL kwarg, so it cannot take `query=`; for a query string use `from django.urls import reverse` and `reverse("url_name", query={...})`
 
 ### Model Field Guidelines
 - **UndecidedTeam models**: Don't set both `label` and `formula` - use one or the other as per form validation
@@ -86,6 +96,7 @@ This is a Python based repository, it provides a Django reusable application tha
 - **Test method return values**: Understand and test what methods actually return (tuples, dicts, etc.)
 
 ### Test Organization
+- **Class-level data goes in `setUpTestData`** - never override `setUpClass`; if one must be, it has to call `super()` first or the class's transaction is never opened
 - **No management commands for tests** - use regular unit tests instead
 - **Remove utility function calls from integration tests** - test through the actual usage paths
 - **Focus on user-facing behavior** - test how features work in practice, not internal implementation details
@@ -108,6 +119,7 @@ This is a Python based repository, it provides a Django reusable application tha
 - **Test real workflows**: Focus on complete user journeys through the admin interface and frontend
 - **Performance validation**: Include tests for Visual Scheduler performance with large datasets
 - **Browser automation**: Use Playwright's `Page` fixture for browser interactions and `expect()` for assertions
+- **Admin delete routes**: a new delete route in the admin needs a `Case` in `tests/e2e/admin_delete.py` saying what its confirmation reads; `test_every_delete_route_has_a_case` in `tests/e2e/test_admin_delete_modals.py` fails until it has one
 
 ### E2E Test Patterns
 - **Authentication**: Use `authenticated_page` fixture for tests requiring admin access
