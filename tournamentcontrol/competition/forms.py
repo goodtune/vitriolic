@@ -2329,7 +2329,9 @@ class DrawGenerationForm(BootstrapFormControlMixin, forms.Form):
             if team_eval
         )
         for team_eval in team_evals:
-            error = first_stage_position_error(stage, team_eval)
+            error = zero_position_error(team_eval) or first_stage_position_error(
+                stage, team_eval
+            )
             if error:
                 self.add_error("format", error)
 
@@ -2752,29 +2754,36 @@ class DivisionStructureJSONForm(forms.Form):
                 "A division of that name already exists in this season."
             )
 
-        errors = self._first_stage_position_errors(structure)
+        errors = self._position_errors(structure)
         if errors:
             raise forms.ValidationError(errors)
 
         return json_data
 
-    def _first_stage_position_errors(self, structure):
+    def _position_errors(self, structure):
         """
-        The positions in the first stage's draw formats that name the stage
-        before it, once each. The division will have no stage before its
-        first, so they name no team; the undecided-team form and the draw
-        wizard refuse them too (``first_stage_position_error``).
+        The positions in the stages' draw formats that name no team, once
+        each, as the undecided-team form and the draw wizard refuse them: a
+        zero in any stage (``zero_position_error``), and in the first stage a
+        position that names the stage before it, which the division will not
+        have (``first_stage_position_message``).
         """
-        first = structure.stages[0]
-        references = dict.fromkeys(
-            reference
-            for text in structure.stage_draw_formats(first)
-            for round in draw_generator(None, text).rounds
-            for descriptor in round.matches
-            for reference in (descriptor.home_team, descriptor.away_team)
-        )
-        errors = [first_stage_position_message(first.title, ref) for ref in references]
-        return [error for error in errors if error]
+        errors = []
+        for index, stage in enumerate(structure.stages):
+            references = dict.fromkeys(
+                reference
+                for text in structure.stage_draw_formats(stage)
+                for round in draw_generator(None, text).rounds
+                for descriptor in round.matches
+                for reference in (descriptor.home_team, descriptor.away_team)
+            )
+            for reference in references:
+                error = zero_position_error(reference)
+                if error is None and index == 0:
+                    error = first_stage_position_message(stage.title, reference)
+                if error:
+                    errors.append(error)
+        return list(dict.fromkeys(errors))
 
     def get_division_structure(self):
         """Get the validated DivisionStructure instance."""
