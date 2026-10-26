@@ -78,6 +78,41 @@ def knockout(stage, kick_off, final_kick_off):
     return semi_1, semi_2, final
 
 
+def own_ladder(stage, kick_off, final_kick_off):
+    """
+    Two matches in ``stage``, the first stage of its division, and a final
+    between the winner of the first and the leader of the stage's own ladder
+    (``S1P1``): a place ``Match.eval`` fills from a ladder the stage's own
+    matches are still deciding.
+    """
+    t1, t2, t3, t4 = TeamFactory.create_batch(4, division=stage.division)
+    match_1 = MatchFactory.create(
+        stage=stage, home_team=t1, away_team=t4, datetime=kick_off, label="Match 1"
+    )
+    match_2 = MatchFactory.create(
+        stage=stage, home_team=t2, away_team=t3, datetime=kick_off, label="Match 2"
+    )
+    final = MatchFactory.create(
+        stage=stage,
+        home_team=None,
+        away_team=None,
+        home_team_eval="W",
+        home_team_eval_related=match_1,
+        away_team_eval="S1P1",
+        datetime=final_kick_off,
+        label="Final",
+    )
+    return match_1, match_2, final
+
+
+def decide(*matches):
+    """The home team of each of ``matches`` wins 4-3."""
+    for match in matches:
+        match.home_team_score = 4
+        match.away_team_score = 3
+        match.save()
+
+
 class BasicResultTests(TestCase):
     @freeze_time("2019-07-15 09:00 UTC")
     def test_bare_all_in_utc(self):
@@ -275,6 +310,120 @@ class RequireProgression(TestCase):
             {finals.division: {finals: [final]}},
         )
 
+    def test_a_place_on_the_stages_own_ladder(self):
+        """
+        A final in the first stage of its division between the winner of one
+        of its matches and the leader of the stage's own ladder (``S1P1``):
+        the ladder is open while the stage's other match is unplayed, so the
+        final waits for it, as a match waits for the stage before.
+        """
+        dt1 = datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC"))
+        dt2 = datetime.datetime(2019, 7, 15, 10, 30, tzinfo=ZoneInfo("UTC"))
+        stage = StageFactory.create(division__season__timezone="UTC", order=1)
+        match_1, match_2, final = own_ladder(stage, dt1, dt2)
+        decide(match_1)
+
+        self.assertProgression(
+            "match 1 decided",
+            [(match_2.home_team.title, match_2.away_team.title)],
+            [("Winner Match 1", "1st Stage 1")],
+            [],  # the stage's own ladder is open, match 2 is unplayed
+            {},
+        )
+
+        decide(match_2)
+
+        self.assertProgression(
+            "both decided",
+            [],
+            [("Winner Match 1", "1st Stage 1")],
+            [final],
+            {stage.division: {stage: [final]}},
+        )
+
+    def test_a_place_on_a_later_stages_own_ladder(self):
+        """
+        The stage a place names is the match's own whichever stage that is: a
+        final in the second stage naming ``S2P1`` waits for the second stage's
+        other match, with the stage before complete.
+        """
+        dt1 = datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC"))
+        dt2 = datetime.datetime(2019, 7, 15, 10, 30, tzinfo=ZoneInfo("UTC"))
+        rounds = StageFactory.create(division__season__timezone="UTC", order=1)
+        finals = StageFactory.create(division=rounds.division, order=2)
+        t1, t2, t3, t4 = TeamFactory.create_batch(4, division=rounds.division)
+        decide(
+            MatchFactory.create(stage=rounds, home_team=t1, away_team=t2, datetime=dt1)
+        )
+        semi = MatchFactory.create(
+            stage=finals, home_team=t1, away_team=t4, datetime=dt1, label="Semi"
+        )
+        playoff = MatchFactory.create(
+            stage=finals, home_team=t2, away_team=t3, datetime=dt1, label="Playoff"
+        )
+        final = MatchFactory.create(
+            stage=finals,
+            home_team=None,
+            away_team=None,
+            home_team_eval="W",
+            home_team_eval_related=semi,
+            away_team_eval="S2P1",
+            datetime=dt2,
+            label="Final",
+        )
+        decide(semi)
+
+        self.assertProgression(
+            "semi decided",
+            [(t2.title, t3.title)],
+            [("Winner Semi", "1st Stage 2")],
+            [],  # the finals' own ladder is open, the playoff is unplayed
+            {},
+        )
+
+        decide(playoff)
+
+        self.assertProgression(
+            "playoff decided",
+            [],
+            [("Winner Semi", "1st Stage 2")],
+            [final],
+            {finals.division: {finals: [final]}},
+        )
+
+    def test_a_place_on_the_stage_before_waits_for_that_stage_only(self):
+        """
+        A final in the second stage naming places on the ladder of the stage
+        before (``S1P1``, ``S1P2``) is governed by that stage: with its matches
+        decided the final is ready, whatever the second stage's own matches.
+        """
+        dt1 = datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC"))
+        dt2 = datetime.datetime(2019, 7, 15, 10, 30, tzinfo=ZoneInfo("UTC"))
+        rounds = StageFactory.create(division__season__timezone="UTC", order=1)
+        finals = StageFactory.create(division=rounds.division, order=2)
+        t1, t2, t3, t4 = TeamFactory.create_batch(4, division=rounds.division)
+        decide(
+            MatchFactory.create(stage=rounds, home_team=t1, away_team=t2, datetime=dt1)
+        )
+        MatchFactory.create(stage=finals, home_team=t3, away_team=t4, datetime=dt1)
+        final = MatchFactory.create(
+            stage=finals,
+            home_team=None,
+            away_team=None,
+            home_team_eval="S1P1",
+            away_team_eval="S1P2",
+            datetime=dt2,
+            label="Final",
+        )
+
+        self.assertProgression(
+            "rounds decided",
+            [(t3.title, t4.title)],
+            [("1st Stage 1", "2nd Stage 1")],
+            [final],
+            {finals.division: {finals: [final]}},
+        )
+
 
 @per_shell
 @freeze_time("2019-07-15 09:30 UTC")
@@ -358,6 +507,62 @@ class FirstStageProgressionPageTests(TestCase):
         (form,) = self.get_context("formset").forms
         self.assertEqual(form.instance.title, "G1P2")
         self.assertCountEqual(form.fields["team"].queryset, [home, away])
+
+    def test_a_place_on_the_stages_own_ladder_waits_for_the_ladder(self):
+        """
+        A final between the winner of one of the stage's matches and the
+        leader of the stage's own ladder (``S1P1``) is not offered while the
+        stage's other match is unplayed: the home page has no stage to
+        progress, and the progression page has nothing to progress.
+        """
+        kick_off = datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC"))
+        final_kick_off = datetime.datetime(2019, 7, 15, 10, 30, tzinfo=ZoneInfo("UTC"))
+        match_1, _match_2, _final = own_ladder(self.stage, kick_off, final_kick_off)
+        decide(match_1)
+
+        with self.login(self.superuser):
+            self.get_check_200("admin:index")
+            self.assertResponseContains(
+                self.by_shell(
+                    workbook=(
+                        '<p class="wb-muted">'
+                        '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+                        '<use href="/static/touchtechnology/admin/workbook/icons.svg'
+                        '#circle-check"></use></svg> No stages require progression.</p>'
+                    ),
+                    explorer=(
+                        '<tr><td colspan="2" class="empty-state">'
+                        "No stage is waiting for its teams.</td></tr>"
+                    ),
+                )
+            )
+            self.get(self.progress_url())
+        self.assert_http_410_gone()
+
+    def test_a_place_on_the_stages_own_ladder_is_offered_once_it_is_complete(self):
+        """
+        With every match of the stage decided its ladder is complete: the home
+        page lists the stage, and the progression page offers the final.
+        """
+        kick_off = datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC"))
+        final_kick_off = datetime.datetime(2019, 7, 15, 10, 30, tzinfo=ZoneInfo("UTC"))
+        match_1, match_2, final = own_ladder(self.stage, kick_off, final_kick_off)
+        decide(match_1, match_2)
+
+        with self.login(self.superuser):
+            self.get_check_200("admin:index")
+            self.assertResponseContains(
+                f'<a href="{self.progress_url()}">{self.stage.title}</a>'
+            )
+            self.get_check_200(self.progress_url())
+        self.assertResponseContains(
+            '<input type="hidden" name="form-TOTAL_FORMS" value="1" '
+            'id="id_form-TOTAL_FORMS">'
+        )
+        self.assertResponseContains(
+            f'<input type="hidden" name="form-0-id" value="{final.pk}" '
+            'id="id_form-0-id">'
+        )
 
     def test_a_failing_widget_is_left_out_of_the_home_page(self):
         """

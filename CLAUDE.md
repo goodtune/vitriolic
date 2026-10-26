@@ -42,7 +42,12 @@ This is a Django-based repository providing reusable applications for sporting c
 - Follow existing code patterns and Django idioms
 - Always use named URLs and proper template path methods
 - Test both positive outcomes and security/permission scenarios
-- In tests, `assertResponseContains` must be given a full HTML fragment (the whole element); never use `html=False` to search for bare text
+- Assert the expected value with `assertEqual`; never `assertNotEqual`, `assertIsNotNone` or `assertTrue`/`assertFalse`
+- Use the `django-test-plus` idioms: no `html=` argument to `assertResponseContains` (give it the whole element), no assigned response (`response = self.get(...)`), `self.assert_http_###_name()` rather than `.status_code`, with `assert_http_302_found(url=...)` rather than `assertRedirects`, plus `assertLoginRequired`, `assertResponseHeaders` and `get_check_200`. For a query string pass `data=` on the request; `self.reverse()` cannot take `query=`, so use `django.urls.reverse(..., query=...)` only when the URL string itself is needed
+- Build class-level test data in `setUpTestData`; never override `setUpClass` without calling `super()`
+- Before opening a PR, run the environment with no selector (`tox -e <env>` alone) as CI does; module order changes what leaks between tests
+- A new admin delete route needs a case in `tests/e2e/admin_delete.py`; `test_every_delete_route_has_a_case` enforces it
+- Build strings with f-strings, except logger calls (printf-style lazy arguments), SQL placeholders and `_()` strings; modernise `%`, `.format()` and `super(Class, self)` only in files the PR already modifies
 - Use ORM relations instead of manual queries
 - Never perform `git add .` - always be explicit about the files you add
 - Never make up ways to run the tests, follow the instructions
