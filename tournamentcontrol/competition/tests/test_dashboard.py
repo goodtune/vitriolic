@@ -30,15 +30,15 @@ from tournamentcontrol.competition.tests.factories import (
     UndecidedTeamFactory,
 )
 
-#: The widgets the competition puts on the admin's home page: the title of
-#: each, and its icon in the Workbook and the Explorer.
-WIDGETS = (
-    ("Awaiting Scores", "list-checks", "results"),
-    ("Progress Teams", "layers", "stage"),
-    ("Season Reports", "printer", "print"),
-    ("Awaiting Detailed Results", "chart-bar", "chart"),
-    ("Awaiting MVP Points", "chart-bar", "chart"),
-)
+#: The widgets the competition puts on the admin's home page: the icon of each,
+#: by its title, in the Workbook and the Explorer.
+WIDGETS = {
+    "Awaiting Scores": {"workbook": "list-checks", "explorer": "results"},
+    "Progress Teams": {"workbook": "layers", "explorer": "stage"},
+    "Season Reports": {"workbook": "printer", "explorer": "print"},
+    "Awaiting Detailed Results": {"workbook": "chart-bar", "explorer": "chart"},
+    "Awaiting MVP Points": {"workbook": "chart-bar", "explorer": "chart"},
+}
 
 
 class OpenCompetitionAdminComponent(CompetitionAdminComponent):
@@ -50,6 +50,18 @@ class OpenCompetitionAdminComponent(CompetitionAdminComponent):
     """
 
     unprotected = True
+
+
+def match_awaiting_details():
+    """
+    A match with a result in a season that records statistics, and no detailed
+    result yet: the one match Awaiting Detailed Results has to show.
+    """
+    return MatchFactory.create(
+        home_team_score=5,
+        away_team_score=3,
+        stage__division__season__statistics=True,
+    )
 
 
 def knockout(stage, kick_off, final_kick_off):
@@ -588,23 +600,26 @@ class FirstStageProgressionPageTests(TestCase):
 
 
 class HomePageMixin(MenuMixin):
-    def widget_headings(self):
-        """The heading of each of the competition's widgets, as the shell draws it."""
+    def widget_headings(self, *titles):
+        """
+        The heading of each of the competition's widgets, or of those named by
+        ``titles``, as the shell draws it. A title the competition has no widget
+        for is an error, so a test cannot assert nothing by mistake.
+        """
         return [
-            f"<h2>{self.icon(self.by_shell(workbook=workbook, explorer=explorer))}"
-            f"{title}</h2>"
-            for title, workbook, explorer in WIDGETS
+            f"<h2>{self.icon(self.by_shell(**WIDGETS[title]))}{title}</h2>"
+            for title in titles or WIDGETS
         ]
 
-    def assertWidgetsShown(self):
-        """The home page shows each of the competition's widgets, once."""
-        for heading in self.widget_headings():
+    def assertWidgetsShown(self, *titles):
+        """The home page shows each of the competition's widgets (or ``titles``), once."""
+        for heading in self.widget_headings(*titles):
             with self.subTest(shown=heading):
                 self.assertResponseContains(heading, count=1)
 
-    def assertWidgetsHidden(self):
-        """The home page shows none of the competition's widgets."""
-        for heading in self.widget_headings():
+    def assertWidgetsHidden(self, *titles):
+        """The home page shows none of the competition's widgets (or ``titles``)."""
+        for heading in self.widget_headings(*titles):
             with self.subTest(hidden=heading):
                 self.assertResponseNotContains(heading)
 
@@ -612,6 +627,11 @@ class HomePageMixin(MenuMixin):
 @per_shell
 class SuperuserHomePageTests(HomePageMixin, TestCase):
     user_factory = SuperUserFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        # Awaiting Detailed Results is drawn only while a match awaits one.
+        match_awaiting_details()
 
     def test_every_widget_is_shown(self):
         self.assertMenu(self.make_user("superuser"), *COMPONENTS)
@@ -631,6 +651,8 @@ class StaffHomePageTests(HomePageMixin, TestCase):
     def setUpTestData(cls):
         cls.staff = cls.make_user("staff")
         cls.organiser = cls.make_user("organiser", perms=["competition.change_match"])
+        # Awaiting Detailed Results is drawn only while a match awaits one.
+        match_awaiting_details()
 
     def test_a_permission_over_the_application(self):
         self.assertMenu(self.organiser, "content", "competition")
@@ -644,4 +666,55 @@ class StaffHomePageTests(HomePageMixin, TestCase):
         site.register(OpenCompetitionAdminComponent)
         self.addCleanup(site.unregister, OpenCompetitionAdminComponent)
         self.assertMenu(self.staff, "content", "competition")
+        self.assertWidgetsShown()
+
+
+@per_shell
+class WidgetShowTests(HomePageMixin, TestCase):
+    """
+    The home page asks each widget whether it has anything to show
+    (``DashboardWidget.show``) before it draws it. Awaiting Detailed Results is
+    the one widget of the competition's that may say no: it is left out while
+    no match awaits a detailed result, and drawn beside the others once one
+    does. The others always say yes.
+    """
+
+    user_factory = SuperUserFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = cls.make_user("superuser")
+
+    def home_page_queries(self):
+        """
+        What the home page costs a superuser while no match awaits a detailed
+        result: the redirect lookup, the session, the user, one query for each
+        of the four widgets that list something (Awaiting Scores, Progress
+        Teams, Season Reports, Awaiting MVP Points) and a second for Progress
+        Teams' stages, and one for Awaiting Detailed Results to ask whether it
+        has anything to show; it is left out, so its list is never fetched.
+        The other widgets answer ``show()`` without the database. Workbook
+        spends two more on the page's jobs.
+        """
+        return self.by_shell(workbook=11, explorer=9)
+
+    def get_home_page(self, queries):
+        with self.login(self.superuser):
+            # The first request fills the caches the site keeps from one
+            # request to the next; measure the home page after that.
+            self.get_check_200("admin:index")
+            with self.assertNumQueries(queries):
+                self.get_check_200("admin:index")
+
+    def test_a_widget_with_nothing_to_show_is_left_out(self):
+        self.get_home_page(self.home_page_queries())
+        self.assertWidgetsHidden("Awaiting Detailed Results")
+        self.assertWidgetsShown(
+            "Awaiting Scores", "Progress Teams", "Season Reports", "Awaiting MVP Points"
+        )
+
+    def test_a_widget_with_something_to_show_is_drawn(self):
+        match_awaiting_details()
+        # One query more: the widget said it has a match, and then lists it.
+        self.get_home_page(self.home_page_queries() + 1)
         self.assertWidgetsShown()

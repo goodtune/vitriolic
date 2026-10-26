@@ -182,11 +182,16 @@ class AdminSite(DjangoAdminSite):
         """
         The widgets of the home page: those of the components the menu shows
         ``request.user`` (see ``allowed``), so the page draws nothing from an
-        application the person may not use.
+        application the person may not use, and of those only the widgets with
+        something to show (``DashboardWidget.show``).
         """
         widgets = ()
         for __, __, __, component, __ in allowed(self.get_components(), request):
-            widgets += getattr(component, "widgets", ())
+            widgets += tuple(
+                widget
+                for widget in getattr(component, "widgets", ())
+                if widget.show()
+            )
         return widgets
 
     def get_absolute_url(self):
