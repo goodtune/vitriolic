@@ -17,6 +17,9 @@ is the shell the test is run under::
                     explorer="<h1>Sign in</h1>",
                 ),
             )
+
+Add ``IconMixin`` to such a case for ``self.icon(name)``, the markup of an icon
+in the shell the test runs under.
 """
 
 import sys
@@ -52,6 +55,20 @@ class ShellMixin:
         previous = site.shell
         site.shell = self.shell_name
         self.addCleanup(setattr, site, "shell", previous)
+
+
+class IconMixin:
+    """The markup of an icon, in the shell a ``per_shell`` test runs under."""
+
+    def icon(self, name):
+        css, sprite = self.by_shell(
+            workbook=("wb-icon", "workbook/icons.svg"),
+            explorer=("icon", "explorer/img/icons.svg"),
+        )
+        return (
+            f'<svg class="{css}" aria-hidden="true" focusable="false">'
+            f'<use href="/static/touchtechnology/admin/{sprite}#{name}"></use></svg>'
+        )
 
 
 def per_shell(cls=None, *, shells=None):

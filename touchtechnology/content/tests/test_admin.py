@@ -8,7 +8,7 @@ from django.test import override_settings
 from guardian.shortcuts import assign_perm
 from test_plus.test import TestCase
 
-from touchtechnology.admin.tests.shells import by_shell, per_shell
+from touchtechnology.admin.tests.shells import IconMixin, by_shell, per_shell
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.tests.factories import (
     StaffFactory,
@@ -162,20 +162,6 @@ class MediaDeleteTests(TestCase):
             with self.login(self.staff):
                 self.get("admin:content:media:delete", path="gallery/")
         self.assert_http_404_not_found()
-
-
-class IconMixin:
-    """The markup of an icon, in the shell a ``per_shell`` test runs under."""
-
-    def icon(self, name):
-        css, sprite = self.by_shell(
-            workbook=("wb-icon", "workbook/icons.svg"),
-            explorer=("icon", "explorer/img/icons.svg"),
-        )
-        return (
-            f'<svg class="{css}" aria-hidden="true" focusable="false">'
-            f'<use href="/static/touchtechnology/admin/{sprite}#{name}"></use></svg>'
-        )
 
 
 @per_shell
@@ -405,7 +391,7 @@ class ApplicationListObjectPermissionTests(ApplicationListMixin, TestCase):
         # Asking what this person may do over the list as a whole costs the
         # same for any number of rows: the Explorer asks once more, for the
         # import path's column.
-        self.assertListQueries(self.editor, self.by_shell(workbook=22, explorer=23))
+        self.assertListQueries(self.editor, self.by_shell(workbook=12, explorer=13))
 
     def test_each_row_shows_how_many_pages_mount_it(self):
         self.assertPagesShown(self.editor)
