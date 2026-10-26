@@ -1581,7 +1581,7 @@ class CompetitionAdminComponent(AdminComponent):
         match = extra_context.get("match")
         return self.generic_delete(
             request,
-            MatchScoreSheet,
+            match.scoresheets.all(),
             pk=pk,
             permission_required=True,
             post_delete_redirect=self.redirect(f"{match.urls['edit']}#scoresheets-tab"),
