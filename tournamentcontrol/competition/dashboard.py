@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from touchtechnology.admin.base import DashboardWidget
-from tournamentcontrol.competition.models import Match, Stage, Team
+from tournamentcontrol.competition.models import Match, Stage, Team, UndecidedTeam
 from tournamentcontrol.competition.utils import (
     legitimate_bye_match,
     team_awaits_upstream,
@@ -150,13 +150,26 @@ def matches_require_progression():
 def matches_progression_possible():
     matches = matches_require_progression()
 
-    # cache which stages have all their matches played or byes marked played
-    stages = Stage.objects.filter(matches__in=matches).distinct()
+    # cache which stages have all their matches played or byes marked played,
+    # and which hold a place a person can fill (an undecided team of our own:
+    # the upstream sync's placeholder is not one, see
+    # ``UndecidedTeamQuerySet.of_our_own``)
+    stages = (
+        Stage.objects.filter(matches__in=matches)
+        .distinct()
+        .annotate(
+            has_places=Exists(
+                UndecidedTeam.objects.of_our_own().filter(stage=OuterRef("pk"))
+            )
+        )
+    )
     score_entered = Q(home_team_score__isnull=False, away_team_score__isnull=False)
     played_bye = Q(is_bye=True, bye_processed=True)
     is_washout = Q(is_washout=True)
     _stage_cache = {}
+    _places_cache = {}
     for stage in stages:
+        _places_cache[stage.pk] = stage.has_places
         try:
             preceding = stage.comes_after
         except Stage.DoesNotExist:
@@ -192,10 +205,9 @@ def matches_progression_possible():
         elif match.away_team is None and isinstance(away_team, Team):
             return True
 
-        if match.stage.undecided_teams.exists() and _stage_cache[match.stage_id] == 0:
-            return True
-
-        return False
+        # Otherwise the stage is progressed by hand, if it holds a place a
+        # person can fill.
+        return _places_cache[match.stage_id]
 
     matches = [m for m in matches if _can_evaluate(m)]
 

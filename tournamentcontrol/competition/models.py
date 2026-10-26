@@ -86,6 +86,7 @@ from tournamentcontrol.competition.query import (
     StageQuerySet,
     StatisticQuerySet,
     TeamAssociationQuerySet,
+    UndecidedTeamQuerySet,
 )
 from tournamentcontrol.competition.signals import match_forfeit
 from tournamentcontrol.competition.upstream import (
@@ -2099,6 +2100,8 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
         verbose_name=_("Pool"),
         label_from_instance="title",
     )
+
+    objects = UndecidedTeamQuerySet.as_manager()
 
     class Meta:
         ordering = ("stage_group", "formula")

@@ -285,10 +285,10 @@ class UpstreamPlaceholderTests(TestCase):
         self.assertCountEqual(possible, [])
 
     def test_queries_for_one_final(self):
-        self.assertProgressionQueries(1, 5)
+        self.assertProgressionQueries(1, 6)
 
     def test_queries_for_four_finals(self):
-        self.assertProgressionQueries(4, 8)
+        self.assertProgressionQueries(4, 12)
 
 
 @per_shell
@@ -575,13 +575,15 @@ class UpstreamPlaceholderMatchFormTests(TestCase):
 
     def test_queries(self):
         """
-        Whether the stage holds an undecided team of our own is asked once:
-        the stage's teams and undecided teams are queried as the form is
-        rendered, not as it is built.
+        Building the form asks whether the stage has pools, and once whether
+        it holds an undecided team of our own. The teams and undecided teams
+        each field offers are queried as the form is rendered, not here.
         """
         host = place_to_fill(self.stage, label="Host", formula="")
-        match = self.stage.matches.get(home_team_undecided=host)
-        with self.assertNumQueries(1):
+        match = self.stage.matches.select_related(
+            "home_team_undecided", "away_team"
+        ).get(home_team_undecided=host)
+        with self.assertNumQueries(2):
             MatchEditForm(instance=match)
 
 
