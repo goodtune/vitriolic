@@ -105,6 +105,7 @@ from tournamentcontrol.competition.utils import (
     FauxQueryset,
     create_thumbnail_preview,
     first_stage_position_error,
+    first_stage_position_message,
     legitimate_bye_match,
     match_unplayed,
     time_choice,
@@ -2751,7 +2752,29 @@ class DivisionStructureJSONForm(forms.Form):
                 "A division of that name already exists in this season."
             )
 
+        errors = self._first_stage_position_errors(structure)
+        if errors:
+            raise forms.ValidationError(errors)
+
         return json_data
+
+    def _first_stage_position_errors(self, structure):
+        """
+        The positions in the first stage's draw formats that name the stage
+        before it, once each. The division will have no stage before its
+        first, so they name no team; the undecided-team form and the draw
+        wizard refuse them too (``first_stage_position_error``).
+        """
+        first = structure.stages[0]
+        references = dict.fromkeys(
+            reference
+            for text in structure.stage_draw_formats(first)
+            for round in draw_generator(None, text).rounds
+            for descriptor in round.matches
+            for reference in (descriptor.home_team, descriptor.away_team)
+        )
+        errors = [first_stage_position_message(first.title, ref) for ref in references]
+        return [error for error in errors if error]
 
     def get_division_structure(self):
         """Get the validated DivisionStructure instance."""

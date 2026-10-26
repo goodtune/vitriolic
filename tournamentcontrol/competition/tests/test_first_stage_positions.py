@@ -173,8 +173,12 @@ class DivisionStructureJSONFormTests(FirstStageMixin, TestCase):
                 StageFixture(
                     title="Pools",
                     pools=[
-                        PoolFixture(title="Pool 1", teams=[0, 1], draw_format_ref="final"),
-                        PoolFixture(title="Pool 2", teams=[2, 3], draw_format_ref="final"),
+                        PoolFixture(
+                            title="Pool 1", teams=[0, 1], draw_format_ref="final"
+                        ),
+                        PoolFixture(
+                            title="Pool 2", teams=[2, 3], draw_format_ref="final"
+                        ),
                     ],
                 ),
             ],

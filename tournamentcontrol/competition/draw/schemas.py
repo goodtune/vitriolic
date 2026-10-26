@@ -62,8 +62,20 @@ class DivisionStructure(BaseModel):
             return None
         return self.draw_formats.get(ref)
 
+    def stage_draw_formats(self, stage: StageFixture) -> list[str]:
+        """
+        The draw formats the matches of ``stage`` are built from: its own
+        when it has no pools, otherwise each pool's. A reference to no
+        format is left out, as the builder leaves it out.
+        """
+        if stage.pools:
+            refs = [pool.draw_format_ref for pool in stage.pools]
+        else:
+            refs = [stage.draw_format_ref]
+        return [text for text in map(self.get_draw_format, refs) if text]
 
-class RoundDescriptor(object):
+
+class RoundDescriptor:
     def __init__(self, count, round_label, **kwargs):
         self.count = count
         self.round_label = round_label
@@ -77,11 +89,11 @@ class RoundDescriptor(object):
 
     def __str__(self):
         return "\n".join(
-            ["ROUND %s" % self.round_label] + [str(m) for m in self.matches]
+            [f"ROUND {self.round_label}"] + [str(m) for m in self.matches]
         )
 
 
-class MatchDescriptor(object):
+class MatchDescriptor:
     def __init__(self, match_id, home_team, away_team, match_label=None, **kwargs):
         self.match_id = match_id
         self.home_team = home_team
@@ -90,13 +102,11 @@ class MatchDescriptor(object):
 
     def __str__(self):
         if self.match_label:
-            return "%s: %s vs %s %s" % (
-                self.match_id,
-                self.home_team,
-                self.away_team,
-                self.match_label,
+            return (
+                f"{self.match_id}: {self.home_team} vs {self.away_team} "
+                f"{self.match_label}"
             )
-        return "%s: %s vs %s" % (self.match_id, self.home_team, self.away_team)
+        return f"{self.match_id}: {self.home_team} vs {self.away_team}"
 
     def generate(self, generator, stage, round, date):
         from tournamentcontrol.competition.models import (
