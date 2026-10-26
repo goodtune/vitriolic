@@ -1572,7 +1572,12 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
 
     @cached_property
     def _title_comes_after(self):
-        return self.comes_after
+        # ``None`` for the first stage of a division: ``cached_property`` does
+        # not keep an exception, so raising would query again for each team.
+        try:
+            return self.comes_after
+        except Stage.DoesNotExist:
+            return None
 
     @cached_property
     def _title_pools(self):
@@ -2115,7 +2120,8 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
                 if group is not None:
                     return group.teams
             except IndexError:
-                # If the formula references an invalid group, fall back to division teams
+                # The formula names a stage or pool that does not exist (such
+                # as the stage before the first), fall back to division teams
                 pass
         return self.stage.division.teams
 
@@ -2136,7 +2142,8 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
 
             return stage_group_position_tpl.render(c).strip()
         except IndexError:
-            # If the formula references an invalid group, return the formula itself
+            # The formula names a stage or pool that does not exist (such as
+            # the stage before the first), return the formula itself
             return self.formula
 
     @property
@@ -2769,6 +2776,12 @@ class Match(
             stage = group = position = None
         else:
             stage = self.stage._title_comes_after
+            if stage is None:
+                # A place on the ladder of the stage before, in the first
+                # stage of a division: it names nothing, so show it as written.
+                if plain:
+                    return team_eval
+                return {"title": team_eval}
 
         if team_undecided and stage is None:
             if plain:
@@ -2884,8 +2897,9 @@ class Match(
             stage = self.stage.comes_after
         except Stage.DoesNotExist:
             if self.home_team_eval_related or self.away_team_eval_related:
-                # This match depends on the result of matches in the same stage.
-                stage = self.stage
+                # This match depends on the result of matches in the same
+                # stage; there is no stage before it to take a position from.
+                stage = None
             else:
                 logger.warning(
                     "Stage is first, %r should not be attempting to be evaluated.", self
@@ -2961,6 +2975,8 @@ class Match(
                                 source = self.stage.division.stages.all()[
                                     int(selected) - 1
                                 ]
+                            if source is None:
+                                raise IndexError("No stage before the first")
                             positions, group_positions = lookup(source)
                             try:
                                 g = int(group)

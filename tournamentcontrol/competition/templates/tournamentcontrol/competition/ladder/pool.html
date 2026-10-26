@@ -70,11 +70,14 @@
 				{% endif %}
 
 				{% if pool.carry_ladder and summary %}
-					<caption>
-						{% with previous=stage.comes_after %}
-							{% blocktrans %}Matches played in <strong>{{ previous }}</strong> between teams in this pool contribute to this ladder.{% endblocktrans %}
-						{% endwith %}
-					</caption>
+					{# previous is empty for the first stage of a division (a template does not raise Stage.DoesNotExist); it carries nothing. #}
+					{% with previous=stage.comes_after %}
+						{% if previous %}
+							<caption>
+								{% blocktrans %}Matches played in <strong>{{ previous }}</strong> between teams in this pool contribute to this ladder.{% endblocktrans %}
+							</caption>
+						{% endif %}
+					{% endwith %}
 				{% endif %}
 			</table>
 		{% endfor %}

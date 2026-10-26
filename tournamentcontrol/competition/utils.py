@@ -525,7 +525,19 @@ def stage_group_position(stage, formula):
 
     if s is None:
         logger.debug("No stage specified in formula %r", formula)
-        s = stage.comes_after
+        try:
+            s = stage.comes_after
+        except stage.DoesNotExist:
+            # As for a stage number past the last stage of the division.
+            logger.warning(
+                "Formula %r refers to the stage before %r, the first stage",
+                formula,
+                stage,
+            )
+            raise IndexError(
+                f"{formula} refers to the stage before {stage}, the first stage "
+                "of its division"
+            ) from None
     else:
         try:
             s = stage.division.stages.all()[int(s) - 1]

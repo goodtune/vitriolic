@@ -1311,6 +1311,202 @@ class DivisionFinalsQueryTests(TestCase):
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class FirstStageReferenceTests(TestCase):
+    """
+    A position with no stage in it (P1, G1P2) is a place on the ladder of the
+    stage before. The first stage of a division has no stage before it, so
+    such a reference names nothing: the public pages show it as written, as
+    they show a reference they cannot read, within the same query budget
+    however many of them the division has.
+    """
+
+    @classmethod
+    def _division(cls, title, finals):
+        division = factories.DivisionFactory.create(season=cls.season, title=title)
+        stage = factories.StageFactory.create(
+            division=division, title="Finals", order=1
+        )
+        kickoff = datetime(2026, 10, 6, 9, 0, tzinfo=ZoneInfo("UTC"))
+        for number in range(1, finals + 1):
+            factories.MatchFactory.create(
+                stage=stage,
+                home_team=None,
+                away_team=None,
+                home_team_eval=f"P{number * 2 - 1}",
+                away_team_eval=f"P{number * 2}",
+                datetime=kickoff,
+                date=kickoff.date(),
+                time=kickoff.time(),
+                label=f"Final {number}",
+            )
+            factories.MatchFactory.create(
+                stage=stage,
+                home_team=None,
+                away_team=None,
+                home_team_undecided=factories.UndecidedTeamFactory.create(
+                    stage=stage, formula=f"G{number}P1", label=""
+                ),
+                away_team_undecided=factories.UndecidedTeamFactory.create(
+                    stage=stage, formula=f"G{number}P2", label=""
+                ),
+                datetime=kickoff,
+                date=kickoff.date(),
+                time=kickoff.time(),
+                label=f"Playoff {number}",
+            )
+        return division
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create()
+        cls.competition = cls.season.competition
+        cls.few_finals = cls._division("Few Finals", finals=1)
+        cls.many_finals = cls._division("Many Finals", finals=8)
+
+    def test_division_page_shows_references_as_written(self):
+        self.get(
+            "competition:division",
+            self.competition.slug,
+            self.season.slug,
+            self.few_finals.slug,
+        )
+        self.response_200()
+        self.assertResponseContains('<td class="team right">P1</td>')
+        self.assertResponseContains('<td class="team">P2</td>')
+        self.assertResponseContains('<td class="team right">G1P1</td>')
+        self.assertResponseContains('<td class="team">G1P2</td>')
+
+    def test_team_page_shows_the_opponent_as_written(self):
+        team = factories.TeamFactory.create(division=self.few_finals)
+        factories.MatchFactory.create(
+            stage=self.few_finals.stages.get(),
+            home_team=team,
+            away_team=None,
+            away_team_eval="P3",
+        )
+        self.get(
+            "competition:team",
+            self.competition.slug,
+            self.season.slug,
+            self.few_finals.slug,
+            team.slug,
+        )
+        self.response_200()
+        self.assertResponseContains('<td class="team">P3</td>')
+
+    def test_few_finals_query_count(self):
+        self.assertGoodView(
+            "competition:division",
+            self.competition.slug,
+            self.season.slug,
+            self.few_finals.slug,
+            test_query_count=14,
+        )
+
+    def test_many_finals_query_count(self):
+        self.assertGoodView(
+            "competition:division",
+            self.competition.slug,
+            self.season.slug,
+            self.many_finals.slug,
+            test_query_count=14,
+        )
+
+    def test_second_stage_shows_positions(self):
+        """
+        In a later stage the same references name places on the ladder of
+        the stage before, as they always have.
+        """
+        division = factories.DivisionFactory.create(season=self.season)
+        pools = factories.StageFactory.create(division=division, title="Pools", order=1)
+        factories.StageGroupFactory.create(stage=pools, title="Pool 1")
+        finals = factories.StageFactory.create(
+            division=division, title="Finals", order=2
+        )
+        final = factories.MatchFactory.create(
+            stage=finals,
+            home_team=None,
+            away_team=None,
+            home_team_eval="P1",
+            away_team_eval="G1P2",
+        )
+        self.assertEqual(str(final), "1st vs 2nd Pool 1")
+
+        self.get(
+            "competition:division",
+            self.competition.slug,
+            self.season.slug,
+            division.slug,
+        )
+        self.response_200()
+        self.assertResponseContains('<td class="team right">1st</td>')
+        self.assertResponseContains('<td class="team">2nd Pool 1</td>')
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class CarriedPoolLadderTests(TestCase):
+    """
+    The ladder of a pool that carries over points names the stage they come
+    from. The first stage of a division has no stage before it and carries
+    nothing, so its ladder has no such caption.
+    """
+
+    @staticmethod
+    def caption(previous):
+        return (
+            f"<caption>Matches played in <strong>{previous}</strong> between "
+            "teams in this pool contribute to this ladder.</caption>"
+        )
+
+    def get_division(self, stage):
+        division = stage.division
+        pool = factories.StageGroupFactory.create(
+            stage=stage, title="Pool 1", carry_ladder=True
+        )
+        home, away = factories.TeamFactory.create_batch(
+            2, division=division, stage_group=pool
+        )
+        factories.MatchFactory.create(
+            stage=stage,
+            stage_group=pool,
+            home_team=home,
+            away_team=away,
+            home_team_score=5,
+            away_team_score=2,
+        )
+        self.get(
+            "competition:division",
+            division.season.competition.slug,
+            division.season.slug,
+            division.slug,
+        )
+        self.response_200()
+        pool_url = self.reverse(
+            "competition:pool",
+            division.season.competition.slug,
+            division.season.slug,
+            division.slug,
+            stage.slug,
+            pool.slug,
+        )
+        self.assertResponseContains(
+            f'<th class="team"><a href="{pool_url}">Pool 1</a></th>'
+        )
+
+    def test_caption_names_the_stage_before(self):
+        division = factories.DivisionFactory.create()
+        factories.StageFactory.create(division=division, title="Round Robin", order=1)
+        self.get_division(
+            factories.StageFactory.create(division=division, title="Finals", order=2)
+        )
+        self.assertResponseContains(self.caption("Round Robin"))
+
+    def test_first_stage_has_no_caption(self):
+        self.get_division(factories.StageFactory.create(title="Finals", order=1))
+        self.assertResponseNotContains(self.caption(""))
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
 class SeasonThumbnailTests(TestCase):
     """
     A live-streamed season keeps the image it uploads to YouTube as its
