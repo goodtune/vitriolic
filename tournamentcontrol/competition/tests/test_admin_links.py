@@ -117,20 +117,24 @@ class ScoreSheetDeleteTests(TestCase):
         cls.scoresheet = MatchScoreSheet.objects.create(
             match=cls.match, image="harness/score-sheet"
         )
+        cls.deleter = cls.make_user(
+            "deleter",
+            perms=["competition.delete_matchscoresheet", "competition.change_match"],
+        )
+        cls.editor = cls.make_user("editor", perms=["competition.change_match"])
 
-    def delete_scoresheet(self):
+    def delete_scoresheet(self, match):
+        """Post the delete of the score sheet through the address of ``match``."""
         self.post(
             "admin:fixja:competition:season:division:stage:match:"
             "matchscoresheet:delete",
-            *self.scoresheet._get_url_args(),
+            *match._get_url_args(),
+            self.scoresheet.pk,
         )
 
     def test_deleting_returns_to_the_match(self):
-        user = self.make_user(
-            perms=["competition.delete_matchscoresheet", "competition.change_match"]
-        )
-        with self.login(user):
-            self.delete_scoresheet()
+        with self.login(self.deleter):
+            self.delete_scoresheet(self.match)
             self.assert_http_302_found(url=f"{self.match.urls['edit']}#scoresheets-tab")
             self.get_check_200(
                 "admin:fixja:competition:season:division:stage:match:edit",
@@ -138,8 +142,15 @@ class ScoreSheetDeleteTests(TestCase):
             )
         self.assertCountEqual(self.match.scoresheets.all(), [])
 
+    def test_deleting_through_another_match_is_not_found(self):
+        other = factories.MatchFactory.create(stage=self.match.stage)
+        with self.login(self.deleter):
+            self.delete_scoresheet(other)
+        self.assert_http_404_not_found()
+        self.assertEqual(self.match.scoresheets.count(), 1)
+
     def test_deleting_needs_the_permission(self):
-        with self.login(self.make_user(perms=["competition.change_match"])):
-            self.delete_scoresheet()
+        with self.login(self.editor):
+            self.delete_scoresheet(self.match)
         self.assert_http_403_forbidden()
         self.assertCountEqual(self.match.scoresheets.all(), [self.scoresheet])
