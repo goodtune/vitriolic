@@ -1,6 +1,7 @@
 import tempfile
 from os.path import dirname, join
 
+from django.conf import settings
 from django.contrib.auth.models import Permission
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -142,6 +143,28 @@ class GoodViewTests(TestCase):
             # This test mainly verifies no code crashes with the new generic handling
 
 
+class MediaStorageMixin:
+    """
+    Keeps the media of each test in a folder of its own, in the project's
+    storage: Django's own cannot remove a folder.
+    """
+
+    def setUp(self):
+        super().setUp()
+        root = self.enterContext(tempfile.TemporaryDirectory())
+        self.enterContext(
+            override_settings(
+                STORAGES={
+                    **settings.STORAGES,
+                    "default": {
+                        "BACKEND": "touchtechnology.common.storage.FileSystemStorage",
+                        "OPTIONS": {"location": root},
+                    },
+                },
+            )
+        )
+
+
 class MediaDeleteTests(TestCase):
     """Deleting a file or a folder of the media section."""
 
@@ -162,6 +185,88 @@ class MediaDeleteTests(TestCase):
             with self.login(self.staff):
                 self.get("admin:content:media:delete", path="gallery/")
         self.assert_http_404_not_found()
+
+
+@per_shell
+class MediaDeleteConfirmationTests(MediaStorageMixin, IconMixin, TestCase):
+    """
+    The page that asks before a file or a folder of the media is deleted, at
+    the address its row's Delete form posts to. Cancel goes back to the folder
+    the file or the folder is in.
+    """
+
+    user_factory = SuperUserFactory
+
+    def setUp(self):
+        super().setUp()
+        self.superuser = self.make_user("superuser")
+
+    def assertConfirmation(self, kind, name, cancel):
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=(
+                    f"<p>You are about to delete the {kind} <strong>{name}</strong>. "
+                    "This will permanently remove it from your site. "
+                    "Are you sure you want to continue?</p>"
+                ),
+                explorer=(
+                    f"<p>The {kind} <strong>{name}</strong> "
+                    "will be removed from the site for good.</p>"
+                ),
+            )
+        )
+        csrf = (
+            '<input type="hidden" name="csrfmiddlewaretoken" '
+            f'value="{self.get_context("csrf_token")}">'
+        )
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=(
+                    f'<form action="" method="post">{csrf}<div class="wb-actions">'
+                    '<button type="submit" class="wb-button wb-button-danger">'
+                    f'{self.icon("trash-2")}Delete</button>'
+                    f'<a href="{cancel}" class="wb-button wb-button-quiet">Cancel</a>'
+                    "</div></form>"
+                ),
+                explorer=(
+                    f'<form action="" method="post" class="button-row">{csrf}'
+                    '<button type="submit" class="button destructive">'
+                    f'{self.icon("trash")}<span>Delete</span></button>'
+                    f'<a href="{cancel}" class="button">Cancel</a></form>'
+                ),
+            )
+        )
+
+    def test_a_file_at_the_top_is_confirmed_before_it_is_deleted(self):
+        default_storage.save("minutes.pdf", ContentFile(b"%PDF-1.4"))
+        with self.login(self.superuser):
+            self.get("admin:content:media:delete", "minutes.pdf")
+        self.assert_http_200_ok()
+        self.assertConfirmation(
+            "File", "minutes.pdf", self.reverse("admin:content:media:list")
+        )
+
+    def test_a_file_in_a_folder_is_confirmed_before_it_is_deleted(self):
+        default_storage.save("reports/minutes.pdf", ContentFile(b"%PDF-1.4"))
+        with self.login(self.superuser):
+            self.get("admin:content:media:delete", "reports/", "minutes.pdf")
+        self.assert_http_200_ok()
+        self.assertConfirmation(
+            "File",
+            "reports/minutes.pdf",
+            self.reverse("admin:content:media:edit", "reports/"),
+        )
+
+    def test_a_folder_is_confirmed_before_it_is_deleted(self):
+        default_storage.makedirs("reports/2026")
+        with self.login(self.superuser):
+            self.get("admin:content:media:delete", "reports/2026/")
+        self.assert_http_200_ok()
+        self.assertConfirmation(
+            "Folder",
+            "reports/2026",
+            self.reverse("admin:content:media:edit", "reports/"),
+        )
 
 
 @per_shell
