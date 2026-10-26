@@ -3,11 +3,13 @@ import os
 from collections import namedtuple
 
 from django.contrib import messages
-from django.core.files.storage import default_storage
+from django.contrib.auth.decorators import permission_required
+from django.core.files.storage import FileSystemStorage, default_storage
 from django.db.models import Count, Q
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import NoReverseMatch, include, path, re_path, resolve, reverse
+from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
 from django.utils.http import urlencode
 from django.utils.translation import gettext_lazy as _
@@ -588,7 +590,17 @@ class ContentAdminComponent(AdminComponent):
     def perms_chunk(self, request, pk, *args, **kwargs):
         return self.generic_permissions(request, Chunk, pk=pk, **kwargs)
 
+    # Media views. The site's files have no model: the content app's
+    # ``view_file`` and ``delete_file`` permissions, held by ``Page``, guard them.
+
+    def folder_url(self, path):
+        """The list of the folder at ``path``, or of all the files when it is empty."""
+        if path:
+            return self.reverse("media:edit", kwargs={"path": path})
+        return self.reverse("media:list")
+
     @staff_login_required_m
+    @method_decorator(permission_required("content.view_file", raise_exception=True))
     def ls(self, request, path=None, *args, **kwargs):
         try:
             directories, files = default_storage.listdir(path or ".")
@@ -720,6 +732,7 @@ class ContentAdminComponent(AdminComponent):
         return self.render(request, templates, context)
 
     @staff_login_required_m
+    @method_decorator(permission_required("content.delete_file", raise_exception=True))
     def rm(self, request, path=None, filename=None, *args, **kwargs):
         try:
             directories, files = default_storage.listdir(path or ".")
@@ -747,46 +760,49 @@ class ContentAdminComponent(AdminComponent):
                 return not any([item for item in listdir if item])
 
         fullpath = os.path.join(path or "", filename or "")
+        # The folder this file or folder is in: "" at the top.
+        parentdir = os.path.join(os.path.dirname(path.rstrip("/")), "") if path else ""
+
+        # Django's own FileSystemStorage has no rmdir, but its delete() removes
+        # an empty directory. Any other storage says whether it can.
+        if isinstance(default_storage, FileSystemStorage):
+            rmdir = default_storage.delete
+        else:
+            rmdir = getattr(default_storage, "rmdir", None)
 
         if filename:
-            cls, action, tpl = File, default_storage.delete, "file"
-            item = os.path.basename(fullpath)
-        elif hasattr(default_storage, "rmdir"):
-            cls, action, tpl = Folder, default_storage.rmdir, "folder"
-            item = os.path.basename(os.path.dirname(fullpath))
+            cls, action, tpl, kind = File, default_storage.delete, "file", _("file")
         else:
-            raise Http404(
-                "We can't handle this, as the "
-                "backend storage system does not "
-                "support removing directories."
-            )
-
-        if path is not None:
-            parentdir = os.path.normpath(os.path.join(path, "..")) + "/"
-        else:
-            parentdir = ""
-
+            cls, action, tpl, kind = Folder, rmdir, "folder", _("folder")
         obj = cls(fullpath)
+        item = os.path.basename(obj.path)
+
+        if action is None:
+            messages.error(
+                request,
+                _(
+                    "The folder “%(name)s” was not removed: this site's storage "
+                    "cannot remove folders."
+                )
+                % {"name": item},
+            )
+            return self.redirect(self.folder_url(parentdir))
+
         if not obj.is_leaf_node():
             messages.error(request, _('The folder "%s" is not empty.') % item)
-            return self.redirect(self.reverse("media:edit", kwargs={"path": parentdir}))
+            return self.redirect(self.folder_url(parentdir))
 
         if request.method == "POST":
             action(fullpath)
             messages.success(request, f'Successfully deleted {tpl} "{item}"')
-            if path:
-                if cls is Folder:
-                    return self.redirect(
-                        self.reverse("media:edit", kwargs={"path": parentdir})
-                    )
-                return self.redirect(self.reverse("media:edit", kwargs={"path": path}))
-            return self.redirect(self.reverse("media:list"))
+            return self.redirect(self.folder_url(parentdir if cls is Folder else path))
 
         context = {
             "path": path,
             "parentdir": parentdir,
             "filename": filename,
             "object": obj,
+            "kind": kind,
         }
         context.update(kwargs)
 

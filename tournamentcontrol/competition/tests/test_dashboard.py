@@ -30,15 +30,15 @@ from tournamentcontrol.competition.tests.factories import (
     UndecidedTeamFactory,
 )
 
-#: The widgets the competition puts on the admin's home page: the title of
-#: each, and its icon in the Workbook and the Explorer.
-WIDGETS = (
-    ("Awaiting Scores", "list-checks", "results"),
-    ("Progress Teams", "layers", "stage"),
-    ("Season Reports", "printer", "print"),
-    ("Awaiting Detailed Results", "chart-bar", "chart"),
-    ("Awaiting MVP Points", "chart-bar", "chart"),
-)
+#: The widgets the competition puts on the admin's home page: the icon of each,
+#: by its title, in the Workbook and the Explorer.
+WIDGETS = {
+    "Awaiting Scores": {"workbook": "list-checks", "explorer": "results"},
+    "Progress Teams": {"workbook": "layers", "explorer": "stage"},
+    "Season Reports": {"workbook": "printer", "explorer": "print"},
+    "Awaiting Detailed Results": {"workbook": "chart-bar", "explorer": "chart"},
+    "Awaiting MVP Points": {"workbook": "chart-bar", "explorer": "chart"},
+}
 
 
 class OpenCompetitionAdminComponent(CompetitionAdminComponent):
@@ -50,6 +50,18 @@ class OpenCompetitionAdminComponent(CompetitionAdminComponent):
     """
 
     unprotected = True
+
+
+def match_awaiting_details():
+    """
+    A match with a result in a season that records statistics, and no detailed
+    result yet: the one match Awaiting Detailed Results has to show.
+    """
+    return MatchFactory.create(
+        home_team_score=5,
+        away_team_score=3,
+        stage__division__season__statistics=True,
+    )
 
 
 def knockout(stage, kick_off, final_kick_off):
@@ -76,6 +88,41 @@ def knockout(stage, kick_off, final_kick_off):
         label="Final",
     )
     return semi_1, semi_2, final
+
+
+def own_ladder(stage, kick_off, final_kick_off):
+    """
+    Two matches in ``stage``, the first stage of its division, and a final
+    between the winner of the first and the leader of the stage's own ladder
+    (``S1P1``): a place ``Match.eval`` fills from a ladder the stage's own
+    matches are still deciding.
+    """
+    t1, t2, t3, t4 = TeamFactory.create_batch(4, division=stage.division)
+    match_1 = MatchFactory.create(
+        stage=stage, home_team=t1, away_team=t4, datetime=kick_off, label="Match 1"
+    )
+    match_2 = MatchFactory.create(
+        stage=stage, home_team=t2, away_team=t3, datetime=kick_off, label="Match 2"
+    )
+    final = MatchFactory.create(
+        stage=stage,
+        home_team=None,
+        away_team=None,
+        home_team_eval="W",
+        home_team_eval_related=match_1,
+        away_team_eval="S1P1",
+        datetime=final_kick_off,
+        label="Final",
+    )
+    return match_1, match_2, final
+
+
+def decide(*matches):
+    """The home team of each of ``matches`` wins 4-3."""
+    for match in matches:
+        match.home_team_score = 4
+        match.away_team_score = 3
+        match.save()
 
 
 class BasicResultTests(TestCase):
@@ -275,6 +322,120 @@ class RequireProgression(TestCase):
             {finals.division: {finals: [final]}},
         )
 
+    def test_a_place_on_the_stages_own_ladder(self):
+        """
+        A final in the first stage of its division between the winner of one
+        of its matches and the leader of the stage's own ladder (``S1P1``):
+        the ladder is open while the stage's other match is unplayed, so the
+        final waits for it, as a match waits for the stage before.
+        """
+        dt1 = datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC"))
+        dt2 = datetime.datetime(2019, 7, 15, 10, 30, tzinfo=ZoneInfo("UTC"))
+        stage = StageFactory.create(division__season__timezone="UTC", order=1)
+        match_1, match_2, final = own_ladder(stage, dt1, dt2)
+        decide(match_1)
+
+        self.assertProgression(
+            "match 1 decided",
+            [(match_2.home_team.title, match_2.away_team.title)],
+            [("Winner Match 1", "1st Stage 1")],
+            [],  # the stage's own ladder is open, match 2 is unplayed
+            {},
+        )
+
+        decide(match_2)
+
+        self.assertProgression(
+            "both decided",
+            [],
+            [("Winner Match 1", "1st Stage 1")],
+            [final],
+            {stage.division: {stage: [final]}},
+        )
+
+    def test_a_place_on_a_later_stages_own_ladder(self):
+        """
+        The stage a place names is the match's own whichever stage that is: a
+        final in the second stage naming ``S2P1`` waits for the second stage's
+        other match, with the stage before complete.
+        """
+        dt1 = datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC"))
+        dt2 = datetime.datetime(2019, 7, 15, 10, 30, tzinfo=ZoneInfo("UTC"))
+        rounds = StageFactory.create(division__season__timezone="UTC", order=1)
+        finals = StageFactory.create(division=rounds.division, order=2)
+        t1, t2, t3, t4 = TeamFactory.create_batch(4, division=rounds.division)
+        decide(
+            MatchFactory.create(stage=rounds, home_team=t1, away_team=t2, datetime=dt1)
+        )
+        semi = MatchFactory.create(
+            stage=finals, home_team=t1, away_team=t4, datetime=dt1, label="Semi"
+        )
+        playoff = MatchFactory.create(
+            stage=finals, home_team=t2, away_team=t3, datetime=dt1, label="Playoff"
+        )
+        final = MatchFactory.create(
+            stage=finals,
+            home_team=None,
+            away_team=None,
+            home_team_eval="W",
+            home_team_eval_related=semi,
+            away_team_eval="S2P1",
+            datetime=dt2,
+            label="Final",
+        )
+        decide(semi)
+
+        self.assertProgression(
+            "semi decided",
+            [(t2.title, t3.title)],
+            [("Winner Semi", "1st Stage 2")],
+            [],  # the finals' own ladder is open, the playoff is unplayed
+            {},
+        )
+
+        decide(playoff)
+
+        self.assertProgression(
+            "playoff decided",
+            [],
+            [("Winner Semi", "1st Stage 2")],
+            [final],
+            {finals.division: {finals: [final]}},
+        )
+
+    def test_a_place_on_the_stage_before_waits_for_that_stage_only(self):
+        """
+        A final in the second stage naming places on the ladder of the stage
+        before (``S1P1``, ``S1P2``) is governed by that stage: with its matches
+        decided the final is ready, whatever the second stage's own matches.
+        """
+        dt1 = datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC"))
+        dt2 = datetime.datetime(2019, 7, 15, 10, 30, tzinfo=ZoneInfo("UTC"))
+        rounds = StageFactory.create(division__season__timezone="UTC", order=1)
+        finals = StageFactory.create(division=rounds.division, order=2)
+        t1, t2, t3, t4 = TeamFactory.create_batch(4, division=rounds.division)
+        decide(
+            MatchFactory.create(stage=rounds, home_team=t1, away_team=t2, datetime=dt1)
+        )
+        MatchFactory.create(stage=finals, home_team=t3, away_team=t4, datetime=dt1)
+        final = MatchFactory.create(
+            stage=finals,
+            home_team=None,
+            away_team=None,
+            home_team_eval="S1P1",
+            away_team_eval="S1P2",
+            datetime=dt2,
+            label="Final",
+        )
+
+        self.assertProgression(
+            "rounds decided",
+            [(t3.title, t4.title)],
+            [("1st Stage 1", "2nd Stage 1")],
+            [final],
+            {finals.division: {finals: [final]}},
+        )
+
 
 @per_shell
 @freeze_time("2019-07-15 09:30 UTC")
@@ -359,6 +520,62 @@ class FirstStageProgressionPageTests(TestCase):
         self.assertEqual(form.instance.title, "G1P2")
         self.assertCountEqual(form.fields["team"].queryset, [home, away])
 
+    def test_a_place_on_the_stages_own_ladder_waits_for_the_ladder(self):
+        """
+        A final between the winner of one of the stage's matches and the
+        leader of the stage's own ladder (``S1P1``) is not offered while the
+        stage's other match is unplayed: the home page has no stage to
+        progress, and the progression page has nothing to progress.
+        """
+        kick_off = datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC"))
+        final_kick_off = datetime.datetime(2019, 7, 15, 10, 30, tzinfo=ZoneInfo("UTC"))
+        match_1, _match_2, _final = own_ladder(self.stage, kick_off, final_kick_off)
+        decide(match_1)
+
+        with self.login(self.superuser):
+            self.get_check_200("admin:index")
+            self.assertResponseContains(
+                self.by_shell(
+                    workbook=(
+                        '<p class="wb-muted">'
+                        '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+                        '<use href="/static/touchtechnology/admin/workbook/icons.svg'
+                        '#circle-check"></use></svg> No stages require progression.</p>'
+                    ),
+                    explorer=(
+                        '<tr><td colspan="2" class="empty-state">'
+                        "No stage is waiting for its teams.</td></tr>"
+                    ),
+                )
+            )
+            self.get(self.progress_url())
+        self.assert_http_410_gone()
+
+    def test_a_place_on_the_stages_own_ladder_is_offered_once_it_is_complete(self):
+        """
+        With every match of the stage decided its ladder is complete: the home
+        page lists the stage, and the progression page offers the final.
+        """
+        kick_off = datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC"))
+        final_kick_off = datetime.datetime(2019, 7, 15, 10, 30, tzinfo=ZoneInfo("UTC"))
+        match_1, match_2, final = own_ladder(self.stage, kick_off, final_kick_off)
+        decide(match_1, match_2)
+
+        with self.login(self.superuser):
+            self.get_check_200("admin:index")
+            self.assertResponseContains(
+                f'<a href="{self.progress_url()}">{self.stage.title}</a>'
+            )
+            self.get_check_200(self.progress_url())
+        self.assertResponseContains(
+            '<input type="hidden" name="form-TOTAL_FORMS" value="1" '
+            'id="id_form-TOTAL_FORMS">'
+        )
+        self.assertResponseContains(
+            f'<input type="hidden" name="form-0-id" value="{final.pk}" '
+            'id="id_form-0-id">'
+        )
+
     def test_a_failing_widget_is_left_out_of_the_home_page(self):
         """
         The home page stands when one of its widgets fails: the widget is left
@@ -383,23 +600,26 @@ class FirstStageProgressionPageTests(TestCase):
 
 
 class HomePageMixin(MenuMixin):
-    def widget_headings(self):
-        """The heading of each of the competition's widgets, as the shell draws it."""
+    def widget_headings(self, *titles):
+        """
+        The heading of each of the competition's widgets, or of those named by
+        ``titles``, as the shell draws it. A title the competition has no widget
+        for is an error, so a test cannot assert nothing by mistake.
+        """
         return [
-            f"<h2>{self.icon(self.by_shell(workbook=workbook, explorer=explorer))}"
-            f"{title}</h2>"
-            for title, workbook, explorer in WIDGETS
+            f"<h2>{self.icon(self.by_shell(**WIDGETS[title]))}{title}</h2>"
+            for title in titles or WIDGETS
         ]
 
-    def assertWidgetsShown(self):
-        """The home page shows each of the competition's widgets, once."""
-        for heading in self.widget_headings():
+    def assertWidgetsShown(self, *titles):
+        """The home page shows each of the competition's widgets (or ``titles``), once."""
+        for heading in self.widget_headings(*titles):
             with self.subTest(shown=heading):
                 self.assertResponseContains(heading, count=1)
 
-    def assertWidgetsHidden(self):
-        """The home page shows none of the competition's widgets."""
-        for heading in self.widget_headings():
+    def assertWidgetsHidden(self, *titles):
+        """The home page shows none of the competition's widgets (or ``titles``)."""
+        for heading in self.widget_headings(*titles):
             with self.subTest(hidden=heading):
                 self.assertResponseNotContains(heading)
 
@@ -407,6 +627,11 @@ class HomePageMixin(MenuMixin):
 @per_shell
 class SuperuserHomePageTests(HomePageMixin, TestCase):
     user_factory = SuperUserFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        # Awaiting Detailed Results is drawn only while a match awaits one.
+        match_awaiting_details()
 
     def test_every_widget_is_shown(self):
         self.assertMenu(self.make_user("superuser"), *COMPONENTS)
@@ -426,6 +651,8 @@ class StaffHomePageTests(HomePageMixin, TestCase):
     def setUpTestData(cls):
         cls.staff = cls.make_user("staff")
         cls.organiser = cls.make_user("organiser", perms=["competition.change_match"])
+        # Awaiting Detailed Results is drawn only while a match awaits one.
+        match_awaiting_details()
 
     def test_a_permission_over_the_application(self):
         self.assertMenu(self.organiser, "content", "competition")
@@ -439,4 +666,55 @@ class StaffHomePageTests(HomePageMixin, TestCase):
         site.register(OpenCompetitionAdminComponent)
         self.addCleanup(site.unregister, OpenCompetitionAdminComponent)
         self.assertMenu(self.staff, "content", "competition")
+        self.assertWidgetsShown()
+
+
+@per_shell
+class WidgetShowTests(HomePageMixin, TestCase):
+    """
+    The home page asks each widget whether it has anything to show
+    (``DashboardWidget.show``) before it draws it. Awaiting Detailed Results is
+    the one widget of the competition's that may say no: it is left out while
+    no match awaits a detailed result, and drawn beside the others once one
+    does. The others always say yes.
+    """
+
+    user_factory = SuperUserFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = cls.make_user("superuser")
+
+    def home_page_queries(self):
+        """
+        What the home page costs a superuser while no match awaits a detailed
+        result: the redirect lookup, the session, the user, one query for each
+        of the four widgets that list something (Awaiting Scores, Progress
+        Teams, Season Reports, Awaiting MVP Points) and a second for Progress
+        Teams' stages, and one for Awaiting Detailed Results to ask whether it
+        has anything to show; it is left out, so its list is never fetched.
+        The other widgets answer ``show()`` without the database. Workbook
+        spends two more on the page's jobs.
+        """
+        return self.by_shell(workbook=11, explorer=9)
+
+    def get_home_page(self, queries):
+        with self.login(self.superuser):
+            # The first request fills the caches the site keeps from one
+            # request to the next; measure the home page after that.
+            self.get_check_200("admin:index")
+            with self.assertNumQueries(queries):
+                self.get_check_200("admin:index")
+
+    def test_a_widget_with_nothing_to_show_is_left_out(self):
+        self.get_home_page(self.home_page_queries())
+        self.assertWidgetsHidden("Awaiting Detailed Results")
+        self.assertWidgetsShown(
+            "Awaiting Scores", "Progress Teams", "Season Reports", "Awaiting MVP Points"
+        )
+
+    def test_a_widget_with_something_to_show_is_drawn(self):
+        match_awaiting_details()
+        # One query more: the widget said it has a match, and then lists it.
+        self.get_home_page(self.home_page_queries() + 1)
         self.assertWidgetsShown()

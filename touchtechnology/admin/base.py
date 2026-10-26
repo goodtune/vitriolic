@@ -38,9 +38,7 @@ class AdminComponentMixin(ShellTemplatesMixin):
     unprotected = True
 
     def __init__(self, app, name, app_name, *args, **kwargs):
-        super(AdminComponentMixin, self).__init__(
-            name=name, app_name=app_name, *args, **kwargs
-        )
+        super().__init__(name=name, app_name=app_name, *args, **kwargs)
         self.app = app
 
     @property
@@ -109,9 +107,7 @@ class AdminComponentMixin(ShellTemplatesMixin):
         context.setdefault("shell", self.shell)
         context.setdefault("field_template", self.shell.field_template)
 
-        return super(AdminComponentMixin, self).render(
-            request, templates, context, *args, **kwargs
-        )
+        return super().render(request, templates, context, *args, **kwargs)
 
     def explorer(self):
         """This component's ``Explorer``."""
@@ -123,7 +119,7 @@ class AdminComponentMixin(ShellTemplatesMixin):
     def reverse(self, name, args=(), kwargs={}, prefix=None):
         if prefix is None:
             prefix = self.app
-        return super(AdminComponentMixin, self).reverse(name, args, kwargs, prefix)
+        return super().reverse(name, args, kwargs, prefix)
 
     def tasks(self, request):
         """
@@ -211,16 +207,22 @@ class AdminComponent(AdminComponentMixin, Application):
         Our standard template directory for AdminComponent's will be 'admin'
         within the projects normally namespaced template directory.
         """
-        return os.path.join(super(AdminComponent, self).template_base, "admin")
+        return os.path.join(super().template_base, "admin")
 
 
-class DashboardWidget(object):
+class DashboardWidget:
     verbose_name = NotImplemented
     template = NotImplemented
     half = True
 
     @classmethod
     def show(cls):
+        """
+        Whether the widget has anything to show. The home page asks before it
+        draws the widget (``AdminSite.dashboard``) and leaves it out when the
+        answer is false. Asked of the class: the page instantiates only the
+        widgets it draws.
+        """
         return True
 
     def _get_context(self):

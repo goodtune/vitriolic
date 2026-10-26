@@ -24,7 +24,7 @@
 						{% block row-buttons-items %}
 							{% if obj.urls.detail %}<a href="{{ obj.urls.detail }}">{% icon "eye" %}{% trans "View" %}</a>{% endif %}
 							{% if obj.urls.edit %}<a href="{{ obj.urls.edit }}">{% icon "folder-open" %}{% trans "Open" %}</a>{% endif %}
-							{% if obj.urls.delete %}
+							{% if obj.urls.delete and perms.content.delete_file %}
 								<form method="post" action="{{ obj.urls.delete }}" data-confirm="{% blocktrans %}“{{ obj }}” will be removed for good.{% endblocktrans %}" data-confirm-label="{% trans "Delete" %}">
 									{% csrf_token %}
 									<button type="submit" class="destructive-item">{% icon "trash" %}{% trans "Delete" %}</button>
