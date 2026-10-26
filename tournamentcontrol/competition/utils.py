@@ -711,18 +711,27 @@ def first_stage_position_error(stage, formula):
 
 def zero_position_error(formula):
     """
-    Why the position ``formula`` names no team when one of its numbers is a
-    zero (``S0P1``, ``G0P1``, ``P0``), or ``None`` when none is: stages,
-    pools and positions are numbered from one, as ``stage_group_position``
-    counts them. A formula the pattern does not read is not this rule's to
-    refuse.
+    Why the numbers of the position ``formula`` are refused, or ``None`` when
+    they are not. One is a zero (``S0P1``, ``G0P1``, ``P0``): stages, pools
+    and positions are numbered from one, as ``stage_group_position`` counts
+    them, so it names no team. Or one has a leading zero (``S01P1``): ``int``
+    reads it as the same number, but a formula is matched as text in the
+    database too (``team_awaits_own_ladder``), so it has one spelling. A
+    formula the pattern does not read is not this rule's to refuse.
     """
     match = stage_group_position_re.fullmatch(formula)
-    if match is None or 0 not in [int(n) for n in match.groups() if n is not None]:
+    if match is None:
         return None
-    return _("%(formula)s: stage, pool and position numbers start at 1.") % {
-        "formula": formula
-    }
+    numbers = [n for n in match.groups() if n is not None]
+    if 0 in [int(n) for n in numbers]:
+        return _("%(formula)s: stage, pool and position numbers start at 1.") % {
+            "formula": formula
+        }
+    if any(n.startswith("0") for n in numbers):
+        return _(
+            "%(formula)s: stage, pool and position numbers have no leading zero."
+        ) % {"formula": formula}
+    return None
 
 
 #
