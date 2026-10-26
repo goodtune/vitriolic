@@ -282,8 +282,8 @@ class DetailResultWidget(DashboardWidget):
 
     @classmethod
     def show(cls):
-        matches = matches_require_details_results()
-        return bool(matches.count())
+        """Only while a match awaits a detailed result."""
+        return matches_require_details_results().exists()
 
     @property
     def matches(self):

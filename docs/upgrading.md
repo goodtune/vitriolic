@@ -280,6 +280,24 @@ There are two more gaps:
 
 The full notes for the change are in pull request #437.
 
+## The home page asks each widget whether it has anything to show
+
+`DashboardWidget.show()` has always been part of the widget API, but in 4.x the
+home page never called it: every widget of a component was drawn, whatever
+`show()` returned. From 5.0 `AdminSite.dashboard()` calls `show()` on each
+widget class and leaves out a widget that returns a false value. The widget's
+template is not rendered and its `context` is not built.
+
+The competition's Awaiting Detailed Results widget is the one widget of the
+library with its own `show()`: it is drawn only while a match awaits a detailed
+result. The other widgets are drawn as before.
+
+Check the `show()` of any widget of your own. It now runs on every view of the
+home page, for every person the menu shows its component to, so keep it cheap:
+ask the database with `exists()`, or not at all. A `show()` that raises takes
+the home page down; the guard that leaves out a widget whose `context` fails
+does not cover `show()`.
+
 ## The `en-AU` catalogues are gone
 
 The apps no longer ship `locale/en-AU`. Django never loaded those catalogues,
