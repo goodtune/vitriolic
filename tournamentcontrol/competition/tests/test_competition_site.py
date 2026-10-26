@@ -1444,6 +1444,102 @@ class FirstStageReferenceTests(TestCase):
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class ExplicitStageReferenceTests(TestCase):
+    """
+    A position may name its stage: ``S1G1P1`` is first place in pool 1 of the
+    division's first stage. The division page names it against that stage,
+    not the stage before the match's own, within the same query budget
+    however many of them the division has.
+    """
+
+    @classmethod
+    def _division(cls, title, finals):
+        division = factories.DivisionFactory.create(season=cls.season, title=title)
+        pools = factories.StageFactory.create(division=division, title="Pools", order=1)
+        for number in (1, 2):
+            factories.StageGroupFactory.create(stage=pools, title=f"Pool {number}")
+        quarters = factories.StageFactory.create(
+            division=division, title="Quarters", order=2, follows=pools
+        )
+        # Quarters feeds two stages, so a place on its ladder names it.
+        semis = factories.StageFactory.create(
+            division=division, title="Semis", order=3, follows=quarters
+        )
+        factories.StageFactory.create(
+            division=division, title="Plate", order=4, follows=quarters
+        )
+        kickoff = datetime(2026, 10, 6, 9, 0, tzinfo=ZoneInfo("UTC"))
+        for number in range(1, finals + 1):
+            factories.MatchFactory.create(
+                stage=semis,
+                home_team=None,
+                away_team=None,
+                home_team_eval=f"S1G1P{number}",
+                away_team_eval=f"S1G2P{number}",
+                datetime=kickoff,
+                date=kickoff.date(),
+                time=kickoff.time(),
+                label=f"Semi {number}",
+            )
+            factories.MatchFactory.create(
+                stage=semis,
+                home_team=None,
+                away_team=None,
+                home_team_undecided=factories.UndecidedTeamFactory.create(
+                    stage=semis, formula=f"S1P{number * 2 - 1}", label=""
+                ),
+                away_team_undecided=factories.UndecidedTeamFactory.create(
+                    stage=semis, formula=f"S1P{number * 2}", label=""
+                ),
+                datetime=kickoff,
+                date=kickoff.date(),
+                time=kickoff.time(),
+                label=f"Playoff {number}",
+            )
+        return division
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create()
+        cls.competition = cls.season.competition
+        cls.few_finals = cls._division("Few Finals", finals=1)
+        cls.many_finals = cls._division("Many Finals", finals=8)
+
+    def test_division_page_names_the_stage_in_the_formula(self):
+        self.get(
+            "competition:division",
+            self.competition.slug,
+            self.season.slug,
+            self.few_finals.slug,
+        )
+        self.assert_http_200_ok()
+        self.assertResponseContains('<td class="team right">1st Pool 1</td>')
+        self.assertResponseContains('<td class="team">1st Pool 2</td>')
+        self.assertResponseContains('<td class="team right">1st</td>')
+        self.assertResponseContains('<td class="team">2nd</td>')
+
+    def test_few_finals_query_count(self):
+        with self.assertNumQueries(13):
+            self.get(
+                "competition:division",
+                self.competition.slug,
+                self.season.slug,
+                self.few_finals.slug,
+            )
+        self.assert_http_200_ok()
+
+    def test_many_finals_query_count(self):
+        with self.assertNumQueries(13):
+            self.get(
+                "competition:division",
+                self.competition.slug,
+                self.season.slug,
+                self.many_finals.slug,
+            )
+        self.assert_http_200_ok()
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
 class CarriedPoolLadderTests(TestCase):
     """
     The ladder of a pool that carries over points names the stage they come

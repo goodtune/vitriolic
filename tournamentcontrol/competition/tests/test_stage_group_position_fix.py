@@ -396,6 +396,136 @@ class FirstStageReferenceTests(TestCase):
         self.assertEqual(final.eval(), (self.teams[0], {"title": "P1"}))
 
 
+class ExplicitStageReferenceTests(TestCase):
+    """
+    A position may name its stage: ``S1G1P1`` is first place in pool 1 of the
+    division's first stage, wherever the match is. Its title names that
+    stage's places, the places ``eval`` fills it from, not those of the stage
+    before the match's own.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.division = DivisionFactory.create()
+        cls.teams = TeamFactory.create_batch(4, division=cls.division)
+        cls.pools = StageFactory.create(division=cls.division, title="Pools", order=1)
+        cls.pool = StageGroupFactory.create(stage=cls.pools, title="Pool 1")
+        cls.pool.teams.set(cls.teams)
+        cls.quarters = StageFactory.create(
+            division=cls.division, title="Quarters", order=2, follows=cls.pools
+        )
+        # Quarters feeds two stages, so a place on its ladder names it.
+        cls.semis = StageFactory.create(
+            division=cls.division, title="Semis", order=3, follows=cls.quarters
+        )
+        StageFactory.create(
+            division=cls.division, title="Plate", order=4, follows=cls.quarters
+        )
+
+    def play_pools(self):
+        """Teams finish in pool 1 and on the ladder in the order they were made."""
+        for home, away in ((0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)):
+            MatchFactory.create(
+                stage=self.pools,
+                stage_group=self.pool,
+                home_team=self.teams[home],
+                away_team=self.teams[away],
+                home_team_score=5,
+                away_team_score=0,
+            )
+
+    def test_title_names_the_stage_in_the_formula(self):
+        match = MatchFactory.create(
+            stage=self.semis,
+            home_team=None,
+            away_team=None,
+            home_team_eval="S1G1P1",
+            away_team_eval="S1P2",
+        )
+        self.assertEqual(match.get_home_team(), {"title": "1st Pool 1"})
+        self.assertEqual(match.get_away_team(), {"title": "2nd"})
+        self.assertEqual(match.get_home_team_plain(), "1st Pool 1")
+        self.assertEqual(match.get_away_team_plain(), "2nd")
+        self.assertEqual(str(match), "1st Pool 1 vs 2nd")
+
+    def test_undecided_team_names_the_stage_in_its_formula(self):
+        """``UndecidedTeam.title`` and the match's title agree."""
+        undecided = UndecidedTeamFactory.create(
+            stage=self.semis, formula="S1G1P1", label=""
+        )
+        match = MatchFactory.create(
+            stage=self.semis,
+            home_team=None,
+            away_team=None,
+            home_team_undecided=undecided,
+            away_team_eval="S1P2",
+        )
+        self.assertEqual(str(undecided), "1st Pool 1")
+        self.assertEqual(match.get_home_team(), {"title": "1st Pool 1"})
+        self.assertEqual(str(match), "1st Pool 1 vs 2nd")
+
+    def test_eval_agrees_with_the_title(self):
+        match = MatchFactory.create(
+            stage=self.semis,
+            home_team=None,
+            away_team=None,
+            home_team_eval="S1G1P1",
+            away_team_eval="S1P2",
+        )
+        self.assertEqual(match.eval(), ({"title": "1st Pool 1"}, {"title": "2nd"}))
+
+        self.play_pools()
+        # Quarters has a ladder of its own, led by the last team of the pool.
+        MatchFactory.create(
+            stage=self.quarters,
+            home_team=self.teams[3],
+            away_team=self.teams[2],
+            home_team_score=5,
+            away_team_score=0,
+        )
+        self.assertEqual(match.eval(), (self.teams[0], self.teams[1]))
+
+    def test_stage_that_does_not_exist_is_shown_as_written(self):
+        """
+        The division has four stages: ``S9`` is past the last, and stages
+        are numbered from one, so ``S0`` names none.
+        """
+        match = MatchFactory.create(
+            stage=self.semis,
+            home_team=None,
+            away_team=None,
+            home_team_eval="S9P1",
+            away_team_eval="S0G1P1",
+        )
+        self.assertEqual(match.get_home_team(), {"title": "S9P1"})
+        self.assertEqual(match.get_away_team(), {"title": "S0G1P1"})
+        self.assertEqual(match.get_home_team_plain(), "S9P1")
+        self.assertEqual(match.get_away_team_plain(), "S0G1P1")
+        self.assertEqual(match.eval(), ({"title": "S9P1"}, {"title": "S0G1P1"}))
+
+    def test_first_stage_names_its_own_ladder(self):
+        """
+        ``S1P1`` in the first stage is first place on that stage's ladder,
+        where ``eval`` takes it from, unlike ``P1``, which names the stage
+        before (see ``FirstStageReferenceTests``).
+        """
+        self.play_pools()
+        played = self.pools.matches.get(
+            home_team=self.teams[2], away_team=self.teams[3]
+        )
+        final = MatchFactory.create(
+            stage=self.pools,
+            home_team=None,
+            away_team=None,
+            home_team_eval="S1P1",
+            away_team_eval="W",
+            away_team_eval_related=played,
+        )
+        self.assertEqual(final.get_home_team(), {"title": "1st"})
+        self.assertEqual(final.get_home_team_plain(), "1st")
+        self.assertEqual(final.eval(), (self.teams[0], self.teams[2]))
+
+
 class StageGroupPositionIntegrationTests(TestCase):
     """
     Integration tests that verify stage_group_position works correctly
