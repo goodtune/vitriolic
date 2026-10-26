@@ -1,10 +1,10 @@
 {% extends "touchtechnology/admin/workbook/base.html" %}
 {% load i18n common admin_workbook %}
 
-{% block page_title %}{% blocktrans with type=object|type %}Delete {{ type }}{% endblocktrans %}{% endblock %}
+{% block page_title %}{% firstof kind object|type as type %}{% blocktrans %}Delete {{ type }}{% endblocktrans %}{% endblock %}
 
 {% block content %}
-	{% with type=object|type %}
+	{% firstof kind object|type as type %}
 		<header class="wb-head">
 			<div class="wb-head-text">
 				<p class="wb-eyebrow">{% icon "trash-2" %}{% blocktrans %}Delete {{ type }}{% endblocktrans %}</p>
@@ -28,5 +28,4 @@
 				<p class="wb-actions"><a href="{% url 'admin:content:index' %}{% if object.parent %}?r={{ object.parent.pk }}{% endif %}" class="wb-button">{% trans "Cancel" %}</a></p>
 			{% endif %}
 		</div>
-	{% endwith %}
 {% endblock %}

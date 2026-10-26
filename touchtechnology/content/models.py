@@ -84,6 +84,14 @@ class Page(models.Model):
 
     last_modified = DateTimeField(auto_now=True)
 
+    class Meta:
+        # The site's files (the media section) have no model of their own.
+        # The pages, which use them, hold the permissions over them.
+        permissions = [
+            ("view_file", "Can view files"),
+            ("delete_file", "Can delete files"),
+        ]
+
     def __repr__(self):
         return f"<Page: #{self.pk}>"
 

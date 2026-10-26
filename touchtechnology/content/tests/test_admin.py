@@ -1,3 +1,4 @@
+import os
 import tempfile
 from os.path import dirname, join
 
@@ -170,21 +171,36 @@ class ChunkListTests(TestCase):
 
 class MediaStorageMixin:
     """
-    Keeps the media of each test in a folder of its own, in the project's
-    storage: Django's own cannot remove a folder. The storage is given its
-    location, as it cannot make one when ``STORAGE_FOLDER`` is not set.
+    Keeps the media of each test in a folder of its own, in Django's own
+    ``FileSystemStorage``: the default storage of a project that names none.
     """
 
     def setUp(self):
         super().setUp()
-        root = self.enterContext(tempfile.TemporaryDirectory())
+        self.root = self.enterContext(tempfile.TemporaryDirectory())
+        self.enterContext(override_settings(MEDIA_ROOT=self.root))
+
+    def makedirs(self, name):
+        """An empty folder ``name`` in the storage, and the folders above it."""
+        os.makedirs(default_storage.path(name))
+
+
+class ProjectStorageMixin(MediaStorageMixin):
+    """
+    The same, in the project's ``touchtechnology.common.storage.FileSystemStorage``
+    (the storage with the ``rmdir`` the folder delete once relied on), given the
+    test's folder as its location.
+    """
+
+    def setUp(self):
+        super().setUp()
         self.enterContext(
             override_settings(
                 STORAGES={
                     **settings.STORAGES,
                     "default": {
                         "BACKEND": "touchtechnology.common.storage.FileSystemStorage",
-                        "OPTIONS": {"location": root},
+                        "OPTIONS": {"location": self.root},
                     },
                 },
             )
@@ -192,13 +208,18 @@ class MediaStorageMixin:
 
 
 class MediaDeleteTests(MediaStorageMixin, TestCase):
-    """Deleting a file or a folder of the media section."""
+    """
+    Deleting a file or a folder of the media section, as a member of staff who
+    may view and delete the site's files.
+    """
 
     user_factory = StaffFactory
 
     def setUp(self):
         super().setUp()
-        self.staff = self.make_user("staff")
+        self.staff = self.make_user(
+            "staff", perms=["content.view_file", "content.delete_file"]
+        )
 
     def test_a_file_in_a_missing_folder_is_not_found(self):
         with self.login(self.staff):
@@ -222,7 +243,7 @@ class MediaDeleteTests(MediaStorageMixin, TestCase):
         self.assertEqual(default_storage.listdir("reports"), ([], []))
 
     def test_deleting_a_folder_goes_back_to_the_folder_it_was_in(self):
-        default_storage.makedirs("reports/2026")
+        self.makedirs("reports/2026")
         with self.login(self.staff):
             self.post("admin:content:media:delete", "reports/2026/")
         self.assert_http_302_found(
@@ -230,13 +251,81 @@ class MediaDeleteTests(MediaStorageMixin, TestCase):
         )
         self.assertEqual(default_storage.listdir("reports"), ([], []))
 
+    def test_deleting_a_folder_at_the_top_goes_back_to_the_list(self):
+        self.makedirs("reports")
+        with self.login(self.staff):
+            self.post("admin:content:media:delete", "reports/")
+        self.assert_http_302_found(url=self.reverse("admin:content:media:list"))
+        self.assertEqual(default_storage.listdir(""), ([], []))
+
+
+class ProjectStorageMediaDeleteTests(ProjectStorageMixin, MediaDeleteTests):
+    """The same deletes, in the project's storage."""
+
+
+@per_shell
+class NonFileSystemStorageMediaDeleteTests(IconMixin, TestCase):
+    """
+    A storage that is not a file system has no folder the site can remove.
+    Deleting one of its folders says so, instead of answering that the page is
+    missing.
+    """
+
+    user_factory = StaffFactory
+
+    def setUp(self):
+        super().setUp()
+        self.enterContext(
+            override_settings(
+                STORAGES={
+                    **settings.STORAGES,
+                    "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
+                },
+            )
+        )
+        self.staff = self.make_user(
+            "staff", perms=["content.view_file", "content.delete_file"]
+        )
+        # An empty folder: the storage keeps the folder of a file it has deleted.
+        default_storage.save("reports/2026/.keep", ContentFile(b"\n"))
+        default_storage.delete("reports/2026/.keep")
+
+    def test_a_folder_of_the_storage_is_not_removed(self):
+        with self.login(self.staff):
+            self.post("admin:content:media:delete", "reports/2026/")
+            self.assert_http_302_found(
+                url=self.reverse("admin:content:media:edit", "reports/")
+            )
+            self.get_check_200("admin:content:media:edit", "reports/")
+        text = (
+            "The folder “2026” was not removed: "
+            "this site's storage cannot remove folders."
+        )
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=(
+                    '<p class="wb-message wb-message-error">'
+                    f'{self.icon("circle-alert")}<span>{text}</span></p>'
+                ),
+                explorer=(
+                    '<div class="message message-error">'
+                    f'{self.icon("alert")}<p>{text}</p>'
+                    '<button type="button" class="message-close">'
+                    f'{self.icon("x")}<span class="visually-hidden">Dismiss</span>'
+                    "</button></div>"
+                ),
+            )
+        )
+        self.assertEqual(default_storage.listdir("reports"), (["2026"], []))
+
 
 @per_shell
 class MediaDeleteConfirmationTests(MediaStorageMixin, IconMixin, TestCase):
     """
     The page that asks before a file or a folder of the media is deleted, at
-    the address its row's Delete form posts to. Cancel goes back to the folder
-    the file or the folder is in.
+    the address its row's Delete form posts to. It calls the file or the folder
+    what it is, and Cancel goes back to the folder it is in, or to the list
+    when it is at the top.
     """
 
     user_factory = SuperUserFactory
@@ -246,6 +335,14 @@ class MediaDeleteConfirmationTests(MediaStorageMixin, IconMixin, TestCase):
         self.superuser = self.make_user("superuser")
 
     def assertConfirmation(self, kind, name, cancel):
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=(
+                    f'<p class="wb-eyebrow">{self.icon("trash-2")}Delete {kind}</p>'
+                ),
+                explorer=f"<h1>Delete this {kind}?</h1>",
+            )
+        )
         self.assertResponseContains(
             self.by_shell(
                 workbook=(
@@ -287,7 +384,7 @@ class MediaDeleteConfirmationTests(MediaStorageMixin, IconMixin, TestCase):
             self.get("admin:content:media:delete", "minutes.pdf")
         self.assert_http_200_ok()
         self.assertConfirmation(
-            "File", "minutes.pdf", self.reverse("admin:content:media:list")
+            "file", "minutes.pdf", self.reverse("admin:content:media:list")
         )
 
     def test_a_file_in_a_folder_is_confirmed_before_it_is_deleted(self):
@@ -296,20 +393,219 @@ class MediaDeleteConfirmationTests(MediaStorageMixin, IconMixin, TestCase):
             self.get("admin:content:media:delete", "reports/", "minutes.pdf")
         self.assert_http_200_ok()
         self.assertConfirmation(
-            "File",
+            "file",
             "reports/minutes.pdf",
             self.reverse("admin:content:media:edit", "reports/"),
         )
 
     def test_a_folder_is_confirmed_before_it_is_deleted(self):
-        default_storage.makedirs("reports/2026")
+        self.makedirs("reports/2026")
         with self.login(self.superuser):
             self.get("admin:content:media:delete", "reports/2026/")
         self.assert_http_200_ok()
         self.assertConfirmation(
-            "Folder",
+            "folder",
             "reports/2026",
             self.reverse("admin:content:media:edit", "reports/"),
+        )
+
+    def test_a_folder_at_the_top_is_confirmed_before_it_is_deleted(self):
+        self.makedirs("reports")
+        with self.login(self.superuser):
+            self.get("admin:content:media:delete", "reports/")
+        self.assert_http_200_ok()
+        self.assertConfirmation(
+            "folder", "reports", self.reverse("admin:content:media:list")
+        )
+
+
+class DeleteFormMixin(IconMixin):
+    """The Delete form of a row of a list, in the shell the test runs under."""
+
+    def delete_form(self, action, name, kind):
+        """
+        The Delete form of a row. The Explorer's list of files names no kind,
+        and asks without a title: give ``kind=None`` for it.
+        """
+        csrf = (
+            '<input type="hidden" name="csrfmiddlewaretoken" '
+            f'value="{self.get_context("csrf_token")}">'
+        )
+        if kind is None:
+            explorer = f'data-confirm="“{name}” will be removed for good."'
+        else:
+            explorer = (
+                f'data-confirm="The {kind} “{name}” will be removed for good." '
+                f'data-confirm-title="Delete this {kind}?"'
+            )
+        return self.by_shell(
+            workbook=(
+                f'<form method="post" action="{action}" '
+                f'data-wb-confirm="The {kind} “{name}” will be removed for good." '
+                f'data-wb-confirm-title="Delete {name}?" '
+                f'data-wb-confirm-label="Delete {kind}">'
+                f'{csrf}<button type="submit" class="wb-danger-item">'
+                f'{self.icon("trash-2")}Delete</button></form>'
+            ),
+            explorer=(
+                f'<form method="post" action="{action}" {explorer} '
+                'data-confirm-label="Delete">'
+                f'{csrf}<button type="submit" class="destructive-item">'
+                f'{self.icon("trash")}Delete</button></form>'
+            ),
+        )
+
+
+@per_shell
+class MediaPermissionTests(MediaStorageMixin, DeleteFormMixin, TestCase):
+    """
+    The media section takes the content app's permissions over the site's
+    files: ``content.view_file`` to list them and ``content.delete_file`` to
+    delete one. The list offers Delete only to a person who may.
+    """
+
+    user_factory = StaffFactory
+
+    def setUp(self):
+        super().setUp()
+        default_storage.save("reports/minutes.pdf", ContentFile(b"%PDF-1.4"))
+        self.makedirs("reports/2026")
+
+    def menu(self, row, items):
+        """The menu of row ``row`` of the list, holding ``items`` and no more."""
+        return self.by_shell(
+            workbook=(
+                f'<div class="wb-menu" popover id="wbm-file-{row}"><ul>'
+                f'{"".join(f"<li>{item}</li>" for item in items)}</ul></div>'
+            ),
+            explorer=(
+                f'<div class="menu-panel" id="file-menu-{row}">'
+                f'{"".join(items)}</div>'
+            ),
+        )
+
+    def view_link(self, name):
+        return f'<a href="{default_storage.url(name)}">{self.icon("eye")}View</a>'
+
+    def open_link(self, path):
+        url = self.reverse("admin:content:media:edit", path)
+        # The Explorer's icon tag draws "folder-open" with its "image" glyph.
+        icon = self.icon(self.by_shell(workbook="folder-open", explorer="image"))
+        return f'<a href="{url}">{icon}Open</a>'
+
+    def test_a_visitor_is_asked_to_sign_in(self):
+        self.assertLoginRequired("admin:content:media:list")
+        self.assertLoginRequired("admin:content:media:edit", "reports/")
+        self.assertLoginRequired(
+            "admin:content:media:delete", "reports/", "minutes.pdf"
+        )
+        self.assertLoginRequired("admin:content:media:delete", "reports/2026/")
+        self.assertLoginRequired(
+            "admin:content:media:delete", "reports/", "minutes.pdf", method="post"
+        )
+        self.assertEqual(
+            default_storage.listdir("reports"), (["2026"], ["minutes.pdf"])
+        )
+
+    def test_a_superuser_lists_and_deletes_files(self):
+        superuser = SuperUserFactory.create(username="superuser")
+        with self.login(superuser):
+            self.get_check_200("admin:content:media:list")
+            self.get_check_200("admin:content:media:edit", "reports/")
+            self.assertResponseContains(
+                self.menu(
+                    2,
+                    [
+                        self.view_link("reports/minutes.pdf"),
+                        self.delete_form(
+                            self.reverse(
+                                "admin:content:media:delete", "reports/", "minutes.pdf"
+                            ),
+                            "minutes.pdf",
+                            self.by_shell(workbook="file", explorer=None),
+                        ),
+                    ],
+                )
+            )
+            self.post("admin:content:media:delete", "reports/", "minutes.pdf")
+        self.assert_http_302_found(
+            url=self.reverse("admin:content:media:edit", "reports/")
+        )
+        self.assertEqual(default_storage.listdir("reports"), (["2026"], []))
+
+    def test_a_person_who_may_not_view_files_is_refused(self):
+        staff = self.make_user("staff")
+        with self.login(staff):
+            self.get("admin:content:media:list")
+            self.assert_http_403_forbidden()
+            self.get("admin:content:media:edit", "reports/")
+            self.assert_http_403_forbidden()
+            self.get("admin:content:media:delete", "reports/", "minutes.pdf")
+            self.assert_http_403_forbidden()
+            self.post("admin:content:media:delete", "reports/", "minutes.pdf")
+            self.assert_http_403_forbidden()
+        self.assertEqual(
+            default_storage.listdir("reports"), (["2026"], ["minutes.pdf"])
+        )
+
+    def test_a_person_who_may_view_files_sees_them_without_delete(self):
+        viewer = self.make_user("viewer", perms=["content.view_file"])
+        with self.login(viewer):
+            self.get_check_200("admin:content:media:list")
+            self.get_check_200("admin:content:media:edit", "reports/")
+        self.assertResponseContains(self.menu(1, [self.open_link("reports/2026/")]))
+        self.assertResponseContains(
+            self.menu(2, [self.view_link("reports/minutes.pdf")])
+        )
+
+    def test_a_person_who_may_view_but_not_delete_files_is_refused_the_delete(self):
+        viewer = self.make_user("viewer", perms=["content.view_file"])
+        with self.login(viewer):
+            self.get("admin:content:media:delete", "reports/", "minutes.pdf")
+            self.assert_http_403_forbidden()
+            self.post("admin:content:media:delete", "reports/", "minutes.pdf")
+            self.assert_http_403_forbidden()
+            self.get("admin:content:media:delete", "reports/2026/")
+            self.assert_http_403_forbidden()
+            self.post("admin:content:media:delete", "reports/2026/")
+            self.assert_http_403_forbidden()
+        self.assertEqual(
+            default_storage.listdir("reports"), (["2026"], ["minutes.pdf"])
+        )
+
+    def test_a_person_who_may_delete_files_is_offered_to(self):
+        deleter = self.make_user(
+            "deleter", perms=["content.view_file", "content.delete_file"]
+        )
+        with self.login(deleter):
+            self.get_check_200("admin:content:media:edit", "reports/")
+        self.assertResponseContains(
+            self.menu(
+                1,
+                [
+                    self.open_link("reports/2026/"),
+                    self.delete_form(
+                        self.reverse("admin:content:media:delete", "reports/2026/"),
+                        "2026",
+                        self.by_shell(workbook="folder", explorer=None),
+                    ),
+                ],
+            )
+        )
+        self.assertResponseContains(
+            self.menu(
+                2,
+                [
+                    self.view_link("reports/minutes.pdf"),
+                    self.delete_form(
+                        self.reverse(
+                            "admin:content:media:delete", "reports/", "minutes.pdf"
+                        ),
+                        "minutes.pdf",
+                        self.by_shell(workbook="file", explorer=None),
+                    ),
+                ],
+            )
         )
 
 
@@ -601,7 +897,7 @@ class ApplicationListObjectPermissionTests(ApplicationListMixin, TestCase):
 
 
 @per_shell
-class DeleteConfirmationTests(IconMixin, TestCase):
+class DeleteConfirmationTests(DeleteFormMixin, TestCase):
     """
     The dialog that asks before a row is deleted calls the row what it is: a
     page, a folder or an application of the sitemap, a file or a folder of the
@@ -615,39 +911,6 @@ class DeleteConfirmationTests(IconMixin, TestCase):
         self.superuser = self.make_user("superuser")
         self.news, _ = Placeholder.objects.get_or_create(
             path=NEWS_SITE, namespace="news"
-        )
-
-    def delete_form(self, action, name, kind):
-        """
-        The Delete form of a row. The Explorer's list of files names no kind,
-        and asks without a title: give ``kind=None`` for it.
-        """
-        csrf = (
-            '<input type="hidden" name="csrfmiddlewaretoken" '
-            f'value="{self.get_context("csrf_token")}">'
-        )
-        if kind is None:
-            explorer = f'data-confirm="“{name}” will be removed for good."'
-        else:
-            explorer = (
-                f'data-confirm="The {kind} “{name}” will be removed for good." '
-                f'data-confirm-title="Delete this {kind}?"'
-            )
-        return self.by_shell(
-            workbook=(
-                f'<form method="post" action="{action}" '
-                f'data-wb-confirm="The {kind} “{name}” will be removed for good." '
-                f'data-wb-confirm-title="Delete {name}?" '
-                f'data-wb-confirm-label="Delete {kind}">'
-                f'{csrf}<button type="submit" class="wb-danger-item">'
-                f'{self.icon("trash-2")}Delete</button></form>'
-            ),
-            explorer=(
-                f'<form method="post" action="{action}" {explorer} '
-                'data-confirm-label="Delete">'
-                f'{csrf}<button type="submit" class="destructive-item">'
-                f'{self.icon("trash")}Delete</button></form>'
-            ),
         )
 
     def test_each_node_of_the_sitemap_is_called_what_it_is(self):
