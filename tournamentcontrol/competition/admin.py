@@ -1578,8 +1578,15 @@ class CompetitionAdminComponent(AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_matchscoresheet(self, request, pk, **extra_context):
+        match = extra_context.get("match")
         return self.generic_delete(
-            request, MatchScoreSheet, pk=pk, permission_required=True
+            request,
+            MatchScoreSheet,
+            pk=pk,
+            permission_required=True,
+            post_delete_redirect=self.redirect(
+                f"{match.urls['edit']}#scoresheets-tab"
+            ),
         )
 
     @staff_login_required_m
