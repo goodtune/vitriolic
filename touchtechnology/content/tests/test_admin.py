@@ -163,8 +163,152 @@ class MediaDeleteTests(TestCase):
         self.assert_http_404_not_found()
 
 
+class IconMixin:
+    """The markup of an icon, in the shell a ``per_shell`` test runs under."""
+
+    def icon(self, name):
+        css, sprite = self.by_shell(
+            workbook=("wb-icon", "workbook/icons.svg"),
+            explorer=("icon", "explorer/img/icons.svg"),
+        )
+        return (
+            f'<svg class="{css}" aria-hidden="true" focusable="false">'
+            f'<use href="/static/touchtechnology/admin/{sprite}#{name}"></use></svg>'
+        )
+
+
 @per_shell
-class DeleteConfirmationTests(TestCase):
+class SitemapListTests(IconMixin, TestCase):
+    """The sitemap list: what each row shows, and what the page costs to draw."""
+
+    user_factory = SuperUserFactory
+
+    def setUp(self):
+        super().setUp()
+        self.superuser = self.make_user("superuser")
+
+    def make_nodes(self, count, parent=None):
+        """
+        Give ``parent`` (or the top of the sitemap) ``count`` nodes in all: a
+        page, a folder and an application in turn, the applications mounting
+        the installed ones.
+        """
+        start = SitemapNode.objects.filter(parent=parent).count()
+        applications = Placeholder.objects.order_by("pk")
+        for n in range(start, count):
+            node = {"title": f"Node {n}", "slug": f"node-{n}", "parent": parent}
+            if n % 3 == 0:
+                SitemapNode.objects.create(**node, object=Page.objects.create())
+            elif n % 3 == 1:
+                SitemapNode.objects.create(**node)
+            else:
+                SitemapNode.objects.create(
+                    **node, object=applications[n // 3 % applications.count()]
+                )
+
+    def assertListQueries(self, queries, parent=None):
+        """
+        The list of ``parent``'s nodes (or the top of the sitemap) runs
+        ``queries`` queries with one node in it and with twelve.
+        """
+        data = {"r": parent.pk} if parent else {}
+        with self.login(self.superuser):
+            for count in (1, 12):
+                with self.subTest(count=count):
+                    self.make_nodes(count, parent)
+                    # The first request after a change of the sitemap rebuilds
+                    # the site's URL patterns; measure the list after that.
+                    self.get_check_200("admin:content:index", data=data)
+                    with self.assertNumQueries(queries):
+                        self.get("admin:content:index", data=data)
+
+    def test_the_top_of_the_sitemap_runs_as_many_queries_for_twelve_as_for_one(self):
+        self.assertListQueries(7)
+
+    def test_a_folder_runs_as_many_queries_for_twelve_as_for_one(self):
+        press = SitemapNode.objects.create(title="Press", slug="press")
+        archive = SitemapNode.objects.create(
+            title="Archive", slug="archive", parent=press
+        )
+        # The folder, its line and the trail to it are looked up once each.
+        self.assertListQueries(self.by_shell(workbook=14, explorer=13), archive)
+
+    def test_a_folder_lists_each_node_at_its_address(self):
+        press = SitemapNode.objects.create(title="Press", slug="press")
+        archive = SitemapNode.objects.create(
+            title="Archive", slug="archive", parent=press
+        )
+        self.make_nodes(1, archive)
+        with self.login(self.superuser):
+            self.get_check_200("admin:content:index", data={"r": archive.pk})
+        # A node's address has no URL name: it is the slugs of its line.
+        address = "/press/archive/node-0/"
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=(
+                    f'<td data-label="Address"><a href="{address}" target="_blank" '
+                    f'rel="noopener"><span class="wb-code">{address}</span>'
+                    '<span class="wb-sr"> (opens a new tab)</span></a></td>'
+                ),
+                explorer=(
+                    f'<td class="wide-only"><a href="{address}" target="_blank">'
+                    f"{address}</a></td>"
+                ),
+            )
+        )
+
+    def title_cell(self, node, route, icon):
+        """The first cell of ``node``'s row, which links to ``route``."""
+        edit = self.reverse(route, node.pk)
+        return self.by_shell(
+            workbook=(
+                f'<td class="wb-title-cell">{self.icon(icon)}'
+                f'<a href="{edit}">{node.title}</a></td>'
+            ),
+            explorer=(
+                f'<td class="title-cell"><a href="{edit}">{self.icon(icon)}'
+                f"<span>{node.title}</span></a></td>"
+            ),
+        )
+
+    def test_each_row_shows_the_icon_of_what_the_node_holds(self):
+        """
+        A node's icon is that of what it holds, not of its place in the tree:
+        a page with pages beneath it is still a page, and an application or a
+        folder with nothing in it yet is not one.
+        """
+        news, _ = Placeholder.objects.get_or_create(path=NEWS_SITE, namespace="news")
+        press = SitemapNode.objects.create(title="Press", slug="press")
+        SitemapNode.objects.create(
+            title="Releases", slug="releases", parent=press, object=Page.objects.create()
+        )
+        archive = SitemapNode.objects.create(title="Archive", slug="archive")
+        about = SitemapNode.objects.create(
+            title="About us", slug="about-us", object=Page.objects.create()
+        )
+        team = SitemapNode.objects.create(
+            title="Team", slug="team", object=Page.objects.create()
+        )
+        SitemapNode.objects.create(
+            title="Coaches", slug="coaches", parent=team, object=Page.objects.create()
+        )
+        latest = SitemapNode.objects.create(title="Latest", slug="latest", object=news)
+        page = self.by_shell(workbook="file-text", explorer="page")
+        with self.login(self.superuser):
+            self.get_check_200("admin:content:index")
+        for node, route, icon in (
+            (press, "admin:content:folder:edit", "folder"),
+            (archive, "admin:content:folder:edit", "folder"),
+            (about, "admin:content:page:edit", page),
+            (team, "admin:content:page:edit", page),
+            (latest, "admin:content:placeholder:edit", "puzzle"),
+        ):
+            with self.subTest(node.title):
+                self.assertResponseContains(self.title_cell(node, route, icon))
+
+
+@per_shell
+class DeleteConfirmationTests(IconMixin, TestCase):
     """
     The dialog that asks before a row is deleted calls the row what it is: a
     page, a folder or an application of the sitemap, a file or a folder of the
@@ -178,16 +322,6 @@ class DeleteConfirmationTests(TestCase):
         self.superuser = self.make_user("superuser")
         self.news, _ = Placeholder.objects.get_or_create(
             path=NEWS_SITE, namespace="news"
-        )
-
-    def icon(self, name):
-        css, sprite = self.by_shell(
-            workbook=("wb-icon", "workbook/icons.svg"),
-            explorer=("icon", "explorer/img/icons.svg"),
-        )
-        return (
-            f'<svg class="{css}" aria-hidden="true" focusable="false">'
-            f'<use href="/static/touchtechnology/admin/{sprite}#{name}"></use></svg>'
         )
 
     def delete_form(self, action, name, kind):
@@ -291,6 +425,62 @@ class DeleteConfirmationTests(TestCase):
         )
 
 
+@per_shell
+class MountedApplicationDeleteTests(IconMixin, TestCase):
+    """
+    An application that the sitemap still uses is not deleted: deleting it
+    would remove every node of the sitemap that mounts it, and the dialog that
+    asks first does not know of them.
+    """
+
+    user_factory = SuperUserFactory
+
+    def setUp(self):
+        super().setUp()
+        self.superuser = self.make_user("superuser")
+        self.news, _ = Placeholder.objects.get_or_create(
+            path=NEWS_SITE, namespace="news"
+        )
+        SitemapNode.objects.create(title="Latest", slug="latest", object=self.news)
+        press = SitemapNode.objects.create(title="Press", slug="press")
+        SitemapNode.objects.create(
+            title="Releases", slug="releases", parent=press, object=self.news
+        )
+
+    def test_deleting_an_application_the_sitemap_uses_is_refused(self):
+        placeholders = Placeholder.objects.count()
+        with self.login(self.superuser):
+            self.post("admin:content:real_placeholder:delete", self.news.pk)
+            self.assert_http_302_found(
+                url=self.reverse("admin:content:real_placeholder:list")
+            )
+            self.get_check_200("admin:content:real_placeholder:list")
+        text = (
+            "“News” was not deleted: the sitemap still uses it at "
+            "Latest (/latest/), Releases (/press/releases/). "
+            "Delete those from the sitemap first."
+        )
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=(
+                    '<p class="wb-message wb-message-error">'
+                    f'{self.icon("circle-alert")}<span>{text}</span></p>'
+                ),
+                explorer=(
+                    '<div class="message message-error">'
+                    f'{self.icon("alert")}<p>{text}</p>'
+                    '<button type="button" class="message-close">'
+                    f'{self.icon("x")}<span class="visually-hidden">Dismiss</span>'
+                    "</button></div>"
+                ),
+            )
+        )
+        self.assertEqual(
+            (Placeholder.objects.count(), SitemapNode.objects.count()),
+            (placeholders, 3),
+        )
+
+
 class ApplicationDeleteTests(TestCase):
     """
     Confirming the delete of an application posts to the route its row's form
@@ -314,6 +504,16 @@ class ApplicationDeleteTests(TestCase):
             self.post("admin:content:real_placeholder:delete", self.news.pk)
         self.assert_http_403_forbidden()
         self.assertCountEqual(Placeholder.objects.filter(namespace="news"), [self.news])
+
+    def test_a_person_who_may_not_delete_applications_is_refused_one_in_use(self):
+        latest = SitemapNode.objects.create(
+            title="Latest", slug="latest", object=self.news
+        )
+        editor = self.make_user("editor", perms=["content.change_placeholder"])
+        with self.login(editor):
+            self.post("admin:content:real_placeholder:delete", self.news.pk)
+        self.assert_http_403_forbidden()
+        self.assertCountEqual(self.news.nodes.all(), [latest])
 
     def test_a_person_who_may_delete_applications_deletes_one(self):
         editor = self.make_user("editor", perms=["content.delete_placeholder"])

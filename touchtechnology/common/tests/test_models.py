@@ -1,6 +1,7 @@
 from django.utils.encoding import smart_str
 from test_plus import TestCase
 
+from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.tests import factories
 
 
@@ -36,3 +37,37 @@ class SitemapNodeTests(TestCase):
         expected_log = f'DEBUG:touchtechnology.common.models:Disabling node {repr(node)}'
         self.assertCountEqual(cm.output, [expected_log])
 
+
+class SitemapNodeAddressTests(TestCase):
+    """
+    A node's address is the slugs of its line, the home page's left out,
+    however the node was loaded.
+    """
+
+    def setUp(self):
+        self.home = SitemapNode.objects.create(title="Home", slug="home")
+        self.press = SitemapNode.objects.create(title="Press", slug="press")
+        self.archive = SitemapNode.objects.create(
+            title="Archive", slug="archive", parent=self.press
+        )
+        self.minutes = SitemapNode.objects.create(
+            title="Minutes", slug="minutes", parent=self.archive
+        )
+
+    def test_a_node_loaded_alone(self):
+        node = SitemapNode.objects.get(pk=self.minutes.pk)
+        self.assertEqual(node.get_absolute_url(), "/press/archive/minutes/")
+
+    def test_a_node_at_the_top_needs_no_query(self):
+        press, home = SitemapNode.objects.filter(level=0).order_by("-slug")
+        with self.assertNumQueries(0):
+            self.assertEqual(
+                (press.get_absolute_url(), home.get_absolute_url()), ("/press/", "/")
+            )
+
+    def test_a_node_loaded_through_its_parents_needs_no_query(self):
+        press = SitemapNode.objects.get(pk=self.press.pk)
+        (archive,) = press.children.all()
+        (minutes,) = archive.children.all()
+        with self.assertNumQueries(0):
+            self.assertEqual(minutes.get_absolute_url(), "/press/archive/minutes/")
