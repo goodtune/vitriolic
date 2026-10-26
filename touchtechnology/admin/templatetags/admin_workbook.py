@@ -33,7 +33,7 @@ SPRITE = "touchtechnology/admin/workbook/icons.svg"
 
 @register.simple_tag
 def icon(name, label=None, size=None):
-    href = "%s#%s" % (static(SPRITE), name)
+    href = f"{static(SPRITE)}#{name}"
     style = format_html(' style="--icon-size:{}"', size) if size else ""
     if label:
         return format_html(
@@ -79,7 +79,7 @@ def page_query(context, number):
     query = request.GET.copy() if request is not None else QueryDict(mutable=True)
     query.pop("page", None)
     rest = query.urlencode()
-    return "?%spage=%s" % (rest + "&" if rest else "", number)
+    return f"?{rest}&page={number}" if rest else f"?page={number}"
 
 
 @register.filter
@@ -198,7 +198,7 @@ def admin_nav(context, placement="rail"):
                 }
             )
     try:
-        home = reverse("%s:index" % getattr(admin, "name", "admin"))
+        home = reverse(f"{getattr(admin, 'name', 'admin')}:index")
     except NoReverseMatch:
         home = "/"
     return {

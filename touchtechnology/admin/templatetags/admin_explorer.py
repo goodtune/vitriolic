@@ -96,10 +96,8 @@ def icon(name, label=""):
     An icon of the admin's sprite. Without a ``label`` it is decoration and
     hidden from assistive technology; with one it is named by it.
     """
-    href = "%s#%s" % (
-        static("touchtechnology/admin/explorer/img/icons.svg"),
-        icon_name(name),
-    )
+    sprite = static("touchtechnology/admin/explorer/img/icons.svg")
+    href = f"{sprite}#{icon_name(name)}"
     if label:
         return format_html(
             '<svg class="icon" role="img" aria-label="{}"><use href="{}"></use></svg>',
@@ -158,9 +156,9 @@ def widget(bound_field, extra_class=""):
         attrs["placeholder"] = False
     if bound_field.errors:
         attrs["aria-invalid"] = "true"
-        described = ["%s-errors" % bound_field.auto_id]
+        described = [f"{bound_field.auto_id}-errors"]
         if bound_field.help_text:
-            described.append("%s_helptext" % bound_field.auto_id)
+            described.append(f"{bound_field.auto_id}_helptext")
         attrs["aria-describedby"] = " ".join(described)
     return bound_field.as_widget(attrs=attrs)
 
