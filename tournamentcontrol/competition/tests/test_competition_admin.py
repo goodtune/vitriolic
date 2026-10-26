@@ -4142,27 +4142,38 @@ class MatchDetailQueryTests(TestCase):
 class MatchRowMixin(IconMixin):
     """
     The menu of a match's row on its stage's Matches tab, and the run sheet's
-    link to its statistics page.
+    links to its statistics and referees pages.
     """
 
     detail = "admin:fixja:competition:season:division:stage:match:detail"
+    referees = "admin:fixja:competition:season:division:stage:match:referees"
 
-    def actions_cell(self, match, name, statistics=False, edit=True, delete=True):
+    def actions_cell(
+        self, match, name, statistics=False, edit=True, delete=True, referees=True
+    ):
         """
         The last cell of the match's row, named ``name``. Its menu offers
-        Statistics when the players' statistics of the match can be entered
-        and the person may change the match, and Edit and Delete to those who
-        may change and delete it.
+        Referees and Edit to those who may change the match, Statistics too
+        when the players' statistics of the match can be entered, and Delete
+        to those who may delete it.
         """
         namespace = "admin:fixja:competition:season:division:stage:match"
         args = match._get_url_args()
-        referees = self.reverse(f"{namespace}:referees", *args)
+        referees_url = self.reverse(f"{namespace}:referees", *args)
         detail = self.reverse(f"{namespace}:detail", *args)
         edit_url = self.reverse(f"{namespace}:edit", *args)
         delete_url = self.reverse(f"{namespace}:delete", *args)
         csrf = (
             '<input type="hidden" name="csrfmiddlewaretoken" '
             f'value="{self.get_context("csrf_token")}">'
+        )
+        workbook_referees, explorer_referees = (
+            (
+                f'<li><a href="{referees_url}">{self.icon("flag")}Referees</a></li>',
+                f'<a href="{referees_url}">{self.icon("referee")}Referees</a>',
+            )
+            if referees
+            else ("", "")
         )
         workbook_statistics, explorer_statistics = (
             (
@@ -4207,9 +4218,8 @@ class MatchRowMixin(IconMixin):
                 f'aria-label="More actions for {name}">{self.icon("ellipsis")}'
                 "</button>"
                 f'<div class="wb-menu" popover id="wbm-match-{match.pk}"><ul>'
-                f'<li><a href="{referees}">{self.icon("flag")}Referees</a></li>'
-                f"{workbook_statistics}{workbook_edit}{workbook_delete}"
-                "</ul></div></div></td>"
+                f"{workbook_referees}{workbook_statistics}{workbook_edit}"
+                f"{workbook_delete}</ul></div></div></td>"
             ),
             explorer=(
                 '<td class="actions-cell"><div class="row-actions"><div class="menu">'
@@ -4219,9 +4229,8 @@ class MatchRowMixin(IconMixin):
                 f'<span class="visually-hidden">More actions for {name}</span>'
                 "</button>"
                 f'<div class="menu-panel" id="row-menu-match-{match.pk}">'
-                f'<a href="{referees}">{self.icon("referee")}Referees</a>'
-                f"{explorer_statistics}{explorer_edit}{explorer_delete}"
-                "</div></div></div></td>"
+                f"{explorer_referees}{explorer_statistics}{explorer_edit}"
+                f"{explorer_delete}</div></div></div></td>"
             ),
         )
 
@@ -4231,6 +4240,26 @@ class MatchRowMixin(IconMixin):
         return self.by_shell(
             workbook=f'<a href="{url}">{self.icon("chart-bar")}Detail</a>',
             explorer=f'<a href="{url}">Statistics</a>',
+        )
+
+    def referees_link(self, match):
+        """
+        The run sheet's link to the match's referees page, which sends the
+        person back to the sheet.
+        """
+        season = match.stage.division.season
+        sheet = self.reverse(
+            "admin:fixja:match-runsheet",
+            season.competition_id,
+            season.pk,
+            f"{match.date:%Y%m%d}",
+        )
+        # The sheet writes its own path after "?next=" as it is, which
+        # reverse(query=) would percent-encode.
+        url = f"{self.reverse(self.referees, *match._get_url_args())}?next={sheet}"
+        return self.by_shell(
+            workbook=f'<a href="{url}">{self.icon("flag")}Referees</a>',
+            explorer=f'<a href="{url}">Referees</a>',
         )
 
 
@@ -4489,7 +4518,7 @@ class MatchDetailPermissionTests(MatchRowMixin, TestCase):
             )
         )
         self.assertResponseContains(
-            self.actions_cell(other, "Sharks vs Eagles", edit=False)
+            self.actions_cell(other, "Sharks vs Eagles", edit=False, referees=False)
         )
 
     def test_run_sheet_offers_statistics_to_those_who_may_change_the_match(self):
@@ -4518,6 +4547,84 @@ class MatchDetailPermissionTests(MatchRowMixin, TestCase):
             )
         )
         self.assertResponseContains(self.statistics_link(other), count=0)
+
+
+@per_shell
+class RefereeAppointmentsPermissionTests(MatchRowMixin, TestCase):
+    """
+    A match's referees are appointed by whoever may change the match, which is
+    what its referees page asks. The row menu and the run sheet offer the page
+    only to those who may open it.
+    """
+
+    user_factory = StaffFactory
+
+    def setUp(self):
+        super().setUp()
+        self.stage = factories.StageFactory.create()
+        self.staff = self.make_user("staff")
+
+    def match(self, **kwargs):
+        """A match on 1 May 2025, yet to be played."""
+        return factories.MatchFactory.create(
+            stage=self.stage, date=date(2025, 5, 1), **kwargs
+        )
+
+    def test_staff_without_change_match_is_refused(self):
+        match = self.match()
+        with self.login(self.staff):
+            self.get(self.referees, *match._get_url_args())
+            self.assert_http_403_forbidden()
+
+    def test_change_match_on_the_match_opens_the_page(self):
+        match = self.match()
+        assign_perm("competition.change_match", self.staff, match)
+        with self.login(self.staff):
+            self.get_check_200(self.referees, *match._get_url_args())
+
+    def test_row_menu_offers_referees_to_those_who_may_change_the_match(self):
+        # The stage's Matches tab lists the matches the person may act on at
+        # all. They may change the first and delete the second, so both rows
+        # are drawn, and Referees is offered with Edit, not with Delete.
+        theirs = self.match(home_team__title="Leopards", away_team__title="Marlins")
+        other = self.match(home_team__title="Sharks", away_team__title="Eagles")
+        assign_perm("competition.change_stage", self.staff, self.stage)
+        assign_perm("competition.change_match", self.staff, theirs)
+        assign_perm("competition.delete_match", self.staff, other)
+        with self.login(self.staff):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:edit",
+                *self.stage._get_url_args(),
+            )
+        self.assertResponseContains(
+            self.actions_cell(theirs, "Leopards vs Marlins", delete=False)
+        )
+        self.assertResponseContains(
+            self.actions_cell(other, "Sharks vs Eagles", edit=False, referees=False)
+        )
+
+    def test_run_sheet_offers_referees_to_those_who_may_change_the_match(self):
+        theirs = self.match(home_team__title="Leopards")
+        other = self.match(home_team__title="Sharks")
+        assign_perm("competition.change_match", self.staff, theirs)
+        season = self.stage.division.season
+        # The gate reads the permissions the sheet asks for once for the day's
+        # matches, so the sheet costs what it did.
+        with self.login(self.staff), self.assertNumQueries(23):
+            self.get_check_200(
+                "admin:fixja:match-runsheet",
+                season.competition_id,
+                season.pk,
+                "20250501",
+            )
+        self.assertResponseContains(self.referees_link(theirs), count=1)
+        # The other match is on the sheet, without the link.
+        self.assertResponseContains(
+            self.by_shell(
+                workbook="<td>Sharks</td>", explorer='<td class="team">Sharks</td>'
+            )
+        )
+        self.assertResponseContains(self.referees_link(other), count=0)
 
 
 @per_shell(shells=("explorer",))
