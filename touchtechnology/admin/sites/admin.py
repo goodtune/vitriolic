@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 class AdminSite(DjangoAdminSite):
     def __init__(self, name="admin", shell=DEFAULT_SHELL):
-        super(AdminSite, self).__init__(name)
+        super().__init__(name)
         self.shell = shell
         self._components = collections.OrderedDict()
         self._schemas = collections.defaultdict(lambda: None)
@@ -176,13 +176,15 @@ class AdminSite(DjangoAdminSite):
                 )
         return components
 
-    def dashboard(self):
+    def dashboard(self, request):
+        """
+        The widgets of the home page: those of the components the menu shows
+        ``request.user`` (see ``allowed``), so the page draws nothing from an
+        application the person may not use.
+        """
         widgets = ()
-        for __, __, __, component, schemas in self.get_components():
-            try:
-                widgets += component.widgets
-            except AttributeError:
-                pass
+        for __, __, __, component, __ in allowed(self.get_components(), request):
+            widgets += getattr(component, "widgets", ())
         return widgets
 
     def get_absolute_url(self):
@@ -200,7 +202,7 @@ class AdminSite(DjangoAdminSite):
 
     @staff_login_required_m
     def index(self, request, *args, **kwargs):
-        context = {"admin": self}
+        context = {"admin": self, "widgets": self.dashboard(request)}
         context.update(kwargs)
         if "brand" not in context:
             context["brand"] = get_brand(request)

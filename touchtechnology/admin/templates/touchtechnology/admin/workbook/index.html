@@ -27,14 +27,12 @@
 	{% endif %}
 
 	{% block dashboard %}
-		{% with widgets=admin.dashboard %}
-			{% if widgets %}
-				<div class="wb-dashboard">
-					{% for widget in widgets %}
-						{% render widget %}
-					{% endfor %}
-				</div>
-			{% endif %}
-		{% endwith %}
+		{% if widgets %}
+			<div class="wb-dashboard">
+				{% for widget in widgets %}
+					{% render widget %}
+				{% endfor %}
+			</div>
+		{% endif %}
 	{% endblock %}
 {% endblock %}
