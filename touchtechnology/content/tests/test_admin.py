@@ -5,6 +5,7 @@ from django.contrib.auth.models import Permission
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.test import override_settings
+from guardian.shortcuts import assign_perm
 from test_plus.test import TestCase
 
 from touchtechnology.admin.tests.shells import by_shell, per_shell
@@ -305,6 +306,109 @@ class SitemapListTests(IconMixin, TestCase):
         ):
             with self.subTest(node.title):
                 self.assertResponseContains(self.title_cell(node, route, icon))
+
+
+class ApplicationListMixin(IconMixin):
+    """
+    The Applications list, with only the applications a test makes: mounted
+    by no node of the sitemap, by one and by two, in turn.
+    """
+
+    def setUp(self):
+        super().setUp()
+        Placeholder.objects.all().delete()
+
+    def make_applications(self, count):
+        """Have ``count`` applications in all."""
+        for n in range(Placeholder.objects.count(), count):
+            application = Placeholder.objects.create(
+                path=NEWS_SITE, namespace=f"news-{n}"
+            )
+            for m in range(n % 3):
+                SitemapNode.objects.create(
+                    title=f"News {n}.{m}", slug=f"news-{n}-{m}", object=application
+                )
+
+    def assertListQueries(self, user, queries):
+        """The list runs ``queries`` queries for one application and for twelve."""
+        with self.login(user):
+            for count in (1, 12):
+                with self.subTest(count=count):
+                    self.make_applications(count)
+                    # The first request after a change of the sitemap rebuilds
+                    # the site's URL patterns; measure the list after that.
+                    self.get_check_200("admin:content:real_placeholder:list")
+                    with self.assertNumQueries(queries):
+                        self.get("admin:content:real_placeholder:list")
+
+    def assertPagesShown(self, user):
+        """Each row shows how many pages of the sitemap mount its application."""
+        self.make_applications(3)
+        with self.login(user):
+            self.get_check_200("admin:content:real_placeholder:list")
+        for application in Placeholder.objects.order_by("pk"):
+            pages = application.nodes.count()
+            edit = self.reverse("admin:content:real_placeholder:edit", application.pk)
+            tag = {
+                0: "",
+                1: '<span class="tag">1 page</span>',
+                2: '<span class="tag">2 pages</span>',
+            }[pages]
+            with self.subTest(pages=pages):
+                self.assertResponseContains(
+                    self.by_shell(
+                        workbook=f'<td class="wb-num" data-label="Pages">{pages}</td>',
+                        explorer=(
+                            f'<td class="title-cell"><a href="{edit}">'
+                            f'{self.icon("puzzle")}<span>News</span></a>{tag}</td>'
+                        ),
+                    )
+                )
+
+
+@per_shell
+class ApplicationListTests(ApplicationListMixin, TestCase):
+    """The Applications list, for a person who may do anything."""
+
+    user_factory = SuperUserFactory
+
+    def setUp(self):
+        super().setUp()
+        self.superuser = self.make_user("superuser")
+
+    def test_the_list_runs_as_many_queries_for_twelve_applications_as_for_one(self):
+        self.assertListQueries(self.superuser, 6)
+
+    def test_each_row_shows_how_many_pages_mount_it(self):
+        self.assertPagesShown(self.superuser)
+
+
+@per_shell
+class ApplicationListObjectPermissionTests(ApplicationListMixin, TestCase):
+    """
+    The Applications list for a person who may change each application, but
+    has no permission over all of them: the list is filtered to theirs.
+    """
+
+    user_factory = StaffFactory
+
+    def setUp(self):
+        super().setUp()
+        self.editor = self.make_user("editor")
+
+    def make_applications(self, count):
+        super().make_applications(count)
+        for application in Placeholder.objects.all():
+            assign_perm("content.change_placeholder", self.editor, application)
+
+    def test_the_list_runs_as_many_queries_for_twelve_applications_as_for_one(self):
+        # Asking what this person may do over the list as a whole costs the
+        # same for any number of rows: the Explorer asks once more, for the
+        # import path's column.
+        self.assertListQueries(self.editor, self.by_shell(workbook=22, explorer=23))
+
+    def test_each_row_shows_how_many_pages_mount_it(self):
+        self.assertPagesShown(self.editor)
 
 
 @per_shell
