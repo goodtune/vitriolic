@@ -18,7 +18,16 @@ class PrinceError(Exception):
 
     Without it, ``PRINCE_BINARY`` did not finish within the read timeout, or
     it exited with an error status. The ``subprocess`` exception is the
-    ``__cause__``.
+    ``__cause__``. If the binary could not be run at all, the error is a
+    ``PrinceUnavailable``.
+    """
+
+
+class PrinceUnavailable(PrinceError):
+    """
+    ``PRINCE_BINARY`` could not be run: it is missing, or it is not
+    executable. The ``OSError`` is the ``__cause__``. Trying again will not
+    help; the site's setup must change.
     """
 
 
@@ -87,6 +96,9 @@ def prince(html, base_url=None, ttl=300, **kwargs):
                 timeout=timeout,
                 check=True,
             ).stdout
+        except OSError as exc:
+            logger.error("PDF binary %s cannot be run: %s", BINARY, exc.strerror)
+            raise PrinceUnavailable(f"Local PDF generation failed: {exc}") from exc
         except subprocess.SubprocessError as exc:
             raise PrinceError(f"Local PDF generation failed: {exc}") from exc
         logger.info("Local PDF generation complete.")
