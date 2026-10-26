@@ -49,9 +49,12 @@ def wait_for_snapshot(page, season):
     """
     Wait until the day page has been brought up to date by its event stream.
 
-    The stream's first push re-renders the lists, wiping a score typed before
-    it lands. Pages cannot tell when that is, so publish an event and wait for
-    it to show in the activity feed: the push carrying it follows the snapshot.
+    The stream's first push, the snapshot, re-renders the lists. It keeps a
+    score being typed and leaves alone the rows a person is working in, so it
+    discards nothing; a test waits for it to act on a page that is up to date,
+    or to see what the snapshot did. Pages cannot tell when that is, so
+    publish an event and wait for it to show in the activity feed: the push
+    carrying it follows the snapshot.
     """
     expect(page.locator(".sse")).not_to_have_class("down")
     events.publish(
@@ -536,10 +539,10 @@ def test_a_single_score_is_refused_in_its_row(
     """
     A result with one score is refused, and its row says why.
 
-    The page can finish loading before its event stream sends the first
-    push, which re-renders the results with unbound forms and so removes the
-    error of a refusal shown before it. A person cannot save that fast, but
-    the test can, so it waits for the stream to catch up before it types.
+    The test waits for the event stream's first push before it types, so the
+    refusal is made on a page that is up to date, as a person makes it.
+    test_a_refusal_keeps_its_error_when_the_snapshot_lands_after_it covers
+    the push landing after the refusal.
     """
     compops_page.goto(asgi_live_server.url + tournament["day_path"])
     wait_for_snapshot(compops_page, tournament["season"])

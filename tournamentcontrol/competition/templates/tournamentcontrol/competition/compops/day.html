@@ -33,9 +33,18 @@
 </div>
 {% endpartialdef %}
 	<div class="rows" data-show="$slot_{{ slot.key }}">
+		{% comment %}
+		A row the person is working in, an open Edit or a refused save, is held.
+		Datastar's morph leaves an element as it is only when the page's and the
+		patch's both carry data-ignore-morph, so a re-render of the whole list
+		(keep_held) marks every row: it passes over the held rows and updates the
+		rest, and data-preserve-attr keeps the mark off the rows it updates. A
+		held row is sent in replace mode: a morph would not carry its mark onto
+		the page, and would pass over a row the page holds already.
+		{% endcomment %}
 		{% for match in slot.matches %}
 			{% with form=match.compops_form editable=match.compops_editable entered=match.compops_entered editing=match.compops_editing %}{% partialdef match_row inline %}
-<div id="match-{{ match.pk }}" class="row{% if not editable %} readonly{% endif %}">
+<div id="match-{{ match.pk }}" class="row{% if not editable %} readonly{% endif %}"{% if keep_held or editing or form.errors %} data-ignore-morph data-preserve-attr="data-ignore-morph"{% endif %}>
 	<div class="g"><b>{{ match.play_at.title|default:"—" }}</b><span>{{ match.stage.division.title }}{% if match.stage_group %} · {{ match.stage_group.title }}{% endif %}</span></div>
 	{% if editable and form %}
 		<form class="s" method="post" action="{% compops_url 'match-result' match_pk=match.pk %}" data-on:submit="@post('{% compops_url 'match-result' match_pk=match.pk %}', {contentType: 'form'})">

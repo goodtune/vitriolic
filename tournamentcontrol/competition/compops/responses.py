@@ -11,13 +11,14 @@ from django.http import HttpResponse
 from django.shortcuts import redirect
 
 
-def fragment_response(request, html):
+def fragment_response(request, html, mode=None):
+    """``html`` as it is, or as a Datastar patch in ``mode`` (default a morph)."""
     if request.datastar:
-        return DatastarResponse(SSE.patch_elements(html))
+        return DatastarResponse(SSE.patch_elements(html, mode=mode))
     return HttpResponse(html)
 
 
-def patches(request, fragments, signals=None, redirect_to="", page=None):
+def patches(request, fragments, signals=None, redirect_to="", page=None, mode=None):
     """
     Answer a change either as Datastar patches or, for a plain browser, with
     a redirect to ``redirect_to``.
@@ -25,7 +26,8 @@ def patches(request, fragments, signals=None, redirect_to="", page=None):
     A refusal the user must read cannot be redirected away from, so the view
     passes ``page``: a callable returning the full page (status 200) to send
     a plain browser instead. ``fragments`` may also be a callable, so a plain
-    browser's request does not render what only Datastar would use.
+    browser's request does not render what only Datastar would use. ``mode``
+    is the Datastar patch mode of every fragment; the default morphs them.
     """
     if not request.datastar:
         if page is not None:
@@ -33,7 +35,7 @@ def patches(request, fragments, signals=None, redirect_to="", page=None):
         return redirect(redirect_to)
     if callable(fragments):
         fragments = fragments()
-    events = [SSE.patch_elements(html) for html in fragments]
+    events = [SSE.patch_elements(html, mode=mode) for html in fragments]
     if signals:
         events.append(SSE.patch_signals(signals))
     return DatastarResponse(events)

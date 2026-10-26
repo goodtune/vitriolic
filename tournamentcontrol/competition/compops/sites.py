@@ -12,6 +12,7 @@ import logging
 from functools import wraps
 
 import django
+from datastar_py.consts import ElementPatchMode
 from django import forms
 from django.apps import apps
 from django.conf import settings
@@ -286,11 +287,15 @@ class CompOpsSite(Application):
 
     # --- context ----------------------------------------------------
 
-    def day_context(self, request, season, day, bound_forms=None, stream_errors=()):
+    def day_context(
+        self, request, season, day, bound_forms=None, stream_errors=(), keep_held=False
+    ):
         """
         The context for the day page and its fragments. ``bound_forms`` maps
         a match's pk to a submitted result form to show in place of its own,
         with its errors; ``stream_errors`` are the messages for the streams.
+        ``keep_held`` is for a patch of the whole list, which must leave the
+        rows the person holds as they are (see ``match_row`` in day.html).
         """
         bound_forms = bound_forms or {}
         now = timezone.now()
@@ -333,6 +338,7 @@ class CompOpsSite(Application):
             "collapsed": request.session.get("compops_collapsed", False),
             "can_stream": can_stream(request.user, season),
             "can_statistics": can_enter_statistics(request.user),
+            "keep_held": keep_held,
             "user": request.user,
         }
 
@@ -358,8 +364,12 @@ class CompOpsSite(Application):
         return current_slot, next_slot
 
     def snapshot_fragments(self, request, season, day):
-        """Everything the day page shows that can change, freshly rendered."""
-        context = self.day_context(request, season, day)
+        """
+        Everything the day page shows that can change, freshly rendered. The
+        stream sends it on every reconnect, so it leaves the rows the person
+        holds, an open Edit or a refused save, as they are.
+        """
+        context = self.day_context(request, season, day, keep_held=True)
         fragments = [
             render_fragment(request, name, **context)
             for name in ("results", "scorers", "streams", "activity")
@@ -470,7 +480,7 @@ class CompOpsSite(Application):
         request.session["compops_collapsed"] = not request.session.get(
             "compops_collapsed", False
         )
-        context = self.day_context(request, season, day)
+        context = self.day_context(request, season, day, keep_held=True)
         return patches(
             request,
             [render_fragment(request, "main", **context)],
@@ -538,7 +548,8 @@ class CompOpsSite(Application):
             editing=True,
             **self._row_context(request, season, day, match, form),
         )
-        return fragment_response(request, html)
+        # A held row is sent whole; see match_row in day.html.
+        return fragment_response(request, html, mode=ElementPatchMode.REPLACE)
 
     @staff_required
     @season_view
@@ -568,6 +579,7 @@ class CompOpsSite(Application):
                 self.slot_patches(request, season, day, match),
                 redirect_to=redirect_to,
             )
+        # A held row is sent whole; see match_row in day.html.
         return patches(
             request,
             lambda: [
@@ -582,6 +594,7 @@ class CompOpsSite(Application):
             page=lambda: self.day_page(
                 request, season, day, bound_forms={match.pk: form}
             ),
+            mode=ElementPatchMode.REPLACE,
         )
 
     # --- scorers ----------------------------------------------------
