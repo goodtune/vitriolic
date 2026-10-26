@@ -1165,7 +1165,7 @@ class UndecidedTeamForm(UserMixin, ModelForm):
 
     def clean_formula(self):
         formula = self.cleaned_data.get("formula").upper()
-        if formula and not stage_group_position_re.match(formula):
+        if formula and not stage_group_position_re.fullmatch(formula):
             raise forms.ValidationError(_("This is not a valid team formula."))
         error = zero_position_error(formula) or first_stage_position_error(
             self.instance.stage, formula

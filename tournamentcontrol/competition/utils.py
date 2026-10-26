@@ -682,7 +682,7 @@ def first_stage_position_message(stage_title, formula):
     comes before it. This is for a stage that is first by construction, such
     as the first stage of a ``DivisionStructure`` still to be built.
     """
-    match = stage_group_position_re.match(formula)
+    match = stage_group_position_re.fullmatch(formula)
     if match is None or match["stage"] is not None:
         return None
     return _(
@@ -717,7 +717,7 @@ def zero_position_error(formula):
     counts them. A formula the pattern does not read is not this rule's to
     refuse.
     """
-    match = stage_group_position_re.match(formula)
+    match = stage_group_position_re.fullmatch(formula)
     if match is None or 0 not in [int(n) for n in match.groups() if n is not None]:
         return None
     return _("%(formula)s: stage, pool and position numbers start at 1.") % {
