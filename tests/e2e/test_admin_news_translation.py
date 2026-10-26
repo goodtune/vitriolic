@@ -20,8 +20,12 @@ from touchtechnology.news.tests.factories import ArticleFactory, TranslationFact
 
 MODES = [pytest.param(False, id="plain"), pytest.param(True, id="htmx")]
 
-#: The row a list shows when it has nothing to list.
+#: The row a list shows when it has nothing to list, and what it says.
 EMPTY_ROW = by_shell(workbook="tr.wb-table-empty", explorer="td.empty-state")
+EMPTY_ROW_TEXT = by_shell(
+    workbook="No translations yet. Add the first translation",
+    explorer="No translations yet. Add the first translation.",
+)
 
 
 @pytest.fixture
@@ -49,8 +53,8 @@ def test_deleting_a_translation_from_the_translations_tab(
     Expected behaviour:
     - The dialog names the translation
     - Confirming deletes the translation and lands on the article's edit page
-    - The Translations tab of that page says there are none, and the
-      translation's row is gone
+    - The Translations tab of that page says there are none ("No translations
+      yet.", in the plural in both shells), and the translation's row is gone
 
     Runs traditionally (every tab in the page) and with
     ``TOUCHTECHNOLOGY_HTMX_ADMIN_TABS`` (the tab fetched when first shown).
@@ -85,5 +89,6 @@ def test_deleting_a_translation_from_the_translations_tab(
     expect(pane).not_to_contain_text(EMPTY_TAB)
     expect(pane.locator("tbody tr", has_text=translation.headline)).to_have_count(0)
     expect(pane.locator(EMPTY_ROW)).to_have_count(1)
+    expect(pane.locator(EMPTY_ROW)).to_have_text(EMPTY_ROW_TEXT)
     mode = "htmx" if htmx else "plain"
     page.screenshot(path=screenshot_dir / f"delete_translation_{mode}.png")

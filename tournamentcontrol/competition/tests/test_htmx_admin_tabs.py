@@ -1,10 +1,17 @@
+import datetime
+import uuid
+from unittest.mock import patch
+
+import cloudinary
 from django.test import override_settings
 from django.urls import reverse
 from test_plus import TestCase
 
 from touchtechnology.admin.sites import site
-from touchtechnology.admin.tests.shells import by_shell
-from touchtechnology.common.tests.factories import UserFactory
+from touchtechnology.admin.tests.lists import unordered_pages_fail
+from touchtechnology.admin.tests.shells import by_shell, per_shell
+from touchtechnology.common.tests.factories import SuperUserFactory, UserFactory
+from tournamentcontrol.competition.models import MatchScoreSheet
 from tournamentcontrol.competition.tests import factories
 
 
@@ -364,3 +371,90 @@ class HtmxTabAddLinkTests(TestCase):
                 type_name="division",
             ),
         )
+
+
+@per_shell
+@override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
+class HtmxTabOrderTests(TestCase):
+    """
+    A tab fetched on its own shows a page of its objects at a time, so it lists
+    them in a settled order.
+    """
+
+    user_factory = SuperUserFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = cls.make_user("superuser")
+
+    def get_tab(self, obj, tab):
+        edit = obj.url_names["edit"]
+        with unordered_pages_fail(), self.login(self.superuser):
+            self.get(
+                edit.url_name,
+                *edit.args,
+                data={"_htmx_tab": tab},
+                extra={"HTTP_HX_REQUEST": "true"},
+            )
+        self.assert_http_200_ok()
+
+    def test_a_season_lists_its_time_slots_by_first_kick_off(self):
+        season = factories.SeasonFactory.create()
+        evening = factories.SeasonMatchTimeFactory.create(
+            season=season, start=datetime.time(18), interval=40, count=3
+        )
+        morning = factories.SeasonMatchTimeFactory.create(
+            season=season, start=datetime.time(9), interval=30, count=4
+        )
+        midday = factories.SeasonMatchTimeFactory.create(
+            season=season, start=datetime.time(12, 30), interval=30, count=2
+        )
+        self.get_tab(season, "timeslots")
+        self.assertEqual(
+            list(self.get_context("object_list")), [morning, midday, evening]
+        )
+
+    def test_a_division_lists_its_exclusion_dates_by_date(self):
+        division = factories.DivisionFactory.create()
+        queens_birthday = factories.DivisionExclusionDateFactory.create(
+            division=division, date=datetime.date(2026, 6, 8)
+        )
+        anzac_day = factories.DivisionExclusionDateFactory.create(
+            division=division, date=datetime.date(2026, 4, 25)
+        )
+        labour_day = factories.DivisionExclusionDateFactory.create(
+            division=division, date=datetime.date(2026, 5, 4)
+        )
+        self.get_tab(division, "exclusions")
+        self.assertEqual(
+            list(self.get_context("object_list")),
+            [anzac_day, labour_day, queens_birthday],
+        )
+
+    def test_a_match_lists_its_ladder_entries_home_team_first(self):
+        # A result gives the match a ladder entry for each team, home first.
+        match = factories.MatchFactory.create(home_team_score=4, away_team_score=2)
+        home = match.ladder_entries.get(team=match.home_team)
+        away = match.ladder_entries.get(team=match.away_team)
+        self.get_tab(match, "ladder_entries")
+        self.assertEqual(list(self.get_context("object_list")), [home, away])
+
+    @patch.multiple(
+        cloudinary.config(),
+        create=True,
+        cloud_name="test",
+        api_key="test",
+        api_secret="test",
+    )
+    def test_a_match_lists_its_score_sheets_by_key(self):
+        # A score sheet records nothing a person would order it by, such as when
+        # it was uploaded; it is listed by its key, which settles the order.
+        match = factories.MatchFactory.create()
+        second = MatchScoreSheet.objects.create(
+            uuid=uuid.UUID(int=2), match=match, image="harness/second"
+        )
+        first = MatchScoreSheet.objects.create(
+            uuid=uuid.UUID(int=1), match=match, image="harness/first"
+        )
+        self.get_tab(match, "scoresheets")
+        self.assertEqual(list(self.get_context("object_list")), [first, second])

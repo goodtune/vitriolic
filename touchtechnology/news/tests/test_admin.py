@@ -7,9 +7,15 @@ from django.contrib.auth.models import Permission
 from django.test.utils import override_settings
 from test_plus import TestCase
 
-from touchtechnology.common.tests.factories import UserFactory
+from touchtechnology.admin.tests.lists import unordered_pages_fail
+from touchtechnology.admin.tests.shells import per_shell
+from touchtechnology.common.tests.factories import SuperUserFactory, UserFactory
 from touchtechnology.news.models import Article
-from touchtechnology.news.tests.factories import ArticleFactory, TranslationFactory
+from touchtechnology.news.tests.factories import (
+    ArticleFactory,
+    CategoryFactory,
+    TranslationFactory,
+)
 
 TEST_DIR = os.path.join(os.path.dirname(__file__), "html")
 
@@ -125,3 +131,74 @@ class TranslationAdminTests(TestCase):
             self.post("admin:news:article:translation:delete", **self.kwargs)
         self.assert_http_403_forbidden()
         self.assertTranslationKept()
+
+
+@per_shell
+@override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
+class TranslationsTabTests(TestCase):
+    """
+    An article's Translations tab, fetched on its own as the page fetches it
+    when the tab is first shown: a page of the article's translations.
+    """
+
+    user_factory = SuperUserFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = cls.make_user("superuser")
+        cls.article = ArticleFactory.create()
+
+    def get_tab(self):
+        with self.login(self.superuser):
+            self.get(
+                "admin:news:article:edit",
+                pk=self.article.pk,
+                data={"_htmx_tab": "translations"},
+                extra={"HTTP_HX_REQUEST": "true"},
+            )
+        self.assert_http_200_ok()
+
+    def test_the_tab_lists_the_translations_by_locale(self):
+        french = TranslationFactory.create(article=self.article, locale="fr")
+        german = TranslationFactory.create(article=self.article, locale="de")
+        italian = TranslationFactory.create(article=self.article, locale="it")
+        with unordered_pages_fail():
+            self.get_tab()
+        self.assertEqual(
+            list(self.get_context("object_list")), [german, french, italian]
+        )
+
+    def test_an_article_with_no_translations_says_so(self):
+        self.get_tab()
+        add = self.reverse("admin:news:article:translation:add", pk=self.article.pk)
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=(
+                    '<tr class="wb-table-empty"><td colspan="3">'
+                    f'No translations yet. <a href="{add}">Add the first translation</a>'
+                    "</td></tr>"
+                ),
+                explorer=(
+                    '<tr><td colspan="3" class="empty-state">'
+                    f'No translations yet. <a href="{add}">Add the first translation</a>.'
+                    "</td></tr>"
+                ),
+            )
+        )
+
+
+@per_shell
+class CategoryListTests(TestCase):
+    """The list of categories, shown a page at a time."""
+
+    user_factory = SuperUserFactory
+
+    def test_the_categories_are_listed_by_title(self):
+        superuser = self.make_user("superuser")
+        sport = CategoryFactory.create(title="Sport")
+        club = CategoryFactory.create(title="Club news")
+        events = CategoryFactory.create(title="Events")
+        with unordered_pages_fail(), self.login(superuser):
+            self.get("admin:news:category:list")
+        self.assert_http_200_ok()
+        self.assertEqual(list(self.get_context("object_list")), [club, events, sport])

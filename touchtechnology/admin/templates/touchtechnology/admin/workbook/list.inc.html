@@ -104,7 +104,7 @@
 				<tr class="wb-table-empty">
 					<td colspan="{% block empty-row-colspan %}2{% endblock %}">
 						{% if create_link %}
-							{% blocktrans %}No {{ type }} yet.{% endblocktrans %} <a href="{{ create_link }}">{% blocktrans %}Add the first {{ type }}{% endblocktrans %}</a>
+							{% blocktrans with types=model|types %}No {{ types }} yet.{% endblocktrans %} <a href="{{ create_link }}">{% blocktrans %}Add the first {{ type }}{% endblocktrans %}</a>
 						{% else %}
 							{% blocktrans with types=model|types %}There are no {{ types }}.{% endblocktrans %}
 						{% endif %}
