@@ -11,8 +11,11 @@ changing the forms the admin site renders.
 from django import forms
 
 from tournamentcontrol.competition.forms import MatchEditForm, MatchStreamForm
-from tournamentcontrol.competition.models import Match, SeasonMatchTime, Stage
-from tournamentcontrol.competition.utils import stage_group_position_re
+from tournamentcontrol.competition.models import Match, SeasonMatchTime
+from tournamentcontrol.competition.utils import (
+    first_stage_position_error,
+    stage_group_position_re,
+)
 
 EVAL_FIELDS = (
     "home_team_eval",
@@ -46,16 +49,14 @@ def position_eval_error(stage, team_eval):
     stage_number, group_number, position = syntax.groups()
     if "0" in (stage_number, group_number, position):
         return f"{team_eval}: stage, pool and position numbers start at 1."
+    # The rule the admin site's forms apply too.
+    error = first_stage_position_error(stage, team_eval)
+    if error:
+        return error
     # Resolved as ``utils.stage_group_position`` resolves it when the
     # match is evaluated.
     if stage_number is None:
-        try:
-            ref_stage = stage.comes_after
-        except Stage.DoesNotExist:
-            return (
-                f"{team_eval} refers to the stage before this one, but "
-                f"{stage.title} is the first stage of the division."
-            )
+        ref_stage = stage.comes_after
     else:
         stages = list(stage.division.stages.all())
         if int(stage_number) > len(stages):
