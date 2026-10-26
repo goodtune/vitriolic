@@ -25,24 +25,28 @@
 					</tr>
 				</thead>
 				<tbody>
-					{% for match in object_list.playable %}
-						<tr{% ifchanged match.datetime %} class="set-head"{% endifchanged %}>
-							<th>{% ifchanged match.datetime %}{{ match.datetime|time }}{% endifchanged %}</th>
-							<td>{{ match.stage.division.short_title|default:match.stage.division.title|htmlentities }}</td>
-							<td>{{ match.play_at.title|htmlentities }}</td>
-							<td class="team">{{ match.get_home_team.title|htmlentities }}{% if match.home_team_score is not None %} <strong>{{ match.home_team_score }}</strong>{% endif %}</td>
-							<td class="team">{{ match.get_away_team.title|htmlentities }}{% if match.away_team_score is not None %} <strong>{{ match.away_team_score }}</strong>{% endif %}</td>
-							<td>{% for ref in match.referees.all %}{{ ref.person.first_name.0 }} {{ ref.person.last_name }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
-							<td class="nowrap">
-								{% if match.statistics_ready %}<a href="{% url 'admin:fixja:competition:season:division:stage:match:detail' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}">{% trans "Statistics" %}</a> &middot;{% endif %}
-								<a href="{% url 'admin:fixja:competition:season:division:stage:match:referees' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">{% trans "Referees" %}</a>
-								{% if match.videos %}&middot; <a href="{{ match.videos|first }}">{% trans "Video" %}</a>{% endif %}
-								{% if match.live_stream and match.external_identifier %}&middot; <a href="{% url 'admin:fixja:competition:season:division:stage:match:resync-live-stream' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">{% trans "Resync" %}</a>{% endif %}
-							</td>
-						</tr>
-					{% empty %}
-						<tr><td colspan="7" class="empty">{% trans "No match is played on this day." %}</td></tr>
-					{% endfor %}
+					{% with checker=queryset|permchecker:user %}
+						{% for match in object_list.playable %}
+							<tr{% ifchanged match.datetime %} class="set-head"{% endifchanged %}>
+								<th>{% ifchanged match.datetime %}{{ match.datetime|time }}{% endifchanged %}</th>
+								<td>{{ match.stage.division.short_title|default:match.stage.division.title|htmlentities }}</td>
+								<td>{{ match.play_at.title|htmlentities }}</td>
+								<td class="team">{{ match.get_home_team.title|htmlentities }}{% if match.home_team_score is not None %} <strong>{{ match.home_team_score }}</strong>{% endif %}</td>
+								<td class="team">{{ match.get_away_team.title|htmlentities }}{% if match.away_team_score is not None %} <strong>{{ match.away_team_score }}</strong>{% endif %}</td>
+								<td>{% for ref in match.referees.all %}{{ ref.person.first_name.0 }} {{ ref.person.last_name }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+								<td class="nowrap">
+									{% with object_perms=match|checkperm:checker %}
+										{% if match.statistics_ready and change_perm in object_perms %}<a href="{% url 'admin:fixja:competition:season:division:stage:match:detail' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}">{% trans "Statistics" %}</a> &middot;{% endif %}
+									{% endwith %}
+									<a href="{% url 'admin:fixja:competition:season:division:stage:match:referees' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">{% trans "Referees" %}</a>
+									{% if match.videos %}&middot; <a href="{{ match.videos|first }}">{% trans "Video" %}</a>{% endif %}
+									{% if match.live_stream and match.external_identifier %}&middot; <a href="{% url 'admin:fixja:competition:season:division:stage:match:resync-live-stream' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">{% trans "Resync" %}</a>{% endif %}
+								</td>
+							</tr>
+						{% empty %}
+							<tr><td colspan="7" class="empty">{% trans "No match is played on this day." %}</td></tr>
+						{% endfor %}
+					{% endwith %}
 				</tbody>
 			</table>
 		</div>

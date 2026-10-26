@@ -4376,7 +4376,12 @@ class MatchDetailPermissionTests(MatchRowMixin, TestCase):
         other = self.match(home_team__title="Sharks")
         assign_perm("competition.change_match", self.staff, theirs)
         season = self.stage.division.season
-        with self.login(self.staff):
+        # The sheet asks for the person's permissions on the day's matches
+        # once, not once a row.
+        with (
+            self.login(self.staff),
+            self.assertNumQueries(self.by_shell(workbook=23, explorer=23)),
+        ):
             self.get_check_200(
                 "admin:fixja:match-runsheet",
                 season.competition_id,

@@ -36,7 +36,7 @@
 {% endblock row-buttons-items %}
 
 {% block row-buttons-detail %}
-	{% if obj.statistics_ready %}
+	{% if obj.statistics_ready and change_perm in object_perms %}
 		<a href="{{ obj.urls.detail }}">{% icon "chart" %}{% trans "Statistics" %}</a>
 	{% endif %}
 {% endblock row-buttons-detail %}

@@ -2950,6 +2950,18 @@ class CompetitionAdminComponent(AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def edit_match_detail(self, request, stage, match, extra_context, **kwargs):
+        # The page is not a generic_edit, so make the check it would: the
+        # person may change this match, or every match.
+        has_permission = get_40x_or_None(
+            request,
+            get_perms_for_model(Match, change=True),
+            obj=match,
+            return_403=not request.user.is_anonymous,
+            accept_global_perms=True,
+        )
+        if has_permission is not None:
+            return has_permission
+
         if not match.statistics_ready:
             messages.warning(
                 request,
