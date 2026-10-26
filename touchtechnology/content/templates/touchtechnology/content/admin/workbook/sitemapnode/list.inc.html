@@ -9,7 +9,7 @@
 
 {% block table-columns %}
 	<td class="wb-title-cell">
-		{% if obj.is_leaf_node %}{% icon "file-text" %}{% else %}{% icon "folder" %}{% endif %}
+		{% if obj.content_type.model == "page" %}{% icon "file-text" %}{% elif obj.content_type.model == "placeholder" %}{% icon "puzzle" %}{% else %}{% icon "folder" %}{% endif %}
 		{% if change_perm in object_perms and obj.urls.edit %}<a href="{{ obj.urls.edit }}">{{ obj }}</a>{% else %}<span>{{ obj }}</span>{% endif %}
 	</td>
 	<td data-label="{% trans "Shown" %}">
