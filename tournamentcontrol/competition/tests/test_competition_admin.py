@@ -1181,27 +1181,6 @@ class GoodViewTests(TestCase):
                 "html",
             )
 
-    @override_settings(PRINCE_SERVER="pdf.example.com")
-    def test_registration_form_pdf(self):
-        """
-        The PDF server gets the form's HTML, not the repr of the bytes the
-        rendered form holds (#438), and the view answers with the PDF.
-        """
-        club = factories.ClubFactory.create()
-        team = factories.TeamFactory.create(club=club)
-        season = team.division.season
-        season.competition.clubs.add(club)
-        with self.login(self.superuser), responses.RequestsMock() as pdf_service:
-            pdf_service.post("https://pdf.example.com/", body=b"%PDF-1.4 fake")
-            self.get("admin:fixja:club:registration-form", club.pk, season.pk, "pdf")
-            # The calls are cleared when the mock is stopped.
-            self.assertEqual(
-                pdf_service.calls[0].request.body[:15], b"<!DOCTYPE html>"
-            )
-        self.assert_http_200_ok()
-        self.assertResponseHeaders({"Content-Type": "application/pdf"})
-        self.assertEqual(self.last_response.content, b"%PDF-1.4 fake")
-
     def test_officials(self):
         club = factories.ClubFactory.create()
         season = factories.SeasonFactory.create()
@@ -1313,6 +1292,102 @@ class GoodViewTests(TestCase):
             self.assertGoodView(
                 "admin:fixja:club:team:edit", club.pk, team.division.season.pk, team.pk
             )
+
+
+@per_shell
+class RegistrationFormTests(TestCase):
+    """
+    A club's registration form for a season: a sheet for each of its teams,
+    with the team's staff and players, as HTML or as a PDF.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.club = factories.ClubFactory.create()
+        self.team = factories.TeamFactory.create(club=self.club, title="Marlins")
+        self.season = self.team.division.season
+        self.season.competition.clubs.add(self.club)
+
+    def test_html(self):
+        """
+        The sheet names the team (#464), its staff by their names and not the
+        repr of their bytes (#463), and its players.
+        """
+        coach = factories.TeamAssociationFactory.create(
+            team=self.team,
+            is_player=False,
+            person=factories.PersonFactory.create(
+                club=self.club, user__first_name="Staffy", user__last_name="McStaff"
+            ),
+        )
+        coach.roles.add(
+            factories.TeamRoleFactory.create(
+                competition=self.season.competition, name="Coach"
+            )
+        )
+        factories.TeamAssociationFactory.create(
+            team=self.team,
+            number=7,
+            person=factories.PersonFactory.create(
+                club=self.club,
+                user__first_name="Playa",
+                user__last_name="McPlay",
+                date_of_birth=date(2002, 12, 25),
+                email="playa@example.com",
+            ),
+        )
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:club:registration-form",
+                self.club.pk,
+                self.season.pk,
+                "html",
+            )
+        self.assert_http_200_ok()
+        self.assertResponseContains(
+            self.by_shell(
+                workbook='<div class="rf-team team">Marlins</div>',
+                explorer="<h2>Marlins</h2>",
+            )
+        )
+        self.assertResponseContains(
+            '<tr><th rowspan="1">Coach</th><td>Staffy McStaff</td></tr>'
+        )
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=(
+                    "<tr><td>7</td><td>Playa</td><td>McPlay</td><td>25/12/2002</td>"
+                    '<td>playa@example.com</td><td class="signature"></td></tr>'
+                ),
+                explorer=(
+                    '<tr><td class="num">7</td><td>Playa</td><td>McPlay</td>'
+                    "<td>25/12/2002</td><td>playa@example.com</td>"
+                    '<td class="signature"></td></tr>'
+                ),
+            )
+        )
+
+    @override_settings(PRINCE_SERVER="pdf.example.com")
+    def test_pdf(self):
+        """
+        The PDF server gets the form's HTML, not the repr of the bytes the
+        rendered form holds (#438), and the view answers with the PDF.
+        """
+        with self.login(self.superuser), responses.RequestsMock() as pdf_service:
+            pdf_service.post("https://pdf.example.com/", body=b"%PDF-1.4 fake")
+            self.get(
+                "admin:fixja:club:registration-form",
+                self.club.pk,
+                self.season.pk,
+                "pdf",
+            )
+            # The calls are cleared when the mock is stopped.
+            self.assertEqual(
+                pdf_service.calls[0].request.body[:15], b"<!DOCTYPE html>"
+            )
+        self.assert_http_200_ok()
+        self.assertResponseHeaders({"Content-Type": "application/pdf"})
+        self.assertEqual(self.last_response.content, b"%PDF-1.4 fake")
 
 
 class BackendTests(MessagesTestMixin, TestCase):
