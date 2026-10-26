@@ -4202,8 +4202,8 @@ class CompetitionAdminComponent(AdminComponent):
                         "staff", collections.OrderedDict()
                     ).setdefault(role.name, set()).add(
                         (
-                            pa.person.first_name.encode("utf-8").strip(),
-                            pa.person.last_name.encode("utf-8").strip(),
+                            pa.person.first_name.strip(),
+                            pa.person.last_name.strip(),
                             pa.person.date_of_birth,
                             pa.person.email,
                         )
