@@ -317,6 +317,15 @@ The bases are now `MakeDirectoryMixin`, `WalkMixin` and Django's
 `FileSystemStorage`. A project that keeps its media per tenant should mix
 `TenantStorageMixin` into its own storage class.
 
+## The storage no longer has `mkdir` or `rmdir`
+
+`MakeDirectoryMixin` keeps `makedirs`, but its `mkdir` and `rmdir` are gone.
+The media admin makes and removes folders on any `FileSystemStorage` through
+Django's own API, so it no longer called them. A storage that is not a file
+system can still define `mkdir(name, path=None)` and `rmdir(path)`: the media
+admin calls them when they are there, and says the storage cannot make or
+remove folders when they are not.
+
 ## Three method decorators are gone
 
 `touchtechnology.common.decorators` no longer has `cache_control_m`,

@@ -3,7 +3,7 @@ from django.utils.encoding import smart_str
 from django.utils.translation import gettext_lazy as _
 
 
-class BootstrapFormControlMixin(object):
+class BootstrapFormControlMixin:
     """
     Twitter bootstrap is the most widely used user-interface framework. Many
     designers will have experience with it, and there are numerous off-shelf
@@ -17,7 +17,7 @@ class BootstrapFormControlMixin(object):
     control_class = "form-control"
 
     def __init__(self, *args, **kwargs):
-        super(BootstrapFormControlMixin, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         for field_name in getattr(self, "fields", ()):
             field = self.fields[field_name]
 
@@ -41,7 +41,7 @@ class UserMixin(BootstrapFormControlMixin):
 
     def __init__(self, user=None, *args, **kwargs):
         self.user = user
-        super(UserMixin, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
 
 class SuperUserSlugMixin(UserMixin):
@@ -54,7 +54,7 @@ class SuperUserSlugMixin(UserMixin):
     """
 
     def __init__(self, *args, **kwargs):
-        super(SuperUserSlugMixin, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if self.user is None or not self.user.is_superuser:
             self.fields.pop("slug", None)
             self.fields.pop("slug_locked", None)
@@ -67,9 +67,9 @@ class SuperUserSlugMixin(UserMixin):
             )
 
 
-class LabelFromInstanceMixin(object):
+class LabelFromInstanceMixin:
     def __init__(self, label_from_instance="name", *args, **kwargs):
-        super(LabelFromInstanceMixin, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._label_from_instance = label_from_instance
 
     def label_from_instance(self, obj):
@@ -87,9 +87,9 @@ class LabelFromInstanceMixin(object):
         return smart_str(value)
 
 
-class PermissionFormSetMixin(object):
+class PermissionFormSetMixin:
     def __init__(self, instance, queryset, *args, **kwargs):
-        super(PermissionFormSetMixin, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.instance = instance
         self.queryset = queryset
 
@@ -97,7 +97,7 @@ class PermissionFormSetMixin(object):
         return self.queryset.count()
 
     def _construct_form(self, i, **kwargs):
-        return super(PermissionFormSetMixin, self)._construct_form(
+        return super()._construct_form(
             i, instance=self.instance, permission=self.queryset[i]
         )
 
