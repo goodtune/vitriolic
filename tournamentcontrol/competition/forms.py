@@ -1677,6 +1677,8 @@ class DrawGenerationMatchFormSet(BaseDrawGenerationMatchFormSet):
     def _construct_form(self, i, **kwargs):
         if i < self.initial_form_count() and not kwargs.get("instance"):
             kwargs["instance"] = self.get_queryset()[i]
+        # Skip BaseModelFormSet._construct_form: it rebinds instances by the
+        # posted pk and requires that pk; ours are taken by position instead.
         return super(BaseModelFormSet, self)._construct_form(i, **kwargs)
 
     def add_fields(self, form, index):
@@ -2552,6 +2554,8 @@ class MatchStatisticFormset(BaseMatchStatisticFormset):
     def _construct_form(self, i, **kwargs):
         if i < self.initial_form_count() and not kwargs.get("instance"):
             kwargs["instance"] = self.get_queryset()[i]
+        # Skip BaseModelFormSet._construct_form: it rebinds instances by the
+        # posted pk and requires that pk; ours are taken by position instead.
         return super(BaseModelFormSet, self)._construct_form(i, **kwargs)
 
     def clean(self):

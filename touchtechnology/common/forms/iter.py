@@ -1,7 +1,7 @@
 import os.path
 
 
-class TemplateChoiceIterator(object):
+class TemplateChoiceIterator:
     def __init__(self, field):
         self.field = field
 

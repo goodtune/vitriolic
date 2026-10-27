@@ -21,7 +21,7 @@ class BooleanField(models.BooleanField):
             "form_class": fields.BooleanChoiceField,
         }
         defaults.update(kwargs)
-        return super(BooleanField, self).formfield(**defaults)
+        return super().formfield(**defaults)
 
 
 class DateField(models.DateField): ...
@@ -35,17 +35,17 @@ class EmailField(models.EmailField):
     """
 
     def __init__(self, max_length=254, lowercase=True, *args, **kwargs):
-        super(EmailField, self).__init__(max_length=max_length, *args, **kwargs)
+        super().__init__(max_length=max_length, *args, **kwargs)
         self.lowercase = lowercase
 
     def clean(self, value, model_instance):
-        value = super(EmailField, self).clean(value, model_instance)
+        value = super().clean(value, model_instance)
         if self.lowercase:
             value = value.lower()
         return value
 
     def formfield(self, form_class=EmailFormField, **kwargs):
-        return super(EmailField, self).formfield(
+        return super().formfield(
             form_class=form_class, lowercase=self.lowercase, **kwargs
         )
 
@@ -60,7 +60,7 @@ class DateTimeField(models.DateTimeField):
 
 class LocationField(models.CharField):
     def formfield(self, form_class=GoogleMapsField, **kwargs):
-        return super(LocationField, self).formfield(form_class=form_class, **kwargs)
+        return super().formfield(form_class=form_class, **kwargs)
 
 
 class HTMLField(models.TextField):
@@ -72,19 +72,17 @@ class HTMLField(models.TextField):
     def formfield(
         self, form_class=HTMLFormField, widget=HTMLFormField.widget, **kwargs
     ):
-        return super(HTMLField, self).formfield(
-            form_class=form_class, widget=widget, **kwargs
-        )
+        return super().formfield(form_class=form_class, widget=widget, **kwargs)
 
 
 class ForeignKey(models.ForeignKey):
     def __init__(self, to, label_from_instance="name", *args, **kwargs):
-        super(ForeignKey, self).__init__(to, *args, **kwargs)
+        super().__init__(to, *args, **kwargs)
         self.label_from_instance = label_from_instance
 
     def formfield(self, form_class=ModelChoiceField, **kwargs):
         kwargs.setdefault("label_from_instance", self.label_from_instance)
-        return super(ForeignKey, self).formfield(form_class=form_class, **kwargs)
+        return super().formfield(form_class=form_class, **kwargs)
 
 
 class ManyToManyField(models.ManyToManyField):
@@ -99,12 +97,12 @@ class ManyToManyField(models.ManyToManyField):
         Custom `__init__` because I don't want the 'Hold down "Control"...'
         message since I'm using the `CheckboxSelectMultiple` widget.
         """
-        super(ManyToManyField, self).__init__(to, *args, **kwargs)
+        super().__init__(to, *args, **kwargs)
         self.label_from_instance = label_from_instance
 
     def formfield(self, form_class=ModelMultipleChoiceField, **kwargs):
         kwargs.setdefault("label_from_instance", self.label_from_instance)
-        return super(ManyToManyField, self).formfield(form_class=form_class, **kwargs)
+        return super().formfield(form_class=form_class, **kwargs)
 
 
 class NodeOneToOneField(models.OneToOneField):
@@ -115,7 +113,7 @@ class NodeOneToOneField(models.OneToOneField):
     """
 
     def formfield(self, form_class=SitemapNodeModelChoiceField, **kwargs):
-        return super(NodeOneToOneField, self).formfield(form_class=form_class, **kwargs)
+        return super().formfield(form_class=form_class, **kwargs)
 
 
 class NodeForeignKey(models.ForeignKey):
@@ -126,7 +124,7 @@ class NodeForeignKey(models.ForeignKey):
     """
 
     def formfield(self, form_class=SitemapNodeModelChoiceField, **kwargs):
-        return super(NodeForeignKey, self).formfield(form_class=form_class, **kwargs)
+        return super().formfield(form_class=form_class, **kwargs)
 
 
 class TemplatePathField(models.CharField):
@@ -152,7 +150,7 @@ class TemplatePathField(models.CharField):
         self.template_folder = template_folder
         self.match = match
         self.recursive = recursive
-        super(TemplatePathField, self).__init__(verbose_name, name, **kwargs)
+        super().__init__(verbose_name, name, **kwargs)
 
     def formfield(self, **kwargs):
         defaults = {
@@ -163,7 +161,7 @@ class TemplatePathField(models.CharField):
             "form_class": TemplatePathFormField,
         }
         defaults.update(kwargs)
-        return super(TemplatePathField, self).formfield(**defaults)
+        return super().formfield(**defaults)
 
     def get_internal_type(self):
         return "FilePathField"
@@ -178,10 +176,10 @@ class UUIDField(models.CharField):
             # Do not let the user edit UUIDs if they are auto assigned
             kwargs["editable"] = False
             kwargs["blank"] = True
-        super(UUIDField, self).__init__(verbose_name, name, **kwargs)
+        super().__init__(verbose_name, name, **kwargs)
 
     def pre_save(self, model_instance, add):
-        value = super(UUIDField, self).pre_save(model_instance, add)
+        value = super().pre_save(model_instance, add)
         if not value and self.auto:
             value = str(uuid.uuid1())
             setattr(model_instance, self.attname, value)

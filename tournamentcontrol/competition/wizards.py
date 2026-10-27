@@ -44,7 +44,7 @@ class SeasonForm(forms.Form):
     """
 
     def __init__(self, *args, **kwargs):
-        super(SeasonForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         seasons = (
             Season.objects.exclude(complete=True)
@@ -66,7 +66,7 @@ class FilterForm(forms.Form):
     """
 
     def __init__(self, season, *a, **kw):
-        super(FilterForm, self).__init__(*a, **kw)
+        super().__init__(*a, **kw)
 
         # given a Season instance get all the matches which should have a
         # scorecard produced.
@@ -152,7 +152,7 @@ class FilterForm(forms.Form):
 
 class ScorecardWizardBase(SessionWizardView):
     def get_context_data(self, form, **kwargs):
-        context = super(ScorecardWizardBase, self).get_context_data(form, **kwargs)
+        context = super().get_context_data(form, **kwargs)
         context.update(self.extra_context)
         return context
 
@@ -250,9 +250,7 @@ class DrawGenerationWizard(SessionWizardView):
         return {}
 
     def get_context_data(self, form, **kwargs):
-        context = super(DrawGenerationWizard, self).get_context_data(
-            form=form, **kwargs
-        )
+        context = super().get_context_data(form=form, **kwargs)
         context.update(self.extra_context)
         context.update(
             {

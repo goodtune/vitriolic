@@ -28,7 +28,7 @@ class EmailAuthenticationForm(BootstrapFormControlMixin, AuthenticationForm):
     username = EmailField(label=_("Email Address"))
 
     def __init__(self, *args, **kwargs):
-        super(EmailAuthenticationForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         for field_name in self.fields:
             self.fields[field_name].widget.attrs["class"] += " text-center"
 
@@ -73,7 +73,7 @@ class PermissionForm(ModelForm):
     max_checkboxes: int = 7  # Set based on number of rows visible in the admin layout
 
     def __init__(self, permission, *args, **kwargs):
-        super(PermissionForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.content_type = ContentType.objects.get_for_model(self.instance)
         self.permission = permission
 
@@ -152,7 +152,7 @@ class PermissionForm(ModelForm):
             for grant in grant_users.union(grant_groups):
                 assign_perm(self.permission.codename, grant, self.instance)
 
-        return super(PermissionForm, self).save(*args, **kwargs)
+        return super().save(*args, **kwargs)
 
 
 def permissionformset_factory(
