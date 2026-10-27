@@ -17,7 +17,8 @@ def at(hour, minute=0):
 
 class DayFixture(TestCase):
     def setUp(self):
-        self.season = factories.SeasonFactory.create(timezone="Australia/Brisbane")
+        super().setUp()
+        self.season =factories.SeasonFactory.create(timezone="Australia/Brisbane")
         self.venue = factories.VenueFactory.create(season=self.season)
         self.field1 = factories.GroundFactory.create(
             venue=self.venue, title="Field 1", live_stream=True
@@ -54,7 +55,7 @@ class DayResultsTests(DayFixture):
     def test_all_complete_opens_nothing(self):
         self.match(8, home_team_score=1, away_team_score=0)
         (slot,) = queries.day_results(self.season, DAY)
-        self.assertFalse(slot.open)
+        self.assertIs(slot.open, False)
 
     def test_unscheduled_matches_land_in_a_trailing_slot(self):
         self.match(8)
@@ -77,8 +78,8 @@ class DayResultsTests(DayFixture):
         )
         slots = queries.day_results(self.season, DAY)
         self.assertEqual([s.key for s in slots], ["0800", "byes"])
-        self.assertTrue(slots[1].is_byes)
-        self.assertFalse(slots[1].open)
+        self.assertIs(slots[1].is_byes, True)
+        self.assertIs(slots[1].open, False)
 
     def test_other_days_and_seasons_excluded(self):
         self.match(8)
@@ -146,9 +147,8 @@ class DayScorersTests(DayFixture):
 
 class DayStreamsTests(DayFixture):
     def test_current_and_next_per_streamed_ground(self):
-        early = self.match(
-            8, ground=self.field1, live_stream=True, external_identifier="a"
-        )
+        # An earlier streamed match that must not be current.
+        self.match(8, ground=self.field1, live_stream=True, external_identifier="a")
         current = self.match(
             9, ground=self.field1, live_stream=True, external_identifier="b"
         )
@@ -159,7 +159,6 @@ class DayStreamsTests(DayFixture):
         self.assertEqual(gs.ground, self.field1)
         self.assertEqual(gs.current, current)
         self.assertEqual(gs.next, following)
-        self.assertNotEqual(gs.current, early)
 
     def test_before_first_match_there_is_no_current(self):
         first = self.match(9, ground=self.field1, live_stream=True)
