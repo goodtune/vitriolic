@@ -375,6 +375,26 @@ class StageGroupPositionTests(TestCase):
         ):
             utils.stage_group_position(stage2, "G0P1")
 
+    def test_stage_group_position_past_the_last_raises_index_error(self):
+        """
+        A stage number past the last stage of the division, or a pool number
+        past the last pool of the stage, names none, as a zero does.
+        """
+        division = DivisionFactory.create()
+        stage1 = StageFactory.create(division=division, order=1)
+        StageGroupFactory.create(stage=stage1)
+        StageGroupFactory.create(stage=stage1)
+        stage2 = StageFactory.create(division=division, order=2)
+
+        with self.assertRaisesRegex(
+            IndexError, r"^Invalid stage 3 for division .* \(division has 2 stages\)$"
+        ):
+            utils.stage_group_position(stage2, "S3P1")
+        with self.assertRaisesRegex(
+            IndexError, r"^Invalid group 5 for stage .* \(stage has 2 pools\)$"
+        ):
+            utils.stage_group_position(stage2, "S1G5P1")
+
     def test_stage_group_position_with_valid_pool_succeeds(self):
         """
         Test that stage_group_position works correctly when the pool exists.
