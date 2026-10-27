@@ -94,6 +94,7 @@ class LocationWidgetTest(TestCase):
 
 class TestPermissionFormSet(TestCase):
     def setUp(self):
+        super().setUp()
         self.UserModel = get_user_model()
         self.queryset = Permission.objects.filter(
             content_type=ContentType.objects.get_for_model(SitemapNode)

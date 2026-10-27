@@ -8,7 +8,8 @@ from touchtechnology.common.tests import factories
 class SitemapNodeTests(TestCase):
 
     def setUp(self):
-        self.object = factories.SitemapNodeFactory.create()
+        super().setUp()
+        self.object =factories.SitemapNodeFactory.create()
 
     def test_string_representation(self):
         self.assertEqual(self.object.title, smart_str(self.object))
@@ -45,7 +46,8 @@ class SitemapNodeAddressTests(TestCase):
     """
 
     def setUp(self):
-        self.home = SitemapNode.objects.create(title="Home", slug="home")
+        super().setUp()
+        self.home =SitemapNode.objects.create(title="Home", slug="home")
         self.press = SitemapNode.objects.create(title="Press", slug="press")
         self.archive = SitemapNode.objects.create(
             title="Archive", slug="archive", parent=self.press
