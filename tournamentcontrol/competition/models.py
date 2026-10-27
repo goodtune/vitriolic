@@ -167,6 +167,11 @@ class OrderedSitemapNode(SitemapNodeBase):
     copy = HTMLField(blank=True)
     order = models.PositiveIntegerField(default=1)
 
+    #: The foreign key whose rows are kept in ``order`` together (a division's
+    #: stages, a stage's pools), or ``None`` where every row of the model is
+    #: in the one list.
+    ordered_within = None
+
     def __repr__(self):
         return f"<{self.__class__.__name__}: {self.title}>"
 
@@ -176,6 +181,65 @@ class OrderedSitemapNode(SitemapNodeBase):
     class Meta:
         abstract = True
         ordering = ("order",)
+
+    @property
+    def siblings(self):
+        """
+        The rows this one is listed with, itself included, in the order they
+        are listed: by ``order``, and by key where two share a value.
+        """
+        queryset = self.__class__._default_manager.order_by("order", "pk")
+        if self.ordered_within is not None:
+            field = self._meta.get_field(self.ordered_within)
+            queryset = queryset.filter(**{field.attname: getattr(self, field.attname)})
+        return queryset
+
+    def _move(self, step):
+        """
+        Swap places with the sibling ``step`` rows along, whatever the two
+        ``order`` values are: they are not kept dense, so a deleted row leaves
+        a gap. Rows that share a value are first numbered 1, 2, 3, ... so that
+        the swap changes something. The first row has nothing above it and the
+        last nothing below; a move past either end changes nothing.
+        """
+        siblings = list(self.siblings)
+        index = siblings.index(self)
+        if not 0 <= index + step < len(siblings):
+            return False
+        siblings[index] = self
+        target = siblings[index + step]
+        with transaction.atomic():
+            if len({node.order for node in siblings}) < len(siblings):
+                # Two passes keep every value distinct along the way, where
+                # the model has a constraint saying so.
+                offset = siblings[-1].order
+                for n, node in enumerate(siblings, 1):
+                    node.order = offset + n
+                    node.save(update_fields=["order"])
+                for n, node in enumerate(siblings, 1):
+                    node.order = n
+                    node.save(update_fields=["order"])
+            # Swap through a value no row has, for the same reason.
+            mine, theirs = self.order, target.order
+            self.order = 0
+            self.save(update_fields=["order"])
+            target.order = mine
+            target.save(update_fields=["order"])
+            self.order = theirs
+            self.save(update_fields=["order"])
+        return True
+
+    def move_up(self):
+        """Swap places with the row above; ``True`` if there was one."""
+        return self._move(-1)
+
+    move_up.alters_data = True
+
+    def move_down(self):
+        """Swap places with the row below; ``True`` if there was one."""
+        return self._move(1)
+
+    move_down.alters_data = True
 
 
 class Competition(AdminUrlMixin, OrderedSitemapNode):
@@ -474,6 +538,8 @@ class Person(AdminUrlMixin, models.Model):
 
 
 class Season(AdminUrlMixin, OrderedSitemapNode):
+    ordered_within = "competition"
+
     competition = ForeignKey(Competition, related_name="seasons", on_delete=PROTECT)
     hashtag = models.CharField(
         max_length=30,
@@ -854,6 +920,8 @@ class Venue(Place):
     on a particular ground.
     """
 
+    ordered_within = "season"
+
     season = ForeignKey(Season, related_name="venues", on_delete=PROTECT)
 
     def get_tzinfo(self):
@@ -872,6 +940,8 @@ class Ground(Place):
     A ground (in some sports it may be a court or field) is an individual
     playing surface at a given venue.
     """
+
+    ordered_within = "venue"
 
     venue = ForeignKey(Venue, related_name="grounds", on_delete=PROTECT)
     live_stream = BooleanField(default=False)
@@ -1009,6 +1079,8 @@ class Division(
     """
     A model that represents a division within a competition.
     """
+
+    ordered_within = "season"
 
     season = ForeignKey(Season, related_name="divisions", on_delete=PROTECT)
 
@@ -1407,6 +1479,8 @@ class Division(
 
 
 class Stage(AdminUrlMixin, OrderedSitemapNode):
+    ordered_within = "division"
+
     division = ForeignKey(
         Division, related_name="stages", label_from_instance="title", on_delete=PROTECT
     )
@@ -1504,6 +1578,12 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
             UniqueConstraint(
                 fields=["slug", "division"],
                 name="competition_stage_unique_slug_division",
+            ),
+            # A formula names a stage by its number in the division's list,
+            # so two stages may not share a value.
+            UniqueConstraint(
+                fields=["division", "order"],
+                name="competition_stage_unique_division_order",
             ),
             CheckConstraint(
                 condition=Q(color__regex=r"^#[0-9a-fA-F]{6}$"),
@@ -1652,6 +1732,8 @@ class StageGroup(AdminUrlMixin, OrderedSitemapNode):
     'pool', but could also be used to represent a combined division.
     """
 
+    ordered_within = "stage"
+
     stage = ForeignKey(Stage, related_name="pools", on_delete=PROTECT)
     carry_ladder = BooleanField(
         default=False,
@@ -1775,6 +1857,7 @@ class Team(AdminUrlMixin, UpstreamMixin, OrderedSitemapNode):
         related_name="teams",
         label_from_instance="title",
     )
+    ordered_within = "division"
     division = ForeignKey(
         Division,
         blank=True,

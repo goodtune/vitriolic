@@ -1376,39 +1376,13 @@ class CompetitionAdminComponent(AdminComponent):
         if has_permission is not None:
             return has_permission
 
-        # Determine the neighbouring order values based on direction
-        if direction == "up":
-            orders = obj.order, obj.order - 1
-        elif direction == "down":
-            orders = obj.order, obj.order + 1
-        else:
+        if direction not in ("up", "down"):
             raise Http404
 
-        # Get our OrderedSitemapNode queryset for the given model
-        queryset = cls.objects.filter(order__in=orders)
-        if parent is not None:
-            queryset = queryset.filter(**{str(parent): getattr(obj, parent)})
-
-        # The first item has nothing above it and the last nothing below it:
-        # a move off either end changes nothing and goes back to the list.
-        if queryset.count() == 2:
-            # Swap the order value of the two neighbours and write to db.
-            # 1) Hang onto the original ordering of a and b
-            a, b = queryset
-            ao, bo = a.order, b.order
-
-            # 2) Set a.order to 0 to allow b.order to assume that value
-            a.order = 0
-            a.save()
-
-            # 3) Assign the new value to b.order
-            b.order = ao
-            b.save()
-
-            # 4) Assign the new value to a.order
-            a.order = bo
-            a.save()
-
+        # The model knows which rows it is listed with and swaps places with
+        # its real neighbour; a move off either end of the list changes
+        # nothing and goes back to the list.
+        if getattr(obj, f"move_{direction}")():
             fmt = _(
                 'The %(model)s "%(title)s" has been reordered %(direction)s the list.'
             )
