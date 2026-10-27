@@ -1635,6 +1635,21 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
     def _get_url_names(self):
         return super()._get_url_names() + ["build", "undo", "progress"]
 
+    @cached_property
+    def _list_select_related(self):
+        # Everything a row of the Matches tab draws: its teams, decided or
+        # not, where it is played, and the stage its links are built from.
+        return {
+            "matches": [
+                "stage__division__season",
+                "home_team",
+                "away_team",
+                "home_team_undecided",
+                "away_team_undecided",
+                "play_at",
+            ],
+        }
+
     def get_color(self):
         """
         Get the stage background color.
