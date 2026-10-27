@@ -227,10 +227,10 @@ class DrawFormatToolTests(DemoMixin, TestCase):
         form = DrawFormatForm(data={"name": "Broken", "text": text, "teams": 4})
         self.assertEqual(
             form.errors["text"],
-            ["Draw formula is invalid: line(s) '2, 4' are not in the correct format."],
+            ["Draw formula is invalid: line(s) '3, 5' are not in the correct format."],
         )
         message = (
-            "Validation failed: text: Draw formula is invalid: line(s) '2, 4' are "
+            "Validation failed: text: Draw formula is invalid: line(s) '3, 5' are "
             "not in the correct format."
         )
         self.assertToolError(message, admin.preview_draw_format, text)
@@ -243,17 +243,17 @@ class DrawFormatToolTests(DemoMixin, TestCase):
             admin.preview_draw_format,
             "   ",
         )
-        # A match must follow a ROUND line.
+        # A match must follow a ROUND line; the first line is line 1 (#565).
         orphan = "1: 1 vs 2\nROUND\n2: 1 vs 3"
         self.assertEqual(
             DrawFormatForm(data={"name": "Orphan", "text": orphan}).errors["text"],
-            ["Draw formula is invalid: line(s) '0' are not in the correct format."],
+            ["Draw formula is invalid: line(s) '1' are not in the correct format."],
         )
         for tool in (admin.preview_draw_format, admin.create_draw_format):
             with self.subTest(tool=tool.__name__):
                 kwargs = {"name": "Orphan"} if tool == admin.create_draw_format else {}
                 self.assertToolError(
-                    "Validation failed: text: Draw formula is invalid: line(s) '0' "
+                    "Validation failed: text: Draw formula is invalid: line(s) '1' "
                     "are not in the correct format.",
                     tool,
                     text=orphan,
@@ -1154,7 +1154,7 @@ class BuildDrawTests(DemoMixin, TestCase):
             (
                 [{"stage_id": stage, "draw_format_text": "ROUND\n1: 1 v 2"}],
                 "build 0: Validation failed: text: Draw formula is invalid: "
-                "line(s) '1' are not in the correct format.",
+                "line(s) '2' are not in the correct format.",
             ),
             (
                 [
