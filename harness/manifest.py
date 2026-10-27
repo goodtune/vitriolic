@@ -125,7 +125,7 @@ class Manifest:
     def read(cls, path: Path) -> "Manifest":
         data = json.loads(Path(path).read_text())
         if not isinstance(data, dict):
-            raise ValueError("%s does not hold a manifest" % path)
+            raise ValueError(f"{path} does not hold a manifest")
         pages = [PageResult(**p) for p in data.pop("pages", [])]
         flow = [StepResult(**s) for s in data.pop("flow", [])]
         return cls(pages=pages, flow=flow, **data)

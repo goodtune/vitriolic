@@ -172,7 +172,7 @@ def unflow(stamp: str) -> Counter:
     is refused, since an empty suffix would match everything.
     """
     if not STAMP.fullmatch(stamp):
-        raise ValueError("a flow stamp is six digits (HHMMSS), not %r" % stamp)
+        raise ValueError(f"a flow stamp is six digits (HHMMSS), not {stamp!r}")
     suffix = " " + stamp
     removed: Counter = Counter()
     with transaction.atomic():
@@ -194,17 +194,15 @@ def main(argv: list[str]) -> int:
         try:
             removed = unflow(stamp)
         except ValueError as exc:
-            print("unflow: %s" % exc, file=sys.stderr)
+            print(f"unflow: {exc}", file=sys.stderr)
             return 64
         # The rows a delete took with it (the links of many-to-many fields)
         # are counted too; only the models are worth a line each.
         counts = ", ".join(
-            "%s %d" % (label.rsplit(".", 1)[-1], count)
+            f"{label.rsplit('.', 1)[-1]} {count}"
             for label, count in sorted(removed.items())
             if count
         )
-        print(
-            "unflow %s: removed %d rows%s"
-            % (stamp, sum(removed.values()), ": " + counts if counts else "")
-        )
+        detail = f": {counts}" if counts else ""
+        print(f"unflow {stamp}: removed {sum(removed.values())} rows{detail}")
     return 0

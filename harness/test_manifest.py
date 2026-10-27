@@ -88,12 +88,12 @@ def test_only_none_selects_no_pages_and_a_wrong_name_is_refused():
 def captured(name, width, tab=0, file=True, errors=()):
     return PageResult(
         name=name,
-        url="/admin/%s/" % name,
+        url=f"/admin/{name}/",
         width=width,
         status=200,
         title="",
         errors=list(errors),
-        file="%s-%d.png" % (name, width) if file else "",
+        file=f"{name}-{width}.png" if file else "",
         tab=tab,
     )
 

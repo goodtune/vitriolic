@@ -195,7 +195,7 @@ def test_format_date_follows_the_field(kind, placeholder, when, expected):
     ],
 )
 def test_date_pattern_finds_the_date_however_it_is_written(shown):
-    assert date_pattern(DAY).search("Closed on %s." % shown)
+    assert date_pattern(DAY).search(f"Closed on {shown}.")
 
 
 @pytest.mark.parametrize(
@@ -222,7 +222,7 @@ def test_date_pattern_knows_the_months_the_admin_abbreviates():
     ],
 )
 def test_time_pattern_finds_the_time_however_it_is_written(when, shown):
-    assert time_pattern(when).search("Starts %s" % shown)
+    assert time_pattern(when).search(f"Starts {shown}")
 
 
 def test_time_pattern_does_not_find_another_time():

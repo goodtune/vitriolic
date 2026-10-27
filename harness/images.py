@@ -51,4 +51,4 @@ def photo(title: str, size: tuple[int, int] = (1200, 800)) -> ContentFile:
 
     buffer = io.BytesIO()
     image.save(buffer, format="JPEG", quality=85)
-    return ContentFile(buffer.getvalue(), name="%s.jpg" % slugify(title))
+    return ContentFile(buffer.getvalue(), name=f"{slugify(title)}.jpg")

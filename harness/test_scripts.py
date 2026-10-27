@@ -52,8 +52,8 @@ def fake_server():
         [
             "bash",
             "-c",
-            "(exec -a 'python manage.py runserver 127.0.0.1:%d --noreload' sleep 60) "
-            ">/dev/null 2>&1 </dev/null & echo $!" % PORT,
+            f"(exec -a 'python manage.py runserver 127.0.0.1:{PORT} --noreload' sleep 60) "
+            ">/dev/null 2>&1 </dev/null & echo $!",
         ],
         capture_output=True,
         text=True,
@@ -92,7 +92,7 @@ def write_pid_file(var: Path, pid: int, port: str) -> Path:
     run.mkdir(parents=True)
     pidfile = run / "pid"
     pidfile.write_text(
-        "pid=%d\nport=%s\nbrand=default\nhtmx_tabs=0\ncheckout=/x\n" % (pid, port)
+        f"pid={pid}\nport={port}\nbrand=default\nhtmx_tabs=0\ncheckout=/x\n"
     )
     return pidfile
 

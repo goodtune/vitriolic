@@ -174,7 +174,7 @@ def seed(stdout=None) -> dict[str, int]:
     counts = _counts()
     if stdout is not None:
         for model, count in counts.items():
-            stdout.write("%s: %d\n" % (model, count))
+            stdout.write(f"{model}: {count}\n")
     return counts
 
 
@@ -229,7 +229,7 @@ def _seed_users(anchor) -> bool:
         Permission.objects.filter(
             content_type__app_label="news",
             codename__in=[
-                "%s_%s" % (action, model)
+                f"{action}_{model}"
                 for action in ("add", "change")
                 for model in ("article", "category", "translation")
             ],
@@ -300,7 +300,7 @@ def _seed_organisation(anchor) -> bool:
 
     round_robin = {
         teams: tools.create_draw_format(
-            name="Round robin (%d teams)" % teams,
+            name=f"Round robin ({teams} teams)",
             text=round_robin_format(list(range(1, teams + 1))),
             teams=teams,
         )["draw_format"]["id"]
@@ -386,7 +386,7 @@ def _people(clubs, club_roles):
                 last_name=last_name,
                 gender="FM"[number % 2],
                 date_of_birth=datetime.date(1980 + number % 20, 1 + number % 12, 15),
-                email="%s.%s@example.org" % (first_name.lower(), last_name.lower()),
+                email=f"{first_name.lower()}.{last_name.lower()}@example.org",
             )
             association = ClubAssociation.objects.create(club=club, person=person)
             association.roles.add(club_roles[index])
@@ -618,8 +618,7 @@ def _play(tools, season, *, rounds, script):
 def _result(tools, division, match, what=None):
     """Record one result: a close game of touch, or the scripted `what`."""
     rng = random.Random(
-        "%s/%s/%s/%s"
-        % (division.pk, match.round, match.home_team_id, match.away_team_id)
+        f"{division.pk}/{match.round}/{match.home_team_id}/{match.away_team_id}"
     )
     home, away = rng.randint(2, 9), rng.randint(2, 9)
     if what == "unresulted":
@@ -731,7 +730,7 @@ def _seed_content(anchor) -> bool:
         page = Page.objects.create(description=paragraphs[0][:255])
         for sequence, paragraph in enumerate(paragraphs, start=1):
             PageContent.objects.create(
-                page=page, label="copy", sequence=sequence, copy="<p>%s</p>" % paragraph
+                page=page, label="copy", sequence=sequence, copy=f"<p>{paragraph}</p>"
             )
         return SitemapNode.objects.create(
             title=title,
@@ -862,10 +861,10 @@ def _seed_news(anchor) -> bool:
         article = Article.objects.create(
             headline=headline,
             slug=slugify(headline),
-            abstract="%s. Read the full report from the association." % headline,
+            abstract=f"{headline}. Read the full report from the association.",
             copy=(
-                "<p>%s.</p><p>The association thanks every volunteer, referee "
-                "and supporter who made Wednesday night possible.</p>" % headline
+                f"<p>{headline}.</p><p>The association thanks every volunteer, referee "
+                "and supporter who made Wednesday night possible.</p>"
             ),
             published=datetime.datetime.combine(
                 anchor - datetime.timedelta(days=days),
@@ -873,7 +872,7 @@ def _seed_news(anchor) -> bool:
                 datetime.UTC,
             ),
             byline="Harbour Touch League media team",
-            keywords="touch, harbour, %s" % category.lower(),
+            keywords=f"touch, harbour, {category.lower()}",
             image=photo(headline, size=(1200, 800)) if with_photo else None,
         )
         article.categories.add(categories[category])

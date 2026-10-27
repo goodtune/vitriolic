@@ -84,7 +84,7 @@ def test_main_writes_the_pages_under_the_state_directory(monkeypatch, tmp_path, 
     assert main(["Unit Test"]) == 0
     written = json.loads((paths_for("unit_test")["state"] / "pages.json").read_text())
     assert written == json.loads(json.dumps(discover()))
-    assert "%d pages" % len(written["pages"]) in capsys.readouterr().out
+    assert f"{len(written['pages'])} pages" in capsys.readouterr().out
 
 
 @pytest.mark.django_db(transaction=True)

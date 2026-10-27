@@ -30,11 +30,9 @@ def refusal(checkout: Path = CHECKOUT) -> str | None:
     owner = recorded_owner()
     if owner == str(checkout):
         return None
+    name = connection.settings_dict["NAME"]
+    owner = owner or "nobody who left a name"
     return (
-        "harness: %s belongs to %s (this is %s); use db.sh --reset to take it over"
-        % (
-            connection.settings_dict["NAME"],
-            owner or "nobody who left a name",
-            checkout,
-        )
+        f"harness: {name} belongs to {owner} (this is {checkout}); "
+        "use db.sh --reset to take it over"
     )
