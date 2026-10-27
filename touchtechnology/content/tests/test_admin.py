@@ -3,9 +3,12 @@ import tempfile
 from os.path import dirname, join
 
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.models import Permission
+from django.contrib.messages.test import MessagesTestMixin
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from guardian.shortcuts import assign_perm
 from test_plus.test import TestCase
@@ -207,7 +210,7 @@ class ProjectStorageMixin(MediaStorageMixin):
         )
 
 
-class MediaDeleteTests(MediaStorageMixin, TestCase):
+class MediaDeleteTests(MediaStorageMixin, MessagesTestMixin, TestCase):
     """
     Deleting a file or a folder of the media section, as a member of staff who
     may view and delete the site's files.
@@ -219,6 +222,17 @@ class MediaDeleteTests(MediaStorageMixin, TestCase):
         super().setUp()
         self.staff = self.make_user(
             "staff", perms=["content.view_file", "content.delete_file"]
+        )
+
+    def assertDeleted(self, kind, name):
+        """The page the delete sends the person to says what has gone."""
+        self.assertMessages(
+            self.last_response,
+            [
+                messages.Message(
+                    messages.SUCCESS, f'The {kind} "{name}" has been deleted.'
+                )
+            ],
         )
 
     def test_a_file_in_a_missing_folder_is_not_found(self):
@@ -240,6 +254,7 @@ class MediaDeleteTests(MediaStorageMixin, TestCase):
         self.assert_http_302_found(
             url=self.reverse("admin:content:media:edit", "reports/")
         )
+        self.assertDeleted("file", "minutes.pdf")
         self.assertEqual(default_storage.listdir("reports"), ([], []))
 
     def test_deleting_a_folder_goes_back_to_the_folder_it_was_in(self):
@@ -249,6 +264,7 @@ class MediaDeleteTests(MediaStorageMixin, TestCase):
         self.assert_http_302_found(
             url=self.reverse("admin:content:media:edit", "reports/")
         )
+        self.assertDeleted("folder", "2026")
         self.assertEqual(default_storage.listdir("reports"), ([], []))
 
     def test_deleting_a_folder_at_the_top_goes_back_to_the_list(self):
@@ -256,11 +272,84 @@ class MediaDeleteTests(MediaStorageMixin, TestCase):
         with self.login(self.staff):
             self.post("admin:content:media:delete", "reports/")
         self.assert_http_302_found(url=self.reverse("admin:content:media:list"))
+        self.assertDeleted("folder", "reports")
         self.assertEqual(default_storage.listdir(""), ([], []))
 
 
 class ProjectStorageMediaDeleteTests(ProjectStorageMixin, MediaDeleteTests):
     """The same deletes, in the project's storage."""
+
+
+class MediaAddTests(ProjectStorageMixin, MessagesTestMixin, TestCase):
+    """
+    Uploading a file and opening a folder in the media section, as a member of
+    staff who may view and add the site's files. Each goes to the folder it
+    made or filled, and says so. In the project's storage: a new folder needs
+    its ``mkdir``.
+    """
+
+    user_factory = StaffFactory
+
+    def setUp(self):
+        super().setUp()
+        self.staff = self.make_user(
+            "staff", perms=["content.view_file", "content.add_file"]
+        )
+        self.makedirs("reports")
+
+    def upload(self, name):
+        return {"file-file": SimpleUploadedFile(name, b"%PDF-1.4")}
+
+    def test_uploading_a_file_goes_back_to_its_folder(self):
+        with self.login(self.staff):
+            self.post(
+                "admin:content:media:edit", "reports/", data=self.upload("minutes.pdf")
+            )
+        self.assert_http_302_found(
+            url=self.reverse("admin:content:media:edit", "reports/")
+        )
+        self.assertMessages(
+            self.last_response,
+            [messages.Message(messages.SUCCESS, 'Uploaded new file "minutes.pdf"')],
+        )
+        self.assertEqual(default_storage.listdir("reports"), ([], ["minutes.pdf"]))
+
+    def test_uploading_a_file_at_the_top_goes_back_to_the_list(self):
+        with self.login(self.staff):
+            self.post("admin:content:media:list", data=self.upload("agenda.pdf"))
+        self.assert_http_302_found(url=self.reverse("admin:content:media:list"))
+        self.assertEqual(default_storage.listdir(""), (["reports"], ["agenda.pdf"]))
+
+    def test_opening_a_folder_goes_into_it(self):
+        with self.login(self.staff):
+            self.post(
+                "admin:content:media:edit", "reports/", data={"folder-name": "2027"}
+            )
+        self.assert_http_302_found(
+            url=self.reverse("admin:content:media:edit", "reports/2027/")
+        )
+        self.assertMessages(
+            self.last_response,
+            [messages.Message(messages.SUCCESS, 'Opened new folder "2027".')],
+        )
+        self.assertEqual(default_storage.listdir("reports"), (["2027"], []))
+
+    def test_opening_a_folder_at_the_top_goes_into_it(self):
+        with self.login(self.staff):
+            self.post("admin:content:media:list", data={"folder-name": "gallery"})
+        self.assert_http_302_found(
+            url=self.reverse("admin:content:media:edit", "gallery/")
+        )
+        self.assertCountEqual(default_storage.listdir("")[0], ["gallery", "reports"])
+
+    def test_a_person_who_may_not_add_files_is_refused_a_folder(self):
+        viewer = self.make_user("viewer", perms=["content.view_file"])
+        with self.login(viewer):
+            self.post(
+                "admin:content:media:edit", "reports/", data={"folder-name": "2027"}
+            )
+        self.assert_http_403_forbidden()
+        self.assertEqual(default_storage.listdir("reports"), ([], []))
 
 
 @per_shell
@@ -460,8 +549,10 @@ class DeleteFormMixin(IconMixin):
 class MediaPermissionTests(MediaStorageMixin, DeleteFormMixin, TestCase):
     """
     The media section takes the content app's permissions over the site's
-    files: ``content.view_file`` to list them and ``content.delete_file`` to
-    delete one. The list offers Delete only to a person who may.
+    files: ``content.view_file`` to list them, ``content.add_file`` to upload
+    one or open a folder, and ``content.delete_file`` to delete one. The list
+    offers Upload, New folder and Delete only to a person who may, and the
+    component names the section only to a person who may view the files.
     """
 
     user_factory = StaffFactory
@@ -470,6 +561,39 @@ class MediaPermissionTests(MediaStorageMixin, DeleteFormMixin, TestCase):
         super().setUp()
         default_storage.save("reports/minutes.pdf", ContentFile(b"%PDF-1.4"))
         self.makedirs("reports/2026")
+
+    def upload_button(self):
+        return self.by_shell(
+            workbook=(
+                '<button type="button" class="wb-button wb-button-primary" '
+                f'data-wb-dialog="wb-upload">{self.icon("upload")}Upload file</button>'
+            ),
+            explorer=(
+                '<button type="button" class="button primary" '
+                f'data-add-many="file-dialog">{self.icon("upload")}'
+                "<span>Upload file</span></button>"
+            ),
+        )
+
+    def new_folder_button(self):
+        return self.by_shell(
+            workbook=(
+                '<button type="button" class="wb-button" '
+                f'data-wb-dialog="wb-folder">{self.icon("folder")}New folder</button>'
+            ),
+            explorer=(
+                '<button type="button" class="button" '
+                f'data-add-many="folder-dialog">{self.icon("folder")}'
+                "<span>New folder</span></button>"
+            ),
+        )
+
+    def section_link(self):
+        """Media among the sections a page of the component names at its top."""
+        return f'<a href="{self.reverse("admin:content:media:list")}">Media</a>'
+
+    def upload(self, name):
+        return {"file-file": SimpleUploadedFile(name, b"%PDF-1.4")}
 
     def menu(self, row, items):
         """The menu of row ``row`` of the list, holding ``items`` and no more."""
@@ -489,9 +613,7 @@ class MediaPermissionTests(MediaStorageMixin, DeleteFormMixin, TestCase):
 
     def open_link(self, path):
         url = self.reverse("admin:content:media:edit", path)
-        # The Explorer's icon tag draws "folder-open" with its "image" glyph.
-        icon = self.icon(self.by_shell(workbook="folder-open", explorer="image"))
-        return f'<a href="{url}">{icon}Open</a>'
+        return f'<a href="{url}">{self.icon("folder-open")}Open</a>'
 
     def test_a_visitor_is_asked_to_sign_in(self):
         self.assertLoginRequired("admin:content:media:list")
@@ -540,13 +662,28 @@ class MediaPermissionTests(MediaStorageMixin, DeleteFormMixin, TestCase):
             self.assert_http_403_forbidden()
             self.get("admin:content:media:edit", "reports/")
             self.assert_http_403_forbidden()
+            self.post("admin:content:media:list", data=self.upload("agenda.pdf"))
+            self.assert_http_403_forbidden()
             self.get("admin:content:media:delete", "reports/", "minutes.pdf")
             self.assert_http_403_forbidden()
             self.post("admin:content:media:delete", "reports/", "minutes.pdf")
             self.assert_http_403_forbidden()
+        self.assertEqual(default_storage.listdir(""), (["reports"], []))
         self.assertEqual(
             default_storage.listdir("reports"), (["2026"], ["minutes.pdf"])
         )
+
+    def test_a_person_who_may_not_view_files_is_not_shown_the_way_in(self):
+        staff = self.make_user("staff")
+        with self.login(staff):
+            self.get_check_200("admin:content:chunk:list")
+        self.assertResponseNotContains(self.section_link())
+
+    def test_a_person_who_may_view_files_is_shown_the_way_in(self):
+        viewer = self.make_user("viewer", perms=["content.view_file"])
+        with self.login(viewer):
+            self.get_check_200("admin:content:chunk:list")
+        self.assertResponseContains(self.section_link())
 
     def test_a_person_who_may_view_files_sees_them_without_delete(self):
         viewer = self.make_user("viewer", perms=["content.view_file"])
@@ -556,6 +693,34 @@ class MediaPermissionTests(MediaStorageMixin, DeleteFormMixin, TestCase):
         self.assertResponseContains(self.menu(1, [self.open_link("reports/2026/")]))
         self.assertResponseContains(
             self.menu(2, [self.view_link("reports/minutes.pdf")])
+        )
+
+    def test_a_person_who_may_view_but_not_add_files_is_refused_the_upload(self):
+        viewer = self.make_user("viewer", perms=["content.view_file"])
+        with self.login(viewer):
+            self.get_check_200("admin:content:media:edit", "reports/")
+            self.assertResponseNotContains(self.upload_button())
+            self.assertResponseNotContains(self.new_folder_button())
+            self.post(
+                "admin:content:media:edit", "reports/", data=self.upload("agenda.pdf")
+            )
+            self.assert_http_403_forbidden()
+        self.assertEqual(
+            default_storage.listdir("reports"), (["2026"], ["minutes.pdf"])
+        )
+
+    def test_a_person_who_may_add_files_is_offered_to_and_uploads_one(self):
+        adder = self.make_user("adder", perms=["content.view_file", "content.add_file"])
+        with self.login(adder):
+            self.get_check_200("admin:content:media:edit", "reports/")
+            self.assertResponseContains(self.upload_button())
+            self.assertResponseContains(self.new_folder_button())
+            self.post(
+                "admin:content:media:edit", "reports/", data=self.upload("agenda.pdf")
+            )
+            self.assert_http_302_found()
+        self.assertCountEqual(
+            default_storage.listdir("reports")[1], ["agenda.pdf", "minutes.pdf"]
         )
 
     def test_a_person_who_may_view_but_not_delete_files_is_refused_the_delete(self):

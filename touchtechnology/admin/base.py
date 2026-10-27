@@ -149,12 +149,16 @@ class AdminComponentMixin(ShellTemplatesMixin):
         a component dealing with Users & Groups should return an iterable of
         tuples:
 
-            (name, path, optional font awesome icon name)
+            (name, path, optional icon name, optional permission)
 
         For example:
 
             [("Users", "/admin/auth/users/", "user"),
              ("Groups", "/admin/auth/groups/", "group")]
+
+        A section that names a permission (``"content.view_file"``) is drawn,
+        in the menu and the rail, only for a person who holds it. The view
+        behind it still checks for itself.
         """
         return ()
 

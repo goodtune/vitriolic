@@ -4,6 +4,7 @@ from collections import namedtuple
 
 from django.contrib import messages
 from django.contrib.auth.decorators import permission_required
+from django.core.exceptions import PermissionDenied
 from django.core.files.storage import FileSystemStorage, default_storage
 from django.db.models import Count, Q
 from django.http import Http404, HttpResponseRedirect
@@ -253,7 +254,9 @@ class ContentAdminComponent(AdminComponent):
     def dropdowns(self):
         dl = (
             (_("Sitemap"), self.reverse("index"), "sitemap"),
-            (_("Media"), self.reverse("media:list"), "folder-open"),
+            # Media is for a person who may view the site's files; its page
+            # draws the same picture glyph.
+            (_("Media"), self.reverse("media:list"), "image", "content.view_file"),
             (_("Chunks"), self.reverse("chunk:list"), "pencil-square-o"),
             (_("Redirects"), self.reverse("redirect:list"), "reply"),
             (_("Applications"), self.reverse("real_placeholder:list"), "puzzle-piece"),
@@ -591,7 +594,8 @@ class ContentAdminComponent(AdminComponent):
         return self.generic_permissions(request, Chunk, pk=pk, **kwargs)
 
     # Media views. The site's files have no model: the content app's
-    # ``view_file`` and ``delete_file`` permissions, held by ``Page``, guard them.
+    # ``view_file``, ``add_file`` and ``delete_file`` permissions, held by
+    # ``Page``, guard them.
 
     def folder_url(self, path):
         """The list of the folder at ``path``, or of all the files when it is empty."""
@@ -626,6 +630,11 @@ class ContentAdminComponent(AdminComponent):
         form_kwargs = dict(path=path)
 
         if request.method == "POST":
+            # Uploading a file or opening a folder adds to the site's files:
+            # viewing them is not enough.
+            if not request.user.has_perm("content.add_file"):
+                raise PermissionDenied
+
             # Give the Forms the POST and FILES from the request
             form_kwargs.update(dict(data=request.POST, files=request.FILES))
 
@@ -633,7 +642,8 @@ class ContentAdminComponent(AdminComponent):
             file_form = FileUploadForm(prefix="file", **form_kwargs)
 
             if folder_form.is_valid() and file_form.is_valid():
-                redirect_to = "."
+                # Back to this folder, or into the one just opened.
+                redirect_to = self.folder_url(path)
                 saved = None
 
                 if folder_form.has_changed():
@@ -643,7 +653,7 @@ class ContentAdminComponent(AdminComponent):
                     messages.success(
                         request, _('Opened new folder "%s".') % folder_name
                     )
-                    redirect_to = folder_name + "/"  # FIXME reverse this
+                    redirect_to = self.folder_url(os.path.join(saved, ""))
 
                 if file_form.has_changed():
                     saved = file_form.save()
@@ -794,7 +804,11 @@ class ContentAdminComponent(AdminComponent):
 
         if request.method == "POST":
             action(fullpath)
-            messages.success(request, f'Successfully deleted {tpl} "{item}"')
+            messages.success(
+                request,
+                _('The %(kind)s "%(name)s" has been deleted.')
+                % {"kind": kind, "name": item},
+            )
             return self.redirect(self.folder_url(parentdir if cls is Folder else path))
 
         context = {
