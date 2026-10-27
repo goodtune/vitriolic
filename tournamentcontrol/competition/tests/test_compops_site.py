@@ -24,6 +24,7 @@ TZ = ZoneInfo("Australia/Brisbane")
 
 class CompOpsFixture(TestCase):
     def setUp(self):
+        super().setUp()
         self.staff = factories.UserFactory.create(is_staff=True)
         self.user = factories.UserFactory.create()
         self.season = factories.SeasonFactory.create(
@@ -53,16 +54,12 @@ class IndexTests(CompOpsFixture):
     def test_staff_required(self):
         with self.login(self.user):
             self.get("compops:index")
-            self.response_403()
+            self.assert_http_403_forbidden()
 
     def test_single_active_season_redirects_to_today(self):
         with self.login(self.staff):
-            response = self.get("compops:index")
-        self.assertRedirects(
-            response,
-            reverse("compops:day", kwargs=self.day_kwargs),
-            fetch_redirect_response=False,
-        )
+            self.get("compops:index")
+        self.assert_http_302_found(url=self.reverse("compops:day", **self.day_kwargs))
 
     def test_two_active_seasons_are_listed(self):
         other = factories.SeasonFactory.create(timezone="Australia/Brisbane")
@@ -71,7 +68,7 @@ class IndexTests(CompOpsFixture):
         )
         with self.login(self.staff):
             self.get("compops:index")
-        self.response_200()
+        self.assert_http_200_ok()
         url = reverse(
             "compops:season", kwargs={"competition": "pacific-cup", "season": "pc26"}
         )
@@ -97,19 +94,13 @@ class DayPageTests(CompOpsFixture):
 
     def test_season_redirects_to_today_in_season_time_zone(self):
         with self.login(self.staff):
-            response = self.get(
-                "compops:season", competition="pacific-cup", season="pc26"
-            )
-        self.assertRedirects(
-            response,
-            reverse("compops:day", kwargs=self.day_kwargs),
-            fetch_redirect_response=False,
-        )
+            self.get("compops:season", competition="pacific-cup", season="pc26")
+        self.assert_http_302_found(url=self.reverse("compops:day", **self.day_kwargs))
 
     def test_day_page_renders_every_panel(self):
         with self.login(self.staff):
             self.get("compops:day", **self.day_kwargs)
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertResponseContains('<span id="results-count" class="count">1</span>')
         self.assertResponseContains(
             '<span id="scorers-count" class="count zero">0</span>'
@@ -129,21 +120,22 @@ class DayPageTests(CompOpsFixture):
                 season="pc26",
                 datestr="20261399",
             )
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_fragment_plain_and_datastar(self):
         with self.login(self.staff):
-            plain = self.get("compops:activity", **self.day_kwargs)
-            self.assertEqual(plain["Content-Type"], "text/html; charset=utf-8")
+            self.get("compops:activity", **self.day_kwargs)
+            self.assertResponseHeaders({"Content-Type": "text/html; charset=utf-8"})
             self.assertResponseContains(
                 '<li id="activity-empty" class="empty">Nothing has happened yet today.</li>'
             )
-            streamed = self.client.get(
-                reverse("compops:activity", kwargs=self.day_kwargs),
-                headers={"Datastar-Request": "true"},
+            self.get(
+                "compops:activity",
+                extra={"headers": {"Datastar-Request": "true"}},
+                **self.day_kwargs,
             )
-        self.assertEqual(streamed["Content-Type"], "text/event-stream")
-        body = b"".join(streamed.streaming_content).decode()
+        self.assertResponseHeaders({"Content-Type": "text/event-stream"})
+        body = b"".join(self.last_response.streaming_content).decode()
         self.assertIn("event: datastar-patch-elements", body)
         self.assertIn('data: elements <ul id="activity"', body)
 
@@ -190,9 +182,9 @@ class DayPageTests(CompOpsFixture):
 
     def test_count_ids_are_unique_on_the_page(self):
         with self.login(self.staff):
-            response = self.get("compops:day", **self.day_kwargs)
-        self.response_200()
-        content = response.content.decode()
+            self.get("compops:day", **self.day_kwargs)
+        self.assert_http_200_ok()
+        content = self.last_response.content.decode()
         for name in (
             "results-count",
             "results-count-tab",
@@ -230,7 +222,7 @@ class SeasonWithoutTimeZoneTests(CompOpsFixture):
             )
         with timezone.override("Pacific/Auckland"), self.login(self.staff):
             self.get("compops:day", **self.day_kwargs)
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertResponseContains(
             '<li class="score-entered"><time>12:15:30</time>'
             "<span>Score · x · priya</span></li>"
@@ -248,13 +240,9 @@ class SeasonWithoutTimeZoneTests(CompOpsFixture):
         self.match.home_team_score = 2
         self.match.away_team_score = 1
         self.match.save()
-        url = reverse(
-            "compops:match-scorers",
-            kwargs={**self.day_kwargs, "match_pk": self.match.pk},
-        )
         with timezone.override("Pacific/Auckland"), self.login(self.staff):
-            self.last_response = self.client.get(url)
-        self.response_200()
+            self.get("compops:match-scorers", match_pk=self.match.pk, **self.day_kwargs)
+        self.assert_http_200_ok()
         self.assertResponseContains(
             f'<span class="season">{self.season} · Thursday 8 October</span>'
         )
@@ -282,19 +270,20 @@ class RenderCountsTests(TestCase):
 @freeze_time("2026-10-08 00:00 +10:00")
 class LayoutTests(CompOpsFixture):
     def test_toggle_collapses_then_expands(self):
-        url = reverse("compops:layout", kwargs=self.day_kwargs)
         with self.login(self.staff):
-            response = self.client.post(url, headers={"Datastar-Request": "true"})
-            body = b"".join(response.streaming_content).decode()
-            self.assertIn('data: elements <main id="main" class="collapsed">', body)
-            self.assertTrue(self.client.session["compops_collapsed"])
-            response = self.client.post(url)
-            self.assertRedirects(
-                response,
-                reverse("compops:day", kwargs=self.day_kwargs),
-                fetch_redirect_response=False,
+            self.post(
+                "compops:layout",
+                extra={"headers": {"Datastar-Request": "true"}},
+                **self.day_kwargs,
             )
-            self.assertFalse(self.client.session["compops_collapsed"])
+            body = b"".join(self.last_response.streaming_content).decode()
+            self.assertIn('data: elements <main id="main" class="collapsed">', body)
+            self.assertEqual(self.client.session["compops_collapsed"], True)
+            self.post("compops:layout", **self.day_kwargs)
+            self.assert_http_302_found(
+                url=self.reverse("compops:day", **self.day_kwargs)
+            )
+            self.assertEqual(self.client.session["compops_collapsed"], False)
 
     def test_day_page_honours_the_session(self):
         with self.login(self.staff):

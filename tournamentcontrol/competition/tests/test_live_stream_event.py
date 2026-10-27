@@ -52,7 +52,47 @@ def copy_video_link():
             '<use href="/static/touchtechnology/admin/workbook/icons.svg#link"></use>'
             "</svg><span>Copy video link</span></button>"
         ),
-        explorer='data-copy="https://youtu.be/adhoc123"',
+        explorer=(
+            '<button type="button" class="button compact" '
+            'data-copy="https://youtu.be/adhoc123" data-copied="Copied">'
+            '<svg class="icon" aria-hidden="true" focusable="false">'
+            '<use href="/static/touchtechnology/admin/explorer/img/icons.svg#copy">'
+            '</use></svg><span class="copy-label">Copy video link</span></button>'
+        ),
+    )
+
+
+#: The link to an object from its row in one of the season's lists.
+def row_link(url, text, icon):
+    return by_shell(
+        workbook=f'<a href="{url}">{text}</a>',
+        explorer=(
+            f'<a href="{url}"><svg class="icon" aria-hidden="true" focusable="false">'
+            f'<use href="/static/touchtechnology/admin/explorer/img/icons.svg#{icon}">'
+            f"</use></svg><span>{text}</span></a>"
+        ),
+    )
+
+
+#: The season's tab of live stream events, holding ``count`` of them.
+def events_tab(count):
+    return by_shell(
+        workbook=(
+            '<a class="wb-tab" role="tab" id="live_stream_events-tab" '
+            'href="#live_stream_events-pane" aria-controls="live_stream_events-pane" '
+            'aria-selected="false" aria-label="Live stream events">Live stream events '
+            f'<span class="wb-tab-count" aria-hidden="true">{count}</span></a>'
+        ),
+        explorer=(
+            '<a class="tab" role="tab" id="live_stream_events-tab-link" '
+            'href="#live_stream_events-tab" aria-controls="live_stream_events-tab" '
+            'aria-selected="false" tabindex="-1">'
+            '<svg class="icon" aria-hidden="true" focusable="false">'
+            '<use href="/static/touchtechnology/admin/explorer/img/icons.svg#video">'
+            "</use></svg><span>Live stream events</span>"
+            '<span class="count" aria-hidden="true" '
+            'data-count-of="live_stream_events-tab" hidden></span></a>'
+        ),
     )
 
 
@@ -577,8 +617,10 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
                 event.season.competition_id,
                 event.season_id,
             )
-            self.assertResponseContains("Opening Ceremony", html=False)
-            self.assertResponseContains("live_stream_events-tab", html=False)
+            self.assertResponseContains(
+                row_link(event.urls["edit"], "Opening Ceremony", "video")
+            )
+            self.assertResponseContains(events_tab(1))
 
     def test_season_edit_offers_copy_video_link(self):
         event = factories.LiveStreamEventFactory.create(
@@ -590,9 +632,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
                 event.season.competition_id,
                 event.season_id,
             )
-            self.assertResponseContains(
-                copy_video_link(), html=by_shell(workbook=True, explorer=False)
-            )
+            self.assertResponseContains(copy_video_link())
 
     def test_season_edit_hides_copy_video_link_for_removed_broadcast(self):
         event = factories.LiveStreamEventFactory.create(
@@ -607,9 +647,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
                 event.season.competition_id,
                 event.season_id,
             )
-        self.assertResponseNotContains(
-            copy_video_link(), html=by_shell(workbook=True, explorer=False)
-        )
+        self.assertResponseNotContains(copy_video_link())
 
     def test_season_edit_hides_events_tab_when_not_live_streamed(self):
         season = factories.SeasonFactory.create(live_stream=False)
@@ -619,7 +657,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
                 season.competition_id,
                 season.pk,
             )
-            self.assertResponseNotContains("live_stream_events-tab", html=False)
+            self.assertResponseNotContains(events_tab(0))
 
     def test_add_event_requires_login(self):
         season = factories.SeasonFactory.create(live_stream=True)
@@ -668,7 +706,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
                     "stop_2": "30",
                 },
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         # The broadcast identifier issued by the platform is the primary key
         event = season.live_stream_events.get()
@@ -709,7 +747,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
                     "stop_2": "30",
                 },
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         self.assertEqual(season.live_stream_events.count(), 0)
         mock_youtube.liveBroadcasts.assert_not_called()
@@ -742,7 +780,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
                     event.season_id,
                     event.pk,
                 )
-            self.response_302()
+            self.assert_http_302_found()
 
         mock_youtube.liveBroadcasts.return_value.delete.assert_called_once_with(
             id="adhoc123"
@@ -773,7 +811,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
                 event.season_id,
                 event.pk,
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         # Destruction on the platform was not confirmed, the record stays.
         self.assertEqual(LiveStreamEvent.objects.count(), 1)
@@ -803,7 +841,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
                     event.season_id,
                     event.pk,
                 )
-            self.response_302()
+            self.assert_http_302_found()
 
         # Already absent from the platform is equally confirmation.
         self.assertEqual(LiveStreamEvent.objects.count(), 0)
@@ -824,7 +862,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
                 event.season_id,
                 event.pk,
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         # Without credentials destruction cannot be confirmed, the record
         # stays and the platform is never touched.
@@ -866,7 +904,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
                     "stop_2": "30",
                 },
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         self.assertEqual(season.live_stream_events.count(), 0)
         self.assertIn(
@@ -901,7 +939,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
                 event.season_id,
                 event.pk,
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         # Destruction on the platform cannot be confirmed, the record stays.
         self.assertEqual(LiveStreamEvent.objects.count(), 1)
@@ -992,8 +1030,29 @@ class LiveStreamKeyAdminTests(WarmCachesMixin, TestCase):
                 stream_key.season.competition_id,
                 stream_key.season_id,
             )
-        self.assertResponseContains("Roaming Camera", html=False)
-        self.assertResponseContains("live_stream_keys-tab", html=False)
+        self.assertResponseContains(
+            row_link(stream_key.urls["edit"], "Roaming Camera", "key")
+        )
+        self.assertResponseContains(
+            by_shell(
+                workbook=(
+                    '<a class="wb-tab" role="tab" id="live_stream_keys-tab" '
+                    'href="#live_stream_keys-pane" aria-controls="live_stream_keys-pane" '
+                    'aria-selected="false" aria-label="Stream keys">Stream keys '
+                    '<span class="wb-tab-count" aria-hidden="true">1</span></a>'
+                ),
+                explorer=(
+                    '<a class="tab" role="tab" id="live_stream_keys-tab-link" '
+                    'href="#live_stream_keys-tab" aria-controls="live_stream_keys-tab" '
+                    'aria-selected="false" tabindex="-1">'
+                    '<svg class="icon" aria-hidden="true" focusable="false">'
+                    '<use href="/static/touchtechnology/admin/explorer/img/icons.svg#key">'
+                    "</use></svg><span>Stream keys</span>"
+                    '<span class="count" aria-hidden="true" '
+                    'data-count-of="live_stream_keys-tab" hidden></span></a>'
+                ),
+            )
+        )
 
     def test_edit_view_renders(self):
         stream_key = factories.LiveStreamKeyFactory.create(season__live_stream=True)
@@ -1004,7 +1063,7 @@ class LiveStreamKeyAdminTests(WarmCachesMixin, TestCase):
                 stream_key.season_id,
                 stream_key.pk,
             )
-            self.response_200()
+            self.assert_http_200_ok()
 
     @mock.patch(
         "tournamentcontrol.competition.models.Season.youtube",
@@ -1030,7 +1089,7 @@ class LiveStreamKeyAdminTests(WarmCachesMixin, TestCase):
                 season.pk,
                 data={"title": "Roaming Camera"},
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         # The liveStream identifier issued by the platform is the primary key
         stream_key = season.live_stream_keys.get()
@@ -1061,7 +1120,7 @@ class LiveStreamKeyAdminTests(WarmCachesMixin, TestCase):
                 season.pk,
                 data={"title": "Roaming Camera"},
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         self.assertEqual(season.live_stream_keys.count(), 0)
 
@@ -1081,7 +1140,7 @@ class LiveStreamKeyAdminTests(WarmCachesMixin, TestCase):
                 season.pk,
                 data={"title": "Roaming Camera"},
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         mock_youtube.liveStreams.assert_not_called()
         self.assertEqual(season.live_stream_keys.count(), 0)
@@ -1114,7 +1173,7 @@ class LiveStreamKeyAdminTests(WarmCachesMixin, TestCase):
                     stream_key.season_id,
                     stream_key.pk,
                 )
-            self.response_302()
+            self.assert_http_302_found()
 
         mock_youtube.liveStreams.return_value.delete.assert_called_once_with(
             id="stream456"
@@ -1148,7 +1207,7 @@ class LiveStreamKeyAdminTests(WarmCachesMixin, TestCase):
                 stream_key.season_id,
                 stream_key.pk,
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         # Destruction on the platform was not confirmed, the record stays.
         self.assertEqual(LiveStreamKey.objects.count(), 1)
@@ -1178,7 +1237,7 @@ class LiveStreamKeyAdminTests(WarmCachesMixin, TestCase):
                 stream_key.season_id,
                 stream_key.pk,
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         # The record is protected while an event references it, so it must
         # still exist and the platform must never be touched.

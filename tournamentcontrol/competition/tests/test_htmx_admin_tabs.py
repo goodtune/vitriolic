@@ -19,8 +19,7 @@ class HtmxCompetitionTabTests(TestCase):
     """Tests for HTMX tab content loading on competition admin views."""
 
     @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
+    def setUpTestData(cls):
         cls.competition = factories.CompetitionFactory.create()
         cls.season = factories.SeasonFactory.create(
             competition=cls.competition,
@@ -37,7 +36,7 @@ class HtmxCompetitionTabTests(TestCase):
                 "admin:fixja:competition:edit",
                 self.competition.pk,
             )
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertInContext("form")
             self.assertInContext("object")
 
@@ -49,7 +48,7 @@ class HtmxCompetitionTabTests(TestCase):
                 "admin:fixja:competition:edit",
                 self.competition.pk,
             )
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertInContext("form")
             self.assertInContext("object")
 
@@ -63,11 +62,8 @@ class HtmxCompetitionTabTests(TestCase):
                 data={"_htmx_tab": "nonexistent_tab"},
                 extra={"HTTP_HX_REQUEST": "true"},
             )
-            self.response_200()
-            self.assertTemplateUsed(
-                self.last_response,
-                site.shell.template("_htmx_tab_empty.html"),
-            )
+            self.assert_http_200_ok()
+            self.assertResponseTemplateUsed(site.shell.template("_htmx_tab_empty.html"))
 
     def test_competition_htmx_tab_ignored_without_flag(self):
         """HTMX tab parameter is ignored when feature flag is off."""
@@ -78,10 +74,8 @@ class HtmxCompetitionTabTests(TestCase):
                 data={"_htmx_tab": "season_set"},
                 extra={"HTTP_HX_REQUEST": "true"},
             )
-            self.response_200()
-            self.assertTemplateUsed(
-                self.last_response, site.shell.template("edit.html")
-            )
+            self.assert_http_200_ok()
+            self.assertResponseTemplateUsed(site.shell.template("edit.html"))
 
     @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
     def test_competition_htmx_tab_requires_htmx_header(self):
@@ -92,18 +86,15 @@ class HtmxCompetitionTabTests(TestCase):
                 self.competition.pk,
                 data={"_htmx_tab": "season_set"},
             )
-            self.response_200()
-            self.assertTemplateUsed(
-                self.last_response, site.shell.template("edit.html")
-            )
+            self.assert_http_200_ok()
+            self.assertResponseTemplateUsed(site.shell.template("edit.html"))
 
 
 class HtmxSeasonTabTests(TestCase):
     """Tests for HTMX tab content loading on season admin views."""
 
     @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
+    def setUpTestData(cls):
         cls.season = factories.SeasonFactory.create()
         cls.competition = cls.season.competition
 
@@ -122,10 +113,8 @@ class HtmxSeasonTabTests(TestCase):
                 data={"_htmx_tab": "divisions"},
                 extra={"HTTP_HX_REQUEST": "true"},
             )
-            self.response_200()
-            self.assertTemplateNotUsed(
-                self.last_response, site.shell.template("edit.html")
-            )
+            self.assert_http_200_ok()
+            self.assertResponseTemplateNotUsed(site.shell.template("edit.html"))
 
     @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
     def test_season_edit_htmx_tab_venues(self):
@@ -138,10 +127,8 @@ class HtmxSeasonTabTests(TestCase):
                 data={"_htmx_tab": "venues"},
                 extra={"HTTP_HX_REQUEST": "true"},
             )
-            self.response_200()
-            self.assertTemplateNotUsed(
-                self.last_response, site.shell.template("edit.html")
-            )
+            self.assert_http_200_ok()
+            self.assertResponseTemplateNotUsed(site.shell.template("edit.html"))
 
     @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
     def test_season_edit_htmx_tab_exclusions(self):
@@ -154,10 +141,8 @@ class HtmxSeasonTabTests(TestCase):
                 data={"_htmx_tab": "exclusions"},
                 extra={"HTTP_HX_REQUEST": "true"},
             )
-            self.response_200()
-            self.assertTemplateNotUsed(
-                self.last_response, site.shell.template("edit.html")
-            )
+            self.assert_http_200_ok()
+            self.assertResponseTemplateNotUsed(site.shell.template("edit.html"))
 
     def test_season_edit_traditional_mode(self):
         """Season edit page loads normally without HTMX flag."""
@@ -167,21 +152,31 @@ class HtmxSeasonTabTests(TestCase):
                 self.competition.pk,
                 self.season.pk,
             )
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertInContext("form")
             self.assertInContext("object")
 
     @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
     def test_season_htmx_tab_requires_auth(self):
         """HTMX tab requests require authentication."""
+        args = (self.competition.pk, self.season.pk)
         self.get(
             "admin:fixja:competition:season:edit",
-            self.competition.pk,
-            self.season.pk,
+            *args,
             data={"_htmx_tab": "divisions"},
             extra={"HTTP_HX_REQUEST": "true"},
         )
-        self.response_302()
+        self.assert_http_302_found()
+        tab = reverse(
+            "admin:fixja:competition:season:edit",
+            args=args,
+            query={"_htmx_tab": "divisions"},
+        )
+        # The login view quotes "next" with "/" left bare, so compare the
+        # URLs by their parsed query rather than as strings.
+        self.assertURLEqual(
+            self.last_response.url, reverse("admin:login", query={"next": tab})
+        )
 
 
 @override_settings(
@@ -223,7 +218,7 @@ class HtmxTabPaginationTests(TestCase):
                 data={"_htmx_tab": "members", **data},
                 extra={"HTTP_HX_REQUEST": "true"},
             )
-        self.response_200()
+        self.assert_http_200_ok()
 
     def test_first_page_of_members(self):
         self._get_club_tab()
@@ -273,7 +268,7 @@ class HtmxTabPaginationTests(TestCase):
     def test_pages_are_not_pushed_onto_the_history(self):
         "The pages of a tab are not recorded in the history."
         self._get_club_tab()
-        self.assertEqual(self.last_response["HX-Push-Url"], "false")
+        self.assertResponseHeaders({"HX-Push-Url": "false"})
 
     def test_queryset_tab_is_paginated(self):
         with self.login(self.superuser):
@@ -284,7 +279,7 @@ class HtmxTabPaginationTests(TestCase):
                 data={"_htmx_tab": "divisions", "page": 2},
                 extra={"HTTP_HX_REQUEST": "true"},
             )
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertEqual(len(self.get_context("object_list")), 1)
         self.assertEqual(self.get_context("paginator").count, 3)
         self.assertEqual(self.get_context("page"), 2)
@@ -329,7 +324,7 @@ class HtmxTabAddLinkTests(TestCase):
     def test_club_people_tab_traditional_mode(self):
         with self.login(self.superuser):
             self.get("admin:fixja:club:edit", self.club.pk)
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertResponseContains(
             self._add_link(
                 "admin:fixja:club:person:add", self.club.pk, type_name="person"
@@ -345,7 +340,7 @@ class HtmxTabAddLinkTests(TestCase):
                 data={"_htmx_tab": "members"},
                 extra={"HTTP_HX_REQUEST": "true"},
             )
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertResponseContains(
             self._add_link(
                 "admin:fixja:club:person:add", self.club.pk, type_name="person"
@@ -362,7 +357,7 @@ class HtmxTabAddLinkTests(TestCase):
                 data={"_htmx_tab": "divisions"},
                 extra={"HTTP_HX_REQUEST": "true"},
             )
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertResponseContains(
             self._add_link(
                 "admin:fixja:competition:season:division:add",

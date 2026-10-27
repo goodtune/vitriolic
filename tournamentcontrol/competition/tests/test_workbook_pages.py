@@ -6,6 +6,7 @@ returns to.
 
 import datetime
 
+from django.urls import reverse
 from freezegun import freeze_time
 from test_plus import TestCase
 
@@ -246,11 +247,7 @@ class DivisionPageTests(TestCase):
                 *self.args,
                 self.stage.pk,
             )
-        self.response_302()
-        self.assertEqual(
-            self.last_response["Location"],
-            f"{self.division.urls['edit']}#stages-tab",
-        )
+        self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")
 
 
 @per_shell(shells=("workbook",))
@@ -293,11 +290,7 @@ class ReturnTests(TestCase):
                 "20261014",
                 data=data,
             )
-        self.response_302()
-        self.assertEqual(
-            self.last_response["Location"],
-            f"{self.season.urls['edit']}#schedule-tab",
-        )
+        self.assert_http_302_found(url=f"{self.season.urls['edit']}#schedule-tab")
 
 
 @per_shell(shells=("workbook",))
@@ -327,10 +320,7 @@ class ClubOfficialsTests(TestCase):
                 self.club.pk,
                 data={"person": str(self.person.pk), "roles": [str(role.pk)]},
             )
-        self.response_302()
-        self.assertEqual(
-            self.last_response["Location"], f"{self.club.urls['edit']}#staff-tab"
-        )
+        self.assert_http_302_found(url=f"{self.club.urls['edit']}#staff-tab")
         self.assertEqual(
             list(self.club.staff.values_list("person", flat=True)), [self.person.pk]
         )
@@ -403,8 +393,14 @@ class TreeTests(TestCase):
     def test_an_unknown_component_is_not_found(self):
         with self.login(self.superuser):
             self.get("admin:explorer", data={"node": "nowhere/"})
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_only_staff_may_open_folders(self):
         self.get("admin:explorer", data={"node": "fixja/"})
-        self.response_302()
+        self.assert_http_302_found()
+        folder = reverse("admin:explorer", query={"node": "fixja/"})
+        # The login view quotes "next" with "/" left bare, so compare the
+        # URLs by their parsed query rather than as strings.
+        self.assertURLEqual(
+            self.last_response.url, reverse("admin:login", query={"next": folder})
+        )

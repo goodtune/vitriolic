@@ -13,8 +13,7 @@ class LiveStreamTemplateTest(TestCase):
     """Test that live stream templates render correctly."""
 
     @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
+    def setUpTestData(cls):
         # Create common test objects that can be reused across tests
         cls.stage = factories.StageFactory.create()
         cls.competition = cls.stage.division.season.competition
@@ -50,6 +49,7 @@ class LiveStreamTemplateTest(TestCase):
         )
 
     def setUp(self):
+        super().setUp()
         self.factory = RequestFactory()
 
     def _get_template_context(self, match=None):
