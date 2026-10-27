@@ -25,6 +25,7 @@ from django.db.models import (
     DateField,
     DateTimeField,
     F,
+    Max,
     Q,
     Sum,
     TimeField,
@@ -197,8 +198,8 @@ class OrderedSitemapNode(SitemapNodeBase):
     def _move(self, step):
         """
         Swap places with the sibling ``step`` rows along, whatever the two
-        ``order`` values are: they are not kept dense, so a deleted row leaves
-        a gap. Rows that share a value are first numbered 1, 2, 3, ... so that
+        ``order`` values are: they need not be dense, since a deleted pool or
+        division leaves a gap. Rows that share a value are first numbered 1, 2, 3, ... so that
         the swap changes something. The first row has nothing above it and the
         last nothing below; a move past either end changes nothing.
         """
@@ -228,6 +229,35 @@ class OrderedSitemapNode(SitemapNodeBase):
             self.order = theirs
             self.save(update_fields=["order"])
         return True
+
+    def close_gap(self):
+        """
+        Move every sibling below this row up one, once this row has left the
+        list (deleted, or moved to another), so the list stays numbered
+        1, 2, 3, ...
+
+        One ``UPDATE ... order - 1`` would collide with itself where the model
+        has a ``(parent, order)`` constraint, since PostgreSQL checks it row
+        by row. Two passes keep every value distinct along the way: the rows
+        below are lifted past the largest value in the list, then dropped
+        back one short of where they were.
+        """
+        if self.ordered_within is not None and (
+            getattr(self, self._meta.get_field(self.ordered_within).attname) is None
+        ):
+            # A team not yet placed in a division is in no list.
+            return
+        below = self.siblings.filter(order__gt=self.order)
+        offset = below.aggregate(offset=Max("order"))["offset"]
+        if offset is None:
+            return
+        with transaction.atomic():
+            below.update(order=F("order") + offset)
+            self.siblings.filter(order__gt=offset).update(
+                order=F("order") - offset - 1
+            )
+
+    close_gap.alters_data = True
 
     def move_up(self):
         """Swap places with the row above; ``True`` if there was one."""
@@ -1916,6 +1946,10 @@ class Team(AdminUrlMixin, UpstreamMixin, OrderedSitemapNode):
             UniqueConstraint(
                 fields=["title", "division"],
                 name="competition_team_unique_title_division",
+            ),
+            UniqueConstraint(
+                fields=["division", "order"],
+                name="competition_team_unique_division_order",
             ),
         ]
 

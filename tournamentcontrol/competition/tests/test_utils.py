@@ -228,15 +228,13 @@ class RegradeTests(TestCase):
             is_bye=True,
         )
 
-        # ``regrade`` reorders and rewires the matches; the caller moves the
-        # team (the admin's regrade form saves the new division).
+        # ``regrade`` moves the team, reorders and rewires the matches.
         utils.regrade(self.team, self.upper)
-        self.team.division = self.upper
-        self.team.save()
 
         # The team takes the next order in the upper division and the lower
         # division closes the gap it left.
-        self.assertEqual(self.team.order, 4)
+        self.team.refresh_from_db()
+        self.assertEqual((self.team.division, self.team.order), (self.upper, 4))
         self.assertEqual(
             list(self.lower.teams.order_by("order").values_list("title", "order")),
             [("Lower 2", 1), ("Lower 3", 2)],

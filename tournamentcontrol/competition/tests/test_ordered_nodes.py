@@ -3,9 +3,9 @@ The order of the rows kept in a list together: a division's stages and teams,
 a stage's pools, a season's divisions.
 
 A row moves past its real neighbour in the list, whatever the ``order``
-values are: they are not kept dense, so a row that is deleted leaves a gap. A
-division's stages may not share a value, since a formula names a stage by its
-number in the list.
+values are: pools and divisions are not kept dense, so one that is deleted
+leaves a gap. A division's stages and teams are kept dense, and may not share
+a value; a formula names a stage by its number in the list.
 """
 
 from django.db import IntegrityError, connection
@@ -127,15 +127,78 @@ class UniqueOrderTests(TestCase):
                 division=self.division, title="Second", slug="second", order=1
             )
 
-    def test_two_teams_of_a_division_may_share_an_order(self):
-        # A team's neighbours are closed up when it is deleted or regraded
-        # with one update of every row below it, which the database checks
-        # row by row; a constraint on teams must wait for those to change.
+    def test_two_teams_of_a_division_may_not_share_an_order(self):
         factories.TeamFactory.create(division=self.division, order=1)
-        team = Team.objects.create(
-            division=self.division, title="Second", slug="second", order=1
+        with self.assertRaisesMessage(
+            IntegrityError, "competition_team_unique_division_order"
+        ):
+            Team.objects.create(
+                division=self.division, title="Second", slug="second", order=1
+            )
+
+
+class CloseGapTests(TestCase):
+    """
+    A team or stage that is deleted takes its place in the list with it: the
+    rows below move up one, so the list stays numbered 1, 2, 3, ...
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.division = factories.DivisionFactory.create()
+        cls.other = factories.DivisionFactory.create(season=cls.division.season)
+
+    def test_deleting_a_team_closes_the_gap(self):
+        first, second, third, fourth = [
+            factories.TeamFactory.create(division=self.division, title=title, order=n)
+            for n, title in enumerate(("Ants", "Bees", "Cats", "Dogs"), 1)
+        ]
+        elsewhere = factories.TeamFactory.create(division=self.other, order=3)
+        second.delete()
+        self.assertEqual(
+            list(self.division.teams.values_list("title", "order")),
+            [("Ants", 1), ("Cats", 2), ("Dogs", 3)],
         )
-        self.assertEqual(team.order, 1)
+        elsewhere.refresh_from_db()
+        self.assertEqual(elsewhere.order, 3)
+
+    def test_deleting_a_stage_closes_the_gap(self):
+        first, second, third, fourth = [
+            factories.StageFactory.create(division=self.division, title=title, order=n)
+            for n, title in enumerate(("Pool", "Quarters", "Semis", "Finals"), 1)
+        ]
+        elsewhere = factories.StageFactory.create(division=self.other, order=3)
+        second.delete()
+        self.assertEqual(
+            list(self.division.stages.values_list("title", "order")),
+            [("Pool", 1), ("Semis", 2), ("Finals", 3)],
+        )
+        elsewhere.refresh_from_db()
+        self.assertEqual(elsewhere.order, 3)
+
+    def test_deleting_teams_in_turn_closes_each_gap(self):
+        # The teams are read once; deleting the first moves the others, so
+        # the values the caller holds for them are stale.
+        teams = [
+            factories.TeamFactory.create(division=self.division, title=title, order=n)
+            for n, title in enumerate(("Ants", "Bees", "Cats", "Dogs"), 1)
+        ]
+        for team in teams[:2]:
+            team.delete()
+        self.assertEqual(
+            list(self.division.teams.values_list("title", "order")),
+            [("Cats", 1), ("Dogs", 2)],
+        )
+
+    def test_deleting_the_last_stage_changes_nothing_else(self):
+        first, second = [
+            factories.StageFactory.create(division=self.division, title=title, order=n)
+            for n, title in enumerate(("Pool", "Finals"), 1)
+        ]
+        second.delete()
+        self.assertEqual(
+            list(self.division.stages.values_list("title", "order")), [("Pool", 1)]
+        )
 
 
 class MigrationTests(TransactionTestCase):
@@ -193,6 +256,73 @@ class MigrationTests(TransactionTestCase):
                 .values_list("title", "order")
             ),
             [("Pool play", 1), ("Finals", 3)],
+        )
+
+        # Migrate everything else forward again so later tests see the
+        # expected schema.
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
+
+class DenseMigrationTests(TransactionTestCase):
+    """
+    The teams and stages of each division are numbered 1, 2, 3, ... in the
+    order they were listed before the constraint on teams is added; a team
+    not yet placed in a division is left alone.
+    """
+
+    migrate_from = [("competition", "0071_unique_order")]
+    migrate_to = [("competition", "0073_unique_team_order")]
+
+    def test_teams_and_stages_are_numbered_densely(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.migrate_from)
+        apps = executor.loader.project_state(self.migrate_from).apps
+        Competition = apps.get_model("competition", "Competition")
+        Season = apps.get_model("competition", "Season")
+        Division = apps.get_model("competition", "Division")
+        Stage = apps.get_model("competition", "Stage")
+        Team = apps.get_model("competition", "Team")
+
+        competition = Competition.objects.create(title="Touch", slug="touch")
+        season = Season.objects.create(
+            competition=competition, title="2026", slug="2026"
+        )
+        division = Division.objects.create(season=season, title="Open", slug="open")
+        for n, title in ((2, "Ants"), (2, "Bees"), (5, "Cats")):
+            Team.objects.create(
+                division=division, title=title, slug=title.lower(), order=n
+            )
+        unplaced = Team.objects.create(title="Dogs", slug="dogs", order=7)
+        for n, title in ((1, "Pool play"), (3, "Finals")):
+            Stage.objects.create(
+                division=division, title=title, slug=title.lower(), order=n
+            )
+
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(self.migrate_to)
+        apps = executor.loader.project_state(self.migrate_to).apps
+        Stage = apps.get_model("competition", "Stage")
+        Team = apps.get_model("competition", "Team")
+
+        self.assertEqual(
+            list(
+                Team.objects.filter(division_id=division.pk)
+                .order_by("order")
+                .values_list("title", "order")
+            ),
+            [("Ants", 1), ("Bees", 2), ("Cats", 3)],
+        )
+        self.assertEqual(Team.objects.get(pk=unplaced.pk).order, 7)
+        self.assertEqual(
+            list(
+                Stage.objects.filter(division_id=division.pk)
+                .order_by("order")
+                .values_list("title", "order")
+            ),
+            [("Pool play", 1), ("Finals", 2)],
         )
 
         # Migrate everything else forward again so later tests see the
