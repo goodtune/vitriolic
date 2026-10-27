@@ -4606,10 +4606,10 @@ class MatchDetailPermissionTests(MatchRowMixin, TestCase):
         assign_perm("competition.change_match", self.staff)
         season = self.stage.division.season
         # Both rows draw their links, so both walk to their competition for
-        # the URLs: the five queries a row the sheet has always spent.
+        # the URLs: two queries more than when one row did.
         with (
             self.login(self.staff),
-            self.assertNumQueries(self.by_shell(workbook=28, explorer=28)),
+            self.assertNumQueries(self.by_shell(workbook=25, explorer=25)),
         ):
             self.get_check_200(
                 "admin:fixja:match-runsheet",
@@ -4681,9 +4681,10 @@ class RefereeAppointmentsPermissionTests(MatchRowMixin, TestCase):
         assign_perm("competition.change_match", self.staff, theirs)
         season = self.stage.division.season
         # The gate reads the permissions the sheet asks for once for the day's
-        # matches, and the row without the link does not walk to its
+        # matches, and the person's permissions on every match once (their own
+        # and their groups'); the row without the link does not walk to its
         # competition for the URL: two queries fewer than when every row did.
-        with self.login(self.staff), self.assertNumQueries(21):
+        with self.login(self.staff), self.assertNumQueries(23):
             self.get_check_200(
                 "admin:fixja:match-runsheet",
                 season.competition_id,
@@ -4819,7 +4820,11 @@ class StreamedMatchMixin(MatchRowMixin):
         )
 
     def get_run_sheet(self, queries):
-        """The run sheet of 1 May 2025, as the member of staff sees it."""
+        """
+        The run sheet of 1 May 2025, as the member of staff sees it. Of
+        ``queries``, two read the person's permissions on every match (their
+        own and their groups'), which the row gates ask of Django once.
+        """
         season = self.stage.division.season
         # guardian looks up the matches' content type once a process and
         # keeps it, so look it up first: the count must not depend on which
@@ -4901,7 +4906,7 @@ class ResyncLiveStreamPermissionTests(MessagesTestMixin, StreamedMatchMixin, Tes
         # for their URLs, and under Workbook does not ask whether its ground
         # has a camera; the sheet's other per-row queries (stage, division,
         # place, referees) are older than the gate.
-        self.get_run_sheet(self.by_shell(workbook=24, explorer=23))
+        self.get_run_sheet(self.by_shell(workbook=26, explorer=25))
         self.assertResponseContains(self.resync_link(theirs), count=1)
         # The other match is on the sheet, without the link.
         self.assertResponseContains(
@@ -4926,7 +4931,7 @@ class StreamLinksPermissionTests(StreamedMatchMixin, TestCase):
         other = self.match(live_stream=True, home_team__title="Sharks")
         assign_perm("competition.change_match", self.staff, theirs)
         # Neither row asks whether its ground has a camera: it is streaming.
-        self.get_run_sheet(23)
+        self.get_run_sheet(25)
         self.assertResponseContains(
             self.stream_link(theirs, "triangle-alert", "Fix stream"), count=1
         )
@@ -4942,7 +4947,7 @@ class StreamLinksPermissionTests(StreamedMatchMixin, TestCase):
         assign_perm("competition.change_match", self.staff, theirs)
         # Only the row that may offer the link asks whether its ground has a
         # camera.
-        self.get_run_sheet(24)
+        self.get_run_sheet(26)
         self.assertResponseContains(
             self.stream_link(theirs, "pencil", "Stream?"), count=1
         )
