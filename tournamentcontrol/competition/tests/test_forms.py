@@ -1,10 +1,17 @@
 from django import forms
+from django.db.models import Count
 from test_plus import TestCase
 
 from tournamentcontrol.competition.admin import next_related_factory
+from tournamentcontrol.competition.draw.schemas import (
+    DivisionStructure,
+    PoolFixture,
+    StageFixture,
+)
 from tournamentcontrol.competition.forms import (
     ClubEditForm,
     DivisionForm,
+    DivisionStructureJSONForm,
     DrawFormatForm,
     MatchEditForm,
     TeamForm,
@@ -173,6 +180,111 @@ class TeamFormTests(TestCase):
             form,
             "text",
             ["Draw formula is invalid: line(s) '1' are not in the correct format."],
+        )
+
+    def test_drawformat_invalid_lines_are_listed_in_order(self):
+        "The offending lines are listed in the order they appear (#528)."
+        form = DrawFormatForm(
+            data={
+                "name": "Test Draw Format",
+                # Lines 1, 4 and 8 are wrong; a set of them iterates 8, 1, 4.
+                "text": (
+                    "ROUND\n1: 1v2\n2: 3 vs 4\n"
+                    "ROUND\n3: 1 v 3\n4: 2 vs 4\n5: 1 vs 4\n"
+                    "ROUND\n6: 2v3"
+                ),
+                "teams": 4,
+                "is_final": "0",
+            },
+        )
+        self.assertFormError(
+            form,
+            "text",
+            [
+                "Draw formula is invalid: line(s) '1, 4, 8' are not in the correct "
+                "format."
+            ],
+        )
+
+class DivisionStructureJSONFormTests(TestCase):
+    """
+    The JSON division builder validates every draw format a stage or pool
+    refers to as the draw format form does, naming the format (#534).
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create()
+
+    def form(self, **draw_formats):
+        structure = DivisionStructure(
+            title="Juniors",
+            teams=["Reds", "Blues", "Greens", "Yellows"],
+            draw_formats=draw_formats,
+            stages=[
+                StageFixture(
+                    title="Pools",
+                    pools=[
+                        PoolFixture(title="Pool 1", teams=[0, 1], draw_format_ref="pool"),
+                        PoolFixture(title="Pool 2", teams=[2, 3], draw_format_ref="pool"),
+                    ],
+                ),
+                StageFixture(title="Finals", draw_format_ref="final"),
+            ],
+        )
+        return DivisionStructureJSONForm(
+            self.season, data={"json_data": structure.model_dump_json()}
+        )
+
+    def test_match_before_a_round_is_refused(self):
+        form = self.form(pool="1: 1 vs 2\nROUND\n2: 2 vs 1", final="ROUND\n1: P1 vs P2")
+        self.assertEqual(
+            form.errors,
+            {
+                "json_data": [
+                    "Draw format 'pool': Draw formula is invalid: line(s) '0' are "
+                    "not in the correct format."
+                ]
+            },
+        )
+
+    def test_empty_format_is_refused(self):
+        form = self.form(pool="ROUND\n1: 1 vs 2", final="")
+        self.assertEqual(
+            form.errors,
+            {
+                "json_data": [
+                    "Draw format 'final': Draw formula is invalid: it has no ROUND "
+                    "line."
+                ]
+            },
+        )
+
+    def test_each_bad_format_is_reported_once(self):
+        form = self.form(pool="1 vs 2", final="")
+        self.assertEqual(
+            form.errors,
+            {
+                "json_data": [
+                    "Draw format 'pool': Draw formula is invalid: line(s) '0' are "
+                    "not in the correct format.",
+                    "Draw format 'final': Draw formula is invalid: it has no ROUND "
+                    "line.",
+                ]
+            },
+        )
+
+    def test_valid_formats_build(self):
+        form = self.form(
+            pool="ROUND\n1: 1 vs 2\nROUND\n2: 2 vs 1", final="ROUND\n1: P1 vs P2"
+        )
+        self.assertEqual(form.errors, {})
+        division = form.save()
+        self.assertEqual(
+            list(division.stages.annotate(count=Count("matches")).values_list(
+                "title", "count"
+            )),
+            [("Pools", 4), ("Finals", 1)],
         )
 
 
