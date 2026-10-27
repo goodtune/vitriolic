@@ -280,12 +280,11 @@ class ProjectStorageMediaDeleteTests(ProjectStorageMixin, MediaDeleteTests):
     """The same deletes, in the project's storage."""
 
 
-class MediaAddTests(ProjectStorageMixin, MessagesTestMixin, TestCase):
+class MediaAddTests(MediaStorageMixin, MessagesTestMixin, TestCase):
     """
     Uploading a file and opening a folder in the media section, as a member of
     staff who may view and add the site's files. Each goes to the folder it
-    made or filled, and says so. In the project's storage: a new folder needs
-    its ``mkdir``.
+    made or filled, and says so.
     """
 
     user_factory = StaffFactory
@@ -352,15 +351,15 @@ class MediaAddTests(ProjectStorageMixin, MessagesTestMixin, TestCase):
         self.assertEqual(default_storage.listdir("reports"), ([], []))
 
 
-@per_shell
-class NonFileSystemStorageMediaDeleteTests(IconMixin, TestCase):
-    """
-    A storage that is not a file system has no folder the site can remove.
-    Deleting one of its folders says so, instead of answering that the page is
-    missing.
-    """
+class ProjectStorageMediaAddTests(ProjectStorageMixin, MediaAddTests):
+    """The same uploads and folders, in the project's storage."""
 
-    user_factory = StaffFactory
+
+class NonFileSystemStorageMixin:
+    """
+    Keeps the media of each test in Django's ``InMemoryStorage``: a storage
+    that is not a file system, with no folder the site can make or remove.
+    """
 
     def setUp(self):
         super().setUp()
@@ -372,24 +371,14 @@ class NonFileSystemStorageMediaDeleteTests(IconMixin, TestCase):
                 },
             )
         )
-        self.staff = self.make_user(
-            "staff", perms=["content.view_file", "content.delete_file"]
-        )
-        # An empty folder: the storage keeps the folder of a file it has deleted.
-        default_storage.save("reports/2026/.keep", ContentFile(b"\n"))
-        default_storage.delete("reports/2026/.keep")
 
-    def test_a_folder_of_the_storage_is_not_removed(self):
-        with self.login(self.staff):
-            self.post("admin:content:media:delete", "reports/2026/")
-            self.assert_http_302_found(
-                url=self.reverse("admin:content:media:edit", "reports/")
-            )
-            self.get_check_200("admin:content:media:edit", "reports/")
-        text = (
-            "The folder “2026” was not removed: "
-            "this site's storage cannot remove folders."
-        )
+    def makedirs(self, name):
+        """An empty folder ``name``: the storage keeps the folder of a deleted file."""
+        default_storage.save(f"{name}/.keep", ContentFile(b"\n"))
+        default_storage.delete(f"{name}/.keep")
+
+    def assertStorageMessage(self, text):
+        """The page the person is sent to carries ``text`` as an error."""
         self.assertResponseContains(
             self.by_shell(
                 workbook=(
@@ -404,6 +393,80 @@ class NonFileSystemStorageMediaDeleteTests(IconMixin, TestCase):
                     "</button></div>"
                 ),
             )
+        )
+
+
+@per_shell
+class NonFileSystemStorageMediaAddTests(NonFileSystemStorageMixin, IconMixin, TestCase):
+    """
+    A storage that is not a file system has no folder the site can make.
+    Opening one says so, instead of failing.
+    """
+
+    user_factory = StaffFactory
+
+    def setUp(self):
+        super().setUp()
+        self.staff = self.make_user(
+            "staff", perms=["content.view_file", "content.add_file"]
+        )
+        self.makedirs("reports")
+
+    def test_a_folder_of_the_storage_is_not_made(self):
+        with self.login(self.staff):
+            self.post(
+                "admin:content:media:edit", "reports/", data={"folder-name": "2027"}
+            )
+            self.assert_http_302_found(
+                url=self.reverse("admin:content:media:edit", "reports/")
+            )
+            self.get_check_200("admin:content:media:edit", "reports/")
+        self.assertStorageMessage(
+            "The folder “2027” was not made: "
+            "this site's storage cannot make folders."
+        )
+        self.assertEqual(default_storage.listdir("reports"), ([], []))
+
+    def test_a_file_is_still_uploaded(self):
+        with self.login(self.staff):
+            self.post(
+                "admin:content:media:edit",
+                "reports/",
+                data={"file-file": SimpleUploadedFile("minutes.pdf", b"%PDF-1.4")},
+            )
+        self.assert_http_302_found(
+            url=self.reverse("admin:content:media:edit", "reports/")
+        )
+        self.assertEqual(default_storage.listdir("reports"), ([], ["minutes.pdf"]))
+
+
+@per_shell
+class NonFileSystemStorageMediaDeleteTests(NonFileSystemStorageMixin, IconMixin, TestCase):
+    """
+    A storage that is not a file system has no folder the site can remove.
+    Deleting one of its folders says so, instead of answering that the page is
+    missing.
+    """
+
+    user_factory = StaffFactory
+
+    def setUp(self):
+        super().setUp()
+        self.staff = self.make_user(
+            "staff", perms=["content.view_file", "content.delete_file"]
+        )
+        self.makedirs("reports/2026")
+
+    def test_a_folder_of_the_storage_is_not_removed(self):
+        with self.login(self.staff):
+            self.post("admin:content:media:delete", "reports/2026/")
+            self.assert_http_302_found(
+                url=self.reverse("admin:content:media:edit", "reports/")
+            )
+            self.get_check_200("admin:content:media:edit", "reports/")
+        self.assertStorageMessage(
+            "The folder “2026” was not removed: "
+            "this site's storage cannot remove folders."
         )
         self.assertEqual(default_storage.listdir("reports"), (["2026"], []))
 
