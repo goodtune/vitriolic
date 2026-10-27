@@ -71,9 +71,7 @@ class ControlTests(TestCase):
         )
 
     def test_a_long_or_multiple_choice_opens_a_dialog(self):
-        options = "".join(
-            f'<option value="{n}">Choice {n}</option>' for n in range(12)
-        )
+        options = "".join(f'<option value="{n}">Choice {n}</option>' for n in range(12))
         self.assertHTMLEqual(
             render("{{ form.many|control }}", form=ChoiceForm()),
             '<select name="many" class="wb-select" data-picker="dialog" id="id_many">'

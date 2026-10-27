@@ -1197,9 +1197,7 @@ class Application:
         return render_to_string(templates, context, context_instance, **kwargs)
 
     def render(self, request, templates, context, tz=None, **kwargs):
-        logger.debug(
-            "%s.render: %s", self.__class__.__name__, request.path
-        )
+        logger.debug("%s.render: %s", self.__class__.__name__, request.path)
         context.update({"application": self})
         kwargs.setdefault("context", context)
 
