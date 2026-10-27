@@ -52,18 +52,18 @@ class AdminSite(DjangoAdminSite):
         self._shell = get_shell(getattr(shell, "name", shell))
 
     def register(self, component, *schemas):
-        logger.debug("Registering admin component... %s" % component.__name__)
+        logger.debug("Registering admin component... %s", component.__name__)
         if component in self._components:
             # During testing, apps can be reloaded causing re-registration
             # Only raise if not explicitly in test mode
             if not getattr(settings, "TESTING", False):
                 raise AlreadyRegistered(
-                    _("The component %s is already registered" % component.__name__)
+                    _("The component %s is already registered") % component.__name__
                 )
             else:
                 logger.debug(
-                    "Component %s already registered, skipping during test"
-                    % component.__name__
+                    "Component %s already registered, skipping during test",
+                    component.__name__,
                 )
                 return
         self._components[component] = instance = component(self.name)
@@ -77,7 +77,7 @@ class AdminSite(DjangoAdminSite):
             self._components.pop(component)
         except KeyError:
             raise NotRegistered(
-                _("The component %s is not registered" % component.__name__)
+                _("The component %s is not registered") % component.__name__
             )
 
     def _hidden_component(self, component):
@@ -202,9 +202,9 @@ class AdminSite(DjangoAdminSite):
             args = ()
         if kwargs is None:
             kwargs = {}
-        named_url = "%s:%s" % (self.name, name)
+        named_url = f"{self.name}:{name}"
         if prefix:
-            named_url = "%s:%s" % (prefix, named_url)
+            named_url = f"{prefix}:{named_url}"
         return reverse_lazy(named_url, args=args, kwargs=kwargs, current_app=self.name)
 
     @staff_login_required_m

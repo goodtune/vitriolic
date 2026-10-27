@@ -34,7 +34,7 @@ def build(season: Season, spec) -> Division:
         CompetitionExecutionError: If building fails
     """
     try:
-        logger.info(f"Building division '{spec.title}' for season {season.pk}")
+        logger.info("Building division '%s' for season %s", spec.title, season.pk)
         next_division_order = (
             max(season.divisions.values_list("order", flat=True), default=0) + 1
         )
@@ -48,7 +48,7 @@ def build(season: Season, spec) -> Division:
                 "order": next_division_order,
             },
         )
-        logger.debug(f"Created division: {division.title}")
+        logger.debug("Created division: %s", division.title)
 
         # Create teams
         team_mapping = {}
@@ -62,7 +62,7 @@ def build(season: Season, spec) -> Division:
                 },
             )
             team_mapping[team_name] = team
-            logger.debug(f"Created team: {team.title}")
+            logger.debug("Created team: %s", team.title)
 
         # Create lookup by team order for pools that reference by index
         team_lookup = {team.order: team for team in division.teams.all()}
@@ -77,7 +77,7 @@ def build(season: Season, spec) -> Division:
                     "order": stage_order,
                 },
             )
-            logger.debug(f"Created stage: {stage.title}")
+            logger.debug("Created stage: %s", stage.title)
 
             # Handle stage-level draw format (knockouts without pools)
             if stage_spec.draw_format_ref and not stage_spec.pools:
@@ -96,7 +96,7 @@ def build(season: Season, spec) -> Division:
                             "order": pool_order,
                         },
                     )
-                    logger.debug(f"Created pool: {pool.title}")
+                    logger.debug("Created pool: %s", pool.title)
 
                     # Add teams to pool and build team mapping
                     pool_team_mapping = {}
@@ -119,11 +119,11 @@ def build(season: Season, spec) -> Division:
                                 stage, draw_format, pool_team_mapping, pool
                             )
 
-        logger.info(f"Successfully built division '{spec.title}'")
+        logger.info("Successfully built division '%s'", spec.title)
         return division
 
     except Exception as e:
-        logger.error(f"Error building division: {e}")
+        logger.error("Error building division: %s", e)
         raise CompetitionExecutionError(f"Failed to build division: {e}")
 
 
@@ -155,9 +155,11 @@ def _generate_matches_from_draw_format(
             custom_date_generator=no_date_generator,
         )
 
-        logger.debug(f"DrawGenerator produced {len(matches)} matches")
+        logger.debug("DrawGenerator produced %d matches", len(matches))
         if len(matches) == 0:
-            logger.warning(f"No matches generated from draw format: {draw_format[:100]}...")
+            logger.warning(
+                "No matches generated from draw format: %.100s...", draw_format
+            )
 
         # Update stage_group for pool matches
         if stage_group:
@@ -168,11 +170,14 @@ def _generate_matches_from_draw_format(
         matches.save()
 
         logger.debug(
-            f"Generated {len(matches)} matches from draw format for {'pool ' + stage_group.title if stage_group else 'stage ' + stage.title}"
+            "Generated %d matches from draw format for %s %s",
+            len(matches),
+            "pool" if stage_group else "stage",
+            stage_group.title if stage_group else stage.title,
         )
 
     except Exception as e:
-        logger.error(f"Error generating matches from draw format: {e}")
+        logger.error("Error generating matches from draw format: %s", e)
         raise
 
 
@@ -192,4 +197,4 @@ def cleanup_season_structure(season: Season):
                 stage.delete()
             division.delete()
 
-        logger.info(f"Cleaned up competition structure for season {season.pk}")
+        logger.info("Cleaned up competition structure for season %s", season.pk)
