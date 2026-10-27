@@ -2,7 +2,7 @@ import os.path
 
 from django import forms
 from django.contrib.contenttypes.models import ContentType
-from django.core.files.storage import default_storage
+from django.core.files.storage import FileSystemStorage, default_storage
 from django.forms.models import inlineformset_factory
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
@@ -281,7 +281,20 @@ class NewFolderForm(FileFormMixin, forms.Form):
         return name
 
     def save(self, *args, **kwargs):
-        return default_storage.mkdir(name=self.cleaned_data["name"], path=self.path)
+        """
+        Make the folder and return its path in the storage. Raises
+        ``NotImplementedError`` for a storage that cannot make folders.
+        """
+        name = os.path.join(self.path or "", self.cleaned_data["name"])
+        # Django's own FileSystemStorage has no mkdir, but gives the folder's
+        # place on disk. Any other storage says whether it can.
+        if isinstance(default_storage, FileSystemStorage):
+            os.makedirs(default_storage.path(name))
+        elif hasattr(default_storage, "mkdir"):
+            default_storage.mkdir(name=self.cleaned_data["name"], path=self.path)
+        else:
+            raise NotImplementedError("This storage cannot make folders.")
+        return name
 
 
 class FileUploadForm(FileFormMixin, forms.Form):
