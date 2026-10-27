@@ -11,6 +11,7 @@ from guardian.shortcuts import get_objects_for_user
 
 from touchtechnology.common.utils import (
     get_all_perms_for_model_cached,
+    get_perms_for_model,
     model_and_manager,
 )
 
@@ -74,6 +75,10 @@ def admin_list_context(context, queryset, scope=None, template=None, paginate_by
     kw.pop("admin", None)
     kw.pop("component", None)
 
+    add_perm, change_perm, delete_perm, view_perm = get_perms_for_model(
+        model, True, True, True, "view"
+    )
+
     context.update(
         {
             "model": model,
@@ -83,12 +88,10 @@ def admin_list_context(context, queryset, scope=None, template=None, paginate_by
             "create": reverse_lazy("%s:add" % namespace, kwargs=kw),
             # Pass to template the name permissions so we can re-use template
             # code to generically list and add/change/delete objects
-            "add_perm": "%s.add_%s" % (model._meta.app_label, model._meta.model_name),
-            "view_perm": "%s.view_%s" % (model._meta.app_label, model._meta.model_name),
-            "change_perm": "%s.change_%s"
-            % (model._meta.app_label, model._meta.model_name),
-            "delete_perm": "%s.delete_%s"
-            % (model._meta.app_label, model._meta.model_name),
+            "add_perm": add_perm,
+            "view_perm": view_perm,
+            "change_perm": change_perm,
+            "delete_perm": delete_perm,
         }
     )
 
