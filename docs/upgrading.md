@@ -345,3 +345,12 @@ def thing(self, request, *args, **kwargs):
 The decorators that take no arguments stay: `csrf_exempt_m`,
 `login_required_m`, `never_cache_m`, `staff_login_required_m`,
 `superuser_login_required_m`, `require_GET_m` and `require_POST_m`.
+
+## `ResizedImageFieldFile` is gone
+
+`touchtechnology.common.storage` no longer has `ResizedImageFieldFile`. Its
+`regenerate` method called `Image.ANTIALIAS` and `Image.tostring`, which
+Pillow removed, so it raised `AttributeError` the first time it ran. No field
+in this library used it. A project that imported it must make its resized
+copies with Pillow itself, for example `Image.thumbnail` with
+`Image.Resampling.LANCZOS`.
