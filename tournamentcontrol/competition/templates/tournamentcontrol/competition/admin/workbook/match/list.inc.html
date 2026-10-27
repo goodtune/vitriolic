@@ -29,7 +29,9 @@
 {% block empty-row-colspan %}7{% endblock %}
 
 {% block row-buttons-items %}
-	<li><a href="{{ obj.urls.referees }}">{% icon "flag" %}{% trans "Referees" %}</a></li>
+	{% if change_perm in object_perms %}
+		<li><a href="{{ obj.urls.referees }}">{% icon "flag" %}{% trans "Referees" %}</a></li>
+	{% endif %}
 	{{ block.super }}
 {% endblock row-buttons-items %}
 

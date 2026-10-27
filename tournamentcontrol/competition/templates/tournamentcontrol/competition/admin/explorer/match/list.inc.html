@@ -31,7 +31,9 @@
 {% block empty-row-colspan %}8{% endblock %}
 
 {% block row-buttons-items %}
-	<a href="{{ obj.urls.referees }}">{% icon "referee" %}{% trans "Referees" %}</a>
+	{% if change_perm in object_perms %}
+		<a href="{{ obj.urls.referees }}">{% icon "referee" %}{% trans "Referees" %}</a>
+	{% endif %}
 	{{ block.super }}
 {% endblock row-buttons-items %}
 
