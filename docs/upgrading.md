@@ -306,3 +306,33 @@ The apps no longer ship `locale/en-AU`. Django never loaded those catalogues,
 because it looks for a directory named `en_AU`, and they held no translations.
 A project that offers `en-au` in `LANGUAGES` sees no change: these apps show
 their source strings, as before.
+
+## The storage no longer looks for `tenant_schemas`
+
+`touchtechnology.common.storage.FileSystemStorage` no longer has
+`tenant_schemas.storage.TenantStorageMixin` among its bases. In 4.x the mixin
+was imported when `tenant_schemas` was installed and replaced with an empty
+class when it was not; `tenant_schemas` is not a dependency of this library.
+The bases are now `MakeDirectoryMixin`, `WalkMixin` and Django's
+`FileSystemStorage`. A project that keeps its media per tenant should mix
+`TenantStorageMixin` into its own storage class.
+
+## Three method decorators are gone
+
+`touchtechnology.common.decorators` no longer has `cache_control_m`,
+`permission_required_m` or `user_passes_test_m`. Each wrapped a decorator
+*factory* in `method_decorator`, so it could not be given its arguments and
+never worked. Write the Django decorator at the call site instead:
+
+```python
+from django.contrib.auth.decorators import permission_required
+from django.utils.decorators import method_decorator
+
+@method_decorator(permission_required("app.change_thing"))
+def thing(self, request, *args, **kwargs):
+    ...
+```
+
+The decorators that take no arguments stay: `csrf_exempt_m`,
+`login_required_m`, `never_cache_m`, `staff_login_required_m`,
+`superuser_login_required_m`, `require_GET_m` and `require_POST_m`.
