@@ -11,12 +11,6 @@ from PIL import Image
 
 from touchtechnology.common.default_settings import STORAGE_FOLDER, STORAGE_URL
 
-try:
-    from tenant_schemas.storage import TenantStorageMixin
-except ImportError:
-    TenantStorageMixin = type("TenantStorageMixin", (), {})
-
-
 logger = logging.getLogger(__name__)
 
 __all__ = (
@@ -83,9 +77,7 @@ class WalkMixin:
                 yield triple
 
 
-class FileSystemStorage(
-    MakeDirectoryMixin, WalkMixin, TenantStorageMixin, FileSystemStorageBase
-):
+class FileSystemStorage(MakeDirectoryMixin, WalkMixin, FileSystemStorageBase):
     """
     Django's storage, keeping the site's files in the folder that
     ``TOUCHTECHNOLOGY_STORAGE_FOLDER`` names inside ``MEDIA_ROOT`` and serving
