@@ -22,11 +22,11 @@ class SetupTests(TestCase):
         )
         self.assertEqual(setup.next_step.label, "Three")
         self.assertEqual((setup.done, setup.total, setup.percent), (1, 3, 33))
-        self.assertFalse(setup.complete)
+        self.assertIs(setup.complete, False)
 
     def test_complete_ignores_optional_steps(self):
         setup = Setup("Set-up", [Step("One", True), Step("Two", False, optional=True)])
-        self.assertTrue(setup.complete)
+        self.assertIs(setup.complete, True)
         self.assertIsNone(setup.next_step)
 
     def test_folded_when_every_required_step_is_done(self):
@@ -66,26 +66,28 @@ class SeasonSetupTests(TestCase):
 
     def test_division_short_of_teams_links_to_its_teams(self):
         step = self.steps(self.season)["Enter the teams"]
-        self.assertFalse(step.done)
+        self.assertIs(step.done, False)
         self.assertEqual(step.url, f"{self.division.urls['edit']}#teams-tab")
 
     def test_venue_without_grounds_links_to_its_grounds(self):
         venue = factories.VenueFactory.create(season=self.season)
         step = self.steps(self.season)["Add venues and their grounds"]
-        self.assertFalse(step.done)
+        self.assertIs(step.done, False)
         self.assertEqual(step.url, f"{venue.urls['edit']}#grounds-tab")
         factories.GroundFactory.create(venue=venue)
-        self.assertTrue(self.steps(self.season)["Add venues and their grounds"].done)
+        self.assertIs(
+            self.steps(self.season)["Add venues and their grounds"].done, True
+        )
 
     def test_draw_built_and_scheduled(self):
         for _ in range(2):
             factories.TeamFactory.create(division=self.division)
         match = factories.MatchFactory.create(stage=self.stage, date=date(2026, 7, 8))
         steps = self.steps(self.season)
-        self.assertTrue(steps["Enter the teams"].done)
-        self.assertTrue(steps["Build the draw"].done)
+        self.assertIs(steps["Enter the teams"].done, True)
+        self.assertIs(steps["Build the draw"].done, True)
         schedule = steps["Give every match a time and a ground"]
-        self.assertFalse(schedule.done)
+        self.assertIs(schedule.done, False)
         self.assertEqual(
             schedule.url,
             self.reverse(
@@ -122,7 +124,7 @@ class SeasonSetupTests(TestCase):
             f'<a href="{self.season.urls["edit"]}#setup-tab">'
             "<strong>Season set-up</strong> 3 of 8 done</a>"
         )
-        self.assertFalse(self.context["setup"].here)
+        self.assertIs(self.context["setup"].here, False)
 
     def test_competition_setup_asks_for_a_season(self):
         competition = factories.CompetitionFactory.create()

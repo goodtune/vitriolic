@@ -43,14 +43,7 @@ class StageGroupPositionRegexTests(TestCase):
         for pattern, expected_groups in valid_patterns:
             with self.subTest(pattern=pattern):
                 match = stage_group_position_re.match(pattern)
-                self.assertIsNotNone(match, f"Pattern '{pattern}' should match")
-
-                stage, group, position = match.groups()
-                expected_stage, expected_group, expected_position = expected_groups
-
-                self.assertEqual(stage, expected_stage)
-                self.assertEqual(group, expected_group)
-                self.assertEqual(position, expected_position)
+                self.assertEqual(match.groups(), expected_groups)
 
     def test_invalid_regex_patterns(self):
         """Test that invalid stage_group_position patterns do not match."""
@@ -77,22 +70,20 @@ class StageGroupPositionRegexTests(TestCase):
 
     def test_partial_matches_not_accepted(self):
         """Test that partial matches at start of string don't count as valid."""
+        # The regex is not anchored at the end, so a valid prefix matches
+        # without consuming the trailing text; a leading space does not match.
         partial_patterns = [
-            "P1Extra",  # Valid start but extra text
-            "G1P1More",
-            "S1G1P1AndMore",
-            "P1 ",  # Trailing space
-            " P1",  # Leading space
+            ("P1Extra", "P1"),  # Valid start but extra text
+            ("G1P1More", "G1P1"),
+            ("S1G1P1AndMore", "S1G1P1"),
+            ("P1 ", "P1"),  # Trailing space
+            (" P1", None),  # Leading space
         ]
 
-        for pattern in partial_patterns:
+        for pattern, expected in partial_patterns:
             with self.subTest(pattern=pattern):
                 match = stage_group_position_re.match(pattern)
-                # These might match but should not be considered complete/valid
-                if match:
-                    # If it matches, the full match should not equal the input
-                    # indicating the pattern didn't consume the whole string
-                    self.assertNotEqual(match.group(0), pattern)
+                self.assertEqual(match and match.group(0), expected)
 
 
 class StageGroupPositionModelFixTests(TestCase):
@@ -103,6 +94,7 @@ class StageGroupPositionModelFixTests(TestCase):
 
     def setUp(self):
         """Set up test fixtures for model testing."""
+        super().setUp()
         self.division = DivisionFactory.create()
         self.stage1 = StageFactory.create(division=self.division, order=1)
         self.stage2 = StageFactory.create(
@@ -333,6 +325,7 @@ class FirstStageReferenceTests(TestCase):
     """
 
     def setUp(self):
+        super().setUp()
         self.stage = StageFactory.create(order=1)
         self.teams = TeamFactory.create_batch(2, division=self.stage.division)
 
@@ -548,6 +541,7 @@ class StageGroupPositionIntegrationTests(TestCase):
 
     def setUp(self):
         """Set up a realistic two-stage competition."""
+        super().setUp()
         self.division = DivisionFactory.create()
 
         # Stage 1: Round Robin with two groups

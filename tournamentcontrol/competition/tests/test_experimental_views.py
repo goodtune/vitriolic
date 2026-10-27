@@ -44,7 +44,7 @@ class DisabledExperimentalViewTests(TestCase):
         self.get(
             "competition:season-fixtures", season.competition.slug, season.slug
         )
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_team_timeline_not_enabled(self):
         team = factories.TeamFactory.create()
@@ -56,12 +56,13 @@ class DisabledExperimentalViewTests(TestCase):
             team.division.slug,
             team.slug,
         )
-        self.response_404()
+        self.assert_http_404_not_found()
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
 class SeasonFixturesTests(TestCase):
     def setUp(self):
+        super().setUp()
         self.season = factories.SeasonFactory.create(enable_experimental_views=True)
 
     def test_season_fixtures(self):
@@ -137,7 +138,7 @@ class SeasonFixturesTests(TestCase):
             data={"day": "2022-07-02"},
             extra={"HTTP_HX_REQUEST": "true"},
         )
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertTemplateUsed(
             self.last_response,
             "tournamentcontrol/competition/_season_fixtures_day.html",
@@ -154,7 +155,7 @@ class SeasonFixturesTests(TestCase):
             self.season.slug,
             data={"day": "not-a-day"},
         )
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_season_fixtures_excludes_unscheduled_matches(self):
         stage = factories.StageFactory.create(division__season=self.season)
@@ -190,7 +191,7 @@ class SeasonFixturesTests(TestCase):
             self.season.slug,
             data={"day": "2022-07-09"},
         )
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_season_fixtures_division_filter(self):
         stage1 = factories.StageFactory.create(division__season=self.season)
@@ -248,7 +249,7 @@ class SeasonFixturesTests(TestCase):
             self.season.slug,
             data={"team": "no-such-team"},
         )
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_season_fixtures_place_filter(self):
         stage = factories.StageFactory.create(division__season=self.season)
@@ -295,14 +296,14 @@ class SeasonFixturesTests(TestCase):
             self.season.slug,
             data={"place": "0"},
         )
-        self.response_404()
+        self.assert_http_404_not_found()
         self.get(
             "competition:season-fixtures",
             self.season.competition.slug,
             self.season.slug,
             data={"place": "not-a-pk"},
         )
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_season_fixtures_excludes_draft_divisions(self):
         stage = factories.StageFactory.create(division__season=self.season)
@@ -338,7 +339,7 @@ class SeasonFixturesTests(TestCase):
             self.season.slug,
             data={"division": draft_stage.division.slug},
         )
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_season_fixtures_excludes_byes(self):
         stage = factories.StageFactory.create(division__season=self.season)
@@ -365,6 +366,7 @@ class SeasonFixturesTests(TestCase):
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
 class TeamTimelineTests(TestCase):
     def setUp(self):
+        super().setUp()
         self.season = factories.SeasonFactory.create(enable_experimental_views=True)
         self.stage = factories.StageFactory.create(division__season=self.season)
         self.team = factories.TeamFactory.create(division=self.stage.division)
@@ -432,7 +434,7 @@ class TeamTimelineTests(TestCase):
         self.assertEqual(record["played"], 1)
         self.assertEqual(record["win"], 1)
         self.assertResponseContains(
-            "Played 1: 1 win, 0 losses, 0 draws.", html=False
+            '<p class="team-record">Played 1: 1 win, 0 losses, 0 draws.</p>'
         )
 
     def test_team_timeline_undecided_matches(self):
@@ -470,7 +472,7 @@ class TeamTimelineTests(TestCase):
             team.division.slug,
             team.slug,
         )
-        self.response_404()
+        self.assert_http_404_not_found()
 
 
 class MatchesTimelineTests(TestCase):

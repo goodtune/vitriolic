@@ -21,6 +21,7 @@ class MatchLiveStreamTests(TestCase):
 
     def setUp(self):
         """Create test fixtures with YouTube configuration."""
+        super().setUp()
         self.season = factories.SeasonFactory.create(
             live_stream=True,
             live_stream_project_id="test-project-123",
@@ -69,10 +70,10 @@ class MatchLiveStreamTests(TestCase):
         mock_build.return_value = mock_youtube
         
         # Make transition
-        response = self.match_with_stream.transition_live_stream('live')
-        
-        # Verify response
-        self.assertEqual(response, mock_response)
+        result = self.match_with_stream.transition_live_stream('live')
+
+        # Verify result
+        self.assertEqual(result, mock_response)
         
         # Verify YouTube API was called correctly
         mock_youtube.liveBroadcasts.return_value.transition.assert_called_once_with(
@@ -90,10 +91,10 @@ class MatchLiveStreamTests(TestCase):
         custom_youtube.liveBroadcasts.return_value.transition.return_value.execute.return_value = custom_response
         
         # The build mock should not be called when providing custom service
-        response = self.match_with_stream.transition_live_stream('testing', custom_youtube)
-        
+        result = self.match_with_stream.transition_live_stream('testing', custom_youtube)
+
         # Verify custom service was used
-        self.assertEqual(response, custom_response)
+        self.assertEqual(result, custom_response)
         custom_youtube.liveBroadcasts.return_value.transition.assert_called_once()
         
         # Verify season's YouTube service was not created
@@ -134,15 +135,15 @@ class MatchLiveStreamTests(TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             
-            response = self.match_with_stream.transition_live_stream('testing', mock_youtube)
-            
+            result = self.match_with_stream.transition_live_stream('testing', mock_youtube)
+
             # Verify warning was issued
             self.assertEqual(len(w), 1)
-            self.assertTrue(issubclass(w[0].category, LiveStreamTransitionWarning))
+            self.assertIs(w[0].category, LiveStreamTransitionWarning)
             self.assertIn("Potentially invalid transition from 'live' to 'testing'", str(w[0].message))
             
             # Verify transition still proceeded
-            self.assertEqual(response, mock_transition_response)
+            self.assertEqual(result, mock_transition_response)
 
     @mock.patch("tournamentcontrol.competition.models.build")
     def test_transition_with_youtube_api_exception_handling(self, mock_build):
@@ -174,11 +175,11 @@ class MatchLiveStreamTests(TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             
-            response = self.match_with_stream.transition_live_stream('live', mock_youtube)
-            
+            result = self.match_with_stream.transition_live_stream('live', mock_youtube)
+
             # Should be no warnings for valid transition
             self.assertEqual(len(w), 0)
-            self.assertEqual(response['status'], 'live')
+            self.assertEqual(result, {'status': 'live'})
 
     @mock.patch("tournamentcontrol.competition.models.build")
     def test_same_status_transition_allowed(self, mock_build):
@@ -195,11 +196,11 @@ class MatchLiveStreamTests(TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             
-            response = self.match_with_stream.transition_live_stream('testing', mock_youtube)
-            
+            result = self.match_with_stream.transition_live_stream('testing', mock_youtube)
+
             # Should be no warnings for same-status transition
             self.assertEqual(len(w), 0)
-            self.assertEqual(response['status'], 'testing')
+            self.assertEqual(result, {'status': 'testing'})
 
     @mock.patch("tournamentcontrol.competition.models.build")
     def test_transition_when_status_check_fails(self, mock_build):
@@ -214,9 +215,9 @@ class MatchLiveStreamTests(TestCase):
         mock_youtube.liveBroadcasts.return_value.transition.return_value.execute.return_value = {'status': 'live'}
         
         # Should proceed despite status check failure
-        response = self.match_with_stream.transition_live_stream('live', mock_youtube)
-        
-        self.assertEqual(response['status'], 'live')
+        result = self.match_with_stream.transition_live_stream('live', mock_youtube)
+
+        self.assertEqual(result, {'status': 'live'})
         mock_youtube.liveBroadcasts.return_value.transition.assert_called_once_with(
             broadcastStatus='live',
             id='yt_broadcast_123',

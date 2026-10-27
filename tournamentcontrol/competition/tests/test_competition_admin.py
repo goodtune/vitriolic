@@ -115,29 +115,39 @@ class TestCase(BaseTestCase):
         super().setUp()
         self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
 
-    def assertGoodEditView(self, viewname, *args, **kwargs):
+    def assertGoodEditView(self, viewname, *args, saved_url=None, **kwargs):
         test_query_count = kwargs.pop("test_query_count", 50)
         self.assertLoginRequired(viewname, *args)
         with self.login(self.superuser):
             self.assertGoodView(viewname, test_query_count=test_query_count, *args)
             if kwargs:
                 self.post(viewname, *args, **kwargs)
-                self.assert_http_302_found()
+                self.assert_http_302_found(url=saved_url)
 
-    def assertGoodDeleteView(self, viewname, *args):
+    def assertGoodDeleteView(self, viewname, *args, deleted_url):
         self.assertLoginRequired(viewname, *args)
         with self.login(self.superuser):
             self.get(viewname, *args)
             self.assert_http_405_method_not_allowed()
             self.post(viewname, *args)
-            self.assert_http_302_found()
+            self.assert_http_302_found(url=deleted_url)
 
-    def assertGoodNamespace(self, instance, **kwargs):
+    def assertGoodNamespace(self, instance, deleted_url, saved_url=None, **kwargs):
+        """
+        ``deleted_url`` is where deleting the instance leads. When ``kwargs``
+        are posted, adding and editing lead to ``saved_url``.
+        """
         namespace = instance._get_admin_namespace()
         args = instance._get_url_args()
-        self.assertGoodEditView(f"{namespace}:add", *args[:-1], **kwargs)
-        self.assertGoodEditView(f"{namespace}:edit", *args, **kwargs)
-        self.assertGoodDeleteView(f"{namespace}:delete", *args)
+        self.assertGoodEditView(
+            f"{namespace}:add", *args[:-1], saved_url=saved_url, **kwargs
+        )
+        self.assertGoodEditView(
+            f"{namespace}:edit", *args, saved_url=saved_url, **kwargs
+        )
+        self.assertGoodDeleteView(
+            f"{namespace}:delete", *args, deleted_url=deleted_url
+        )
 
 
 class TemplateTests(TestCase):
@@ -575,85 +585,119 @@ class GoodViewTests(TestCase):
         list of competitions.
         """
         self.assertLoginRequired("admin:fixja:index")
+        url = self.reverse("admin:fixja:competition:list")
         with self.login(self.superuser):
             self.get("admin:fixja:index")
             if site.shell.index_landing:
                 self.assert_http_200_ok()
-                url = self.reverse("admin:fixja:competition:list")
                 self.assertResponseContains(
                     f'<a class="wb-task" href="{url}">'
                     f'<span class="wb-task-icon">{ICON % "chevron-right"}</span>'
                     '<span class="wb-task-title">Competitions</span></a>',
                 )
             else:
-                self.assert_http_302_found()
+                self.assert_http_302_found(url=url)
 
     def test_competition(self):
         competition = factories.CompetitionFactory.create()
         self.assertLoginRequired("admin:fixja:competition:list")
         with self.login(self.superuser):
             self.assertGoodView("admin:fixja:competition:list")
-        self.assertGoodNamespace(competition)
+        self.assertGoodNamespace(
+            competition, self.reverse("admin:fixja:competition:list")
+        )
 
     def test_clubrole(self):
         role = factories.ClubRoleFactory.create()
-        self.assertGoodNamespace(role, data={"name": "Club Role"})
+        competition_url = role.competition.urls["edit"]
+        self.assertGoodNamespace(
+            role,
+            f"{competition_url}#club_roles-tab",
+            saved_url=str(competition_url),
+            data={"name": "Club Role"},
+        )
 
     def test_teamrole(self):
         role = factories.TeamRoleFactory.create()
-        self.assertGoodNamespace(role, data={"name": "Team Role"})
+        competition_url = role.competition.urls["edit"]
+        self.assertGoodNamespace(
+            role,
+            f"{competition_url}#team_roles-tab",
+            saved_url=str(competition_url),
+            data={"name": "Team Role"},
+        )
 
     def test_season(self):
         season = factories.SeasonFactory.create()
-        self.assertGoodNamespace(season)
+        self.assertGoodNamespace(
+            season, f"{season.competition.urls['edit']}#seasons-tab"
+        )
 
     def test_season_exclusion(self):
         exclusion = factories.SeasonExclusionDateFactory.create()
-        self.assertGoodNamespace(exclusion)
+        self.assertGoodNamespace(
+            exclusion, f"{exclusion.season.urls['edit']}#exclusions-tab"
+        )
 
     def test_timeslot(self):
         matchtime = factories.SeasonMatchTimeFactory.create()
-        self.assertGoodNamespace(matchtime)
+        self.assertGoodNamespace(
+            matchtime, f"{matchtime.season.urls['edit']}#timeslots-tab"
+        )
 
     def test_livestreamevent(self):
         event = factories.LiveStreamEventFactory.create(season__live_stream=True)
-        self.assertGoodNamespace(event)
+        self.assertGoodNamespace(
+            event, f"{event.season.urls['edit']}#live_stream_events-tab"
+        )
 
     def test_livestreamkey(self):
         stream_key = factories.LiveStreamKeyFactory.create(season__live_stream=True)
-        self.assertGoodNamespace(stream_key)
+        self.assertGoodNamespace(
+            stream_key, f"{stream_key.season.urls['edit']}#live_stream_keys-tab"
+        )
 
     def test_venue(self):
         venue = factories.VenueFactory.create()
-        self.assertGoodNamespace(venue)
+        self.assertGoodNamespace(venue, f"{venue.season.urls['edit']}#venues-tab")
 
     def test_ground(self):
         ground = factories.GroundFactory.create()
-        self.assertGoodNamespace(ground)
+        self.assertGoodNamespace(ground, f"{ground.venue.urls['edit']}#grounds-tab")
 
     def test_division(self):
         division = factories.DivisionFactory.create()
-        self.assertGoodNamespace(division)
+        self.assertGoodNamespace(
+            division, f"{division.season.urls['edit']}#divisions-tab"
+        )
 
     def test_division_exclusion(self):
         exclusion = factories.DivisionExclusionDateFactory.create()
-        self.assertGoodNamespace(exclusion)
+        self.assertGoodNamespace(
+            exclusion, f"{exclusion.division.urls['edit']}#exclusions-tab"
+        )
 
     def test_team(self):
         team = factories.TeamFactory.create()
-        self.assertGoodNamespace(team)
+        self.assertGoodNamespace(team, str(team.division.urls["edit"]))
 
     def test_teamassociation(self):
         team_association = factories.TeamAssociationFactory.create()
-        self.assertGoodNamespace(team_association)
+        self.assertGoodNamespace(
+            team_association, f"{team_association.team.urls['edit']}#people-tab"
+        )
 
     def test_stage(self):
         stage = factories.StageFactory.create()
-        self.assertGoodNamespace(stage, test_query_count=100)
+        self.assertGoodNamespace(
+            stage,
+            f"{stage.division.urls['edit']}#stages-tab",
+            test_query_count=100,
+        )
 
     def test_match(self):
         match = factories.MatchFactory.create()
-        self.assertGoodNamespace(match)
+        self.assertGoodNamespace(match, f"{match.stage.urls['edit']}#matches-tab")
 
     @patch.multiple(
         cloudinary.config(),
@@ -666,7 +710,9 @@ class GoodViewTests(TestCase):
         scoresheet = MatchScoreSheet.objects.create(
             match=factories.MatchFactory.create(), image="harness/score-sheet"
         )
-        self.assertGoodNamespace(scoresheet)
+        self.assertGoodNamespace(
+            scoresheet, f"{scoresheet.match.urls['edit']}#scoresheets-tab"
+        )
 
     @patch.multiple(
         cloudinary.config(),
@@ -684,7 +730,7 @@ class GoodViewTests(TestCase):
 
     def test_pool(self):
         pool = factories.StageGroupFactory.create()
-        self.assertGoodNamespace(pool)
+        self.assertGoodNamespace(pool, f"{pool.stage.urls['edit']}#pools-tab")
 
     @unittest.skip(
         "django-guardian bug - see "
@@ -695,19 +741,21 @@ class GoodViewTests(TestCase):
         self.assertLoginRequired("admin:fixja:club:list")
         with self.login(self.superuser):
             self.assertGoodView("admin:fixja:club:list")
-        self.assertGoodNamespace(club)
+        self.assertGoodNamespace(club, self.reverse("admin:fixja:club:list"))
 
     def test_person(self):
         person = factories.PersonFactory.create()
         self.assertEqual(person.statistics.count(), 0)
-        self.assertGoodNamespace(person)
+        self.assertGoodNamespace(person, str(person.club.urls["edit"]))
 
     def test_format(self):
         draw_format = factories.DrawFormatFactory.create()
         self.assertLoginRequired("admin:fixja:format:list")
         with self.login(self.superuser):
             self.assertGoodView("admin:fixja:format:list")
-        self.assertGoodNamespace(draw_format)
+        self.assertGoodNamespace(
+            draw_format, self.reverse("admin:fixja:format:list")
+        )
 
     @unittest.skip("Not refactored as a namespace yet")
     def test_list_drawformat(self):
@@ -769,7 +817,7 @@ class GoodViewTests(TestCase):
                     "form-0-play_at": ground.pk,
                 },
             )
-            self.assert_http_302_found()
+            self.assert_http_302_found(url=f"{season.urls['edit']}#schedule-tab")
 
     def test_match_live_stream_requires_staff_login(self):
         stage = factories.StageFactory.create()
@@ -1076,7 +1124,7 @@ class GoodViewTests(TestCase):
                 data[f"form-{i}-team"] = str(team.pk)
 
             self.post(url.url_name, *url.args, data=data)
-            self.assert_http_302_found()
+            self.assert_http_302_found(url=str(division.season.urls["edit"]))
 
             semi_1.refresh_from_db()
             semi_2.refresh_from_db()
@@ -1189,7 +1237,7 @@ class GoodViewTests(TestCase):
                 "keep_old": "false",
             }
             self.post("admin:fixja:club:person:merge", club.pk, member1.pk, data=data)
-            self.assert_http_302_found()
+            self.assert_http_302_found(url=str(club.urls["edit"]))
 
         # Check the database state after the merge.
         self.assertCountEqual(
@@ -1241,7 +1289,7 @@ class GoodViewTests(TestCase):
                 person.pk,
                 data=data,
             )
-            self.assert_http_302_found()
+            self.assert_http_302_found(url=str(original_club.urls["edit"]))
 
             # Verify the person was transferred
             person.refresh_from_db()
@@ -1597,7 +1645,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         }
         add_division = Division(season=season).url_names["add"]
         self.post(add_division.url_name, *add_division.args, data=data)
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=str(season.urls["edit"]))
 
         with self.settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls"):
             self.assertGoodView(
@@ -1621,7 +1669,7 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         edit_division = division.url_names["edit"]
         self.post(edit_division.url_name, *edit_division.args, data=data)
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=str(season.urls["edit"]))
 
         with self.settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls"):
             self.assertGoodView(
@@ -1735,7 +1783,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             "slug_locked": "0",
         }
         self.post("admin:fixja:club:edit", club.pk, data=data)
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=self.reverse("admin:fixja:club:list"))
 
         self.get("admin:fixja:club:list")
         self.assertResponseContains(
@@ -1889,7 +1937,8 @@ class BackendTests(MessagesTestMixin, TestCase):
             match.date.strftime("%Y%m%d"),
             data=data,
         )
-        self.assert_http_302_found()
+        schedule_url = f"{match.stage.division.season.urls['edit']}#schedule-tab"
+        self.assert_http_302_found(url=schedule_url)
 
         data.update(
             {
@@ -1904,7 +1953,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             match.date.strftime("%Y%m%d"),
             data=data,
         )
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=schedule_url)
 
     def test_enhancement_0024_team(self):
         """
@@ -1954,7 +2003,7 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # Ensure that POST to the delete view redirects.
         self.post(delete_team.url_name, *delete_team.args)
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=str(stage.division.urls["edit"]))
 
         # Subsequent GET request to the edit view should be a 404.
         self.get(edit_team.url_name, *edit_team.args)
@@ -2008,7 +2057,7 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # Ensure that POST to the delete view redirects.
         self.post(team._get_admin_namespace() + ":delete", *team._get_url_args())
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=str(stage.urls["edit"]))
 
         # Subsequent GET request to the edit view should be a 404.
         self.get(team._get_admin_namespace() + ":delete", *team._get_url_args())
@@ -2026,8 +2075,8 @@ class BackendTests(MessagesTestMixin, TestCase):
         }
         add_pool = pool.url_names["add"]
         self.post(add_pool.url_name, *add_pool.args[:-1], data=data)
-        self.assert_http_302_found()
         z = pool.stage.pools.latest("order")
+        self.assert_http_302_found(url=str(z.urls["edit"]))
         self.assertEqual(z.order, pool.order + 1)
 
     def test_bug_0115_add_duplicate_team_name(self):
@@ -2055,7 +2104,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         # Unsaved instance means we don't have to trim the final positional argument.
         add_team = Team(division=division).url_names["add"]
         self.post(add_team.url_name, *add_team.args, data=data)
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=str(division.urls["edit"]))
         # Ensure that the team was created and that it has a slug
         team = division.teams.get(title="New Team")
         self.assertEqual(team.slug, "new-team")
@@ -2073,7 +2122,8 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         edit_team = team.url_names["edit"]
         self.post(edit_team.url_name, *edit_team.args, data=data)
-        self.assert_http_302_found()
+        division_url = str(team.division.urls["edit"])
+        self.assert_http_302_found(url=division_url)
 
         # Ensure that the team was updated
         blue = Team.objects.get(title="Blue")
@@ -2085,7 +2135,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         data["title"] = "Magenta"
         edit_blue = blue.url_names["edit"]
         self.post(edit_blue.url_name, *edit_blue.args, data=data)
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=division_url)
 
         magenta = Team.objects.get(title="Magenta")
         self.assertEqual(team.pk, magenta.pk)
@@ -2131,7 +2181,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         add_match = Match(stage=stage).url_names["add"]
         data["live_stream_thumbnail_image"] = ""
         self.post(add_match.url_name, *add_match.args, data=data)
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=str(stage.urls["edit"]))
 
     def test_bug_100_add_stagegroup(self):
         """
@@ -2451,7 +2501,7 @@ class BackendTests(MessagesTestMixin, TestCase):
 
             # Submit step 1 to complete the wizard
             self.post(build_url.url_name, *build_url.args, data=step1_data)
-            self.assert_http_302_found()
+            self.assert_http_302_found(url=str(stage.division.urls["edit"]))
 
             # If we have successfully moved through the wizard and been
             # redirected, the following matches would have been created.
@@ -2550,7 +2600,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             # This should complete successfully without TypeError
             data["live_stream_thumbnail_image"] = ""
             self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
-            self.assert_http_302_found()  # Should redirect successfully
+            self.assert_http_302_found(url=str(match.stage.urls["edit"]))
 
             # Verify the match was updated
             match.refresh_from_db()
@@ -2649,7 +2699,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 data=data,
             )
-            self.assert_http_302_found()  # Should redirect after successful save
+            self.assert_http_302_found(url=str(season.urls["edit"]))
 
         # Check that division was created, with a match for every line of the format
         self.assertEqual(season.divisions.count(), 1)
@@ -2809,7 +2859,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             # This should complete successfully without TypeError
             data["live_stream_thumbnail_image"] = ""
             self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
-            self.assert_http_302_found()  # Should redirect successfully
+            self.assert_http_302_found(url=str(match.stage.urls["edit"]))
 
             # Verify the match was updated
             match.refresh_from_db()
@@ -2856,7 +2906,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         undo_draw_url = stage.url_names["undo"]
 
         self.post(undo_draw_url.url_name, *undo_draw_url.args)
-        self.assert_http_302_found()  # Should redirect successfully without error
+        self.assert_http_302_found(url=f"{stage.division.urls['edit']}#stages-tab")
 
         # Verify all matches from the stage were deleted
         self.assertCountEqual(stage.matches.all(), [])
@@ -2952,7 +3002,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         undo_draw_url = stage.url_names["undo"]
 
         self.post(undo_draw_url.url_name, *undo_draw_url.args)
-        self.assert_http_302_found()  # Should redirect successfully without error
+        self.assert_http_302_found(url=f"{stage.division.urls['edit']}#stages-tab")
 
         # Verify all matches from the stage were deleted despite complex dependencies
         self.assertCountEqual(stage.matches.all(), [])
@@ -3035,7 +3085,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         add_match = Match(stage=stage).url_names["add"]
         data["live_stream_thumbnail_image"] = ""
         self.post(add_match.url_name, *add_match.args, data=data)
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=str(stage.urls["edit"]))
 
     @patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
     @patch(
@@ -3088,7 +3138,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         resync = match.url_names["resync-live-stream"]
         with self.login(self.superuser):
             self.post(resync.url_name, *resync.args)
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=str(match.stage.urls["edit"]))
 
         update_call = mock_youtube.liveBroadcasts.return_value.update.call_args
         body = update_call.kwargs["body"]
@@ -3132,7 +3182,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         resync = match.url_names["resync-live-stream"]
         with self.login(self.superuser):
             self.post(resync.url_name, *resync.args)
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=str(match.stage.urls["edit"]))
 
         mock_youtube.liveBroadcasts.return_value.update.assert_not_called()
 
@@ -3222,7 +3272,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "20250501",
                 data=data,
             )
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=str(season.urls["edit"]))
 
         match_to_turn_on.refresh_from_db()
         match_to_turn_off.refresh_from_db()
@@ -3256,12 +3306,30 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "20250501",
             )
             self.assert_http_200_ok()
-            self.assertContains(self.last_response, expected_url)
+            self.assertResponseContains(
+                by_shell(
+                    workbook=f'<a class="p-button" href="{expected_url}">Live Stream</a>',
+                    explorer=f'<a href="{expected_url}">Live stream</a>',
+                )
+            )
 
             edit_season = season.url_names["edit"]
             self.get(edit_season.url_name, *edit_season.args)
             self.assert_http_200_ok()
-            self.assertContains(self.last_response, expected_url)
+            self.assertResponseContains(
+                by_shell(
+                    workbook=(
+                        f'<li><a href="{expected_url}">{ICON % "video"}'
+                        "Live stream</a></li>"
+                    ),
+                    explorer=(
+                        f'<a href="{expected_url}">'
+                        '<svg class="icon" aria-hidden="true" focusable="false">'
+                        '<use href="/static/touchtechnology/admin/explorer/img/'
+                        'icons.svg#video"></use></svg>Live stream</a>'
+                    ),
+                )
+            )
 
     def test_runsheet_shows_resync_icon_only_when_broadcast_exists(self):
         stage = factories.StageFactory.create()
@@ -3310,15 +3378,25 @@ class BackendTests(MessagesTestMixin, TestCase):
             ],
         )
 
+        runsheet_url = self.reverse(
+            "admin:fixja:match-runsheet", season.competition.pk, season.pk, "20250501"
+        )
+
         with self.login(self.superuser):
-            self.get(
-                "admin:fixja:match-runsheet",
-                season.competition.pk,
-                season.pk,
-                "20250501",
-            )
+            self.get(runsheet_url)
         self.assert_http_200_ok()
-        self.assertContains(self.last_response, streaming_resync_url)
+        # The template prints ``next`` as the bare path; reverse(query=) would
+        # encode its slashes, so the link is spelled out as the page draws it.
+        resync_link = f"{streaming_resync_url}?next={runsheet_url}"
+        self.assertResponseContains(
+            by_shell(
+                workbook=(
+                    f'<a href="{resync_link}">'
+                    f'{ICON % "refresh-cw"}Resync</a>'
+                ),
+                explorer=f'<a href="{resync_link}">Resync</a>',
+            )
+        )
         self.assertNotContains(self.last_response, not_yet_streaming_resync_url)
 
     @patch("tournamentcontrol.competition.admin.sync_live_stream")
@@ -3361,7 +3439,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "20250501",
                 data=data,
             )
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=str(season.urls["edit"]))
 
         mock_sync_live_stream.s.assert_called_once_with(
             match_to_turn_on.pk, base_url=ANY
@@ -3403,7 +3481,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "20250501",
                 data=data,
             )
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=str(season.urls["edit"]))
 
         mock_sync_live_stream.s.assert_not_called()
 
@@ -3482,7 +3560,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 "20250501",
             )
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=str(season.urls["edit"]))
 
         queued_pks = {call.args[0] for call in mock_sync_live_stream.s.call_args_list}
         self.assertEqual(
@@ -3505,7 +3583,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 "20250501",
             )
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=str(season.urls["edit"]))
 
         mock_sync_live_stream.s.assert_not_called()
 
@@ -3537,7 +3615,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 "20250501",
             )
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=str(season.urls["edit"]))
 
         mock_sync_live_stream.s.assert_not_called()
 
@@ -3808,7 +3886,9 @@ class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
         assign_perm("competition.add_division", staff)
         with self.login(staff):
             self.post(self.viewname, *self.args, data=data)
-            self.assert_http_302_found()
+            self.assert_http_302_found(
+                url=f"{self.season.urls['edit']}#divisions-tab"
+            )
         self.assertEqual(self.season.divisions.get().title, "Men's Open")
 
 
@@ -3908,7 +3988,7 @@ class BulkCreateTeamTests(MessagesTestMixin, TestCase):
                 [[], [], ["club", "title"]],
             )
             self.post(self.viewname, *self.args, data=self.rows(*rows))
-            self.assert_http_302_found()
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#teams-tab")
         self.assertEqual(
             list(self.division.teams.order_by("order").values_list("title", "club")),
             [("New Zealand", nzl.pk), ("Kangaroos", aus.pk)],
@@ -3941,7 +4021,7 @@ class BulkCreateTeamTests(MessagesTestMixin, TestCase):
         assign_perm("competition.add_team", staff)
         with self.login(staff):
             self.post(self.viewname, *self.args, data=data)
-            self.assert_http_302_found()
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#teams-tab")
         self.assertEqual(self.division.teams.get().title, "Bravo")
 
 
@@ -3980,7 +4060,7 @@ class SeasonEditForfeitNotificationsTests(TestCase):
                     "live_stream_privacy": "public",
                 },
             )
-            self.assert_http_302_found()
+            self.assert_http_302_found(url=str(self.season.competition.urls["edit"]))
         self.season.refresh_from_db()
         self.assertEqual(self.season.title, "Renamed")
         self.assertCountEqual(self.season.forfeit_notifications.all(), self.recipients)
@@ -4087,7 +4167,7 @@ class MatchResultsQueryTests(WarmCachesMixin, TestCase):
                 match.date.strftime("%Y%m%d"),
                 data=data,
             )
-        self.assert_http_302_found()
+        self.assert_http_302_found(url=f"{self.season.urls['edit']}#schedule-tab")
         match.refresh_from_db()
         self.assertEqual(match.forfeit_winner, match.away_team)
 

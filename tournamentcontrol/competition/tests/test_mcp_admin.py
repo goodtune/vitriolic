@@ -15,12 +15,11 @@ import json
 import secrets
 from types import SimpleNamespace
 from unittest import mock
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
-from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
+from django.contrib.auth.views import redirect_to_login
 from django.db import connection
-from django.shortcuts import resolve_url
 from django.test.utils import CaptureQueriesContext, override_settings
 from freezegun import freeze_time
 from google.auth.exceptions import RefreshError
@@ -763,7 +762,7 @@ class BulkCreateTests(AdminFixtureMixin, TestCase):
                 {"division_id": 999999, "title": "Final"},
             ],
         )
-        self.assertFalse(self.womens.stages.filter(title="Plate").exists())
+        self.assertEqual(self.womens.stages.filter(title="Plate").count(), 0)
 
     def test_create_pools(self):
         res = self.admin().create_pools(
@@ -1066,7 +1065,7 @@ class ByeTests(AdminFixtureMixin, TestCase):
                 },
             },
         )
-        self.assertTrue(match.is_bye)
+        self.assertIs(match.is_bye, True)
         self.assertIsNone(match.away_team)
         self.assertIsNone(match.datetime)
 
@@ -1212,12 +1211,12 @@ class ByeTests(AdminFixtureMixin, TestCase):
             },
         )
         self.fra_v_eng.refresh_from_db()
-        self.assertTrue(self.fra_v_eng.is_bye)
+        self.assertIs(self.fra_v_eng.is_bye, True)
         self.assertIsNone(self.fra_v_eng.away_team)
         self.assertIsNone(self.fra_v_eng.time)
         self.assertIsNone(self.fra_v_eng.datetime)
         self.assertIsNone(self.fra_v_eng.play_at)
-        self.assertFalse(self.fra_v_eng.referees.exists())
+        self.assertCountEqual(self.fra_v_eng.referees.all(), [])
 
         # The released slot is free for another match.
         admin.reschedule_match(
@@ -1278,8 +1277,8 @@ class ByeTests(AdminFixtureMixin, TestCase):
         self.assertEqual(
             Match.objects.filter(pk=self.fra_v_eng.pk).values().get(), before
         )
-        self.assertFalse(Match.objects.get(pk=self.eng_v_fra.pk).is_bye)
-        self.assertFalse(Match.objects.get(pk=self.aus_v_eng.pk).is_bye)
+        self.assertIs(Match.objects.get(pk=self.eng_v_fra.pk).is_bye, False)
+        self.assertIs(Match.objects.get(pk=self.aus_v_eng.pk).is_bye, False)
 
     def test_convert_bye_to_match(self):
         # Australia's round 2 bye becomes a match against New Zealand, left
@@ -1376,7 +1375,7 @@ class ByeTests(AdminFixtureMixin, TestCase):
             },
         )
         self.bye.refresh_from_db()
-        self.assertFalse(self.bye.is_bye)
+        self.assertIs(self.bye.is_bye, False)
         self.assertEqual(self.bye.away_team, self.nzl_men)
         self.assertIsNone(self.bye.time)
         # Back to a bye, processed: it can no longer be turned into a match.
@@ -1393,8 +1392,8 @@ class ByeTests(AdminFixtureMixin, TestCase):
             away_team_id=self.nzl_men.pk,
         )
         self.assertEqual(Match.objects.filter(pk=self.bye.pk).values().get(), before)
-        self.assertTrue(before["is_bye"])
-        self.assertTrue(before["bye_processed"])
+        self.assertIs(before["is_bye"], True)
+        self.assertIs(before["bye_processed"], True)
         self.assertIsNone(before["away_team_id"])
 
     def test_bye_flag_is_explicit_and_idempotent(self):
@@ -1533,7 +1532,7 @@ class ByeTests(AdminFixtureMixin, TestCase):
             },
         )
         self.bye.refresh_from_db()
-        self.assertFalse(self.bye.is_bye)
+        self.assertIs(self.bye.is_bye, False)
         self.assertEqual(self.bye.away_team_eval, "W")
         self.assertEqual(self.bye.away_team_eval_related, self.eng_v_fra)
 
@@ -2729,48 +2728,55 @@ def _pkce():
 class AdminMCPHTTPTests(AdminFixtureMixin, TestCase):
     """Drive the administration tools over the Streamable HTTP transport."""
 
-    def rpc(self, method, params=None, id=1, expect=200, **extra):
+    def send(self, method, params=None, id=1, **extra):
         payload = {"jsonrpc": "2.0", "id": id, "method": method, "params": params or {}}
-        response = self.client.post(
-            self.reverse("mcp-admin"),
+        self.post(
+            "mcp-admin",
             data=json.dumps(payload),
-            content_type="application/json",
-            HTTP_ACCEPT="application/json, text/event-stream",
-            **extra,
+            extra={
+                "content_type": "application/json",
+                "HTTP_ACCEPT": "application/json, text/event-stream",
+                **extra,
+            },
         )
-        self.assertEqual(response.status_code, expect)
-        if expect != 200:
-            return response
-        data = response.json()
+
+    def rpc(self, method, params=None, id=1, **extra):
+        self.send(method, params, id, **extra)
+        self.assert_http_200_ok()
+        data = self.last_response.json()
         self.assertEqual(data["jsonrpc"], "2.0")
         self.assertEqual(data["id"], id)
         return data["result"]
 
     def test_anonymous_is_challenged(self):
-        response = self.rpc("tools/list", expect=401)
-        self.assertEqual(
-            response["WWW-Authenticate"],
-            'Bearer resource_metadata="http://testserver/.well-known/'
-            'oauth-protected-resource/admin/mcp/"',
+        self.send("tools/list")
+        self.assert_http_401_unauthorized()
+        self.assertResponseHeaders(
+            {
+                "WWW-Authenticate": 'Bearer resource_metadata="http://testserver/'
+                '.well-known/oauth-protected-resource/admin/mcp/"',
+            }
         )
-        self.assertEqual(response.json()["error"], "unauthorized")
-        response = self.rpc(
-            "tools/list", expect=401, HTTP_AUTHORIZATION="Bearer not-a-token"
+        self.assertEqual(self.last_response.json()["error"], "unauthorized")
+        self.send("tools/list", HTTP_AUTHORIZATION="Bearer not-a-token")
+        self.assert_http_401_unauthorized()
+        self.assertResponseHeaders(
+            {
+                "WWW-Authenticate": 'Bearer error="invalid_token", '
+                'resource_metadata="http://testserver/'
+                '.well-known/oauth-protected-resource/admin/mcp/"',
+            }
         )
         self.assertEqual(
-            response["WWW-Authenticate"],
-            'Bearer error="invalid_token", resource_metadata="http://testserver/'
-            '.well-known/oauth-protected-resource/admin/mcp/"',
-        )
-        self.assertEqual(
-            response.json()["error_description"],
+            self.last_response.json()["error_description"],
             "The bearer token is invalid or has expired.",
         )
 
     def test_non_staff_is_forbidden(self):
         self.login(self.user)
-        response = self.rpc("tools/list", expect=403)
-        self.assertEqual(response.json()["error"], "forbidden")
+        self.send("tools/list")
+        self.assert_http_403_forbidden()
+        self.assertEqual(self.last_response.json()["error"], "forbidden")
 
     def test_tools_list(self):
         self.login(self.superuser)
@@ -3007,18 +3013,21 @@ class OAuthFlowTests(AdminFixtureMixin, TestCase):
     """
 
     def test_discovery(self):
-        response = self.client.get("/.well-known/oauth-protected-resource/admin/mcp/")
-        self.assertEqual(response.status_code, 200)
-        metadata = response.json()
+        self.get(
+            "oauth2_discovery:oauth-resource-metadata-path",
+            resource_path="admin/mcp/",
+        )
+        self.assert_http_200_ok()
+        metadata = self.last_response.json()
         self.assertEqual(metadata["resource"], "http://testserver/admin/mcp")
         self.assertEqual(metadata["authorization_servers"], ["http://testserver/o"])
         self.assertEqual(metadata["scopes_supported"], ["competition"])
         self.assertEqual(metadata["bearer_methods_supported"], ["header"])
         self.assertEqual(metadata["resource_name"], "Tournament Control")
 
-        response = self.client.get("/.well-known/oauth-authorization-server/o")
-        self.assertEqual(response.status_code, 200)
-        metadata = response.json()
+        self.get("oauth2_discovery:oauth-server-metadata-issuer", issuer_path="o")
+        self.assert_http_200_ok()
+        metadata = self.last_response.json()
         self.assertEqual(metadata["issuer"], "http://testserver/o")
         self.assertEqual(
             metadata["authorization_endpoint"], "http://testserver/o/authorize/"
@@ -3034,8 +3043,8 @@ class OAuthFlowTests(AdminFixtureMixin, TestCase):
 
     def authorize(self, user, redirect_uri="http://localhost:43110/callback"):
         """Register a public client and authorize it as ``user``."""
-        response = self.client.post(
-            "/o/register/",
+        self.post(
+            "oauth2_provider:dcr-register",
             data=json.dumps(
                 {
                     "client_name": "Claude Code",
@@ -3045,10 +3054,10 @@ class OAuthFlowTests(AdminFixtureMixin, TestCase):
                     "token_endpoint_auth_method": "none",
                 }
             ),
-            content_type="application/json",
+            extra={"content_type": "application/json"},
         )
-        self.assertEqual(response.status_code, 201)
-        client = response.json()
+        self.assert_http_201_created()
+        client = self.last_response.json()
         self.assertEqual(client["client_name"], "Claude Code")
         self.assertEqual(client["token_endpoint_auth_method"], "none")
 
@@ -3064,30 +3073,35 @@ class OAuthFlowTests(AdminFixtureMixin, TestCase):
             "resource": "http://testserver/admin/mcp/",
         }
         # Anonymous: sent to the site's login page first.
-        response = self.client.get("/o/authorize/", params)
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(
-            urlparse(response["Location"]).path, str(resolve_url(settings.LOGIN_URL))
+        self.get("oauth2_provider:authorize", data=params)
+        self.assert_http_302_found(
+            url=redirect_to_login(
+                f"{self.reverse('oauth2_provider:authorize')}?{urlencode(params)}"
+            )["Location"]
         )
 
         self.login(user)
-        response = self.client.get("/o/authorize/", params)
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Claude Code")
-        response = self.client.post(
-            "/o/authorize/",
-            dict(params, allow="Authorize"),
+        self.get("oauth2_provider:authorize", data=params)
+        self.assert_http_200_ok()
+        self.assertResponseContains(
+            '<h3 class="block-center-heading">Authorize Claude Code?</h3>'
         )
-        self.assertEqual(response.status_code, 302)
-        location = urlparse(response["Location"])
-        self.assertEqual(location.netloc, "localhost:43110")
+        self.post("oauth2_provider:authorize", data=dict(params, allow="Authorize"))
+        # The redirect carries a fresh authorization code, so only its fixed
+        # parts can be compared.
+        self.assert_http_302_found()
+        location = urlparse(self.last_response["Location"])
+        self.assertEqual(
+            (location.scheme, location.netloc, location.path),
+            ("http", "localhost:43110", "/callback"),
+        )
         query = parse_qs(location.query)
         self.assertEqual(query["state"], ["xyz"])
         self.client.logout()
 
-        response = self.client.post(
-            "/o/token/",
-            {
+        self.post(
+            "oauth2_provider:token",
+            data={
                 "grant_type": "authorization_code",
                 "code": query["code"][0],
                 "redirect_uri": redirect_uri,
@@ -3096,8 +3110,8 @@ class OAuthFlowTests(AdminFixtureMixin, TestCase):
                 "resource": "http://testserver/admin/mcp/",
             },
         )
-        self.assertEqual(response.status_code, 200)
-        token = response.json()
+        self.assert_http_200_ok()
+        token = self.last_response.json()
         self.assertEqual(token["token_type"], "Bearer")
         self.assertEqual(token["scope"], "competition")
         self.assertIn("refresh_token", token)
@@ -3105,24 +3119,25 @@ class OAuthFlowTests(AdminFixtureMixin, TestCase):
 
     def rpc(self, token, method, params=None, id=1):
         payload = {"jsonrpc": "2.0", "id": id, "method": method, "params": params or {}}
-        response = self.client.post(
-            self.reverse("mcp-admin"),
+        self.post(
+            "mcp-admin",
             data=json.dumps(payload),
-            content_type="application/json",
-            HTTP_ACCEPT="application/json, text/event-stream",
-            HTTP_AUTHORIZATION=f"Bearer {token}",
+            extra={
+                "content_type": "application/json",
+                "HTTP_ACCEPT": "application/json, text/event-stream",
+                "HTTP_AUTHORIZATION": f"Bearer {token}",
+            },
         )
-        return response
 
     def test_authorization_code_flow(self):
         __, token = self.authorize(self.superuser)
-        response = self.rpc(token["access_token"], "tools/call", {"name": "whoami"})
-        self.assertEqual(response.status_code, 200)
-        result = response.json()["result"]["structuredContent"]
+        self.rpc(token["access_token"], "tools/call", {"name": "whoami"})
+        self.assert_http_200_ok()
+        result = self.last_response.json()["result"]["structuredContent"]
         self.assertEqual(result["authenticated"], True)
         self.assertEqual(result["username"], self.superuser.username)
 
-        response = self.rpc(
+        self.rpc(
             token["access_token"],
             "tools/call",
             {
@@ -3130,34 +3145,36 @@ class OAuthFlowTests(AdminFixtureMixin, TestCase):
                 "arguments": {"season_id": self.season.pk, "hashtag": "#E26"},
             },
         )
-        self.assertEqual(response.status_code, 200)
+        self.assert_http_200_ok()
         self.assertEqual(
-            response.json()["result"]["structuredContent"]["season"]["hashtag"], "#E26"
+            self.last_response.json()["result"]["structuredContent"]["season"][
+                "hashtag"
+            ],
+            "#E26",
         )
 
     def test_refresh_token(self):
         client, token = self.authorize(self.superuser)
-        response = self.client.post(
-            "/o/token/",
-            {
+        self.post(
+            "oauth2_provider:token",
+            data={
                 "grant_type": "refresh_token",
                 "refresh_token": token["refresh_token"],
                 "client_id": client["client_id"],
             },
         )
-        self.assertEqual(response.status_code, 200)
-        refreshed = response.json()
-        self.assertNotEqual(refreshed["access_token"], token["access_token"])
-        response = self.rpc(refreshed["access_token"], "tools/list")
-        self.assertEqual(response.status_code, 200)
+        self.assert_http_200_ok()
+        refreshed = self.last_response.json()
+        self.rpc(refreshed["access_token"], "tools/list")
+        self.assert_http_200_ok()
         # The old access token was revoked by the rotation.
-        response = self.rpc(token["access_token"], "tools/list")
-        self.assertEqual(response.status_code, 401)
+        self.rpc(token["access_token"], "tools/list")
+        self.assert_http_401_unauthorized()
 
     def test_token_is_bound_to_the_resource(self):
         __, token = self.authorize(self.superuser)
-        response = self.client.post(
-            self.reverse("mcp"),
+        self.post(
+            "mcp",
             data=json.dumps(
                 {
                     "jsonrpc": "2.0",
@@ -3166,31 +3183,34 @@ class OAuthFlowTests(AdminFixtureMixin, TestCase):
                     "params": {"name": "whoami"},
                 }
             ),
-            content_type="application/json",
-            HTTP_ACCEPT="application/json, text/event-stream",
-            HTTP_AUTHORIZATION=f"Bearer {token['access_token']}",
+            extra={
+                "content_type": "application/json",
+                "HTTP_ACCEPT": "application/json, text/event-stream",
+                "HTTP_AUTHORIZATION": f"Bearer {token['access_token']}",
+            },
         )
         # A token issued for /admin/mcp is not valid for /mcp, so the public
         # server treats the caller as anonymous.
         self.assertEqual(
-            response.json()["result"]["structuredContent"]["authenticated"], False
+            self.last_response.json()["result"]["structuredContent"]["authenticated"],
+            False,
         )
 
     def test_non_staff_token_is_forbidden(self):
         __, token = self.authorize(self.user)
-        response = self.rpc(token["access_token"], "tools/list")
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.json()["error"], "forbidden")
+        self.rpc(token["access_token"], "tools/list")
+        self.assert_http_403_forbidden()
+        self.assertEqual(self.last_response.json()["error"], "forbidden")
 
     def test_staff_permissions_apply_to_tokens(self):
         __, token = self.authorize(self.staff)
-        response = self.rpc(
+        self.rpc(
             token["access_token"],
             "tools/call",
             {"name": "delete_match", "arguments": {"match_id": self.aus_v_eng.pk}},
         )
-        self.assertEqual(response.status_code, 200)
-        result = response.json()["result"]
+        self.assert_http_200_ok()
+        result = self.last_response.json()["result"]
         self.assertEqual(result["isError"], True)
         self.assertEqual(
             result["content"][0]["text"],

@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from unittest import mock
 
 from django.contrib.auth.models import Permission
@@ -34,16 +35,19 @@ def youtube_mock(current_status=None):
 
 class MatchTransitionTests(TestCase):
     def setUp(self):
+        super().setUp()
         self.season = factories.SeasonFactory.create(**YOUTUBE_SEASON)
         self.match = factories.MatchFactory.create(
             stage__division__season=self.season, external_identifier="yt1"
         )
 
     def test_transition_stores_status_and_time(self):
-        self.match.transition_live_stream("live", youtube_mock("testing"))
+        now = datetime(2026, 3, 1, 10, 30, tzinfo=UTC)
+        with mock.patch("django.utils.timezone.now", return_value=now):
+            self.match.transition_live_stream("live", youtube_mock("testing"))
         self.match.refresh_from_db()
         self.assertEqual(self.match.live_stream_status, "live")
-        self.assertIsNotNone(self.match.live_stream_status_at)
+        self.assertEqual(self.match.live_stream_status_at, now)
 
     def test_failed_transition_leaves_status_untouched(self):
         service = youtube_mock("testing")
@@ -76,6 +80,7 @@ class MatchTransitionTests(TestCase):
 
 class LiveStreamEventTransitionTests(TestCase):
     def setUp(self):
+        super().setUp()
         self.season = factories.SeasonFactory.create(**YOUTUBE_SEASON)
         self.event = factories.LiveStreamEventFactory.create(season=self.season)
 
@@ -94,10 +99,11 @@ class LiveStreamEventTransitionTests(TestCase):
 
 class StreamSeasonPermissionTests(TestCase):
     def test_permission_exists(self):
-        self.assertTrue(
+        self.assertEqual(
             Permission.objects.filter(
                 content_type__app_label="competition", codename="stream_season"
-            ).exists()
+            ).count(),
+            1,
         )
 
 
@@ -125,7 +131,7 @@ class StatisticsUpdatedSignalTests(TestCase):
         formset = MatchStatisticFormset(
             match.home_team_score, data=data, prefix="home", queryset=queryset
         )
-        self.assertTrue(formset.is_valid(), formset.errors)
+        self.assertIs(formset.is_valid(), True, formset.errors)
         received = []
 
         def receiver(sender, match, **kwargs):

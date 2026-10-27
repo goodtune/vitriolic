@@ -32,6 +32,7 @@ TZ = ZoneInfo("Australia/Brisbane")
 @freeze_time("2026-10-08 10:50 +10:00")
 class StreamsFixture(TestCase):
     def setUp(self):
+        super().setUp()
         events.reset_backend()
         self.streamer = factories.UserFactory.create(is_staff=True)
         self.streamer.user_permissions.add(
@@ -85,6 +86,14 @@ class StreamsFixture(TestCase):
 
     def url(self, name, **extra):
         return reverse(f"compops:{name}", kwargs={**self.kw, **extra})
+
+    def send(self, name, method="post", datastar=False, **extra):
+        """Request a CompOps view; a Datastar request returns the streamed body."""
+        getattr(self, method)(
+            f"compops:{name}", extra=DATASTAR if datastar else {}, **self.kw, **extra
+        )
+        if datastar:
+            return b"".join(self.last_response.streaming_content).decode()
 
 
 class StreamsFragmentTests(StreamsFixture):
@@ -154,7 +163,14 @@ class StreamsFragmentTests(StreamsFixture):
     def test_without_permission_no_buttons(self):
         with self.login(self.staff):
             self.get("compops:streams", **self.kw)
-        self.assertResponseNotContains("Go live")
+        self.assert_http_200_ok()
+        self.assertResponseContains('<span class="badge testing">testing</span>')
+        self.assertResponseNotContains(
+            '<button class="btn g sm" type="submit">Go live</button>'
+        )
+        self.assertResponseNotContains(
+            '<button class="btn sm" type="submit">Go live: all 10:40</button>'
+        )
 
     def test_next_match_and_season_event_listed(self):
         with self.login(self.streamer):
@@ -173,11 +189,10 @@ class MatchTransitionTests(StreamsFixture):
     def test_go_live_stores_status_and_publishes(self, build):
         build.return_value = youtube_mock("testing")
         with self.login(self.streamer), self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(
-                self.url("match-stream", match_pk=self.current.pk, status="live"),
-                headers={"Datastar-Request": "true"},
+            body = self.send(
+                "match-stream", datastar=True, match_pk=self.current.pk, status="live"
             )
-        body = b"".join(response.streaming_content).decode()
+        self.assert_http_200_ok()
         self.assertIn('<span class="badge live">live</span>', body)
         self.current.refresh_from_db()
         self.assertEqual(self.current.live_stream_status, "live")
@@ -194,47 +209,37 @@ class MatchTransitionTests(StreamsFixture):
     def test_plain_post_redirects(self, build):
         build.return_value = youtube_mock("testing")
         with self.login(self.streamer):
-            response = self.client.post(
-                self.url("match-stream", match_pk=self.current.pk, status="live")
-            )
-        self.assertRedirects(
-            response,
-            reverse("compops:day", kwargs=self.kw),
-            fetch_redirect_response=False,
-        )
+            self.send("match-stream", match_pk=self.current.pk, status="live")
+        self.assert_http_302_found(url=self.url("day"))
 
     def test_without_permission_is_403(self):
         with self.login(self.staff):
-            response = self.client.post(
-                self.url("match-stream", match_pk=self.current.pk, status="live")
-            )
-        self.assertEqual(response.status_code, 403)
+            self.send("match-stream", match_pk=self.current.pk, status="live")
+        self.assert_http_403_forbidden()
 
     def test_unknown_status_is_404(self):
         with self.login(self.streamer):
-            response = self.client.post(
-                self.url("match-stream", match_pk=self.current.pk, status="paused")
-            )
-        self.assertEqual(response.status_code, 404)
+            self.send("match-stream", match_pk=self.current.pk, status="paused")
+        self.assert_http_404_not_found()
 
     def test_get_is_not_allowed(self):
         with self.login(self.streamer):
-            response = self.client.get(
-                self.url("match-stream", match_pk=self.current.pk, status="live")
+            self.send(
+                "match-stream", method="get", match_pk=self.current.pk, status="live"
             )
-        self.assertEqual(response.status_code, 405)
+        self.assert_http_405_method_not_allowed()
 
     @mock.patch("tournamentcontrol.competition.models.build")
     def test_missing_broadcast_reports_an_error_and_publishes_nothing(self, build):
         build.return_value = youtube_mock()
         orphan = self.make(self.current.stage, 12, 0, live_stream=True)
         with self.login(self.streamer), self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(
-                self.url("match-stream", match_pk=orphan.pk, status="live"),
-                headers={"Datastar-Request": "true"},
+            body = self.send(
+                "match-stream", datastar=True, match_pk=orphan.pk, status="live"
             )
-        body = b"".join(response.streaming_content).decode()
-        self.assertIn("does not have a live stream identifier", body)
+        self.assert_http_200_ok()
+        message = f"{streams.describe(orphan)}: {orphan} does not have a live stream identifier"
+        self.assertIn(f'<p class="warn">{escape(message)}</p>', body)
         self.assertEqual(events.recent(self.season.pk), [])
 
     @mock.patch("tournamentcontrol.competition.models.build")
@@ -249,10 +254,8 @@ class MatchTransitionTests(StreamsFixture):
             live_stream_status="ready",
         )
         with self.login(self.streamer):
-            response = self.client.post(
-                self.url("match-stream", match_pk=turned_off.pk, status="live")
-            )
-        self.assertEqual(response.status_code, 404)
+            self.send("match-stream", match_pk=turned_off.pk, status="live")
+        self.assert_http_404_not_found()
         self.assertEqual(build.call_count, 0)
         turned_off.refresh_from_db()
         self.assertEqual(turned_off.live_stream_status, "ready")
@@ -271,10 +274,8 @@ class MatchTransitionTests(StreamsFixture):
             live_stream_status="ready",
         )
         with self.login(self.streamer):
-            response = self.client.post(
-                self.url("match-stream", match_pk=elsewhere.pk, status="live")
-            )
-        self.assertEqual(response.status_code, 404)
+            self.send("match-stream", match_pk=elsewhere.pk, status="live")
+        self.assert_http_404_not_found()
         self.assertEqual(build.call_count, 0)
         elsewhere.refresh_from_db()
         self.assertEqual(elsewhere.live_stream_status, "ready")
@@ -284,13 +285,15 @@ class MatchTransitionTests(StreamsFixture):
         build.side_effect = RefreshError("expired")
         with self.login(self.streamer), self.captureOnCommitCallbacks(execute=True):
             with self.assertLogs("tournamentcontrol.competition.compops.streams"):
-                response = self.client.post(
-                    self.url("match-stream", match_pk=self.current.pk, status="live"),
-                    headers={"Datastar-Request": "true"},
+                body = self.send(
+                    "match-stream",
+                    datastar=True,
+                    match_pk=self.current.pk,
+                    status="live",
                 )
-        self.assertEqual(response.status_code, 200)
-        body = b"".join(response.streaming_content).decode()
-        self.assertIn("expired", body)
+        self.assert_http_200_ok()
+        message = f"{streams.describe(self.current)}: expired"
+        self.assertIn(f'<p class="warn">{escape(message)}</p>', body)
         self.assertEqual(events.recent(self.season.pk), [])
 
     @mock.patch("tournamentcontrol.competition.models.build")
@@ -302,12 +305,15 @@ class MatchTransitionTests(StreamsFixture):
         build.return_value = service
         with self.login(self.streamer), self.captureOnCommitCallbacks(execute=True):
             with self.assertLogs("tournamentcontrol.competition.compops.streams"):
-                response = self.client.post(
-                    self.url("match-stream", match_pk=self.current.pk, status="live"),
-                    headers={"Datastar-Request": "true"},
+                body = self.send(
+                    "match-stream",
+                    datastar=True,
+                    match_pk=self.current.pk,
+                    status="live",
                 )
-        body = b"".join(response.streaming_content).decode()
-        self.assertIn("quota", body)
+        self.assert_http_200_ok()
+        message = f"{streams.describe(self.current)}: quota"
+        self.assertIn(f'<p class="warn">{escape(message)}</p>', body)
         self.assertEqual(events.recent(self.season.pk), [])
 
 
@@ -517,9 +523,8 @@ class EventAndSlotTransitionTests(StreamsFixture):
     def test_season_event_transition(self, build):
         build.return_value = youtube_mock("ready")
         with self.login(self.streamer), self.captureOnCommitCallbacks(execute=True):
-            self.client.post(
-                self.url("event-stream", event_pk=self.event.pk, status="testing")
-            )
+            self.send("event-stream", event_pk=self.event.pk, status="testing")
+        self.assert_http_302_found(url=self.url("day"))
         self.event.refresh_from_db()
         self.assertEqual(self.event.live_stream_status, "testing")
         (event,) = events.recent(self.season.pk)
@@ -543,10 +548,8 @@ class EventAndSlotTransitionTests(StreamsFixture):
         self.event.live_stream = False
         self.event.save()
         with self.login(self.streamer):
-            response = self.client.post(
-                self.url("event-stream", event_pk=self.event.pk, status="testing")
-            )
-        self.assertEqual(response.status_code, 404)
+            self.send("event-stream", event_pk=self.event.pk, status="testing")
+        self.assert_http_404_not_found()
         self.assertEqual(build.call_count, 0)
         self.event.refresh_from_db()
         self.assertEqual(self.event.live_stream_status, None)
@@ -559,10 +562,8 @@ class EventAndSlotTransitionTests(StreamsFixture):
             start=timezone.make_aware(datetime.datetime(2026, 10, 9, 17, 30), TZ),
         )
         with self.login(self.streamer):
-            response = self.client.post(
-                self.url("event-stream", event_pk=tomorrow.pk, status="testing")
-            )
-        self.assertEqual(response.status_code, 404)
+            self.send("event-stream", event_pk=tomorrow.pk, status="testing")
+        self.assert_http_404_not_found()
         self.assertEqual(build.call_count, 0)
         tomorrow.refresh_from_db()
         self.assertEqual(tomorrow.live_stream_status, None)
@@ -586,7 +587,8 @@ class EventAndSlotTransitionTests(StreamsFixture):
             external_identifier="yt-field-2",
         )
         with self.login(self.streamer), self.captureOnCommitCallbacks(execute=True):
-            self.client.post(self.url("slot-stream", slot_key="1040", status="live"))
+            self.send("slot-stream", slot_key="1040", status="live")
+        self.assert_http_302_found(url=self.url("day"))
         service.liveBroadcasts.return_value.transition.assert_called_once_with(
             broadcastStatus="live", id="yt-current", part="snippet,status"
         )
@@ -604,7 +606,8 @@ class EventAndSlotTransitionTests(StreamsFixture):
             self.current.stage, 10, 40, live_stream=True, external_identifier="yt-other"
         )
         with self.login(self.streamer), self.captureOnCommitCallbacks(execute=True):
-            self.client.post(self.url("slot-stream", slot_key="1040", status="live"))
+            self.send("slot-stream", slot_key="1040", status="live")
+        self.assert_http_302_found(url=self.url("day"))
         self.assertEqual(service.liveBroadcasts.return_value.transition.call_count, 2)
         other.refresh_from_db()
         self.assertEqual(other.live_stream_status, "live")

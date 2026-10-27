@@ -1,3 +1,4 @@
+from django.forms import Media
 from test_plus import TestCase
 
 from touchtechnology.common.tests.factories import UserFactory
@@ -64,7 +65,7 @@ class DrawGenerationMatchFormSetTest(TestCase):
                 self.stage.pk,
                 data=data0,
             )
-            self.response_200()
+            self.assert_http_200_ok()
 
             wizard = self.get_context("wizard")
             forms = wizard["form"]
@@ -96,7 +97,7 @@ class DrawGenerationMatchFormSetTest(TestCase):
                 self.stage.pk,
                 data=data1,
             )
-            self.response_302()
+            self.assert_http_302_found(url=self.stage.division.urls["edit"])
 
         self.assertEqual(Match.objects.count(), 6)
 
@@ -156,7 +157,7 @@ class DrawGenerationMatchFormSetTest(TestCase):
                 stage.pk,
                 data=data0,
             )
-            self.response_200()
+            self.assert_http_200_ok()
 
             wizard = self.get_context("wizard")
             forms = wizard["form"]
@@ -188,7 +189,7 @@ class DrawGenerationMatchFormSetTest(TestCase):
                 stage.pk,
                 data=data1,
             )
-            self.response_302()
+            self.assert_http_302_found(url=stage.division.urls["edit"])
 
         self.assertCountEqual(
             [(m.get_home_team(), m.get_away_team()) for m in Match.objects.all()],
@@ -245,7 +246,7 @@ class DrawGenerationFormTest(TestCase):
 
         # This should not raise TypeError: DrawGenerationForm.__init__() missing 1 required positional argument: 'initial'
         empty_form = formset.empty_form
-        self.assertIsNotNone(empty_form)
+        self.assertIsInstance(empty_form, DrawGenerationForm)
         self.assertIsNone(empty_form.instance)
 
     def test_formset_empty_form_media_access(self):
@@ -254,5 +255,4 @@ class DrawGenerationFormTest(TestCase):
         empty_form = formset.empty_form
 
         # This was failing in the template when trying to access {{ formset.empty_form.media }}
-        media = empty_form.media
-        self.assertIsNotNone(media)
+        self.assertIsInstance(empty_form.media, Media)

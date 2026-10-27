@@ -1203,14 +1203,16 @@ class MCPServerHTTPTests(MCPFixtureMixin, TestCase):
 
     def rpc(self, method, params=None, id=1):
         payload = {"jsonrpc": "2.0", "id": id, "method": method, "params": params or {}}
-        response = self.client.post(
-            self.reverse("mcp"),
+        self.post(
+            "mcp",
             data=json.dumps(payload),
-            content_type="application/json",
-            HTTP_ACCEPT="application/json, text/event-stream",
+            extra={
+                "content_type": "application/json",
+                "HTTP_ACCEPT": "application/json, text/event-stream",
+            },
         )
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
+        self.assert_http_200_ok()
+        data = self.last_response.json()
         self.assertEqual(data["jsonrpc"], "2.0")
         self.assertEqual(data["id"], id)
         return data["result"]
@@ -1238,21 +1240,18 @@ class MCPServerHTTPTests(MCPFixtureMixin, TestCase):
         # promptly matters because a synchronous worker would otherwise hold
         # the connection open until it is killed.
         for method in ("get", "delete", "put"):
-            response = getattr(self.client, method)(
-                self.reverse("mcp"), HTTP_ACCEPT="application/json, text/event-stream"
-            )
-            self.assertEqual(response.status_code, 405, method)
-            self.assertEqual(response["Allow"], "POST, OPTIONS", method)
-        response = self.client.options(self.reverse("mcp"))
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Allow"], "POST, OPTIONS")
+            with self.subTest(method=method):
+                getattr(self, method)(
+                    "mcp", extra={"HTTP_ACCEPT": "application/json, text/event-stream"}
+                )
+                self.assert_http_405_method_not_allowed()
+                self.assertResponseHeaders({"Allow": "POST, OPTIONS"})
+        self.options("mcp")
+        self.assert_http_200_ok()
+        self.assertResponseHeaders({"Allow": "POST, OPTIONS"})
         # A POST without the MCP Accept header is not for the SDK either.
-        response = self.client.post(
-            self.reverse("mcp"),
-            data="{}",
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 406)
+        self.post("mcp", data="{}", extra={"content_type": "application/json"})
+        self.assert_http_406_not_acceptable()
 
     def test_tools_list(self):
         result = self.rpc("tools/list")
@@ -1273,7 +1272,7 @@ class MCPServerHTTPTests(MCPFixtureMixin, TestCase):
         # on every tool, and clients use them to skip per-call approval.
         for tool in result["tools"]:
             with self.subTest(tool=tool["name"]):
-                self.assertTrue(tool["title"])
+                self.assertRegex(tool["title"], r"^[A-Z]")
                 # The Claude directory reads the title from the annotations.
                 self.assertEqual(tool["annotations"]["title"], tool["title"])
                 self.assertEqual(tool["annotations"]["readOnlyHint"], True)
@@ -1341,16 +1340,18 @@ class MCPRequestHandledSignalTests(MCPFixtureMixin, TestCase):
 
     def rpc(self, method, params=None):
         payload = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}}
-        response = self.client.post(
-            self.reverse("mcp"),
+        self.post(
+            "mcp",
             data=json.dumps(payload),
-            content_type="application/json",
-            HTTP_ACCEPT="application/json, text/event-stream",
+            extra={
+                "content_type": "application/json",
+                "HTTP_ACCEPT": "application/json, text/event-stream",
+            },
         )
-        self.assertEqual(response.status_code, 200)
+        self.assert_http_200_ok()
         self.assertEqual(len(self.sent), 1)
         self.assertEqual(self.sent[0]["request"].path, self.reverse("mcp"))
-        return response.json()["result"], self.sent[0]
+        return self.last_response.json()["result"], self.sent[0]
 
     def test_method_without_tool(self):
         __, sent = self.rpc("tools/list")
@@ -1375,13 +1376,15 @@ class MCPRequestHandledSignalTests(MCPFixtureMixin, TestCase):
     def test_unknown_method_is_a_status_code_not_an_error(self):
         # Method not found is the caller's mistake, not the server's.
         payload = {"jsonrpc": "2.0", "id": 1, "method": "no/such/method"}
-        response = self.client.post(
-            self.reverse("mcp"),
+        self.post(
+            "mcp",
             data=json.dumps(payload),
-            content_type="application/json",
-            HTTP_ACCEPT="application/json, text/event-stream",
+            extra={
+                "content_type": "application/json",
+                "HTTP_ACCEPT": "application/json, text/event-stream",
+            },
         )
-        self.assertEqual(response.json()["error"]["code"], -32601)
+        self.assertEqual(self.last_response.json()["error"]["code"], -32601)
         (sent,) = self.sent
         self.assertEqual(sent["method"], "no/such/method")
         self.assertEqual(sent["status_code"], "-32601")
