@@ -975,6 +975,20 @@ class SitemapListTests(ArrowMixin, TestCase):
                 action = self.reverse("admin:reorder", press.pk, direction)
                 self.assertResponseContains(self.arrow(action, direction, "Press"))
 
+    def test_the_arrows_come_from_the_admin_app(self):
+        """
+        The Explorer draws the arrows with the admin app's partial, so the
+        content app does not need ``tournamentcontrol`` to be installed.
+        """
+        if self.shell_name != "explorer":
+            self.skipTest("The Workbook draws its arrows in the list itself.")
+        SitemapNode.objects.create(title="Press", slug="press")
+        with self.login(self.superuser):
+            self.get_check_200("admin:content:index")
+        self.assertTemplateUsed(
+            self.last_response, "touchtechnology/admin/explorer/_reorder.inc.html"
+        )
+
     def plain_title_cell(self, node):
         """The first cell of ``node``'s row, for a person who may not edit it."""
         return self.by_shell(

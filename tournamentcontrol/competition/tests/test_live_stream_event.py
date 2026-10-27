@@ -14,6 +14,7 @@ from googleapiclient.errors import HttpError
 from test_plus import TestCase
 
 from touchtechnology.admin.tests.shells import by_shell
+from touchtechnology.common.tests.caches import WarmCachesMixin
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.forms import LiveStreamEventForm
 from tournamentcontrol.competition.models import LiveStreamEvent, LiveStreamKey
@@ -26,6 +27,12 @@ from tournamentcontrol.competition.tasks import (
 from tournamentcontrol.competition.tests import factories
 
 UTC = ZoneInfo("UTC")
+
+
+#: What the season's edit page costs, with the site and content types already
+#: looked up (see ``WarmCachesMixin``). The Explorer shell draws fewer panels.
+def season_edit_queries():
+    return by_shell(workbook=45, explorer=39)
 
 
 def _http_error(status, message):
@@ -554,7 +561,7 @@ class DeleteYoutubeBroadcastTests(TestCase):
         self.assertEqual(delete_youtube_broadcast(season.pk, "adhoc123"), None)
 
 
-class LiveStreamEventAdminTests(TestCase):
+class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
     def setUp(self):
         super().setUp()
         self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
@@ -592,15 +599,16 @@ class LiveStreamEventAdminTests(TestCase):
             external_identifier="adhoc123",
             live_stream=False,
         )
-        with self.login(self.superuser):
-            self.assertGoodView(
+        self.warm_caches()
+        with self.login(self.superuser), self.assertNumQueries(season_edit_queries()):
+            self.get_check_200(
                 "admin:fixja:competition:season:edit",
                 event.season.competition_id,
                 event.season_id,
             )
-            self.assertResponseNotContains(
-                copy_video_link(), html=by_shell(workbook=True, explorer=False)
-            )
+        self.assertResponseNotContains(
+            copy_video_link(), html=by_shell(workbook=True, explorer=False)
+        )
 
     def test_season_edit_hides_events_tab_when_not_live_streamed(self):
         season = factories.SeasonFactory.create(live_stream=False)
@@ -967,7 +975,7 @@ class DeleteYoutubeStreamTests(TestCase):
         self.assertEqual(delete_youtube_stream(season.pk, "stream456"), None)
 
 
-class LiveStreamKeyAdminTests(TestCase):
+class LiveStreamKeyAdminTests(WarmCachesMixin, TestCase):
     def setUp(self):
         super().setUp()
         self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
@@ -976,14 +984,15 @@ class LiveStreamKeyAdminTests(TestCase):
         stream_key = factories.LiveStreamKeyFactory.create(
             title="Roaming Camera", season__live_stream=True
         )
-        with self.login(self.superuser):
-            self.assertGoodView(
+        self.warm_caches()
+        with self.login(self.superuser), self.assertNumQueries(season_edit_queries()):
+            self.get_check_200(
                 "admin:fixja:competition:season:edit",
                 stream_key.season.competition_id,
                 stream_key.season_id,
             )
-            self.assertResponseContains("Roaming Camera", html=False)
-            self.assertResponseContains("live_stream_keys-tab", html=False)
+        self.assertResponseContains("Roaming Camera", html=False)
+        self.assertResponseContains("live_stream_keys-tab", html=False)
 
     def test_edit_view_renders(self):
         stream_key = factories.LiveStreamKeyFactory.create(season__live_stream=True)

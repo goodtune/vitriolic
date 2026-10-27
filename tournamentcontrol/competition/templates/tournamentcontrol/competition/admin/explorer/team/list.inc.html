@@ -25,5 +25,5 @@
 {% block row-buttons-extra %}
 	{% url 'admin:fixja:reorder' 'team:division' obj.pk "up" as up_url %}
 	{% url 'admin:fixja:reorder' 'team:division' obj.pk "down" as down_url %}
-	{% include "tournamentcontrol/competition/admin/explorer/_reorder.inc.html" %}
+	{% include "touchtechnology/admin/explorer/_reorder.inc.html" %}
 {% endblock %}

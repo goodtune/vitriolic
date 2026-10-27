@@ -17,6 +17,7 @@ from icalendar import Calendar
 from PIL import Image
 from test_plus import TestCase
 
+from touchtechnology.common.tests.caches import WarmCachesMixin
 from tournamentcontrol.competition.draw import schemas
 from tournamentcontrol.competition.draw.builders import build
 from tournamentcontrol.competition.models import Match, Team
@@ -1822,7 +1823,7 @@ class ThumbnailViewTests(TestCase):
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
 @freeze_time("2026-10-08 03:00:00")
-class ClubPageTests(TestCase):
+class ClubPageTests(WarmCachesMixin, TestCase):
     """
     A club's page lists its teams, each with its next match or, once it has
     played them all, its last one. Looking those up cost four queries per
@@ -1893,23 +1894,28 @@ class ClubPageTests(TestCase):
             [(t.next_match(), t.last_match()) for t in teams],
         )
 
+    # The club page costs the same however many teams the club has.
+    CLUB_PAGE_QUERIES = 11
+
     def test_few_teams_query_count(self):
-        self.assertGoodView(
-            "competition:club",
-            competition=self.competition.slug,
-            season=self.season.slug,
-            club=self.few.slug,
-            test_query_count=12,
-        )
+        self.warm_caches()
+        with self.assertNumQueries(self.CLUB_PAGE_QUERIES):
+            self.get_check_200(
+                "competition:club",
+                competition=self.competition.slug,
+                season=self.season.slug,
+                club=self.few.slug,
+            )
 
     def test_many_teams_query_count(self):
-        self.assertGoodView(
-            "competition:club",
-            competition=self.competition.slug,
-            season=self.season.slug,
-            club=self.many.slug,
-            test_query_count=12,
-        )
+        self.warm_caches()
+        with self.assertNumQueries(self.CLUB_PAGE_QUERIES):
+            self.get_check_200(
+                "competition:club",
+                competition=self.competition.slug,
+                season=self.season.slug,
+                club=self.many.slug,
+            )
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")

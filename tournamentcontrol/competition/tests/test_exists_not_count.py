@@ -7,13 +7,12 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from test_plus import TestCase
 
-from tournamentcontrol.competition.models import LadderEntry
 from tournamentcontrol.competition.signals.ladders import (
     team_ladder_entry_aggregation,
 )
 from tournamentcontrol.competition.templatetags.competition import ladder
 from tournamentcontrol.competition.tests.factories import (
-    MatchFactory,
+    LadderEntryFactory,
     SeasonFactory,
     StageFactory,
     StageGroupFactory,
@@ -58,7 +57,5 @@ class ExistsNotCountTests(TestCase):
         stage = StageFactory.create(
             division=self.stage.division, order=2, carry_ladder=True
         )
-        match = MatchFactory.create(stage=stage)
-        # The handler reads only the entry's relations; it need not be saved.
-        entry = LadderEntry(match=match, team=match.home_team, opponent=match.away_team)
+        entry = LadderEntryFactory.create(match__stage=stage)
         self.assertNoCount(team_ladder_entry_aggregation, None, entry, created=False)

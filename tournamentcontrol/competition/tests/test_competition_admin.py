@@ -11,9 +11,7 @@ import responses
 from dateutil.rrule import DAILY
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.contenttypes.models import ContentType
 from django.contrib.messages.test import MessagesTestMixin
-from django.contrib.sites.models import Site
 from django.db import connection
 from django.template import Context, Template
 from django.test import override_settings
@@ -25,6 +23,7 @@ from test_plus import TestCase as BaseTestCase
 from touchtechnology.admin.branding import get_brand
 from touchtechnology.admin.sites import site
 from touchtechnology.admin.tests.shells import ArrowMixin, IconMixin, by_shell, per_shell
+from touchtechnology.common.tests.caches import WarmCachesMixin
 from touchtechnology.common.tests.factories import (
     StaffFactory,
     SuperUserFactory,
@@ -4180,7 +4179,7 @@ class MatchDetailQueryTests(TestCase):
         )
 
 
-class MatchRowMixin(IconMixin):
+class MatchRowMixin(WarmCachesMixin, IconMixin):
     """
     The menu of a match's row on its stage's Matches tab, and the run sheet's
     links to its statistics and referees pages.
@@ -4344,11 +4343,7 @@ class MatchRowMixin(IconMixin):
         if queries is None:
             queries = self.RUN_SHEET_QUERIES
         season = self.stage.division.season
-        # The site middleware looks up the site, and guardian the matches'
-        # content type, once a process and keeps them, so look them up first:
-        # the count must not depend on which test runs first.
-        Site.objects.get_current()
-        ContentType.objects.get_for_model(Match)
+        self.warm_caches()
         with self.login(self.staff), self.assertNumQueries(queries):
             self.get_check_200(
                 "admin:fixja:match-runsheet",
