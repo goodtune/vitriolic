@@ -7,13 +7,11 @@ class APIPermissionsTestCase(TestCase):
 
     def test_api_root_accessible_by_anonymous_users(self):
         """Test that /api/ root is accessible by anonymous users"""
-        self.get("api-root")
-        self.response_200()
+        self.get_check_200("api-root")
 
     def test_api_v1_accessible_by_anonymous_users(self):
         """Test that /api/v1/ root is accessible by anonymous users"""
-        self.get("v1:api-root")
-        self.response_200()
+        self.get_check_200("v1:api-root")
 
     @override_settings(
         REST_FRAMEWORK={
@@ -28,8 +26,7 @@ class APIPermissionsTestCase(TestCase):
         is configured globally. This permission class requires a queryset, but
         API root views don't have querysets since they just list endpoints.
         """
-        self.get("api-root")
-        self.response_200()
+        self.get_check_200("api-root")
 
     @override_settings(
         REST_FRAMEWORK={
@@ -44,5 +41,4 @@ class APIPermissionsTestCase(TestCase):
         is configured globally. This permission class requires a queryset, but
         API root views don't have querysets since they just list endpoints.
         """
-        self.get("v1:api-root")
-        self.response_200()
+        self.get_check_200("v1:api-root")

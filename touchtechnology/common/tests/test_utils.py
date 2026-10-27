@@ -8,28 +8,22 @@ from touchtechnology.common.utils import get_base_url, get_mod_func
 
 class BooleanChoiceFieldCoerce(TestCase):
     def test_true_boolean(self):
-        result = boolean_choice_field_coerce(True)
-        self.assertTrue(result)
+        self.assertIs(boolean_choice_field_coerce(True), True)
 
     def test_false_boolean(self):
-        result = boolean_choice_field_coerce(False)
-        self.assertFalse(result)
-
-    def test_true_integer(self):
-        result = boolean_choice_field_coerce("1")
-        self.assertTrue(result)
-
-    def test_false_integer(self):
-        result = boolean_choice_field_coerce("0")
-        self.assertFalse(result)
+        self.assertIs(boolean_choice_field_coerce(False), False)
 
     def test_true_string(self):
-        result = boolean_choice_field_coerce(1)
-        self.assertTrue(result)
+        self.assertIs(boolean_choice_field_coerce("1"), True)
 
     def test_false_string(self):
-        result = boolean_choice_field_coerce(0)
-        self.assertFalse(result)
+        self.assertIs(boolean_choice_field_coerce("0"), False)
+
+    def test_true_integer(self):
+        self.assertIs(boolean_choice_field_coerce(1), True)
+
+    def test_false_integer(self):
+        self.assertIs(boolean_choice_field_coerce(0), False)
 
 
 class GetModFunc(TestCase):
