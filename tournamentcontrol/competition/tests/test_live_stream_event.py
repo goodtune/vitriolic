@@ -33,7 +33,7 @@ UTC = ZoneInfo("UTC")
 #: sitemap's URL tree already looked up (see ``WarmCachesMixin``). The Explorer
 #: shell draws fewer panels.
 def season_edit_queries():
-    return by_shell(workbook=29, explorer=23)
+    return by_shell(workbook=28, explorer=22)
 
 
 def _http_error(status, message):

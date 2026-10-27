@@ -5,6 +5,7 @@ from itertools import zip_longest
 from django import template
 from django.core.paginator import Paginator
 from django.db import models
+from django.db.models.manager import BaseManager
 from django.template import loader
 from django.urls import resolve, reverse_lazy
 from guardian.shortcuts import get_objects_for_user
@@ -32,6 +33,12 @@ def admin_list(context, queryset, scope=None, template=None, paginate_by=None):
 
 def admin_list_context(context, queryset, scope=None, template=None, paginate_by=None):
     model, manager = model_and_manager(queryset)
+
+    # A tab hands over the very manager or queryset the list's heading tests
+    # (``{% if manager %}``). A queryset that test has read is listed from its
+    # rows rather than read again; a manager becomes its queryset here.
+    if isinstance(queryset, BaseManager):
+        queryset = queryset.all()
 
     request = context.get("request")
     component = context.get("component")

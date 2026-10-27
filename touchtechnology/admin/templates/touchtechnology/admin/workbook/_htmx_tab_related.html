@@ -13,6 +13,6 @@ the list, to edit or delete an object, is a plain link that leaves the page.
 {% endcomment %}
 <div>
 	{% with table=templates|default:None manager=tab_manager %}
-		{% admin_list tab_manager.all template=tab_manager|admin_list_template:table paginate_by=tab_paginate_by %}
+		{% admin_list tab_manager template=tab_manager|admin_list_template:table paginate_by=tab_paginate_by %}
 	{% endwith %}
 </div>
