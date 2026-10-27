@@ -26,6 +26,7 @@ TZ = ZoneInfo("Australia/Brisbane")
 @freeze_time("2026-10-08 10:50 +10:00")
 class BoothFixture(TestCase):
     def setUp(self):
+        super().setUp()
         events.reset_backend()
         self.season = factories.SeasonFactory.create(
             slug="pc26",
@@ -108,6 +109,11 @@ class BoothFixture(TestCase):
     def url(self, name, **extra):
         return reverse(f"compops:{name}", kwargs={**self.kw, **extra})
 
+    def datastar(self, method, name, **extra):
+        """Send a Datastar request; return the streamed body."""
+        getattr(self, method)(f"compops:{name}", extra=DATASTAR, **self.kw, **extra)
+        return b"".join(self.last_response.streaming_content).decode()
+
 
 class BoothAccessTests(BoothFixture):
     def test_login_required(self):
@@ -116,12 +122,12 @@ class BoothAccessTests(BoothFixture):
     def test_stream_permission_required(self):
         with self.login(self.outsider):
             self.get("compops:booth", **self.kw)
-            self.response_403()
+        self.assert_http_403_forbidden()
 
     def test_commentator_without_staff_flag_can_open_the_booth(self):
         with self.login(self.commentator):
             self.get("compops:booth", **self.kw)
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertResponseContains('<div id="lamp" class="lamp live">ON AIR</div>')
 
     def test_page_subscribes_to_the_booth_stream(self):
@@ -146,7 +152,7 @@ class BoothAccessTests(BoothFixture):
                 season="pc26",
                 ground="field-9",
             )
-            self.response_404()
+        self.assert_http_404_not_found()
 
 
 class StripAndLampTests(BoothFixture):
@@ -191,11 +197,8 @@ class OnAirTests(BoothFixture):
     def test_end_broadcast(self, build):
         build.return_value = youtube_mock("live")
         with self.login(self.commentator), self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(
-                self.url("booth-onair", status="complete"),
-                headers={"Datastar-Request": "true"},
-            )
-        body = b"".join(response.streaming_content).decode()
+            body = self.datastar("post", "booth-onair", status="complete")
+        self.assert_http_200_ok()
         self.assertIn('data: elements <section id="onair" class="onair">', body)
         self.assertIn('<div id="lamp" class="lamp">OFF AIR</div>', body)
         self.current.refresh_from_db()
@@ -210,7 +213,7 @@ class OnAirTests(BoothFixture):
         with freeze_time("2026-10-08 11:30 +10:00"):
             with self.login(self.commentator):
                 self.get("compops:booth-lamp", **self.kw)
-                self.response_200()
+                self.assert_http_200_ok()
                 self.assertResponseContains(
                     '<div id="lamp" class="lamp live">ON AIR</div>'
                 )
@@ -225,7 +228,8 @@ class OnAirTests(BoothFixture):
                 self.login(self.commentator),
                 self.captureOnCommitCallbacks(execute=True),
             ):
-                self.client.post(end_url, headers={"Datastar-Request": "true"})
+                self.datastar("post", "booth-onair", status="complete")
+        self.assert_http_200_ok()
         self.current.refresh_from_db()
         self.following.refresh_from_db()
         self.assertEqual(self.current.live_stream_status, "complete")
@@ -235,13 +239,11 @@ class OnAirTests(BoothFixture):
         self.current.delete()
         self.previous.delete()
         with self.login(self.commentator):
-            response = self.client.post(
-                self.url("booth-onair", status="complete"),
-                headers={"Datastar-Request": "true"},
-            )
-        self.assertEqual(response.status_code, 200)
-        body = b"".join(response.streaming_content).decode()
-        self.assertIn("Nothing is on this ground right now.", body)
+            body = self.datastar("post", "booth-onair", status="complete")
+        self.assert_http_200_ok()
+        self.assertIn(
+            '<span class="warn">Nothing is on this ground right now.</span>', body
+        )
 
     def test_times_follow_the_ground_zone(self):
         auckland = factories.GroundFactory.create(
@@ -267,30 +269,33 @@ class OnAirTests(BoothFixture):
         )
         with self.login(self.commentator):
             self.get("compops:booth-lamp", **{**self.kw, "ground": "field-3"})
-        body = self.last_response.content.decode()
-        self.assertIn("live since 13:30", body)
-        self.assertNotIn("live since 10:30", body)
+        self.assert_http_200_ok()
+        self.assertResponseContains(
+            "<span>Men's Open · kick-off 10:40 · live since 13:30</span>"
+        )
+        self.assertResponseNotContains(
+            "<span>Men's Open · kick-off 10:40 · live since 10:30</span>"
+        )
 
     def test_only_live_and_complete_are_accepted(self):
         with self.login(self.commentator):
-            response = self.client.post(self.url("booth-onair", status="testing"))
-        self.assertEqual(response.status_code, 404)
+            self.post("compops:booth-onair", status="testing", **self.kw)
+        self.assert_http_404_not_found()
 
     def test_outsider_is_403(self):
         with self.login(self.outsider):
-            response = self.client.post(self.url("booth-onair", status="complete"))
-        self.assertEqual(response.status_code, 403)
+            self.post("compops:booth-onair", status="complete", **self.kw)
+        self.assert_http_403_forbidden()
 
 
 class ArmTests(BoothFixture):
     def test_cannot_arm_while_live(self):
         with self.login(self.commentator):
-            response = self.client.post(
-                self.url("booth-arm"), headers={"Datastar-Request": "true"}
-            )
-        self.assertEqual(response.status_code, 200)
-        body = b"".join(response.streaming_content).decode()
-        self.assertIn("End the current broadcast first", body)
+            body = self.datastar("post", "booth-arm")
+        self.assert_http_200_ok()
+        self.assertIn(
+            '<span class="warn">End the current broadcast first.</span>', body
+        )
 
     @mock.patch("tournamentcontrol.competition.models.build")
     def test_arm_moves_next_to_testing(self, build):
@@ -298,10 +303,8 @@ class ArmTests(BoothFixture):
         self.current.live_stream_status = "complete"
         self.current.save()
         with self.login(self.commentator), self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(
-                self.url("booth-arm"), headers={"Datastar-Request": "true"}
-            )
-        self.assertEqual(response.status_code, 200)
+            self.datastar("post", "booth-arm")
+        self.assert_http_200_ok()
         self.following.refresh_from_db()
         self.assertEqual(self.following.live_stream_status, "testing")
 
@@ -313,19 +316,14 @@ class ArmTests(BoothFixture):
             self.login(self.commentator),
             self.captureOnCommitCallbacks(execute=True),
         ):
-            self.client.post(
-                self.url("booth-onair", status="complete"),
-                headers={"Datastar-Request": "true"},
-            )
+            self.datastar("post", "booth-onair", status="complete")
             self.get("compops:booth-lamp", **self.kw)
             self.assertIn(
                 "Next on Field 1 today: 11:20 Fiji v New Zealand",
                 self.last_response.content.decode(),
             )
-            response = self.client.post(
-                self.url("booth-arm"), headers={"Datastar-Request": "true"}
-            )
-        self.assertEqual(response.status_code, 200)
+            self.datastar("post", "booth-arm")
+        self.assert_http_200_ok()
         self.current.refresh_from_db()
         self.following.refresh_from_db()
         self.assertEqual(self.current.live_stream_status, "complete")
@@ -340,10 +338,8 @@ class ArmTests(BoothFixture):
             12, 0, self.aus, self.fji, live_stream=True, external_identifier="yt-later"
         )
         with self.login(self.commentator):
-            response = self.client.post(
-                self.url("booth-arm"), headers={"Datastar-Request": "true"}
-            )
-        body = b"".join(response.streaming_content).decode()
+            body = self.datastar("post", "booth-arm")
+        self.assert_http_200_ok()
         self.assertIn("Already armed.", body)
         later.refresh_from_db()
         self.assertIsNone(later.live_stream_status)
@@ -354,11 +350,8 @@ class ArmTests(BoothFixture):
         self.following.external_identifier = None
         self.following.save()
         with self.login(self.commentator):
-            response = self.client.post(
-                self.url("booth-arm"), headers={"Datastar-Request": "true"}
-            )
-        self.assertEqual(response.status_code, 200)
-        body = b"".join(response.streaming_content).decode()
+            body = self.datastar("post", "booth-arm")
+        self.assert_http_200_ok()
         self.assertIn("has no YouTube broadcast", body)
 
     @mock.patch("tournamentcontrol.competition.models.build")
@@ -378,10 +371,8 @@ class ArmTests(BoothFixture):
             self.get("compops:booth", **self.kw)
             body = self.last_response.content.decode()
             self.assertIn("Next on Field 1 today: 12:00 Australia v Fiji", body)
-            response = self.client.post(
-                self.url("booth-arm"), headers={"Datastar-Request": "true"}
-            )
-        self.assertEqual(response.status_code, 200)
+            self.datastar("post", "booth-arm")
+        self.assert_http_200_ok()
         service.liveBroadcasts.return_value.transition.assert_called_once_with(
             broadcastStatus="testing", id="yt-later", part="snippet,status"
         )
@@ -398,17 +389,14 @@ class ArmTests(BoothFixture):
         self.following.live_stream = False
         self.following.save()
         with self.login(self.commentator):
-            response = self.client.post(
-                self.url("booth-arm"), headers={"Datastar-Request": "true"}
-            )
-            self.assertEqual(response.status_code, 200)
-            body = b"".join(response.streaming_content).decode()
+            body = self.datastar("post", "booth-arm")
+            self.assert_http_200_ok()
             self.assertIn(
                 '<span class="warn">No more broadcasts on Field 1 today.</span>', body
             )
             # Without JavaScript the booth page carries the same refusal.
-            self.last_response = self.client.post(self.url("booth-arm"))
-        self.response_200()
+            self.post("compops:booth-arm", **self.kw)
+        self.assert_http_200_ok()
         self.assertResponseContains(
             '<span class="warn">No more broadcasts on Field 1 today.</span>'
         )
@@ -430,11 +418,8 @@ class ArmTests(BoothFixture):
             live_stream_status="live",
         )
         with self.login(self.commentator), self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(
-                self.url("booth-onair", status="complete"),
-                headers={"Datastar-Request": "true"},
-            )
-        self.assertEqual(response.status_code, 200)
+            self.datastar("post", "booth-onair", status="complete")
+        self.assert_http_200_ok()
         service.liveBroadcasts.return_value.transition.assert_called_once_with(
             broadcastStatus="complete", id="yt-now", part="snippet,status"
         )
@@ -447,22 +432,16 @@ class ArmTests(BoothFixture):
         self.current.external_identifier = None
         self.current.save()
         with self.login(self.commentator):
-            response = self.client.post(
-                self.url("booth-onair", status="complete"),
-                headers={"Datastar-Request": "true"},
-            )
-            self.assertEqual(response.status_code, 200)
-            body = b"".join(response.streaming_content).decode()
+            body = self.datastar("post", "booth-onair", status="complete")
+            self.assert_http_200_ok()
             self.assertIn(
                 '<span class="warn">Australia v New Zealand has no YouTube'
                 " broadcast.</span>",
                 body,
             )
             # Without JavaScript the booth page carries the same refusal.
-            self.last_response = self.client.post(
-                self.url("booth-onair", status="complete")
-            )
-        self.response_200()
+            self.post("compops:booth-onair", status="complete", **self.kw)
+        self.assert_http_200_ok()
         self.assertResponseContains(
             '<span class="warn">Australia v New Zealand has no YouTube'
             " broadcast.</span>"
@@ -476,12 +455,11 @@ class ArmTests(BoothFixture):
         self.current.save()
         self.following.delete()
         with self.login(self.commentator):
-            response = self.client.post(
-                self.url("booth-arm"), headers={"Datastar-Request": "true"}
-            )
-        self.assertEqual(response.status_code, 200)
-        body = b"".join(response.streaming_content).decode()
-        self.assertIn("No more broadcasts on Field 1 today", body)
+            body = self.datastar("post", "booth-arm")
+        self.assert_http_200_ok()
+        self.assertIn(
+            '<span class="warn">No more broadcasts on Field 1 today.</span>', body
+        )
 
 
 class HeldLampTests(BoothFixture):
@@ -562,11 +540,10 @@ class PaneTests(BoothFixture):
 
     def test_sheets(self):
         with self.login(self.commentator):
-            response = self.client.get(
-                self.url("booth-pane", match_pk=self.current.pk, pane="sheets"),
-                headers={"Datastar-Request": "true"},
+            body = self.datastar(
+                "get", "booth-pane", match_pk=self.current.pk, pane="sheets"
             )
-        body = b"".join(response.streaming_content).decode()
+        self.assert_http_200_ok()
         self.assertIn('data: elements <div id="pane" class="pane sheets">', body)
         self.assertIn("Liam Thompson", body)
         self.assertIn(
@@ -614,7 +591,7 @@ class PaneTests(BoothFixture):
                 pane="weather",
                 **self.kw,
             )
-            self.response_404()
+        self.assert_http_404_not_found()
 
     def test_match_from_another_ground_is_404(self):
         other = factories.GroundFactory.create(
@@ -625,7 +602,7 @@ class PaneTests(BoothFixture):
             self.get(
                 "compops:booth-pane", match_pk=elsewhere.pk, pane="sheets", **self.kw
             )
-            self.response_404()
+        self.assert_http_404_not_found()
 
     def test_tabs_follow_the_match_on_air_when_it_overruns(self):
         with freeze_time("2026-10-08 11:30 +10:00"), self.login(self.commentator):
@@ -654,11 +631,8 @@ class PaneTests(BoothFixture):
 class TeamPickerTests(BoothFixture):
     def test_picker_groups_the_division_by_pool(self):
         with self.login(self.commentator):
-            response = self.client.get(
-                self.url("booth-teams", match_pk=self.current.pk),
-                headers={"Datastar-Request": "true"},
-            )
-        body = b"".join(response.streaming_content).decode()
+            body = self.datastar("get", "booth-teams", match_pk=self.current.pk)
+        self.assert_http_200_ok()
         self.assertIn('data: elements <div id="modal-body" class="sheet">', body)
         self.assertIn("Pool A", body)
         self.assertIn("Pool B", body)
@@ -674,4 +648,4 @@ class TeamPickerTests(BoothFixture):
         stranger = factories.TeamFactory.create()
         with self.login(self.commentator):
             self.get("compops:booth-team", team_pk=stranger.pk, **self.kw)
-            self.response_404()
+        self.assert_http_404_not_found()

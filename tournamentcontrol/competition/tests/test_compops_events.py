@@ -23,10 +23,12 @@ async def first_event(feed):
 
 class MemoryBackendTests(TestCase):
     def setUp(self):
+        super().setUp()
         events.reset_backend()
 
     def tearDown(self):
         events.reset_backend()
+        super().tearDown()
 
     def publish_committed(self, *args, **kwargs):
         # ``publish`` defers to ``transaction.on_commit``, which touches the
@@ -54,7 +56,7 @@ class MemoryBackendTests(TestCase):
         self.assertEqual(event["actor"], "gary")
         self.assertEqual(event["summary"], "Field 1 live")
         self.assertEqual(event["id"], 3)
-        self.assertTrue(event["at"].endswith("+00:00"))
+        self.assertEqual(event["at"][-6:], "+00:00")
 
     async def test_subscribe_receives_published_event(self):
         async def consume():
@@ -101,7 +103,7 @@ class MemoryBackendTests(TestCase):
 
         event, registered = await asyncio.wait_for(first(), timeout=1)
         self.assertIsNone(event)
-        self.assertTrue(registered)
+        self.assertIs(registered, True)
 
     async def test_stale_subscriber_is_dropped_without_blocking_others(self):
         backend = events.get_backend()
@@ -132,6 +134,7 @@ class MemoryBackendTests(TestCase):
 
 class RedisBackendTests(TestCase):
     def setUp(self):
+        super().setUp()
         self.server = fakeredis.FakeServer()
         self.backend = RedisBackend(
             "redis://unused",
@@ -180,7 +183,7 @@ class RedisBackendTests(TestCase):
 
         event, subscribed = await asyncio.wait_for(first(), timeout=1)
         self.assertIsNone(event)
-        self.assertTrue(subscribed)
+        self.assertIs(subscribed, True)
 
     async def test_closing_the_subscription_closes_the_pubsub(self):
         created = self.spy_on_pubsub()
@@ -190,7 +193,7 @@ class RedisBackendTests(TestCase):
         ) as gen:
             await gen.__anext__()
         (pubsub,) = created
-        self.assertFalse(pubsub.subscribed)
+        self.assertIs(pubsub.subscribed, False)
         self.assertIsNone(pubsub.connection)
 
     async def test_pubsub_is_closed_even_if_unsubscribe_fails(self):
@@ -252,12 +255,14 @@ class TenantTestsMixin:
 
 class MemoryBackendTenantTests(TenantTestsMixin, TestCase):
     def setUp(self):
+        super().setUp()
         events.reset_backend()
         self.addCleanup(events.reset_backend)
 
 
 class RedisBackendTenantTests(TenantTestsMixin, TestCase):
     def setUp(self):
+        super().setUp()
         server = fakeredis.FakeServer()
         self.redis = fakeredis.FakeRedis(server=server)
         self.enterContext(
@@ -299,6 +304,7 @@ class RedisBackendTenantTests(TenantTestsMixin, TestCase):
 class BackendSelectionTests(TestCase):
     def tearDown(self):
         events.reset_backend()
+        super().tearDown()
 
     def test_default_is_memory(self):
         events.reset_backend()
