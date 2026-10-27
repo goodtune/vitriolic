@@ -10,7 +10,7 @@
 	<td class="wb-title-cell">
 		{% if change_perm in object_perms %}<a href="{{ obj.urls.edit }}">{{ obj }}</a>{% else %}<span>{{ obj }}</span>{% endif %}
 	</td>
-	<td class="wb-num" data-label="{% trans "Articles" %}">{{ obj.article_set.count }}</td>
+	<td class="wb-num" data-label="{% trans "Articles" %}">{{ obj.article_count }}</td>
 {% endblock %}
 
 {% block empty-row-colspan %}3{% endblock %}
