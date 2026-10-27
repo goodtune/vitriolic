@@ -19,7 +19,7 @@
 	  delete-data-title    how the object is named when asking to delete it
 	  table-row-empty      what an empty list says
 {% endcomment %}{% firstof create|resolved create_url as create_link %}{% with type=model|type %}
-{% if manager %}
+{% if manager is not None %}
 	{% block heading %}
 		<div class="wb-sheet-head">
 			<h2>{{ manager.all|types|capfirst }}</h2>
@@ -36,7 +36,7 @@
 
 {% block table %}
 {% block filter %}
-	{% if manager and object_list|length > 8 %}{% include "touchtechnology/admin/workbook/_filter.html" %}{% endif %}
+	{% if manager is not None and object_list|length > 8 %}{% include "touchtechnology/admin/workbook/_filter.html" %}{% endif %}
 {% endblock filter %}
 <div class="wb-table-wrap">
 <table class="wb-table wb-table-cards" data-wb-sortable>
