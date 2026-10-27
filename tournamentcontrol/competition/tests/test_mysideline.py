@@ -23,7 +23,12 @@ from test_plus import TestCase
 from touchtechnology.admin.tests.shells import by_shell
 from touchtechnology.common.tests.caches import WarmCachesMixin
 from touchtechnology.common.tests.factories import UserFactory
-from tournamentcontrol.competition.forms import DivisionForm, TeamForm
+from tournamentcontrol.competition.forms import (
+    CompetitionForm,
+    DivisionForm,
+    SeasonForm,
+    TeamForm,
+)
 from tournamentcontrol.competition.models import (
     Division,
     Ground,
@@ -35,6 +40,7 @@ from tournamentcontrol.competition.models import (
     Venue,
     upstream_renamed,
 )
+from tournamentcontrol.competition.tasks import synchronise_upstream_season
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.tests.upstream import (
     STATE_CUP_SEASON_URL,
@@ -67,6 +73,21 @@ from tournamentcontrol.competition.upstream.types import RemoteCompetition
 ASSOCIATION_URL = "https://tfa.mysideline.com.au/competitions/association/6338"
 SEASON_URL = ASSOCIATION_URL + "?season=2026"
 SYDNEY = ZoneInfo("Australia/Sydney")
+
+
+def upstream_url_input(value):
+    """The MySideline link field of the competition and season forms."""
+    return by_shell(
+        workbook=(
+            f'<input type="url" name="upstream_url" value="{value}" maxlength="1024" '
+            'class="wb-input" aria-describedby="id_upstream_url_help" '
+            'id="id_upstream_url">'
+        ),
+        explorer=(
+            f'<input type="url" name="upstream_url" value="{value}" maxlength="1024" '
+            'aria-describedby="id_upstream_url_helptext" id="id_upstream_url">'
+        ),
+    )
 
 
 class RemoteWorld:
@@ -1097,8 +1118,8 @@ class TitleTests(SyncTestCase):
             self.assertEqual(obj.title, name)
             self.assertEqual(obj.upstream_title, name)
             self.assertEqual(obj.upstream_title_synced, name)
-            self.assertFalse(obj.upstream_title_overridden)
-            self.assertFalse(obj.upstream_title_changed)
+            self.assertEqual(obj.upstream_title_overridden, False)
+            self.assertEqual(obj.upstream_title_changed, False)
 
     def test_local_division_name_is_kept(self):
         self.rename_division()
@@ -1107,8 +1128,8 @@ class TitleTests(SyncTestCase):
         self.assertEqual(self.division.title, "14 Boys")
         self.assertEqual(self.division.upstream_title, "Mens Div 1")
         self.assertEqual(self.division.upstream_title_synced, "Mens Div 1")
-        self.assertTrue(self.division.upstream_title_overridden)
-        self.assertFalse(self.division.upstream_title_changed)
+        self.assertEqual(self.division.upstream_title_overridden, True)
+        self.assertEqual(self.division.upstream_title_changed, False)
         self.assertEqual(result.warnings, [])
 
     def test_local_team_name_is_kept(self):
@@ -1118,7 +1139,7 @@ class TitleTests(SyncTestCase):
         self.team.refresh_from_db()
         self.assertEqual(self.team.title, "Terrigal")
         self.assertEqual(self.team.upstream_title, "Sharks")
-        self.assertTrue(self.team.upstream_title_overridden)
+        self.assertEqual(self.team.upstream_title_overridden, True)
         self.assertEqual(result.warnings, [])
 
     def test_local_name_does_not_affect_the_rest_of_the_sync(self):
@@ -1140,7 +1161,7 @@ class TitleTests(SyncTestCase):
         self.assertEqual(self.division.title, "14 Boys")
         self.assertEqual(self.division.upstream_title, "Mens Premier")
         self.assertEqual(self.division.upstream_title_synced, "Mens Div 1")
-        self.assertTrue(self.division.upstream_title_changed)
+        self.assertEqual(self.division.upstream_title_changed, True)
         self.assertEqual(len(result.warnings), 1)
         self.assertIn("renamed remotely", result.warnings[0])
         self.assertIn("'Mens Div 1' to 'Mens Premier'", result.warnings[0])
@@ -1180,7 +1201,7 @@ class TitleTests(SyncTestCase):
         self.assertEqual(division.upstream_id, "mysideline:300")
         self.assertEqual(division.title, "TBA")
         self.assertEqual(division.upstream_title_synced, "TBA")
-        self.assertFalse(division.upstream_title_overridden)
+        self.assertEqual(division.upstream_title_overridden, False)
 
     def test_renamed_queryset(self):
         self.rename_division()
@@ -1241,39 +1262,39 @@ class TitleAdminTests(WarmCachesMixin, SyncTestCase):
         division = factories.DivisionFactory.create(season=self.season)
         form = DivisionForm(instance=division, user=self.superuser)
         self.assertNotIn("upstream_title_reset", form.fields)
-        self.assertFalse(form.upstream_unacknowledged)
+        self.assertEqual(form.upstream_unacknowledged, False)
 
     def test_unchanged_form_still_saves_the_acknowledgement(self):
         # A form which edits no field must still report a change while an
         # upstream rename is unacknowledged, or the admin skips the save.
         form = self.division_form()
-        self.assertTrue(form.upstream_unacknowledged)
-        self.assertTrue(form.has_changed())
-        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.upstream_unacknowledged, True)
+        self.assertEqual(form.has_changed(), True)
+        self.assertEqual(form.is_valid(), True, form.errors)
         form.save()
-        self.assertFalse(self.division_form().upstream_unacknowledged)
+        self.assertEqual(self.division_form().upstream_unacknowledged, False)
 
     def test_saving_keeps_the_local_name_and_acknowledges_the_change(self):
         form = self.division_form()
-        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.is_valid(), True, form.errors)
         form.save()
         self.division.refresh_from_db()
         self.assertEqual(self.division.title, "14 Boys")
         self.assertEqual(self.division.upstream_title_synced, "Mens Premier")
-        self.assertTrue(self.division.upstream_title_overridden)
-        self.assertFalse(self.division.upstream_title_changed)
+        self.assertEqual(self.division.upstream_title_overridden, True)
+        self.assertEqual(self.division.upstream_title_changed, False)
         # ... and the synchronisation stops reporting it.
         self.assertEqual(self.sync().warnings, [])
 
     def test_saving_with_reset_adopts_the_remote_name(self):
         form = self.division_form(upstream_title_reset="1")
-        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.is_valid(), True, form.errors)
         form.save()
         self.division.refresh_from_db()
         self.assertEqual(self.division.title, "Mens Premier")
         self.assertEqual(self.division.slug, "mens-premier")
         self.assertEqual(self.division.upstream_title_synced, "Mens Premier")
-        self.assertFalse(self.division.upstream_title_overridden)
+        self.assertEqual(self.division.upstream_title_overridden, False)
         # ... and later renames are applied again without intervention.
         self.remote.competition(100)["name"] = "Mens Division One"
         self.sync()
@@ -1298,7 +1319,7 @@ class TitleAdminTests(WarmCachesMixin, SyncTestCase):
             user=self.superuser,
         )
         self.assertIn("Terrigal Sharks", form.fields["title"].help_text)
-        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.is_valid(), True, form.errors)
         form.save()
         team.refresh_from_db()
         self.assertEqual(team.title, "Terrigal Sharks")
@@ -1311,7 +1332,7 @@ class TitleAdminTests(WarmCachesMixin, SyncTestCase):
         self.remote.team(100, 1)["name"] = "Terrigal Sharks"
         self.sync()
         team.refresh_from_db()
-        self.assertTrue(team.upstream_title_changed)
+        self.assertEqual(team.upstream_title_changed, True)
 
         form = TeamForm(
             team.division,
@@ -1319,16 +1340,16 @@ class TitleAdminTests(WarmCachesMixin, SyncTestCase):
             instance=team,
             user=self.superuser,
         )
-        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.is_valid(), True, form.errors)
         # No field was edited, but the acknowledgement must still be saved:
         # the admin skips the save entirely for an unchanged form.
-        self.assertTrue(form.upstream_unacknowledged)
-        self.assertTrue(form.has_changed())
+        self.assertEqual(form.upstream_unacknowledged, True)
+        self.assertEqual(form.has_changed(), True)
         form.save()
         team.refresh_from_db()
         self.assertEqual(team.title, "Terrigal")
         self.assertEqual(team.upstream_title_synced, "Terrigal Sharks")
-        self.assertFalse(team.upstream_title_changed)
+        self.assertEqual(team.upstream_title_changed, False)
 
     def test_sync_page_lists_remote_renames(self):
         with self.login(self.superuser):
@@ -1337,16 +1358,15 @@ class TitleAdminTests(WarmCachesMixin, SyncTestCase):
                 self.get_check_200(
                     "admin:fixja:competition:season:upstream-sync", *self.args
                 )
-            self.assertResponseContains("14 Boys", html=False)
-            self.assertResponseContains("Mens Premier", html=False)
+            edit = self.reverse(
+                "admin:fixja:competition:season:division:edit",
+                self.season.competition_id,
+                self.season.pk,
+                self.division.pk,
+            )
             self.assertResponseContains(
-                self.reverse(
-                    "admin:fixja:competition:season:division:edit",
-                    self.season.competition_id,
-                    self.season.pk,
-                    self.division.pk,
-                ),
-                html=False,
+                f'<li><a href="{edit}">14 Boys</a> &mdash; was &ldquo;Mens Div 1&rdquo;, '
+                "now &ldquo;Mens Premier&rdquo; on MySideline</li>"
             )
 
 
@@ -1709,8 +1729,6 @@ class InvocationTests(SyncTestCase):
 
     @mock.patch("tournamentcontrol.competition.tasks._upstream_synchronise_season")
     def test_task(self, synchronise):
-        from tournamentcontrol.competition.tasks import synchronise_upstream_season
-
         synchronise.return_value = apply_snapshot(self.season, [])
         self.assertEqual(
             synchronise_upstream_season.delay(self.season.pk).get(),
@@ -1872,18 +1890,31 @@ class AdminTests(WarmCachesMixin, TestCase):
     def test_forms_show_mysideline_fields(self):
         with self.login(self.superuser):
             self.get_competition_edit()
-            self.assertResponseContains('name="upstream_url"', html=False)
+            self.assertResponseContains(upstream_url_input(ASSOCIATION_URL))
             self.get_season_edit()
-            self.assertResponseContains('name="upstream_url"', html=False)
+            self.assertResponseContains(
+                upstream_url_input(f"{ASSOCIATION_URL}?season=2025")
+            )
 
     def test_season_list_shows_button(self):
+        sync = self.reverse("admin:fixja:competition:season:upstream-sync", *self.args)
         with self.login(self.superuser):
             self.get_competition_edit()
             self.assertResponseContains(
-                self.reverse(
-                    "admin:fixja:competition:season:upstream-sync", *self.args
-                ),
-                html=False,
+                by_shell(
+                    workbook=(
+                        f'<a href="{sync}"><svg class="wb-icon" aria-hidden="true" '
+                        'focusable="false"><use href="/static/touchtechnology/admin/'
+                        'workbook/icons.svg#refresh-cw"></use></svg>'
+                        "Sync with MySideline</a>"
+                    ),
+                    explorer=(
+                        f'<a href="{sync}"><svg class="icon" aria-hidden="true" '
+                        'focusable="false"><use href="/static/touchtechnology/admin/'
+                        'explorer/img/icons.svg#refresh"></use></svg>'
+                        "Synchronise from MySideline</a>"
+                    ),
+                )
             )
 
     @mock.patch("tournamentcontrol.competition.admin.synchronise_upstream_season")
@@ -1892,9 +1923,24 @@ class AdminTests(WarmCachesMixin, TestCase):
             self.assertGoodView(
                 "admin:fixja:competition:season:upstream-sync", *self.args
             )
-            self.assertResponseContains("Synchronise now", html=False)
+            self.assertResponseContains(
+                by_shell(
+                    workbook=(
+                        '<button type="submit" class="wb-button wb-button-primary">'
+                        '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+                        '<use href="/static/touchtechnology/admin/workbook/icons.svg'
+                        '#refresh-cw"></use></svg>Synchronise now</button>'
+                    ),
+                    explorer=(
+                        '<button type="submit" form="edit-form" class="button primary">'
+                        '<svg class="icon" aria-hidden="true" focusable="false">'
+                        '<use href="/static/touchtechnology/admin/explorer/img/icons.svg'
+                        '#refresh"></use></svg><span>Synchronise now</span></button>'
+                    ),
+                )
+            )
             self.post("admin:fixja:competition:season:upstream-sync", *self.args)
-            self.response_302()
+            self.assert_http_302_found()
         task.delay.assert_called_once_with(self.season.pk)
 
     def test_sync_view_requires_link(self):
@@ -1902,11 +1948,9 @@ class AdminTests(WarmCachesMixin, TestCase):
         self.season.save()
         with self.login(self.superuser):
             self.get("admin:fixja:competition:season:upstream-sync", *self.args)
-            self.response_404()
+            self.assert_http_404_not_found()
 
     def test_competition_form_validation(self):
-        from tournamentcontrol.competition.forms import CompetitionForm
-
         competition = self.season.competition
         data = {
             "title": competition.title,
@@ -1947,8 +1991,6 @@ class AdminTests(WarmCachesMixin, TestCase):
         self.assertEqual(len(form.errors["upstream_url"]), 1)
 
     def test_season_form_validation(self):
-        from tournamentcontrol.competition.forms import SeasonForm
-
         data = {
             "title": self.season.title,
             "slug": self.season.slug,

@@ -122,12 +122,8 @@ class RichTextTests(TestCase):
                 }
             )
         )
-        self.assertTrue(
-            html.lstrip().startswith(
-                '<div class="wb-field wb-field-textarea html_widget">'
-            ),
-            html[:200],
-        )
+        opening = '<div class="wb-field wb-field-textarea html_widget">'
+        self.assertEqual(html.lstrip()[: len(opening)], opening)
 
     def test_the_article_page_carries_the_editor(self):
         article = ArticleFactory.create()
@@ -248,10 +244,7 @@ class AddAnotherTests(TestCase):
         }
         with self.login(self.superuser):
             self.post("admin:content:redirect:add", data=data)
-        self.response_302()
-        self.assertEqual(
-            self.last_response["Location"], self.reverse("admin:content:redirect:add")
-        )
+        self.assert_http_302_found(url=self.reverse("admin:content:redirect:add"))
         self.assertEqual(
             list(Redirect.objects.values_list("label", flat=True)), ["Old fixtures"]
         )

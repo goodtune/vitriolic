@@ -53,6 +53,7 @@ def element_patches(response):
 @freeze_time("2026-10-08 00:00 +10:00")
 class ResultsFixture(TestCase):
     def setUp(self):
+        super().setUp()
         events.reset_backend()
         self.staff = factories.UserFactory.create(is_staff=True)
         self.staff.user_permissions.add(Permission.objects.get(codename="change_match"))
@@ -89,8 +90,12 @@ class ResultsFixture(TestCase):
         data = {"home_team_score": home, "away_team_score": away, **extra}
         headers = {"Datastar-Request": "true"} if datastar else {}
         with self.login(user or self.staff):
-            return self.client.post(
-                self.url("match-result", match_pk=match.pk), data, headers=headers
+            return self.post(
+                "compops:match-result",
+                match_pk=match.pk,
+                data=data,
+                extra={"headers": headers},
+                **self.kw,
             )
 
 
@@ -98,7 +103,7 @@ class SlotFragmentTests(ResultsFixture):
     def test_pending_row_renders_the_form_without_values(self):
         with self.login(self.staff):
             self.get("compops:slot", slot_key="0800", **self.kw)
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertResponseContains(
             '<input type="number" name="home_team_score" class="sc" '
             f'data-preserve-attr="value" id="m{self.match.pk}_home_team_score">'
@@ -159,14 +164,14 @@ class SlotFragmentTests(ResultsFixture):
     def test_unknown_slot_is_404(self):
         with self.login(self.staff):
             self.get("compops:slot", slot_key="0900", **self.kw)
-        self.response_404()
+        self.assert_http_404_not_found()
 
 
 class SaveScoreTests(ResultsFixture):
     def test_plain_post_saves_and_redirects(self):
         with self.captureOnCommitCallbacks(execute=True):
-            response = self.post_score(self.match, 5, 4)
-        self.assertRedirects(response, self.url("day"), fetch_redirect_response=False)
+            self.post_score(self.match, 5, 4)
+        self.assert_http_302_found(url=self.url("day"))
         self.match.refresh_from_db()
         self.assertEqual(
             (self.match.home_team_score, self.match.away_team_score), (5, 4)
@@ -174,7 +179,7 @@ class SaveScoreTests(ResultsFixture):
         (event,) = events.recent(self.season.pk)
         self.assertEqual(event["type"], "score-entered")
         self.assertEqual(event["match"], self.match.pk)
-        self.assertFalse(event["adjusted"])
+        self.assertEqual(event["adjusted"], False)
         self.assertEqual(event["actor"], self.staff.get_username())
 
     def test_score_is_saved_before_the_signal_is_sent(self):
@@ -200,9 +205,9 @@ class SaveScoreTests(ResultsFixture):
         self.assertEqual(saves, [self.match.pk])
 
     def test_datastar_post_returns_row_header_and_count_patches(self):
-        response = self.post_score(self.match, 5, 4, datastar=True)
-        self.assertEqual(response.status_code, 200)
-        body = b"".join(response.streaming_content).decode()
+        self.post_score(self.match, 5, 4, datastar=True)
+        self.assert_http_200_ok()
+        body = b"".join(self.last_response.streaming_content).decode()
         self.assertIn(f'data: elements <div id="match-{self.match.pk}"', body)
         self.assertIn('data: elements <div id="slot-0800-h"', body)
         self.assertNotIn('data: elements <div id="slot-0800" class="slot"', body)
@@ -213,14 +218,14 @@ class SaveScoreTests(ResultsFixture):
 
     def test_datastar_post_leaves_the_other_rows_of_the_slot_alone(self):
         pending = self.make(8)
-        response = self.post_score(self.match, 5, 4, datastar=True)
-        body = b"".join(response.streaming_content).decode()
+        self.post_score(self.match, 5, 4, datastar=True)
+        body = b"".join(self.last_response.streaming_content).decode()
         self.assertNotIn(f'id="match-{pending.pk}"', body)
         self.assertIn('<span class="when">1 of 2 entered</span>', body)
 
     def test_missing_away_score_re_renders_errors(self):
-        response = self.post_score(self.match, 5, "", datastar=True)
-        body = b"".join(response.streaming_content).decode()
+        self.post_score(self.match, 5, "", datastar=True)
+        body = b"".join(self.last_response.streaming_content).decode()
         self.assertIn("Both scores are required.", body)
         self.match.refresh_from_db()
         self.assertIsNone(self.match.home_team_score)
@@ -235,7 +240,7 @@ class SaveScoreTests(ResultsFixture):
                 forfeit_winner=self.match.home_team.pk,
             )
         self.match.refresh_from_db()
-        self.assertTrue(self.match.is_forfeit)
+        self.assertEqual(self.match.is_forfeit, True)
         self.assertEqual(self.match.forfeit_winner, self.match.home_team)
         (event,) = events.recent(self.season.pk)
         self.assertEqual(event["type"], "score-entered")
@@ -247,27 +252,27 @@ class SaveScoreTests(ResultsFixture):
         )
 
     def test_without_change_match_is_403(self):
-        response = self.post_score(self.match, 5, 4, user=self.readonly)
-        self.assertEqual(response.status_code, 403)
+        self.post_score(self.match, 5, 4, user=self.readonly)
+        self.assert_http_403_forbidden()
 
     def test_upstream_match_is_refused(self):
         mirrored = self.make(9, upstream_id="mysideline:5")
-        response = self.post_score(mirrored, 5, 4)
-        self.assertEqual(response.status_code, 400)
+        self.post_score(mirrored, 5, 4)
+        self.assert_http_400_bad_request()
 
     def test_unprogressed_match_is_refused(self):
         undecided = factories.UndecidedTeamFactory.create(stage=self.stage)
         pending = self.make(9, home_team=None, home_team_undecided=undecided)
-        response = self.post_score(pending, 5, 4)
-        self.assertEqual(response.status_code, 400)
+        self.post_score(pending, 5, 4)
+        self.assert_http_400_bad_request()
 
     def test_match_from_another_day_is_404(self):
         when = timezone.make_aware(datetime.datetime(2026, 10, 9, 8), TZ)
         other = factories.MatchFactory.create(
             stage=self.stage, datetime=when, date=when.date(), time=when.time()
         )
-        response = self.post_score(other, 5, 4)
-        self.assertEqual(response.status_code, 404)
+        self.post_score(other, 5, 4)
+        self.assert_http_404_not_found()
 
 
 class EditScoreTests(ResultsFixture):
@@ -291,7 +296,7 @@ class EditScoreTests(ResultsFixture):
         with self.captureOnCommitCallbacks(execute=True):
             self.post_score(done, 3, 2)
         (event,) = events.recent(self.season.pk)
-        self.assertTrue(event["adjusted"])
+        self.assertEqual(event["adjusted"], True)
         self.assertEqual(
             event["summary"],
             f"Score · {done.stage.division.title} · {done.home_team.title} "
@@ -442,7 +447,7 @@ class ByeTests(ResultsFixture):
         with self.captureOnCommitCallbacks(execute=True):
             self.post_score(bye, "", "", bye_processed="on")
         bye.refresh_from_db()
-        self.assertTrue(bye.bye_processed)
+        self.assertEqual(bye.bye_processed, True)
         (event,) = events.recent(self.season.pk)
         self.assertEqual(event["type"], "bye-processed")
 
@@ -485,13 +490,13 @@ class PermissionOrderTests(ResultsFixture):
     def test_global_permission_needs_no_object_query(self):
         user = self.fresh(self.staff)
         with self.assertNumQueries(0):
-            self.assertTrue(can_change_match(user, self.match))
+            self.assertEqual(can_change_match(user, self.match), True)
 
     def test_object_permission_is_still_honoured(self):
         assign_perm("competition.change_match", self.readonly, self.match)
         user = self.fresh(self.readonly)
         with CaptureQueriesContext(connection) as queries:
-            self.assertTrue(can_change_match(user, self.match))
+            self.assertEqual(can_change_match(user, self.match), True)
         # Without the global permission, the object check goes to guardian.
         self.assertGreater(len(queries), 0)
 
@@ -501,4 +506,4 @@ class PermissionOrderTests(ResultsFixture):
         )
         user = self.fresh(self.staff)
         with self.assertNumQueries(0):
-            self.assertTrue(can_stream(user, self.season))
+            self.assertEqual(can_stream(user, self.season), True)

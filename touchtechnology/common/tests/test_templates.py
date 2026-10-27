@@ -1,11 +1,11 @@
+import platform
 import sys
-from importlib import import_module
-from urllib.parse import urlparse, urlunparse
+from importlib import import_module, metadata
 
+import django
 from django.template import Context, Template, engines
 from django.template.engine import Engine
 from django.test.utils import override_settings
-from django.utils.http import urlencode
 from test_plus import TestCase
 
 from touchtechnology.common.models import SitemapNode
@@ -386,9 +386,7 @@ class QueryStringTest(TestCase):
 
     fixtures = ["query_string"]
 
-    def setUp(self):
-        self.query = dict(year=2013)
-        self.url = urlparse(self.reverse("querystring:index"))
+    query = {"year": 2013}
 
     def test_no_filter_no_page(self):
         self.get("querystring:index")
@@ -400,9 +398,7 @@ class QueryStringTest(TestCase):
         self.assertResponseNotContains('<span id="9">9</span>')
 
     def test_no_filter_page(self):
-        query = dict(page=2)
-        url = self.url._replace(query=urlencode(query, True))
-        self.get(urlunparse(url))
+        self.get("querystring:index", data={"page": 2})
 
         self.assertResponseContains('<a href="?page=3">3</a>')
         self.assertResponseNotContains('<a href="?page=4">4</a>')
@@ -411,8 +407,7 @@ class QueryStringTest(TestCase):
         self.assertResponseContains('<span id="9">9</span>')
 
     def test_filter_no_page(self):
-        url = self.url._replace(query=urlencode(self.query, True))
-        self.get(urlunparse(url))
+        self.get("querystring:index", data=self.query)
 
         year = self.query["year"]
         self.assertResponseContains(f'<a href="?year={year}&amp;page=2">2</a>')
@@ -422,9 +417,7 @@ class QueryStringTest(TestCase):
         self.assertResponseNotContains('<span id="9">9</span>')
 
     def test_filter_page(self):
-        query = dict(page=2, **self.query)
-        url = self.url._replace(query=urlencode(query, True))
-        self.get(urlunparse(url))
+        self.get("querystring:index", data={"page": 2, **self.query})
 
         year = self.query["year"]
         self.assertResponseContains(f'<a href="?year={year}&amp;page=2">2</a>')
@@ -436,45 +429,48 @@ class QueryStringTest(TestCase):
 
 @override_settings(ROOT_URLCONF="example_app.urls")
 class ContextTest(TestCase):
+    # The templates render the bare value, with no element to assert on.
     def test_env(self):
-        self.get("context:env")
-        self.assertResponseContains("dev", html=False)
+        self.get_check_200("context:env")
+        self.assertContext("SITE_ENV", "dev")
 
     def test_tz(self):
-        self.get("context:tz")
-        self.assertResponseContains("UTC", html=False)
+        self.get_check_200("context:tz")
+        self.assertContext("TIME_ZONE", "UTC")
 
 
 class VersionTest(TestCase):
     def test_version_python(self):
         """Test version tag for Python returns expected structure."""
         template = Template("{% load common %}{% version 'python' %}")
-        output = template.render(Context()).strip()
-        # Should contain a version div with Python info
-        self.assertIn('class="version"', output)
-        self.assertIn('id="pkg_Python"', output)  # name is "Python" for python package
-        self.assertIn("Python", output)
-        # Should contain a version number (e.g., 3.12.x)
-        self.assertRegex(output, r"\d+\.\d+")
+        output = template.render(Context())
+        self.assertHTMLEqual(
+            output,
+            '<div class="version" id="pkg_Python">'
+            f'<span class="release">Python {platform.python_version()}</span>'
+            "</div>",
+        )
 
     def test_version_django(self):
         """Test version tag for Django package."""
         template = Template("{% load common %}{% version 'django' %}")
-        output = template.render(Context()).strip()
-        # Should contain a version div with Django info
-        self.assertIn('class="version"', output)
-        self.assertIn(
-            'id="pkg_django"', output
-        )  # name is lowercase for regular packages
-        self.assertIn("Django", output)
-        # Should contain a version number
-        self.assertRegex(output, r"\d+\.\d+")
+        output = template.render(Context())
+        # A final release has no pre-release part.
+        state = "release" if django.VERSION[3] == "final" else "development"
+        self.assertHTMLEqual(
+            output,
+            '<div class="version" id="pkg_django">'
+            f'<span class="{state}">Django {metadata.version("django")}</span>'
+            "</div>",
+        )
 
     def test_version_nonexistent_package(self):
         """Test version tag for non-existent package."""
         template = Template("{% load common %}{% version 'nonexistentpackage123' %}")
-        output = template.render(Context()).strip()
-        # Should contain unversioned div when package not found
-        self.assertIn('class="version"', output)
-        self.assertIn('id="unknown"', output)
-        self.assertIn("Unversioned", output)
+        output = template.render(Context())
+        self.assertHTMLEqual(
+            output,
+            '<div class="version" id="unknown">'
+            '<span class="development">Unversioned</span>'
+            "</div>",
+        )

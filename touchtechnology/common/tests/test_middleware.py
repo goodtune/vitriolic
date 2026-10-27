@@ -8,6 +8,7 @@ from touchtechnology.common.middleware import DatastarMiddleware
 
 class DatastarMiddlewareTests(TestCase):
     def setUp(self):
+        super().setUp()
         self.factory = RequestFactory()
         self.response = HttpResponse()
 

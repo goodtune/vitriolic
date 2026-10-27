@@ -34,6 +34,7 @@ NEWS_SITE = "touchtechnology.news.sites.NewsSite"
 
 class AdminTests(TestCase):
     def setUp(self):
+        super().setUp()
         self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
         self.staff = UserFactory.create(is_staff=True)
         self.staff.user_permissions.set(
@@ -110,7 +111,7 @@ class AdminTests(TestCase):
                 "formset-0-page": "",
             }
             self.post("admin:content:page:add", data=data)
-            self.response_302()
+            self.assert_http_302_found(url=self.reverse("admin:content:index"))
 
             node = SitemapNode.objects.latest("pk")
             self.assertEqual(node.get_absolute_url(), "/sample/")
@@ -120,11 +121,12 @@ class AdminTests(TestCase):
             # Unfortunately the SitemapNodeMiddleware does not appear to be
             # having an effect?
             # self.get(node.get_absolute_url())
-            # self.response_200()
+            # self.assert_http_200_ok()
 
 
 class GoodViewTests(TestCase):
     def setUp(self):
+        super().setUp()
         self.staff = UserFactory.create(is_staff=True, is_superuser=True)
         self.regular = UserFactory.create()
 
@@ -133,7 +135,6 @@ class GoodViewTests(TestCase):
 
         with self.login(self.staff):
             self.assertGoodView("admin:content:redirect:list")
-            self.response_200()
 
     def test_delete_redirect_with_protected_objects(self):
         """

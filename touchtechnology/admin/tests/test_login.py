@@ -1,4 +1,5 @@
 from django.test import override_settings
+from django.urls import reverse
 from test_plus import TestCase
 
 from touchtechnology.admin.tests.shells import per_shell
@@ -31,21 +32,13 @@ class AdminLoginTests(TestCase):
         ):
             self.assertResponseContains(fragment)
 
+    @override_settings(LOGIN_URL="admin:login")
     def test_anonymous_admin_index_redirects_to_admin_login(self):
-        self.get("admin:index")
-        self.assertRedirects(
-            self.last_response,
-            f"{self.reverse('admin:login')}?next={self.reverse('admin:index')}",
-            fetch_redirect_response=False,
-        )
+        self.assertLoginRequired("admin:index")
 
     def test_login_without_next_lands_on_the_admin(self):
         self.post("admin:login", data={"username": "admin", "password": "password"})
-        self.assertRedirects(
-            self.last_response,
-            self.reverse("admin:index"),
-            fetch_redirect_response=False,
-        )
+        self.assert_http_302_found(url=self.reverse("admin:index"))
 
     def test_login_follows_next(self):
         target = self.reverse("admin:news:article:list")
@@ -53,8 +46,7 @@ class AdminLoginTests(TestCase):
             "admin:login",
             data={"username": "admin", "password": "password", "next": target},
         )
-        self.response_302()
-        self.assertEqual(self.last_response["Location"], target)
+        self.assert_http_302_found(url=target)
 
     def test_login_refuses_offsite_next(self):
         self.post(
@@ -65,23 +57,18 @@ class AdminLoginTests(TestCase):
                 "next": "https://example.net/",
             },
         )
-        self.response_302()
-        self.assertEqual(self.last_response["Location"], self.reverse("admin:index"))
+        self.assert_http_302_found(url=self.reverse("admin:index"))
 
     def test_logout_requires_post_and_lands_on_login(self):
         with self.login(self.superuser):
             self.get("admin:logout")
-            self.response_405()
+            self.assert_http_405_method_not_allowed()
             self.post("admin:logout")
-            self.assertRedirects(
-                self.last_response,
-                self.reverse("admin:login"),
-                fetch_redirect_response=False,
-            )
+            self.assert_http_302_found(url=self.reverse("admin:login"))
 
     def test_wrong_password_shows_the_error(self):
         self.post("admin:login", data={"username": "admin", "password": "wrong"})
-        self.response_200()
+        self.assert_http_200_ok()
         error = self.last_response.context["form"].non_field_errors()[0]
         self.assertResponseContains(
             self.by_shell(
@@ -99,36 +86,26 @@ class AdminLoginTests(TestCase):
         target = self.reverse("admin:news:article:list")
         with self.login(self.superuser):
             self.get("admin:login", data={"next": target})
-            self.assertRedirects(
-                self.last_response, target, fetch_redirect_response=False
-            )
+            self.assert_http_302_found(url=target)
             self.get("admin:login")
-            self.assertRedirects(
-                self.last_response,
-                self.reverse("admin:index"),
-                fetch_redirect_response=False,
-            )
+            self.assert_http_302_found(url=self.reverse("admin:index"))
 
     def test_signed_in_staff_is_not_sent_back_to_the_login_page(self):
         with self.login(self.superuser):
             self.get("admin:login", data={"next": self.reverse("admin:login")})
-            self.assertRedirects(
-                self.last_response,
-                self.reverse("admin:index"),
-                fetch_redirect_response=False,
-            )
+            self.assert_http_302_found(url=self.reverse("admin:index"))
 
     def test_staff_redirect_is_never_cached(self):
         with self.login(self.superuser):
             self.get("admin:login")
-        self.response_302()
+        self.assert_http_302_found(url=self.reverse("admin:index"))
         self.assertIn("no-store", self.last_response["Cache-Control"])
 
     def test_signed_in_non_staff_sees_the_form_with_a_notice(self):
         user = factories.UserFactory.create(username="visitor")
         with self.login(user):
             self.get("admin:login", data={"next": self.reverse("admin:index")})
-        self.response_200()
+        self.assert_http_200_ok()
         for fragment in self.by_shell(
             workbook=(
                 '<p class="wb-message wb-message-warning signed-in-notice">'
@@ -150,12 +127,12 @@ class AdminLoginTests(TestCase):
         user = factories.UserFactory.create(username="visitor")
         with self.login(user):
             self.get("admin:index")
-            login = f"{self.reverse('admin:login')}?next={self.reverse('admin:index')}"
-            self.assertRedirects(
-                self.last_response, login, fetch_redirect_response=False
-            )
-            self.get(login)
-            self.response_200()
+            login = reverse("admin:login", query={"next": self.reverse("admin:index")})
+            self.assert_http_302_found()
+            # Django leaves "/" unescaped in "next"; compare the parsed URLs.
+            self.assertURLEqual(self.last_response.url, login)
+            self.get("admin:login", data={"next": self.reverse("admin:index")})
+            self.assert_http_200_ok()
 
     def test_signed_in_non_staff_can_switch_to_a_staff_account(self):
         user = factories.UserFactory.create(username="visitor")
@@ -168,10 +145,6 @@ class AdminLoginTests(TestCase):
                     "next": self.reverse("admin:index"),
                 },
             )
-            self.assertRedirects(
-                self.last_response,
-                self.reverse("admin:index"),
-                fetch_redirect_response=False,
-            )
+            self.assert_http_302_found(url=self.reverse("admin:index"))
             self.get("admin:index")
-            self.response_200()
+            self.assert_http_200_ok()

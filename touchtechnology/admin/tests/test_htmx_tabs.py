@@ -41,12 +41,12 @@ class LazySettingsHelperTests(TestCase):
 
     def test_s_boolean_evaluation(self):
         result = S("HTMX_ADMIN_TABS", False)
-        self.assertFalse(result)
+        self.assertEqual(result, False)
 
     @override_settings(TOUCHTECHNOLOGY_LAZY_TEST_BOOL=True)
     def test_s_boolean_true_evaluation(self):
         result = S("LAZY_TEST_BOOL", False)
-        self.assertTrue(result)
+        self.assertEqual(result, True)
 
     def test_s_int_coercion(self):
         result = S("NONEXISTENT_INT", 5)
@@ -87,7 +87,7 @@ class HtmxAdminTabsFeatureFlagTests(TestCase):
     """Tests for the HTMX admin tabs feature flag."""
 
     def test_default_flag_is_false(self):
-        self.assertFalse(HTMX_ADMIN_TABS)
+        self.assertEqual(HTMX_ADMIN_TABS, False)
 
     def test_context_processor_returns_flag(self):
         rf = RequestFactory()
@@ -99,14 +99,14 @@ class HtmxAdminTabsFeatureFlagTests(TestCase):
         rf = RequestFactory()
         request = rf.get("/")
         result = htmx_admin_tabs(request)
-        self.assertFalse(result["htmx_admin_tabs"])
+        self.assertEqual(result["htmx_admin_tabs"], False)
 
     @override_settings(TOUCHTECHNOLOGY_HTMX_ADMIN_TABS=True)
     def test_context_processor_respects_override(self):
         rf = RequestFactory()
         request = rf.get("/")
         result = htmx_admin_tabs(request)
-        self.assertTrue(result["htmx_admin_tabs"])
+        self.assertEqual(result["htmx_admin_tabs"], True)
 
 
 class HtmxTabTemplateRenderingTests(TestCase):
@@ -197,8 +197,9 @@ class HtmxScriptTagTests(TestCase):
 
     def test_installed_library_is_served(self):
         url = htmx_script()
-        self.assertTrue(url.startswith(settings.STATIC_URL))
-        self.assertIsNotNone(finders.find(url.removeprefix(settings.STATIC_URL)))
+        name = url.removeprefix(settings.STATIC_URL)
+        self.assertEqual(url, f"{settings.STATIC_URL}{name}")
+        self.assertIn(name, finders.find(name))
 
     def test_admin_pages_include_it(self):
         superuser = factories.UserFactory.create(is_staff=True, is_superuser=True)
@@ -219,7 +220,7 @@ class HtmxTabViewTests(TestCase):
         """Edit view returns full page when HTMX flag is disabled."""
         with self.login(self.superuser):
             self.get("admin:auth:users:edit", pk=self.superuser.pk)
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertTemplateUsed(
                 self.last_response, self.shell.template("edit.html")
             )
@@ -233,7 +234,7 @@ class HtmxTabViewTests(TestCase):
                 pk=self.superuser.pk,
                 data={"_htmx_tab": "groups"},
             )
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertTemplateUsed(
                 self.last_response, self.shell.template("edit.html")
             )
@@ -248,7 +249,7 @@ class HtmxTabViewTests(TestCase):
                 data={"_htmx_tab": "groups"},
                 extra={"HTTP_HX_REQUEST": "true"},
             )
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertTemplateUsed(
                 self.last_response,
                 self.shell.template("_htmx_tab_empty.html"),
@@ -263,7 +264,7 @@ class HtmxTabViewTests(TestCase):
                 data={"_htmx_tab": "groups"},
                 extra={"HTTP_HX_REQUEST": "true"},
             )
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertTemplateUsed(
                 self.last_response, self.shell.template("edit.html")
             )

@@ -1,6 +1,7 @@
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from test_plus import TestCase
 
 from touchtechnology.admin.tests.shells import per_shell
@@ -10,9 +11,9 @@ from touchtechnology.common.tests.factories import UserFactory
 @per_shell
 class AuthenticationTest(TestCase):
 
+    @override_settings(LOGIN_URL="admin:login")
     def test_admin_login(self):
-        self.get("admin:index")
-        self.response_302()
+        self.assertLoginRequired("admin:index")
 
     def test_admin_logout(self):
         user = UserFactory.create(is_staff=True)
@@ -29,7 +30,7 @@ class AuthenticationTest(TestCase):
         user = UserFactory.create(is_staff=True, is_superuser=True)
         with self.login(user):
             self.get("admin:index")
-        self.response_200()
+        self.assert_http_200_ok()
         token = self.get_context("csrf_token")
         logout = self.reverse("admin:logout")
         self.assertResponseContains(

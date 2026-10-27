@@ -172,7 +172,7 @@ class LocalizedDateViewTest(TestPlusCase):
         )
         # Test with Chinese month name for June (六月)
         self.get("news:article", year="2013", month="六月", day="23", slug=article.slug)
-        self.response_200()
+        self.assert_http_200_ok()
 
     def test_japanese_month_in_url(self):
         """Test URL with Japanese month name."""
@@ -181,7 +181,7 @@ class LocalizedDateViewTest(TestPlusCase):
         )
         # Test with Japanese month name for June (6月)
         self.get("news:article", year="2013", month="6月", day="23", slug=article.slug)
-        self.response_200()
+        self.assert_http_200_ok()
 
     def test_spanish_month_in_url(self):
         """Test URL with Spanish month name."""
@@ -192,7 +192,7 @@ class LocalizedDateViewTest(TestPlusCase):
         self.get(
             "news:article", year="2013", month="junio", day="23", slug=article.slug
         )
-        self.response_200()
+        self.assert_http_200_ok()
 
     def test_french_month_in_url(self):
         """Test URL with French month name."""
@@ -201,7 +201,7 @@ class LocalizedDateViewTest(TestPlusCase):
         )
         # Test with French month name for June (juin)
         self.get("news:article", year="2013", month="juin", day="23", slug=article.slug)
-        self.response_200()
+        self.assert_http_200_ok()
 
     def test_german_month_in_url(self):
         """Test URL with German month name."""
@@ -210,24 +210,24 @@ class LocalizedDateViewTest(TestPlusCase):
         )
         # Test with German month name for June (juni)
         self.get("news:article", year="2013", month="juni", day="23", slug=article.slug)
-        self.response_200()
+        self.assert_http_200_ok()
 
     def test_invalid_localized_month_404(self):
         """Test that invalid localized month names return 404."""
         self.get("news:article", year="2013", month="无效月", day="23", slug="test")
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_archive_day_with_localized_month(self):
         """Test archive day view with localized month name."""
         # Test with Chinese month name for June (六月)
         self.get("news:day", year="2013", month="六月", day="23")
-        self.response_200()
+        self.assert_http_200_ok()
 
     def test_archive_month_with_localized_month(self):
         """Test archive month view with localized month name."""
         # Test with Chinese month name for June (六月)
         self.get("news:month", year="2013", month="六月")
-        self.response_200()
+        self.assert_http_200_ok()
 
     def test_backward_compatibility_english_months(self):
         """Test that existing English month names still work."""
@@ -236,8 +236,8 @@ class LocalizedDateViewTest(TestPlusCase):
         )
         # Test with English short month name
         self.get("news:article", year="2013", month="jun", day="23", slug=article.slug)
-        self.response_200()
+        self.assert_http_200_ok()
 
         # Test with English full month name
         self.get("news:article", year="2013", month="june", day="23", slug=article.slug)
-        self.response_200()
+        self.assert_http_200_ok()

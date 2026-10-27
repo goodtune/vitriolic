@@ -41,8 +41,7 @@ class OptionalAppsAPITestCase(TestCase):
     def test_api_works_without_news_app(self):
         """Test that the API entrypoint works when news app is not installed"""
         self.without_news()
-        self.get("/api/")
-        self.response_200()
+        self.get_check_200("api-root")
 
         # Should show only v1 endpoint
         expected = {"v1": "http://testserver/api/v1/"}
@@ -51,8 +50,7 @@ class OptionalAppsAPITestCase(TestCase):
     def test_v1_api_adapts_to_installed_apps(self):
         """Test that v1 API only shows endpoints for installed apps"""
         self.without_news()
-        self.get("/api/v1/")
-        self.response_200()
+        self.get_check_200("v1:api-root")
 
         # Should show only competition endpoints, no news
         expected = {
@@ -63,8 +61,7 @@ class OptionalAppsAPITestCase(TestCase):
 
     def test_v1_api_shows_all_endpoints_when_all_apps_installed(self):
         """Test that v1 API shows all endpoints when all apps are installed"""
-        self.get("/api/v1/")
-        self.response_200()
+        self.get_check_200("v1:api-root")
 
         # Should show all available endpoints
         expected = {

@@ -39,8 +39,9 @@ def edit_link(url, text, icon):
 
 
 class RegistrationTests(test_plus.TestCase):
-    def setUp(self):
-        self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = UserFactory.create(is_staff=True, is_superuser=True)
 
     def test_component_is_registered(self):
         names = [c.app_name for c in site._components.values()]
@@ -49,10 +50,8 @@ class RegistrationTests(test_plus.TestCase):
     def test_index_redirects_to_years(self):
         with self.login(self.superuser):
             self.get("admin:enrolment:index")
-            self.response_302()
-            self.assertEqual(
-                self.last_response["Location"],
-                self.reverse("admin:enrolment:schoolyear:list"),
+            self.assert_http_302_found(
+                url=self.reverse("admin:enrolment:schoolyear:list")
             )
 
 
@@ -293,13 +292,9 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
                     "teacher": self.teacher.pk,
                 },
             )
-            self.response_302()
+            self.assert_http_302_found(url=f"{self.year.urls['edit']}#classes-tab")
             self.assertEqual(
-                self.last_response["Location"],
-                f'{self.year.urls["edit"]}#classes-tab',
-            )
-            self.assertTrue(
-                ClassGroup.objects.filter(year=self.year, title="2D").exists()
+                ClassGroup.objects.filter(year=self.year, title="2D").count(), 1
             )
 
     def test_duplicate_enrolment_is_a_form_error(self):
@@ -310,7 +305,7 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
                 class_group_id=self.group.pk,
                 data={"student": self.student.pk},
             )
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertFormError(
                 self.last_response.context["form"],
                 None,
@@ -325,16 +320,17 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
                 class_group_id=self.other_group.pk,
                 data={"student": self.student.pk},
             )
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertFormError(
                 self.last_response.context["form"],
                 None,
                 "Ines Varga is already enrolled in 2C (2026) this year.",
             )
-            self.assertFalse(
+            self.assertEqual(
                 Enrolment.objects.filter(
                     student=self.student, class_group=self.other_group
-                ).exists()
+                ).count(),
+                0,
             )
 
     def test_student_may_move_up_to_a_class_in_the_next_year(self):
@@ -353,11 +349,12 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
                 class_group_id=next_group.pk,
                 data={"student": self.student.pk},
             )
-            self.response_302()
-            self.assertTrue(
+            self.assert_http_302_found()
+            self.assertEqual(
                 Enrolment.objects.filter(
                     student=self.student, class_group=next_group
-                ).exists()
+                ).count(),
+                1,
             )
 
     def test_editing_an_enrolment_does_not_clash_with_itself(self):
@@ -369,7 +366,7 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
                 pk=self.enrolment.pk,
                 data={"student": self.student.pk},
             )
-            self.response_302()
+            self.assert_http_302_found()
 
     def test_score_above_maximum_is_a_form_error(self):
         with self.login(self.superuser):
@@ -378,13 +375,13 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
                 data=self.assessment_data((self.enrolment, "11")),
                 **self.assessment_kwargs,
             )
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertFormError(
                 self.last_response.context["formset"].forms[0],
                 "mark",
                 "The mark cannot be more than the maximum of 10.",
             )
-            self.assertFalse(self.assessment.scores.exists())
+            self.assertCountEqual(self.assessment.scores.all(), [])
 
     def test_score_within_maximum_is_saved(self):
         with self.login(self.superuser):
@@ -393,7 +390,7 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
                 data=self.assessment_data((self.enrolment, "9")),
                 **self.assessment_kwargs,
             )
-            self.response_302()
+            self.assert_http_302_found()
             self.assertEqual(
                 list(self.assessment.scores.values_list("enrolment", "mark")),
                 [(self.enrolment.pk, 9)],
@@ -406,14 +403,14 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
                 data=self.assessment_data((self.outsider_enrolment, "5")),
                 **self.assessment_kwargs,
             )
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertFormError(
                 self.last_response.context["formset"].forms[0],
                 "enrolment",
                 "Select a valid choice. That choice is not one of the available "
                 "choices.",
             )
-            self.assertFalse(self.assessment.scores.exists())
+            self.assertCountEqual(self.assessment.scores.all(), [])
 
     def test_assessment_offers_only_the_classs_students(self):
         with self.login(self.superuser):
@@ -470,14 +467,10 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
                 year_id=self.year.pk,
                 pk=self.group.pk,
             )
-            self.response_302()
-            self.assertEqual(
-                self.last_response["Location"],
-                f'{self.year.urls["edit"]}#classes-tab',
-            )
-            self.assertFalse(Enrolment.objects.filter(class_group=self.group).exists())
-            self.assertFalse(Assessment.objects.filter(class_group=self.group).exists())
-            self.assertFalse(Score.objects.exists())
+            self.assert_http_302_found(url=f"{self.year.urls['edit']}#classes-tab")
+            self.assertCountEqual(Enrolment.objects.filter(class_group=self.group), [])
+            self.assertCountEqual(Assessment.objects.filter(class_group=self.group), [])
+            self.assertCountEqual(Score.objects.all(), [])
 
 
 Row = collections.namedtuple("Row", "name kwargs target")
@@ -599,8 +592,9 @@ class PermissionDataMixin:
 
     def assertStillExists(self, row):
         if row.target is not None:
-            self.assertTrue(
-                type(row.target).objects.filter(pk=row.target.pk).exists(),
+            self.assertEqual(
+                type(row.target).objects.filter(pk=row.target.pk).count(),
+                1,
                 f"{row.name} removed {row.target!r}",
             )
 
@@ -631,9 +625,9 @@ class PermissionSweepTests(PermissionDataMixin, test_plus.TestCase):
                 with self.subTest(row.name, **row.kwargs):
                     if row.target is None:
                         self.get(row.name, **row.kwargs)
-                        self.response_403()
+                        self.assert_http_403_forbidden()
                     self.post(row.name, **row.kwargs)
-                    self.response_403()
+                    self.assert_http_403_forbidden()
                     self.assertStillExists(row)
 
     def test_staff_with_model_permissions_can_list_and_edit(self):
@@ -661,8 +655,8 @@ class PermissionSweepTests(PermissionDataMixin, test_plus.TestCase):
                 pk=self.assessment.pk,
                 **self.class_kwargs,
             )
-            self.response_403()
-        self.assertTrue(Assessment.objects.filter(pk=self.assessment.pk).exists())
+            self.assert_http_403_forbidden()
+        self.assertEqual(Assessment.objects.filter(pk=self.assessment.pk).count(), 1)
 
 
 class NestingTests(PermissionDataMixin, test_plus.TestCase):
@@ -676,8 +670,8 @@ class NestingTests(PermissionDataMixin, test_plus.TestCase):
             with self.subTest(namespace, view=view, **parent):
                 name = f"admin:enrolment:{namespace}:{view}"
                 self.request(method, name, pk=instance.pk, **parent)
-                self.response_404()
-        self.assertTrue(type(instance).objects.filter(pk=instance.pk).exists())
+                self.assert_http_404_not_found()
+        self.assertEqual(type(instance).objects.filter(pk=instance.pk).count(), 1)
 
     def test_class_group_under_the_other_year(self):
         with self.login(self.superuser):
@@ -728,7 +722,7 @@ class NestingTests(PermissionDataMixin, test_plus.TestCase):
                 year_id=self.other_year.pk,
                 class_group_id=self.other_group.pk,
             )
-        self.assertTrue(Score.objects.filter(pk=self.score.pk).exists())
+        self.assertEqual(Score.objects.filter(pk=self.score.pk).count(), 1)
 
     def test_add_under_a_class_of_the_other_year(self):
         with self.login(self.superuser):
@@ -739,7 +733,7 @@ class NestingTests(PermissionDataMixin, test_plus.TestCase):
                         year_id=self.year.pk,
                         class_group_id=self.other_group.pk,
                     )
-                    self.response_404()
+                    self.assert_http_404_not_found()
 
 
 @per_shell(shells=("explorer",))
@@ -748,7 +742,7 @@ class YearSetupTests(EnrolmentDataMixin, test_plus.TestCase):
         bare = ClassGroup.objects.create(year=self.year, grade=self.grade, title="2W")
         with self.login(self.superuser):
             self.get("admin:enrolment:schoolyear:edit", pk=self.year.pk)
-            self.response_200()
+            self.assert_http_200_ok()
         self.assertResponseContains(
             '<p class="setup-detail"><span class="visually-hidden">Still to do:'
             f"</span> {bare} has no teacher</p>"
@@ -762,9 +756,9 @@ class YearSetupTests(EnrolmentDataMixin, test_plus.TestCase):
                 year_id=self.year.pk,
                 pk=self.group.pk,
             )
-            self.response_200()
+            self.assert_http_200_ok()
         setup = self.context["setup"]
-        self.assertFalse(setup.here)
+        self.assertEqual(setup.here, False)
         self.assertResponseContains(
             f'<a href="{self.year.urls["edit"]}#setup-tab">'
             f"<strong>School year set-up</strong> {setup.done} of {setup.total} done</a>"

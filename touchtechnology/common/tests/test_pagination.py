@@ -18,7 +18,6 @@ class PaginationTest(TestCase):
     def test_parameter(self):
         self.get("pagination:parameter", 3)
         n = len(self.get_context("object_list"))
-        self.assertNotEqual(n, 5)
         self.assertEqual(n, 3)
 
     def test_parameter_no_pagination(self):

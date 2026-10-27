@@ -8,6 +8,7 @@ from touchtechnology.news.tests.factories import ArticleFactory
 
 class RelatedFilterTest(TestCase):
     def setUp(self):
+        super().setUp()
         RelativeFactory.reset_sequence()
         self.template = Template(
             """

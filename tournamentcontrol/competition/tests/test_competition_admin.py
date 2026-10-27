@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 import cloudinary
 import responses
 from dateutil.rrule import DAILY
+from django import forms
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.messages.test import MessagesTestMixin
@@ -121,15 +122,15 @@ class TestCase(BaseTestCase):
             self.assertGoodView(viewname, test_query_count=test_query_count, *args)
             if kwargs:
                 self.post(viewname, *args, **kwargs)
-                self.response_302()
+                self.assert_http_302_found()
 
     def assertGoodDeleteView(self, viewname, *args):
         self.assertLoginRequired(viewname, *args)
         with self.login(self.superuser):
             self.get(viewname, *args)
-            self.response_405()
+            self.assert_http_405_method_not_allowed()
             self.post(viewname, *args)
-            self.response_302()
+            self.assert_http_302_found()
 
     def assertGoodNamespace(self, instance, **kwargs):
         namespace = instance._get_admin_namespace()
@@ -141,8 +142,7 @@ class TestCase(BaseTestCase):
 
 class TemplateTests(TestCase):
     @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
+    def setUpTestData(cls):
         stage1 = factories.StageFactory.create()
         stage2 = factories.StageFactory.create(division=stage1.division, follows=stage1)
         ground = factories.GroundFactory.create(venue__season=stage2.division.season)
@@ -175,10 +175,6 @@ class TemplateTests(TestCase):
         cls.division = stage2.division
         cls.season = cls.division.season
         cls.competition = cls.season.competition
-
-    @classmethod
-    def tearDownClass(cls):
-        super().tearDownClass()
 
     def test_team_title(self):
         template = Template("{% load common %}{{ team.title|htmlentities }}")
@@ -582,7 +578,7 @@ class GoodViewTests(TestCase):
         with self.login(self.superuser):
             self.get("admin:fixja:index")
             if site.shell.index_landing:
-                self.response_200()
+                self.assert_http_200_ok()
                 url = self.reverse("admin:fixja:competition:list")
                 self.assertResponseContains(
                     f'<a class="wb-task" href="{url}">'
@@ -590,7 +586,7 @@ class GoodViewTests(TestCase):
                     '<span class="wb-task-title">Competitions</span></a>',
                 )
             else:
-                self.response_302()
+                self.assert_http_302_found()
 
     def test_competition(self):
         competition = factories.CompetitionFactory.create()
@@ -684,7 +680,7 @@ class GoodViewTests(TestCase):
         MatchScoreSheet.objects.create(match=match, image="harness/score-sheet")
         with self.login(self.superuser):
             self.get(f"{match._get_admin_namespace()}:edit", *match._get_url_args())
-            self.response_200()
+            self.assert_http_200_ok()
 
     def test_pool(self):
         pool = factories.StageGroupFactory.create()
@@ -703,7 +699,7 @@ class GoodViewTests(TestCase):
 
     def test_person(self):
         person = factories.PersonFactory.create()
-        self.assertFalse(person.statistics.count())
+        self.assertEqual(person.statistics.count(), 0)
         self.assertGoodNamespace(person)
 
     def test_format(self):
@@ -773,7 +769,7 @@ class GoodViewTests(TestCase):
                     "form-0-play_at": ground.pk,
                 },
             )
-            self.response_302()
+            self.assert_http_302_found()
 
     def test_match_live_stream_requires_staff_login(self):
         stage = factories.StageFactory.create()
@@ -894,7 +890,7 @@ class GoodViewTests(TestCase):
             # The round games cannot be progressed, it's the first stage and
             # therefore can't have any undecided teams.
             self.get(url_rounds.url_name, *url_rounds.args)
-            self.response_410()
+            self.assert_http_410_gone()
 
             # FIXME
             #
@@ -902,7 +898,7 @@ class GoodViewTests(TestCase):
             # # that need to be entered for matches in the preceding stage.
             # self.get(finals._get_admin_namespace() + ':progress',
             #          *finals._get_url_args())
-            # self.response_410()
+            # self.assert_http_410_gone()
             #
             # # Set random results for every unplayed match in the previous stage
             # # so that we can determine progressions.
@@ -912,7 +908,7 @@ class GoodViewTests(TestCase):
 
             # The final series progression should now be accessible.
             self.get(url_finals.url_name, *url_finals.args)
-            self.response_200()
+            self.assert_http_200_ok()
 
     def test_progress_teams_position_before_undecided(self):
         """
@@ -990,7 +986,7 @@ class GoodViewTests(TestCase):
             # Positional references from the previous stage can be resolved
             # immediately, so the match progression form must be presented.
             self.get(url.url_name, *url.args)
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertTemplateUsed(
                 self.last_response,
                 site.shell.shelled(
@@ -1054,7 +1050,7 @@ class GoodViewTests(TestCase):
 
             # Only the undecided teams remain to be progressed.
             self.get(url.url_name, *url.args)
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertTemplateUsed(
                 self.last_response,
                 site.shell.shelled(
@@ -1080,7 +1076,7 @@ class GoodViewTests(TestCase):
                 data[f"form-{i}-team"] = str(team.pk)
 
             self.post(url.url_name, *url.args, data=data)
-            self.response_302()
+            self.assert_http_302_found()
 
             semi_1.refresh_from_db()
             semi_2.refresh_from_db()
@@ -1089,7 +1085,7 @@ class GoodViewTests(TestCase):
 
             # Nothing left to progress.
             self.get(url.url_name, *url.args)
-            self.response_410()
+            self.assert_http_410_gone()
 
     def test_progression_list(self):
         rounds = factories.StageFactory.create(order=1)
@@ -1149,7 +1145,7 @@ class GoodViewTests(TestCase):
 
         with self.login(self.superuser):
             self.get("admin:fixja:club:edit", club.pk)
-            self.response_200()
+            self.assert_http_200_ok()
 
         self.assertResponseContains(f'<option value="{member.pk}">{member}</option>')
         self.assertResponseNotContains(
@@ -1193,7 +1189,7 @@ class GoodViewTests(TestCase):
                 "keep_old": "false",
             }
             self.post("admin:fixja:club:person:merge", club.pk, member1.pk, data=data)
-            self.response_302()
+            self.assert_http_302_found()
 
         # Check the database state after the merge.
         self.assertCountEqual(
@@ -1235,7 +1231,7 @@ class GoodViewTests(TestCase):
         with self.login(self.superuser):
             # Test GET request shows the form
             self.get("admin:fixja:club:person:transfer", original_club.pk, person.pk)
-            self.response_200()
+            self.assert_http_200_ok()
 
             # Test POST request transfers the person
             data = {"club": target_club.pk}
@@ -1245,7 +1241,7 @@ class GoodViewTests(TestCase):
                 person.pk,
                 data=data,
             )
-            self.response_302()
+            self.assert_http_302_found()
 
             # Verify the person was transferred
             person.refresh_from_db()
@@ -1278,9 +1274,9 @@ class GoodViewTests(TestCase):
     #     self.assertLoginRequired('admin:fixja:competition:delete', 1)
     #     with self.login(username='gary@touch.asn.au'):
     #         self.get('admin:fixja:competition:delete', 1)
-    #         self.response_405()
+    #         self.assert_http_405_method_not_allowed()
     #         self.post('admin:fixja:competition:delete', 1)
-    #         self.response_302()
+    #         self.assert_http_302_found()
 
     def test_perms_views(self):
         team = factories.TeamFactory.create()
@@ -1331,7 +1327,7 @@ class GoodViewTests(TestCase):
         season.competition.clubs.add(club)
         with self.login(self.superuser):
             self.get("admin:fixja:club:officials", club.pk, season.pk)
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertResponseContains(
                 by_shell(
                     workbook='<p class="wb-empty" data-wb-formset-none>'
@@ -1339,7 +1335,6 @@ class GoodViewTests(TestCase):
                     explorer='<td colspan="3" class="empty-state">'
                     "The club has no officials for this season yet.</td>",
                 ),
-                html=by_shell(workbook=False, explorer=True),
             )
 
     def test_officials_complete_season_is_read_only_to_club_administrators(self):
@@ -1349,7 +1344,7 @@ class GoodViewTests(TestCase):
         user = UserFactory.create(is_staff=True)
         with self.login(user):
             self.get("admin:fixja:club:officials", club.pk, season.pk)
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertResponseContains(
                 by_shell(
                     workbook='<tr class="wb-table-empty"><td colspan="2">'
@@ -1357,7 +1352,6 @@ class GoodViewTests(TestCase):
                     explorer='<td colspan="2" class="empty-state">'
                     "The club has no officials for this season.</td>",
                 ),
-                html=by_shell(workbook=False, explorer=True),
             )
 
     def test_officials_save_returns_to_the_club(self):
@@ -1380,11 +1374,8 @@ class GoodViewTests(TestCase):
                     "form-0-roles": role.pk,
                 },
             )
-            self.response_302()
-            self.assertRedirects(
-                self.last_response,
-                reverse("admin:fixja:club:edit", args=(club.pk,)),
-                fetch_redirect_response=False,
+            self.assert_http_302_found(
+                url=reverse("admin:fixja:club:edit", args=(club.pk,))
             )
         official = SeasonAssociation.objects.get(club=club, season=season)
         self.assertEqual(official.person, person)
@@ -1414,11 +1405,8 @@ class GoodViewTests(TestCase):
                     "people-0-roles": role.pk,
                 },
             )
-            self.response_302()
-            self.assertRedirects(
-                self.last_response,
-                reverse("admin:fixja:club:edit", args=(club.pk,)),
-                fetch_redirect_response=False,
+            self.assert_http_302_found(
+                url=reverse("admin:fixja:club:edit", args=(club.pk,))
             )
         member = TeamAssociation.objects.get(team=team)
         self.assertEqual(member.person, person)
@@ -1609,17 +1597,20 @@ class BackendTests(MessagesTestMixin, TestCase):
         }
         add_division = Division(season=season).url_names["add"]
         self.post(add_division.url_name, *add_division.args, data=data)
-        self.response_302()
+        self.assert_http_302_found()
 
         with self.settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls"):
             self.assertGoodView(
                 "competition:season", season.competition.slug, season.slug
             )
-            self.assertResponseContains("Mixed 4", html=False)
+            mixed_4_url = self.reverse(
+                "competition:division", season.competition.slug, season.slug, "mixed-4"
+            )
+            self.assertResponseContains(f'<a href="{mixed_4_url}">Mixed 4</a>')
             self.assertGoodView(
                 "competition:division", season.competition.slug, season.slug, "mixed-4"
             )
-            self.assertResponseContains("Mixed 4", html=False)
+            self.assertResponseContains("<h2>Mixed 4</h2>")
 
         data.update(
             {
@@ -1630,14 +1621,22 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         edit_division = division.url_names["edit"]
         self.post(edit_division.url_name, *edit_division.args, data=data)
-        self.response_302()
+        self.assert_http_302_found()
 
         with self.settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls"):
             self.assertGoodView(
                 "competition:season", season.competition.slug, season.slug
             )
-            self.assertResponseNotContains("Mixed 4", html=False)
-            self.assertResponseContains("4th Division Mixed", html=False)
+            self.assertResponseNotContains(f'<a href="{mixed_4_url}">Mixed 4</a>')
+            division_url = self.reverse(
+                "competition:division",
+                season.competition.slug,
+                season.slug,
+                "4th-division-mixed",
+            )
+            self.assertResponseContains(
+                f'<a href="{division_url}">4th Division Mixed</a>'
+            )
 
     def test_scorers_view_basic(self):
         """Test that scorers view loads correctly with basic match and statistics data"""
@@ -1672,7 +1671,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 division.season.pk,
                 division.pk,
             )
-            self.response_200()
+            self.assert_http_200_ok()
 
         # Get context data directly
         scorers = self.get_context("scorers")
@@ -1736,11 +1735,21 @@ class BackendTests(MessagesTestMixin, TestCase):
             "slug_locked": "0",
         }
         self.post("admin:fixja:club:edit", club.pk, data=data)
-        self.response_302()
+        self.assert_http_302_found()
 
         self.get("admin:fixja:club:list")
-        self.assertResponseContains("Bare Back Riders", html=False)
-        self.assertResponseContains("BBR", html=False)
+        self.assertResponseContains(
+            by_shell(
+                workbook=f'<a href="{club.urls["edit"]}">Bare Back Riders</a>',
+                explorer="<span>Bare Back Riders</span>",
+            )
+        )
+        self.assertResponseContains(
+            by_shell(
+                workbook='<td data-label="Abbreviation">BBR</td>',
+                explorer="<td>BBR</td>",
+            )
+        )
 
     def test_match_detail(self):
         play_at = factories.GroundFactory.create()
@@ -1760,12 +1769,9 @@ class BackendTests(MessagesTestMixin, TestCase):
             "season_id": m.stage.division.season_id,
             "competition_id": m.stage.division.season.competition_id,
         }
-        url = reverse(
-            "admin:fixja:competition:season:division:stage:match:detail",
-            kwargs=kwargs,
-        )
+        detail = "admin:fixja:competition:season:division:stage:match:detail"
 
-        res = self.client.get(url)
+        self.get(detail, **kwargs)
 
         # After GET ensure away_team has no players
         text = by_shell(
@@ -1780,7 +1786,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         </td>
         """,
         )
-        self.assertResponseContains(text, res)
+        self.assertResponseContains(text)
 
         data = {
             "home-0-number": "3",
@@ -1811,7 +1817,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             "away-MAX_NUM_FORMS": "1000",
         }
 
-        res = self.client.post(url, data=data)
+        self.post(detail, data=data, **kwargs)
         text = by_shell(
             workbook="""
         <div class="wb-problems" role="alert"><ul>
@@ -1835,7 +1841,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         </div>
         """,
         )
-        self.assertResponseContains(text, res)
+        self.assertResponseContains(text)
 
         data.update(
             {
@@ -1845,8 +1851,8 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "home-3-points": "2",
             }
         )
-        res = self.client.post(url, data=data)
-        self.assertRedirects(res, reverse("admin:index"))
+        self.post(detail, data=data, **kwargs)
+        self.assert_http_302_found(url=reverse("admin:index"))
 
         # Make sure the database is correctly reflecting the detailed entries.
         self.assertEqual(m.statistics.count(), 4)
@@ -1883,7 +1889,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             match.date.strftime("%Y%m%d"),
             data=data,
         )
-        self.response_302()
+        self.assert_http_302_found()
 
         data.update(
             {
@@ -1898,7 +1904,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             match.date.strftime("%Y%m%d"),
             data=data,
         )
-        self.response_302()
+        self.assert_http_302_found()
 
     def test_enhancement_0024_team(self):
         """
@@ -1924,11 +1930,11 @@ class BackendTests(MessagesTestMixin, TestCase):
         # Ensure that visiting the delete view does not respond when matches
         # are associated with the Team.
         self.get(delete_home.url_name, *delete_home.args)
-        self.response_410()
+        self.assert_http_410_gone()
 
         # Ensure that POST to the delete view fails the same as for GET.
         self.post(delete_home.url_name, *delete_home.args)
-        self.response_410()
+        self.assert_http_410_gone()
 
         # Create a new Team and re-check the scenarios.
         team = factories.TeamFactory.create(division=stage.division)
@@ -1944,15 +1950,15 @@ class BackendTests(MessagesTestMixin, TestCase):
         # Ensure that visiting the delete view is not allowed when there are no
         # matches but you use a GET request.
         self.get(delete_team.url_name, *delete_team.args)
-        self.response_405()
+        self.assert_http_405_method_not_allowed()
 
         # Ensure that POST to the delete view redirects.
         self.post(delete_team.url_name, *delete_team.args)
-        self.response_302()
+        self.assert_http_302_found()
 
         # Subsequent GET request to the edit view should be a 404.
         self.get(edit_team.url_name, *edit_team.args)
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_enhancement_0024_undecidedteam(self):
         """
@@ -1978,11 +1984,11 @@ class BackendTests(MessagesTestMixin, TestCase):
         # Ensure that visiting the delete view does not respond when matches
         # are associated with the Team.
         self.get(away._get_admin_namespace() + ":delete", *away._get_url_args())
-        self.response_410()
+        self.assert_http_410_gone()
 
         # Ensure that POST to the delete view fails the same as for GET.
         self.post(away._get_admin_namespace() + ":delete", *away._get_url_args())
-        self.response_410()
+        self.assert_http_410_gone()
 
         # Create a new UndecidedTeam and re-check the scenarios.
         team = factories.UndecidedTeamFactory.create(stage=stage)
@@ -1998,15 +2004,15 @@ class BackendTests(MessagesTestMixin, TestCase):
         # Ensure that visiting the delete view is not allowed when there are no
         # matches but you use a GET request.
         self.get(team._get_admin_namespace() + ":delete", *team._get_url_args())
-        self.response_405()
+        self.assert_http_405_method_not_allowed()
 
         # Ensure that POST to the delete view redirects.
         self.post(team._get_admin_namespace() + ":delete", *team._get_url_args())
-        self.response_302()
+        self.assert_http_302_found()
 
         # Subsequent GET request to the edit view should be a 404.
         self.get(team._get_admin_namespace() + ":delete", *team._get_url_args())
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_bug_80_add_stagegroup(self):
         "Add Pool should gain order equal to max(order) + 1"
@@ -2020,7 +2026,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         }
         add_pool = pool.url_names["add"]
         self.post(add_pool.url_name, *add_pool.args[:-1], data=data)
-        self.response_302()
+        self.assert_http_302_found()
         z = pool.stage.pools.latest("order")
         self.assertEqual(z.order, pool.order + 1)
 
@@ -2049,7 +2055,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         # Unsaved instance means we don't have to trim the final positional argument.
         add_team = Team(division=division).url_names["add"]
         self.post(add_team.url_name, *add_team.args, data=data)
-        self.response_302()
+        self.assert_http_302_found()
         # Ensure that the team was created and that it has a slug
         team = division.teams.get(title="New Team")
         self.assertEqual(team.slug, "new-team")
@@ -2067,7 +2073,7 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         edit_team = team.url_names["edit"]
         self.post(edit_team.url_name, *edit_team.args, data=data)
-        self.response_302()
+        self.assert_http_302_found()
 
         # Ensure that the team was updated
         blue = Team.objects.get(title="Blue")
@@ -2079,7 +2085,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         data["title"] = "Magenta"
         edit_blue = blue.url_names["edit"]
         self.post(edit_blue.url_name, *edit_blue.args, data=data)
-        self.response_302()
+        self.assert_http_302_found()
 
         magenta = Team.objects.get(title="Magenta")
         self.assertEqual(team.pk, magenta.pk)
@@ -2125,7 +2131,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         add_match = Match(stage=stage).url_names["add"]
         data["live_stream_thumbnail_image"] = ""
         self.post(add_match.url_name, *add_match.args, data=data)
-        self.response_302()
+        self.assert_http_302_found()
 
     def test_bug_100_add_stagegroup(self):
         """
@@ -2192,7 +2198,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                         "referees": [referees[referee].pk],
                     },
                 )
-                self.assertRedirects(self.last_response, stage.urls["edit"])
+                self.assert_http_302_found(url=str(stage.urls["edit"]))
                 self.assertCountEqual(
                     match.referees.values_list("person__first_name", flat=True),
                     [referees[referee].person.first_name],
@@ -2218,7 +2224,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             "live_stream": "0",
         }
         self.post(add_ground.url_name, *add_ground.args, data=data)
-        self.assertRedirects(self.last_response, venue.urls["edit"])
+        self.assert_http_302_found(url=str(venue.urls["edit"]))
 
     def test_delete_division_with_protected_objects(self):
         """
@@ -2234,7 +2240,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.post(delete_division.url_name, *delete_division.args)
 
         # Should redirect back to the division edit page with error message
-        self.assertRedirects(self.last_response, division.urls["edit"])
+        self.assert_http_302_found(url=str(division.urls["edit"]))
 
         # Check that objects still exists
         self.assertQuerySetEqual(Division.objects.all(), [division])
@@ -2270,7 +2276,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.post(delete_division.url_name, *delete_division.args)
 
         # Should redirect back to season page
-        self.assertRedirects(self.last_response, season.urls["edit"] + "#divisions-tab")
+        self.assert_http_302_found(url=f"{season.urls['edit']}#divisions-tab")
 
         # Check that division was deleted
         self.assertQuerySetEqual(Division.objects.all(), [])
@@ -2300,7 +2306,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.post(delete_stage.url_name, *delete_stage.args)
 
         # Should redirect back to the stage edit page with error message
-        self.assertRedirects(self.last_response, stage.urls["edit"])
+        self.assert_http_302_found(url=str(stage.urls["edit"]))
 
         # Check that objects still exists
         self.assertQuerySetEqual(Stage.objects.all(), [stage])
@@ -2355,19 +2361,18 @@ class BackendTests(MessagesTestMixin, TestCase):
         with self.login(self.superuser):
             # Step 0: Test that the first step renders without error
             self.get(build_url.url_name, *build_url.args)
-            self.response_200()
+            self.assert_http_200_ok()
 
             # Extract the formset from the context and test empty_form works
             formset = self.get_context("form")
-            self.assertIsNotNone(formset)
+            self.assertIsInstance(formset, forms.BaseFormSet)
 
             # This should not raise TypeError - the main bug we're testing
             empty_form = formset.empty_form
-            self.assertIsNotNone(empty_form)
+            self.assertIsInstance(empty_form, forms.BaseForm)
 
             # Test media property access (this was the original failing case)
-            media = empty_form.media
-            self.assertIsNotNone(media)
+            self.assertIsInstance(empty_form.media, forms.Media)
 
             # Prepare step 0 data with a valid DrawFormat selection and date
             step0_data = {
@@ -2392,19 +2397,18 @@ class BackendTests(MessagesTestMixin, TestCase):
 
             # Submit step 0 to proceed to step 1
             self.post(build_url.url_name, *build_url.args, data=step0_data)
-            self.response_200()
+            self.assert_http_200_ok()
 
             # Step 1: Test the second step
             formset = self.get_context("form")
-            self.assertIsNotNone(formset)
+            self.assertIsInstance(formset, forms.BaseFormSet)
 
             # Test that empty_form works on step 1 - this is the main fix
             empty_form = formset.empty_form
-            self.assertIsNotNone(empty_form)
+            self.assertIsInstance(empty_form, forms.BaseForm)
 
             # Test that we can access the media property without TypeError
-            media = empty_form.media
-            self.assertIsNotNone(media)
+            self.assertIsInstance(empty_form.media, forms.Media)
 
             # Prepare step 1 data
             step1_data = {
@@ -2447,7 +2451,7 @@ class BackendTests(MessagesTestMixin, TestCase):
 
             # Submit step 1 to complete the wizard
             self.post(build_url.url_name, *build_url.args, data=step1_data)
-            self.response_302()
+            self.assert_http_302_found()
 
             # If we have successfully moved through the wizard and been
             # redirected, the following matches would have been created.
@@ -2546,11 +2550,11 @@ class BackendTests(MessagesTestMixin, TestCase):
             # This should complete successfully without TypeError
             data["live_stream_thumbnail_image"] = ""
             self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
-            self.response_302()  # Should redirect successfully
+            self.assert_http_302_found()  # Should redirect successfully
 
             # Verify the match was updated
             match.refresh_from_db()
-            self.assertFalse(match.live_stream)
+            self.assertEqual(match.live_stream, False)
             self.assertIsNone(match.external_identifier)
 
     def test_json_division_builder_post_invalid_json(self):
@@ -2573,15 +2577,17 @@ class BackendTests(MessagesTestMixin, TestCase):
             season.pk,
             data=data,
         )
-        self.response_200()  # Should stay on form with errors
+        self.assert_http_200_ok()  # Should stay on form with errors
 
         # Check that no divisions were created
         self.assertEqual(season.divisions.count(), 0)
 
         # Check for validation error
         formset = self.get_context("formset")
-        self.assertIsNotNone(formset)
-        self.assertFalse(formset.is_valid())
+        self.assertEqual(
+            formset.errors,
+            [{"json_data": ["Invalid JSON: Expecting value: line 1 column 13 (char 12)"]}],
+        )
 
     def test_json_division_builder_post_empty_json(self):
         """Test that empty JSON shows validation errors instead of success."""
@@ -2603,20 +2609,14 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 data=data,
             )
-            self.response_200()  # Should stay on form with errors
+            self.assert_http_200_ok()  # Should stay on form with errors
 
         # Check that no divisions were created
         self.assertEqual(season.divisions.count(), 0)
 
         # Check for validation error
         formset = self.get_context("formset")
-        self.assertIsNotNone(formset)
-        self.assertFalse(formset.is_valid())
-
-        # Check for specific required field error
-        form = formset.forms[0]
-        self.assertFalse(form.is_valid())
-        self.assertEqual(form.errors, {"json_data": ["This field is required."]})
+        self.assertEqual(formset.errors, [{"json_data": ["This field is required."]}])
 
     def test_json_division_builder_post_valid_json(self):
         """Test that valid JSON creates divisions successfully."""
@@ -2649,7 +2649,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 data=data,
             )
-            self.response_302()  # Should redirect after successful save
+            self.assert_http_302_found()  # Should redirect after successful save
 
         # Check that division was created, with a match for every line of the format
         self.assertEqual(season.divisions.count(), 1)
@@ -2692,7 +2692,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 data=data,
             )
-            self.response_200()  # Should stay on form with errors
+            self.assert_http_200_ok()  # Should stay on form with errors
 
         # Check that no new divisions were created
         self.assertEqual(season.divisions.count(), 1)  # Still just the existing one
@@ -2700,15 +2700,9 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # Check for validation error
         formset = self.get_context("formset")
-        self.assertIsNotNone(formset)
-        self.assertFalse(formset.is_valid())
-
-        # Check for specific duplicate name error
-        form = formset.forms[0]
-        self.assertFalse(form.is_valid())
         self.assertEqual(
-            form.errors,
-            {"json_data": ["A division of that name already exists in this season."]},
+            formset.errors,
+            [{"json_data": ["A division of that name already exists in this season."]}],
         )
 
     def test_json_division_builder_duplicate_names_within_forms(self):
@@ -2753,23 +2747,20 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 data=data,
             )
-            self.response_200()  # Should stay on form with errors
+            self.assert_http_200_ok()  # Should stay on form with errors
 
         # Check that no divisions were created
         self.assertEqual(season.divisions.count(), 0)
 
         # Check for validation error
         formset = self.get_context("formset")
-        self.assertIsNotNone(formset)
-        self.assertFalse(formset.is_valid())
-
-        # Check that both forms have duplicate name errors
-        for i in [0, 1]:
-            form = formset.forms[i]
-            self.assertFalse(form.is_valid())
-            self.assertEqual(
-                form.errors, {"json_data": ["Division names must be unique."]}
-            )
+        self.assertEqual(
+            formset.errors,
+            [
+                {"json_data": ["Division names must be unique."]},
+                {"json_data": ["Division names must be unique."]},
+            ],
+        )
 
     def test_edit_match_youtube_api_basic_guard_clause(self):
         """
@@ -2818,11 +2809,11 @@ class BackendTests(MessagesTestMixin, TestCase):
             # This should complete successfully without TypeError
             data["live_stream_thumbnail_image"] = ""
             self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
-            self.response_302()  # Should redirect successfully
+            self.assert_http_302_found()  # Should redirect successfully
 
             # Verify the match was updated
             match.refresh_from_db()
-            self.assertFalse(match.live_stream)
+            self.assertEqual(match.live_stream, False)
             self.assertIsNone(match.external_identifier)
 
     def test_undo_draw_with_dependent_matches(self):
@@ -2865,7 +2856,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         undo_draw_url = stage.url_names["undo"]
 
         self.post(undo_draw_url.url_name, *undo_draw_url.args)
-        self.response_302()  # Should redirect successfully without error
+        self.assert_http_302_found()  # Should redirect successfully without error
 
         # Verify all matches from the stage were deleted
         self.assertCountEqual(stage.matches.all(), [])
@@ -2961,7 +2952,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         undo_draw_url = stage.url_names["undo"]
 
         self.post(undo_draw_url.url_name, *undo_draw_url.args)
-        self.response_302()  # Should redirect successfully without error
+        self.assert_http_302_found()  # Should redirect successfully without error
 
         # Verify all matches from the stage were deleted despite complex dependencies
         self.assertCountEqual(stage.matches.all(), [])
@@ -2991,7 +2982,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 division.season.pk,
                 division.pk,
             )
-        self.response_200()
+        self.assert_http_200_ok()
 
         # Check response content type and headers
         self.assertResponseHeaders(
@@ -3044,7 +3035,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         add_match = Match(stage=stage).url_names["add"]
         data["live_stream_thumbnail_image"] = ""
         self.post(add_match.url_name, *add_match.args, data=data)
-        self.response_302()
+        self.assert_http_302_found()
 
     @patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
     @patch(
@@ -3097,7 +3088,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         resync = match.url_names["resync-live-stream"]
         with self.login(self.superuser):
             self.post(resync.url_name, *resync.args)
-        self.response_302()
+        self.assert_http_302_found()
 
         update_call = mock_youtube.liveBroadcasts.return_value.update.call_args
         body = update_call.kwargs["body"]
@@ -3141,7 +3132,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         resync = match.url_names["resync-live-stream"]
         with self.login(self.superuser):
             self.post(resync.url_name, *resync.args)
-        self.response_302()
+        self.assert_http_302_found()
 
         mock_youtube.liveBroadcasts.return_value.update.assert_not_called()
 
@@ -3183,7 +3174,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 "20250501",
             )
-        self.response_200()
+        self.assert_http_200_ok()
 
         formset = self.last_response.context["formset"]
         listed_pks = {form.instance.pk for form in formset.forms}
@@ -3231,12 +3222,12 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "20250501",
                 data=data,
             )
-        self.response_302()
+        self.assert_http_302_found()
 
         match_to_turn_on.refresh_from_db()
         match_to_turn_off.refresh_from_db()
-        self.assertTrue(match_to_turn_on.live_stream)
-        self.assertFalse(match_to_turn_off.live_stream)
+        self.assertEqual(match_to_turn_on.live_stream, True)
+        self.assertEqual(match_to_turn_off.live_stream, False)
 
     def test_runsheet_and_season_schedule_link_to_bulk_live_stream_view(self):
         stage = factories.StageFactory.create()
@@ -3264,11 +3255,13 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 "20250501",
             )
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertContains(self.last_response, expected_url)
 
-            season_edit_response = self.client.get(str(season.urls["edit"]))
-            self.assertContains(season_edit_response, expected_url)
+            edit_season = season.url_names["edit"]
+            self.get(edit_season.url_name, *edit_season.args)
+            self.assert_http_200_ok()
+            self.assertContains(self.last_response, expected_url)
 
     def test_runsheet_shows_resync_icon_only_when_broadcast_exists(self):
         stage = factories.StageFactory.create()
@@ -3324,7 +3317,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 "20250501",
             )
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertContains(self.last_response, streaming_resync_url)
         self.assertNotContains(self.last_response, not_yet_streaming_resync_url)
 
@@ -3368,7 +3361,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "20250501",
                 data=data,
             )
-        self.response_302()
+        self.assert_http_302_found()
 
         mock_sync_live_stream.s.assert_called_once_with(
             match_to_turn_on.pk, base_url=ANY
@@ -3410,7 +3403,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "20250501",
                 data=data,
             )
-        self.response_302()
+        self.assert_http_302_found()
 
         mock_sync_live_stream.s.assert_not_called()
 
@@ -3489,7 +3482,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 "20250501",
             )
-        self.response_302()
+        self.assert_http_302_found()
 
         queued_pks = {call.args[0] for call in mock_sync_live_stream.s.call_args_list}
         self.assertEqual(
@@ -3512,7 +3505,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 "20250501",
             )
-        self.response_302()
+        self.assert_http_302_found()
 
         mock_sync_live_stream.s.assert_not_called()
 
@@ -3544,7 +3537,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 "20250501",
             )
-        self.response_302()
+        self.assert_http_302_found()
 
         mock_sync_live_stream.s.assert_not_called()
 
@@ -3612,7 +3605,7 @@ class EditViewPermissionTests(TestCase):
             self.get(
                 "admin:fixja:competition:season:edit", *self.season._get_url_args()
             )
-            self.response_200()
+            self.assert_http_200_ok()
             css = by_shell(workbook='class="wb-input" ', explorer="")
             self.assertResponseContains(
                 f'<input type="text" name="title" value="{self.season.title}" '
@@ -3623,23 +3616,23 @@ class EditViewPermissionTests(TestCase):
         assign_perm("competition.change_season", self.staff, self.season)
         with self.login(self.staff):
             self.get("admin:fixja:competition:season:edit", *self.other._get_url_args())
-            self.response_403()
+            self.assert_http_403_forbidden()
 
     def test_change_permission_does_not_allow_add(self):
         assign_perm("competition.change_season", self.staff)
         with self.login(self.staff):
             self.get("admin:fixja:competition:season:add", self.season.competition_id)
-            self.response_403()
+            self.assert_http_403_forbidden()
 
     def test_add_permission_allows_add_but_not_edit(self):
         assign_perm("competition.add_season", self.staff)
         with self.login(self.staff):
             self.get("admin:fixja:competition:season:add", self.season.competition_id)
-            self.response_200()
+            self.assert_http_200_ok()
             self.get(
                 "admin:fixja:competition:season:edit", *self.season._get_url_args()
             )
-            self.response_403()
+            self.assert_http_403_forbidden()
 
 
 class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
@@ -3678,7 +3671,7 @@ class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
     def test_season_edit_offers_bulk_create(self):
         with self.login(self.superuser):
             self.get("admin:fixja:competition:season:edit", *self.args)
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertResponseContains(
                 by_shell(
                     workbook=bulk_dialog(
@@ -3699,7 +3692,7 @@ class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
         self.assertLoginRequired(self.viewname, *self.args)
         with self.login(self.superuser):
             self.get(self.viewname, *self.args, data={"count": "3"})
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertResponseContains(
                 '<input type="hidden" name="form-TOTAL_FORMS" value="3" '
                 'id="id_form-TOTAL_FORMS">'
@@ -3720,14 +3713,14 @@ class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
             for count, rows in (("0", 1), ("500", 50), ("x", 5)):
                 with self.subTest(count=count):
                     self.get(self.viewname, *self.args, data={"count": count})
-                    self.response_200()
+                    self.assert_http_200_ok()
                     self.assertEqual(len(self.get_context("formset").forms), rows)
 
     def test_weekly_season_has_no_games_per_day(self):
         season = factories.SeasonFactory.create()
         with self.login(self.superuser):
             self.get(self.viewname, season.competition_id, season.pk)
-            self.response_200()
+            self.assert_http_200_ok()
             formset = self.get_context("formset")
             self.assertNotIn("games_per_day", formset.forms[0].fields)
 
@@ -3740,12 +3733,7 @@ class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
         )
         with self.login(self.superuser):
             self.post(self.viewname, *self.args, data=data)
-            self.response_302()
-            self.assertRedirects(
-                self.last_response,
-                self.season.urls["edit"] + "#divisions-tab",
-                fetch_redirect_response=False,
-            )
+            self.assert_http_302_found(url=f"{self.season.urls['edit']}#divisions-tab")
         self.assertEqual(
             list(
                 self.season.divisions.order_by("order").values_list(
@@ -3774,7 +3762,7 @@ class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
         )
         with self.login(self.superuser):
             self.post(self.viewname, *self.args, data=data)
-            self.response_200()
+            self.assert_http_200_ok()
             formset = self.get_context("formset")
             self.assertEqual(
                 [form.errors.get("title") for form in formset],
@@ -3789,7 +3777,7 @@ class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
     def test_post_refuses_no_rows(self):
         with self.login(self.superuser):
             self.post(self.viewname, *self.args, data=self.rows({}, {}))
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertResponseContains(
                 by_shell(
                     workbook='<div class="wb-problems" role="alert" tabindex="-1">'
@@ -3806,7 +3794,7 @@ class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
         data = self.rows(*(self.division(f"D{n}") for n in range(51)))
         with self.login(self.superuser):
             self.post(self.viewname, *self.args, data=data)
-            self.response_200()
+            self.assert_http_200_ok()
         self.assertEqual(self.season.divisions.count(), 0)
 
     def test_permission_required(self):
@@ -3814,13 +3802,13 @@ class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
         data = self.rows(self.division("Men's Open"))
         with self.login(staff):
             self.get(self.viewname, *self.args)
-            self.response_403()
+            self.assert_http_403_forbidden()
             self.post(self.viewname, *self.args, data=data)
-            self.response_403()
+            self.assert_http_403_forbidden()
         assign_perm("competition.add_division", staff)
         with self.login(staff):
             self.post(self.viewname, *self.args, data=data)
-            self.response_302()
+            self.assert_http_302_found()
         self.assertEqual(self.season.divisions.get().title, "Men's Open")
 
 
@@ -3850,7 +3838,7 @@ class BulkCreateTeamTests(MessagesTestMixin, TestCase):
     def test_division_edit_offers_bulk_create(self):
         with self.login(self.superuser):
             self.get("admin:fixja:competition:season:division:edit", *self.args)
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertResponseContains(
                 by_shell(
                     workbook=bulk_dialog(
@@ -3871,7 +3859,7 @@ class BulkCreateTeamTests(MessagesTestMixin, TestCase):
         self.assertLoginRequired(self.viewname, *self.args)
         with self.login(self.superuser):
             self.get(self.viewname, *self.args, data={"count": "4"})
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertResponseContains(
                 '<input type="hidden" name="form-TOTAL_FORMS" value="4" '
                 'id="id_form-TOTAL_FORMS">'
@@ -3887,12 +3875,7 @@ class BulkCreateTeamTests(MessagesTestMixin, TestCase):
         data = self.rows({"title": "Bravo"}, {"title": ""}, {"title": "Charlie"})
         with self.login(self.superuser):
             self.post(self.viewname, *self.args, data=data)
-            self.response_302()
-            self.assertRedirects(
-                self.last_response,
-                self.division.urls["edit"] + "#teams-tab",
-                fetch_redirect_response=False,
-            )
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#teams-tab")
         self.assertEqual(
             list(self.division.teams.order_by("order").values_list("title", "order")),
             [("Alpha", 1), ("Bravo", 2), ("Charlie", 3)],
@@ -3919,13 +3902,13 @@ class BulkCreateTeamTests(MessagesTestMixin, TestCase):
                 *self.args,
                 data=self.rows(*rows, {"title": "", "club": str(other.pk)}),
             )
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertEqual(
                 [list(form.errors) for form in self.get_context("formset")],
                 [[], [], ["club", "title"]],
             )
             self.post(self.viewname, *self.args, data=self.rows(*rows))
-            self.response_302()
+            self.assert_http_302_found()
         self.assertEqual(
             list(self.division.teams.order_by("order").values_list("title", "club")),
             [("New Zealand", nzl.pk), ("Kangaroos", aus.pk)],
@@ -3936,7 +3919,7 @@ class BulkCreateTeamTests(MessagesTestMixin, TestCase):
         data = self.rows({"title": "Bravo"}, {"title": "Bravo"}, {"title": "Alpha"})
         with self.login(self.superuser):
             self.post(self.viewname, *self.args, data=data)
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertEqual(
                 [form.errors.get("title") for form in self.get_context("formset")],
                 [
@@ -3952,13 +3935,13 @@ class BulkCreateTeamTests(MessagesTestMixin, TestCase):
         data = self.rows({"title": "Bravo"})
         with self.login(staff):
             self.get(self.viewname, *self.args)
-            self.response_403()
+            self.assert_http_403_forbidden()
             self.post(self.viewname, *self.args, data=data)
-            self.response_403()
+            self.assert_http_403_forbidden()
         assign_perm("competition.add_team", staff)
         with self.login(staff):
             self.post(self.viewname, *self.args, data=data)
-            self.response_302()
+            self.assert_http_302_found()
         self.assertEqual(self.division.teams.get().title, "Bravo")
 
 
@@ -3981,7 +3964,7 @@ class SeasonEditForfeitNotificationsTests(TestCase):
             self.get(
                 "admin:fixja:competition:season:edit", *self.season._get_url_args()
             )
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertNotIn("forfeit_notifications", self.get_context("form").fields)
 
     def test_saving_the_season_keeps_its_forfeit_notifications(self):
@@ -3997,7 +3980,7 @@ class SeasonEditForfeitNotificationsTests(TestCase):
                     "live_stream_privacy": "public",
                 },
             )
-            self.response_302()
+            self.assert_http_302_found()
         self.season.refresh_from_db()
         self.assertEqual(self.season.title, "Renamed")
         self.assertCountEqual(self.season.forfeit_notifications.all(), self.recipients)
@@ -4104,7 +4087,7 @@ class MatchResultsQueryTests(WarmCachesMixin, TestCase):
                 match.date.strftime("%Y%m%d"),
                 data=data,
             )
-        self.response_302()
+        self.assert_http_302_found()
         match.refresh_from_db()
         self.assertEqual(match.forfeit_winner, match.away_team)
 
@@ -4133,7 +4116,7 @@ class MatchResultsQueryTests(WarmCachesMixin, TestCase):
                 match.date.strftime("%Y%m%d"),
                 data=data,
             )
-        self.response_200()
+        self.assert_http_200_ok()
         match.refresh_from_db()
         self.assertEqual(match.forfeit_winner, None)
 
@@ -5159,7 +5142,7 @@ class MostValuableWidgetTests(DashboardQueriesMixin, TestCase):
         with self.login(self.superuser):
             with CaptureQueriesContext(connection) as queries:
                 self.get("admin:index")
-            self.response_200()
+            self.assert_http_200_ok()
         return len(queries)
 
     def test_few_seasons_query_count(self):
@@ -5248,7 +5231,7 @@ class WizardBrandTests(TestCase):
 
         with self.settings(TEMPLATES=templates), self.login(self.superuser):
             self.get(build_url.url_name, *build_url.args)
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertNotIn("brand", self.last_response.context_data)
             self.assertResponseContains(
                 by_shell(

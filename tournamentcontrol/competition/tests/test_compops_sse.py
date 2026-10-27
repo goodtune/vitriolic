@@ -6,10 +6,8 @@ from zoneinfo import ZoneInfo
 
 from asgiref.sync import sync_to_async
 from asgiref.testing import ApplicationCommunicator
-from django.conf import settings
 from django.contrib.auth.models import Permission
 from django.core.asgi import get_asgi_application
-from django.shortcuts import resolve_url
 from django.test import TransactionTestCase as DjangoTransactionTestCase
 from django.test import override_settings
 from django.urls import reverse
@@ -85,6 +83,7 @@ class TransactionTestCase(DjangoTransactionTestCase, BaseTestCase):
 
 class SseFixture:
     def setUp(self):
+        super().setUp()
         events.reset_backend()
         self.addCleanup(events.reset_backend)
         self.staff = factories.UserFactory.create(is_staff=True)
@@ -197,35 +196,36 @@ class CompOpsEventsTests(SseFixture, TestCase):
             external_identifier="yt-1",
         )
 
-    async def test_anonymous_is_redirected(self):
-        response = await self.async_client.get(self.url)
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(
-            response["Location"].startswith(str(resolve_url(settings.LOGIN_URL)))
-        )
+    def test_anonymous_is_redirected(self):
+        self.assertLoginRequired(self.url)
 
     async def test_non_staff_is_forbidden(self):
         response = await self.get(user=self.user)
-        self.assertEqual(response.status_code, 403)
+        self.assert_http_403_forbidden(response)
 
     async def test_unknown_season_is_not_found(self):
         response = await self.get(
             reverse("compops:events", kwargs={**self.kw, "season": "nope"})
         )
-        self.assertEqual(response.status_code, 404)
+        self.assert_http_404_not_found(response)
 
     async def test_bad_date_is_not_found(self):
         response = await self.get(
             reverse("compops:events", kwargs={**self.kw, "datestr": "20261399"})
         )
-        self.assertEqual(response.status_code, 404)
+        self.assert_http_404_not_found(response)
 
     async def test_headers(self):
         response = await self.get()
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Content-Type"], "text/event-stream; charset=utf-8")
-        self.assertEqual(response["Cache-Control"], "no-cache")
-        self.assertEqual(response["X-Accel-Buffering"], "no")
+        self.assert_http_200_ok(response)
+        self.assertResponseHeaders(
+            {
+                "Content-Type": "text/event-stream; charset=utf-8",
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+            response,
+        )
         await response.streaming_content.aclose()
 
     async def test_snapshot_then_push(self):
@@ -588,26 +588,22 @@ class BoothEventsTests(SseFixture, TestCase):
         reader = Reader(response)
         return reader, await reader.until(until)
 
-    async def test_anonymous_is_redirected(self):
-        response = await self.async_client.get(self.booth_url)
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(
-            response["Location"].startswith(str(resolve_url(settings.LOGIN_URL)))
-        )
+    def test_anonymous_is_redirected(self):
+        self.assertLoginRequired(self.booth_url)
 
     async def test_outsider_is_forbidden(self):
         response = await self.get(self.booth_url, user=self.user)
-        self.assertEqual(response.status_code, 403)
+        self.assert_http_403_forbidden(response)
 
     async def test_staff_without_stream_permission_is_forbidden(self):
         response = await self.get(self.booth_url, user=self.staff)
-        self.assertEqual(response.status_code, 403)
+        self.assert_http_403_forbidden(response)
 
     async def test_unknown_season_is_not_found(self):
         response = await self.get(
             reverse("compops:booth-events", kwargs={**self.booth_kw, "season": "nope"})
         )
-        self.assertEqual(response.status_code, 404)
+        self.assert_http_404_not_found(response)
 
     async def test_unstreamed_ground_is_not_found(self):
         await self.async_client.aforce_login(self.commentator)
@@ -618,16 +614,21 @@ class BoothEventsTests(SseFixture, TestCase):
                 ),
                 headers={"Datastar-Request": "true"},
             )
-            self.assertEqual(response.status_code, 404)
+            self.assert_http_404_not_found(response)
 
     async def test_headers(self):
         await self.async_client.aforce_login(self.commentator)
         response = await self.async_client.get(
             self.booth_url, headers={"Datastar-Request": "true"}
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Content-Type"], "text/event-stream; charset=utf-8")
-        self.assertEqual(response["Cache-Control"], "no-cache")
+        self.assert_http_200_ok(response)
+        self.assertResponseHeaders(
+            {
+                "Content-Type": "text/event-stream; charset=utf-8",
+                "Cache-Control": "no-cache",
+            },
+            response,
+        )
         await response.streaming_content.aclose()
 
     async def test_snapshot_has_onair_strip_and_pane(self):
