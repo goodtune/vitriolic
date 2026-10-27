@@ -1,13 +1,9 @@
 import logging
 
-from django.contrib.auth.decorators import (
-    login_required,
-    permission_required,
-    user_passes_test,
-)
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.utils.decorators import method_decorator
 from django.utils.functional import wraps
-from django.views.decorators.cache import cache_control, never_cache
+from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
@@ -38,14 +34,11 @@ def node2extracontext(f, *a, **kw):
     return _decorated
 
 
-cache_control_m = method_decorator(cache_control)
 csrf_exempt_m = method_decorator(csrf_exempt)
 login_required_m = method_decorator(login_required)
 never_cache_m = method_decorator(never_cache)
-permission_required_m = method_decorator(permission_required)
 staff_login_required_m = method_decorator(staff_login_required)
 superuser_login_required_m = method_decorator(superuser_login_required)
-user_passes_test_m = method_decorator(user_passes_test)
 
 require_GET_m = method_decorator(require_GET)
 require_POST_m = method_decorator(require_POST)
