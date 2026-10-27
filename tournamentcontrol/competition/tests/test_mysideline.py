@@ -20,6 +20,8 @@ from django.db import IntegrityError
 from freezegun import freeze_time
 from test_plus import TestCase
 
+from touchtechnology.admin.tests.shells import by_shell
+from touchtechnology.common.tests.caches import WarmCachesMixin
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.forms import DivisionForm, TeamForm
 from tournamentcontrol.competition.models import (
@@ -1196,7 +1198,7 @@ class TitleTests(SyncTestCase):
         )
 
 
-class TitleAdminTests(SyncTestCase):
+class TitleAdminTests(WarmCachesMixin, SyncTestCase):
     """Choosing between the local and the MySideline name in the admin."""
 
     def setUp(self):
@@ -1330,11 +1332,11 @@ class TitleAdminTests(SyncTestCase):
 
     def test_sync_page_lists_remote_renames(self):
         with self.login(self.superuser):
-            self.assertGoodView(
-                "admin:fixja:competition:season:upstream-sync",
-                *self.args,
-                test_query_count=60,
-            )
+            self.warm_caches()
+            with self.assertNumQueries(12):
+                self.get_check_200(
+                    "admin:fixja:competition:season:upstream-sync", *self.args
+                )
             self.assertResponseContains("14 Boys", html=False)
             self.assertResponseContains("Mens Premier", html=False)
             self.assertResponseContains(
@@ -1839,7 +1841,7 @@ class StateCupTests(TestCase):
         self.assertEqual(result.deleted, {})
 
 
-class AdminTests(TestCase):
+class AdminTests(WarmCachesMixin, TestCase):
     def setUp(self):
         super().setUp()
         self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
@@ -1854,26 +1856,29 @@ class AdminTests(TestCase):
             "admin:fixja:competition:season:upstream-sync", *self.args
         )
 
+    # The edit pages cost the same every time, with the caches warm.
+    def get_competition_edit(self):
+        self.warm_caches()
+        with self.assertNumQueries(by_shell(workbook=19, explorer=16)):
+            self.get_check_200(
+                "admin:fixja:competition:edit", self.season.competition_id
+            )
+
+    def get_season_edit(self):
+        self.warm_caches()
+        with self.assertNumQueries(by_shell(workbook=24, explorer=20)):
+            self.get_check_200("admin:fixja:competition:season:edit", *self.args)
+
     def test_forms_show_mysideline_fields(self):
         with self.login(self.superuser):
-            self.assertGoodView(
-                "admin:fixja:competition:edit",
-                self.season.competition_id,
-                test_query_count=60,
-            )
+            self.get_competition_edit()
             self.assertResponseContains('name="upstream_url"', html=False)
-            self.assertGoodView(
-                "admin:fixja:competition:season:edit", *self.args, test_query_count=60
-            )
+            self.get_season_edit()
             self.assertResponseContains('name="upstream_url"', html=False)
 
     def test_season_list_shows_button(self):
         with self.login(self.superuser):
-            self.assertGoodView(
-                "admin:fixja:competition:edit",
-                self.season.competition_id,
-                test_query_count=60,
-            )
+            self.get_competition_edit()
             self.assertResponseContains(
                 self.reverse(
                     "admin:fixja:competition:season:upstream-sync", *self.args

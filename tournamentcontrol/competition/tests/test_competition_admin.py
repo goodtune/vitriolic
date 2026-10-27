@@ -51,10 +51,20 @@ from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin, round_robin_format
 
-#: The home page's budget: the widgets' queries, and two for its jobs (the
-#: latest day with results to enter and the next match day). It holds however
-#: many stages, seasons or matches there are.
-DASHBOARD_QUERIES = 16
+#: The home page's budget, with the caches warm (see ``WarmCachesMixin``): the
+#: widgets' queries, and two for its jobs (the latest day with results to enter
+#: and the next match day). It holds however many stages, seasons or matches
+#: there are.
+def dashboard_budget():
+    return by_shell(workbook=11, explorer=9)
+
+
+class DashboardQueriesMixin(WarmCachesMixin):
+    def assertDashboardQueries(self, queries):
+        with self.login(self.superuser):
+            self.warm_caches()
+            with self.assertNumQueries(queries):
+                self.get_check_200("admin:index")
 
 #: An icon of the admin's sprite, as the pages draw it.
 ICON = (
@@ -3993,7 +4003,7 @@ class SeasonEditForfeitNotificationsTests(TestCase):
         self.assertCountEqual(self.season.forfeit_notifications.all(), self.recipients)
 
 
-class MatchResultsQueryTests(TestCase):
+class MatchResultsQueryTests(WarmCachesMixin, TestCase):
     """
     Results are entered on one page per day of matches. Each match drew its
     two teams, its ground, its division and the forfeit winner choices with
@@ -4030,26 +4040,32 @@ class MatchResultsQueryTests(TestCase):
             )
         return created
 
-    def get_day(self, matches, **kwargs):
-        with self.login(self.superuser):
-            self.assertGoodView(
-                "admin:fixja:match-results",
-                self.season.competition.pk,
-                self.season.pk,
-                matches[0].date.strftime("%Y%m%d"),
-                **kwargs,
-            )
+    def get_day(self, matches):
+        self.get_check_200(
+            "admin:fixja:match-results",
+            self.season.competition.pk,
+            self.season.pk,
+            matches[0].date.strftime("%Y%m%d"),
+        )
 
-    # The tree in the rail opens the season's match days down to this one.
+    # The day costs the same however many matches it has, with the caches
+    # warm. The tree in the rail opens the season's match days down to it.
+    def assertDayQueries(self, matches):
+        with self.login(self.superuser):
+            self.warm_caches()
+            with self.assertNumQueries(by_shell(workbook=13, explorer=14)):
+                self.get_day(matches)
+
     def test_few_matches_query_count(self):
-        self.get_day(self.few, test_query_count=17)
+        self.assertDayQueries(self.few)
 
     def test_many_matches_query_count(self):
-        self.get_day(self.many, test_query_count=17)
+        self.assertDayQueries(self.many)
 
     def test_forfeit_winner_choices(self):
         match = self.few[0]
-        self.get_day(self.few)
+        with self.login(self.superuser):
+            self.get_day(self.few)
         self.assertResponseContains(
             '<select name="matches-0-forfeit_winner" '
             + by_shell(
@@ -4122,7 +4138,7 @@ class MatchResultsQueryTests(TestCase):
         self.assertEqual(match.forfeit_winner, None)
 
 
-class MatchDetailQueryTests(TestCase):
+class MatchDetailQueryTests(WarmCachesMixin, TestCase):
     """
     The detailed results page has a row for every player of both teams.
     Each row looked up its player and their statistics for the match on its
@@ -4152,27 +4168,34 @@ class MatchDetailQueryTests(TestCase):
             )
         return match
 
-    def get_detail(self, match, **kwargs):
-        with self.login(self.superuser):
-            self.assertGoodView(
-                "admin:fixja:competition:season:division:stage:match:detail",
-                competition_id=match.stage.division.season.competition_id,
-                season_id=match.stage.division.season_id,
-                division_id=match.stage.division_id,
-                stage_id=match.stage_id,
-                match_id=match.pk,
-                **kwargs,
-            )
+    def get_detail(self, match):
+        self.get_check_200(
+            "admin:fixja:competition:season:division:stage:match:detail",
+            competition_id=match.stage.division.season.competition_id,
+            season_id=match.stage.division.season_id,
+            division_id=match.stage.division_id,
+            stage_id=match.stage_id,
+            match_id=match.pk,
+        )
 
-    # The tree in the rail opens the folders down to the match's pool.
+    # The page costs the same however many players the teams have, with the
+    # caches warm. The tree in the rail opens the folders down to the match's
+    # pool.
+    def assertDetailQueries(self, match):
+        with self.login(self.superuser):
+            self.warm_caches()
+            with self.assertNumQueries(22):
+                self.get_detail(match)
+
     def test_small_squads_query_count(self):
-        self.get_detail(self.small, test_query_count=26)
+        self.assertDetailQueries(self.small)
 
     def test_large_squads_query_count(self):
-        self.get_detail(self.large, test_query_count=26)
+        self.assertDetailQueries(self.large)
 
     def test_entered_statistics_are_shown(self):
-        self.get_detail(self.small)
+        with self.login(self.superuser):
+            self.get_detail(self.small)
         away = self.last_response.context["formsets"][1]
         self.assertEqual(
             [form.instance.pk is not None for form in away.forms], [True, True]
@@ -4333,7 +4356,7 @@ class MatchRowMixin(WarmCachesMixin, IconMixin):
     # once and Django for their permissions on every match once (their own
     # and their groups'), and selects or prefetches every relation a row
     # touches.
-    RUN_SHEET_QUERIES = 15
+    RUN_SHEET_QUERIES = 13
 
     def get_run_sheet(self, queries=None):
         """
@@ -5067,7 +5090,7 @@ class MatchPageStatisticsTests(IconMixin, TestCase):
             self.assert_http_403_forbidden()
 
 
-class DashboardQueryTests(TestCase):
+class DashboardQueryTests(DashboardQueriesMixin, TestCase):
     """
     The dashboard lists matches awaiting results and the stages with
     reports to print. Each report row looked up its division, season and
@@ -5083,20 +5106,16 @@ class DashboardQueryTests(TestCase):
                 factories.MatchFactory.create(stage=stage)
             )
 
-    def get_dashboard(self, **kwargs):
-        with self.login(self.superuser):
-            self.assertGoodView("admin:index", **kwargs)
-
     def test_few_stages_query_count(self):
         self._stages(2)
-        self.get_dashboard(test_query_count=DASHBOARD_QUERIES)
+        self.assertDashboardQueries(dashboard_budget())
 
     def test_many_stages_query_count(self):
         self._stages(8)
-        self.get_dashboard(test_query_count=DASHBOARD_QUERIES)
+        self.assertDashboardQueries(dashboard_budget())
 
 
-class MostValuableWidgetTests(TestCase):
+class MostValuableWidgetTests(DashboardQueriesMixin, TestCase):
     """
     The "Awaiting MVP Points" widget lists the matches where a team's
     players have statistics but no MVP points. Each row it listed looked up
@@ -5132,9 +5151,9 @@ class MostValuableWidgetTests(TestCase):
             )
         return match
 
-    def get_dashboard(self, **kwargs):
+    def get_dashboard(self):
         with self.login(self.superuser):
-            self.assertGoodView("admin:index", **kwargs)
+            self.get_check_200("admin:index")
 
     def dashboard_queries(self):
         with self.login(self.superuser):
@@ -5145,12 +5164,12 @@ class MostValuableWidgetTests(TestCase):
 
     def test_few_seasons_query_count(self):
         self._season()
-        self.get_dashboard(test_query_count=DASHBOARD_QUERIES + 1)
+        self.assertDashboardQueries(dashboard_budget())
 
     def test_many_seasons_query_count(self):
         for _ in range(6):
             self._season(matches=4)
-        self.get_dashboard(test_query_count=DASHBOARD_QUERIES + 1)
+        self.assertDashboardQueries(dashboard_budget())
 
     def test_query_count_does_not_grow(self):
         self._season()

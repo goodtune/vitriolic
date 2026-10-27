@@ -29,10 +29,11 @@ from tournamentcontrol.competition.tests import factories
 UTC = ZoneInfo("UTC")
 
 
-#: What the season's edit page costs, with the site and content types already
-#: looked up (see ``WarmCachesMixin``). The Explorer shell draws fewer panels.
+#: What the season's edit page costs, with the site, the content types and the
+#: sitemap's URL tree already looked up (see ``WarmCachesMixin``). The Explorer
+#: shell draws fewer panels.
 def season_edit_queries():
-    return by_shell(workbook=32, explorer=26)
+    return by_shell(workbook=30, explorer=24)
 
 
 def _http_error(status, message):

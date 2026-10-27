@@ -38,7 +38,12 @@ protect = AccountsSite(name="protect")
 
 
 class SitemapNodeMiddleware(MiddlewareMixin):
-    def process_request(self, request):
+    @staticmethod
+    def dehydrated_urlpatterns():
+        """
+        Return the URL tree of the sitemap, as the cache keeps it. Build it
+        from the sitemap nodes and cache it if the cache does not have it.
+        """
         # Each tenant's tree is cached under its own version, the one that
         # saving or deleting a node in that tenant throws away.
         version = urlpatterns_cache_version()
@@ -152,6 +157,11 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 timeout=DEHYDRATED_URLPATTERNS_TIMEOUT,
                 version=version,
             )
+
+        return dehydrated
+
+    def process_request(self, request):
+        dehydrated = self.dehydrated_urlpatterns()
 
         # Always start with the project wide ROOT_URLCONF and add our sitemap.xml view
         urlpatterns = [
