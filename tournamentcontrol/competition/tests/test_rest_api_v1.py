@@ -55,12 +55,12 @@ class APITests(TestCase):
     def test_club_list(self):
         """Test club-list endpoint"""
         self.get("v1:competition:club-list")
-        self.response_200()
+        self.assert_http_200_ok()
 
     def test_club_detail(self):
         """Test club-detail endpoint"""
         self.get("v1:competition:club-detail", slug=self.club.slug)
-        self.response_200()
+        self.assert_http_200_ok()
 
         response_data = self.last_response.json()
         self.assertEqual(response_data["status"], "active")
@@ -71,7 +71,7 @@ class APITests(TestCase):
         factories.ClubFactory.create(status=ClubStatus.HIDDEN)
 
         self.get("v1:competition:club-list")
-        self.response_200()
+        self.assert_http_200_ok()
 
         # Build expected payload for all clubs ordered by title
         expected_payload = [
@@ -95,12 +95,12 @@ class APITests(TestCase):
     def test_competition_list(self):
         """Test competition-list endpoint"""
         self.get("v1:competition:competition-list")
-        self.response_200()
+        self.assert_http_200_ok()
 
     def test_competition_detail(self):
         """Test competition-detail endpoint"""
         self.get("v1:competition:competition-detail", slug=self.competition.slug)
-        self.response_200()
+        self.assert_http_200_ok()
 
     def test_season_list(self):
         """Test season-list endpoint"""
@@ -108,7 +108,7 @@ class APITests(TestCase):
             "v1:competition:season-list",
             competition_slug=self.competition.slug,
         )
-        self.response_200()
+        self.assert_http_200_ok()
 
     def test_season_detail(self):
         """Test season-detail endpoint"""
@@ -117,7 +117,7 @@ class APITests(TestCase):
             competition_slug=self.competition.slug,
             slug=self.season.slug,
         )
-        self.response_200()
+        self.assert_http_200_ok()
 
     def test_division_list(self):
         """Test division-list endpoint"""
@@ -126,7 +126,7 @@ class APITests(TestCase):
             competition_slug=self.competition.slug,
             season_slug=self.season.slug,
         )
-        self.response_200()
+        self.assert_http_200_ok()
 
     def test_division_detail(self):
         """Test division-detail endpoint"""
@@ -136,7 +136,7 @@ class APITests(TestCase):
             season_slug=self.season.slug,
             slug=self.division.slug,
         )
-        self.response_200()
+        self.assert_http_200_ok()
 
         # Validate that the response contains the expected data, including timezone serialization.
         self.assertJSONEqual(
@@ -229,7 +229,7 @@ class APITests(TestCase):
             season_slug=self.season.slug,
             division_slug=self.division.slug,
         )
-        self.response_200()
+        self.assert_http_200_ok()
 
     def test_stage_detail(self):
         """Test stage-detail endpoint"""
@@ -240,7 +240,7 @@ class APITests(TestCase):
             division_slug=self.division.slug,
             slug=self.stage.slug,
         )
-        self.response_200()
+        self.assert_http_200_ok()
 
     def test_division_detail_includes_ladder_summary(self):
         """Test that division-detail endpoint includes ladder_summary in stages"""
@@ -293,7 +293,7 @@ class APITests(TestCase):
             season_slug=self.season.slug,
             slug=stage.division.slug,
         )
-        self.response_200()
+        self.assert_http_200_ok()
 
         expected_payload = {
             "title": stage.division.title,
@@ -519,7 +519,7 @@ class APITests(TestCase):
             season_slug=self.season.slug,
             slug=division.slug,
         )
-        self.response_200()
+        self.assert_http_200_ok()
 
         # Look up objects by title using get()
         alpha = division.teams.get(title="Alpha")
@@ -748,7 +748,7 @@ class APITests(TestCase):
             division_slug=division.slug,
             slug=stage.slug,
         )
-        self.response_200()
+        self.assert_http_200_ok()
 
         expected_payload = {
             "title": stage.title,
@@ -861,7 +861,7 @@ class APITests(TestCase):
             season_slug=self.season.slug,
             slug=division.slug,
         )
-        self.response_200()
+        self.assert_http_200_ok()
 
         expected_payload = {
             "title": division.title,
