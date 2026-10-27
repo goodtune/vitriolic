@@ -238,9 +238,6 @@ class BasicResultWidget(DashboardWidget):
         matches = matches_require_basic_results()
         matches = matches.order_by("date", "time")
 
-        dates = matches.values_list(
-            "stage__division__season__competition", "stage__division__season", "date"
-        ).distinct()
         times = matches.values_list(
             "stage__division__season__competition",
             "stage__division__season",
@@ -264,7 +261,7 @@ class BasicResultWidget(DashboardWidget):
             for time in time_list:
                 dates_times.append(key + (time,))
 
-        context = {"matches": matches, "dates": dates, "dates_times": dates_times}
+        context = {"matches": matches, "dates_times": dates_times}
         return context
 
 
