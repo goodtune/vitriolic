@@ -368,9 +368,12 @@ class DrawGenerator:
                     errors.add(line)
                 keys.add(match_id)
         if errors:
-            lines = ", ".join([str(e) for e in errors])
+            lines = ", ".join(str(e) for e in sorted(errors))
             raise ValueError(
                 f"Draw formula is invalid: line(s) '{lines}' are not "
                 "in the correct format."
             )
+        if not in_round:
+            # An empty format: it would build no rounds and no matches.
+            raise ValueError("Draw formula is invalid: it has no ROUND line.")
         return True

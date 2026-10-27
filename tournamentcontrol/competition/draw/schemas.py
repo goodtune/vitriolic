@@ -62,17 +62,32 @@ class DivisionStructure(BaseModel):
             return None
         return self.draw_formats.get(ref)
 
-    def stage_draw_formats(self, stage: StageFixture) -> list[str]:
+    def stage_draw_format_refs(self, stage: StageFixture) -> list[Optional[str]]:
         """
-        The draw formats the matches of ``stage`` are built from: its own
-        when it has no pools, otherwise each pool's. A reference to no
-        format is left out, as the builder leaves it out.
+        The references to the draw formats the matches of ``stage`` are
+        built from: its own when it has no pools, otherwise each pool's.
         """
         if stage.pools:
-            refs = [pool.draw_format_ref for pool in stage.pools]
-        else:
-            refs = [stage.draw_format_ref]
+            return [pool.draw_format_ref for pool in stage.pools]
+        return [stage.draw_format_ref]
+
+    def stage_draw_formats(self, stage: StageFixture) -> list[str]:
+        """
+        The draw formats the matches of ``stage`` are built from. A
+        reference to no format is left out, as the builder leaves it out.
+        """
+        refs = self.stage_draw_format_refs(stage)
         return [text for text in map(self.get_draw_format, refs) if text]
+
+    def referenced_draw_formats(self) -> Dict[str, str]:
+        """
+        The draw formats some stage or pool refers to, by key, in the order
+        they are first referred to. A reference to no format is left out.
+        """
+        refs = dict.fromkeys(
+            ref for stage in self.stages for ref in self.stage_draw_format_refs(stage)
+        )
+        return {ref: self.draw_formats[ref] for ref in refs if ref in self.draw_formats}
 
 
 class RoundDescriptor:

@@ -3027,13 +3027,8 @@ class AdminToolset(CompetitionToolset):
         try:
             DrawGenerator.validate(text)
         except ValueError as exc:
-            raise ToolError("Validation failed: text: %s" % exc)
-        generator = draw_generator(None, text)
-        if not generator.rounds:
-            raise ToolError(
-                "Validation failed: text: The draw format has no ROUND lines."
-            )
-        return generator
+            raise ToolError(f"Validation failed: text: {exc}")
+        return draw_generator(None, text)
 
     def list_draw_formats(
         self,
