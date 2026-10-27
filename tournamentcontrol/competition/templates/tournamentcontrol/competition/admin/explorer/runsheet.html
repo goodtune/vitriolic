@@ -25,8 +25,8 @@
 					</tr>
 				</thead>
 				<tbody>
-					{% with checker=queryset|permchecker:user %}
-						{% for match in object_list.playable %}
+					{% with matches=object_list.playable %}{% with checker=matches|permchecker:user %}
+						{% for match in matches %}
 							<tr{% ifchanged match.datetime %} class="set-head"{% endifchanged %}>
 								<th>{% ifchanged match.datetime %}{{ match.datetime|time }}{% endifchanged %}</th>
 								<td>{{ match.stage.division.short_title|default:match.stage.division.title|htmlentities }}</td>
@@ -46,7 +46,7 @@
 						{% empty %}
 							<tr><td colspan="7" class="empty">{% trans "No match is played on this day." %}</td></tr>
 						{% endfor %}
-					{% endwith %}
+					{% endwith %}{% endwith %}
 				</tbody>
 			</table>
 		</div>

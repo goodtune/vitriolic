@@ -1859,14 +1859,14 @@ class AdminTests(WarmCachesMixin, TestCase):
     # The edit pages cost the same every time, with the caches warm.
     def get_competition_edit(self):
         self.warm_caches()
-        with self.assertNumQueries(by_shell(workbook=24, explorer=21)):
+        with self.assertNumQueries(by_shell(workbook=19, explorer=16)):
             self.get_check_200(
                 "admin:fixja:competition:edit", self.season.competition_id
             )
 
     def get_season_edit(self):
         self.warm_caches()
-        with self.assertNumQueries(by_shell(workbook=34, explorer=30)):
+        with self.assertNumQueries(by_shell(workbook=24, explorer=20)):
             self.get_check_200("admin:fixja:competition:season:edit", *self.args)
 
     def test_forms_show_mysideline_fields(self):

@@ -883,7 +883,7 @@ class SitemapListTests(ArrowMixin, TestCase):
                         self.get("admin:content:index", data=data)
 
     def test_the_top_of_the_sitemap_runs_as_many_queries_for_twelve_as_for_one(self):
-        self.assertListQueries(7)
+        self.assertListQueries(6)
 
     def test_a_folder_runs_as_many_queries_for_twelve_as_for_one(self):
         press = SitemapNode.objects.create(title="Press", slug="press")
@@ -891,7 +891,7 @@ class SitemapListTests(ArrowMixin, TestCase):
             title="Archive", slug="archive", parent=press
         )
         # The folder, its line and the trail to it are looked up once each.
-        self.assertListQueries(self.by_shell(workbook=14, explorer=13), archive)
+        self.assertListQueries(self.by_shell(workbook=13, explorer=12), archive)
 
     def test_a_folder_lists_each_node_at_its_address(self):
         press = SitemapNode.objects.create(title="Press", slug="press")
@@ -1118,7 +1118,7 @@ class ApplicationListTests(ApplicationListMixin, TestCase):
         self.superuser = self.make_user("superuser")
 
     def test_the_list_runs_as_many_queries_for_twelve_applications_as_for_one(self):
-        self.assertListQueries(self.superuser, 6)
+        self.assertListQueries(self.superuser, 5)
 
     def test_each_row_shows_how_many_pages_mount_it(self):
         self.assertPagesShown(self.superuser)
@@ -1146,7 +1146,7 @@ class ApplicationListObjectPermissionTests(ApplicationListMixin, TestCase):
         # Asking what this person may do over the list as a whole costs the
         # same for any number of rows: the Explorer asks once more, for the
         # import path's column.
-        self.assertListQueries(self.editor, self.by_shell(workbook=12, explorer=13))
+        self.assertListQueries(self.editor, self.by_shell(workbook=11, explorer=12))
 
     def test_each_row_shows_how_many_pages_mount_it(self):
         self.assertPagesShown(self.editor)

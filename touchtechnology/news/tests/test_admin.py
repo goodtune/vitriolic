@@ -290,7 +290,7 @@ class CategoryListTests(TestCase):
                     # the process (content types, the site), so the count is
                     # the same alone and in the whole suite.
                     self.get_check_200("admin:news:category:list")
-                    with self.assertNumQueries(8):
+                    with self.assertNumQueries(7):
                         self.get("admin:news:category:list")
 
     def test_each_row_shows_how_many_articles_it_has(self):
