@@ -3077,7 +3077,7 @@ class OAuthFlowTests(AdminFixtureMixin, TestCase):
         self.assert_http_302_found(
             url=redirect_to_login(
                 f"{self.reverse('oauth2_provider:authorize')}?{urlencode(params)}"
-            )["Location"]
+            ).url
         )
 
         self.login(user)

@@ -1,5 +1,5 @@
+from django.contrib.auth.views import redirect_to_login
 from django.test import override_settings
-from django.urls import reverse
 from test_plus import TestCase
 
 from touchtechnology.admin.tests.shells import per_shell
@@ -127,10 +127,8 @@ class AdminLoginTests(TestCase):
         user = factories.UserFactory.create(username="visitor")
         with self.login(user):
             self.get("admin:index")
-            login = reverse("admin:login", query={"next": self.reverse("admin:index")})
-            self.assert_http_302_found()
-            # Django leaves "/" unescaped in "next"; compare the parsed URLs.
-            self.assertURLEqual(self.last_response.url, login)
+            login = redirect_to_login(self.reverse("admin:index"), "admin:login")
+            self.assert_http_302_found(url=login.url)
             self.get("admin:login", data={"next": self.reverse("admin:index")})
             self.assert_http_200_ok()
 
