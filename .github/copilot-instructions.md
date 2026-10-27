@@ -113,6 +113,7 @@ This is a Python based repository, it provides a Django reusable application tha
 - **Location**: All E2E tests in `tests/e2e/` directory
 - **Shared fixtures**: Use `tests/e2e/conftest.py` for common fixtures like `admin_user` and `authenticated_page`
 - **Execution**: Run via `tox -e e2e` which handles browser installation and database setup
+- **In CI**: the E2E workflow runs on every push to `main`, but on a pull request only while it carries the `e2e` label; add the label when the change touches templates, static files or admin behaviour a browser would notice, and leave it off for the rest
 
 ### E2E Test Guidelines  
 - **Comprehensive docstrings**: All E2E test methods must have detailed docstrings explaining purpose, prerequisites, expected behavior, and current limitations

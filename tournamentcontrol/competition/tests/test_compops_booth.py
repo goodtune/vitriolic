@@ -10,6 +10,11 @@ from test_plus import TestCase
 
 from tournamentcontrol.competition.compops import events
 from tournamentcontrol.competition.tests import factories
+from tournamentcontrol.competition.tests.test_compops_results import (
+    DATASTAR,
+    HELD,
+    element_patches,
+)
 from tournamentcontrol.competition.tests.test_live_stream_transition import (
     YOUTUBE_SEASON,
     youtube_mock,
@@ -477,6 +482,69 @@ class ArmTests(BoothFixture):
         self.assertEqual(response.status_code, 200)
         body = b"".join(response.streaming_content).decode()
         self.assertIn("No more broadcasts on Field 1 today", body)
+
+
+class HeldLampTests(BoothFixture):
+    """
+    A lamp that shows why an action was refused is held: a re-render of the
+    whole booth (the event stream's snapshot, a push about another ground)
+    leaves it as it is. A refusal sends the lamp alone and whole, in replace
+    mode; an action that goes through sends the lamp and the strip with no
+    mark, which releases the lamp.
+    """
+
+    def test_a_refused_arm_holds_the_lamp_with_the_reason(self):
+        with self.login(self.commentator):
+            self.post("compops:booth-arm", extra=DATASTAR, **self.kw)
+        self.assert_http_200_ok()
+        ((mode, html),) = element_patches(self.last_response)
+        self.assertEqual(mode, "replace")
+        self.assertEqual(
+            html.splitlines()[0], f'<section id="onair" class="onair" {HELD}>'
+        )
+        self.assertInHTML(
+            '<span class="warn">End the current broadcast first.</span>',
+            html,
+            count=1,
+        )
+
+    def test_a_refused_on_air_action_holds_the_lamp_with_the_reason(self):
+        self.current.external_identifier = None
+        self.current.save()
+        with self.login(self.commentator):
+            self.post(
+                "compops:booth-onair", status="complete", extra=DATASTAR, **self.kw
+            )
+        self.assert_http_200_ok()
+        ((mode, html),) = element_patches(self.last_response)
+        self.assertEqual(mode, "replace")
+        self.assertEqual(
+            html.splitlines()[0], f'<section id="onair" class="onair" {HELD}>'
+        )
+        self.assertInHTML(
+            '<span class="warn">Australia v New Zealand has no YouTube broadcast.'
+            "</span>",
+            html,
+            count=1,
+        )
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_an_action_that_goes_through_releases_the_lamp(self, build):
+        build.return_value = youtube_mock("live")
+        with self.login(self.commentator), self.captureOnCommitCallbacks(execute=True):
+            self.post(
+                "compops:booth-onair", status="complete", extra=DATASTAR, **self.kw
+            )
+        self.assertEqual(
+            [
+                (mode, html.splitlines()[0])
+                for mode, html in element_patches(self.last_response)
+            ],
+            [
+                ("outer", '<section id="onair" class="onair">'),
+                ("outer", '<section id="strip" class="strip">'),
+            ],
+        )
 
 
 class PaneTests(BoothFixture):

@@ -754,11 +754,16 @@ class SitemapListTests(ArrowMixin, TestCase):
                 f'<td class="wb-title-cell">{self.icon("folder")}'
                 f"<span>{node.title}</span></td>"
             ),
-            explorer=(
-                f'<td class="title-cell"><a href="{node.urls["edit"]}">'
-                f'{self.icon("folder")}<span>{node.title}</span></a></td>'
-            ),
+            explorer=f'<td class="title-cell"><span>{node.title}</span></td>',
         )
+
+    def staff(self, username, *nodes):
+        """A member of staff who may add to the sitemap and change ``nodes``."""
+        person = StaffFactory.create(username=username)
+        assign_perm("common.add_sitemapnode", person)
+        for node in nodes:
+            assign_perm("common.change_sitemapnode", person, node)
+        return person
 
     def test_a_person_who_may_not_change_the_nodes_sees_no_arrows(self):
         """
@@ -766,9 +771,7 @@ class SitemapListTests(ArrowMixin, TestCase):
         no arrow to move one they may not change.
         """
         press = SitemapNode.objects.create(title="Press", slug="press")
-        viewer = StaffFactory.create(username="viewer")
-        assign_perm("common.add_sitemapnode", viewer)
-        with self.login(viewer):
+        with self.login(self.staff("viewer")):
             self.get_check_200("admin:content:index")
         self.assertResponseContains(self.plain_title_cell(press))
         for direction in ("up", "down"):
@@ -779,10 +782,7 @@ class SitemapListTests(ArrowMixin, TestCase):
     def test_the_arrows_are_drawn_for_the_nodes_the_person_may_change(self):
         press = SitemapNode.objects.create(title="Press", slug="press")
         archive = SitemapNode.objects.create(title="Archive", slug="archive")
-        editor = StaffFactory.create(username="editor")
-        assign_perm("common.add_sitemapnode", editor)
-        assign_perm("common.change_sitemapnode", editor, press)
-        with self.login(editor):
+        with self.login(self.staff("editor", press)):
             self.get_check_200("admin:content:index")
         self.assertResponseContains(self.plain_title_cell(archive))
         for direction in ("up", "down"):
@@ -791,6 +791,20 @@ class SitemapListTests(ArrowMixin, TestCase):
                 self.assertResponseContains(self.arrow(action, direction, "Press"))
                 action = self.reverse("admin:reorder", archive.pk, direction)
                 self.assertResponseNotContains(self.arrow(action, direction, "Archive"))
+
+    def test_the_title_is_linked_for_the_nodes_the_person_may_change(self):
+        """
+        A node's title opens its edit page for a person who may change it;
+        for anyone else it is the title alone, as that page would refuse them.
+        """
+        press = SitemapNode.objects.create(title="Press", slug="press")
+        archive = SitemapNode.objects.create(title="Archive", slug="archive")
+        with self.login(self.staff("editor", press)):
+            self.get_check_200("admin:content:index")
+        self.assertResponseContains(
+            self.title_cell(press, "admin:content:folder:edit", "folder")
+        )
+        self.assertResponseContains(self.plain_title_cell(archive))
 
 
 class ApplicationListMixin(IconMixin):

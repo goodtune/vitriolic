@@ -27,6 +27,7 @@ This is a Django-based repository providing reusable applications for sporting c
 
 - **Unit tests**: Use Django test framework with `django-test-plus`, located within each module
 - **E2E tests**: Use Playwright with `pytest-django`, located in `tests/e2e/`
+- **E2E in CI**: runs on pushes to `main`, and on a pull request only while it carries the `e2e` label; add the label for changes a browser would notice
 - **Execution**: Run via `tox` for full suite or specific environments
 
 ### Running Tests

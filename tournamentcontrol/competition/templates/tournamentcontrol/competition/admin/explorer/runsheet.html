@@ -37,10 +37,10 @@
 								<td class="nowrap">
 									{% with object_perms=match|checkperm:checker %}
 										{% if match.statistics_ready and change_perm in object_perms %}<a href="{% url 'admin:fixja:competition:season:division:stage:match:detail' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}">{% trans "Statistics" %}</a> &middot;{% endif %}
+										{% if change_perm in object_perms %}<a href="{% url 'admin:fixja:competition:season:division:stage:match:referees' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">{% trans "Referees" %}</a>{% endif %}
+										{% if match.videos %}{% if change_perm in object_perms %}&middot; {% endif %}<a href="{{ match.videos|first }}">{% trans "Video" %}</a>{% endif %}
+										{% if match.live_stream and match.external_identifier %}{% if change_perm in object_perms or match.videos %}&middot; {% endif %}<a href="{% url 'admin:fixja:competition:season:division:stage:match:resync-live-stream' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">{% trans "Resync" %}</a>{% endif %}
 									{% endwith %}
-									<a href="{% url 'admin:fixja:competition:season:division:stage:match:referees' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">{% trans "Referees" %}</a>
-									{% if match.videos %}&middot; <a href="{{ match.videos|first }}">{% trans "Video" %}</a>{% endif %}
-									{% if match.live_stream and match.external_identifier %}&middot; <a href="{% url 'admin:fixja:competition:season:division:stage:match:resync-live-stream' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">{% trans "Resync" %}</a>{% endif %}
 								</td>
 							</tr>
 						{% empty %}
