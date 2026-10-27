@@ -171,7 +171,7 @@ def team_ladder_entry_aggregation(sender, instance, created=None, *args, **kwarg
         # when the preceeding stage had Pools, this stage does not have any
         # Pools, and carry_ladder is set, then we would bring forward the
         # statistics from matches played with other teams in the stage.
-        if previous.pools.count():
+        if previous.pools.exists():
             base += instance.team.ladder_entries.filter(
                 match__include_in_ladder=True,
                 match__stage=previous,

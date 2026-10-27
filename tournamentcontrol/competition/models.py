@@ -1707,7 +1707,7 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
 
     def ladders(self):
         res = collections.OrderedDict()
-        if self.pools.count():
+        if self.pools.exists():
             for pool in self.pools.all():
                 res.setdefault(self, collections.OrderedDict()).update(pool.ladders())
         else:

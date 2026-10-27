@@ -113,11 +113,11 @@ class ParentChildModelForm(BootstrapFormControlMixin, ModelForm):
 
 class BaseSitemapNodeForm(SuperUserSlugMixin, ModelForm):
     def __init__(self, *args, **kwargs):
-        super(BaseSitemapNodeForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if not self.instance.level and self.instance.slug == SITEMAP_ROOT:
             self.fields.pop("slug", None)
             self.fields.pop("slug_locked", None)
-        if not self.fields["restrict_to_groups"].queryset.count():
+        if not self.fields["restrict_to_groups"].queryset.exists():
             self.fields.pop("restrict_to_groups", None)
         if not SITEMAP_HTTPS_OPTION:
             self.fields.pop("require_https", None)
