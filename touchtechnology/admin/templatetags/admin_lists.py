@@ -54,7 +54,7 @@ def admin_list_context(context, queryset, scope=None, template=None, paginate_by
     match = resolve(request.path)
     namespace = match.namespace
     if match.namespace.rsplit(":", 1)[1] != scope:
-        namespace = "%s:%s" % (match.namespace, scope)
+        namespace = f"{match.namespace}:{scope}"
 
     perms = get_all_perms_for_model_cached(model)
     global_perms = any([request.user.has_perm(p) for p in perms])
@@ -85,7 +85,7 @@ def admin_list_context(context, queryset, scope=None, template=None, paginate_by
             "template": template,
             "queryset": queryset,
             "object_list": queryset,
-            "create": reverse_lazy("%s:add" % namespace, kwargs=kw),
+            "create": reverse_lazy(f"{namespace}:add", kwargs=kw),
             # Pass to template the name permissions so we can re-use template
             # code to generically list and add/change/delete objects
             "add_perm": add_perm,

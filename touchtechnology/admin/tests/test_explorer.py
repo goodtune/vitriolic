@@ -11,6 +11,7 @@ from touchtechnology.admin.sites import site
 from touchtechnology.admin.templatetags.admin import allowed
 from touchtechnology.admin.tests.shells import per_shell
 from touchtechnology.common.tests import factories
+from touchtechnology.news.admin import NewsAdminComponent
 from touchtechnology.news.tests.factories import ArticleFactory, TranslationFactory
 
 
@@ -39,4 +40,25 @@ class LazyObjectTests(TestCase):
         self.assertEqual(
             [node.label for node in tree.crumbs],
             ["News", "Articles", "Flow Cup begins"],
+        )
+
+
+class TrailKeyTests(TestCase):
+    """
+    The trail names each object by the lower-case label of its model. An
+    article's translations are its only relation, so they have no folder.
+    """
+
+    def test_the_trail_to_a_translation(self):
+        article = ArticleFactory.create()
+        translation = TranslationFactory.create(article=article, locale="fr")
+        explorer = site._components[NewsAdminComponent].explorer()
+
+        self.assertEqual(
+            explorer.trail_of(translation),
+            [
+                "news/s0",
+                f"news/o:news.article:{article.pk}",
+                f"news/o:news.translation:{translation.pk}",
+            ],
         )
