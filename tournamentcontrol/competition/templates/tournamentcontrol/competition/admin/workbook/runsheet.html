@@ -53,10 +53,12 @@
 												<a href="{% url 'admin:fixja:competition:season:division:stage:match:detail' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}">{% icon "chart-bar" %}{% trans "Detail" %}</a>
 											{% endif %}
 										{% endblock %}
+										{% block referees_link %}
+											{% if change_perm in object_perms %}
+												<a href="{% url 'admin:fixja:competition:season:division:stage:match:referees' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">{% icon "flag" %}{% trans "Referees" %}</a>
+											{% endif %}
+										{% endblock %}
 									{% endwith %}
-									{% block referees_link %}
-										<a href="{% url 'admin:fixja:competition:season:division:stage:match:referees' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">{% icon "flag" %}{% trans "Referees" %}</a>
-									{% endblock %}
 									{% if match.videos %}
 										<a href="{{ match.videos|first }}">{% icon "video" %}{% trans "Video" %}</a>
 										{% if match.live_stream and user.is_superuser %}<a href="https://studio.youtube.com/video/{{ match.external_identifier }}/livestreaming">{% icon "settings" %}{% trans "Studio" %}</a>{% endif %}

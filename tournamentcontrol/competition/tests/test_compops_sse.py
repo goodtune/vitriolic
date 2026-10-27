@@ -20,9 +20,10 @@ from test_plus import TestCase
 from test_plus.test import BaseTestCase
 
 from touchtechnology.admin.tests.tenancy import schema_context
-from tournamentcontrol.competition.compops import events
+from tournamentcontrol.competition.compops import events, streams
 from tournamentcontrol.competition.compops.sites import CompOpsSite
 from tournamentcontrol.competition.tests import factories
+from tournamentcontrol.competition.tests.test_compops_results import HELD
 
 TZ = ZoneInfo("Australia/Brisbane")
 
@@ -124,6 +125,15 @@ class SseFixture:
 
     async def publish(self, *args, **kwargs):
         await sync_to_async(self.publish_committed)(*args, **kwargs)
+
+    async def publish_change(self, obj, status):
+        """Publish ``obj``'s broadcast change as the site does after a transition."""
+
+        def publish():
+            with self.captureOnCommitCallbacks(execute=True):
+                streams.publish_change(obj, status, actor="op")
+
+        await sync_to_async(publish)()
 
     async def publish_in(self, schema_name, *args, **kwargs):
         """Publish as a request in the tenant ``schema_name`` does."""
@@ -403,6 +413,92 @@ class CompOpsEventsTests(SseFixture, TestCase):
 
 
 @freeze_time("2026-10-08 00:00 +10:00", real_asyncio=True)
+class HeldStreamsEventsTests(SseFixture, TestCase):
+    """
+    The day page's stream and the blocks of its streams column (see
+    ground_stream in day.html): the snapshot marks every block, so the blocks
+    the page holds pass over it, and a push marks every block but the one it
+    is about, which it releases.
+    """
+
+    def setUp(self):
+        super().setUp()
+        venue = factories.VenueFactory.create(season=self.season)
+        self.field1 = factories.GroundFactory.create(
+            venue=venue, title="Field 1", live_stream=True
+        )
+        self.field2 = factories.GroundFactory.create(
+            venue=venue, title="Field 2", live_stream=True
+        )
+        self.on_field1 = self.streamed(self.field1, "yt-1")
+        self.on_field2 = self.streamed(self.field2, "yt-2")
+        self.event = factories.LiveStreamEventFactory.create(
+            season=self.season,
+            start=timezone.make_aware(datetime.datetime(2026, 10, 8, 17, 30), TZ),
+        )
+        self.blocks = (
+            f"stream-{self.field1.pk}",
+            f"stream-{self.field2.pk}",
+            f"event-{self.event.pk}",
+        )
+
+    def streamed(self, ground, identifier):
+        when = timezone.make_aware(datetime.datetime(2026, 10, 8, 10, 40), TZ)
+        return factories.MatchFactory.create(
+            stage=self.stage,
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            play_at=ground,
+            live_stream=True,
+            external_identifier=identifier,
+        )
+
+    @staticmethod
+    def held(block):
+        return f'data: elements <div id="{block}" class="stream" {HELD}>'
+
+    @staticmethod
+    def released(block):
+        return f'data: elements <div id="{block}" class="stream">'
+
+    async def test_the_snapshot_marks_every_block(self):
+        reader, snapshot = await self.connect()
+        try:
+            lines = snapshot[SNAPSHOT_IDS.index("streams")].splitlines()
+            for block in self.blocks:
+                self.assertIn(self.held(block), lines)
+        finally:
+            await reader.close()
+
+    async def test_a_push_about_a_match_releases_its_grounds_block_and_holds_the_rest(
+        self,
+    ):
+        reader, _ = await self.connect()
+        try:
+            await self.publish_change(self.on_field1, "live")
+            lines = "".join(await reader.until(LAST_COUNT)).splitlines()
+            self.assertIn(self.released(f"stream-{self.field1.pk}"), lines)
+            self.assertIn(self.held(f"stream-{self.field2.pk}"), lines)
+            self.assertIn(self.held(f"event-{self.event.pk}"), lines)
+        finally:
+            await reader.close()
+
+    async def test_a_push_about_a_season_event_releases_it_and_holds_the_grounds(
+        self,
+    ):
+        reader, _ = await self.connect()
+        try:
+            await self.publish_change(self.event, "testing")
+            lines = "".join(await reader.until(LAST_COUNT)).splitlines()
+            self.assertIn(self.released(f"event-{self.event.pk}"), lines)
+            self.assertIn(self.held(f"stream-{self.field1.pk}"), lines)
+            self.assertIn(self.held(f"stream-{self.field2.pk}"), lines)
+        finally:
+            await reader.close()
+
+
+@freeze_time("2026-10-08 00:00 +10:00", real_asyncio=True)
 class CompOpsEventsDisconnectTests(SseFixture, TransactionTestCase):
     async def test_disconnect_unsubscribes(self):
         await self.async_client.aforce_login(self.staff)
@@ -570,6 +666,55 @@ class BoothEventsTests(SseFixture, TestCase):
         reader, chunks = await self.connect_booth({"pane": "runsheet", "match": None})
         try:
             self.assertIn('<div id="pane" class="pane runsheet">', "".join(chunks))
+        finally:
+            await reader.close()
+
+    async def test_the_snapshot_marks_the_lamp(self):
+        # A lamp that shows a refusal is held (see lamp in booth.html), so the
+        # snapshot marks the lamp and the page's held lamp passes over it.
+        reader, chunks = await self.connect_booth(until='<section id="strip"')
+        try:
+            self.assertIn(
+                f'data: elements <section id="onair" class="onair" {HELD}>',
+                chunks[0].splitlines(),
+            )
+        finally:
+            await reader.close()
+
+    async def test_a_push_about_this_ground_releases_the_lamp(self):
+        reader, _ = await self.connect_booth(until='<section id="strip"')
+        try:
+            await self.publish_change(self.current, "complete")
+            pushed = await reader.until('<section id="strip"')
+            self.assertIn(
+                'data: elements <section id="onair" class="onair">',
+                pushed[0].splitlines(),
+            )
+        finally:
+            await reader.close()
+
+    async def test_a_push_about_another_ground_holds_the_lamp(self):
+        field3 = await sync_to_async(factories.GroundFactory.create)(
+            venue=self.field1.venue, title="Field 3", slug="field-3", live_stream=True
+        )
+        when = timezone.make_aware(datetime.datetime(2026, 10, 8, 10, 40), TZ)
+        elsewhere = await sync_to_async(factories.MatchFactory.create)(
+            stage=self.stage,
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            play_at=field3,
+            live_stream=True,
+            external_identifier="yt-3",
+        )
+        reader, _ = await self.connect_booth(until='<section id="strip"')
+        try:
+            await self.publish_change(elsewhere, "live")
+            pushed = await reader.until('<section id="strip"')
+            self.assertIn(
+                f'data: elements <section id="onair" class="onair" {HELD}>',
+                pushed[0].splitlines(),
+            )
         finally:
             await reader.close()
 

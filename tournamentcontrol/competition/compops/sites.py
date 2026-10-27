@@ -180,6 +180,25 @@ def result_form(match, data=None):
     )
 
 
+def stream_block(obj):
+    """
+    The element id of the block of the streams column that shows ``obj``: a
+    match's ground's block, a ground's block, or a season event's own.
+    """
+    if isinstance(obj, Match):
+        return f"stream-{obj.play_at_id}"
+    if isinstance(obj, Ground):
+        return f"stream-{obj.pk}"
+    return f"event-{obj.pk}"
+
+
+def changed_stream(event):
+    """The block (as ``stream_block`` names it) a ``stream-changed`` event is about."""
+    if event.get("kind") == "event":
+        return f"event-{event.get('id')}"
+    return f"stream-{event.get('ground')}"
+
+
 class CompOpsSite(Application):
 
     def __init__(self, name="compops", app_name="compops", **kwargs):
@@ -288,18 +307,34 @@ class CompOpsSite(Application):
     # --- context ----------------------------------------------------
 
     def day_context(
-        self, request, season, day, bound_forms=None, stream_errors=(), keep_held=False
+        self,
+        request,
+        season,
+        day,
+        bound_forms=None,
+        stream_errors=None,
+        keep_held=False,
+        changed=None,
     ):
         """
         The context for the day page and its fragments. ``bound_forms`` maps
         a match's pk to a submitted result form to show in place of its own,
-        with its errors; ``stream_errors`` are the messages for the streams.
-        ``keep_held`` is for a patch of the whole list, which must leave the
-        rows the person holds as they are (see ``match_row`` in day.html).
+        with its errors; ``stream_errors`` maps a block of the streams column
+        (see ``stream_block``) to the refusals it shows. ``keep_held`` is for
+        a patch of the whole list or column, which must leave the rows and
+        blocks the person holds as they are (see ``match_row`` and
+        ``ground_stream`` in day.html); ``changed`` names the one block such
+        a patch is about, which it releases.
         """
         bound_forms = bound_forms or {}
+        stream_errors = stream_errors or {}
         now = timezone.now()
         ground_streams, stream_events = queries.day_streams(season, day, now)
+        blocks = [(item, stream_block(item.ground)) for item in ground_streams]
+        blocks += [(event, stream_block(event)) for event in stream_events]
+        for shown, block in blocks:
+            shown.compops_errors = stream_errors.get(block, [])
+            shown.compops_held = keep_held and block != changed
         slots = queries.day_results(season, day)
         for slot in slots:
             for match in slot.matches:
@@ -324,7 +359,6 @@ class CompOpsSite(Application):
             "results_pending": sum(s.total - s.entered for s in slots if not s.is_byes),
             "scorers": scorers,
             "streams": ground_streams,
-            "stream_errors": list(stream_errors),
             "current_slot": current_slot,
             "next_slot": next_slot,
             "live_count": sum(
@@ -367,7 +401,8 @@ class CompOpsSite(Application):
         """
         Everything the day page shows that can change, freshly rendered. The
         stream sends it on every reconnect, so it leaves the rows the person
-        holds, an open Edit or a refused save, as they are.
+        holds, an open Edit or a refused save, and the blocks of the streams
+        column that show a refusal, as they are.
         """
         context = self.day_context(request, season, day, keep_held=True)
         fragments = [
@@ -393,7 +428,11 @@ class CompOpsSite(Application):
                 *render_counts(request, **context),
             ]
         if kind == "stream-changed":
-            return self.stream_patches(request, season, day)
+            # The push releases the block it is about and leaves the other
+            # held blocks as they are; see ground_stream in day.html.
+            return self.stream_patches(
+                request, season, day, keep_held=True, changed=changed_stream(event)
+            )
         return []
 
     # --- pages ------------------------------------------------------
@@ -712,24 +751,58 @@ class CompOpsSite(Application):
 
     # --- streams ----------------------------------------------------
 
-    def stream_patches(self, request, season, day, errors=()):
-        context = self.day_context(request, season, day, stream_errors=errors)
+    def stream_patches(self, request, season, day, keep_held=False, changed=None):
+        """
+        The streams column, the activity and the counts, re-rendered. A push
+        leaves the blocks the person holds as they are (``keep_held``) except
+        the block ``changed`` names; see ``ground_stream`` in day.html.
+        """
+        context = self.day_context(
+            request, season, day, keep_held=keep_held, changed=changed
+        )
         return [
             render_fragment(request, "streams", **context),
             render_fragment(request, "activity", **context),
             *render_counts(request, **context),
         ]
 
+    def refused_stream_patches(self, request, season, day, errors):
+        """
+        The blocks of the streams column that ``errors`` are about, each held
+        with its refusals, and nothing else: a refusal changes nothing else.
+        """
+        context = self.day_context(request, season, day, stream_errors=errors)
+        return [
+            render_fragment(request, "ground_stream", item=item, **context)
+            for item in context["streams"]
+            if item.compops_errors
+        ] + [
+            render_fragment(request, "season_event", event=event, **context)
+            for event in context["events"]
+            if event.compops_errors
+        ]
+
     def _stream_response(self, request, season, day, errors):
+        """
+        Answer a stream action. ``errors`` maps a block of the streams column
+        (see ``stream_block``) to its refusals. An action that went through
+        sends the column with no block held, which releases them all; a
+        refused one sends the refused blocks alone, held and whole (see
+        ``ground_stream`` in day.html).
+        """
+        redirect_to = reverse("compops:day", kwargs=day_kwargs(season, day))
+        if not errors:
+            return patches(
+                request,
+                lambda: self.stream_patches(request, season, day),
+                redirect_to=redirect_to,
+            )
         return patches(
             request,
-            lambda: self.stream_patches(request, season, day, errors),
-            redirect_to=reverse("compops:day", kwargs=day_kwargs(season, day)),
-            page=(
-                (lambda: self.day_page(request, season, day, stream_errors=errors))
-                if errors
-                else None
-            ),
+            lambda: self.refused_stream_patches(request, season, day, errors),
+            redirect_to=redirect_to,
+            page=lambda: self.day_page(request, season, day, stream_errors=errors),
+            mode=ElementPatchMode.REPLACE,
         )
 
     def _check_status(self, status):
@@ -746,7 +819,9 @@ class CompOpsSite(Application):
         if not streams.opted_in(match, streams.streamed_ground_ids(season)):
             raise Http404("The match is not streamed.")
         error = streams.transition(match, status, request.user.get_username())
-        return self._stream_response(request, season, day, [error] if error else [])
+        return self._stream_response(
+            request, season, day, {stream_block(match): [error]} if error else {}
+        )
 
     @require_POST_m
     @staff_required
@@ -756,7 +831,9 @@ class CompOpsSite(Application):
         require(can_stream(request.user, season))
         event = get_object_or_404(queries.day_events(season, day), pk=event_pk)
         error = streams.transition(event, status, request.user.get_username())
-        return self._stream_response(request, season, day, [error] if error else [])
+        return self._stream_response(
+            request, season, day, {stream_block(event): [error]} if error else {}
+        )
 
     @require_POST_m
     @staff_required
@@ -768,12 +845,12 @@ class CompOpsSite(Application):
         if slot is None:
             raise Http404("No such slot.")
         ground_ids = streams.streamed_ground_ids(season)
-        errors = []
+        errors = {}
         for match in slot.matches:
             if streams.streamable(match, ground_ids):
                 error = streams.transition(match, status, request.user.get_username())
                 if error:
-                    errors.append(error)
+                    errors.setdefault(stream_block(match), []).append(error)
         return self._stream_response(request, season, day, errors)
 
     # --- booth ------------------------------------------------------
@@ -883,10 +960,36 @@ class CompOpsSite(Application):
     def _booth_match(self, ground, day, match_pk):
         return get_object_or_404(queries.ground_runsheet(ground, day), pk=match_pk)
 
-    def _booth_fragments(self, request, season, ground, names, **extra):
+    def _booth_fragments(self, request, season, ground, names):
         context = self.booth_context(request, season, ground)
-        context.update(extra)
         return [render_fragment(request, name, **context) for name in names]
+
+    def _booth_refused(self, request, season, ground, context, errors):
+        """
+        Answer a refused booth action: the lamp alone, with the reasons, held
+        and sent whole (see ``lamp`` in booth.html). A refusal changes
+        nothing, so the lamp comes from the ``context`` the action checked.
+        Datastar discards the body of a non-200 response, so the answer is
+        200 with the reasons in the lamp.
+        """
+        return patches(
+            request,
+            lambda: [render_fragment(request, "lamp", **{**context, "errors": errors})],
+            redirect_to=self._booth_url(season, ground),
+            page=lambda: self.booth_page(request, season, ground, errors=errors),
+            mode=ElementPatchMode.REPLACE,
+        )
+
+    def _booth_changed(self, request, season, ground):
+        """
+        Answer a booth action that went through: the lamp and the strip,
+        re-rendered. The lamp carries no mark, which releases a held one.
+        """
+        return patches(
+            request,
+            lambda: self._booth_fragments(request, season, ground, ("lamp", "strip")),
+            redirect_to=self._booth_url(season, ground),
+        )
 
     def _booth_url(self, season, ground):
         return reverse(
@@ -961,51 +1064,25 @@ class CompOpsSite(Application):
             error = streams.transition(broadcast, status, request.user.get_username())
             if error:
                 errors.append(error)
-        return patches(
-            request,
-            lambda: self._booth_fragments(
-                request, season, ground, ("lamp", "strip"), errors=errors
-            ),
-            redirect_to=self._booth_url(season, ground),
-            page=self._booth_refusal(request, season, ground, errors),
-        )
-
-    def _booth_refusal(self, request, season, ground, errors):
-        """The booth page with ``errors`` in its lamp; None when there are none."""
-        if not errors:
-            return None
-        return lambda: self.booth_page(request, season, ground, errors=errors)
+        if errors:
+            return self._booth_refused(request, season, ground, context, errors)
+        return self._booth_changed(request, season, ground)
 
     @require_POST_m
     @booth_view
     @booth_required
     def booth_arm(self, request, season, ground, **kwargs):
         context = self.booth_context(request, season, ground)
-        redirect_to = self._booth_url(season, ground)
         if not context["armable"]:
-            errors = [context["arm_reason"]]
-            # Datastar discards the body of a non-200 response, so a refusal
-            # is answered 200 with the reason in the lamp.
-            return patches(
-                request,
-                lambda: [
-                    render_fragment(request, "lamp", **{**context, "errors": errors})
-                ],
-                redirect_to=redirect_to,
-                page=self._booth_refusal(request, season, ground, errors),
+            return self._booth_refused(
+                request, season, ground, context, [context["arm_reason"]]
             )
         error = streams.transition(
             context["armable_match"], "testing", request.user.get_username()
         )
-        errors = [error] if error else []
-        return patches(
-            request,
-            lambda: self._booth_fragments(
-                request, season, ground, ("lamp", "strip"), errors=errors
-            ),
-            redirect_to=redirect_to,
-            page=self._booth_refusal(request, season, ground, errors),
-        )
+        if error:
+            return self._booth_refused(request, season, ground, context, [error])
+        return self._booth_changed(request, season, ground)
 
     def _pane_html(self, request, context, pane, match):
         extra = {"pane": pane, "pane_match": match}
@@ -1082,7 +1159,9 @@ class CompOpsSite(Application):
     def booth_snapshot(self, request, season, ground, pane, match_pk):
         context = self.booth_context(request, season, ground)
         fragments = [
-            render_fragment(request, "lamp", **context),
+            # The stream sends the snapshot on every reconnect, so it leaves a
+            # lamp that shows a refusal as it is; see lamp in booth.html.
+            render_fragment(request, "lamp", keep_held=True, **context),
             render_fragment(request, "strip", **context),
         ]
         pane_html = self._booth_pane_fragment(request, context, pane, match_pk)
@@ -1096,7 +1175,12 @@ class CompOpsSite(Application):
         fragments = []
         refresh_pane = False
         if kind == "stream-changed":
-            fragments.append(render_fragment(request, "lamp", **context))
+            # A push about this ground releases a held lamp; one about another
+            # ground leaves it as it is. See lamp in booth.html.
+            keep_held = event.get("ground") != ground.pk
+            fragments.append(
+                render_fragment(request, "lamp", keep_held=keep_held, **context)
+            )
             fragments.append(render_fragment(request, "strip", **context))
             refresh_pane = pane == "runsheet"
         elif kind in ("score-entered", "bye-processed"):

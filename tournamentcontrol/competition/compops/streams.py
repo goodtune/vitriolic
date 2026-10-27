@@ -76,6 +76,9 @@ def publish_change(obj, status, actor):
         kind=kind,
         id=obj.pk,
         status=status,
+        # The pages hold a ground's block, or a booth's lamp, that shows a
+        # refusal until a push about that ground; see ground_stream in day.html.
+        ground=obj.play_at_id if kind == "match" else None,
     )
 
 
