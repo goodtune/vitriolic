@@ -33,7 +33,7 @@
         <div class="toolbar-center">
             <select class="date-selector" @change="navigateToDate($event.target.value)">
                 {% for schedule_date in dates %}
-                <option value="{% url 'admin:competition:match-visual-schedule' season.competition_id season.pk schedule_date|date:"Ymd" %}"
+                <option value="{% url 'admin:fixja:match-visual-schedule' season.competition_id season.pk schedule_date|date:"Ymd" %}"
                         {% if schedule_date == date %}selected{% endif %}>
                     {{ schedule_date|date:"l, F j, Y" }}
                 </option>

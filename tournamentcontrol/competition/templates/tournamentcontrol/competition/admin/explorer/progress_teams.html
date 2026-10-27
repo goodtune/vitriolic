@@ -4,7 +4,7 @@
 {% block page_title %}{% trans "Progress teams" %}{% endblock %}
 {% block page_kind %}{% if date %}{{ date|date:"l j F Y" }}{% else %}{{ stage.division.title }}, {{ stage.title }}{% endif %}{% endblock %}
 {% block page_icon %}<span class="title-icon">{% icon "stage" %}</span>{% endblock %}
-{% block cancel-url %}{% url 'admin:competition:competition:season:division:stage:edit' competition.pk season.pk division.pk stage.pk %}{% endblock %}
+{% block cancel-url %}{% url 'admin:fixja:competition:season:division:stage:edit' competition.pk season.pk division.pk stage.pk %}{% endblock %}
 
 {% block form-body %}
 	{{ formset.management_form }}

@@ -257,9 +257,9 @@ class HomePageTests(AwaitingResultsMixin, TestCase):
             "season_id": self.season.pk,
             "datestr": "20261017",
         }
-        day_url = reverse("admin:competition:match-results", kwargs=day)
+        day_url = reverse("admin:fixja:match-results", kwargs=day)
         time_url = reverse(
-            "admin:competition:match-results", kwargs=dict(day, timestr="1800")
+            "admin:fixja:match-results", kwargs=dict(day, timestr="1800")
         )
         self.assertResponseContains(
             f'<li><a class="wb-widget-date" href="{day_url}">Sat 17 Oct 2026</a>'
