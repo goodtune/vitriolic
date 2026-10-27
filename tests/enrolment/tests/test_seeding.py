@@ -60,8 +60,9 @@ class SeedingTests(TestCase):
             Enrolment.objects.filter(class_group__year__title="2027").count(),
             40 - leavers,
         )
-        self.assertFalse(
-            ClassGroup.objects.filter(year__title="2026", teacher__isnull=True).exists()
+        self.assertEqual(
+            ClassGroup.objects.filter(year__title="2026", teacher__isnull=True).count(),
+            0,
         )
 
     def test_command_prints_counts(self):
@@ -83,7 +84,7 @@ class SeedingTests(TestCase):
                     f"--students must be from 1 to {MAX_STUDENTS}, not {students}.",
                 ):
                     call_command("seed_enrolment", students=students)
-        self.assertFalse(Student.objects.exists())
+        self.assertEqual(Student.objects.count(), 0)
 
     def test_command_refuses_more_students_than_there_are_names(self):
         with self.assertRaisesMessage(
@@ -91,4 +92,4 @@ class SeedingTests(TestCase):
             f"--students must be from 1 to {MAX_STUDENTS}, not {MAX_STUDENTS + 1}.",
         ):
             call_command("seed_enrolment", students=MAX_STUDENTS + 1)
-        self.assertFalse(Student.objects.exists())
+        self.assertEqual(Student.objects.count(), 0)
