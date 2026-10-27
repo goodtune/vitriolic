@@ -1,12 +1,13 @@
 from test_plus import TestCase
 
 from touchtechnology.admin.tests.shells import per_shell
+from touchtechnology.common.tests.caches import WarmCachesMixin
 from touchtechnology.common.tests.factories import SuperUserFactory
 from tournamentcontrol.competition.tests import factories
 
 
 @per_shell
-class StageMatchesTabQueryTests(TestCase):
+class StageMatchesTabQueryTests(WarmCachesMixin, TestCase):
     """
     The Matches tab of the stage edit page draws each match with its teams,
     its pool and where it is played, at the same cost however many matches
@@ -53,10 +54,7 @@ class StageMatchesTabQueryTests(TestCase):
     def get_stage(self, stage):
         name = "admin:fixja:competition:season:division:stage:edit"
         with self.login(self.make_user()):
-            # The current site, the content types guardian asks for and the
-            # sitemap's URL patterns are kept for the life of the process.
-            # Draw the page once so they are, whichever test runs first.
-            self.get_check_200(name, *stage._get_url_args())
+            self.warm_caches()
             with self.assertNumQueries(self.by_shell(workbook=31, explorer=29)):
                 self.get_check_200(name, *stage._get_url_args())
 

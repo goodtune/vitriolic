@@ -19,6 +19,7 @@ from freezegun import freeze_time
 from test_plus import TestCase
 
 from touchtechnology.admin.tests.shells import by_shell
+from touchtechnology.common.tests.caches import WarmCachesMixin
 from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.forms import CompetitionForm, SeasonForm
 from tournamentcontrol.competition.models import (
@@ -708,7 +709,7 @@ class SyncTests(TestCase):
         self.assertIn(MENS_DIV_1, result.warnings[0])
 
 
-class AdminTests(TestCase):
+class AdminTests(WarmCachesMixin, TestCase):
     def setUp(self):
         super().setUp()
         self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
@@ -720,11 +721,11 @@ class AdminTests(TestCase):
     def test_season_list_names_the_provider(self):
         sync = self.reverse("admin:fixja:competition:season:upstream-sync", *self.args)
         with self.login(self.superuser):
-            self.assertGoodView(
-                "admin:fixja:competition:edit",
-                self.season.competition_id,
-                test_query_count=60,
-            )
+            self.warm_caches()
+            with self.assertNumQueries(by_shell(workbook=18, explorer=15)):
+                self.get_check_200(
+                    "admin:fixja:competition:edit", self.season.competition_id
+                )
             self.assertResponseContains(
                 by_shell(
                     workbook=(

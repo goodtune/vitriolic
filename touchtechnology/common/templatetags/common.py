@@ -557,10 +557,16 @@ def version(package, url=None):
 
 
 @register.filter("permchecker")
-def create_permission_checker(model_or_manager, user):
+def create_permission_checker(objects, user):
     """
-    Create an :class:`ObjectPermissionChecker` for optimal permission checking
-    of related objects.
+    Create an :class:`ObjectPermissionChecker` with ``user``'s permissions on
+    ``objects`` prefetched.
+
+    ``objects`` are the rows the template is about to show. Iterating them here
+    fills a queryset's result cache, which the template's own loop then reuses,
+    and guardian takes the primary keys from the rows rather than asking the
+    database for them again. Rows that are not model instances (the Files list
+    shows files and folders of the storage) have no permissions to prefetch.
 
     http://django-guardian.readthedocs.io/en/stable/userguide/performance.html
 
@@ -568,12 +574,14 @@ def create_permission_checker(model_or_manager, user):
     an active superuser without its cache, and filling it would cost two
     queries per list (the primary keys and the model's permission codenames).
     """
-    model, manager = model_and_manager(model_or_manager)
     checker = ObjectPermissionChecker(user)
     if user.is_superuser:
         return checker
+    objects = [obj for obj in objects if isinstance(obj, Model)]
+    if not objects:
+        return checker
     try:
-        checker.prefetch_perms(manager)
+        checker.prefetch_perms(objects)
     except UnboundLocalError:
         logger.exception(
             "https://github.com/django-guardian/django-guardian/issues/519"

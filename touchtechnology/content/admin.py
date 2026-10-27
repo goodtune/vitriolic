@@ -741,7 +741,6 @@ class ContentAdminComponent(AdminComponent):
             "file_form": file_form,
             "writable": writable,
             "object_list": object_list,
-            "queryset": Page.objects.all(),
             "list_template": select_template_name(
                 self.template_path("list.inc.html", "file")
             ),

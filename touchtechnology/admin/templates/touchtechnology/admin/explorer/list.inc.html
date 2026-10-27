@@ -37,7 +37,7 @@ View item, for an object with a detail page, is row-buttons-detail).
 				{% endblock table-head %}
 			</thead>
 			<tbody>
-				{% with checker=queryset|permchecker:user %}
+				{% with checker=object_list|permchecker:user %}
 					{% for obj in object_list %}
 						{% block table-row %}
 							{% with object_perms=obj|checkperm:checker %}

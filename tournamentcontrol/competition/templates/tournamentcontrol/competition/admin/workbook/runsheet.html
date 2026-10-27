@@ -36,8 +36,8 @@
 				</tr>
 			</thead>
 			<tbody>
-				{% with checker=queryset|permchecker:user %}
-					{% for match in object_list.playable %}
+				{% with matches=object_list.playable %}{% with checker=matches|permchecker:user %}
+					{% for match in matches %}
 						<tr{% ifchanged match.datetime %} class="r-group"{% endifchanged %}>
 							<th scope="row">{% ifchanged match.datetime %}{{ match.datetime|time:"H:i" }}{% endifchanged %}</th>
 							<td>{{ match.stage.division.short_title|default:match.stage.division.title|htmlentities }}</td>
@@ -77,7 +77,7 @@
 							</td>
 						</tr>
 					{% endfor %}
-				{% endwith %}
+				{% endwith %}{% endwith %}
 			</tbody>
 		</table>
 	</div>

@@ -1094,7 +1094,7 @@ class CalendarQueryTests(TestCase):
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
-class DivisionViewQueryTests(TestCase):
+class DivisionViewQueryTests(WarmCachesMixin, TestCase):
     """
     The division view follows ``parent.ladders`` and
     ``parent.matches_by_date``, both of which used to issue at least
@@ -1169,27 +1169,28 @@ class DivisionViewQueryTests(TestCase):
             )
         )
 
+    # The division page costs the same however many teams and stages it has.
+    DIVISION_QUERIES = 9
+
+    def get_division(self, division):
+        self.warm_caches()
+        with self.assertNumQueries(self.DIVISION_QUERIES):
+            self.get_check_200(
+                "competition:division",
+                self.competition.slug,
+                self.season.slug,
+                division.slug,
+            )
+
     def test_small_division_query_count(self):
-        self.assertGoodView(
-            "competition:division",
-            self.competition.slug,
-            self.season.slug,
-            self.small_division.slug,
-            test_query_count=14,
-        )
+        self.get_division(self.small_division)
 
     def test_large_division_query_count(self):
-        self.assertGoodView(
-            "competition:division",
-            self.competition.slug,
-            self.season.slug,
-            self.large_division.slug,
-            test_query_count=14,
-        )
+        self.get_division(self.large_division)
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
-class DivisionFinalsQueryTests(TestCase):
+class DivisionFinalsQueryTests(WarmCachesMixin, TestCase):
     """
     Until a pool stage is over, its finals show placeholders such as
     "1st Pool A" in place of teams. Working one out used to look up the
@@ -1292,27 +1293,28 @@ class DivisionFinalsQueryTests(TestCase):
         self.assertEqual(playoff.get_home_team(), {"title": "1st Pool 1"})
         self.assertEqual(playoff.get_away_team(), {"title": "Host nation"})
 
+    # The division page costs the same however many finals it has.
+    DIVISION_QUERIES = 13
+
+    def get_division(self, division):
+        self.warm_caches()
+        with self.assertNumQueries(self.DIVISION_QUERIES):
+            self.get_check_200(
+                "competition:division",
+                self.competition.slug,
+                self.season.slug,
+                division.slug,
+            )
+
     def test_few_finals_query_count(self):
-        self.assertGoodView(
-            "competition:division",
-            self.competition.slug,
-            self.season.slug,
-            self.few_finals.slug,
-            test_query_count=17,
-        )
+        self.get_division(self.few_finals)
 
     def test_many_finals_query_count(self):
-        self.assertGoodView(
-            "competition:division",
-            self.competition.slug,
-            self.season.slug,
-            self.many_finals.slug,
-            test_query_count=17,
-        )
+        self.get_division(self.many_finals)
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
-class FirstStageReferenceTests(TestCase):
+class FirstStageReferenceTests(WarmCachesMixin, TestCase):
     """
     A position with no stage in it (P1, G1P2) is a place on the ladder of the
     stage before. The first stage of a division has no stage before it, so
@@ -1395,23 +1397,24 @@ class FirstStageReferenceTests(TestCase):
         self.response_200()
         self.assertResponseContains('<td class="team">P3</td>')
 
+    # The division page costs the same however many finals it has.
+    DIVISION_QUERIES = 10
+
+    def get_division(self, division):
+        self.warm_caches()
+        with self.assertNumQueries(self.DIVISION_QUERIES):
+            self.get_check_200(
+                "competition:division",
+                self.competition.slug,
+                self.season.slug,
+                division.slug,
+            )
+
     def test_few_finals_query_count(self):
-        self.assertGoodView(
-            "competition:division",
-            self.competition.slug,
-            self.season.slug,
-            self.few_finals.slug,
-            test_query_count=14,
-        )
+        self.get_division(self.few_finals)
 
     def test_many_finals_query_count(self):
-        self.assertGoodView(
-            "competition:division",
-            self.competition.slug,
-            self.season.slug,
-            self.many_finals.slug,
-            test_query_count=14,
-        )
+        self.get_division(self.many_finals)
 
     def test_second_stage_shows_positions(self):
         """
@@ -1895,7 +1898,7 @@ class ClubPageTests(WarmCachesMixin, TestCase):
         )
 
     # The club page costs the same however many teams the club has.
-    CLUB_PAGE_QUERIES = 11
+    CLUB_PAGE_QUERIES = 9
 
     def test_few_teams_query_count(self):
         self.warm_caches()
@@ -1999,15 +2002,14 @@ class NextAndLastMatchTimeZoneTests(TestCase):
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
-class MatchDetailViewQueryTests(TestCase):
+class MatchDetailViewQueryTests(WarmCachesMixin, TestCase):
     """
     The public match detail page renders the ``preview`` template tag,
     which iterates ``TeamAssociation`` rows for both teams and
     dereferences ``person`` on each one. Without prefetching, that
     produces one ``competition_person`` query per associated player.
-    Pin the view's query count so the same upper bound holds whether
-    the teams are empty or fully squadded - any per-player scaling
-    trips the large case.
+    Pin the view's query count for empty and fully squadded teams - any
+    per-player scaling trips the large case.
     """
 
     @classmethod
@@ -2036,25 +2038,24 @@ class MatchDetailViewQueryTests(TestCase):
                 ),
             )
 
-    def test_small_match_query_count(self):
-        self.assertGoodView(
-            "competition:match",
-            self.competition.slug,
-            self.season.slug,
-            self.division.slug,
-            self.small_match.pk,
-            test_query_count=18,
-        )
+    def get_match(self, match, queries):
+        self.warm_caches()
+        with self.assertNumQueries(queries):
+            self.get_check_200(
+                "competition:match",
+                self.competition.slug,
+                self.season.slug,
+                self.division.slug,
+                match.pk,
+            )
 
+    def test_small_match_query_count(self):
+        self.get_match(self.small_match, 11)
+
+    # Two more than the small match: Django skips a prefetch that has no rows
+    # to follow, and here each team's players are fetched once.
     def test_large_match_query_count(self):
-        self.assertGoodView(
-            "competition:match",
-            self.competition.slug,
-            self.season.slug,
-            self.division.slug,
-            self.large_match.pk,
-            test_query_count=18,
-        )
+        self.get_match(self.large_match, 13)
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
