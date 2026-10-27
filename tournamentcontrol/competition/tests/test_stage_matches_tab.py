@@ -55,7 +55,7 @@ class StageMatchesTabQueryTests(WarmCachesMixin, TestCase):
         name = "admin:fixja:competition:season:division:stage:edit"
         with self.login(self.make_user()):
             self.warm_caches()
-            with self.assertNumQueries(self.by_shell(workbook=34, explorer=32)):
+            with self.assertNumQueries(self.by_shell(workbook=31, explorer=29)):
                 self.get_check_200(name, *stage._get_url_args())
 
     def test_few_matches(self):

@@ -722,7 +722,7 @@ class AdminTests(WarmCachesMixin, TestCase):
         sync = self.reverse("admin:fixja:competition:season:upstream-sync", *self.args)
         with self.login(self.superuser):
             self.warm_caches()
-            with self.assertNumQueries(by_shell(workbook=19, explorer=16)):
+            with self.assertNumQueries(by_shell(workbook=18, explorer=15)):
                 self.get_check_200(
                     "admin:fixja:competition:edit", self.season.competition_id
                 )

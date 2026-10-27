@@ -569,8 +569,14 @@ def create_permission_checker(objects, user):
     shows files and folders of the storage) have no permissions to prefetch.
 
     http://django-guardian.readthedocs.io/en/stable/userguide/performance.html
+
+    A superuser's checker is not prefetched: guardian answers ``has_perm`` for
+    an active superuser without its cache, and filling it would cost two
+    queries per list (the primary keys and the model's permission codenames).
     """
     checker = ObjectPermissionChecker(user)
+    if user.is_superuser:
+        return checker
     objects = [obj for obj in objects if isinstance(obj, Model)]
     if not objects:
         return checker
