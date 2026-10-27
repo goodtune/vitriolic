@@ -5,6 +5,7 @@ from test_plus import TestCase
 
 from tournamentcontrol.competition import utils
 from tournamentcontrol.competition.models import Match
+from touchtechnology.admin.tests.shells import IconMixin, per_shell
 from tournamentcontrol.competition.tests.factories import (
     DivisionFactory,
     MatchFactory,
@@ -493,7 +494,8 @@ class StageGroupPositionTests(TestCase):
             self.assertEqual(choices, stage2.division.teams)
 
 
-class TwoStageFormulaProblemTests(TestCase):
+@per_shell
+class TwoStageFormulaProblemTests(IconMixin, TestCase):
     """
     Tests for the two-stage scenario as requested by @goodtune.
 
@@ -555,7 +557,7 @@ class TwoStageFormulaProblemTests(TestCase):
         self.assertEqual(undecided_team_g2p2.title, f"2nd {self.pool2.title}")
 
         # Create a Match between the two undecided teams
-        match = MatchFactory.create(
+        final = MatchFactory.create(
             stage=self.finals_stage,
             home_team_undecided=undecided_team_g1p1,
             away_team_undecided=undecided_team_g2p2,
@@ -569,7 +571,7 @@ class TwoStageFormulaProblemTests(TestCase):
         self.get(self.finals_stage.urls["edit"])
         self.assert_http_200_ok()
         # The page should contain the match label
-        self.assertResponseContains("Final")
+        self.assertResponseContains(self.match_title(final))
 
     def test_invalid_formulas_gracefully_handled_in_admin_view(self):
         """
@@ -621,15 +623,11 @@ class TwoStageFormulaProblemTests(TestCase):
         self.get(self.finals_stage.urls["edit"])
         self.assert_http_200_ok()
         # The match should be displayed on the stage edit page
-        self.assertResponseContains("Invalid Formula Match")
+        self.assertResponseContains(self.match_title(match_with_invalid_formulas))
         # Verify that the home_team and away_team formulas are rendered correctly
         # Invalid formulas should show the formula itself as fallback
-        self.assertResponseContains(
-            "G5P2"
-        )  # home_team_eval formula should be displayed
-        self.assertResponseContains(
-            "G3P1"
-        )  # away_team_eval formula should be displayed
+        self.assertResponseContains(self.team_cell("Home", "G5P2"))
+        self.assertResponseContains(self.team_cell("Away", "G3P1"))
 
         # Test the eval() method directly - it should handle the IndexError gracefully
         # The Match.eval() method should return a tuple of (home_team, away_team)
@@ -672,7 +670,7 @@ class TwoStageFormulaProblemTests(TestCase):
         )
 
         # Create matches using both teams to force title evaluation in admin
-        MatchFactory.create(
+        mixed = MatchFactory.create(
             stage=self.finals_stage,
             home_team_undecided=valid_team,
             away_team_undecided=invalid_team,
@@ -699,9 +697,26 @@ class TwoStageFormulaProblemTests(TestCase):
         self.get(self.finals_stage.urls["edit"])
         self.assert_http_200_ok()
         # The match label should appear
-        self.assertResponseContains("Mixed Formula Match")
+        self.assertResponseContains(self.match_title(mixed))
         # Verify that the home_team and away_team formulas are rendered correctly
         # Valid team (G1P1) should show the resolved title
-        self.assertResponseContains(f"1st {self.pool1.title}")
+        self.assertResponseContains(self.team_cell("Home", f"1st {self.pool1.title}"))
         # Invalid team (G3P1) should show the formula as fallback
-        self.assertResponseContains("G3P1")
+        self.assertResponseContains(self.team_cell("Away", "G3P1"))
+
+    def match_title(self, match):
+        """The link to edit ``match``, labelled with its label, in its list row."""
+        return self.by_shell(
+            workbook=f'<a href="{match.urls["edit"]}">{match.label}</a>',
+            explorer=(
+                f'<a href="{match.urls["edit"]}">{self.icon("match")}'
+                f"<span>{match.label}</span></a>"
+            ),
+        )
+
+    def team_cell(self, side, title):
+        """The ``side`` ("Home" or "Away") cell of a match row showing ``title``."""
+        return self.by_shell(
+            workbook=f'<td data-label="{side}">{title}</td>',
+            explorer=f"<td>{title}</td>",
+        )
