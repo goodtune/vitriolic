@@ -192,6 +192,76 @@ class TranslationsTabTests(TestCase):
         )
 
 
+@override_settings(TOUCHTECHNOLOGY_NEWS_IMAGE_REQUIRED=False)
+class ArticleEditPermissionTests(TestCase):
+    """
+    Who may open and save an article's edit page: staff need
+    ``news.change_article`` on the article or globally.
+    """
+
+    user_factory = StaffFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.article = ArticleFactory.create(headline="Before")
+        cls.other_article = ArticleFactory.create()
+        cls.data = {
+            "headline": "After",
+            "abstract": "This is the abstract",
+            "copy": "<p>This is the copy</p>",
+            "published": "2017-01-01 05:30:00",
+            "is_active": "1",
+        }
+
+    def assertArticleSaved(self):
+        self.assert_http_302_found(url=self.reverse("admin:news:article:list"))
+        self.article.refresh_from_db()
+        self.assertEqual(self.article.headline, "After")
+
+    def assertArticleUnchanged(self):
+        self.article.refresh_from_db()
+        self.assertEqual(self.article.headline, "Before")
+
+    def test_edit_sends_an_anonymous_visitor_to_sign_in(self):
+        self.assertLoginRequired("admin:news:article:edit", pk=self.article.pk)
+
+    def test_staff_without_the_change_permission_cannot_open_the_page(self):
+        staff = self.make_user("staff")
+        with self.login(staff):
+            self.get("admin:news:article:edit", pk=self.article.pk)
+        self.assert_http_403_forbidden()
+
+    def test_staff_without_the_change_permission_cannot_save(self):
+        staff = self.make_user("staff")
+        with self.login(staff):
+            self.post("admin:news:article:edit", pk=self.article.pk, data=self.data)
+        self.assert_http_403_forbidden()
+        self.assertArticleUnchanged()
+
+    def test_permission_on_another_article_does_not_open_this_one(self):
+        staff = self.make_user("staff")
+        assign_perm("news.change_article", staff, self.other_article)
+        with self.login(staff):
+            self.get("admin:news:article:edit", pk=self.article.pk)
+        self.assert_http_403_forbidden()
+
+    def test_staff_with_the_object_permission_opens_and_saves(self):
+        staff = self.make_user("staff")
+        assign_perm("news.change_article", staff, self.article)
+        with self.login(staff):
+            self.get_check_200("admin:news:article:edit", pk=self.article.pk)
+            self.post("admin:news:article:edit", pk=self.article.pk, data=self.data)
+        self.assertArticleSaved()
+
+    def test_staff_with_the_global_permission_opens_and_saves(self):
+        staff = self.make_user("staff")
+        assign_perm("news.change_article", staff)
+        with self.login(staff):
+            self.get_check_200("admin:news:article:edit", pk=self.article.pk)
+            self.post("admin:news:article:edit", pk=self.article.pk, data=self.data)
+        self.assertArticleSaved()
+
+
 @per_shell
 class CategoryListTests(TestCase):
     """The list of categories, shown a page at a time."""
