@@ -501,7 +501,7 @@ class FirstStageProgressionPageTests(TestCase):
             # No stage comes before it, so there is no ladder beside the
             # places to fill.
             self.get(self.progress_url())
-            self.response_200()
+            self.assert_http_200_ok()
             self.assertEqual(self.get_context("ladders"), {})
 
     def test_undecided_team_named_by_a_position_in_a_first_stage(self):
@@ -523,7 +523,7 @@ class FirstStageProgressionPageTests(TestCase):
 
         with self.login(self.superuser):
             self.get(self.progress_url())
-        self.response_200()
+        self.assert_http_200_ok()
         (form,) = self.get_context("formset").forms
         self.assertEqual(form.instance.title, "G1P2")
         self.assertCountEqual(form.fields["team"].queryset, [home, away])
