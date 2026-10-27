@@ -6,6 +6,7 @@ returns to.
 
 import datetime
 
+from django.contrib.auth.views import redirect_to_login
 from django.urls import reverse
 from freezegun import freeze_time
 from test_plus import TestCase
@@ -397,10 +398,5 @@ class TreeTests(TestCase):
 
     def test_only_staff_may_open_folders(self):
         self.get("admin:explorer", data={"node": "fixja/"})
-        self.assert_http_302_found()
         folder = reverse("admin:explorer", query={"node": "fixja/"})
-        # The login view quotes "next" with "/" left bare, so compare the
-        # URLs by their parsed query rather than as strings.
-        self.assertURLEqual(
-            self.last_response.url, reverse("admin:login", query={"next": folder})
-        )
+        self.assert_http_302_found(url=redirect_to_login(folder, "admin:login").url)

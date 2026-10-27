@@ -3,6 +3,7 @@ import uuid
 from unittest.mock import patch
 
 import cloudinary
+from django.contrib.auth.views import redirect_to_login
 from django.test import override_settings
 from django.urls import reverse
 from test_plus import TestCase
@@ -166,17 +167,12 @@ class HtmxSeasonTabTests(TestCase):
             data={"_htmx_tab": "divisions"},
             extra={"HTTP_HX_REQUEST": "true"},
         )
-        self.assert_http_302_found()
         tab = reverse(
             "admin:fixja:competition:season:edit",
             args=args,
             query={"_htmx_tab": "divisions"},
         )
-        # The login view quotes "next" with "/" left bare, so compare the
-        # URLs by their parsed query rather than as strings.
-        self.assertURLEqual(
-            self.last_response.url, reverse("admin:login", query={"next": tab})
-        )
+        self.assert_http_302_found(url=redirect_to_login(tab, "admin:login").url)
 
 
 @override_settings(
