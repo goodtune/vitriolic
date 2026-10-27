@@ -647,7 +647,18 @@ class ContentAdminComponent(AdminComponent):
                 saved = None
 
                 if folder_form.has_changed():
-                    saved = folder_form.save()
+                    try:
+                        saved = folder_form.save()
+                    except NotImplementedError:
+                        messages.error(
+                            request,
+                            _(
+                                "The folder “%(name)s” was not made: this site's "
+                                "storage cannot make folders."
+                            )
+                            % {"name": folder_form.cleaned_data["name"]},
+                        )
+                        return self.redirect(redirect_to)
                     logger.debug("created folder %s", saved)
                     folder_name = os.path.basename(saved)
                     messages.success(
