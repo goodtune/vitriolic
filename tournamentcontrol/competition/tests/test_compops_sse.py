@@ -169,9 +169,34 @@ class SseFixture:
         snapshot = await reader.until(LAST_COUNT)
         return reader, snapshot
 
+    @staticmethod
+    def held(block):
+        return f'data: elements <div id="{block}" class="stream" {HELD}>'
+
+    @staticmethod
+    def released(block):
+        return f'data: elements <div id="{block}" class="stream">'
+
 
 @freeze_time("2026-10-08 00:00 +10:00", real_asyncio=True)
 class CompOpsEventsTests(SseFixture, TestCase):
+    def setUp(self):
+        super().setUp()
+        venue = factories.VenueFactory.create(season=self.season)
+        self.ground = factories.GroundFactory.create(
+            venue=venue, title="Field 1", live_stream=True
+        )
+        when = timezone.make_aware(datetime.datetime(2026, 10, 8, 10, 40), TZ)
+        self.streamed = factories.MatchFactory.create(
+            stage=self.stage,
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            play_at=self.ground,
+            live_stream=True,
+            external_identifier="yt-1",
+        )
+
     async def test_anonymous_is_redirected(self):
         response = await self.async_client.get(self.url)
         self.assertEqual(response.status_code, 302)
@@ -272,15 +297,11 @@ class CompOpsEventsTests(SseFixture, TestCase):
     async def test_stream_change_pushes_the_stream_column(self):
         reader, _ = await self.connect()
         try:
-            await self.publish(
-                self.season.pk,
-                "stream-changed",
-                summary="x",
-                kind="match",
-                id=1,
-                status="live",
-            )
+            await self.publish_change(self.streamed, "live")
             pushed = "".join(await reader.until(LAST_COUNT))
+            self.assertIn(
+                self.released(f"stream-{self.ground.pk}"), pushed.splitlines()
+            )
             self.assertIn('data: elements <div id="streams"', pushed)
             self.assertIn('data: elements <span id="streams-count"', pushed)
             self.assertIn('data: elements <span id="streams-count-rail"', pushed)
@@ -291,12 +312,12 @@ class CompOpsEventsTests(SseFixture, TestCase):
         reader, _ = await self.connect()
         try:
             await self.publish(self.season.pk, "mystery", summary="x")
-            await self.publish(
-                self.season.pk, "stream-changed", summary="x", kind="match", id=1
-            )
+            await self.publish_change(self.streamed, "live")
             pushed = "".join(await reader.until(LAST_COUNT))
             self.assertNotIn('id="slot-0800-h"', pushed)
-            self.assertIn('data: elements <div id="streams"', pushed)
+            self.assertIn(
+                self.released(f"stream-{self.ground.pk}"), pushed.splitlines()
+            )
         finally:
             await reader.close()
 
@@ -319,15 +340,15 @@ class CompOpsEventsTests(SseFixture, TestCase):
                 await self.publish(
                     self.season.pk, "score-entered", summary="x", match=self.match.pk
                 )
-                await self.publish(
-                    self.season.pk, "stream-changed", summary="x", kind="match", id=1
-                )
+                await self.publish_change(self.streamed, "live")
                 with self.assertLogs(
                     "tournamentcontrol.competition.compops.sse", level="ERROR"
                 ):
                     pushed = "".join(await reader.until(LAST_COUNT))
             self.assertEqual(patched.call_count, 2)
-            self.assertIn('data: elements <div id="streams"', pushed)
+            self.assertIn(
+                self.released(f"stream-{self.ground.pk}"), pushed.splitlines()
+            )
             self.assertNotIn('id="slot-0800-h"', pushed)
         finally:
             await reader.close()
@@ -337,7 +358,12 @@ class CompOpsEventsTests(SseFixture, TestCase):
         reader, _ = await self.connect()
         try:
             await self.publish_in(
-                "bravo", self.season.pk, "stream-changed", kind="match", id=1
+                "bravo",
+                self.season.pk,
+                "stream-changed",
+                kind="match",
+                id=self.streamed.pk,
+                ground=self.ground.pk,
             )
             await self.publish_in(
                 "alpha", self.season.pk, "statistics-entered", match=self.match.pk
@@ -351,9 +377,7 @@ class CompOpsEventsTests(SseFixture, TestCase):
         reader, _ = await self.connect()
         try:
             before = self.close_old_connections.call_count
-            await self.publish(
-                self.season.pk, "stream-changed", summary="x", kind="match", id=1
-            )
+            await self.publish_change(self.streamed, "live")
             await reader.until(LAST_COUNT)
             self.assertGreaterEqual(self.close_old_connections.call_count - before, 2)
         finally:
@@ -454,13 +478,6 @@ class HeldStreamsEventsTests(SseFixture, TestCase):
             external_identifier=identifier,
         )
 
-    @staticmethod
-    def held(block):
-        return f'data: elements <div id="{block}" class="stream" {HELD}>'
-
-    @staticmethod
-    def released(block):
-        return f'data: elements <div id="{block}" class="stream">'
 
     async def test_the_snapshot_marks_every_block(self):
         reader, snapshot = await self.connect()
@@ -644,9 +661,7 @@ class BoothEventsTests(SseFixture, TestCase):
             await self.publish(
                 self.season.pk, "statistics-entered", summary="x", match=other.pk
             )
-            await self.publish(
-                self.season.pk, "stream-changed", summary="x", kind="match", id=1
-            )
+            await self.publish_change(self.current, "live")
             pushed = await reader.until('<section id="strip"')
             self.assertEqual(len(pushed), 2)
             self.assertNotIn('id="pane"', "".join(pushed))
@@ -747,9 +762,7 @@ class BoothEventsTests(SseFixture, TestCase):
     async def test_stream_change_refreshes_the_open_runsheet(self):
         reader, _ = await self.connect_booth({"pane": "runsheet", "match": None})
         try:
-            await self.publish(
-                self.season.pk, "stream-changed", summary="x", kind="match", id=1
-            )
+            await self.publish_change(self.current, "live")
             pushed = await reader.until('<div id="pane"')
             self.assertEqual(len(pushed), 3)
             self.assertIn('<div id="pane" class="pane runsheet">', pushed[2])
@@ -846,9 +859,7 @@ class BoothEventsTests(SseFixture, TestCase):
         )
         try:
             await self.publish(self.season.pk, "mystery", summary="x")
-            await self.publish(
-                self.season.pk, "stream-changed", summary="x", kind="match", id=1
-            )
+            await self.publish_change(self.current, "live")
             pushed = await reader.until('<section id="strip"')
             self.assertEqual(len(pushed), 2)
             self.assertIn('<section id="onair"', pushed[0])
