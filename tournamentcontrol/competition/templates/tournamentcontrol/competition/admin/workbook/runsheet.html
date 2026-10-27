@@ -58,19 +58,21 @@
 												<a href="{% url 'admin:fixja:competition:season:division:stage:match:referees' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">{% icon "flag" %}{% trans "Referees" %}</a>
 											{% endif %}
 										{% endblock %}
+										{% if match.videos %}
+											<a href="{{ match.videos|first }}">{% icon "video" %}{% trans "Video" %}</a>
+											{% if match.live_stream and user.is_superuser %}<a href="https://studio.youtube.com/video/{{ match.external_identifier }}/livestreaming">{% icon "settings" %}{% trans "Studio" %}</a>{% endif %}
+										{% endif %}
+										{% if change_perm in object_perms %}
+											{% if match.live_stream and not match.live_stream_bind %}
+												<a href="{{ match.urls.edit }}?next={{ request.path }}">{% icon "triangle-alert" %}{% trans "Fix stream" %}</a>
+											{% elif match.play_at.ground.live_stream and not match.live_stream %}
+												<a href="{{ match.urls.edit }}?next={{ request.path }}">{% icon "pencil" %}{% trans "Stream?" %}</a>
+											{% endif %}
+											{% if match.live_stream and match.external_identifier %}
+												<a href="{% url 'admin:fixja:competition:season:division:stage:match:resync-live-stream' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">{% icon "refresh-cw" %}{% trans "Resync" %}</a>
+											{% endif %}
+										{% endif %}
 									{% endwith %}
-									{% if match.videos %}
-										<a href="{{ match.videos|first }}">{% icon "video" %}{% trans "Video" %}</a>
-										{% if match.live_stream and user.is_superuser %}<a href="https://studio.youtube.com/video/{{ match.external_identifier }}/livestreaming">{% icon "settings" %}{% trans "Studio" %}</a>{% endif %}
-									{% endif %}
-									{% if match.live_stream and not match.live_stream_bind %}
-										<a href="{{ match.urls.edit }}?next={{ request.path }}">{% icon "triangle-alert" %}{% trans "Fix stream" %}</a>
-									{% elif match.play_at.ground.live_stream and not match.live_stream %}
-										<a href="{{ match.urls.edit }}?next={{ request.path }}">{% icon "pencil" %}{% trans "Stream?" %}</a>
-									{% endif %}
-									{% if match.live_stream and match.external_identifier %}
-										<a href="{% url 'admin:fixja:competition:season:division:stage:match:resync-live-stream' match.stage.division.season.competition.pk match.stage.division.season.pk match.stage.division.pk match.stage.pk match.pk %}?next={{ request.path }}">{% icon "refresh-cw" %}{% trans "Resync" %}</a>
-									{% endif %}
 								</div>
 							</td>
 						</tr>
