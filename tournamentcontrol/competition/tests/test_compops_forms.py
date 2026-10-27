@@ -37,6 +37,7 @@ SCORERS_TEMPLATE = "tournamentcontrol/competition/compops/scorers.html"
 @freeze_time("2026-10-08 10:50 +10:00")
 class FormsFixture(TestCase):
     def setUp(self):
+        super().setUp()
         events.reset_backend()
         self.operator = factories.UserFactory.create(is_staff=True)
         self.operator.user_permissions.add(
@@ -104,23 +105,19 @@ class FormsFixture(TestCase):
     def url(self, name, **extra):
         return reverse(f"compops:{name}", kwargs={**self.day_kw, **extra})
 
-    def booth(self, name, **extra):
-        return reverse(f"compops:{name}", kwargs={**self.booth_kw, **extra})
-
-    def submit(self, url, data=None):
-        """POST as a plain browser; ``assertResponseContains`` reads the result."""
+    def submit(self, name, kw, data=None, **extra):
+        """POST as a plain browser; the assertions read ``last_response``."""
         with self.login(self.operator), self.captureOnCommitCallbacks(execute=True):
-            self.last_response = self.client.post(url, data or {})
-        return self.last_response
+            self.post(f"compops:{name}", data=data or {}, **kw, **extra)
 
-    def assertDayPage(self, response):
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, DAY_TEMPLATE)
+    def assertDayPage(self):
+        self.assert_http_200_ok()
+        self.assertResponseTemplateUsed(DAY_TEMPLATE)
         self.assertResponseContains('<span class="brand">TOURNAMENT OPS</span>')
 
-    def assertBoothPage(self, response):
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, BOOTH_TEMPLATE)
+    def assertBoothPage(self):
+        self.assert_http_200_ok()
+        self.assertResponseTemplateUsed(BOOTH_TEMPLATE)
         self.assertResponseContains('<span class="brand">BOOTH</span>')
 
 
@@ -129,12 +126,12 @@ class ResultFormTests(FormsFixture):
         super().setUp()
         self.match = self.make(8)
 
-    def post(self, match, data):
-        return self.submit(self.url("match-result", match_pk=match.pk), data)
+    def send(self, match, data):
+        self.submit("match-result", self.day_kw, data, match_pk=match.pk)
 
     def test_valid_save_redirects_to_the_day_and_persists(self):
-        response = self.post(self.match, {"home_team_score": 5, "away_team_score": 4})
-        self.assertRedirects(response, self.day_url, fetch_redirect_response=False)
+        self.send(self.match, {"home_team_score": 5, "away_team_score": 4})
+        self.assert_http_302_found(url=self.day_url)
         self.match.refresh_from_db()
         self.assertEqual(
             (self.match.home_team_score, self.match.away_team_score), (5, 4)
@@ -142,13 +139,13 @@ class ResultFormTests(FormsFixture):
 
     def test_editing_an_entered_score_redirects_and_persists(self):
         done = self.make(9, home_team_score=3, away_team_score=1)
-        response = self.post(done, {"home_team_score": 3, "away_team_score": 2})
-        self.assertRedirects(response, self.day_url, fetch_redirect_response=False)
+        self.send(done, {"home_team_score": 3, "away_team_score": 2})
+        self.assert_http_302_found(url=self.day_url)
         done.refresh_from_db()
         self.assertEqual((done.home_team_score, done.away_team_score), (3, 2))
 
     def test_forfeit_with_a_winner_redirects_and_persists(self):
-        response = self.post(
+        self.send(
             self.match,
             {
                 "home_team_score": "",
@@ -157,9 +154,9 @@ class ResultFormTests(FormsFixture):
                 "forfeit_winner": self.nzl.pk,
             },
         )
-        self.assertRedirects(response, self.day_url, fetch_redirect_response=False)
+        self.assert_http_302_found(url=self.day_url)
         self.match.refresh_from_db()
-        self.assertTrue(self.match.is_forfeit)
+        self.assertIs(self.match.is_forfeit, True)
         self.assertEqual(self.match.forfeit_winner, self.nzl)
 
     def test_bye_is_processed(self):
@@ -172,14 +169,14 @@ class ResultFormTests(FormsFixture):
             datetime=None,
             is_bye=True,
         )
-        response = self.post(bye, {"bye_processed": "on"})
-        self.assertRedirects(response, self.day_url, fetch_redirect_response=False)
+        self.send(bye, {"bye_processed": "on"})
+        self.assert_http_302_found(url=self.day_url)
         bye.refresh_from_db()
-        self.assertTrue(bye.bye_processed)
+        self.assertIs(bye.bye_processed, True)
 
     def test_one_score_only_shows_the_error_in_the_day_page(self):
-        response = self.post(self.match, {"home_team_score": 5, "away_team_score": ""})
-        self.assertDayPage(response)
+        self.send(self.match, {"home_team_score": 5, "away_team_score": ""})
+        self.assertDayPage()
         self.assertResponseContains("<li>Both scores are required.</li>")
         self.assertResponseContains(
             '<input type="number" name="home_team_score" value="5" class="sc" '
@@ -190,8 +187,8 @@ class ResultFormTests(FormsFixture):
 
     def test_one_score_only_on_an_entered_row_keeps_it_in_edit(self):
         done = self.make(9, home_team_score=3, away_team_score=1)
-        response = self.post(done, {"home_team_score": 4, "away_team_score": ""})
-        self.assertDayPage(response)
+        self.send(done, {"home_team_score": 4, "away_team_score": ""})
+        self.assertDayPage()
         self.assertResponseContains("<li>Both scores are required.</li>")
         self.assertResponseContains(
             '<input type="number" name="home_team_score" value="4" class="sc" '
@@ -208,10 +205,11 @@ class ResultFormTests(FormsFixture):
 
     def test_other_rows_keep_their_own_forms(self):
         other = self.make(8)
-        response = self.post(self.match, {"home_team_score": 5, "away_team_score": ""})
-        self.assertDayPage(response)
-        self.assertEqual(response.content.decode().count("<li>Both scores"), 1)
-        self.assertIn(f'id="match-{other.pk}"', response.content.decode())
+        self.send(self.match, {"home_team_score": 5, "away_team_score": ""})
+        self.assertDayPage()
+        self.assertResponseContains("<li>Both scores are required.</li>", count=1)
+        body = self.last_response.content.decode()
+        self.assertEqual(body.count(f'id="match-{other.pk}"'), 1)
 
 
 class ScorersFormTests(FormsFixture):
@@ -252,12 +250,12 @@ class ScorersFormTests(FormsFixture):
                 )
         return data
 
-    def post(self, data):
-        return self.submit(self.scorers_url, data)
+    def send(self, data):
+        self.submit("match-scorers", self.day_kw, data, match_pk=self.match.pk)
 
     def test_valid_save_redirects_to_the_day_and_persists_both_sides(self):
-        response = self.post(self.payload([1, 1], [1]))
-        self.assertRedirects(response, self.day_url, fetch_redirect_response=False)
+        self.send(self.payload([1, 1], [1]))
+        self.assert_http_302_found(url=self.day_url)
         saved = SimpleScoreMatchStatistic.objects.filter(match=self.match)
         self.assertEqual(saved.count(), 3)
         self.assertEqual(
@@ -266,27 +264,27 @@ class ScorersFormTests(FormsFixture):
         )
 
     def test_points_that_do_not_sum_show_the_formset_error_in_the_modal(self):
-        response = self.post(self.payload([1, 0], [1]))
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, SCORERS_TEMPLATE)
+        self.send(self.payload([1, 0], [1]))
+        self.assert_http_200_ok()
+        self.assertResponseTemplateUsed(SCORERS_TEMPLATE)
         # The modal is a partial of the day page; Django 5.2 records no
         # template for it, so look for its Save button instead.
         self.assertResponseContains(
             '<button class="btn p" type="submit">Save scorers</button>'
         )
-        self.assertTemplateNotUsed(response, DAY_TEMPLATE)
+        self.assertResponseTemplateNotUsed(DAY_TEMPLATE)
         self.assertResponseContains(
             "<li>Total number of points (1) does not equal total number of "
             "scores (2) for this team.</li>"
         )
-        self.assertFalse(
-            SimpleScoreMatchStatistic.objects.filter(match=self.match).exists()
+        self.assertEqual(
+            SimpleScoreMatchStatistic.objects.filter(match=self.match).count(), 0
         )
 
     def test_the_error_page_works_without_javascript(self):
-        response = self.post(self.payload([1, 0], [1]))
-        body = response.content.decode()
-        self.assertTrue(body.lstrip().lower().startswith("<!doctype html>"))
+        self.send(self.payload([1, 0], [1]))
+        body = self.last_response.content.decode()
+        self.assertEqual(body.lstrip()[:15].lower(), "<!doctype html>")
         # The form posts on its own, with its token, and Save submits it.
         self.assertIn(f'<form method="post" action="{self.scorers_url}"', body)
         self.assertResponseContains(
@@ -301,9 +299,9 @@ class ScorersFormTests(FormsFixture):
 
     def test_the_plain_get_is_the_same_page(self):
         with self.login(self.operator):
-            self.last_response = self.client.get(self.scorers_url)
-        self.assertEqual(self.last_response.status_code, 200)
-        self.assertTemplateUsed(self.last_response, SCORERS_TEMPLATE)
+            self.get("compops:match-scorers", match_pk=self.match.pk, **self.day_kw)
+        self.assert_http_200_ok()
+        self.assertResponseTemplateUsed(SCORERS_TEMPLATE)
         self.assertResponseContains(f'<a class="btn" href="{self.day_url}">Cancel</a>')
 
 
@@ -326,14 +324,14 @@ class StreamFormTests(FormsFixture):
             start=timezone.make_aware(datetime.datetime(2026, 10, 8, 17, 30), TZ),
         )
 
-    def post(self, name, **extra):
-        return self.submit(self.url(name, **extra))
+    def send(self, name, **extra):
+        self.submit(name, self.day_kw, **extra)
 
     @mock.patch("tournamentcontrol.competition.models.build")
     def test_go_live_redirects_and_stores_the_status(self, build):
         build.return_value = youtube_mock("testing")
-        response = self.post("match-stream", match_pk=self.current.pk, status="live")
-        self.assertRedirects(response, self.day_url, fetch_redirect_response=False)
+        self.send("match-stream", match_pk=self.current.pk, status="live")
+        self.assert_http_302_found(url=self.day_url)
         self.current.refresh_from_db()
         self.assertEqual(self.current.live_stream_status, "live")
 
@@ -341,8 +339,8 @@ class StreamFormTests(FormsFixture):
     def test_a_match_without_a_broadcast_shows_the_error_in_the_day_page(self, build):
         build.return_value = youtube_mock()
         orphan = self.make(12, play_at=self.field1, live_stream=True)
-        response = self.post("match-stream", match_pk=orphan.pk, status="live")
-        self.assertDayPage(response)
+        self.send("match-stream", match_pk=orphan.pk, status="live")
+        self.assertDayPage()
         message = f"{streams.describe(orphan)}: {orphan} does not have a live stream identifier"
         self.assertResponseContains(f'<p class="warn">{escape(message)}</p>')
         self.assertEqual(events.recent(self.season.pk), [])
@@ -350,8 +348,8 @@ class StreamFormTests(FormsFixture):
     @mock.patch("tournamentcontrol.competition.models.build")
     def test_whole_slot_redirects_and_transitions_every_broadcast(self, build):
         build.return_value = youtube_mock("testing")
-        response = self.post("slot-stream", slot_key="1040", status="live")
-        self.assertRedirects(response, self.day_url, fetch_redirect_response=False)
+        self.send("slot-stream", slot_key="1040", status="live")
+        self.assert_http_302_found(url=self.day_url)
         self.current.refresh_from_db()
         self.assertEqual(self.current.live_stream_status, "live")
 
@@ -359,8 +357,8 @@ class StreamFormTests(FormsFixture):
     def test_whole_slot_failure_shows_the_error_in_the_day_page(self, build):
         build.side_effect = RefreshError("expired")
         with self.assertLogs("tournamentcontrol.competition.compops.streams"):
-            response = self.post("slot-stream", slot_key="1040", status="live")
-        self.assertDayPage(response)
+            self.send("slot-stream", slot_key="1040", status="live")
+        self.assertDayPage()
         message = f"{streams.describe(self.current)}: expired"
         self.assertResponseContains(f'<p class="warn">{escape(message)}</p>')
         self.current.refresh_from_db()
@@ -369,8 +367,8 @@ class StreamFormTests(FormsFixture):
     @mock.patch("tournamentcontrol.competition.models.build")
     def test_event_redirects_and_stores_the_status(self, build):
         build.return_value = youtube_mock("ready")
-        response = self.post("event-stream", event_pk=self.event.pk, status="testing")
-        self.assertRedirects(response, self.day_url, fetch_redirect_response=False)
+        self.send("event-stream", event_pk=self.event.pk, status="testing")
+        self.assert_http_302_found(url=self.day_url)
         self.event.refresh_from_db()
         self.assertEqual(self.event.live_stream_status, "testing")
 
@@ -378,10 +376,8 @@ class StreamFormTests(FormsFixture):
     def test_event_failure_shows_the_error_in_the_day_page(self, build):
         build.side_effect = RefreshError("expired")
         with self.assertLogs("tournamentcontrol.competition.compops.streams"):
-            response = self.post(
-                "event-stream", event_pk=self.event.pk, status="testing"
-            )
-        self.assertDayPage(response)
+            self.send("event-stream", event_pk=self.event.pk, status="testing")
+        self.assertDayPage()
         message = f"{streams.describe(self.event)}: expired"
         self.assertResponseContains(f'<p class="warn">{escape(message)}</p>')
 
@@ -389,11 +385,11 @@ class StreamFormTests(FormsFixture):
 class LayoutFormTests(FormsFixture):
     def test_toggle_redirects_and_flips_the_session(self):
         with self.login(self.operator):
-            response = self.client.post(self.url("layout"))
-            self.assertRedirects(response, self.day_url, fetch_redirect_response=False)
-            self.assertTrue(self.client.session["compops_collapsed"])
-            self.client.post(self.url("layout"))
-            self.assertFalse(self.client.session["compops_collapsed"])
+            self.post("compops:layout", **self.day_kw)
+            self.assert_http_302_found(url=self.day_url)
+            self.assertIs(self.client.session["compops_collapsed"], True)
+            self.post("compops:layout", **self.day_kw)
+            self.assertIs(self.client.session["compops_collapsed"], False)
 
 
 class BoothFormTests(FormsFixture):
@@ -421,36 +417,35 @@ class BoothFormTests(FormsFixture):
             11, 20, play_at=self.field1, live_stream=True, external_identifier="yt-next"
         )
 
-    def post(self, name, **extra):
-        return self.submit(self.booth(name, **extra))
+    def send(self, name, **extra):
+        self.submit(name, self.booth_kw, **extra)
 
-    def onair(self, response):
-        match = re.search(
+    def onair(self):
+        (section,) = re.findall(
             r'<section id="onair".*?</section>',
-            response.content.decode(),
+            self.last_response.content.decode(),
             flags=re.DOTALL,
         )
-        self.assertIsNotNone(match, "no #onair section in the page")
-        return match.group(0)
+        return section
 
     @mock.patch("tournamentcontrol.competition.models.build")
     def test_ending_the_broadcast_redirects_to_the_booth_and_stores_complete(
         self, build
     ):
         build.return_value = youtube_mock("live")
-        response = self.post("booth-onair", status="complete")
-        self.assertRedirects(response, self.booth_url, fetch_redirect_response=False)
+        self.send("booth-onair", status="complete")
+        self.assert_http_302_found(url=self.booth_url)
         self.current.refresh_from_db()
         self.assertEqual(self.current.live_stream_status, "complete")
 
     def test_nothing_on_the_ground_shows_the_reason_in_the_lamp(self):
         self.current.delete()
         self.previous.delete()
-        response = self.post("booth-onair", status="complete")
-        self.assertBoothPage(response)
-        self.assertIn(
+        self.send("booth-onair", status="complete")
+        self.assertBoothPage()
+        self.assertInHTML(
             '<span class="warn">Nothing is on this ground right now.</span>',
-            self.onair(response),
+            self.onair(),
         )
 
     @mock.patch("tournamentcontrol.competition.models.build")
@@ -458,17 +453,17 @@ class BoothFormTests(FormsFixture):
         build.return_value = youtube_mock("ready")
         self.current.live_stream_status = "complete"
         self.current.save()
-        response = self.post("booth-arm")
-        self.assertRedirects(response, self.booth_url, fetch_redirect_response=False)
+        self.send("booth-arm")
+        self.assert_http_302_found(url=self.booth_url)
         self.following.refresh_from_db()
         self.assertEqual(self.following.live_stream_status, "testing")
 
     def test_a_refused_arm_shows_the_reason_in_the_lamp(self):
-        response = self.post("booth-arm")
-        self.assertBoothPage(response)
-        self.assertIn(
+        self.send("booth-arm")
+        self.assertBoothPage()
+        self.assertInHTML(
             '<span class="warn">End the current broadcast first.</span>',
-            self.onair(response),
+            self.onair(),
         )
         self.following.refresh_from_db()
         self.assertIsNone(self.following.live_stream_status)
@@ -477,11 +472,9 @@ class BoothFormTests(FormsFixture):
     def test_a_failed_transition_shows_the_reason_in_the_lamp(self, build):
         build.side_effect = RefreshError("expired")
         with self.assertLogs("tournamentcontrol.competition.compops.streams"):
-            response = self.post("booth-onair", status="complete")
-        self.assertBoothPage(response)
+            self.send("booth-onair", status="complete")
+        self.assertBoothPage()
         message = f"{streams.describe(self.current)}: expired"
-        self.assertIn(
-            f'<span class="warn">{escape(message)}</span>', self.onair(response)
-        )
+        self.assertInHTML(f'<span class="warn">{escape(message)}</span>', self.onair())
         self.current.refresh_from_db()
         self.assertEqual(self.current.live_stream_status, "live")
