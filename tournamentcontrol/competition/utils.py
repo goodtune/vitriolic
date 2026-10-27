@@ -116,16 +116,19 @@ match_decided = or_(
 )
 
 
-def team_awaits_own_ladder():
+def _own_ladder():
     """
-    A match with a side still to be decided which names a place on the ladder
-    of the match's own stage, while that ladder is open. ``Match.eval`` fills
-    ``S1P1`` from the first stage of the division whatever stage the match is
-    in, as the ladder stands when it is asked, so a match in that stage is
-    not progressed until every match of the stage which can be played has
-    been decided. A match waiting on progression itself does not hold the
-    ladder open: it is what the progression is for, and holding two such
-    matches back for each other would progress neither.
+    The two halves of "names a place on the ladder of its own stage, while
+    that ladder is open", for a row with a ``stage`` (a ``Match`` or an
+    ``UndecidedTeam``): the pattern a formula naming the stage's own ladder
+    matches, and an ``Exists`` true while the ladder is open.
+
+    ``Match.eval`` fills ``S1P1`` from the first stage of the division
+    whatever stage the match is in, as the ladder stands when it is asked, so
+    the place is not settled until every match of the stage which can be
+    played has been decided. A match waiting on progression itself does not
+    hold the ladder open: it is what the progression is for, and holding two
+    such matches back for each other would progress neither.
 
     A function, where its neighbours are ``Q`` objects: ``models`` imports
     this module, so ``Match`` and ``Stage`` can only be looked up once the
@@ -133,7 +136,7 @@ def team_awaits_own_ladder():
     """
     Match = apps.get_model("competition", "Match")
     Stage = apps.get_model("competition", "Stage")
-    # The number of the match's stage in its division, counting from one as
+    # The number of the row's stage in its division, counting from one as
     # ``Match.eval`` and ``Stage._title_stages`` do.
     number = Subquery(
         Stage.objects.filter(
@@ -144,13 +147,7 @@ def team_awaits_own_ladder():
         .annotate(number=Count("pk"))
         .values("number")
     )
-    own_ladder = Concat(Value("^S"), Cast(number, CharField()), Value(r"(G\d+)?P\d+$"))
-    names_own_ladder = (
-        Q(home_team__isnull=True, home_team_eval__regex=own_ladder)
-        | Q(home_team__isnull=True, home_team_undecided__formula__regex=own_ladder)
-        | Q(away_team__isnull=True, away_team_eval__regex=own_ladder)
-        | Q(away_team__isnull=True, away_team_undecided__formula__regex=own_ladder)
-    )
+    pattern = Concat(Value("^S"), Cast(number, CharField()), Value(r"(G\d+)?P\d+$"))
     # The default manager annotates team titles through outer joins which the
     # subquery has no use for.
     ladder_open = Exists(
@@ -158,7 +155,33 @@ def team_awaits_own_ladder():
         .exclude(match_decided)
         .exclude(team_needs_progressing)
     )
+    return pattern, ladder_open
+
+
+def team_awaits_own_ladder():
+    """
+    A match with a side still to be decided which names a place on the ladder
+    of the match's own stage, while that ladder is open (``_own_ladder``), so
+    it is not progressed ahead of the ladder.
+    """
+    own_ladder, ladder_open = _own_ladder()
+    names_own_ladder = (
+        Q(home_team__isnull=True, home_team_eval__regex=own_ladder)
+        | Q(home_team__isnull=True, home_team_undecided__formula__regex=own_ladder)
+        | Q(away_team__isnull=True, away_team_eval__regex=own_ladder)
+        | Q(away_team__isnull=True, away_team_undecided__formula__regex=own_ladder)
+    )
     return Q(names_own_ladder, ladder_open)
+
+
+def undecided_team_awaits_own_ladder():
+    """
+    The undecided team behind ``team_awaits_own_ladder``: its formula names a
+    place on the ladder of its own stage while that ladder is open
+    (``_own_ladder``), so the place is not filled by hand ahead of the ladder.
+    """
+    own_ladder, ladder_open = _own_ladder()
+    return Q(ladder_open, formula__regex=own_ladder)
 
 
 stage_group_position_re = re.compile(

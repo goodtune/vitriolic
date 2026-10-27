@@ -3118,7 +3118,7 @@ class CompetitionAdminComponent(AdminComponent):
             .exclude(team_awaits_upstream)
             .exclude(team_awaits_own_ladder())
         )
-        teams = stage.undecided_teams.of_our_own()
+        teams = stage.undecided_teams.fillable()
 
         if not matches:
             return HttpResponseGone()

@@ -159,15 +159,15 @@ def matches_progression_possible():
     matches = matches_require_progression().exclude(team_awaits_own_ladder())
 
     # cache which stages have all their matches played or byes marked played,
-    # and which hold a place a person can fill (an undecided team of our own:
-    # the upstream sync's placeholder is not one, see
-    # ``UndecidedTeamQuerySet.of_our_own``)
+    # and which hold a place a person can fill (an undecided team of our own
+    # not waiting on the stage's own ladder: the upstream sync's placeholder
+    # is not one, see ``UndecidedTeamQuerySet.fillable``)
     stages = (
         Stage.objects.filter(matches__in=matches)
         .distinct()
         .annotate(
             has_places=Exists(
-                UndecidedTeam.objects.of_our_own().filter(stage=OuterRef("pk"))
+                UndecidedTeam.objects.fillable().filter(stage=OuterRef("pk"))
             )
         )
     )
