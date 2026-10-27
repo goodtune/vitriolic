@@ -681,8 +681,7 @@ class UpstreamTitleMixin:
         return super().has_changed() or self.upstream_unacknowledged
 
     def clean(self):
-        # Not every form in the chain returns the cleaned data.
-        cleaned_data = super().clean() or self.cleaned_data
+        cleaned_data = super().clean()
         if cleaned_data.get("upstream_title_reset"):
             cleaned_data["title"] = self.instance.upstream_title
         return cleaned_data
@@ -1175,7 +1174,7 @@ class UndecidedTeamForm(UserMixin, ModelForm):
         return formula
 
     def clean(self):
-        data = super().clean() or self.cleaned_data
+        data = super().clean()
         if data.get("formula"):
             # The formula names the team, so the label is not saved.
             data["label"] = ""
