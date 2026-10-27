@@ -1,9 +1,16 @@
 import os.path
 import tempfile
 
+from django.core.files.storage import (
+    FileSystemStorage as FileSystemStorageBase,
+)
 from django.test import TestCase, override_settings
 
-from touchtechnology.common.storage import FileSystemStorage
+from touchtechnology.common.storage import (
+    FileSystemStorage,
+    MakeDirectoryMixin,
+    WalkMixin,
+)
 
 
 class StorageTests(TestCase):
@@ -11,6 +18,13 @@ class StorageTests(TestCase):
     def setUp(self):
         location = tempfile.mkdtemp()
         self.storage = FileSystemStorage(location=location)
+
+    def test_bases_are_the_two_mixins_and_the_django_storage(self):
+        # No stand-in for a tenant storage mixin sits between them (#546).
+        self.assertEqual(
+            FileSystemStorage.__bases__,
+            (MakeDirectoryMixin, WalkMixin, FileSystemStorageBase),
+        )
 
     def test_makedirs(self):
         path, folder = "", "test_mkdir_folder/with_two/subfolders"
