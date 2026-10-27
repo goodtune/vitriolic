@@ -1,9 +1,10 @@
 # coding=UTF-8
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Permission
+from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
+from modelforms.forms import ModelForm
 
 from touchtechnology.common.forms.auth import permissionformset_factory
 from touchtechnology.common.forms.fields import (
@@ -13,6 +14,20 @@ from touchtechnology.common.forms.fields import (
 )
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.tests import factories
+
+
+class GroupForm(ModelForm):
+    class Meta:
+        model = Group
+        fields = ["name"]
+
+
+class ModelFormCleanTest(TestCase):
+    def test_clean_returns_cleaned_data(self):
+        """django-modelforms 1.0.2 returns the cleaned data from clean() (#538)."""
+        form = GroupForm(data={"name": "Referees"})
+        form.is_valid()
+        self.assertEqual(form.clean(), {"name": "Referees"})
 
 
 class CustomFormField(TestCase):
