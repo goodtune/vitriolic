@@ -4548,17 +4548,41 @@ class MatchDetailPermissionTests(MatchRowMixin, TestCase):
             self.actions_cell(other, "Sharks vs Eagles", edit=False, referees=False)
         )
 
+    def test_row_menu_offers_edit_and_statistics_for_change_match_on_every_match(
+        self,
+    ):
+        # change_match on every match (a global permission) opens each match's
+        # edit, referees and statistics pages, so the row menu offers them, as
+        # it does for change_match on the one match. The tab lists every match
+        # for the holder of a global permission.
+        first = self.match(home_team__title="Leopards", away_team__title="Marlins")
+        second = self.match(home_team__title="Sharks", away_team__title="Eagles")
+        assign_perm("competition.change_stage", self.staff, self.stage)
+        assign_perm("competition.change_match", self.staff)
+        with self.login(self.staff):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:edit",
+                *self.stage._get_url_args(),
+            )
+        self.assertResponseContains(
+            self.actions_cell(first, "Leopards vs Marlins", statistics=True, delete=False)
+        )
+        self.assertResponseContains(
+            self.actions_cell(second, "Sharks vs Eagles", statistics=True, delete=False)
+        )
+
     def test_run_sheet_offers_statistics_to_those_who_may_change_the_match(self):
         theirs = self.match(home_team__title="Leopards")
         other = self.match(home_team__title="Sharks")
         assign_perm("competition.change_match", self.staff, theirs)
         season = self.stage.division.season
         # The sheet asks for the person's permissions on the day's matches
-        # once, not once a row; and a row with neither link does not walk to
-        # its competition for their URLs.
+        # once, not once a row, and for their permissions on every match once
+        # (their own and their groups'); and a row with neither link does not
+        # walk to its competition for their URLs.
         with (
             self.login(self.staff),
-            self.assertNumQueries(self.by_shell(workbook=21, explorer=21)),
+            self.assertNumQueries(self.by_shell(workbook=23, explorer=23)),
         ):
             self.get_check_200(
                 "admin:fixja:match-runsheet",
@@ -4575,6 +4599,26 @@ class MatchDetailPermissionTests(MatchRowMixin, TestCase):
             )
         )
         self.assertResponseContains(self.statistics_link(other), count=0)
+
+    def test_run_sheet_offers_statistics_for_change_match_on_every_match(self):
+        first = self.match(home_team__title="Leopards")
+        second = self.match(home_team__title="Sharks")
+        assign_perm("competition.change_match", self.staff)
+        season = self.stage.division.season
+        # Both rows draw their links, so both walk to their competition for
+        # the URLs: the five queries a row the sheet has always spent.
+        with (
+            self.login(self.staff),
+            self.assertNumQueries(self.by_shell(workbook=28, explorer=28)),
+        ):
+            self.get_check_200(
+                "admin:fixja:match-runsheet",
+                season.competition_id,
+                season.pk,
+                "20250501",
+            )
+        self.assertResponseContains(self.statistics_link(first), count=1)
+        self.assertResponseContains(self.statistics_link(second), count=1)
 
 
 @per_shell
@@ -4654,6 +4698,82 @@ class RefereeAppointmentsPermissionTests(MatchRowMixin, TestCase):
             )
         )
         self.assertResponseContains(self.referees_link(other), count=0)
+
+
+@per_shell
+class GlobalChangePermissionRowMenuTests(IconMixin, TestCase):
+    """
+    A change permission held on every object of a model (a global permission)
+    opens each object's edit page, so the rows of the division's Stages and
+    Teams tabs offer Edit to its holder, as they do to the holder of the
+    permission on the one object.
+    """
+
+    user_factory = StaffFactory
+
+    def setUp(self):
+        super().setUp()
+        self.division = factories.DivisionFactory.create()
+        self.staff = self.make_user("staff")
+        assign_perm("competition.change_division", self.staff, self.division)
+
+    def edit_item(self, name, obj):
+        """The Edit item of the row menu of ``obj``, whose edit view is ``name``."""
+        url = self.reverse(name, *obj._get_url_args())
+        return self.by_shell(
+            workbook=f'<li><a href="{url}">{self.icon("pencil")}Edit</a></li>',
+            explorer=f'<a href="{url}">{self.icon("edit")}Edit</a>',
+        )
+
+    def test_stages_offer_edit_for_change_stage_on_every_stage(self):
+        stage = factories.StageFactory.create(division=self.division)
+        assign_perm("competition.change_stage", self.staff)
+        with self.login(self.staff):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:edit",
+                *self.division._get_url_args(),
+            )
+        self.assertResponseContains(
+            self.edit_item("admin:fixja:competition:season:division:stage:edit", stage)
+        )
+
+    def test_stages_withhold_edit_without_change_stage(self):
+        stage = factories.StageFactory.create(division=self.division)
+        assign_perm("competition.delete_stage", self.staff, stage)
+        with self.login(self.staff):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:edit",
+                *self.division._get_url_args(),
+            )
+        self.assertResponseContains(
+            self.edit_item("admin:fixja:competition:season:division:stage:edit", stage),
+            count=0,
+        )
+
+    def test_teams_offer_edit_for_change_team_on_every_team(self):
+        team = factories.TeamFactory.create(division=self.division)
+        assign_perm("competition.change_team", self.staff)
+        with self.login(self.staff):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:edit",
+                *self.division._get_url_args(),
+            )
+        self.assertResponseContains(
+            self.edit_item("admin:fixja:competition:season:division:team:edit", team)
+        )
+
+    def test_teams_withhold_edit_without_change_team(self):
+        team = factories.TeamFactory.create(division=self.division)
+        assign_perm("competition.delete_team", self.staff, team)
+        with self.login(self.staff):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:edit",
+                *self.division._get_url_args(),
+            )
+        self.assertResponseContains(
+            self.edit_item("admin:fixja:competition:season:division:team:edit", team),
+            count=0,
+        )
 
 
 class StreamedMatchMixin(MatchRowMixin):

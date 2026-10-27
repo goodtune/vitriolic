@@ -5,11 +5,16 @@ from io import BytesIO
 
 from django.contrib.auth.models import Permission
 from django.test.utils import override_settings
+from guardian.shortcuts import assign_perm
 from test_plus import TestCase
 
 from touchtechnology.admin.tests.lists import unordered_pages_fail
-from touchtechnology.admin.tests.shells import per_shell
-from touchtechnology.common.tests.factories import SuperUserFactory, UserFactory
+from touchtechnology.admin.tests.shells import IconMixin, per_shell
+from touchtechnology.common.tests.factories import (
+    StaffFactory,
+    SuperUserFactory,
+    UserFactory,
+)
 from touchtechnology.news.models import Article
 from touchtechnology.news.tests.factories import (
     ArticleFactory,
@@ -202,3 +207,45 @@ class CategoryListTests(TestCase):
             self.get("admin:news:category:list")
         self.assert_http_200_ok()
         self.assertEqual(list(self.get_context("object_list")), [club, events, sport])
+
+
+@per_shell
+class ArticleListPermissionTests(IconMixin, TestCase):
+    """
+    The list of articles offers Edit to whoever may change the article:
+    ``change_article`` on the article, or on every article, which is what the
+    article's own page and its delete view accept.
+    """
+
+    user_factory = StaffFactory
+
+    def setUp(self):
+        super().setUp()
+        self.staff = self.make_user("staff")
+        self.article = ArticleFactory.create(headline="Grand final preview")
+
+    def edit_item(self):
+        """The Edit item of the article's row menu."""
+        url = self.reverse("admin:news:article:edit", self.article.pk)
+        return self.by_shell(
+            workbook=f'<li><a href="{url}">{self.icon("pencil")}Edit</a></li>',
+            explorer=f'<a href="{url}">{self.icon("edit")}Edit</a>',
+        )
+
+    def test_change_article_on_every_article_offers_edit(self):
+        assign_perm("news.change_article", self.staff)
+        with self.login(self.staff):
+            self.get_check_200("admin:news:article:list")
+        self.assertResponseContains(self.edit_item())
+
+    def test_change_article_on_the_article_offers_edit(self):
+        assign_perm("news.change_article", self.staff, self.article)
+        with self.login(self.staff):
+            self.get_check_200("admin:news:article:list")
+        self.assertResponseContains(self.edit_item())
+
+    def test_delete_article_alone_withholds_edit(self):
+        assign_perm("news.delete_article", self.staff, self.article)
+        with self.login(self.staff):
+            self.get_check_200("admin:news:article:list")
+        self.assertResponseContains(self.edit_item(), count=0)
