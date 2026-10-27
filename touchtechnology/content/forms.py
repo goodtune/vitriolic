@@ -74,7 +74,7 @@ class ParentChildModelForm(BootstrapFormControlMixin, ModelForm):
         self.parent_form = parent_form_class(
             instance=parent,
             data=self.data if self.is_bound else None,
-            prefix="parent-%s" % self.prefix,
+            prefix=f"parent-{self.prefix}",
             **pfkw,
         )
 
@@ -270,11 +270,9 @@ class NewFolderForm(FileFormMixin, forms.Form):
 
     def clean_name(self):
         name = self.cleaned_data.get("name")
-        if self.path is None:
-            path = name
-        else:
-            path = os.path.join(self.path, name)
-        if name and default_storage.exists(path):
+        if not name:
+            return name
+        if default_storage.exists(os.path.join(self.path or "", name)):
             raise forms.ValidationError(_("Already exists."))
         return name
 

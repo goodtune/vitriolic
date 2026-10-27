@@ -53,9 +53,7 @@ class SeasonForm(forms.Form):
         )
         self.fields["season"] = ModelChoiceField(
             queryset=seasons,
-            label_from_instance=lambda s: "{0} {1}".format(
-                s.competition.title, s.title
-            ),
+            label_from_instance=lambda s: f"{s.competition.title} {s.title}",
         )
 
 
