@@ -23,6 +23,7 @@ from django.utils import timezone
 from tournamentcontrol.competition.utils import (
     team_needs_progressing,
     team_title_case_clause,
+    undecided_team_awaits_own_ladder,
     undecided_team_awaits_upstream,
 )
 
@@ -104,6 +105,17 @@ class UndecidedTeamQuerySet(QuerySet):
         in one place.
         """
         return self.exclude(undecided_team_awaits_upstream())
+
+    def fillable(self):
+        """
+        The places a person can fill now: those of our own, less any whose
+        formula names a place on the ladder of its own stage while that ladder
+        is open (``undecided_team_awaits_own_ladder`` in ``utils``). The
+        progression page leaves a match out while a side of it waits on that
+        ladder (``team_awaits_own_ladder``); the places formset, and the home
+        page's count of places, apply the same rule.
+        """
+        return self.of_our_own().exclude(undecided_team_awaits_own_ladder())
 
 
 class MatchQuerySet(QuerySet):
