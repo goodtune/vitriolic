@@ -107,7 +107,7 @@ class NewsAdminComponent(AdminComponent):
             pk=pk,
             form_class=ArticleForm,
             form_kwargs={"user": request.user},
-            # permission_required=True,
+            permission_required=True,
             post_save_redirect=self.redirect(urljoin(request.path, "..")),
             extra_context=kwargs,
         )
