@@ -23,7 +23,7 @@
 {% block empty-row-colspan %}3{% endblock %}
 
 {% block row-buttons-extra %}
-	{% url 'admin:competition:reorder' model="team" parent="division" pk=obj.pk direction="up" as up_url %}
-	{% url 'admin:competition:reorder' model="team" parent="division" pk=obj.pk direction="down" as down_url %}
+	{% url 'admin:fixja:reorder' 'team:division' obj.pk "up" as up_url %}
+	{% url 'admin:fixja:reorder' 'team:division' obj.pk "down" as down_url %}
 	{% include "tournamentcontrol/competition/admin/explorer/_reorder.inc.html" %}
 {% endblock %}
