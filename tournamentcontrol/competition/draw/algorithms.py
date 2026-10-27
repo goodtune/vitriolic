@@ -139,7 +139,7 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1, min_per_d
                 return self.st
 
             def __repr__(self):
-                return "<Team: {} ({})>".format(self.st, self.order)
+                return f"<Team: {self.st} ({self.order})>"
 
         seeded_team_list = [
             Team(t, order=order) for order, t in enumerate(seeded_team_list, 1)
@@ -172,7 +172,7 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1, min_per_d
     # produce round robin formats
     draw_formats = [
         {
-            "label": "Round Robin (%d/%d teams)" % (size - 1, size),
+            "label": f"Round Robin ({size - 1}/{size} teams)",
             "format": round_robin_format(range(1, size + 1)),
         }
         # unique set of pool sizes requiring individual draw formats

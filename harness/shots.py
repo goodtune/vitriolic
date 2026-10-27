@@ -150,15 +150,15 @@ class Collector:
             if "net::ERR_" not in text:
                 if url:
                     bucket = self.errors if self._same_host(url) else self.warnings
-                    self._add(bucket, "%s: %s" % (text, url))
+                    self._add(bucket, f"{text}: {url}")
                 else:
                     # With no address there is no host to excuse it.
-                    self._add(self.errors, "console error: %s" % text)
+                    self._add(self.errors, f"console error: {text}")
         else:
-            self._add(self.errors, "console error: %s" % text)
+            self._add(self.errors, f"console error: {text}")
 
     def _pageerror(self, error) -> None:
-        self._add(self.errors, "uncaught page error: %s" % error)
+        self._add(self.errors, f"uncaught page error: {error}")
 
     def _requestfailed(self, request) -> None:
         failure = request.failure or "failed"
@@ -167,7 +167,7 @@ class Collector:
             # navigation that moved on); a refusal shows as a console error.
             return
         bucket = self.errors if self._same_host(request.url) else self.warnings
-        self._add(bucket, "request failed: %s (%s)" % (request.url, failure))
+        self._add(bucket, f"request failed: {request.url} ({failure})")
 
     def drain(self) -> tuple[list[str], list[str]]:
         errors, warnings = self.errors, self.warnings
@@ -190,9 +190,7 @@ def sign_in(page: Page, base: str) -> None:
     page.get_by_role("button", name="Sign in").click()
     page.wait_for_load_state("load")
     if urlparse(page.url).path.startswith(LOGIN_PATH):
-        raise RuntimeError(
-            "signing in as %s left the page at %s" % (USERNAME, page.url)
-        )
+        raise RuntimeError(f"signing in as {USERNAME} left the page at {page.url}")
 
 
 def tab_locators(page: Page) -> list[Locator]:
@@ -215,7 +213,7 @@ def tab_locators(page: Page) -> list[Locator]:
         if link.inner_text().strip().lower().startswith("skip to"):
             continue
         target = (link.get_attribute("href") or "")[1:]
-        if page.locator("[id=%s]" % json.dumps(target)).count():
+        if page.locator(f"[id={json.dumps(target)}]").count():
             candidates.append(link)
     return candidates if len(candidates) >= 2 else []
 
@@ -238,19 +236,19 @@ def capture_page(page, collector, base, spec, width, out) -> PageResult:
         title = page.title()
         final_url = _path(page.url)
         if status == 0 or status >= 400:
-            errors.append("HTTP %d" % status)
+            errors.append(f"HTTP {status}")
         elif name == "login" and final_url != _path(url):
-            errors.append("the sign-in page redirected to %s" % final_url)
+            errors.append(f"the sign-in page redirected to {final_url}")
         elif urlparse(page.url).path.startswith(LOGIN_PATH) and not url.startswith(
             LOGIN_PATH
         ):
             errors.append("redirected to sign-in")
         if width == FOLD_WIDTH and name in FOLD_PAGES:
-            page.screenshot(path=str(out / ("%s-fold-%d.png" % (name, width))))
-        page.screenshot(path=str(out / ("%s-%d.png" % (name, width))), full_page=True)
+            page.screenshot(path=str(out / f"{name}-fold-{width}.png"))
+        page.screenshot(path=str(out / f"{name}-{width}.png"), full_page=True)
         saved = True
     except PlaywrightError as exc:
-        errors.append("failed to load: %s" % str(exc).splitlines()[0])
+        errors.append(f"failed to load: {str(exc).splitlines()[0]}")
     raised_errors, warnings = collector.drain()
     return PageResult(
         name=name,
@@ -260,7 +258,7 @@ def capture_page(page, collector, base, spec, width, out) -> PageResult:
         title=title,
         errors=errors + raised_errors,
         warnings=warnings,
-        file="%s-%d.png" % (name, width) if saved else "",
+        file=f"{name}-{width}.png" if saved else "",
         final_url="" if final_url == _path(url) else final_url,
     )
 
@@ -276,7 +274,7 @@ def capture_tabs(page, collector, spec, width, out, status, title):
     if not tabs and spec.get("tabs"):
         results.append(
             PageResult(
-                name="%s-tab-0" % spec["name"],
+                name=f"{spec['name']}-tab-0",
                 url=spec["url"],
                 width=width,
                 status=status,
@@ -286,15 +284,15 @@ def capture_tabs(page, collector, spec, width, out, status, title):
             )
         )
     for n in range(1, len(tabs) + 1):
-        name = "%s-tab-%d" % (spec["name"], n)
+        name = f"{spec['name']}-tab-{n}"
         errors: list[str] = []
-        file = "%s-%d.png" % (name, width)
+        file = f"{name}-{width}.png"
         try:
             tabs[n - 1].click(timeout=CLICK_MS)
             settle(page)
             page.screenshot(path=str(out / file), full_page=True)
         except PlaywrightError as exc:
-            errors.append("tab %d did not open: %s" % (n, str(exc).splitlines()[0]))
+            errors.append(f"tab {n} did not open: {str(exc).splitlines()[0]}")
             file = ""
         raised_errors, warnings = collector.drain()
         results.append(
@@ -316,10 +314,10 @@ def capture_tabs(page, collector, spec, width, out, status, title):
 def report(result: PageResult) -> None:
     flag = "ok" if not result.errors else "ERROR"
     if result.warnings:
-        flag += " (%d warnings)" % len(result.warnings)
-    print("%s %d %d %s" % (result.name, result.width, result.status, flag), flush=True)
+        flag += f" ({len(result.warnings)} warnings)"
+    print(f"{result.name} {result.width} {result.status} {flag}", flush=True)
     for message in result.errors:
-        print("    error: %s" % message, flush=True)
+        print(f"    error: {message}", flush=True)
 
 
 def capture_spec(context, host, base, spec, width, out, manifest) -> None:
@@ -348,7 +346,7 @@ def capture_spec(context, host, base, spec, width, out, manifest) -> None:
             width=width,
             status=0,
             title="",
-            errors=["capture failed: %s" % str(exc).splitlines()[0]],
+            errors=[f"capture failed: {str(exc).splitlines()[0]}"],
         )
         manifest.pages.append(failure)
         report(failure)
@@ -439,7 +437,7 @@ def capture_width(
                 width=width,
                 status=0,
                 title="",
-                errors=["sign-in failed: %s" % str(exc).splitlines()[0]],
+                errors=[f"sign-in failed: {str(exc).splitlines()[0]}"],
             )
             manifest.pages.append(failure)
             report(failure)
@@ -490,7 +488,7 @@ def record_flow(browser, base, host, manifest, out, width, height) -> None:
     finally:
         context.close()
         if video is not None:
-            video.save_as(str(out / ("flow-%d.webm" % width)))
+            video.save_as(str(out / f"flow-{width}.webm"))
             video.delete()
 
 
@@ -544,7 +542,7 @@ def select_pages(only: str, pages: list[dict]) -> set[str] | None:
     wanted = {o for o in only.split(",") if o}
     unknown = sorted(wanted - {p["name"] for p in pages})
     if unknown:
-        raise SystemExit("unknown page name(s) in --only: %s" % ", ".join(unknown))
+        raise SystemExit(f"unknown page name(s) in --only: {', '.join(unknown)}")
     return wanted or None
 
 
@@ -561,9 +559,8 @@ def run_directory(name: str, brand: str, shell: str, htmx_tabs: bool) -> Path:
     Where a run of ``name`` goes: ``<brand>-<shell>``, and ``<brand>-<shell>-htmx``
     for HTMX tabs.
     """
-    return paths_for(name)["runs"] / (
-        "%s-%s%s" % (brand, shell, "-htmx" if htmx_tabs else "")
-    )
+    suffix = "-htmx" if htmx_tabs else ""
+    return paths_for(name)["runs"] / f"{brand}-{shell}{suffix}"
 
 
 def main(argv: list[str]) -> int:
@@ -594,7 +591,7 @@ def main(argv: list[str]) -> int:
         manifest.errors.append(args.fail)
         manifest.finished = datetime.now(timezone.utc).isoformat(timespec="seconds")
         manifest.write(manifest_path)
-        print("shots: %s" % args.fail, file=sys.stderr)
+        print(f"shots: {args.fail}", file=sys.stderr)
         return 1
     manifest.write(manifest_path)
     if args.prepare:
@@ -611,7 +608,7 @@ def main(argv: list[str]) -> int:
                 "nothing to do: --only none leaves only the flow, and --no-video skips it"
             )
     except (OSError, ValueError, KeyError, SystemExit) as exc:
-        manifest.errors.append("the run could not start: %s" % exc)
+        manifest.errors.append(f"the run could not start: {exc}")
         manifest.finished = datetime.now(timezone.utc).isoformat(timespec="seconds")
         manifest.write(manifest_path)
         raise
@@ -620,22 +617,17 @@ def main(argv: list[str]) -> int:
     manifest = run(args.base.rstrip("/"), pages, out, args.height, manifest)
     warned = sorted({w for r in manifest.results for w in r.warnings})
     for message in warned:
-        print("warning: %s" % message)
+        print(f"warning: {message}")
+    elapsed = time.monotonic() - started
     print(
-        "shots: %d captures, %d errors, %d warnings in %.0f s -> %s"
-        % (
-            len(manifest.pages),
-            manifest.error_count,
-            manifest.warning_count,
-            time.monotonic() - started,
-            out,
-        ),
+        f"shots: {len(manifest.pages)} captures, {manifest.error_count} errors, "
+        f"{manifest.warning_count} warnings in {elapsed:.0f} s -> {out}",
         flush=True,
     )
     if manifest.incomplete:
         print(
-            "shots: incomplete: %d of %d pages captured at %d widths"
-            % (manifest.captured, manifest.expected_pages, len(manifest.widths)),
+            f"shots: incomplete: {manifest.captured} of {manifest.expected_pages} "
+            f"pages captured at {len(manifest.widths)} widths",
             flush=True,
         )
     return 1 if manifest.failed else 0

@@ -34,4 +34,4 @@ class TemplateChoiceIterator:
 
     def choice(self, obj):
         path = obj.path.replace(self.field.template_folder, "", 1)
-        return (obj.path, "%s (%s)" % (path, obj.name))
+        return (obj.path, f"{path} ({obj.name})")

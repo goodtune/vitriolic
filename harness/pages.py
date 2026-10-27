@@ -156,12 +156,12 @@ def _model_pages(model, name):
         edit = lookups["edit"]
         edit_url = _reverse(edit.url_name, edit.args)
     except Exception as exc:  # noqa: BLE001
-        return [], "the edit URL does not reverse: %s: %s" % (
-            type(exc).__name__,
-            str(exc) or "no message",
+        return [], (
+            f"the edit URL does not reverse: {type(exc).__name__}: "
+            f"{str(exc) or 'no message'}"
         )
 
-    pages = [_page("%s-edit" % name, edit_url, "edit")]
+    pages = [_page(f"{name}-edit", edit_url, "edit")]
 
     # The routes that take a parent's arguments only: the new instance has no
     # primary key, so the parent is every argument but the last.
@@ -171,7 +171,7 @@ def _model_pages(model, name):
         try:
             pages.append(
                 _page(
-                    "%s-add" % name,
+                    f"{name}-add",
                     _reverse(add.url_name, parent),
                     "add",
                 )
@@ -184,7 +184,7 @@ def _model_pages(model, name):
         try:
             pages.append(
                 _page(
-                    "%s-perms" % name,
+                    f"{name}-perms",
                     _reverse(perms.url_name, perms.args),
                     "perms",
                 )
@@ -196,7 +196,7 @@ def _model_pages(model, name):
     for args in ((), parent):
         try:
             pages.append(
-                _page("%s-list" % name, _reverse("%s:list" % namespace, args), "list")
+                _page(f"{name}-list", _reverse(f"{namespace}:list", args), "list")
             )
             break
         except NoReverseMatch:
@@ -237,23 +237,25 @@ def _node_pages():
         except Exception as exc:  # noqa: BLE001
             skipped.append(
                 {
-                    "model": "SitemapNode (%s)" % name,
-                    "reason": "the edit URL does not reverse: %s: %s"
-                    % (type(exc).__name__, str(exc) or "no message"),
+                    "model": f"SitemapNode ({name})",
+                    "reason": (
+                        f"the edit URL does not reverse: {type(exc).__name__}: "
+                        f"{str(exc) or 'no message'}"
+                    ),
                 }
             )
             continue
-        pages.append(_page("%s-edit" % name, edit_url, "edit"))
+        pages.append(_page(f"{name}-edit", edit_url, "edit"))
         for view in ("add", "perms"):
             try:
                 if view == "add":
-                    url = _reverse("admin:content:%s:add" % content_name)
+                    url = _reverse(f"admin:content:{content_name}:add")
                 else:
                     url = str(urls[view])
             except Exception as exc:  # noqa: BLE001
                 logger.info("%s has no %s page: %s", name, view, exc)
             else:
-                pages.append(_page("%s-%s" % (name, view), url, view))
+                pages.append(_page(f"{name}-{view}", url, view))
     return pages, skipped
 
 
@@ -269,7 +271,7 @@ def _content_pages():
         try:
             pages.append(_page(name, make(), kind))
         except NoReverseMatch as exc:
-            skipped.append({"model": name, "reason": "does not reverse: %s" % exc})
+            skipped.append({"model": name, "reason": f"does not reverse: {exc}"})
 
     add(
         "placeholder-list",
@@ -303,7 +305,7 @@ def _static_pages():
         _page("login", _reverse("admin:login"), "static"),
     ]
     for __, app_name, url, __, __ in site.get_components():
-        pages.append(_page("%s-index" % app_name, str(url), "static"))
+        pages.append(_page(f"{app_name}-index", str(url), "static"))
     return pages
 
 
@@ -387,7 +389,7 @@ def _special_pages():
         try:
             pages.append(_page(name, make(), "special"))
         except NoReverseMatch as exc:
-            skipped.append({"model": name, "reason": "does not reverse: %s" % exc})
+            skipped.append({"model": name, "reason": f"does not reverse: {exc}"})
 
     def leave_out(name, reason):
         skipped.append({"model": name, "reason": reason})
@@ -410,14 +412,14 @@ def _special_pages():
 
     season_ns = season._get_admin_namespace()
     season_args = season.url_names["edit"].args
-    add("report", lambda: _reverse("%s:report" % season_ns, season_args))
-    add("summary", lambda: _reverse("%s:summary" % season_ns, season_args))
+    add("report", lambda: _reverse(f"{season_ns}:report", season_args))
+    add("summary", lambda: _reverse(f"{season_ns}:summary", season_args))
     add(
         "progression-list",
-        lambda: _reverse("%s:progression-list" % season_ns, season_args),
+        lambda: _reverse(f"{season_ns}:progression-list", season_args),
     )
-    add("json-builder", lambda: _reverse("%s:json-builder" % season_ns, season_args))
-    add("reschedule", lambda: _reverse("%s:reschedule" % season_ns, season_args))
+    add("json-builder", lambda: _reverse(f"{season_ns}:json-builder", season_args))
+    add("reschedule", lambda: _reverse(f"{season_ns}:reschedule", season_args))
     add(
         "match-grid-season",
         lambda: named("competition:season:match-grid", mode="html", **base),
@@ -425,7 +427,7 @@ def _special_pages():
     if season.upstream_enabled:
         add(
             "upstream-sync",
-            lambda: _reverse("%s:upstream-sync" % season_ns, season_args),
+            lambda: _reverse(f"{season_ns}:upstream-sync", season_args),
         )
     else:
         # Never enabled in the seed: the page names a remote host to fetch from,
@@ -439,14 +441,14 @@ def _special_pages():
     if division is not None:
         division_ns = division._get_admin_namespace()
         division_args = division.url_names["edit"].args
-        add("scorers", lambda: _reverse("%s:scorers" % division_ns, division_args))
+        add("scorers", lambda: _reverse(f"{division_ns}:scorers", division_args))
         add(
             "bulk-division",
-            lambda: _reverse("%s:bulk" % division_ns, division_args[:-1]),
+            lambda: _reverse(f"{division_ns}:bulk", division_args[:-1]),
         )
         add(
             "bulk-team",
-            lambda: _reverse("%s:bulk" % Team()._get_admin_namespace(), division_args),
+            lambda: _reverse(f"{Team()._get_admin_namespace()}:bulk", division_args),
         )
 
     club = Club.objects.filter(teams__division__season=season).order_by("pk").first()
@@ -454,12 +456,12 @@ def _special_pages():
         club_ns = club._get_admin_namespace()
         add(
             "officials",
-            lambda: _reverse("%s:officials" % club_ns, [club.pk, season.pk]),
+            lambda: _reverse(f"{club_ns}:officials", [club.pk, season.pk]),
         )
         add(
             "registration-form",
             lambda: _reverse(
-                "%s:registration-form" % club_ns, [club.pk, season.pk, "html"]
+                f"{club_ns}:registration-form", [club.pk, season.pk, "html"]
             ),
         )
         person = club.members.order_by("last_name", "first_name", "pk").first()
@@ -467,7 +469,7 @@ def _special_pages():
             person_ns = person._get_admin_namespace()
             add(
                 "person-merge",
-                lambda: _reverse("%s:merge" % person_ns, person.url_names["edit"].args),
+                lambda: _reverse(f"{person_ns}:merge", person.url_names["edit"].args),
             )
         else:
             leave_out("person-merge", "the club has no person to merge")
@@ -481,11 +483,11 @@ def _special_pages():
     for variant in ("teams", "matches"):
         if variant in variants:
             candidate = variants[variant]
-            add("progress-%s" % variant, lambda: str(candidate.urls["progress"]))
+            add(f"progress-{variant}", lambda: str(candidate.urls["progress"]))
         else:
             leave_out(
-                "progress-%s" % variant,
-                "no stage in the season gives the progress %s page" % variant,
+                f"progress-{variant}",
+                f"no stage in the season gives the progress {variant} page",
             )
 
     match = pick(Match)
@@ -494,7 +496,7 @@ def _special_pages():
         add("referees", lambda: str(match.urls["referees"]))
         add(
             "detail",
-            lambda: _reverse("%s:detail" % match_ns, match.url_names["edit"].args),
+            lambda: _reverse(f"{match_ns}:detail", match.url_names["edit"].args),
         )
 
     return pages, skipped
@@ -523,10 +525,10 @@ def discover() -> dict:
     names = Counter(page["name"] for page in pages)
     duplicates = sorted(name for name, count in names.items() if count > 1)
     if duplicates:
-        raise ValueError("page names are not unique: %s" % ", ".join(duplicates))
+        raise ValueError(f"page names are not unique: {', '.join(duplicates)}")
     wrong = [page["url"] for page in pages if not page["url"].startswith("/admin/")]
     if wrong:
-        raise ValueError("pages outside /admin/: %s" % ", ".join(wrong))
+        raise ValueError(f"pages outside /admin/: {', '.join(wrong)}")
     return {"pages": pages, "skipped": skipped}
 
 
@@ -538,9 +540,7 @@ def main(argv: list[str]) -> int:
         prefix = database_name("x").removesuffix("x")
         db = settings.DATABASES["default"]["NAME"]
         if not db.startswith(prefix):
-            print(
-                "pages: pass the name, the database is called %s" % db, file=sys.stderr
-            )
+            print(f"pages: pass the name, the database is called {db}", file=sys.stderr)
             return 64
         name = normalise(db[len(prefix) :])
 
@@ -549,7 +549,7 @@ def main(argv: list[str]) -> int:
     target.mkdir(parents=True, exist_ok=True)
     (target / "pages.json").write_text(json.dumps(found, indent=2) + "\n")
     print(
-        "%d pages, %d skipped: %s"
-        % (len(found["pages"]), len(found["skipped"]), target / "pages.json")
+        f"{len(found['pages'])} pages, {len(found['skipped'])} skipped: "
+        f"{target / 'pages.json'}"
     )
     return 0

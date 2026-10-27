@@ -21,7 +21,7 @@ COMMANDS = {
 
 def main(argv: list[str]) -> int:
     if len(argv) < 1 or argv[0] not in COMMANDS:
-        print("usage: python -m harness %s" % "|".join(COMMANDS), file=sys.stderr)
+        print(f"usage: python -m harness {'|'.join(COMMANDS)}", file=sys.stderr)
         return 64
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "vitriolic.settings")
     django.setup()

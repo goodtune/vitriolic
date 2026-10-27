@@ -100,16 +100,13 @@ class PermissionForm(ModelForm):
         self.fields["groups"].widget.attrs.setdefault("class", "form-control")
 
     def __repr__(self):
-        return "<%s: %s?%s>" % (
-            self.__class__.__name__,
-            self.permission.codename,
-            urlencode(
-                {
-                    "staff_only": self.staff_only,
-                    "max_checkboxes": self.max_checkboxes,
-                }
-            ),
+        query = urlencode(
+            {
+                "staff_only": self.staff_only,
+                "max_checkboxes": self.max_checkboxes,
+            }
         )
+        return f"<{self.__class__.__name__}: {self.permission.codename}?{query}>"
 
     @cached_property
     def _users_with_perms(self):
@@ -188,7 +185,7 @@ def permissionformset_factory(
 
     meta = type("Meta", (), {"model": model, "fields": ("id",)})
     form_class = type(
-        "%sPermissionForm" % model.__name__,
+        f"{model.__name__}PermissionForm",
         (PermissionForm,),
         {
             "Meta": meta,
@@ -198,7 +195,7 @@ def permissionformset_factory(
     )
     formset_base = formset_factory(form_class)
     formset_class = type(
-        "%sPermissionFormSet" % model.__name__,
+        f"{model.__name__}PermissionFormSet",
         (PermissionFormSetMixin, formset_base),
         {},
     )

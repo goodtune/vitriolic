@@ -264,21 +264,22 @@ def date_pattern(day: datetime.date) -> re.Pattern:
     """
 
     def number(value: int) -> str:
-        return r"(?<!\d)0?%d(?!\d)" % value
+        return rf"(?<!\d)0?{value}(?!\d)"
 
     full, abbreviation = day.strftime("%B"), day.strftime("%b")
     names = {re.escape(full), re.escape(abbreviation) + r"\.?"}
     if day.month == 9:
         names.add(r"Sept\.?")
-    word = "(?:%s)" % "|".join(sorted(names))
+    word = f"(?:{'|'.join(sorted(names))})"
+    month, mday = number(day.month), number(day.day)
     forms = [
-        r"%d-%s-%s" % (day.year, number(day.month), number(day.day)),
-        r"%s\W+%s\W+%d" % (number(day.day), number(day.month), day.year),
-        r"%s\W+%s\W+%d" % (number(day.month), number(day.day), day.year),
-        r"%s\W+%s\W+%d" % (number(day.day), word, day.year),
-        r"%s\W+%s\W+%d" % (word, number(day.day), day.year),
+        rf"{day.year}-{month}-{mday}",
+        rf"{mday}\W+{month}\W+{day.year}",
+        rf"{month}\W+{mday}\W+{day.year}",
+        rf"{mday}\W+{word}\W+{day.year}",
+        rf"{word}\W+{mday}\W+{day.year}",
     ]
-    return re.compile("|".join("(?:%s)" % form for form in forms), re.I)
+    return re.compile("|".join(f"(?:{form})" for form in forms), re.I)
 
 
 def time_pattern(when: datetime.time) -> re.Pattern:
@@ -286,11 +287,11 @@ def time_pattern(when: datetime.time) -> re.Pattern:
     twelve = when.hour % 12 or 12
     meridiem = "a" if when.hour < 12 else "p"
     if when.minute:
-        clock = r"%d:%02d" % (twelve, when.minute)
+        clock = f"{twelve}:{when.minute:02d}"
     else:
-        clock = r"%d(?::00)?" % twelve
+        clock = f"{twelve}(?::00)?"
     return re.compile(
-        r"%02d:%02d|(?<!\d)%s\s*%s\.?m\.?" % (when.hour, when.minute, clock, meridiem),
+        rf"{when.hour:02d}:{when.minute:02d}|(?<!\d){clock}\s*{meridiem}\.?m\.?",
         re.I,
     )
 
@@ -326,21 +327,21 @@ class State:
     def direct(self, reason: str) -> None:
         self.reach("direct")
         self.notes.append(reason)
-        self.warnings.append("went direct: %s" % reason)
+        self.warnings.append(f"went direct: {reason}")
 
     def skip(self, reason: str) -> None:
         """Record something the errand cannot do in today's admin."""
-        self.notes.append("not exercised: %s" % reason)
-        self.warnings.append("not exercised: %s" % reason)
+        self.notes.append(f"not exercised: {reason}")
+        self.warnings.append(f"not exercised: {reason}")
 
     def workaround(self, reason: str) -> None:
         """Record a fault of today's admin that the errand steps around."""
-        self.notes.append("workaround: %s" % reason)
-        self.warnings.append("workaround: %s" % reason)
+        self.notes.append(f"workaround: {reason}")
+        self.warnings.append(f"workaround: {reason}")
 
     def name(self, text: str) -> str:
         """An invented name for an object: ``text`` and the run stamp."""
-        return "%s %s" % (text, self.stamp)
+        return f"{text} {self.stamp}"
 
     def date(self, days: int) -> datetime.date:
         return self.today + datetime.timedelta(days=days)
@@ -396,7 +397,8 @@ def each(locator: Locator) -> list[Locator]:
 
 def quoted(text: str) -> str:
     """``text`` as the value of an attribute selector."""
-    return '"%s"' % text.replace("\\", "\\\\").replace('"', '\\"')
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
 
 
 def aim(state: State, target: Locator, nav: bool = False) -> Locator:
@@ -425,7 +427,7 @@ def click(state: State, target: Locator, nav: bool = True) -> None:
 
 def visible_field(state: State, name: str) -> Locator:
     """The visible form field called ``name``."""
-    return state.page.locator("[name=%s]" % quoted(name)).filter(visible=True).first
+    return state.page.locator(f"[name={quoted(name)}]").filter(visible=True).first
 
 
 def fill_field(target: Locator, text: str, force: bool = False) -> None:
@@ -463,7 +465,7 @@ def type_date(
 
 def attach(state: State, name: str, picture) -> None:
     """Give the file field called ``name`` a picture (a Django ``ContentFile``)."""
-    target = state.page.locator('input[type="file"][name=%s]' % quoted(name))
+    target = state.page.locator(f'input[type="file"][name={quoted(name)}]')
     aim(state, target)
     target.set_input_files(
         {
@@ -480,7 +482,7 @@ def label_of(state: State, field: Locator) -> str:
     field_id = field.get_attribute("id")
     if not field_id:
         return ""
-    label = state.page.locator("label[for=%s]" % quoted(field_id)).first
+    label = state.page.locator(f"label[for={quoted(field_id)}]").first
     return " ".join(label.text_content().split()) if label.count() else ""
 
 
@@ -493,7 +495,7 @@ def choose(state: State, name: str, text: str) -> None:
     behind it is set and the step says so.
     """
     page = state.page
-    native = page.locator("select[name=%s]" % quoted(name)).first
+    native = page.locator(f"select[name={quoted(name)}]").first
     if native.is_visible():
         aim(state, native)
         label = native.locator("option", has_text=text).first.text_content()
@@ -519,8 +521,8 @@ def choose(state: State, name: str, text: str) -> None:
         values = [*chosen, value] if multiple else [value]
         native.select_option(value=values, force=True)
         state.workaround(
-            "the %s field is hidden behind a widget the flow cannot find by label "
-            "or role, so its select was set directly" % name
+            f"the {name} field is hidden behind a widget the flow cannot find by label "
+            "or role, so its select was set directly"
         )
         return
     aim(state, widget).click()
@@ -645,7 +647,7 @@ def see(state: State, text: str | re.Pattern, tab: str | None = None) -> None:
         in_text = page.get_by_text(text).filter(visible=True)
         if isinstance(text, re.Pattern):
             return in_text
-        in_field = page.locator("input[value=%s]" % quoted(text)).filter(visible=True)
+        in_field = page.locator(f"input[value={quoted(text)}]").filter(visible=True)
         return in_text.or_(in_field)
 
     if tab and shown().count() == 0:
@@ -663,13 +665,13 @@ def see(state: State, text: str | re.Pattern, tab: str | None = None) -> None:
         .evaluate_all("links => links.map(a => a.getAttribute('href'))")
     )
     for href in pages:
-        click(state, page.locator("a[href=%s]" % quoted(href)))
+        click(state, page.locator(f"a[href={quoted(href)}]"))
         try:
             shown().first.wait_for(state="visible", timeout=VISIBLE_MS)
             return
         except PlaywrightTimeout:
             continue
-    raise AssertionError("%r is not on %s" % (getattr(text, "pattern", text), page.url))
+    raise AssertionError(f"{getattr(text, 'pattern', text)!r} is not on {page.url}")
 
 
 def find_tab(state: State, key: str) -> Locator | None:
@@ -680,7 +682,7 @@ def find_tab(state: State, key: str) -> Locator | None:
     """
     page = state.page
     label = TAB_LABELS.get(key, key.replace("_", " ").capitalize())
-    name = re.compile(r"^[\W_]*%s\s*$" % re.escape(label), re.I)
+    name = re.compile(rf"^[\W_]*{re.escape(label)}\s*$", re.I)
     return first_visible(
         page.get_by_role("tab", name=name),
         page.get_by_role("tablist").get_by_role("link", name=name),
@@ -721,19 +723,19 @@ def open_tab(state: State, tab: str) -> None:
                 logger.debug("%s did not show on %s", target, page.url)
         return
     label = TAB_LABELS.get(tab, tab)
-    name = re.compile(r"^[\W_]*%s\s*$" % re.escape(label), re.I)
+    name = re.compile(rf"^[\W_]*{re.escape(label)}\s*$", re.I)
     hidden = page.get_by_role("link", name=name, include_hidden=True)
     for candidate in each(hidden):
         href = candidate.get_attribute("href") or ""
         if href and not href.startswith("#") and not href.startswith("javascript"):
             go_direct(
-                state, href, "no visible tab called %r (a link to %s)" % (label, href)
+                state, href, f"no visible tab called {label!r} (a link to {href})"
             )
             return
-    state.notes.append("the %r tab was not found" % label)
+    state.notes.append(f"the {label!r} tab was not found")
     state.warnings.append(
-        "could not open the %r pane: no tab, tablist link, anchor link or link "
-        "of that name" % label
+        f"could not open the {label!r} pane: no tab, tablist link, anchor link or "
+        "link of that name"
     )
 
 
@@ -763,14 +765,14 @@ def follow(state: State, suffix: str, reason: str, *, to: str | None = None) -> 
     link that is there but hidden) and says ``reason``.
     """
     page = state.page
-    visible = page.locator("a[href$=%s]" % quoted(suffix)).filter(visible=True)
+    visible = page.locator(f"a[href$={quoted(suffix)}]").filter(visible=True)
     if visible.count():
         click(state, pick_add(visible))
         return
     if to is None:
-        hidden = page.locator("a[href$=%s]" % quoted(suffix))
+        hidden = page.locator(f"a[href$={quoted(suffix)}]")
         if not hidden.count():
-            raise AssertionError("no link to %s on %s" % (suffix, page.url))
+            raise AssertionError(f"no link to {suffix} on {page.url}")
         to = hidden.first.get_attribute("href")
     go_direct(state, to, reason)
 
@@ -807,8 +809,8 @@ def open_menu(state: State, component: str, href: str) -> None:
 
     def item() -> Locator | None:
         return first_visible(
-            page.get_by_role("navigation").locator("a[href=%s]" % quoted(href)),
-            page.locator("a[href=%s]" % quoted(href)),
+            page.get_by_role("navigation").locator(f"a[href={quoted(href)}]"),
+            page.locator(f"a[href={quoted(href)}]"),
         )
 
     target = (
@@ -818,8 +820,8 @@ def open_menu(state: State, component: str, href: str) -> None:
         go_direct(
             state,
             href,
-            "no menu entry called %r (looked for a link, a button and text)"
-            % component,
+            f"no menu entry called {component!r} "
+            "(looked for a link, a button and text)",
         )
         return
     click(state, target)
@@ -829,7 +831,7 @@ def open_menu(state: State, component: str, href: str) -> None:
         click(state, target)
         found = item()
     if found is None:
-        go_direct(state, href, "the %r menu has no link to %s" % (component, href))
+        go_direct(state, href, f"the {component!r} menu has no link to {href}")
         return
     click(state, found)
 
@@ -849,14 +851,14 @@ def open_named(state: State, name: str, url_key: str | None = None) -> None:
         return
     noted = state.data.get(url_key) if url_key else None
     if noted:
-        go_direct(state, noted, "the page shows no link called %r" % name)
+        go_direct(state, noted, f"the page shows no link called {name!r}")
         return
-    raise AssertionError("no link called %r on %s" % (name, page.url))
+    raise AssertionError(f"no link called {name!r} on {page.url}")
 
 
 def person_label(state: State, first: str) -> str:
     """How a list prints a person the flow made: the last name first."""
-    return "%s, %s" % (state.name("Fairwind"), first)
+    return f"{state.name('Fairwind')}, {first}"
 
 
 def dialog_button(page: Page, names: re.Pattern) -> Locator | None:
@@ -899,7 +901,7 @@ def confirm(state: State, before: str) -> None:
 def expect_visible(locator: Locator, what: str) -> None:
     """Raise unless ``locator`` shows something."""
     if not locator.filter(visible=True).count():
-        raise AssertionError("%s is not shown" % what)
+        raise AssertionError(f"{what} is not shown")
 
 
 # --------------------------------------------------------------------------
@@ -946,9 +948,7 @@ def step_1_sign_in(page: Page, state: State) -> str:
     type_into(state, "password", PASSWORD)
     click(state, page.get_by_role("button", name="Sign in"))
     if path_of(page.url).startswith(LOGIN_PATH):
-        raise AssertionError(
-            "signing in as %s left the page at %s" % (USERNAME, page.url)
-        )
+        raise AssertionError(f"signing in as {USERNAME} left the page at {page.url}")
     return state.via
 
 
@@ -1022,13 +1022,13 @@ def step_3_season(page: Page, state: State) -> str:
         if edit is not None:
             click(state, edit, nav=False)
     for n, value in enumerate(VENUE_PLACE):
-        type_into(state, "latlng_%d" % n, value)
+        type_into(state, f"latlng_{n}", value)
     save(state)
     see(state, venue, "venues")
     open_named(state, venue)
     open_tab(state, "grounds")
     for letter in ("A", "B"):
-        ground = state.name("Field %s" % letter)
+        ground = state.name(f"Field {letter}")
         follow(state, "/ground/add/", "the Grounds tab has no link to add a ground")
         type_into(state, "title", ground)
         save(state)
@@ -1095,9 +1095,9 @@ def step_5_divisions_and_teams(page: Page, state: State) -> str:
     open_tab(state, "divisions")
     bulk_create(state, "Add several divisions", len(divisions), "division")
     for n, title in enumerate(divisions):
-        type_into(state, "form-%d-title" % n, title)
-        type_into(state, "form-%d-forfeit_for_score" % n, "5")
-        type_into(state, "form-%d-forfeit_against_score" % n, "0")
+        type_into(state, f"form-{n}-title", title)
+        type_into(state, f"form-{n}-forfeit_for_score", "5")
+        type_into(state, f"form-{n}-forfeit_against_score", "0")
     save(state)
     for title in divisions:
         see(state, title, "divisions")
@@ -1109,7 +1109,7 @@ def step_5_divisions_and_teams(page: Page, state: State) -> str:
         "result for it fails with a 500 (calc.parse(None)); one is set first"
     )
     for n, points in enumerate(("3", "2", "1")):
-        type_into(state, "points_formula_%d" % n, points)
+        type_into(state, f"points_formula_{n}", points)
     save(state)
     see(state, divisions[0], "divisions")
     open_division(state)
@@ -1122,8 +1122,8 @@ def step_5_divisions_and_teams(page: Page, state: State) -> str:
     bulk_create(state, "Add several teams", len(names), "team")
     clubs = [state.data["club_a"]] * 2 + [state.data["club_b"]] * 2
     for n, (title, club) in enumerate(zip(names, clubs)):
-        choose(state, "form-%d-club" % n, club)
-        type_into(state, "form-%d-title" % n, title)
+        choose(state, f"form-{n}-club", club)
+        type_into(state, f"form-{n}-title", title)
     save(state)
     for title in names:
         see(state, title, "teams")
@@ -1163,16 +1163,13 @@ def bulk_create(state: State, title: str, count: int, segment: str) -> None:
             if go is not None:
                 click(state, go)
                 return
-    add = page.locator("a[href$=%s]" % quoted("/%s/add/" % segment))
+    add = page.locator(f"a[href$={quoted(f'/{segment}/add/')}]")
     if not add.count():
         raise AssertionError(
-            "no control called %r and no link to add a %s on %s"
-            % (title, segment, page.url)
+            f"no control called {title!r} and no link to add a {segment} on {page.url}"
         )
     bulk = add.first.get_attribute("href")[: -len("add/")] + "bulk/"
-    go_direct(
-        state, "%s?count=%d" % (bulk, count), "no way to ask for several: %s" % title
-    )
+    go_direct(state, f"{bulk}?count={count}", f"no way to ask for several: {title}")
 
 
 def step_6_draw(page: Page, state: State) -> str:
@@ -1254,8 +1251,8 @@ def open_day(state: State, page_name: str) -> None:
     open_tab(state, "schedule")
     follow(
         state,
-        "/%s/%s/" % (match_day(state), page_name),
-        "the Schedule tab has no link to the day's %s page" % page_name,
+        f"/{match_day(state)}/{page_name}/",
+        f"the Schedule tab has no link to the day's {page_name} page",
     )
 
 
@@ -1267,23 +1264,23 @@ def step_7_schedule(page: Page, state: State) -> str:
     # used: a time and a ground for each of the day's matches.
     open_day(state, "schedule")
     for n, (ground, kick_off) in enumerate(ALLOCATIONS):
-        choose(state, "form-%d-time" % n, kick_off)
-        choose(state, "form-%d-play_at" % n, state.name(ground))
+        choose(state, f"form-{n}-time", kick_off)
+        choose(state, f"form-{n}-play_at", state.name(ground))
     save(state)
     see(state, "saved")
     # What was saved is read back from the form it came from.
     open_day(state, "schedule")
     for n, (ground, kick_off) in enumerate(ALLOCATIONS):
-        kept_time = page.locator('select[name="form-%d-time"]' % n).evaluate(
+        kept_time = page.locator(f'select[name="form-{n}-time"]').evaluate(
             SELECTED_TEXT_SCRIPT
         )
-        kept_ground = page.locator('select[name="form-%d-play_at"]' % n).evaluate(
+        kept_ground = page.locator(f'select[name="form-{n}-play_at"]').evaluate(
             SELECTED_TEXT_SCRIPT
         )
         if kick_off not in kept_time:
-            raise AssertionError("form-%d-time kept %r" % (n, kept_time))
+            raise AssertionError(f"form-{n}-time kept {kept_time!r}")
         if state.name(ground) not in kept_ground:
-            raise AssertionError("form-%d-play_at kept %r" % (n, kept_ground))
+            raise AssertionError(f"form-{n}-play_at kept {kept_ground!r}")
     return state.via
 
 
@@ -1291,8 +1288,8 @@ def step_8_results(page: Page, state: State) -> str:
     open_day(state, "results")
     scores = ((7, 3), (4, 6))
     for n, (home, away) in enumerate(scores):
-        type_into(state, "matches-%d-home_team_score" % n, str(home))
-        type_into(state, "matches-%d-away_team_score" % n, str(away))
+        type_into(state, f"matches-{n}-home_team_score", str(home))
+        type_into(state, f"matches-{n}-away_team_score", str(away))
     save(state)
     see(state, "saved")
     # The division page carries no ladder today, so the saved scores are
@@ -1304,11 +1301,9 @@ def step_8_results(page: Page, state: State) -> str:
     open_day(state, "results")
     for n, (home, away) in enumerate(scores):
         for name, score in (("home", home), ("away", away)):
-            field_name = "matches-%d-%s_team_score" % (n, name)
-            if page.locator("[name=%s]" % quoted(field_name)).input_value() != str(
-                score
-            ):
-                raise AssertionError("%s did not keep %s" % (field_name, score))
+            field_name = f"matches-{n}-{name}_team_score"
+            if page.locator(f"[name={quoted(field_name)}]").input_value() != str(score):
+                raise AssertionError(f"{field_name} did not keep {score}")
     return state.via
 
 
@@ -1371,7 +1366,7 @@ def step_10_content(page: Page, state: State) -> str:
     label = state.name("Flow old fixtures")
     open_menu(state, "Content", REDIRECTS)
     follow(state, "/redirect/create/", "the list has no link to add a redirect")
-    type_into(state, "source_url", "/flow-old-fixtures-%s/" % state.stamp)
+    type_into(state, "source_url", f"/flow-old-fixtures-{state.stamp}/")
     type_into(state, "destination_url", "/")
     type_into(state, "label", label)
     save(state)
@@ -1394,7 +1389,7 @@ def step_11_enrolment(page: Page, state: State) -> str:
     teacher_last = state.name("Marlowe")
     class_group = state.data["class"] = state.name("Fc")
     # The lists print a class with its year, and an enrolment with the class.
-    class_label = state.data["class_label"] = "%s (%s)" % (class_group, year)
+    class_label = state.data["class_label"] = f"{class_group} ({year})"
 
     open_menu(state, "Enrolment", ENROLMENT_YEARS)
     follow(state, "/year/add/", "the list has no link to add a school year")
@@ -1444,7 +1439,7 @@ def step_11_enrolment(page: Page, state: State) -> str:
         # The list is long and the new student is not on its first page.
         search(state, last)
         see(state, last)
-        students.append("%s %s" % (first, last))
+        students.append(f"{first} {last}")
     state.data["students"] = students
 
     open_class(state)
@@ -1457,9 +1452,9 @@ def step_11_enrolment(page: Page, state: State) -> str:
         )
         choose(state, "student", student)
         save(state)
-        see(state, "%s in %s" % (student, class_label), "enrolments")
+        see(state, f"{student} in {class_label}", "enrolments")
 
-    open_named(state, "%s in %s" % (students[0], class_label), "enrolment_url")
+    open_named(state, f"{students[0]} in {class_label}", "enrolment_url")
     state.data["enrolment_url"] = path_of(page.url)
     open_tab(state, "attendance")
     follow(state, "/attendance/add/", "the Attendance tab has no link to add a record")
@@ -1479,8 +1474,8 @@ def step_11_enrolment(page: Page, state: State) -> str:
     marks = (16, 18)
     for student, mark in zip(students, marks):
         open_named(state, assessment)
-        choose(state, "formset-%d-enrolment" % scored(state), student)
-        type_into(state, "formset-%d-mark" % scored(state), str(mark))
+        choose(state, f"formset-{scored(state)}-enrolment", student)
+        type_into(state, f"formset-{scored(state)}-mark", str(mark))
         save(state)
         state.data["scores"] = scored(state) + 1
     # Every mark entered is on the assessment when it is opened again.
@@ -1491,7 +1486,7 @@ def step_11_enrolment(page: Page, state: State) -> str:
     for mark in marks:
         if not any(value.split(".")[0] == str(mark) for value in kept):
             raise AssertionError(
-                "the mark %d was not kept (the form shows %s)" % (mark, kept)
+                f"the mark {mark} was not kept (the form shows {kept})"
             )
 
     open_enrolment(state)
@@ -1514,7 +1509,7 @@ def scored(state: State) -> int:
 
 def attendance_record(state: State) -> str:
     """How a list prints the attendance record the flow made."""
-    return "%s: present" % state.date(0).isoformat()
+    return f"{state.date(0).isoformat()}: present"
 
 
 def open_class(state: State) -> None:
@@ -1534,7 +1529,7 @@ def open_enrolment(state: State) -> None:
         open_tab(state, "enrolments")
         open_named(
             state,
-            "%s in %s" % (state.data["students"][0], state.data["class_label"]),
+            f"{state.data['students'][0]} in {state.data['class_label']}",
             "enrolment_url",
         )
 
@@ -1567,7 +1562,7 @@ def step_12_delete_attendance(page: Page, state: State) -> str:
     click(state, target)
     confirm(state, before)
     if not at(state, "enrolment_url"):
-        raise AssertionError("the delete went to %s, not the enrolment" % page.url)
+        raise AssertionError(f"the delete went to {page.url}, not the enrolment")
     open_tab(state, "attendance")
     if page.get_by_text(record).filter(visible=True).count():
         raise AssertionError("the attendance record is still listed")
@@ -1588,7 +1583,7 @@ def step_13_sign_out(page: Page, state: State) -> str:
     else:
         sign_out_direct(state)
     if not path_of(page.url).startswith(LOGIN_PATH):
-        raise AssertionError("signing out left the page at %s" % page.url)
+        raise AssertionError(f"signing out left the page at {page.url}")
     page.get_by_role("button", name="Sign in").wait_for(
         state="visible", timeout=VISIBLE_MS
     )
@@ -1644,7 +1639,7 @@ def failed_shot(page: Page, width: int) -> str:
     """A picture of the page a step failed on, beside the video."""
     try:
         directory = Path(page.video.path()).parent
-        name = "flow-%d-failed.png" % width
+        name = f"flow-{width}-failed.png"
         page.screenshot(path=str(directory / name))
         return name
     except (PlaywrightError, OSError, AttributeError):
@@ -1705,19 +1700,18 @@ def run(
             returned = step(page, state)
         except Exception as exc:  # noqa: BLE001 - every failure is recorded
             crashed = True
-            errors.append(
-                "%s: %s" % (type(exc).__name__, " ".join(str(exc).split("\n", 4)[:4]))
-            )
+            summary = " ".join(str(exc).split("\n", 4)[:4])
+            errors.append(f"{type(exc).__name__}: {summary}")
             file = failed_shot(page, width)
         if not crashed and returned != state.via:
             errors.append(
-                "the step reported %r but its moves needed %r" % (returned, state.via)
+                f"the step reported {returned!r} but its moves needed {state.via!r}"
             )
         raised, warnings = collector.drain()
         for message in raised:
             known = known_page_error(message)
             if known:
-                warnings.append("%s (%s)" % (known, message))
+                warnings.append(f"{known} ({message})")
             else:
                 errors.append(message)
         result = StepResult(
@@ -1735,12 +1729,12 @@ def run(
         manifest.flow.append(result)
         if checkpoint:
             checkpoint()
+        failed = " FAILED" if errors else ""
         print(
-            "flow %d %s %s%s (%.1f s)"
-            % (width, name, result.via, " FAILED" if errors else "", result.duration),
+            f"flow {width} {name} {result.via}{failed} ({result.duration:.1f} s)",
             flush=True,
         )
         for message in errors:
-            print("    error: %s" % message, flush=True)
+            print(f"    error: {message}", flush=True)
         if crashed:
             break

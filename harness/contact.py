@@ -86,15 +86,13 @@ def main(argv: list[str]) -> int:
 
     files = sorted(
         p
-        for p in args.run_dir.glob("*-%d.png" % args.width)
+        for p in args.run_dir.glob(f"*-{args.width}.png")
         if not p.name.startswith("contact-")
     )
     if not files:
-        print(
-            "contact: no *-%d.png in %s" % (args.width, args.run_dir), file=sys.stderr
-        )
+        print(f"contact: no *-{args.width}.png in {args.run_dir}", file=sys.stderr)
         return 1
-    out = args.out or args.run_dir / ("contact-%d.png" % args.width)
+    out = args.out or args.run_dir / f"contact-{args.width}.png"
     sheet(files, out, args.columns, args.tile_width, args.max_tile_height)
     print(out)
     return 0
