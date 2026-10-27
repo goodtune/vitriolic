@@ -68,8 +68,8 @@ For example, `touchtechnology/admin/edit.related.html` is now
 `touchtechnology/admin/explorer/edit.related.html`. Two more changed:
 
 - The `mvp` list templates were renamed. See "The `mvp` names are gone" below.
-- `touchtechnology/admin/_version.html` is gone. `{% version_string %}` now
-  returns the text itself.
+- `touchtechnology/admin/_version.html` is gone. See "The `version_string` tag
+  is gone" below.
 
 The pages of the components moved in the same way. The template base of a
 component is the folder of its admin pages, such as
@@ -354,3 +354,16 @@ Pillow removed, so it raised `AttributeError` the first time it ran. No field
 in this library used it. A project that imported it must make its resized
 copies with Pillow itself, for example `Image.thumbnail` with
 `Image.Resampling.LANCZOS`.
+
+## The `version_string` tag is gone
+
+The `admin` template library no longer has `{% version_string %}`, and
+`Application` no longer has a `version` property. Both looked for a
+`__version__` attribute that no package in this library defines. So
+`version` always returned the name of the application and nothing more, and
+logged a warning for each module it looked in. When the tag had no component,
+it raised `AttributeError`. No template in this library used them.
+
+To show the installed version, use the `{% version %}` tag from the `common`
+library, for example `{% version "vitriolic" %}`, or call
+`importlib.metadata.version("vitriolic")` in Python.
