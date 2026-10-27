@@ -354,7 +354,7 @@ class UpstreamPlaceholderPageTests(TestCase):
         """
         with self.login(self.superuser):
             self.get(PROGRESS, *self.progress_args)
-        self.response_410()
+        self.assert_http_410_gone()
 
     def test_progression_page_lists_only_what_can_be_progressed(self):
         """
