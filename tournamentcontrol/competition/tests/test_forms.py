@@ -179,7 +179,7 @@ class TeamFormTests(TestCase):
         self.assertFormError(
             form,
             "text",
-            ["Draw formula is invalid: line(s) '1' are not in the correct format."],
+            ["Draw formula is invalid: line(s) '2' are not in the correct format."],
         )
 
     def test_drawformat_invalid_lines_are_listed_in_order(self):
@@ -187,7 +187,7 @@ class TeamFormTests(TestCase):
         form = DrawFormatForm(
             data={
                 "name": "Test Draw Format",
-                # Lines 1, 4 and 8 are wrong; a set of them iterates 8, 1, 4.
+                # Lines 2, 5 and 9 are wrong; a set of them iterates 9, 2, 5.
                 "text": (
                     "ROUND\n1: 1v2\n2: 3 vs 4\n"
                     "ROUND\n3: 1 v 3\n4: 2 vs 4\n5: 1 vs 4\n"
@@ -201,7 +201,7 @@ class TeamFormTests(TestCase):
             form,
             "text",
             [
-                "Draw formula is invalid: line(s) '1, 4, 8' are not in the correct "
+                "Draw formula is invalid: line(s) '2, 5, 9' are not in the correct "
                 "format."
             ],
         )
@@ -237,12 +237,13 @@ class DivisionStructureJSONFormTests(TestCase):
         )
 
     def test_match_before_a_round_is_refused(self):
+        "The first line of the format is line 1 (#565)."
         form = self.form(pool="1: 1 vs 2\nROUND\n2: 2 vs 1", final="ROUND\n1: P1 vs P2")
         self.assertEqual(
             form.errors,
             {
                 "json_data": [
-                    "Draw format 'pool': Draw formula is invalid: line(s) '0' are "
+                    "Draw format 'pool': Draw formula is invalid: line(s) '1' are "
                     "not in the correct format."
                 ]
             },
@@ -266,7 +267,7 @@ class DivisionStructureJSONFormTests(TestCase):
             form.errors,
             {
                 "json_data": [
-                    "Draw format 'pool': Draw formula is invalid: line(s) '0' are "
+                    "Draw format 'pool': Draw formula is invalid: line(s) '1' are "
                     "not in the correct format.",
                     "Draw format 'final': Draw formula is invalid: it has no ROUND "
                     "line.",
