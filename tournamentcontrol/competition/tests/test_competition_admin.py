@@ -454,8 +454,8 @@ class ReorderTests(MessagesTestMixin, ArrowMixin, BaseTestCase):
         # A deleted stage leaves a gap: the neighbour is the next stage in
         # the list, whatever its number.
         pool_play, semi_finals, finals = self.stages
-        Stage.objects.filter(pk=semi_finals.pk).update(order=3)
         Stage.objects.filter(pk=finals.pk).update(order=5)
+        Stage.objects.filter(pk=semi_finals.pk).update(order=3)
         with self.login(self.superuser):
             self.post("admin:fixja:reorder", "stage:division", semi_finals.pk, "down")
             self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")
@@ -466,8 +466,8 @@ class ReorderTests(MessagesTestMixin, ArrowMixin, BaseTestCase):
 
     def test_a_stage_moves_up_past_a_gap_in_the_order(self):
         pool_play, semi_finals, finals = self.stages
-        Stage.objects.filter(pk=semi_finals.pk).update(order=3)
         Stage.objects.filter(pk=finals.pk).update(order=5)
+        Stage.objects.filter(pk=semi_finals.pk).update(order=3)
         with self.login(self.superuser):
             self.post("admin:fixja:reorder", "stage:division", semi_finals.pk, "up")
             self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")

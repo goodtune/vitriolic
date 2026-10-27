@@ -145,7 +145,7 @@ class MigrationTests(TransactionTestCase):
     """
 
     migrate_from = [("competition", "0069_list_ordering")]
-    migrate_to = [("competition", "0070_unique_order")]
+    migrate_to = [("competition", "0071_unique_order")]
 
     def test_rows_sharing_an_order_are_renumbered(self):
         executor = MigrationExecutor(connection)
