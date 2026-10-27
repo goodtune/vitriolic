@@ -2,6 +2,7 @@
 Tests for YouTube thumbnail management functionality.
 """
 
+import base64
 import io
 from unittest.mock import patch
 
@@ -23,6 +24,7 @@ class MediaMemoryUploadTestCase(TestCase):
     """Test the MediaMemoryUpload class."""
 
     def setUp(self):
+        super().setUp()
         self.image_data = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB`\x82"
         self.mimetype = "image/png"
 
@@ -34,15 +36,15 @@ class MediaMemoryUploadTestCase(TestCase):
 
         self.assertEqual(upload.mimetype(), self.mimetype)
         self.assertEqual(upload.size(), len(self.image_data))
-        self.assertFalse(upload.resumable())
-        self.assertTrue(upload.has_stream())
+        self.assertIs(upload.resumable(), False)
+        self.assertIs(upload.has_stream(), True)
 
     @patch("magic.from_buffer")
     def test_media_memory_upload_resumable(self, mock_magic):
         """Test creating resumable MediaMemoryUpload."""
         mock_magic.return_value = self.mimetype
         upload = MediaMemoryUpload(self.image_data, resumable=True)
-        self.assertTrue(upload.resumable())
+        self.assertIs(upload.resumable(), True)
 
     @patch("magic.from_buffer")
     def test_getbytes(self, mock_magic):
@@ -64,7 +66,6 @@ class MediaMemoryUploadTestCase(TestCase):
         mock_magic.return_value = "image/png"
         upload = MediaMemoryUpload(self.image_data)
 
-        self.assertIsNotNone(upload)
         self.assertEqual(upload.mimetype(), "image/png")
         mock_magic.assert_called_once_with(self.image_data, mime=True)
 
@@ -73,6 +74,7 @@ class SeasonThumbnailTestCase(TestCase):
     """Test Season thumbnail functionality."""
 
     def setUp(self):
+        super().setUp()
         self.season = SeasonFactory()
         self.image_data = b"fake image data"
         self.mimetype = "image/jpeg"
@@ -95,7 +97,6 @@ class SeasonThumbnailTestCase(TestCase):
 
         upload = self.season.get_thumbnail_media_upload()
 
-        self.assertIsNotNone(upload)
         self.assertIsInstance(upload, MediaMemoryUpload)
         self.assertEqual(upload.mimetype(), self.mimetype)
 
@@ -110,6 +111,7 @@ class MatchThumbnailTestCase(TestCase):
     """Test Match thumbnail functionality."""
 
     def setUp(self):
+        super().setUp()
         self.season = SeasonFactory()
         self.match = MatchFactory(stage__division__season=self.season)
         self.image_data = b"fake image data"
@@ -127,7 +129,7 @@ class MatchThumbnailTestCase(TestCase):
 
         upload = self.match.get_thumbnail_media_upload()
 
-        self.assertIsNotNone(upload)
+        self.assertIsInstance(upload, MediaMemoryUpload)
         self.assertEqual(upload.mimetype(), self.mimetype)
         self.assertEqual(upload.size(), len(self.image_data))
 
@@ -143,7 +145,7 @@ class MatchThumbnailTestCase(TestCase):
         # Match has no thumbnail
         upload = self.match.get_thumbnail_media_upload()
 
-        self.assertIsNotNone(upload)
+        self.assertIsInstance(upload, MediaMemoryUpload)
         self.assertEqual(upload.mimetype(), self.season_mimetype)
         self.assertEqual(upload.size(), len(self.season_image_data))
 
@@ -185,6 +187,7 @@ class ThumbnailPreviewTestCase(TestCase):
     """Test PIL-based thumbnail preview functionality."""
 
     def setUp(self):
+        super().setUp()
         # Create a small test image
         self.test_image = Image.new("RGB", (100, 100), color="red")
         self.image_buffer = io.BytesIO()
@@ -197,18 +200,19 @@ class ThumbnailPreviewTestCase(TestCase):
         self.large_image.save(self.large_buffer, format="JPEG")
         self.large_image_data = self.large_buffer.getvalue()
 
+    def assertJPEGDataURL(self, result):
+        """The data URL is the preview's bytes as a base64 JPEG."""
+        encoded = base64.b64encode(result.image_data).decode()
+        self.assertEqual(result.to_data_url(), f"data:image/jpeg;base64,{encoded}")
+        self.assertEqual(Image.open(io.BytesIO(result.image_data)).format, "JPEG")
+
     def test_create_thumbnail_preview_success(self):
         """Test successful creation of thumbnail preview."""
         result = create_thumbnail_preview(self.image_data)
 
-        self.assertIsNotNone(result.image_data)
         self.assertIsInstance(result.image_data, bytes)
         self.assertEqual(result.original_mime_type, "image/png")
-
-        # Test data URL generation
-        data_url = result.to_data_url()
-        self.assertIsNotNone(data_url)
-        self.assertTrue(data_url.startswith("data:image/jpeg;base64,"))
+        self.assertJPEGDataURL(result)
 
     def test_create_thumbnail_preview_large_image(self):
         """Test thumbnail preview creation with large image."""
@@ -216,14 +220,9 @@ class ThumbnailPreviewTestCase(TestCase):
             self.large_image_data, max_width=640, max_height=480
         )
 
-        self.assertIsNotNone(result.image_data)
         self.assertIsInstance(result.image_data, bytes)
         self.assertEqual(result.original_mime_type, "image/jpeg")
-
-        # Test data URL generation
-        data_url = result.to_data_url()
-        self.assertIsNotNone(data_url)
-        self.assertTrue(data_url.startswith("data:image/jpeg;base64,"))
+        self.assertJPEGDataURL(result)
 
         # Verify the preview is smaller than original
         self.assertLess(len(result.image_data), len(self.large_image_data))
@@ -239,22 +238,16 @@ class ThumbnailPreviewTestCase(TestCase):
 
         result = create_thumbnail_preview(rgba_data)
 
-        self.assertIsNotNone(result.image_data)
         self.assertIsInstance(result.image_data, bytes)
         self.assertEqual(result.original_mime_type, "image/png")
-
-        # Test data URL generation
-        data_url = result.to_data_url()
-        self.assertIsNotNone(data_url)
-        self.assertTrue(data_url.startswith("data:image/jpeg;base64,"))
+        self.assertJPEGDataURL(result)
+        self.assertEqual(Image.open(io.BytesIO(result.image_data)).mode, "RGB")
 
     def test_create_thumbnail_preview_custom_quality(self):
         """Test thumbnail creation with custom quality settings."""
         result_high = create_thumbnail_preview(self.image_data, quality=95)
         result_low = create_thumbnail_preview(self.image_data, quality=50)
 
-        self.assertIsNotNone(result_high.image_data)
-        self.assertIsNotNone(result_low.image_data)
         self.assertIsInstance(result_high.image_data, bytes)
         self.assertIsInstance(result_low.image_data, bytes)
         # Lower quality should result in smaller file
@@ -282,12 +275,8 @@ class ThumbnailPreviewTestCase(TestCase):
 
         result = create_thumbnail_preview(wide_data, max_width=640, max_height=480)
 
-        self.assertIsNotNone(result.image_data)
         self.assertIsInstance(result.image_data, bytes)
-
-        # Test data URL generation
-        data_url = result.to_data_url()
-        self.assertIsNotNone(data_url)
+        self.assertJPEGDataURL(result)
 
         # Now we can easily verify the actual dimensions by decoding the image data
         result_image = Image.open(io.BytesIO(result.image_data))

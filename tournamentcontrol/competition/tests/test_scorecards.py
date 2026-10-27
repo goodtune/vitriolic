@@ -11,7 +11,7 @@ from celery import states
 from celery.exceptions import TaskRevokedError
 from celery.result import AsyncResult
 from django.test import override_settings
-from django.urls import reverse
+from django.urls import resolve, reverse
 from test_plus import TestCase
 
 from touchtechnology.admin.shells import DEFAULT_SHELL, get_shell
@@ -136,17 +136,24 @@ class ScorecardTestCase(TestCase):
         self.assertIn("<html", self.prince.call_args.args[0])
         self.assertEqual(self.prince.call_args.kwargs, kwargs)
 
-    def assertRedirectsToAsyncResult(self):
-        self.response_302()
-        prefix = reverse(
-            "admin:fixja:competition:season:scorecards-async",
-            kwargs={
-                "competition_id": self.competition.pk,
-                "season_id": self.season.pk,
-                "result_id": "result",
-            },
-        ).replace("result.pdf", "")
-        self.assertTrue(self.last_response["Location"].startswith(prefix))
+    def assertRedirectsToAsyncResult(
+        self, url_name="admin:fixja:competition:season:scorecards-async"
+    ):
+        """
+        The response redirects to the page that polls for this season's
+        result. The task id is generated, so it is read back from the URL.
+        """
+        result_id = resolve(self.last_response.url).kwargs["result_id"]
+        self.assert_http_302_found(
+            url=reverse(
+                url_name,
+                kwargs={
+                    "competition_id": self.competition.pk,
+                    "season_id": self.season.pk,
+                    "result_id": result_id,
+                },
+            )
+        )
 
     def capture_context(self):
         """
@@ -208,7 +215,7 @@ class DateScorecardTests(ScorecardTestCase):
                 "20170213",
                 "html",
             )
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertIn("<html", self.last_response.content.decode("utf8"))
         self.prince.assert_not_called()
 
@@ -257,7 +264,7 @@ class StageScorecardTests(ScorecardTestCase):
                 self.stage.pk,
                 "html",
             )
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertIn("<html", self.last_response.content.decode("utf8"))
         self.prince.assert_not_called()
 
@@ -306,7 +313,7 @@ class AsyncResultViewTests(PdfFailedAssertions, ScorecardTestCase):
         self.remove_pending_result.assert_not_called()
 
     def assertWaiting(self):
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertResponseHeaders({"Refresh": str(SCORECARD_PDF_WAIT)})
         self.assertResponseContains(
             by_shell(
@@ -319,8 +326,8 @@ class AsyncResultViewTests(PdfFailedAssertions, ScorecardTestCase):
 
     def test_ready(self):
         self.poll(states.SUCCESS, base64.b64encode(FAKE_PDF).decode("utf8"))
-        self.response_200()
-        self.assertEqual(self.last_response["Content-Type"], "application/pdf")
+        self.assert_http_200_ok()
+        self.assertResponseHeaders({"Content-Type": "application/pdf"})
         self.assertEqual(self.last_response.content, FAKE_PDF)
         self.assertNoAsyncResult()
 
@@ -406,7 +413,6 @@ class QueuePdfTaskTests(ScorecardTestCase):
         self.on_task_call = self.start_patch(patch.object(app.backend, "on_task_call"))
 
     def assertQueuedWithoutSubscribing(self, task):
-        self.response_302()
         self.send_task_message.assert_called_once()
         self.assertEqual(self.send_task_message.call_args.args[1], task.name)
         self.on_task_call.assert_not_called()
@@ -426,7 +432,7 @@ class QueuePdfTaskTests(ScorecardTestCase):
     def test_scorecard_report_wizard(self):
         with self.login(self.superuser):
             self.get("admin:fixja:scorecard-report")
-            self.response_200()
+            self.assert_http_200_ok()
             self.post(
                 "admin:fixja:scorecard-report",
                 data={
@@ -434,7 +440,7 @@ class QueuePdfTaskTests(ScorecardTestCase):
                     "0-season": self.season.pk,
                 },
             )
-            self.response_200()
+            self.assert_http_200_ok()
             self.post(
                 "admin:fixja:scorecard-report",
                 data={
@@ -454,6 +460,7 @@ class QueuePdfTaskTests(ScorecardTestCase):
                 self.season.pk,
                 "pdf",
             )
+        self.assertRedirectsToAsyncResult("admin:fixja:competition:season:grid-async")
         self.assertQueuedWithoutSubscribing(generate_pdf_grid)
 
 
@@ -827,7 +834,7 @@ class ScorecardReportWizardTests(ScorecardTestCase):
     def run_wizard(self, mode):
         with self.login(self.superuser):
             self.get(self.url)
-            self.response_200()
+            self.assert_http_200_ok()
             self.post(
                 self.url,
                 data={
@@ -835,7 +842,7 @@ class ScorecardReportWizardTests(ScorecardTestCase):
                     "0-season": self.season.pk,
                 },
             )
-            self.response_200()
+            self.assert_http_200_ok()
             self.post(
                 self.url,
                 data={
@@ -858,7 +865,7 @@ class ScorecardReportWizardTests(ScorecardTestCase):
     def test_html(self):
         render = self.capture_context()
         self.run_wizard("html")
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertEqual(self.last_response.content, b"<html>captured</html>")
         self.prince.assert_not_called()
         context = render.call_args.args[0]

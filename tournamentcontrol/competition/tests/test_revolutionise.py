@@ -52,6 +52,7 @@ from tournamentcontrol.competition.upstream.backends.revolutionise import (
     RevolutioniseURL,
     infer_ladder_template,
 )
+from tournamentcontrol.competition.upstream.base import USER_AGENT
 from tournamentcontrol.competition.upstream.sync import (
     FINALS_STAGE_TITLE,
     REGULAR_STAGE_TITLE,
@@ -199,7 +200,7 @@ class ClientTests(TestCase):
         method, url, kwargs = self.session.calls[0]
         self.assertEqual(url, CCHA_URL)
         self.assertEqual(kwargs["timeout"], (5, 30))
-        self.assertTrue(self.session.headers["User-Agent"].startswith("vitriolic"))
+        self.assertEqual(self.session.headers["User-Agent"], USER_AGENT)
 
     def test_grade(self):
         detail = self.client.get_grade(self.url, 25527, 3741)
@@ -635,7 +636,7 @@ class SyncTests(TestCase):
         )
         self.assertEqual(team.title, "Toukley Crushers")
         self.assertEqual(team.upstream_title, "Wyong Crushers")
-        self.assertTrue(team.upstream_title_changed)
+        self.assertIs(team.upstream_title_changed, True)
         # Every grade's Crushers was renamed; only the one with a local name
         # is reported.
         self.assertEqual(len(result.warnings), 1)
@@ -755,7 +756,7 @@ class AdminTests(WarmCachesMixin, TestCase):
                 f"{CCHA_MENS_URL}</a>"
             )
             self.post("admin:fixja:competition:season:upstream-sync", *self.args)
-            self.response_302()
+            self.assert_http_302_found(url=self.season.urls["edit"])
         task.delay.assert_called_once_with(self.season.pk)
 
     def test_competition_form_canonicalises(self):

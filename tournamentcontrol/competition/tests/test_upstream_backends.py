@@ -136,9 +136,9 @@ class BackendApiTests(TestCase):
     def test_identifiers(self):
         backend = ExampleBackend()
         self.assertEqual(backend.identifier("a/b"), "example:a/b")
-        self.assertTrue(backend.owns_identifier("example:a/b"))
-        self.assertFalse(backend.owns_identifier("examples:1"))
-        self.assertFalse(backend.owns_identifier(None))
+        self.assertIs(backend.owns_identifier("example:a/b"), True)
+        self.assertIs(backend.owns_identifier("examples:1"), False)
+        self.assertIs(backend.owns_identifier(None), False)
         self.assertEqual(backend.remote_id("example:a/b"), "a/b")
         with self.assertRaises(ValueError):
             backend.remote_id("mysideline:1")
@@ -174,7 +174,7 @@ class ThirdBackendTests(TestCase):
         )
         self.assertIsInstance(competition.upstream_backend, ExampleBackend)
         self.assertIsInstance(season.upstream_backend, ExampleBackend)
-        self.assertTrue(season.upstream_enabled)
+        self.assertIs(season.upstream_enabled, True)
         division = factories.DivisionFactory.create(
             season=season, upstream_id="example:1"
         )

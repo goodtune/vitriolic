@@ -136,6 +136,7 @@ class RegradeTests(TestCase):
     """
 
     def setUp(self):
+        super().setUp()
         self.season = SeasonFactory.create()
         self.lower = DivisionFactory.create(season=self.season, title="Lower")
         self.upper = DivisionFactory.create(season=self.season, title="Upper")
@@ -246,7 +247,7 @@ class RegradeTests(TestCase):
         self.assertEqual(processed_bye.home_team, self.team)
         for match, side in ((home, "home_team"), (away, "away_team")):
             match.refresh_from_db()
-            self.assertTrue(match.is_bye)
+            self.assertIs(match.is_bye, True)
             self.assertIsNone(getattr(match, side))
             self.assertIsNone(match.time)
             self.assertIsNone(match.datetime)
@@ -254,13 +255,13 @@ class RegradeTests(TestCase):
         self.assertEqual(home.away_team, self.third)
         self.assertEqual(away.home_team, self.rival)
         earlier.refresh_from_db()
-        self.assertTrue(earlier.is_bye)
+        self.assertIs(earlier.is_bye, True)
         self.assertIsNone(earlier.away_team)
         upper_home.refresh_from_db()
-        self.assertFalse(upper_home.is_bye)
+        self.assertIs(upper_home.is_bye, False)
         self.assertEqual(upper_home.away_team, self.team)
         upper_away.refresh_from_db()
-        self.assertFalse(upper_away.is_bye)
+        self.assertIs(upper_away.is_bye, False)
         self.assertEqual(upper_away.home_team, self.team)
 
     def test_convert_to_byes_returns_the_matches_changed(self):
@@ -288,10 +289,10 @@ class RegradeTests(TestCase):
             sorted(utils.convert_to_byes(self.team, self.dates[1])), [away.pk]
         )
         home.refresh_from_db()
-        self.assertFalse(home.is_bye)
+        self.assertIs(home.is_bye, False)
         self.assertEqual(home.home_team, self.team)
         other.refresh_from_db()
-        self.assertFalse(other.is_bye)
+        self.assertIs(other.is_bye, False)
         self.assertEqual(utils.convert_to_byes(self.team, self.dates[0]), [home.pk])
         self.assertEqual(utils.convert_to_byes(self.team, self.dates[0]), [])
 
@@ -508,6 +509,7 @@ class TwoStageFormulaProblemTests(TestCase):
 
     def setUp(self):
         """Set up the two-stage competition scenario."""
+        super().setUp()
         # Create superuser for admin access
         self.user = SuperUserFactory.create()
 
@@ -565,7 +567,7 @@ class TwoStageFormulaProblemTests(TestCase):
         # Call the stage edit admin view which displays UndecidedTeam titles
         self.login(self.user)
         self.get(self.finals_stage.urls["edit"])
-        self.response_200()
+        self.assert_http_200_ok()
         # The page should contain the match label
         self.assertResponseContains("Final")
 
@@ -617,7 +619,7 @@ class TwoStageFormulaProblemTests(TestCase):
         # Test that accessing the match in admin view doesn't crash
         self.login(self.user)
         self.get(self.finals_stage.urls["edit"])
-        self.response_200()
+        self.assert_http_200_ok()
         # The match should be displayed on the stage edit page
         self.assertResponseContains("Invalid Formula Match")
         # Verify that the home_team and away_team formulas are rendered correctly
@@ -695,7 +697,7 @@ class TwoStageFormulaProblemTests(TestCase):
         # Test that the admin view renders successfully with mixed formulas
         self.login(self.user)
         self.get(self.finals_stage.urls["edit"])
-        self.response_200()
+        self.assert_http_200_ok()
         # The match label should appear
         self.assertResponseContains("Mixed Formula Match")
         # Verify that the home_team and away_team formulas are rendered correctly
