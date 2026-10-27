@@ -563,9 +563,15 @@ def create_permission_checker(model_or_manager, user):
     of related objects.
 
     http://django-guardian.readthedocs.io/en/stable/userguide/performance.html
+
+    A superuser's checker is not prefetched: guardian answers ``has_perm`` for
+    an active superuser without its cache, and filling it would cost two
+    queries per list (the primary keys and the model's permission codenames).
     """
     model, manager = model_and_manager(model_or_manager)
     checker = ObjectPermissionChecker(user)
+    if user.is_superuser:
+        return checker
     try:
         checker.prefetch_perms(manager)
     except UnboundLocalError:
