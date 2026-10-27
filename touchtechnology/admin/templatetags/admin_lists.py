@@ -34,9 +34,10 @@ def admin_list(context, queryset, scope=None, template=None, paginate_by=None):
 def admin_list_context(context, queryset, scope=None, template=None, paginate_by=None):
     model, manager = model_and_manager(queryset)
 
-    # A tab hands over the very manager or queryset the list's heading tests
-    # (``{% if manager %}``). A queryset that test has read is listed from its
-    # rows rather than read again; a manager becomes its queryset here.
+    # A tab hands over its manager, or the queryset its ``_list_*`` hooks make
+    # of it, as ``manager`` too; the list draws its heading when one is given
+    # (``{% if manager is not None %}``), rows or none, without reading it. A
+    # manager becomes its queryset here.
     if isinstance(queryset, BaseManager):
         queryset = queryset.all()
 
