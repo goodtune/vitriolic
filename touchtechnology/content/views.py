@@ -53,7 +53,7 @@ def dispatch(request, page_id=None, node=None, url=None):
     base = "touchtechnology/content"
     args = url.split("/")
     templates = list(
-        template_path(base, "%s.html" % (page and "page" or "folder"), *args)
+        template_path(base, f"{'page' if page else 'folder'}.html", *args)
     )
 
     if page and page.template:

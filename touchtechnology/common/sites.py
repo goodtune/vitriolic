@@ -80,12 +80,9 @@ class Application:
         self._spawned = timezone.now()
 
     def __repr__(self):
-        return "<{0}: {1}/{2}/{3}?{4}>".format(
-            self.__class__.__name__,
-            self.name,
-            self.app_name,
-            self.node or "",
-            urlencode(self.kwargs),
+        return (
+            f"<{self.__class__.__name__}: {self.name}/{self.app_name}/"
+            f"{self.node or ''}?{urlencode(self.kwargs)}>"
         )
 
     def _get_namespace(self, cls=None):
@@ -329,7 +326,7 @@ class Application:
             extra_context = {}
 
         if object_list_name is None:
-            object_list_name = "{0}_list".format(model._meta.model_name)
+            object_list_name = f"{model._meta.model_name}_list"
 
         if templates is None:
             templates = self.template_path("list.html", model._meta.model_name)
@@ -1201,9 +1198,7 @@ class Application:
 
     def render(self, request, templates, context, tz=None, **kwargs):
         logger.debug(
-            "{app}.render: {request.path}".format(
-                app=self.__class__.__name__, request=request
-            )
+            "%s.render: %s", self.__class__.__name__, request.path
         )
         context.update({"application": self})
         kwargs.setdefault("context", context)

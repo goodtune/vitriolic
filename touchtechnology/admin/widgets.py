@@ -116,9 +116,9 @@ def admin_attrs(bound_field, widget):
 
     described = []
     if bound_field.help_text:
-        described.append("%s_help" % bound_field.auto_id)
+        described.append(f"{bound_field.auto_id}_help")
     if bound_field.errors:
-        described.append("%s_error" % bound_field.auto_id)
+        described.append(f"{bound_field.auto_id}_error")
         attrs["aria-invalid"] = "true"
     if described and kind not in ("radios", "checks", "multi"):
         attrs["aria-describedby"] = " ".join(described)
