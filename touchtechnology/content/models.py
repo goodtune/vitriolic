@@ -186,7 +186,7 @@ class Placeholder(models.Model):
         """
         Adding an internal method to allow us to rig up all the applications.
         """
-        if not self.nodes.count():
+        if not self.nodes.exists():
             module_path, site = self.path.rsplit(".", 1)
             module = import_module(module_path)
             if hasattr(module, site):

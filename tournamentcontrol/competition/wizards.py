@@ -140,7 +140,7 @@ class FilterForm(forms.Form):
             query_filter &= Q(stage__division__in=divisions)
 
         matches = self.matches.filter(query_filter)
-        if not matches.count():
+        if not matches.exists():
             raise forms.ValidationError(
                 _("There are no matches that satisfy your criteria.")
             )
@@ -236,7 +236,7 @@ class DrawGenerationWizard(SessionWizardView):
 
     def get_form_initial(self, step):
         if step == "0":
-            if self.stage.pools.count():
+            if self.stage.pools.exists():
                 queryset = self.stage.pools.all()
             else:
                 queryset = self.stage.division.stages.filter(pk=self.stage.pk)

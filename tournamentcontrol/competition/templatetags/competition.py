@@ -111,7 +111,7 @@ def next_date(context, season, offset=0, datestr=None):
 
 @register.simple_tag(takes_context=True)
 def ladder(context, stage):
-    if stage.pools.count():
+    if stage.pools.exists():
         ordering = stage.ladder_summary.model._meta.ordering
         summary = stage.ladder_summary.order_by("stage_group", *ordering)
         template_name = "tournamentcontrol/competition/ladder/pool.html"
