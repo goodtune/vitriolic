@@ -2207,10 +2207,7 @@ class CompetitionAdminComponent(AdminComponent):
 
         return self.generic_edit(
             request,
-            division.stages.select_related(
-                "matches__home_team",
-                "matches__away_team",
-            ),
+            division.stages,
             pk=stage.pk,
             instance=stage,
             related=(

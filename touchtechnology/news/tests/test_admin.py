@@ -15,7 +15,7 @@ from touchtechnology.common.tests.factories import (
     SuperUserFactory,
     UserFactory,
 )
-from touchtechnology.news.models import Article
+from touchtechnology.news.models import Article, Category
 from touchtechnology.news.tests.factories import (
     ArticleFactory,
     CategoryFactory,
@@ -277,6 +277,34 @@ class CategoryListTests(TestCase):
             self.get("admin:news:category:list")
         self.assert_http_200_ok()
         self.assertEqual(list(self.get_context("object_list")), [club, events, sport])
+
+    def test_the_list_runs_as_many_queries_for_twelve_categories_as_for_one(self):
+        superuser = self.make_user("superuser")
+        with self.login(superuser):
+            for count in (1, 12):
+                with self.subTest(count=count):
+                    for n in range(Category.objects.count(), count):
+                        category = CategoryFactory.create()
+                        category.article_set.add(*ArticleFactory.create_batch(n % 3))
+                    # Measure after a first request, which fills the caches of
+                    # the process (content types, the site), so the count is
+                    # the same alone and in the whole suite.
+                    self.get_check_200("admin:news:category:list")
+                    with self.assertNumQueries(8):
+                        self.get("admin:news:category:list")
+
+    def test_each_row_shows_how_many_articles_it_has(self):
+        superuser = self.make_user("superuser")
+        category = CategoryFactory.create(title="Sport")
+        category.article_set.add(*ArticleFactory.create_batch(2))
+        with self.login(superuser):
+            self.get_check_200("admin:news:category:list")
+        self.assertResponseContains(
+            self.by_shell(
+                workbook='<td class="wb-num" data-label="Articles">2</td>',
+                explorer='<td class="num">2</td>',
+            )
+        )
 
 
 @per_shell

@@ -100,6 +100,9 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "vitriolic.urls"
 
+# Reports a failing subTest from the parallel workers (#484).
+TEST_RUNNER = "vitriolic.runner.TestRunner"
+
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",

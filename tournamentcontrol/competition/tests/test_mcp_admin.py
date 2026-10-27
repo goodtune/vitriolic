@@ -173,7 +173,7 @@ class PermissionTests(AdminFixtureMixin, TestCase):
     def test_anonymous_and_non_staff_are_refused(self):
         message = "The competition administration tools require a signed-in staff user."
         for user in (AnonymousUser(), self.user):
-            with self.subTest(user=user):
+            with self.subTest(user=str(user)):
                 self.assertToolError(message, self.admin(user).list_competitions)
                 self.assertToolError(
                     message, self.admin(user).create_competition, title="X"

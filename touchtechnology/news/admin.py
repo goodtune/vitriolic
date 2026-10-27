@@ -1,5 +1,6 @@
 from urllib.parse import urljoin
 
+from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from django.urls import include, path
 from django.utils.translation import gettext_lazy as _
@@ -168,7 +169,9 @@ class NewsAdminComponent(AdminComponent):
     def list_categories(self, request, **kwargs):
         return self.generic_list(
             request,
-            Category,
+            # Each row shows how many articles it has. A query that groups
+            # does not take Meta.ordering, so order it again.
+            Category.objects.annotate(article_count=Count("article")).order_by("title"),
             paginate_by=25,
             permission_required=True,
             extra_context=kwargs,
