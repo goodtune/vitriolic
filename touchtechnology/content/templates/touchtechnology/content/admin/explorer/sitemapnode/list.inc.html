@@ -10,7 +10,7 @@
 {% block table-columns %}
 	<td class="title-cell">
 		{% with edit_url=obj|admin_url:"edit" %}
-			{% if edit_url %}<a href="{{ edit_url }}">{% if obj.content_type.model == "page" %}{% icon "page" %}{% elif obj.content_type.model == "placeholder" %}{% icon "puzzle" %}{% else %}{% icon "folder" %}{% endif %}<span>{{ obj }}</span></a>{% else %}{{ obj }}{% endif %}
+			{% if change_perm in object_perms and edit_url %}<a href="{{ edit_url }}">{% if obj.content_type.model == "page" %}{% icon "page" %}{% elif obj.content_type.model == "placeholder" %}{% icon "puzzle" %}{% else %}{% icon "folder" %}{% endif %}<span>{{ obj }}</span></a>{% else %}<span>{{ obj }}</span>{% endif %}
 		{% endwith %}
 	</td>
 	<td>

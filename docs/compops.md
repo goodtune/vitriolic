@@ -30,7 +30,12 @@ settings. Django 5.2 needs three settings, set out in
 
 The booth refuses an action with a normal 200 response that carries the
 reason in the lamp. Datastar drops the body of non-200 responses, so a
-refusal that used an error status would never reach the page.
+refusal that used an error status would never reach the page. The lamp, like
+a ground's block in the day page's streams column and a result row with an
+open Edit or a refused save, is then held: the snapshot a reconnect sends
+passes over it, and the next action, or a push about the same ground or
+match, releases it. The template comment above `match_row` in `day.html`
+explains the mechanism.
 
 ## Template partials on Django 5.2
 
