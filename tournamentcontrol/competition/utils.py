@@ -1104,7 +1104,7 @@ def create_thumbnail_preview(
         image.save(output_buffer, format="JPEG", quality=quality, optimize=True)
 
     except Exception as e:
-        logger.warning(f"Failed to create thumbnail preview: {e}")
+        logger.warning("Failed to create thumbnail preview: %s", e)
         return ThumbnailPreview()
 
     return ThumbnailPreview(output_buffer.getvalue(), original_mime)

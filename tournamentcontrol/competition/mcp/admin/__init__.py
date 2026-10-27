@@ -3995,9 +3995,7 @@ class AdminToolset(CompetitionToolset):
                 )
             slots = validator.timeslots(season, date)
             if not slots:
-                raise ToolError(
-                    f"The season has no time slots on {date.isoformat()}."
-                )
+                raise ToolError(f"The season has no time slots on {date.isoformat()}.")
             matches = Match.objects.filter(
                 stage__division__season=season, date=date, is_bye=False
             ).filter(Q(time__isnull=True) | Q(play_at__isnull=True))
