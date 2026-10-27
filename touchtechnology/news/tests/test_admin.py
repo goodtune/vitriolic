@@ -27,6 +27,7 @@ TEST_DIR = os.path.join(os.path.dirname(__file__), "html")
 
 class ImageFieldTestCase(TestCase):
     def setUp(self):
+        super().setUp()
         self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
 
         # Single transparent pixel PNG image, base64 encoded.
@@ -57,7 +58,7 @@ class ImageFieldTestCase(TestCase):
         with self.login(self.superuser):
             self.post("admin:news:article:add", data=self.data_with_image)
         # print(self.last_response.content.decode("utf-8"))
-        self.response_302()
+        self.assert_http_302_found(url=self.reverse("admin:news:article:list"))
         self.assertEqual(1, Article.objects.count())
 
     @override_settings(TOUCHTECHNOLOGY_NEWS_IMAGE_REQUIRED=False)
@@ -65,7 +66,7 @@ class ImageFieldTestCase(TestCase):
         with self.login(self.superuser):
             self.post("admin:news:article:add", data=self.data_no_image)
         # print(self.last_response.content.decode("utf-8"))
-        self.response_302()
+        self.assert_http_302_found(url=self.reverse("admin:news:article:list"))
         self.assertEqual(1, Article.objects.count())
 
     @override_settings(TOUCHTECHNOLOGY_NEWS_IMAGE_REQUIRED=False)
@@ -73,7 +74,7 @@ class ImageFieldTestCase(TestCase):
         with self.login(self.superuser):
             self.post("admin:news:article:add", data=self.data_with_image)
         # print(self.last_response.content.decode("utf-8"))
-        self.response_302()
+        self.assert_http_302_found(url=self.reverse("admin:news:article:list"))
         self.assertEqual(1, Article.objects.count())
 
 
@@ -85,6 +86,7 @@ class TranslationAdminTests(TestCase):
     """
 
     def setUp(self):
+        super().setUp()
         self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
         self.staff = UserFactory.create(is_staff=True)
         self.article = ArticleFactory.create()

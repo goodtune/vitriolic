@@ -13,7 +13,7 @@ from touchtechnology.news.tests import factories
 class InvalidDateTest(TestCase):
     def test_archive_day(self):
         self.get("news:article", year="2013", month="feb", day="31")
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_article(self):
         self.get(
@@ -23,7 +23,7 @@ class InvalidDateTest(TestCase):
             day="31",
             slug="tfms-new-generaltechnical-manager",
         )
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_year_out_of_range(self):
         """
@@ -34,7 +34,7 @@ class InvalidDateTest(TestCase):
             with self.subTest(year=year):
                 with self.assertNoLogs("touchtechnology.news", level="WARNING"):
                     self.get("news:month", year=year, month="jul")
-                self.response_404()
+                self.assert_http_404_not_found()
 
     def test_last_year_datetime_can_hold(self):
         """
@@ -42,10 +42,10 @@ class InvalidDateTest(TestCase):
         """
         with self.subTest(view="year"):
             self.get("news:year", year=9999)
-            self.response_404()
+            self.assert_http_404_not_found()
         with self.subTest(view="day"):
             self.get("news:day", year=9999, month="dec", day=31)
-            self.response_404()
+            self.assert_http_404_not_found()
 
     def test_unknown_month_name(self):
         """
@@ -57,12 +57,12 @@ class InvalidDateTest(TestCase):
             with self.subTest(month=month):
                 with self.assertNoLogs("touchtechnology.news", level="WARNING"):
                     self.get("news:month", year=2026, month=month)
-                self.response_404()
+                self.assert_http_404_not_found()
 
     def test_day_out_of_range(self):
         with self.assertNoLogs("touchtechnology.news", level="WARNING"):
             self.get("news:day", year=2026, month="jul", day=32)
-        self.response_404()
+        self.assert_http_404_not_found()
 
 
 @override_settings(ROOT_URLCONF="example_app.urls")
