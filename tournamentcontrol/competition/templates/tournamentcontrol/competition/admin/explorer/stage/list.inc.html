@@ -26,5 +26,5 @@
 	{% endif %}
 	{% url 'admin:fixja:reorder' 'stage:division' obj.pk "up" as up_url %}
 	{% url 'admin:fixja:reorder' 'stage:division' obj.pk "down" as down_url %}
-	{% include "tournamentcontrol/competition/admin/explorer/_reorder.inc.html" %}
+	{% include "touchtechnology/admin/explorer/_reorder.inc.html" %}
 {% endblock %}
