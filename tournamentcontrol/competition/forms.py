@@ -1068,7 +1068,7 @@ class StageGroupForm(SuperUserSlugMixin, ModelForm):
 
         if not self.instance.pk:
             initial = queryset = Team.objects.none()
-        elif self.instance.stage.order > 1 and not self.instance.teams.count():
+        elif self.instance.stage.order > 1 and not self.instance.teams.exists():
             self._undecided = True
             queryset = self.instance.stage.undecided_teams.of_our_own().exclude(
                 stage_group__in=other_pools
@@ -1191,7 +1191,7 @@ class UndecidedTeamForm(UserMixin, ModelForm):
 class TeamForm(UpstreamTitleMixin, SuperUserSlugMixin, ModelForm):
     def __init__(self, division, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if not division.season.competition.clubs.count():
+        if not division.season.competition.clubs.exists():
             self.fields.pop("club")
         else:
             self.fields["club"].queryset = division.season.competition.clubs
@@ -1205,7 +1205,7 @@ class TeamForm(UpstreamTitleMixin, SuperUserSlugMixin, ModelForm):
             for field in timeslot_fields:
                 self.fields.pop(field, None)
                 setattr(self.instance, field, None)
-        elif self.instance.division.season.timeslots.count():
+        elif self.instance.division.season.timeslots.exists():
             timeslots = self.instance.division.season.get_timeslots()
             choices = [("", "")] + [time_choice(t) for t in timeslots]
 
@@ -1241,7 +1241,7 @@ class TeamForm(UpstreamTitleMixin, SuperUserSlugMixin, ModelForm):
         self.fields["team_clashes"].queryset = queryset.select_related(
             "division"
         ).order_by("title", "division")
-        if not queryset.count():
+        if not queryset.exists():
             self.fields.pop("team_clashes", None)
 
     class Meta:
@@ -1454,7 +1454,7 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
             )
 
         # remove `stage_group` field if the `division` has no children
-        if not self.instance.stage.pools.count():
+        if not self.instance.stage.pools.exists():
             self.fields.pop("stage_group", None)
         elif "stage_group" in self.fields:
             self.fields["stage_group"].queryset = self.instance.stage.pools.all()
@@ -2675,7 +2675,7 @@ class DivisionTournamentScheduleForm(TournamentScheduleForm):
 
     def get_absolute_url(self):
         division = self.cleaned_data["team_hook"]
-        if division.matches.count():
+        if division.matches.exists():
             return reverse_lazy(
                 "competition:division",
                 kwargs=dict(
