@@ -11,8 +11,16 @@
 	<span class="sse" data-class:down="!$connected"><i></i> <span data-text="$connected ? 'updates connected' : 'reconnecting'">updates connected</span></span>
 	<span class="clock">{{ now|time:"H:i" }}</span>
 </header>
+{% comment %}
+A lamp that shows why an action was refused is held, as a match_row in
+day.html is: the stream's snapshot, and a push about another ground, mark the
+lamp too (keep_held), so they pass over a held lamp, and data-preserve-attr
+keeps the mark off a lamp they update. A refusal is sent in replace mode, so
+its mark lands; the next action, or a push about this ground, sends the lamp
+without the mark and releases it.
+{% endcomment %}
 {% partialdef lamp inline %}
-<section id="onair" class="onair">
+<section id="onair" class="onair"{% if keep_held or errors %} data-ignore-morph data-preserve-attr="data-ignore-morph"{% endif %}>
 	{% if status == "live" %}<div id="lamp" class="lamp live">ON AIR</div>{% elif status == "testing" %}<div id="lamp" class="lamp testing">STANDBY</div>{% else %}<div id="lamp" class="lamp">OFF AIR</div>{% endif %}
 	<div class="status">
 		{% if broadcast %}<b>{% if status == "live" %}Broadcasting{% elif status == "testing" %}Standby{% else %}Off air{% endif %} · {{ broadcast.get_home_team_plain }} v {{ broadcast.get_away_team_plain }}</b>

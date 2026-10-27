@@ -12,9 +12,10 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 from faker import Faker
+from googleapiclient.errors import HttpError
 from playwright.sync_api import expect
 
-from tournamentcontrol.competition.compops import events
+from tournamentcontrol.competition.compops import events, streams
 from tournamentcontrol.competition.compops.sites import CompOpsSite
 from tournamentcontrol.competition.models import Match, TeamAssociation
 from tournamentcontrol.competition.tests.factories import (
@@ -70,23 +71,34 @@ def wait_for_snapshot(page, season):
 
 
 @contextmanager
-def snapshot_held():
+def snapshot_held(snapshot="snapshot_fragments"):
     """
-    Hold the day page's snapshot back until the block ends, so it lands on
-    whatever the block did, as the snapshot of a reconnect does.
+    Hold a page's snapshot back until the block ends, so it lands on whatever
+    the block did, as the snapshot of a reconnect does. ``snapshot`` names
+    the method of ``CompOpsSite`` that renders it: the day page's by default,
+    ``"booth_snapshot"`` for a booth.
     """
     release = threading.Event()
-    snapshot_fragments = CompOpsSite.snapshot_fragments
+    render = getattr(CompOpsSite, snapshot)
 
     def late_snapshot(site, *args):
         release.wait(10)
-        return snapshot_fragments(site, *args)
+        return render(site, *args)
 
-    with mock.patch.object(CompOpsSite, "snapshot_fragments", late_snapshot):
+    with mock.patch.object(CompOpsSite, snapshot, late_snapshot):
         try:
             yield
         finally:
             release.set()
+
+
+def refusing_youtube(reason):
+    """A YouTube service that refuses every transition with ``reason``."""
+    service = youtube_mock("testing")
+    service.liveBroadcasts.return_value.transition.return_value.execute.side_effect = (
+        HttpError(resp=mock.Mock(status=400, reason=reason), content=b"")
+    )
+    return service
 
 
 def midday_zone(now):
@@ -656,6 +668,111 @@ def test_a_reconnect_brings_the_page_up_to_date_around_the_rows_being_worked_on(
     compops_page.screenshot(
         path=str(screenshot_dir / "compops_reconnect_keeps_work.png"), full_page=True
     )
+
+
+def test_a_refused_stream_action_keeps_its_message_when_the_snapshot_lands_after_it(
+    compops_page, asgi_live_server, tournament, screenshot_dir
+):
+    """
+    A refused stream action keeps its message, in its ground's block of the
+    streams column, when the event stream's snapshot lands after it, as the
+    snapshot of a reconnect does, and through a push about another stream.
+    A push about that ground releases it.
+
+    YouTube refuses to take the upcoming match live. The test holds the
+    snapshot back until the refusal is on the page, then lets it through and
+    waits for it; the push wait_for_snapshot makes is about no ground on the
+    page, so it leaves the block alone as well. Then the match is armed from
+    the booth, and the push about it clears the message.
+    """
+    season, ground, upcoming = (
+        tournament["season"],
+        tournament["ground"],
+        tournament["upcoming"],
+    )
+    block = compops_page.locator(f"#stream-{ground.pk}")
+    message = "Field 1 · Japan v Singapore: Stream is inactive"
+    with mock.patch(
+        "tournamentcontrol.competition.models.build",
+        return_value=refusing_youtube("Stream is inactive"),
+    ):
+        with snapshot_held():
+            compops_page.goto(asgi_live_server.url + tournament["day_path"])
+            block.locator(".next button", has_text="Go live").click()
+            expect(block.locator("p.warn")).to_have_text(message)
+        wait_for_snapshot(compops_page, season)
+    expect(block.locator("p.warn")).to_have_text(message)
+    expect(block.locator(".next .badge")).to_have_text("no status")
+    compops_page.screenshot(
+        path=str(screenshot_dir / "compops_stream_error_kept.png"), full_page=True
+    )
+    Match.objects.filter(pk=upcoming.pk).update(live_stream_status="testing")
+    streams.publish_change(upcoming, "testing", actor="booth")
+    expect(block.locator(".next .badge")).to_have_text("testing")
+    expect(block.locator("p.warn")).to_have_count(0)
+    compops_page.screenshot(
+        path=str(screenshot_dir / "compops_stream_error_released.png"),
+        full_page=True,
+    )
+
+
+def test_a_refused_booth_action_keeps_its_reason_when_the_snapshot_lands_after_it(
+    compops_page, asgi_live_server, tournament, screenshot_dir
+):
+    """
+    A refused booth action keeps its reason in the lamp when the booth's
+    event stream sends its snapshot after the refusal, as the snapshot of a
+    reconnect does, and through a push about another ground. A push about
+    this ground releases it.
+
+    YouTube refuses to end the broadcast. The test holds the snapshot back
+    until the reason is in the lamp, then lets it through. The lamp is held,
+    so the strip is marked and watched to see the snapshot and the pushes
+    land. Then ops end the broadcast from the day page, and the push about
+    it clears the reason and darkens the lamp.
+    """
+    match, scored = tournament["match"], tournament["scored"]
+    reason = (
+        "Field 1 · Australia v New Zealand: The request cannot be completed "
+        "because you have exceeded your quota."
+    )
+    warn = compops_page.locator("#onair .warn")
+    strip = compops_page.locator("#strip")
+    with mock.patch(
+        "tournamentcontrol.competition.models.build",
+        return_value=refusing_youtube(
+            "The request cannot be completed because you have exceeded your quota."
+        ),
+    ):
+        compops_page.set_viewport_size({"width": 1024, "height": 768})
+        with snapshot_held("booth_snapshot"):
+            compops_page.goto(asgi_live_server.url + tournament["booth_path"])
+            button = compops_page.locator("button[data-hold]")
+            expect(button).to_have_text("HOLD TO END BROADCAST")
+            box = button.bounding_box()
+            compops_page.mouse.move(
+                box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+            )
+            compops_page.mouse.down()
+            compops_page.wait_for_timeout(1700)
+            compops_page.mouse.up()
+            expect(warn).to_have_text(reason)
+            strip.evaluate("el => el.setAttribute('data-before-snapshot', '')")
+        expect(strip).not_to_have_attribute("data-before-snapshot", "")
+    expect(warn).to_have_text(reason)
+    expect(compops_page.locator("#lamp")).to_have_text("ON AIR")
+    compops_page.screenshot(
+        path=str(screenshot_dir / "compops_booth_reason_kept.png"), full_page=True
+    )
+    # A push about another ground brings the strip up to date around the lamp.
+    strip.evaluate("el => el.setAttribute('data-before-push', '')")
+    streams.publish_change(scored, "live", actor="e2e")
+    expect(strip).not_to_have_attribute("data-before-push", "")
+    expect(warn).to_have_text(reason)
+    Match.objects.filter(pk=match.pk).update(live_stream_status="complete")
+    streams.publish_change(match, "complete", actor="ops")
+    expect(compops_page.locator("#lamp")).to_have_text("OFF AIR")
+    expect(warn).to_have_count(0)
 
 
 def test_collapsed_layout_puts_scorers_behind_a_tab(
