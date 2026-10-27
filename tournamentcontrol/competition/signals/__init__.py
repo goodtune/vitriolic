@@ -16,7 +16,10 @@ from tournamentcontrol.competition.signals.places import (  # noqa
     set_ground_timezone,
     update_match_datetimes_on_place_timezone_change,
 )
-from tournamentcontrol.competition.signals.teams import delete_team  # noqa
+from tournamentcontrol.competition.signals.ordering import (  # noqa
+    close_order_gap,
+    refresh_order,
+)
 
 
 def delete_related(sender, instance, *args, **kwargs):

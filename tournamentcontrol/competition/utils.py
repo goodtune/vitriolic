@@ -21,6 +21,7 @@ from django.db.models import (
     Exists,
     F,
     Func,
+    Max,
     OuterRef,
     Q,
     Subquery,
@@ -944,9 +945,12 @@ def regrade(team, to, from_date=None):
     if from_date is None:
         from_date = team.matches.filter(match_unplayed).earliest("date").date
 
-    # Update the sequence numbers of all teams in the current division to keep
-    # them in order without any gaps
-    team.division.teams.filter(order__gt=team.order).update(order=F("order") - 1)
+    # Move the team to the end of the new division's list first, so the teams
+    # below it in the old one can close the gap without sharing its value.
+    order = (to.teams.aggregate(order=Max("order"))["order"] or 0) + 1
+    Team.objects.filter(pk=team.pk).update(division=to, order=order)
+    team.close_gap()
+    team.division, team.order = to, order
 
     # All unplayed matches that this team is assigned to play need to be turned
     # into byes, removing them from the home_team and away_team fields. Strip
@@ -957,14 +961,6 @@ def regrade(team, to, from_date=None):
     new_matches = to.matches.filter(legitimate_bye_match, date__gte=from_date)
     new_matches.filter(home_team=None).update(home_team=team, is_bye=False)
     new_matches.filter(away_team=None).update(away_team=team, is_bye=False)
-
-    # Determine the highest sequence value in the target division and assign
-    # that to our team. If it throws an DoesNotExist exception, the division
-    # is empty and we need to set it to 1.
-    try:
-        team.order = to.teams.latest("order").order + 1
-    except Team.DoesNotExist:
-        team.order = 1
 
 
 #
