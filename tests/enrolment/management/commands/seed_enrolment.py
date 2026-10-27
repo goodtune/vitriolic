@@ -10,16 +10,18 @@ class Command(BaseCommand):
             "--students",
             type=int,
             default=300,
-            help="The number of students to create, from 1 to %d (default: 300)."
-            % MAX_STUDENTS,
+            help=(
+                f"The number of students to create, from 1 to {MAX_STUDENTS} "
+                "(default: 300)."
+            ),
         )
 
     def handle(self, *args, **options):
         students = options["students"]
         if not 1 <= students <= MAX_STUDENTS:
             raise CommandError(
-                "--students must be from 1 to %d, not %d." % (MAX_STUDENTS, students)
+                f"--students must be from 1 to {MAX_STUDENTS}, not {students}."
             )
         counts = seed(students=students)
         for name, count in counts.items():
-            self.stdout.write("%s: %d" % (name, count))
+            self.stdout.write(f"{name}: {count}")

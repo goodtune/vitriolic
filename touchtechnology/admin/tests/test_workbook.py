@@ -29,8 +29,8 @@ class ChoiceForm(BootstrapFormControlMixin, forms.Form):
     title = forms.CharField(label="Title")
     when = forms.DateField(label="When", widget=forms.DateInput)
     starts = forms.TimeField(label="Starts", widget=forms.TimeInput)
-    few = forms.ChoiceField(choices=[(n, "Choice %d" % n) for n in range(3)])
-    many = forms.ChoiceField(choices=[(n, "Choice %d" % n) for n in range(12)])
+    few = forms.ChoiceField(choices=[(n, f"Choice {n}") for n in range(3)])
+    many = forms.ChoiceField(choices=[(n, f"Choice {n}") for n in range(12)])
     several = forms.MultipleChoiceField(choices=[("a", "A"), ("b", "B")])
     where = forms.CharField(widget=LocationWidget(height=200, zoom=12))
 
@@ -71,13 +71,11 @@ class ControlTests(TestCase):
         )
 
     def test_a_long_or_multiple_choice_opens_a_dialog(self):
-        options = "".join(
-            '<option value="%d">Choice %d</option>' % (n, n) for n in range(12)
-        )
+        options = "".join(f'<option value="{n}">Choice {n}</option>' for n in range(12))
         self.assertHTMLEqual(
             render("{{ form.many|control }}", form=ChoiceForm()),
             '<select name="many" class="wb-select" data-picker="dialog" id="id_many">'
-            "%s</select>" % options,
+            f"{options}</select>",
         )
         self.assertHTMLEqual(
             render("{{ form.several|control }}", form=ChoiceForm()),
@@ -198,9 +196,8 @@ class TrailTests(TestCase):
             '<li><a href="/admin/"><span>Home</span></a></li>'
             '<li><a href="/admin/news/"><span>News</span></a></li>'
             '<li><a href="/admin/news/article/"><span>Articles</span></a></li>'
-            '<li class="wb-trail-parent"><a href="/admin/news/article/%d/#translations-tab">'
-            "%s<span>Flow Cup begins</span></a></li></ol></nav>"
-            % (article.pk, ICON % "arrow-left"),
+            f'<li class="wb-trail-parent"><a href="/admin/news/article/{article.pk}/#translations-tab">'
+            f'{ICON % "arrow-left"}<span>Flow Cup begins</span></a></li></ol></nav>',
         )
 
 
@@ -217,10 +214,10 @@ class HomeTests(TestCase):
             self.get_check_200("admin:index")
         self.assertResponseContains("<h1>Hello, Odette</h1>")
         self.assertResponseContains(
-            '<a class="wb-task" href="%s"><span class="wb-task-icon">%s</span>'
+            f'<a class="wb-task" href="{self.reverse("admin:news:article:add")}">'
+            f'<span class="wb-task-icon">{ICON % "newspaper"}</span>'
             '<span class="wb-task-title">Write a news article</span>'
-            '<span class="wb-task-note">Publish it now or later</span></a>'
-            % (self.reverse("admin:news:article:add"), ICON % "newspaper"),
+            '<span class="wb-task-note">Publish it now or later</span></a>',
         )
 
 
@@ -237,7 +234,7 @@ class AddAnotherTests(TestCase):
             self.get_check_200("admin:content:redirect:add")
         self.assertResponseContains(
             '<button type="submit" name="_addanother" value="1" class="wb-button">'
-            "%sSave and add another redirect</button>" % (ICON % "copy-plus"),
+            f'{ICON % "copy-plus"}Save and add another redirect</button>',
         )
 
     def test_save_and_add_another_returns_to_the_add_form(self):
@@ -265,7 +262,7 @@ class AddAnotherTests(TestCase):
             self.get_check_200("admin:content:redirect:edit", redirect.pk)
         self.assertResponseNotContains(
             '<button type="submit" name="_addanother" value="1" class="wb-button">'
-            "%sSave and add another redirect</button>" % (ICON % "copy-plus"),
+            f'{ICON % "copy-plus"}Save and add another redirect</button>',
         )
 
 

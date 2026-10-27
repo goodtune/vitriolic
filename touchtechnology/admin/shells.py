@@ -183,7 +183,7 @@ class Shell:
         head, admin, tail = name.partition("/admin/")
         if not admin:
             return name
-        return "%s/admin/%s/%s" % (head, self.name, tail)
+        return f"{head}/admin/{self.name}/{tail}"
 
     def names(self, name):
         """Where to look for an admin template: the neutral path, then the shell's."""
@@ -275,9 +275,9 @@ def get_shell(name):
     try:
         return SHELLS[name]
     except (KeyError, TypeError):
+        known = ", ".join(repr(known) for known in SHELLS)
         raise ImproperlyConfigured(
-            "Unknown admin shell %r; choose one of %s."
-            % (name, ", ".join(repr(known) for known in SHELLS))
+            f"Unknown admin shell {name!r}; choose one of {known}."
         )
 
 

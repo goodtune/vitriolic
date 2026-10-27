@@ -2385,15 +2385,11 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         )
         before = self.snapshot()
         self.assertToolError(
-            "Women's 6 cannot be withdrawn: match %d (round 6, %s) the match is "
-            "live streamed; remove the live stream first; match %d (round 1, %s) "
-            "the team has progressed to Finals."
-            % (
-                self.unplayed[1].pk,
-                WEDNESDAYS[5].isoformat(),
-                final.pk,
-                WEDNESDAYS[13].isoformat(),
-            ),
+            f"Women's 6 cannot be withdrawn: match {self.unplayed[1].pk} "
+            f"(round 6, {WEDNESDAYS[5].isoformat()}) the match is live streamed; "
+            f"remove the live stream first; match {final.pk} "
+            f"(round 1, {WEDNESDAYS[13].isoformat()}) the team has progressed "
+            "to Finals.",
             self.admin_tools.withdraw_team,
             self.team.pk,
         )

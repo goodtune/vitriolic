@@ -48,7 +48,7 @@ ENROLMENT_ITEM = ENROLMENT + "<int:enrolment_id>/"
 def year_setup(year, here=True):
     """What a school ``year`` needs before its classes can be taught."""
     edit = str(year.urls["edit"])
-    details = "%s#%s-tab" % (edit, slugify(year._meta.verbose_name))
+    details = f"{edit}#{slugify(year._meta.verbose_name)}-tab"
     classes = list(
         year.classes.annotate(
             enrolment_count=Count("enrolments", distinct=True),
@@ -60,7 +60,7 @@ def year_setup(year, here=True):
     assessments = sum(c.assessment_count for c in classes)
 
     def tab(obj, name):
-        return "%s#%s-tab" % (obj.urls["edit"], name)
+        return f"{obj.urls['edit']}#{name}-tab"
 
     def count(n, singular, plural):
         return ngettext(singular, plural, n) % {"n": n}
@@ -301,7 +301,7 @@ class EnrolmentAdminComponent(AdminComponent):
     @staticmethod
     def _tab(url, tab):
         "The URL of a parent's edit page, opened on one of its related tabs."
-        return "%s#%s-tab" % (url, tab)
+        return f"{url}#{tab}-tab"
 
     def _class_group(self, year_id, class_group_id):
         return get_object_or_404(ClassGroup, year_id=year_id, pk=class_group_id)

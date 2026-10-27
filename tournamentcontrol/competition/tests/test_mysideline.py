@@ -193,7 +193,7 @@ class RemoteWorld:
             for c in self.competitions
         ]
         payload = ["$", "$L13", None, {"data": {"competitions": listing}}]
-        return '1:"$Sreact.fragment"\n7:%s\n' % json.dumps(payload)
+        return f'1:"$Sreact.fragment"\n7:{json.dumps(payload)}\n'
 
     def graphql(self, body):
         query = body["query"]

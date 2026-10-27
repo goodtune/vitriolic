@@ -57,7 +57,7 @@ def tab_of(parent, child):
     for field in child._meta.get_fields():
         if isinstance(field, ForeignKey) and issubclass(parent, field.related_model):
             try:
-                return "#%s-tab" % field.remote_field.get_accessor_name()
+                return f"#{field.remote_field.get_accessor_name()}-tab"
             except AttributeError:
                 return ""
     return ""

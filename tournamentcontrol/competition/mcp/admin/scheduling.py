@@ -41,7 +41,7 @@ def validation_message(errors):
     parts = []
     for field, messages in errors.items():
         name = "error" if field == NON_FIELD_ERRORS else field
-        parts.append("%s: %s" % (name, " ".join(str(m) for m in messages)))
+        parts.append(f"{name}: {' '.join(str(m) for m in messages)}")
     return "; ".join(parts)
 
 
@@ -118,8 +118,8 @@ class ScheduleValidator:
         else:
             valid = "the season has no time slots on that date"
         return [
-            "Validation failed: time: %s is not a time slot%s; %s."
-            % (_hhmm(match.time), when, valid)
+            f"Validation failed: time: {_hhmm(match.time)} is not a time "
+            f"slot{when}; {valid}."
         ]
 
     def _booked(self, date):
@@ -193,8 +193,8 @@ class ScheduleValidator:
             claimant = self._places.get((match.date, play_at_id, time))
             if claimant is not None:
                 errors.append(
-                    "%s is already scheduled for this time & place."
-                    % claimant.capitalize()
+                    f"{claimant.capitalize()} is already scheduled for this "
+                    "time & place."
                 )
             elif taken(booked_places, (play_at_id, time)):
                 errors.append(
@@ -202,34 +202,26 @@ class ScheduleValidator:
                 )
         if time is not None:
             claimed = self._teams.get((match.date, time), {})
+            kick_off = _hhmm(time)
             for team in (match.home_team, match.away_team):
                 if team is None:
                     continue
                 claimant = claimed.get(team.pk)
                 if claimant is not None or taken(booked_teams, (team.pk, time)):
+                    by = f" ({claimant})" if claimant else ""
                     errors.append(
-                        "%s are already playing at %s on %s%s."
-                        % (
-                            team.title,
-                            _hhmm(time),
-                            match.date.isoformat(),
-                            f" ({claimant})" if claimant else "",
-                        )
+                        f"{team.title} are already playing at {kick_off} on "
+                        f"{match.date.isoformat()}{by}."
                     )
                 for clash in self._clashes(team):
                     claimant = claimed.get(clash.pk)
                     if claimant is None and not taken(booked_teams, (clash.pk, time)):
                         continue
+                    by = f" ({claimant})" if claimant else ""
                     errors.append(
-                        "%s must not play at the same time as %s (%s), who "
-                        "are already scheduled at %s%s."
-                        % (
-                            team.title,
-                            clash.title,
-                            clash.division.title,
-                            _hhmm(time),
-                            f" ({claimant})" if claimant else "",
-                        )
+                        f"{team.title} must not play at the same time as "
+                        f"{clash.title} ({clash.division.title}), who are already "
+                        f"scheduled at {kick_off}{by}."
                     )
         return errors
 

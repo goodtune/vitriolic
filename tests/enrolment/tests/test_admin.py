@@ -140,8 +140,8 @@ class EnrolmentDataMixin:
             "formset-MAX_NUM_FORMS": "1000",
         }
         for index, (enrolment, mark) in enumerate(rows):
-            data["formset-%d-enrolment" % index] = enrolment.pk
-            data["formset-%d-mark" % index] = mark
+            data[f"formset-{index}-enrolment"] = enrolment.pk
+            data[f"formset-{index}-mark"] = mark
         return data
 
 
@@ -180,24 +180,24 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
             self.get_check_200("admin:enrolment:schoolyear:edit", pk=self.year.pk)
 
     def test_year_edit_links_to_add_a_class_group(self):
+        add = self.reverse(ADD_CLASS_GROUP, year_id=self.year.pk)
         with self.login(self.superuser):
             self.get_check_200("admin:enrolment:schoolyear:edit", pk=self.year.pk)
             self.assertResponseContains(
                 by_shell(
                     workbook=(
-                        '<a class="wb-button wb-button-primary wb-button-small" href="%s">'
+                        f'<a class="wb-button wb-button-primary wb-button-small" href="{add}">'
                         '<svg class="wb-icon" aria-hidden="true" focusable="false">'
                         '<use href="/static/touchtechnology/admin/workbook/icons.svg#plus">'
                         "</use></svg>Add class group</a>"
                     ),
                     explorer=(
-                        '<a class="button primary compact" href="%s">'
+                        f'<a class="button primary compact" href="{add}">'
                         '<svg class="icon" aria-hidden="true" focusable="false">'
                         '<use href="/static/touchtechnology/admin/explorer/img/icons.svg#plus"></use>'
                         "</svg><span>Add class group</span></a>"
                     ),
-                )
-                % self.reverse(ADD_CLASS_GROUP, year_id=self.year.pk),
+                ),
             )
 
     def test_grade_edit_has_no_link_to_add_a_class_group(self):
@@ -442,7 +442,7 @@ class GoodViewTests(EnrolmentDataMixin, test_plus.TestCase):
         )
         for number in range(20):
             student = Student.objects.create(
-                first_name="Pupil%02d" % number,
+                first_name=f"Pupil{number:02d}",
                 last_name="Testcase",
                 date_of_birth=datetime.date(2018, 1, 1),
                 guardian_name="Guardian Testcase",
@@ -579,15 +579,15 @@ class PermissionDataMixin:
         "Every URL name of the component, with the arguments to reverse it."
         rows = []
         for namespace, instance, parent, listed in self.models:
-            name = "admin:enrolment:%s:%%s" % namespace
+            prefix = f"admin:enrolment:{namespace}"
             if listed:
-                rows.append(Row(name % "list", {}, None))
+                rows.append(Row(f"{prefix}:list", {}, None))
             rows.extend(
                 [
-                    Row(name % "add", parent, None),
-                    Row(name % "edit", {**parent, "pk": instance.pk}, None),
-                    Row(name % "delete", {**parent, "pk": instance.pk}, instance),
-                    Row(name % "perms", {**parent, "pk": instance.pk}, None),
+                    Row(f"{prefix}:add", parent, None),
+                    Row(f"{prefix}:edit", {**parent, "pk": instance.pk}, None),
+                    Row(f"{prefix}:delete", {**parent, "pk": instance.pk}, instance),
+                    Row(f"{prefix}:perms", {**parent, "pk": instance.pk}, None),
                 ]
             )
         return rows
@@ -601,7 +601,7 @@ class PermissionDataMixin:
         if row.target is not None:
             self.assertTrue(
                 type(row.target).objects.filter(pk=row.target.pk).exists(),
-                "%s removed %r" % (row.name, row.target),
+                f"{row.name} removed {row.target!r}",
             )
 
 
@@ -611,7 +611,7 @@ class PermissionSweepTests(PermissionDataMixin, test_plus.TestCase):
             get_resolver().namespace_dict["admin"][1].namespace_dict["enrolment"][1]
         )
         registered = {
-            "admin:enrolment:%s:%s" % (namespace, pattern.name)
+            f"admin:enrolment:{namespace}:{pattern.name}"
             for namespace, (_, resolver) in component.namespace_dict.items()
             for pattern in resolver.url_patterns
         }
@@ -641,13 +641,13 @@ class PermissionSweepTests(PermissionDataMixin, test_plus.TestCase):
             codename = instance._meta.model_name
             with self.subTest(namespace):
                 user = UserFactory.create(is_staff=True)
-                assign_perm("enrolment.view_%s" % codename, user)
-                assign_perm("enrolment.change_%s" % codename, user)
+                assign_perm(f"enrolment.view_{codename}", user)
+                assign_perm(f"enrolment.change_{codename}", user)
                 with self.login(user):
                     if listed:
-                        self.get_check_200("admin:enrolment:%s:list" % namespace)
+                        self.get_check_200(f"admin:enrolment:{namespace}:list")
                     self.get_check_200(
-                        "admin:enrolment:%s:edit" % namespace,
+                        f"admin:enrolment:{namespace}:edit",
                         pk=instance.pk,
                         **parent,
                     )
@@ -674,7 +674,7 @@ class NestingTests(PermissionDataMixin, test_plus.TestCase):
     def assertNotFoundUnder(self, namespace, instance, **parent):
         for view, method in (("edit", "get"), ("delete", "post"), ("perms", "get")):
             with self.subTest(namespace, view=view, **parent):
-                name = "admin:enrolment:%s:%s" % (namespace, view)
+                name = f"admin:enrolment:{namespace}:{view}"
                 self.request(method, name, pk=instance.pk, **parent)
                 self.response_404()
         self.assertTrue(type(instance).objects.filter(pk=instance.pk).exists())
@@ -735,7 +735,7 @@ class NestingTests(PermissionDataMixin, test_plus.TestCase):
             for namespace in ("enrolment", "assessment"):
                 with self.subTest(namespace):
                     self.get(
-                        "admin:enrolment:%s:add" % namespace,
+                        f"admin:enrolment:{namespace}:add",
                         year_id=self.year.pk,
                         class_group_id=self.other_group.pk,
                     )
@@ -751,7 +751,7 @@ class YearSetupTests(EnrolmentDataMixin, test_plus.TestCase):
             self.response_200()
         self.assertResponseContains(
             '<p class="setup-detail"><span class="visually-hidden">Still to do:'
-            "</span> %s has no teacher</p>" % bare
+            f"</span> {bare} has no teacher</p>"
         )
         self.assertEqual(self.context["setup"].next_step.url, bare.urls["edit"])
 
@@ -766,8 +766,8 @@ class YearSetupTests(EnrolmentDataMixin, test_plus.TestCase):
         setup = self.context["setup"]
         self.assertFalse(setup.here)
         self.assertResponseContains(
-            '<a href="%s#setup-tab"><strong>School year set-up</strong> '
-            "%d of %d done</a>" % (self.year.urls["edit"], setup.done, setup.total)
+            f'<a href="{self.year.urls["edit"]}#setup-tab">'
+            f"<strong>School year set-up</strong> {setup.done} of {setup.total} done</a>"
         )
 
     def test_report_card_shows_year_progress(self):
@@ -779,6 +779,6 @@ class YearSetupTests(EnrolmentDataMixin, test_plus.TestCase):
             )
         setup = self.context["setup"]
         self.assertResponseContains(
-            '<a href="%s#setup-tab"><strong>School year set-up</strong> '
-            "%d of %d done</a>" % (self.year.urls["edit"], setup.done, setup.total)
+            f'<a href="{self.year.urls["edit"]}#setup-tab">'
+            f"<strong>School year set-up</strong> {setup.done} of {setup.total} done</a>"
         )

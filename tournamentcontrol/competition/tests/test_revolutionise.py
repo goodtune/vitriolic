@@ -718,6 +718,7 @@ class AdminTests(TestCase):
         self.args = (self.season.competition_id, self.season.pk)
 
     def test_season_list_names_the_provider(self):
+        sync = self.reverse("admin:fixja:competition:season:upstream-sync", *self.args)
         with self.login(self.superuser):
             self.assertGoodView(
                 "admin:fixja:competition:edit",
@@ -727,20 +728,17 @@ class AdminTests(TestCase):
             self.assertResponseContains(
                 by_shell(
                     workbook=(
-                        '<a href="%s">'
+                        f'<a href="{sync}">'
                         '<svg class="wb-icon" aria-hidden="true" focusable="false">'
                         '<use href="/static/touchtechnology/admin/workbook/icons.svg#refresh-cw">'
                         "</use></svg>Sync with revolutioniseSPORT</a>"
                     ),
                     explorer=(
-                        '<a href="%s">'
+                        f'<a href="{sync}">'
                         '<svg class="icon" aria-hidden="true" focusable="false">'
                         '<use href="/static/touchtechnology/admin/explorer/img/icons.svg#refresh">'
                         "</use></svg>Synchronise from revolutioniseSPORT</a>"
                     ),
-                )
-                % self.reverse(
-                    "admin:fixja:competition:season:upstream-sync", *self.args
                 )
             )
 
