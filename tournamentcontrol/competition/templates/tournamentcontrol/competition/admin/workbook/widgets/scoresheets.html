@@ -2,12 +2,12 @@
 <section class="wb-sheet wb-widget">
 	<div class="wb-sheet-head">
 		<h2>{% icon "printer" %} {{ widget.verbose_name }}</h2>
-		<a class="wb-button wb-button-small" href="{% url 'admin:competition:scorecard-report' %}">{% trans "Report" %}</a>
+		<a class="wb-button wb-button-small" href="{% url 'admin:fixja:scorecard-report' %}">{% trans "Report" %}</a>
 	</div>
 	<ul class="wb-plain">
 		{% for stage in stages %}
 			{% with competition=stage.division.season.competition season=stage.division.season division=stage.division %}
-				<li>{{ division.title }}: <a target="_blank" rel="noopener" href="{% url 'admin:competition:competition:season:division:stage:scorecards' competition.pk season.pk division.pk stage.pk "pdf" %}">{{ stage.title }}</a></li>
+				<li>{{ division.title }}: <a target="_blank" rel="noopener" href="{% url 'admin:fixja:competition:season:division:stage:scorecards' competition.pk season.pk division.pk stage.pk "pdf" %}">{{ stage.title }}</a></li>
 			{% endwith %}
 		{% empty %}
 			<li class="wb-muted">{% icon "circle-check" %} {% trans "There are no pending scoresheets." %}</li>

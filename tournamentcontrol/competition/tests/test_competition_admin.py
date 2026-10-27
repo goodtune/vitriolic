@@ -1752,7 +1752,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             "competition_id": m.stage.division.season.competition_id,
         }
         url = reverse(
-            "admin:competition:competition:season:division:stage:match:detail",
+            "admin:fixja:competition:season:division:stage:match:detail",
             kwargs=kwargs,
         )
 
