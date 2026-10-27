@@ -1334,7 +1334,7 @@ class DrawGenerationWizardRegressionTests(DemoMixin, TestCase):
         build_url = division.regular.url_names["build"]
         with self.login(self.superuser):
             self.get(build_url.url_name, *build_url.args)
-            self.response_200()
+            self.assert_http_200_ok()
             self.post(
                 build_url.url_name,
                 *build_url.args,
@@ -1350,7 +1350,7 @@ class DrawGenerationWizardRegressionTests(DemoMixin, TestCase):
                     "0-0-offset": "",
                 },
             )
-            self.response_200()
+            self.assert_http_200_ok()
             formset = self.get_context("form")
             data = {
                 "draw_generation_wizard-current_step": "1",
@@ -1368,7 +1368,10 @@ class DrawGenerationWizardRegressionTests(DemoMixin, TestCase):
                         value = value.date()
                     data[f"1-{index}-{name}"] = "" if value is None else str(value)
             self.post(build_url.url_name, *build_url.args, data=data)
-            self.response_302()
+            edit_url = division.url_names["edit"]
+            self.assert_http_302_found(
+                url=self.reverse(edit_url.url_name, *edit_url.args)
+            )
         saved = division.regular.matches.order_by("round", "pk")
         self.assertEqual(
             [
@@ -2126,10 +2129,10 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         self.assertEqual(plan, {**self.plan, "saved": False, "dry_run": True})
         # Nothing was saved.
         first.refresh_from_db()
-        self.assertFalse(first.is_bye)
+        self.assertIs(first.is_bye, False)
         self.assertEqual(list(first.referees.all()), [self.referee])
         self.assertEqual(list(self.team.team_clashes.all()), [self.clash])
-        self.assertTrue(Match.objects.filter(pk=self.bye.pk).exists())
+        self.assertEqual(Match.objects.filter(pk=self.bye.pk).count(), 1)
 
         res = self.admin_tools.withdraw_team(self.team.pk)
         self.assertEqual(res, self.plan)
@@ -2139,24 +2142,26 @@ class WithdrawTeamTests(DemoMixin, TestCase):
             if match.away_team_id == self.team.pk:
                 side, other = other, side
             match.refresh_from_db()
-            self.assertTrue(match.is_bye)
-            self.assertFalse(match.bye_processed)
+            self.assertIs(match.is_bye, True)
+            self.assertIs(match.bye_processed, False)
             self.assertIsNone(getattr(match, side))
             self.assertEqual(getattr(match, other), opponent)
             self.assertIsNone(match.time)
             self.assertIsNone(match.datetime)
             self.assertIsNone(match.play_at)
-            self.assertFalse(match.referees.exists())
-        self.assertFalse(Match.objects.filter(pk=self.bye.pk).exists())
+            self.assertCountEqual(match.referees.all(), [])
+        self.assertEqual(Match.objects.filter(pk=self.bye.pk).count(), 0)
         for match in self.played:
             match.refresh_from_db()
-            self.assertFalse(match.is_bye)
-            self.assertTrue(match.include_in_ladder)
-            self.assertIsNotNone(match.home_team_id)
-            self.assertIsNotNone(match.away_team_id)
+            self.assertIs(match.is_bye, False)
+            self.assertIs(match.include_in_ladder, True)
+            self.assertCountEqual(
+                [match.home_team_id, match.away_team_id],
+                [self.team.pk, self.opponent(match).pk],
+            )
         self.assertEqual(self.snapshot(), others)
-        self.assertFalse(self.team.team_clashes.exists())
-        self.assertFalse(self.clash.team_clashes.exists())
+        self.assertCountEqual(self.team.team_clashes.all(), [])
+        self.assertCountEqual(self.clash.team_clashes.all(), [])
 
         # The released slot is free for another match.
         extra = self.admin_tools.create_match(
@@ -2203,11 +2208,11 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         )
         for match in self.unplayed[:2]:
             match.refresh_from_db()
-            self.assertFalse(match.is_bye)
+            self.assertIs(match.is_bye, False)
             self.assertIn(self.team, (match.home_team, match.away_team))
         for match in self.unplayed[2:]:
             match.refresh_from_db()
-            self.assertTrue(match.is_bye)
+            self.assertIs(match.is_bye, True)
 
     def test_void_played_results(self):
         # Twelve matches have results, so the ladder counts 24 appearances.
@@ -2226,7 +2231,7 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         self.assertEqual(res, voided)
         for match in self.played:
             match.refresh_from_db()
-            self.assertFalse(match.include_in_ladder)
+            self.assertIs(match.include_in_ladder, False)
         ladder = self.admin_tools.get_ladder(stage_id=self.stage.pk)
         entries = {
             e["team"]["id"]: e for e in ladder["stages"][0]["pools"][0]["ladder"]
@@ -2307,7 +2312,7 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         )
         self.admin_tools.record_match_result(first.pk, bye_processed=True)
         first.refresh_from_db()
-        self.assertTrue(first.bye_processed)
+        self.assertIs(first.bye_processed, True)
         ladder = self.admin_tools.get_ladder(stage_id=self.stage.pk)
         entries = {
             e["team"]["id"]: e for e in ladder["stages"][0]["pools"][0]["ladder"]
@@ -2396,8 +2401,8 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         self.assertEqual(self.snapshot(), before)
         for match in self.unplayed:
             match.refresh_from_db()
-            self.assertFalse(match.is_bye)
-        self.assertTrue(Match.objects.filter(pk=self.bye.pk).exists())
+            self.assertIs(match.is_bye, False)
+        self.assertEqual(Match.objects.filter(pk=self.bye.pk).count(), 1)
 
     def test_permissions(self):
         # Changing the team needs change_team; changing its matches needs
@@ -2417,7 +2422,7 @@ class WithdrawTeamTests(DemoMixin, TestCase):
         )
         for match in self.unplayed:
             match.refresh_from_db()
-            self.assertFalse(match.is_bye)
+            self.assertIs(match.is_bye, False)
         self.assertToolError(
             "This team cannot be deleted because it has matches scheduled or "
             "played; use withdraw_team to take it out of the draw.",

@@ -20,13 +20,14 @@ class LiveStreamAPITests(TestCase):
     
     user_factory = SuperUserFactory
 
-    def setUp(self):
+    @classmethod
+    def setUpTestData(cls):
         """Create test fixtures."""
         # Create superuser for authentication
-        self.user = self.make_user()
-        
+        cls.user = cls.make_user()
+
         # Create season with streaming capability
-        self.season = factories.SeasonFactory.create(
+        cls.season = factories.SeasonFactory.create(
             live_stream=True,
             live_stream_project_id="test-project-123",
             live_stream_client_id="test-client-123.apps.googleusercontent.com",
@@ -39,34 +40,34 @@ class LiveStreamAPITests(TestCase):
             ],
         )
         
-        self.stage = factories.StageFactory.create(division__season=self.season)
-        
+        cls.stage = factories.StageFactory.create(division__season=cls.season)
+
         # Create matches with and without streaming
-        self.stream_match_1 = factories.MatchFactory.create(
-            stage=self.stage,
+        cls.stream_match_1 = factories.MatchFactory.create(
+            stage=cls.stage,
             external_identifier="youtube_id_1",
             live_stream=True,
             date=date(2023, 6, 15),
         )
         
-        self.stream_match_2 = factories.MatchFactory.create(
-            stage=self.stage,
+        cls.stream_match_2 = factories.MatchFactory.create(
+            stage=cls.stage,
             external_identifier="youtube_id_2",
             live_stream=True,
             date=date(2023, 6, 16),
         )
         
         # Match without streaming (should not appear in API)
-        self.non_stream_match = factories.MatchFactory.create(
-            stage=self.stage,
+        cls.non_stream_match = factories.MatchFactory.create(
+            stage=cls.stage,
             external_identifier=None,
             live_stream=False,
             date=date(2023, 6, 15),
         )
         
         # Match with empty external_identifier (should not appear)
-        self.empty_id_match = factories.MatchFactory.create(
-            stage=self.stage,
+        cls.empty_id_match = factories.MatchFactory.create(
+            stage=cls.stage,
             external_identifier="",
             live_stream=True,
             date=date(2023, 6, 15),
@@ -75,14 +76,14 @@ class LiveStreamAPITests(TestCase):
     def test_unauthenticated_access_denied(self):
         """Test that unauthenticated requests are denied."""
         self.get('v1:competition:livestream-list')
-        self.response_403()
+        self.assert_http_403_forbidden()
 
     def test_list_matches_grouped_by_date(self):
         """Test listing matches grouped by date."""
         self.login(self.user)
         
         self.get('v1:competition:livestream-list')
-        self.response_200()
+        self.assert_http_200_ok()
         
         data = self.last_response.json()
         
@@ -113,7 +114,7 @@ class LiveStreamAPITests(TestCase):
         # Filter for only 2023-06-15
         self.get('v1:competition:livestream-list',
                  data={'date__gte': '2023-06-15', 'date__lte': '2023-06-15'})
-        self.response_200()
+        self.assert_http_200_ok()
         
         data = self.last_response.json()
         
@@ -127,7 +128,7 @@ class LiveStreamAPITests(TestCase):
         # Create another season with matches
         other_season = factories.SeasonFactory.create()
         other_stage = factories.StageFactory.create(division__season=other_season)
-        other_match = factories.MatchFactory.create(
+        factories.MatchFactory.create(
             stage=other_stage,
             external_identifier="other_youtube_id",
             live_stream=True,
@@ -138,7 +139,7 @@ class LiveStreamAPITests(TestCase):
         # Filter by original season ID
         self.get('v1:competition:livestream-list',
                  data={'season_id': self.season.id})
-        self.response_200()
+        self.assert_http_200_ok()
         
         data = self.last_response.json()
         
@@ -148,16 +149,14 @@ class LiveStreamAPITests(TestCase):
             for match in date_matches:
                 all_external_ids.append(match['external_identifier'])
         
-        self.assertIn('youtube_id_1', all_external_ids)
-        self.assertIn('youtube_id_2', all_external_ids)
-        self.assertNotIn('other_youtube_id', all_external_ids)
+        self.assertCountEqual(all_external_ids, ['youtube_id_1', 'youtube_id_2'])
 
     def test_match_serialization_includes_nested_details(self):
         """Test that match serialization includes nested Stage/Division/Season/Competition."""
         self.login(self.user)
         
         self.get('v1:competition:livestream-list')
-        self.response_200()
+        self.assert_http_200_ok()
         
         data = self.last_response.json()
         match_data = data['2023-06-15'][0]
@@ -188,14 +187,15 @@ class LiveStreamAPITests(TestCase):
         # Use invalid date formats
         self.get('v1:competition:livestream-list',
                  data={'date__gte': 'invalid-date', 'date__lte': 'not-a-date'})
-        # Django's ORM will handle invalid date formats by raising a validation error
-        # or returning an empty queryset, so we expect either a 400 or empty results
-        self.assertTrue(self.last_response.status_code in [200, 400])
-        
-        if self.last_response.status_code == 200:
-            # If successful, should return empty results or all matches
-            data = self.last_response.json()
-            self.assertIsInstance(data, dict)
+        # The FilterSet validates the dates, so the request is rejected.
+        self.assert_http_400_bad_request()
+        self.assertEqual(
+            self.last_response.json(),
+            {
+                "date__gte": ["Enter a valid date."],
+                "date__lte": ["Enter a valid date."],
+            },
+        )
 
     @mock.patch("tournamentcontrol.competition.models.build")
     def test_transition_endpoint_success(self, mock_build):
@@ -213,10 +213,10 @@ class LiveStreamAPITests(TestCase):
                   uuid=self.stream_match_1.uuid,
                   data=data,
                   extra={'content_type': 'application/json'})
-        self.response_200()
+        self.assert_http_200_ok()
         
         result = self.last_response.json()
-        self.assertTrue(result['success'])
+        self.assertIs(result['success'], True)
         self.assertEqual(result['message'], 'Successfully transitioned to live')
         self.assertEqual(result['youtube_response'], mock_response)
         self.assertEqual(result['warnings'], [])
@@ -242,14 +242,11 @@ class LiveStreamAPITests(TestCase):
                   uuid=self.stream_match_1.uuid,
                   data=data,
                   extra={'content_type': 'application/json'})
-        self.response_200()
+        self.assert_http_200_ok()
         
         result = self.last_response.json()
-        self.assertTrue(result['success'])
-        # Note: Warning mechanism may not trigger in current implementation
-        # Test verifies warnings array is present but may be empty
-        self.assertIn('warnings', result)
-        self.assertIsInstance(result['warnings'], list)
+        self.assertIs(result['success'], True)
+        self.assertEqual(result['warnings'], [])
 
     def test_transition_endpoint_invalid_status(self):
         """Test transition endpoint with invalid status value."""
@@ -260,10 +257,12 @@ class LiveStreamAPITests(TestCase):
                   uuid=self.stream_match_1.uuid,
                   data=data,
                   extra={'content_type': 'application/json'})
-        self.response_400()
+        self.assert_http_400_bad_request()
         
-        result = self.last_response.json()
-        self.assertIn('status', result)
+        self.assertEqual(
+            self.last_response.json(),
+            {"status": ['"invalid_status" is not a valid choice.']},
+        )
 
     def test_transition_endpoint_missing_external_identifier(self):
         """Test transition endpoint with match lacking external_identifier."""
@@ -274,7 +273,7 @@ class LiveStreamAPITests(TestCase):
                   uuid=self.non_stream_match.uuid,
                   data=data,
                   extra={'content_type': 'application/json'})
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_permission_check_non_superuser(self):
         """Test that regular users without permissions are denied access."""
@@ -283,7 +282,7 @@ class LiveStreamAPITests(TestCase):
         self.login(regular_user)
         
         self.get('v1:competition:livestream-list')
-        self.response_403()
+        self.assert_http_403_forbidden()
 
     def test_retrieve_specific_match(self):
         """Test retrieving a specific match by UUID."""
@@ -291,7 +290,7 @@ class LiveStreamAPITests(TestCase):
         
         self.get('v1:competition:livestream-detail',
                  uuid=self.stream_match_1.uuid)
-        self.response_200()
+        self.assert_http_200_ok()
         
         data = self.last_response.json()
         self.assertEqual(data['uuid'], str(self.stream_match_1.uuid))
