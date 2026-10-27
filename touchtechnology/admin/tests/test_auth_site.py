@@ -23,11 +23,11 @@ class TestCase(PlusTestCase):
     def get_generic_200(self, url_name, user, in_context, template, **kw):
         self.assertLoginRequired(url_name, **kw)
         with self.login(user):
-            res = self.get(url_name, **kw)
-            self.response_200()
+            self.get(url_name, **kw)
+            self.assert_http_200_ok()
             for key in in_context:
                 self.assertInContext(key)
-            self.assertTemplateUsed(res, template)
+            self.assertTemplateUsed(self.last_response, template)
 
 
 @per_shell
@@ -39,7 +39,7 @@ class AuthSiteUserTests(TestCase):
 
         with self.login(self.superuser):
             self.get(url_name)
-            self.response_302()
+            self.assert_http_302_found(url=self.reverse("admin:auth:users:list"))
 
     def test_user_list(self):
         self.get_generic_200(
@@ -63,7 +63,7 @@ class AuthSiteUserTests(TestCase):
 
         with self.login(self.superuser):
             self.get("admin:auth:users:list")
-            self.response_200()
+            self.assert_http_200_ok()
             for fragment in self.by_shell(
                 workbook=(
                     '<th scope="col" class="wb-hide-narrow">Registered</th>',
@@ -115,10 +115,10 @@ class AuthSiteUserTests(TestCase):
 
         with self.login(self.superuser):
             self.get(url_name, pk=1)
-            self.response_405()
+            self.assert_http_405_method_not_allowed()
 
             self.post(url_name, pk=1)
-            self.response_302()
+            self.assert_http_302_found(url=self.reverse("admin:auth:users:list"))
 
 
 @per_shell
@@ -166,10 +166,10 @@ class AuthSiteGroupTests(TestCase):
 
         with self.login(self.superuser):
             self.get(url_name, pk=self.group_instance.pk)
-            self.response_405()
+            self.assert_http_405_method_not_allowed()
 
             self.post(url_name, pk=self.group_instance.pk)
-            self.response_302()
+            self.assert_http_302_found(url=self.reverse("admin:auth:groups:list"))
 
 
 def lazy_twice(get_response):
