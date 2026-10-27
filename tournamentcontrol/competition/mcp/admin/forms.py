@@ -115,7 +115,7 @@ class AgentMatchEvalMixin:
                 )
 
     def clean(self):
-        cleaned_data = super().clean() or self.cleaned_data
+        cleaned_data = super().clean()
         for side in ("home", "away"):
             if {f"{side}_team_eval", f"{side}_team_eval_related"} & set(
                 self.changed_data
