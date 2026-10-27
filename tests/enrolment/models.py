@@ -11,7 +11,7 @@ class EnrolmentModel(AdminUrlMixin, models.Model):
         abstract = True
 
     def _get_admin_namespace(self):
-        return "admin:enrolment:%s" % self._meta.model_name
+        return f"admin:enrolment:{self._meta.model_name}"
 
     def _get_url_args(self):
         return (self.pk,)
@@ -49,7 +49,7 @@ class Teacher(EnrolmentModel):
         ordering = ("last_name", "first_name")
 
     def __str__(self):
-        return "%s %s" % (self.first_name, self.last_name)
+        return f"{self.first_name} {self.last_name}"
 
 
 class ClassGroup(EnrolmentModel):
@@ -75,7 +75,7 @@ class ClassGroup(EnrolmentModel):
         ]
 
     def __str__(self):
-        return "%s (%s)" % (self.title, self.year)
+        return f"{self.title} ({self.year})"
 
     def _get_url_args(self):
         return (self.year_id, self.pk)
@@ -92,7 +92,7 @@ class Student(EnrolmentModel):
         ordering = ("last_name", "first_name")
 
     def __str__(self):
-        return "%s %s" % (self.first_name, self.last_name)
+        return f"{self.first_name} {self.last_name}"
 
 
 class Enrolment(EnrolmentModel):
@@ -116,7 +116,7 @@ class Enrolment(EnrolmentModel):
         ]
 
     def __str__(self):
-        return "%s in %s" % (self.student, self.class_group)
+        return f"{self.student} in {self.class_group}"
 
     def _get_url_args(self):
         return (self.class_group.year_id, self.class_group_id, self.pk)
@@ -148,7 +148,7 @@ class AttendanceRecord(EnrolmentModel):
         ]
 
     def __str__(self):
-        return "%s: %s" % (self.date, self.status)
+        return f"{self.date}: {self.status}"
 
     def _get_url_args(self):
         return (
@@ -200,7 +200,7 @@ class Score(models.Model):
         ]
 
     def __str__(self):
-        return "%s/%s" % (self.mark, self.assessment.maximum_mark)
+        return f"{self.mark}/{self.assessment.maximum_mark}"
 
     def clean(self):
         super().clean()
@@ -208,8 +208,8 @@ class Score(models.Model):
         if self.assessment_id:
             if self.mark is not None and self.mark > self.assessment.maximum_mark:
                 errors["mark"] = (
-                    "The mark cannot be more than the maximum of %s."
-                    % self.assessment.maximum_mark
+                    "The mark cannot be more than the maximum of "
+                    f"{self.assessment.maximum_mark}."
                 )
             if (
                 self.enrolment_id
@@ -223,7 +223,7 @@ class Score(models.Model):
 
 
 class ReportCard(EnrolmentModel):
-    TERM_CHOICES = [(term, "Term %d" % term) for term in range(1, 5)]
+    TERM_CHOICES = [(term, f"Term {term}") for term in range(1, 5)]
 
     enrolment = models.ForeignKey(
         Enrolment, on_delete=models.CASCADE, related_name="report_cards"
@@ -244,7 +244,7 @@ class ReportCard(EnrolmentModel):
         ]
 
     def __str__(self):
-        return "Term %s" % self.term
+        return f"Term {self.term}"
 
     def _get_url_args(self):
         return (

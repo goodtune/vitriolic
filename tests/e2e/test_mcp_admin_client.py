@@ -186,8 +186,8 @@ def test_anonymous_is_challenged(live_server, fixture):
     )
     assert response.status_code == 401
     assert response.headers["WWW-Authenticate"] == (
-        'Bearer resource_metadata="%s/.well-known/oauth-protected-resource/admin/mcp/"'
-        % live_server.url
+        f'Bearer resource_metadata="{live_server.url}'
+        '/.well-known/oauth-protected-resource/admin/mcp/"'
     )
 
 
@@ -259,7 +259,7 @@ def test_non_staff_is_forbidden(live_server, fixture):
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
         headers={
             "Accept": "application/json, text/event-stream",
-            "Authorization": "Bearer %s" % storage.tokens.access_token,
+            "Authorization": f"Bearer {storage.tokens.access_token}",
         },
     )
     assert response.status_code == 403

@@ -80,8 +80,7 @@ class SeedingTests(TestCase):
             with self.subTest(students=students):
                 with self.assertRaisesMessage(
                     CommandError,
-                    "--students must be from 1 to %d, not %d."
-                    % (MAX_STUDENTS, students),
+                    f"--students must be from 1 to {MAX_STUDENTS}, not {students}.",
                 ):
                     call_command("seed_enrolment", students=students)
         self.assertFalse(Student.objects.exists())
@@ -89,8 +88,7 @@ class SeedingTests(TestCase):
     def test_command_refuses_more_students_than_there_are_names(self):
         with self.assertRaisesMessage(
             CommandError,
-            "--students must be from 1 to %d, not %d."
-            % (MAX_STUDENTS, MAX_STUDENTS + 1),
+            f"--students must be from 1 to {MAX_STUDENTS}, not {MAX_STUDENTS + 1}.",
         ):
             call_command("seed_enrolment", students=MAX_STUDENTS + 1)
         self.assertFalse(Student.objects.exists())

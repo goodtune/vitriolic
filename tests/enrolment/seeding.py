@@ -48,7 +48,7 @@ FICTIONAL_MOBILES = [
 ]  # fmt: skip
 
 TEACHER_COUNT = 16
-GRADES = [("Kindergarten", 0)] + [("Year %d" % n, n) for n in range(1, 7)]
+GRADES = [("Kindergarten", 0)] + [(f"Year {n}", n) for n in range(1, 7)]
 YEARS = [
     ("2026", datetime.date(2026, 1, 27), datetime.date(2026, 12, 11)),
     ("2027", datetime.date(2027, 1, 27), datetime.date(2027, 12, 10)),
@@ -111,7 +111,7 @@ GENERAL = [
 def _comment(rng, first_name, phrases):
     """Compose a two-sentence comment from two distinct phrases."""
     first, second = rng.sample(phrases, 2)
-    return "%s %s. %s also %s." % (first_name, first, first_name, second)
+    return f"{first_name} {first}. {first_name} also {second}."
 
 
 def _weekdays():
@@ -124,8 +124,8 @@ def _weekdays():
 def _class_title(grade, number):
     """K1, K2 for kindergarten, then 1A, 1B ... 6B for the school years."""
     if grade.ordinal == 0:
-        return "K%d" % (number + 1)
-    return "%d%s" % (grade.ordinal, "AB"[number])
+        return f"K{number + 1}"
+    return f"{grade.ordinal}{'AB'[number]}"
 
 
 def _seed_structure():
@@ -148,7 +148,7 @@ def _seed_structure():
         teacher, _ = Teacher.objects.update_or_create(
             first_name=first,
             last_name=last,
-            defaults={"email": "%s.%s@school.example" % (first.lower(), last.lower())},
+            defaults={"email": f"{first.lower()}.{last.lower()}@school.example"},
         )
         teachers.append(teacher)
 
@@ -182,7 +182,7 @@ def _seed_students(rng, students):
             last_name=last,
             date_of_birth=date_of_birth,
             defaults={
-                "guardian_name": "%s %s" % (rng.choice(FIRST_NAMES), last),
+                "guardian_name": f"{rng.choice(FIRST_NAMES)} {last}",
                 "guardian_phone": rng.choice(FICTIONAL_MOBILES),
             },
         )
@@ -283,7 +283,7 @@ def seed(students: int = 300, seed: int = 20261) -> dict[str, int]:
     of rows in each seeded table, keyed by model name.
     """
     if not 1 <= students <= MAX_STUDENTS:
-        raise ValueError("students must be from 1 to %d." % MAX_STUDENTS)
+        raise ValueError(f"students must be from 1 to {MAX_STUDENTS}.")
 
     rng = random.Random(seed)
 
