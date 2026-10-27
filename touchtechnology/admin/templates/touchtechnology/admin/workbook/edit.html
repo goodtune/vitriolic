@@ -93,7 +93,7 @@
 								<section class="wb-pane wb-sheet" role="tabpanel" id="{{ name }}-pane">
 									{% block mvp-list %}
 										{% with table=templates|default:None %}
-											{% admin_list manager.all template=manager|admin_list_template:table %}
+											{% admin_list manager template=manager|admin_list_template:table %}
 										{% endwith %}
 									{% endblock %}
 								</section>

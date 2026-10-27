@@ -68,7 +68,7 @@
 						<section class="pane" data-tab-panel role="tabpanel" id="{{ name }}-tab" aria-labelledby="{{ name }}-tab-link">
 							{% block mvp-list %}
 								{% with table=templates|default:None %}
-									{% admin_list manager.all template=manager|admin_list_template:table %}
+									{% admin_list manager template=manager|admin_list_template:table %}
 								{% endwith %}
 							{% endblock %}
 						</section>

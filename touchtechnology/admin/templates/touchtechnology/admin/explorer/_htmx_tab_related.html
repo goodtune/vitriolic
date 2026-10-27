@@ -6,6 +6,6 @@ link, as the panes rendered with the page do; its pages replace this pane.
 {% endcomment %}
 <div>
 	{% with table=templates|default:None manager=tab_manager %}
-		{% admin_list tab_manager.all template=tab_manager|admin_list_template:table paginate_by=tab_paginate_by %}
+		{% admin_list tab_manager template=tab_manager|admin_list_template:table paginate_by=tab_paginate_by %}
 	{% endwith %}
 </div>
