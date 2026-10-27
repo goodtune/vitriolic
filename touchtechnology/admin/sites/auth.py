@@ -25,7 +25,7 @@ class UsersGroups(AdminComponent):
     unprotected = False
 
     def __init__(self, app, name="auth", app_name="auth"):
-        super(UsersGroups, self).__init__(app, name, app_name)
+        super().__init__(app, name, app_name)
         self.user_class = get_user_model()
 
     @property

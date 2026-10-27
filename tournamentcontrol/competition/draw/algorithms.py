@@ -121,7 +121,7 @@ def seeded_tournament(seeded_team_list, days_available, max_per_day=1, min_per_d
     if isinstance(first(seeded_team_list), str):
 
         @functools.total_ordering
-        class Team(object):
+        class Team:
             def __init__(self, st, order):
                 self.st = st
                 self.order = order

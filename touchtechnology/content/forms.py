@@ -106,7 +106,7 @@ class ParentChildModelForm(BootstrapFormControlMixin, ModelForm):
             yield self[name]
 
     def _get_media(self):
-        return super().media +self.parent_form.media
+        return super().media + self.parent_form.media
 
     media = property(_get_media)
 

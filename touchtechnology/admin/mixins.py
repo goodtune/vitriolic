@@ -10,7 +10,7 @@ class AdminUrlLookup:
     args: tuple
 
 
-class AdminUrlMixin(object):
+class AdminUrlMixin:
     """
     Mixin which can be used to add API to a model for use by standard admin
     component templates, tags, and filters.

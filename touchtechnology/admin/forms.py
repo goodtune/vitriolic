@@ -41,7 +41,7 @@ class UserEditForm(UserMixin, ModelForm):
 
 class GroupEditForm(UserMixin, ModelForm):
     def __init__(self, *args, **kwargs):
-        super(GroupEditForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         # The django.contrib applications don't benefit from the
         # touchtechnology.common database fields, so we need to tweak this
         # field queryset the old fashioned way to make sure we're doing a join.

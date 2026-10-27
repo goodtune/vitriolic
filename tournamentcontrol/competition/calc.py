@@ -48,7 +48,7 @@ Comparison = (
 ).setName("comparison")
 
 
-class Calculator(object):
+class Calculator:
 
     def __init__(self, instance, *args, **kwargs):
         Expression = Forward()
@@ -126,7 +126,7 @@ class BonusPointCalculator(Calculator):
     """
 
     def __init__(self, *args, **kwargs):
-        super(BonusPointCalculator, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         self.Operators.update(
             {
