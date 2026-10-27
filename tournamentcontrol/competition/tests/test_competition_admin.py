@@ -2581,7 +2581,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             title="Test Division",
             teams=["Team A", "Team B", "Team C", "Team D"],
             draw_formats={
-                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
+                "round-robin-4": round_robin_format(4)
             },
             stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
         )
@@ -2604,10 +2604,11 @@ class BackendTests(MessagesTestMixin, TestCase):
             )
             self.response_302()  # Should redirect after successful save
 
-        # Check that division was created
+        # Check that division was created, with a match for every line of the format
         self.assertEqual(season.divisions.count(), 1)
         division = season.divisions.first()
         self.assertEqual(division.title, "Test Division")
+        self.assertEqual(division.matches.count(), 6)
 
     def test_json_division_builder_duplicate_existing_division_name(self):
         """Test that existing division names cause validation errors."""
@@ -2623,7 +2624,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             title="Existing Division",  # Same name as existing division
             teams=["Team A", "Team B", "Team C", "Team D"],
             draw_formats={
-                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
+                "round-robin-4": round_robin_format(4)
             },
             stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
         )
@@ -2673,7 +2674,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             title="Duplicate Name",
             teams=["Team A", "Team B", "Team C", "Team D"],
             draw_formats={
-                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
+                "round-robin-4": round_robin_format(4)
             },
             stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
         )
@@ -2681,7 +2682,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             title="Duplicate Name",  # Same name as first structure
             teams=["Team E", "Team F", "Team G", "Team H"],
             draw_formats={
-                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
+                "round-robin-4": round_robin_format(4)
             },
             stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
         )

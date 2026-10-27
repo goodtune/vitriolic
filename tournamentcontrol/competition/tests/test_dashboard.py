@@ -576,6 +576,61 @@ class FirstStageProgressionPageTests(TestCase):
             'id="id_form-0-id">'
         )
 
+    def test_a_place_on_the_stages_own_ladder_is_not_filled_by_hand(self):
+        """
+        A stage with a place a person fills by hand (``Host``) and a final
+        between the winner of one of its matches and the leader of its own
+        ladder (``S1P1``). While the stage's other match is unplayed the
+        progression page asks for the hand-filled place and not the leader,
+        who the ladder has yet to settle; once the ladder is complete the
+        final can be resolved, so the page offers both matches.
+        """
+        kick_off = datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC"))
+        final_kick_off = datetime.datetime(2019, 7, 15, 10, 30, tzinfo=ZoneInfo("UTC"))
+        t1, t2, t3, t4 = TeamFactory.create_batch(4, division=self.stage.division)
+        match_1 = MatchFactory.create(
+            stage=self.stage, home_team=t1, away_team=t4, datetime=kick_off
+        )
+        match_2 = MatchFactory.create(
+            stage=self.stage, home_team=t2, away_team=t3, datetime=kick_off
+        )
+        host = UndecidedTeamFactory.create(stage=self.stage, label="Host", formula="")
+        leader = UndecidedTeamFactory.create(stage=self.stage, formula="S1P1")
+        playoff = MatchFactory.create(
+            stage=self.stage,
+            home_team=None,
+            home_team_undecided=host,
+            away_team=t4,
+            datetime=final_kick_off,
+            label="Playoff",
+        )
+        final = MatchFactory.create(
+            stage=self.stage,
+            home_team=None,
+            away_team=None,
+            home_team_eval="W",
+            home_team_eval_related=match_1,
+            away_team_undecided=leader,
+            datetime=final_kick_off,
+            label="Final",
+        )
+        decide(match_1)
+
+        with self.login(self.superuser):
+            self.get_check_200(self.progress_url())
+        self.assertCountEqual(
+            [form.instance for form in self.get_context("formset").forms], [host]
+        )
+
+        decide(match_2)
+
+        with self.login(self.superuser):
+            self.get_check_200(self.progress_url())
+        self.assertCountEqual(
+            [form.instance for form in self.get_context("formset").forms],
+            [playoff, final],
+        )
+
     def test_a_failing_widget_is_left_out_of_the_home_page(self):
         """
         The home page stands when one of its widgets fails: the widget is left

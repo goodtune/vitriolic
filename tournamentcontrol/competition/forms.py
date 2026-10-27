@@ -2754,11 +2754,28 @@ class DivisionStructureJSONForm(forms.Form):
                 "A division of that name already exists in this season."
             )
 
-        errors = self._position_errors(structure)
+        # The formats must parse before their positions can be read.
+        errors = self._draw_format_errors(structure) or self._position_errors(
+            structure
+        )
         if errors:
             raise forms.ValidationError(errors)
 
         return json_data
+
+    def _draw_format_errors(self, structure):
+        """
+        One error per draw format a stage or pool refers to that
+        ``DrawGenerator`` refuses, naming the format, as ``DrawFormatForm``
+        reports the same message on a saved format.
+        """
+        errors = []
+        for key, text in structure.referenced_draw_formats().items():
+            try:
+                DrawGenerator.validate(text)
+            except ValueError as e:
+                errors.append(f"Draw format '{key}': {e}")
+        return errors
 
     def _position_errors(self, structure):
         """
