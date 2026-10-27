@@ -60,6 +60,9 @@ def strings_outside_the_legacy_mapping(source: str) -> list[str]:
                 and isinstance(body[0].value, ast.Constant)
             ):
                 skip.add(id(body[0].value))
+        # f-string format specs such as ".1f" are not selectors.
+        if isinstance(node, ast.FormattedValue) and node.format_spec is not None:
+            skip.update(id(n) for n in ast.walk(node.format_spec))
         # The mapping itself.
         if isinstance(node, ast.Assign) and any(
             isinstance(t, ast.Name) and t.id == "LEGACY_FALLBACKS" for t in node.targets
@@ -101,6 +104,7 @@ def test_the_check_finds_a_selector_that_names_an_id_a_class_or_data():
         "    page.locator('div[class=\"x\"]')\n"
         "    page.locator('a[href=\"#x\"]')\n"
         "    page.locator('[name=\"title\"]')\n"
+        "    print(f'{page.duration:.1f} s')\n"
     )
     assert selectors_that_name_an_id_a_class_or_data(source) == [
         "#myTab",
