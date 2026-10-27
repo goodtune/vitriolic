@@ -4333,7 +4333,7 @@ class MatchRowMixin(WarmCachesMixin, IconMixin):
     # once and Django for their permissions on every match once (their own
     # and their groups'), and selects or prefetches every relation a row
     # touches.
-    RUN_SHEET_QUERIES = 16
+    RUN_SHEET_QUERIES = 15
 
     def get_run_sheet(self, queries=None):
         """

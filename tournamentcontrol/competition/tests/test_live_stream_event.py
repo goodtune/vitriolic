@@ -32,7 +32,7 @@ UTC = ZoneInfo("UTC")
 #: What the season's edit page costs, with the site and content types already
 #: looked up (see ``WarmCachesMixin``). The Explorer shell draws fewer panels.
 def season_edit_queries():
-    return by_shell(workbook=45, explorer=39)
+    return by_shell(workbook=32, explorer=26)
 
 
 def _http_error(status, message):

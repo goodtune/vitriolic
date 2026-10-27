@@ -57,7 +57,7 @@ class StageMatchesTabQueryTests(TestCase):
             # sitemap's URL patterns are kept for the life of the process.
             # Draw the page once so they are, whichever test runs first.
             self.get_check_200(name, *stage._get_url_args())
-            with self.assertNumQueries(self.by_shell(workbook=37, explorer=35)):
+            with self.assertNumQueries(self.by_shell(workbook=34, explorer=32)):
                 self.get_check_200(name, *stage._get_url_args())
 
     def test_few_matches(self):
