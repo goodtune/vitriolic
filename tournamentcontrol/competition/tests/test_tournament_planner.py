@@ -65,7 +65,7 @@ class TournamentPlannerViewTests(TestCase):
                 "min_per_day": 1,
             },
         )
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertResponseContains("<h3>Pool 2</h3>")
         self.assertResponseContains(
             by_shell(

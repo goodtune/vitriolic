@@ -89,6 +89,7 @@ class BuildLiveStreamBodyShortTitleTests(TestCase):
     """Verify ``short=True`` swaps in ``short_title`` for the templated names."""
 
     def setUp(self):
+        super().setUp()
         self.season = factories.SeasonFactory.create(
             title="Premiership Season Two Thousand Twenty Five",
             short_title="PS25",
@@ -189,6 +190,7 @@ class SyncLiveStreamTaskTests(TestCase):
     """Exercise the celery task that synchronises a match with YouTube."""
 
     def setUp(self):
+        super().setUp()
         self.season = factories.SeasonFactory.create(
             title="Long Season Title For Live Streaming Tests",
             short_title="LS25",
@@ -634,6 +636,7 @@ class SyncLiveStreamTitleFormsTests(TestCase):
     LABEL_ONLY_SHORT = "M50 | Gold Medal | Asia Pacific Seniors 2026"
 
     def setUp(self):
+        super().setUp()
         self.competition = factories.CompetitionFactory.create(
             title="Asia Pacific Seniors Touch Cup",
             short_title="Asia Pacific Seniors",
