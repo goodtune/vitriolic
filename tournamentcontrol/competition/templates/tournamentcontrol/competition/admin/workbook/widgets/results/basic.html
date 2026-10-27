@@ -4,10 +4,9 @@
 	<ul class="wb-plain wb-widget-list">
 		{% for competition, season, date, time in dates_times %}
 			{% url 'admin:fixja:match-results' competition season date|date:"Ymd" as edit_date %}
-			{% url 'admin:fixja:match-results' competition season time|time:"Hi" date|date:"Ymd" as edit_time %}
 			<li>
 				{% ifchanged %}<a class="wb-widget-date" href="{{ edit_date }}">{{ date|date:"D j M Y" }}</a>{% endifchanged %}
-				{% if time %}<a class="wb-badge" href="{{ edit_time }}">{{ time|time:"H:i" }}</a>{% endif %}
+				{% if time %}<a class="wb-badge" href="{% url 'admin:fixja:match-results' competition season time|time:"Hi" date|date:"Ymd" %}">{{ time|time:"H:i" }}</a>{% endif %}
 			</li>
 		{% empty %}
 			<li class="wb-muted">{% icon "circle-check" %} {% trans "No matches awaiting result entry." %}</li>

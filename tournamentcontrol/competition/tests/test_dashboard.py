@@ -780,3 +780,79 @@ class WidgetShowTests(HomePageMixin, TestCase):
         # One query more: the widget said it has a match, and then lists it.
         self.get_home_page(self.home_page_queries() + 1)
         self.assertWidgetsShown()
+
+
+@per_shell
+@freeze_time("2019-07-15 09:00 UTC")
+class BasicResultWidgetLinkTests(TestCase):
+    """
+    Awaiting Scores links each match day to its results page, and each kick-off
+    time on that day to the results page for that time. A day whose only match
+    awaiting a result has no time (a bye) gets the day's link and no time link.
+    """
+
+    user_factory = SuperUserFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = cls.make_user("superuser")
+        utc = ZoneInfo("UTC")
+        cls.timed = MatchFactory.create(
+            datetime=datetime.datetime(2019, 7, 15, 8, 30, tzinfo=utc),
+            stage__division__season__timezone="UTC",
+        )
+        cls.bye = MatchFactory.create(
+            round=1,
+            is_bye=True,
+            away_team=None,
+            datetime=None,
+            date=datetime.date(2019, 7, 14),
+            time=None,
+            stage__division__season=cls.timed.stage.division.season,
+        )
+        # A bye never stands alone: its round has a match, here played.
+        MatchFactory.create(
+            round=1,
+            datetime=datetime.datetime(2019, 7, 14, 8, 30, tzinfo=utc),
+            stage=cls.bye.stage,
+            home_team_score=5,
+            away_team_score=4,
+        )
+        cls.season = cls.timed.stage.division.season
+
+    def results_url(self, *args):
+        return self.reverse(
+            "admin:fixja:match-results",
+            self.season.competition_id,
+            self.season.pk,
+            *args,
+        )
+
+    def test_timed_and_untimed_rows(self):
+        with self.login(self.superuser):
+            self.get_check_200("admin:index")
+        sunday = self.results_url("20190714")
+        monday = self.results_url("20190715")
+        kick_off = self.results_url("0830", "20190715")
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=(
+                    f'<li><a class="wb-widget-date" href="{sunday}">Sun 14 Jul 2019</a></li>'
+                ),
+                explorer=(
+                    f'<tr><td><a href="{sunday}">Sun 14 Jul 2019</a></td><td></td></tr>'
+                ),
+            )
+        )
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=(
+                    f'<li><a class="wb-widget-date" href="{monday}">Mon 15 Jul 2019</a>'
+                    f'<a class="wb-badge" href="{kick_off}">08:30</a></li>'
+                ),
+                explorer=(
+                    f'<tr><td><a href="{monday}">Mon 15 Jul 2019</a></td>'
+                    f'<td><a href="{kick_off}">8:30 a.m.</a></td></tr>'
+                ),
+            )
+        )

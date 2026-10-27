@@ -13,9 +13,8 @@
 				{% for competition, season, date, time in dates_times %}
 					<tr>
 						{% url 'admin:fixja:match-results' competition season date|date:"Ymd" as edit_date %}
-						{% url 'admin:fixja:match-results' competition season time|time:"Hi" date|date:"Ymd" as edit_time %}
 						<td>{% ifchanged %}<a href="{{ edit_date }}">{{ date|date:"D j M Y" }}</a>{% endifchanged %}</td>
-						<td>{% if time %}<a href="{{ edit_time }}">{{ time|time }}</a>{% endif %}</td>
+						<td>{% if time %}<a href="{% url 'admin:fixja:match-results' competition season time|time:"Hi" date|date:"Ymd" %}">{{ time|time }}</a>{% endif %}</td>
 					</tr>
 				{% empty %}
 					<tr><td colspan="2" class="empty-state">{% trans "Every match played has its result." %}</td></tr>
