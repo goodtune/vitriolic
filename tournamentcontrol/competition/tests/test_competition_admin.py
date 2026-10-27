@@ -450,6 +450,43 @@ class ReorderTests(MessagesTestMixin, ArrowMixin, BaseTestCase):
             list(self.division.stages.all()), [semi_finals, pool_play, finals]
         )
 
+    def test_a_stage_moves_down_past_a_gap_in_the_order(self):
+        # A deleted stage leaves a gap: the neighbour is the next stage in
+        # the list, whatever its number.
+        pool_play, semi_finals, finals = self.stages
+        Stage.objects.filter(pk=semi_finals.pk).update(order=3)
+        Stage.objects.filter(pk=finals.pk).update(order=5)
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:division", semi_finals.pk, "down")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")
+        self.assertEqual(
+            list(self.division.stages.values_list("title", "order")),
+            [("Pool play", 1), ("Finals", 3), ("Semi-finals", 5)],
+        )
+
+    def test_a_stage_moves_up_past_a_gap_in_the_order(self):
+        pool_play, semi_finals, finals = self.stages
+        Stage.objects.filter(pk=semi_finals.pk).update(order=3)
+        Stage.objects.filter(pk=finals.pk).update(order=5)
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:division", semi_finals.pk, "up")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")
+        self.assertEqual(
+            list(self.division.stages.values_list("title", "order")),
+            [("Semi-finals", 1), ("Pool play", 3), ("Finals", 5)],
+        )
+
+    def test_a_team_moves_down_past_a_gap_in_the_order(self):
+        ants, bees, cats = self.teams
+        Team.objects.filter(pk=cats.pk).update(order=5)
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "team:division", bees.pk, "down")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#teams-tab")
+        self.assertEqual(
+            list(self.division.teams.values_list("title", "order")),
+            [("Ants", 1), ("Cats", 2), ("Bees", 5)],
+        )
+
     def test_moving_a_team_down_returns_to_the_teams(self):
         ants, bees, cats = self.teams
         with self.login(self.superuser):
