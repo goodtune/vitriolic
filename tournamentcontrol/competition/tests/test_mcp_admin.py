@@ -360,7 +360,7 @@ class BuildCompetitionTests(AdminFixtureMixin, TestCase):
             aus["id"],
         )
         self.assertEqual(
-            admin.delete_match(match["id"]), {"deleted": "match %d" % match["id"]}
+            admin.delete_match(match["id"]), {"deleted": f"match {match['id']}"}
         )
         self.assertEqual(admin.delete_pool(pool["id"]), {"deleted": "pool Pool A"})
         self.assertEqual(admin.delete_stage(finals["id"]), {"deleted": "stage Finals"})
@@ -505,8 +505,8 @@ class BuildCompetitionTests(AdminFixtureMixin, TestCase):
         self.aus_women.refresh_from_db()
         self.assertEqual(self.aus_women.stage_group_id, pool["id"])
         self.assertToolError(
-            "Validation failed: teams: Select a valid choice. %d is not one of the "
-            "available choices." % self.aus_men.pk,
+            f"Validation failed: teams: Select a valid choice. {self.aus_men.pk} "
+            "is not one of the available choices.",
             admin.update_pool,
             pool["id"],
             team_ids=[self.aus_men.pk],
@@ -842,7 +842,7 @@ class SchedulingTests(AdminFixtureMixin, TestCase):
         # A place must belong to the season.
         other_venue = factories.VenueFactory.create(season=self.nationals_2026)
         self.assertToolError(
-            "Venue or ground %d was not found." % other_venue.pk,
+            f"Venue or ground {other_venue.pk} was not found.",
             admin.reschedule_match,
             self.fra_v_eng.pk,
             place_id=other_venue.pk,
@@ -931,8 +931,8 @@ class SchedulingTests(AdminFixtureMixin, TestCase):
             self.old_match.pk,
         )
         self.assertToolError(
-            "Match %d is live streamed; remove its live stream before swapping "
-            "its allocation." % self.aus_v_nzl.pk,
+            f"Match {self.aus_v_nzl.pk} is live streamed; remove its live stream "
+            "before swapping its allocation.",
             admin.swap_match_allocations,
             self.fra_v_eng.pk,
             self.aus_v_nzl.pk,
@@ -952,8 +952,8 @@ class SchedulingTests(AdminFixtureMixin, TestCase):
         self.assertEqual([r["id"] for r in res["match"]["referees"]], [referee.pk])
         self.assertEqual(res["match"]["home_team"]["title"], "Australia")
         self.assertToolError(
-            "Validation failed: referees: Select a valid choice. %d is not one of "
-            "the available choices." % other.pk,
+            f"Validation failed: referees: Select a valid choice. {other.pk} is "
+            "not one of the available choices.",
             admin.set_match_referees,
             self.aus_v_eng.pk,
             [other.pk],
@@ -1735,7 +1735,7 @@ class LiveStreamTests(AdminFixtureMixin, TestCase):
                     "live_stream": True,
                     "stream_key": {"id": self.used_key.pk, "title": "Presentation"},
                     "youtube_broadcast_id": self.event.pk,
-                    "video_url": "https://youtu.be/%s" % self.event.pk,
+                    "video_url": f"https://youtu.be/{self.event.pk}",
                 }
             ],
         )
@@ -2211,7 +2211,7 @@ class LiveStreamEventTests(AdminFixtureMixin, TestCase):
                 "live_stream": True,
                 "stream_key": {"id": self.key.pk, "title": "Roaming camera"},
                 "youtube_broadcast_id": self.event.pk,
-                "video_url": "https://youtu.be/%s" % self.event.pk,
+                "video_url": f"https://youtu.be/{self.event.pk}",
             },
         )
         # The broadcast is brought into line by the queued synchronisation,
@@ -2246,7 +2246,7 @@ class LiveStreamEventTests(AdminFixtureMixin, TestCase):
             title="Nope",
         )
         self.assertToolError(
-            "Live stream event %s was not found." % self.event.pk,
+            f"Live stream event {self.event.pk} was not found.",
             admin.update_season_stream_event,
             self.nationals_2026.pk,
             self.event.pk,
@@ -2562,7 +2562,7 @@ class LiveStreamResyncTests(AdminFixtureMixin, TestCase):
         self.assertEqual(res["saved"], True)
         self.assertEqual(res["action"], "updated")
         self.assertEqual(res["youtube_broadcast_id"], self.event.pk)
-        self.assertEqual(res["video_url"], "https://youtu.be/%s" % self.event.pk)
+        self.assertEqual(res["video_url"], f"https://youtu.be/{self.event.pk}")
         self.assertEqual(res["bound_stream_id"], self.key.pk)
         self.assertEqual(res["event"]["id"], self.event.pk)
         self.assertEqual(res["event"]["title"], "Opening ceremony")
@@ -2629,7 +2629,7 @@ class LiveStreamResyncTests(AdminFixtureMixin, TestCase):
             "nope",
         )
         self.assertToolError(
-            "Live stream event %s was not found." % self.event.pk,
+            f"Live stream event {self.event.pk} was not found.",
             admin.resync_season_stream_event,
             self.nationals_2026.pk,
             self.event.pk,
@@ -2649,7 +2649,7 @@ class LiveStreamResyncTests(AdminFixtureMixin, TestCase):
         return [
             q["sql"]
             for q in queries
-            if "FOR UPDATE" in q["sql"] and '"%s"' % table in q["sql"]
+            if "FOR UPDATE" in q["sql"] and f'"{table}"' in q["sql"]
         ]
 
     def test_match_resync_locks_the_match(
@@ -2892,9 +2892,9 @@ class AdminMCPHTTPTests(AdminFixtureMixin, TestCase):
         self.assertEqual(result["isError"], True)
         self.assertEqual(
             result["content"][0]["text"],
-            "Error executing tool swap_match_allocations: Match %d is live "
-            "streamed; remove its live stream before swapping its allocation."
-            % self.aus_v_eng.pk,
+            "Error executing tool swap_match_allocations: Match "
+            f"{self.aus_v_eng.pk} is live streamed; remove its live stream before "
+            "swapping its allocation.",
         )
 
     def test_draw_tools_over_http(self):
@@ -3110,7 +3110,7 @@ class OAuthFlowTests(AdminFixtureMixin, TestCase):
             data=json.dumps(payload),
             content_type="application/json",
             HTTP_ACCEPT="application/json, text/event-stream",
-            HTTP_AUTHORIZATION="Bearer %s" % token,
+            HTTP_AUTHORIZATION=f"Bearer {token}",
         )
         return response
 
@@ -3168,7 +3168,7 @@ class OAuthFlowTests(AdminFixtureMixin, TestCase):
             ),
             content_type="application/json",
             HTTP_ACCEPT="application/json, text/event-stream",
-            HTTP_AUTHORIZATION="Bearer %s" % token["access_token"],
+            HTTP_AUTHORIZATION=f"Bearer {token['access_token']}",
         )
         # A token issued for /admin/mcp is not valid for /mcp, so the public
         # server treats the caller as anonymous.

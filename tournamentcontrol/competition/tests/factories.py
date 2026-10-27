@@ -40,14 +40,14 @@ class ClubFactory(SitemapNodeBaseFactory):
     # titles must be unique: Faker company names occasionally repeat (two
     # "Smith Group" clubs share a slug and the club page can no longer
     # resolve either of them).
-    title = factory.Sequence(lambda n: "Club %d" % (n + 1))
+    title = factory.Sequence(lambda n: f"Club {n + 1}")
 
 
 class CompetitionFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Competition
 
-    title = factory.Sequence(lambda n: "Competition %d" % n)
+    title = factory.Sequence(lambda n: f"Competition {n}")
 
 
 class ClubRoleFactory(SitemapNodeBaseFactory):
@@ -99,7 +99,7 @@ class VenueFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Venue
 
-    title = factory.Sequence(lambda n: "Venue %d" % (n + 1))
+    title = factory.Sequence(lambda n: f"Venue {n + 1}")
     timezone = factory.SelfAttribute("season.timezone")
 
     season = factory.SubFactory(SeasonFactory)
@@ -109,7 +109,7 @@ class GroundFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Ground
 
-    title = factory.Sequence(lambda n: "Ground %d" % (n + 1))
+    title = factory.Sequence(lambda n: f"Ground {n + 1}")
     timezone = factory.SelfAttribute("venue.timezone")
 
     venue = factory.SubFactory(VenueFactory)
@@ -121,10 +121,10 @@ class LiveStreamKeyFactory(DjangoModelFactory):
 
     season = factory.SubFactory(SeasonFactory)
 
-    title = factory.Sequence(lambda n: "Stream Key %d" % (n + 1))
+    title = factory.Sequence(lambda n: f"Stream Key {n + 1}")
     # The YouTube liveStream identifier is the primary key.
-    external_identifier = factory.Sequence(lambda n: "stream%d" % (n + 1))
-    stream_key = factory.Sequence(lambda n: "abcd-%04d" % (n + 1))
+    external_identifier = factory.Sequence(lambda n: f"stream{n + 1}")
+    stream_key = factory.Sequence(lambda n: f"abcd-{n + 1:04d}")
 
 
 class LiveStreamEventFactory(DjangoModelFactory):
@@ -133,20 +133,20 @@ class LiveStreamEventFactory(DjangoModelFactory):
 
     season = factory.SubFactory(SeasonFactory)
 
-    title = factory.Sequence(lambda n: "Live Stream Event %d" % (n + 1))
+    title = factory.Sequence(lambda n: f"Live Stream Event {n + 1}")
     start = factory.fuzzy.FuzzyDateTime(
         datetime.datetime(2020, 1, 1, tzinfo=ZoneInfo("UTC"))
     )
     stop = factory.LazyAttribute(lambda o: o.start + datetime.timedelta(hours=1))
     # The YouTube broadcast identifier is the primary key.
-    external_identifier = factory.Sequence(lambda n: "adhoc%d" % (n + 1))
+    external_identifier = factory.Sequence(lambda n: f"adhoc{n + 1}")
 
 
 class DivisionFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Division
 
-    title = factory.Sequence(lambda n: "Division %d" % (n + 1))
+    title = factory.Sequence(lambda n: f"Division {n + 1}")
     points_formula = "3*win + 2*draw + 1*loss"
     forfeit_for_score = 5
     forfeit_against_score = 0
@@ -169,7 +169,7 @@ class TeamFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Team
 
-    title = factory.Sequence(lambda n: "Team %d" % (n + 1))
+    title = factory.Sequence(lambda n: f"Team {n + 1}")
 
     club = factory.SubFactory(ClubFactory)
     division = factory.SubFactory(DivisionFactory)
@@ -179,7 +179,7 @@ class StageFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.Stage
 
-    title = factory.Sequence(lambda n: "Stage %d" % (n + 1))
+    title = factory.Sequence(lambda n: f"Stage {n + 1}")
     color = "#e8f5e8"  # Use the default light green
 
     division = factory.SubFactory(DivisionFactory)
@@ -189,7 +189,7 @@ class StageGroupFactory(OrderedSitemapNodeFactory):
     class Meta:
         model = models.StageGroup
 
-    title = factory.Sequence(lambda n: "Pool %d" % (n + 1))
+    title = factory.Sequence(lambda n: f"Pool {n + 1}")
 
     stage = factory.SubFactory(StageFactory)
 
@@ -230,8 +230,8 @@ class UserFactory(DjangoModelFactory):
     first_name = factory.Faker("first_name")
     last_name = factory.Faker("last_name")
 
-    username = factory.Sequence(lambda n: "user%04d" % (n + 1))
-    email = factory.Sequence(lambda n: "user%03d@example.com" % (n + 1))
+    username = factory.Sequence(lambda n: f"user{n + 1:04d}")
+    email = factory.Sequence(lambda n: f"user{n + 1:03d}@example.com")
 
     password = factory.LazyFunction(lambda: make_password("password"))
     is_active = True
@@ -324,7 +324,7 @@ class DrawFormatFactory(DjangoModelFactory):
 
     teams = factory.fuzzy.FuzzyChoice([4, 6, 8, 12])
     name = factory.LazyAttribute(
-        lambda a: "Round Robin ({}/{} teams)".format(a.teams - 1, a.teams)
+        lambda a: f"Round Robin ({a.teams - 1}/{a.teams} teams)"
     )
     text = factory.LazyAttribute(
         lambda a: utils.round_robin_format([t for t in range(1, a.teams + 1)])

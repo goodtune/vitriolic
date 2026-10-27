@@ -81,10 +81,10 @@ class DrawGenerationMatchFormSetTest(TestCase):
             for i, form in enumerate(forms):
                 data1.update(
                     {
-                        "1-%d-round" % i: str(form["round"].initial),
-                        "1-%d-home_team" % i: str(form["home_team"].initial or ""),
-                        "1-%d-away_team" % i: str(form["away_team"].initial or ""),
-                        "1-%d-date" % i: form["date"].initial.strftime("%Y-%m-%d"),
+                        f"1-{i}-round": str(form["round"].initial),
+                        f"1-{i}-home_team": str(form["home_team"].initial or ""),
+                        f"1-{i}-away_team": str(form["away_team"].initial or ""),
+                        f"1-{i}-date": form["date"].initial.strftime("%Y-%m-%d"),
                     }
                 )
 
@@ -104,12 +104,12 @@ class DrawGenerationMatchFormSetTest(TestCase):
         self.assertQuerySetEqual(
             Match.objects.all(),
             [
-                "<Match: 1: %s vs %s>" % (team1, team4),
-                "<Match: 1: %s vs %s>" % (team2, team3),
-                "<Match: 2: %s vs %s>" % (team1, team3),
-                "<Match: 2: %s vs %s>" % (team4, team2),
-                "<Match: 3: %s vs %s>" % (team1, team2),
-                "<Match: 3: %s vs %s>" % (team3, team4),
+                f"<Match: 1: {team1} vs {team4}>",
+                f"<Match: 1: {team2} vs {team3}>",
+                f"<Match: 2: {team1} vs {team3}>",
+                f"<Match: 2: {team4} vs {team2}>",
+                f"<Match: 3: {team1} vs {team2}>",
+                f"<Match: 3: {team3} vs {team4}>",
             ],
             transform=repr,
         )
@@ -173,10 +173,10 @@ class DrawGenerationMatchFormSetTest(TestCase):
             for i, form in enumerate(forms):
                 data1.update(
                     {
-                        "1-%d-round" % i: str(form["round"].initial),
-                        "1-%d-home_team" % i: str(form["home_team"].initial or ""),
-                        "1-%d-away_team" % i: str(form["away_team"].initial or ""),
-                        "1-%d-date" % i: form["date"].initial.strftime("%Y-%m-%d"),
+                        f"1-{i}-round": str(form["round"].initial),
+                        f"1-{i}-home_team": str(form["home_team"].initial or ""),
+                        f"1-{i}-away_team": str(form["away_team"].initial or ""),
+                        f"1-{i}-date": form["date"].initial.strftime("%Y-%m-%d"),
                     }
                 )
 

@@ -369,16 +369,11 @@ def _coerce(model, value, what):
     try:
         return model.model_validate(value)
     except PydanticValidationError as exc:
-        raise ToolError(
-            "%s: %s"
-            % (
-                what,
-                "; ".join(
-                    "%s: %s" % (".".join(str(p) for p in e["loc"]) or "value", e["msg"])
-                    for e in exc.errors()
-                ),
-            )
+        problems = "; ".join(
+            f"{'.'.join(str(p) for p in e['loc']) or 'value'}: {e['msg']}"
+            for e in exc.errors()
         )
+        raise ToolError(f"{what}: {problems}")
 
 
 def _hhmm(time):
@@ -436,16 +431,14 @@ def _format_structure(generator, teams=None):
                     highest = max(highest, int(ref))
                     if ref in in_round:
                         warnings.append(
-                            "Team %s plays more than once in round %d."
-                            % (ref, round.count)
+                            f"Team {ref} plays more than once in round {round.count}."
                         )
                     in_round[ref] = True
                 win_lose = WIN_LOSE_RE.fullmatch(ref)
                 if win_lose and win_lose.group("match_id") not in seen:
                     warnings.append(
-                        "Match %s refers to %s, but match %s is not in an "
-                        "earlier round."
-                        % (descriptor.match_id, ref, win_lose.group("match_id"))
+                        f"Match {descriptor.match_id} refers to {ref}, but match "
+                        f"{win_lose.group('match_id')} is not in an earlier round."
                     )
             matches.append(
                 {
@@ -472,10 +465,8 @@ def _format_structure(generator, teams=None):
     }
     if teams is not None:
         if highest > teams:
-            warnings.append(
-                "Teams %s are byes for %d teams."
-                % (", ".join(str(n) for n in range(teams + 1, highest + 1)), teams)
-            )
+            byes = ", ".join(str(n) for n in range(teams + 1, highest + 1))
+            warnings.append(f"Teams {byes} are byes for {teams} teams.")
         pairings = set()
         for round in rounds:
             for m in round["matches"]:
@@ -785,13 +776,10 @@ class AdminToolset(CompetitionToolset):
             return user
         if obj is not None and obj.pk is not None and user.has_perm(perm, obj):
             return user
+        scope = "" if obj is None or obj.pk is None else f" for this {_label(model)}"
         raise ToolError(
-            "Permission denied: %s requires the %s permission%s."
-            % (
-                f"{action} {_label(model)}",
-                perm,
-                "" if obj is None or obj.pk is None else f" for this {_label(model)}",
-            )
+            f"Permission denied: {action} {_label(model)} requires the {perm} "
+            f"permission{scope}."
         )
 
     def _require_season_access(self, season):
@@ -901,8 +889,7 @@ class AdminToolset(CompetitionToolset):
                 value = html.unescape(value)
             if name not in unbound.fields:
                 raise ToolError(
-                    "%s cannot be set for this %s."
-                    % (name, _label(instance._meta.model))
+                    f"{name} cannot be set for this {_label(instance._meta.model)}."
                 )
             self._put(data, name, unbound.fields[name], value)
         return form_class(*form_args, data=data, instance=instance, **form_kwargs)
@@ -923,15 +910,13 @@ class AdminToolset(CompetitionToolset):
                 parts = widget.decompress(value)
             except Exception as exc:
                 # The points formula widget parses the formula to split it.
-                raise ToolError("Validation failed: %s: %s" % (name, exc))
+                raise ToolError(f"Validation failed: {name}: {exc}")
             for suffix, part in zip(widget.widgets_names, parts):
                 data[name + suffix] = part
         elif isinstance(widget, SplitArrayWidget):
             values = list(value or [])
             for index in range(widget.size):
-                data["%s_%s" % (name, index)] = (
-                    values[index] if index < len(values) else ""
-                )
+                data[f"{name}_{index}"] = values[index] if index < len(values) else ""
         else:
             data[name] = value
 
@@ -977,14 +962,12 @@ class AdminToolset(CompetitionToolset):
             with transaction.atomic():
                 instance.delete()
         except ProtectedError as exc:
+            dependents = ", ".join(
+                sorted({_label(o._meta.model) for o in exc.protected_objects})
+            )
             raise ToolError(
-                "This %s cannot be deleted while other records depend on it: %s."
-                % (
-                    _label(instance._meta.model),
-                    ", ".join(
-                        sorted({_label(o._meta.model) for o in exc.protected_objects})
-                    ),
-                )
+                f"This {_label(instance._meta.model)} cannot be deleted while "
+                f"other records depend on it: {dependents}."
             )
         return {"deleted": action_label}
 
@@ -1012,7 +995,7 @@ class AdminToolset(CompetitionToolset):
         except RefreshError:
             raise ToolError(str(YOUTUBE_AUTH_EXPIRED_MESSAGE))
         except HttpError as exc:
-            raise ToolError("YouTube API error: %s" % exc.reason)
+            raise ToolError(f"YouTube API error: {exc.reason}")
 
     def _youtube_delete(self, youtube, collection, external_identifier):
         """
@@ -1025,7 +1008,7 @@ class AdminToolset(CompetitionToolset):
             raise ToolError(str(YOUTUBE_AUTH_EXPIRED_MESSAGE))
         except HttpError as exc:
             if getattr(exc.resp, "status", None) != 404:
-                raise ToolError("YouTube API error: %s" % exc.reason)
+                raise ToolError(f"YouTube API error: {exc.reason}")
             logger.info("YouTube resource %r already deleted", external_identifier)
         else:
             logger.info("YouTube resource %r deleted", external_identifier)
@@ -1078,7 +1061,7 @@ class AdminToolset(CompetitionToolset):
         except RefreshError:
             raise ToolError(str(YOUTUBE_AUTH_EXPIRED_MESSAGE))
         except HttpError as exc:
-            raise ToolError("YouTube API error: %s" % exc.reason)
+            raise ToolError(f"YouTube API error: {exc.reason}")
 
     def _bulk_create(self, model, items, spec_class, create):
         """
@@ -1091,9 +1074,9 @@ class AdminToolset(CompetitionToolset):
         what = _label(model)
         self._require("add", model)
         if not items:
-            raise ToolError("Give one or more %ss." % what)
+            raise ToolError(f"Give one or more {what}s.")
         if len(items) > MAX_BULK_CREATE:
-            raise ToolError("Give at most %d %ss at once." % (MAX_BULK_CREATE, what))
+            raise ToolError(f"Give at most {MAX_BULK_CREATE} {what}s at once.")
         specs = [
             _coerce(spec_class, item, f"{what} {index}")
             for index, item in enumerate(items)
@@ -1956,7 +1939,7 @@ class AdminToolset(CompetitionToolset):
                 opponent_side = "away" if match.home_team_id == team.pk else "home"
                 if match.stage.order > first_stage_order:
                     blocked.append(
-                        (match, "the team has progressed to %s" % match.stage.title)
+                        (match, f"the team has progressed to {match.stage.title}")
                     )
                 elif match.live_stream:
                     blocked.append(
@@ -2015,25 +1998,19 @@ class AdminToolset(CompetitionToolset):
                 r"\bbye\b", division.points_formula or ""
             ):
                 report["warnings"].append(
-                    "The points formula of %s has no bye term, so the opponents "
-                    "score nothing for these byes; teams that had not yet "
-                    "played %s are disadvantaged unless the formula is changed "
-                    "with update_division." % (division.title, team.title)
+                    f"The points formula of {division.title} has no bye term, so "
+                    "the opponents score nothing for these byes; teams that had "
+                    f"not yet played {team.title} are disadvantaged unless the "
+                    "formula is changed with update_division."
                 )
             if blocked:
                 if dry_run:
                     return report
-                raise ToolError(
-                    "%s cannot be withdrawn: %s."
-                    % (
-                        team.title,
-                        "; ".join(
-                            "match %d (round %s, %s) %s"
-                            % (m.pk, m.round, _iso(m.date), reason)
-                            for m, reason in blocked
-                        ),
-                    )
+                reasons = "; ".join(
+                    f"match {m.pk} (round {m.round}, {_iso(m.date)}) {reason}"
+                    for m, reason in blocked
                 )
+                raise ToolError(f"{team.title} cannot be withdrawn: {reasons}.")
             if dry_run:
                 return report
 
@@ -2565,8 +2542,8 @@ class AdminToolset(CompetitionToolset):
                 for name in ("home", "away"):
                     if not any(side(name)):
                         raise ToolError(
-                            "A match has two sides: give the %s side a team, an "
-                            "undecided team or an eval." % name
+                            f"A match has two sides: give the {name} side a team, "
+                            "an undecided team or an eval."
                         )
                 match.is_bye = False
             return False
@@ -2612,8 +2589,8 @@ class AdminToolset(CompetitionToolset):
             ]
             if len(given) > 1:
                 raise ToolError(
-                    "Give the %s side one of %s, not more than one."
-                    % (side, " or ".join(given))
+                    f"Give the {side} side one of {' or '.join(given)}, "
+                    "not more than one."
                 )
             if team_eval is not None:
                 res[f"{side}_team_eval"] = team_eval
@@ -2863,8 +2840,8 @@ class AdminToolset(CompetitionToolset):
             for match in (first, second):
                 if match.live_stream:
                     raise ToolError(
-                        "Match %d is live streamed; remove its live stream "
-                        "before swapping its allocation." % match.pk
+                        f"Match {match.pk} is live streamed; remove its live "
+                        "stream before swapping its allocation."
                     )
             first_slot = (first.date, first.time, first.play_at)
             second_slot = (second.date, second.time, second.play_at)
@@ -2880,13 +2857,8 @@ class AdminToolset(CompetitionToolset):
                 errors = validator.errors(match)
                 validator.claim(match, f"match {match.pk}")
                 if errors:
-                    raise ToolError(
-                        "Match %d: %s"
-                        % (
-                            match.pk,
-                            " ".join(errors).removeprefix("Validation failed: "),
-                        )
-                    )
+                    problems = " ".join(errors).removeprefix("Validation failed: ")
+                    raise ToolError(f"Match {match.pk}: {problems}")
                 match.save()
         return {
             "saved": True,
@@ -3563,15 +3535,11 @@ class AdminToolset(CompetitionToolset):
         )
         streamed = sorted(doomed.filter(live_stream=True).values_list("pk", flat=True))
         if streamed:
+            plural, verb = ("", "is") if len(streamed) == 1 else ("es", "are")
             raise ToolError(
-                "build %d: match%s %s %s live streamed; disable the live stream "
-                "before replacing the draw."
-                % (
-                    index,
-                    "" if len(streamed) == 1 else "es",
-                    ", ".join(str(pk) for pk in streamed),
-                    "is" if len(streamed) == 1 else "are",
-                )
+                f"build {index}: match{plural} "
+                f"{', '.join(str(pk) for pk in streamed)} {verb} live streamed; "
+                "disable the live stream before replacing the draw."
             )
         deleted = doomed.count()
         # The matches being replaced may refer to each other (W/L evals).
@@ -3579,19 +3547,16 @@ class AdminToolset(CompetitionToolset):
         try:
             doomed.delete()
         except ProtectedError as exc:
-            raise ToolError(
-                "build %d: the draw cannot be replaced while other matches refer "
-                "to it (W/L evals): %s."
-                % (
-                    index,
-                    ", ".join(
-                        sorted(
-                            f"match {o.pk}"
-                            for o in exc.protected_objects
-                            if isinstance(o, Match)
-                        )
-                    ),
+            referrers = ", ".join(
+                sorted(
+                    f"match {o.pk}"
+                    for o in exc.protected_objects
+                    if isinstance(o, Match)
                 )
+            )
+            raise ToolError(
+                f"build {index}: the draw cannot be replaced while other matches "
+                f"refer to it (W/L evals): {referrers}."
             )
         return {"deleted": deleted, "kept_with_results": kept}
 
@@ -3644,9 +3609,9 @@ class AdminToolset(CompetitionToolset):
         if existing.exists():
             if not replace_existing:
                 raise ToolError(
-                    "build %d: %s already has %d matches; pass "
-                    "replace_existing=true to replace those without results."
-                    % (index, target.title, existing.count())
+                    f"build {index}: {target.title} already has "
+                    f"{existing.count()} matches; pass replace_existing=true to "
+                    "replace those without results."
                 )
             self._require("delete", Match)
             replaced = self._clear_draw(index, existing)
@@ -3773,7 +3738,7 @@ class AdminToolset(CompetitionToolset):
         if not builds:
             raise ToolError("Give one or more builds.")
         if len(builds) > MAX_BUILDS:
-            raise ToolError("Give at most %d builds at once." % MAX_BUILDS)
+            raise ToolError(f"Give at most {MAX_BUILDS} builds at once.")
         specs = [
             _coerce(BuildSpec, build, f"build {index}")
             for index, build in enumerate(builds)
@@ -3787,8 +3752,8 @@ class AdminToolset(CompetitionToolset):
             key = (type(plan["target"]), plan["target"].pk)
             if key in seen:
                 raise ToolError(
-                    "builds %d and %d build the same %s."
-                    % (seen[key], plan["index"], _label(plan["target"]))
+                    f"builds {seen[key]} and {plan['index']} build the same "
+                    f"{_label(plan['target'])}."
                 )
             seen[key] = plan["index"]
         with transaction.atomic():
@@ -3913,12 +3878,14 @@ class AdminToolset(CompetitionToolset):
 
     def _refuse_batch(self, failed, entries, total):
         lines = [
-            "item %d (match %s): %s" % (f["index"], f["match_id"], f["error"])
+            f"item {f['index']} (match {f['match_id']}): {f['error']}"
             for f in self._failures(failed, entries)
         ]
+        plural = "" if total == 1 else "s"
+        details = "\n".join(lines)
         raise ToolError(
-            "Nothing was scheduled: %d of %d item%s failed.\n%s"
-            % (len(failed), total, "" if total == 1 else "s", "\n".join(lines))
+            f"Nothing was scheduled: {len(failed)} of {total} item{plural} "
+            f"failed.\n{details}"
         )
 
     @tool_annotations(idempotent=True, open_world=True)
@@ -3951,7 +3918,7 @@ class AdminToolset(CompetitionToolset):
             raise ToolError("Give one or more items.")
         if len(items) > MAX_SCHEDULE_ITEMS:
             raise ToolError(
-                "Give at most %d items at once; split the batch." % MAX_SCHEDULE_ITEMS
+                f"Give at most {MAX_SCHEDULE_ITEMS} items at once; split the batch."
             )
         entries = []
         failed = {}
@@ -4029,7 +3996,7 @@ class AdminToolset(CompetitionToolset):
             slots = validator.timeslots(season, date)
             if not slots:
                 raise ToolError(
-                    "The season has no time slots on %s." % date.isoformat()
+                    f"The season has no time slots on {date.isoformat()}."
                 )
             matches = Match.objects.filter(
                 stage__division__season=season, date=date, is_bye=False
@@ -4229,8 +4196,8 @@ class AdminToolset(CompetitionToolset):
         used_by = key.live_stream_events.count()
         if used_by:
             raise ToolError(
-                "This stream key is used by %d live stream event%s; reassign or "
-                "delete them first." % (used_by, "" if used_by == 1 else "s")
+                f"This stream key is used by {used_by} live stream "
+                f"event{'' if used_by == 1 else 's'}; reassign or delete them first."
             )
         youtube = self._youtube(season)
         self._youtube_delete(youtube, "liveStreams", key.external_identifier)
@@ -4268,10 +4235,10 @@ class AdminToolset(CompetitionToolset):
         now, __ = self._now()
         usages = self._streamed_usages(ground, now).count()
         if usages:
+            plural, verb = ("", "is") if usages == 1 else ("es", "are")
             raise ToolError(
-                "%d upcoming match%s on this ground %s set to be live streamed; "
-                "disable their live streams first."
-                % (usages, "" if usages == 1 else "es", "is" if usages == 1 else "are")
+                f"{usages} upcoming match{plural} on this ground {verb} set to be "
+                "live streamed; disable their live streams first."
             )
         if ground.external_identifier:
             self._youtube(ground.venue.season)

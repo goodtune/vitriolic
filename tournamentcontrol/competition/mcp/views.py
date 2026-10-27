@@ -269,23 +269,24 @@ class AdminMCPView(MCPView):
     def check_access(self, request):
         user = request.user
         if not user.is_authenticated:
+            metadata = self.resource_metadata_url(request)
             if bearer_token(request) is None:
-                challenge = 'Bearer resource_metadata="%s"'
+                challenge = f'Bearer resource_metadata="{metadata}"'
                 description = (
                     "Authentication is required. Obtain an access token from "
                     "the authorization server named in the protected "
                     "resource metadata and present it as a bearer token."
                 )
             else:
-                challenge = 'Bearer error="invalid_token", resource_metadata="%s"'
+                challenge = (
+                    f'Bearer error="invalid_token", resource_metadata="{metadata}"'
+                )
                 description = "The bearer token is invalid or has expired."
             response = JsonResponse(
                 {"error": "unauthorized", "error_description": description},
                 status=401,
             )
-            response["WWW-Authenticate"] = challenge % self.resource_metadata_url(
-                request
-            )
+            response["WWW-Authenticate"] = challenge
             return response
         if not (user.is_active and user.is_staff):
             return JsonResponse(
