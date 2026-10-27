@@ -58,6 +58,20 @@ class MenuMixin(IconMixin):
             ),
         )
 
+    def section_entry(self, url_name, label, workbook, explorer):
+        """The rail's link to a section of a component, as the shell draws it."""
+        url = self.reverse(url_name)
+        return self.by_shell(
+            workbook=(
+                f'<a class="wb-node-link" href="{url}" title="{label}">'
+                f'{self.icon(workbook)}<span class="wb-node-label">{label}</span></a>'
+            ),
+            explorer=(
+                f'<a class="node-link" href="{url}">'
+                f'{self.icon(explorer)}<span class="node-label">{label}</span></a>'
+            ),
+        )
+
     def assertMenu(self, user, *shown):
         """The home page's menu shows ``user`` the components ``shown``, no other."""
         with self.login(user):
@@ -112,6 +126,43 @@ class StaffMenuTests(MenuMixin, TestCase):
 
 
 @per_shell
+class SectionMenuTests(MenuMixin, TestCase):
+    """
+    A section of a component's menu may name a permission, and the rail then
+    draws it only for a person who holds it. Content's Media section takes
+    ``content.view_file``; its Sitemap section is drawn for every member of
+    staff the component is shown to.
+    """
+
+    user_factory = StaffFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.staff = cls.make_user("staff")
+        cls.viewer = cls.make_user("viewer", perms=["content.view_file"])
+
+    def sitemap(self):
+        return self.section_entry("admin:content:index", "Sitemap", "folder", "sitemap")
+
+    def media(self):
+        return self.section_entry(
+            "admin:content:media:list", "Media", "folder", "image"
+        )
+
+    def test_a_person_who_holds_the_permission_is_shown_the_section(self):
+        with self.login(self.viewer):
+            self.get_check_200("admin:index")
+        self.assertResponseContains(self.sitemap())
+        self.assertResponseContains(self.media())
+
+    def test_a_person_without_the_permission_is_not_shown_the_section(self):
+        with self.login(self.staff):
+            self.get_check_200("admin:index")
+        self.assertResponseContains(self.sitemap())
+        self.assertResponseNotContains(self.media())
+
+
+@per_shell
 class MenuQueryTests(TestCase):
     """
     What the home page costs a member of staff who holds no permission in a
@@ -127,6 +178,7 @@ class MenuQueryTests(TestCase):
         cls.staff = cls.make_user("staff")
         cls.editor = cls.make_user("editor")
         assign_perm("content.change_page", cls.editor, Page.objects.create())
+        cls.viewer = cls.make_user("viewer", perms=["content.view_file"])
 
     def assertHomeQueries(self, user):
         with self.login(user):
@@ -143,6 +195,9 @@ class MenuQueryTests(TestCase):
 
     def test_a_person_with_no_permission(self):
         self.assertHomeQueries(self.staff)
+
+    def test_a_person_with_a_permission_a_section_names(self):
+        self.assertHomeQueries(self.viewer)
 
     def test_one_more_protected_component(self):
         site.register(MoreNews)

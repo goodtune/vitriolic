@@ -2862,6 +2862,18 @@ class CompetitionAdminComponent(AdminComponent):
         Useful when a match's title, teams, or timing have changed since the broadcast
         was created and the public YouTube URL must be kept stable.
         """
+        # Only a person who may change the match may re-push its broadcast,
+        # as the match's own page asks.
+        has_permission = get_40x_or_None(
+            request,
+            get_perms_for_model(Match, change=True),
+            obj=match,
+            return_403=True,
+            accept_global_perms=True,
+        )
+        if has_permission is not None:
+            return has_permission
+
         redirect_url = request.GET.get("next") or stage.urls["edit"]
 
         if request.method == "GET":

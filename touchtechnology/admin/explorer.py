@@ -111,11 +111,11 @@ def _url(obj, name="edit"):
 
 
 def _key(obj):
-    return "o:%s.%s:%s" % (obj._meta.app_label, obj._meta.model_name, obj.pk)
+    return f"o:{obj._meta.app_label}.{obj._meta.model_name}:{obj.pk}"
 
 
 def _model_label(model):
-    return "%s.%s" % (model._meta.app_label, model._meta.model_name)
+    return f"{model._meta.app_label}.{model._meta.model_name}"
 
 
 def _has_admin_urls(model):
@@ -128,6 +128,8 @@ class _Section:
     url: str
     icon: str
     model: type | None = None
+    #: The permission a person needs to be shown the section, or ``None``.
+    permission: str | None = None
 
 
 class Explorer:
@@ -163,12 +165,17 @@ class Explorer:
         return self.component.name
 
     def key(self, local):
-        return "%s/%s" % (self.prefix, local)
+        return f"{self.prefix}/{local}"
 
     # ------------------------------------------------------------------
     # Sections
 
     def sections(self):
+        """
+        Every section of the component's menu, in order. A section is shown
+        to a person who holds the permission it names (see ``shown``); a
+        node's key is the section's place here, whoever is asking.
+        """
         found = []
         for entry in self.component.dropdowns():
             label, url = entry[0], str(entry[1])
@@ -181,9 +188,19 @@ class Explorer:
                         str(label), self.shell.section_icon(entry, model)
                     ),
                     model=model,
+                    permission=entry[3] if len(entry) > 3 else None,
                 )
             )
         return found
+
+    def shown(self, request, section):
+        """
+        Whether ``request.user`` is shown ``section``: everyone is, unless it
+        names a permission (``content.view_file``) they do not hold.
+        """
+        return section.permission is None or request.user.has_perm(
+            section.permission
+        )
 
     def section_model(self, url):
         """
@@ -211,7 +228,7 @@ class Explorer:
 
     def section_node(self, request, index, section):
         return Node(
-            key=self.key("s%d" % index),
+            key=self.key(f"s{index}"),
             label=section.label,
             url=section.url,
             icon=section.icon,
@@ -329,6 +346,7 @@ class Explorer:
                 return [
                     self.section_node(request, n, section)
                     for n, section in enumerate(self.sections())
+                    if self.shown(request, section)
                 ]
             if local.startswith("s"):
                 return self.section_children(request, int(local[1:]))
@@ -367,9 +385,9 @@ class Explorer:
         return nodes
 
     def group_node(self, obj, rel, value=None, label=None):
-        local = "g:%s:%s:%s" % (_model_label(type(obj)), obj.pk, rel.name)
+        local = f"g:{_model_label(type(obj))}:{obj.pk}:{rel.name}"
         if value is not None:
-            local += ":%s" % value
+            local += f":{value}"
         if label is None:
             if isinstance(rel, Folder):
                 label = str(rel.label)
@@ -378,7 +396,7 @@ class Explorer:
         icon = self.shell.icon(rel.icon or "folder")
         url = _url(obj)
         if url and not isinstance(rel, Folder):
-            url = "%s#%s-tab" % (url, rel.name)
+            url = f"{url}#{rel.name}-tab"
         return Node(
             key=self.key(local), label=label, url=url, icon=icon, expandable=True
         )
@@ -393,12 +411,12 @@ class Explorer:
         if rel.group_by and value is None:
             return self.grouped_nodes(request, obj, rel, queryset)
         if rel.group_by:
-            queryset = queryset.filter(**{"%s__pk" % rel.group_by: value})
+            queryset = queryset.filter(**{f"{rel.group_by}__pk": value})
         url = _url(obj)
         return self.list_nodes(
             request,
             queryset,
-            more_url=url and "%s#%s-tab" % (url, rel.name),
+            more_url=url and f"{url}#{rel.name}-tab",
             more_label=str(queryset.model._meta.verbose_name_plural),
         )
 
@@ -420,7 +438,7 @@ class Explorer:
         parts = local.split(":")
         label, pk, name = parts[1], parts[2], parts[3]
         value = parts[4] if len(parts) > 4 else None
-        obj = self.lookup("o:%s:%s" % (label, pk), request)
+        obj = self.lookup(f"o:{label}:{pk}", request)
         if obj is None:
             return []
         for rel in self.relations(type(obj), obj):
@@ -550,13 +568,13 @@ class Explorer:
             top = chain[0]
             for n, section in enumerate(sections):
                 if section.model is not None and isinstance(top, section.model):
-                    keys.append(self.key("s%d" % n))
+                    keys.append(self.key(f"s{n}"))
                     break
             else:
                 top_url = _url(top) or ""
                 n = self._section_for_path(sections, top_url)
                 if n is not None:
-                    keys.append(self.key("s%d" % n))
+                    keys.append(self.key(f"s{n}"))
             for parent, child in zip([None, *chain], chain):
                 if parent is not None:
                     keys.extend(self._steps(parent, child))
@@ -564,7 +582,7 @@ class Explorer:
         else:
             n = self._section_for_path(sections, request.path)
             if n is not None:
-                keys.append(self.key("s%d" % n))
+                keys.append(self.key(f"s{n}"))
         return keys
 
     def _section_for_path(self, sections, path):
@@ -587,11 +605,11 @@ class Explorer:
                 continue
             if self.is_flat(model, rel, rels):
                 return []
-            local = "g:%s:%s:%s" % (_model_label(model), parent.pk, rel.name)
+            local = f"g:{_model_label(model)}:{parent.pk}:{rel.name}"
             steps = [self.key(local)]
             if rel.group_by:
-                value = getattr(child, "%s_id" % rel.group_by, None)
-                steps.append(self.key("%s:%s" % (local, value)))
+                value = getattr(child, f"{rel.group_by}_id", None)
+                steps.append(self.key(f"{local}:{value}"))
             return steps
         return []
 
@@ -611,7 +629,7 @@ class Explorer:
             parts = local.split(":")
             if len(parts) > 4:
                 return self.key(":".join(parts[:4]))
-            return self.key("o:%s:%s" % (parts[1], parts[2]))
+            return self.key(f"o:{parts[1]}:{parts[2]}")
         return self.key("")
 
     def trail_of(self, obj):
@@ -636,7 +654,7 @@ class Explorer:
             return self.object_label(obj) if obj else ""
         if local.startswith("g:"):
             parts = local.split(":")
-            obj = self.lookup("o:%s:%s" % (parts[1], parts[2]))
+            obj = self.lookup(f"o:{parts[1]}:{parts[2]}")
             if obj is None:
                 return ""
             for rel in self.relations(type(obj), obj):

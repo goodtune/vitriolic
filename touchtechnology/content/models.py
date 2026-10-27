@@ -88,6 +88,7 @@ class Page(models.Model):
         # The site's files (the media section) have no model of their own.
         # The pages, which use them, hold the permissions over them.
         permissions = [
+            ("add_file", "Can add files"),
             ("view_file", "Can view files"),
             ("delete_file", "Can delete files"),
         ]
