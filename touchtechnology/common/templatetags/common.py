@@ -579,12 +579,20 @@ def create_permission_checker(model_or_manager, user):
 def check_permission(obj, checker):
     """
     For a given model instance and a :class:`ObjectPermissionChecker` return
-    which permissions the associated user has.
+    which permissions the associated user has: on the instance, or on every
+    instance of its model (a global permission), as the views accept with
+    ``get_40x_or_None(..., accept_global_perms=True)``.
+
+    The checker knows object permissions only, so the global ones are asked of
+    the user through Django's own backend, which caches them on the user for
+    the rest of the request.
     """
+    user = checker.user
     return [
         model_perm
         for model_perm in get_all_perms_for_model_cached(obj._meta.model)
         if checker.has_perm(model_perm, obj)
+        or (user is not None and user.has_perm(model_perm))
     ]
 
 
