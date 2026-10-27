@@ -66,7 +66,23 @@ class AdminSite(DjangoAdminSite):
                     component.__name__,
                 )
                 return
-        self._components[component] = instance = component(self.name)
+        instance = component(self.name)
+        # The name roots the component's addresses and its ids in the rail,
+        # so two components may not share one.
+        for registered, other in self._components.items():
+            if other.name == instance.name:
+                raise AlreadyRegistered(
+                    _(
+                        "The component %(component)s has the name %(name)s of "
+                        "the registered component %(registered)s"
+                    )
+                    % {
+                        "component": component.__name__,
+                        "name": instance.name,
+                        "registered": registered.__name__,
+                    }
+                )
+        self._components[component] = instance
         instance.admin_site = self
         if schemas:
             self._schemas[component] = schemas
