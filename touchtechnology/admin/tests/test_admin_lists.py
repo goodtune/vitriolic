@@ -80,3 +80,29 @@ class PermissionNamesTest(TestCase):
         with self.login(self.make_user()):
             self.get_check_200("admin:news:article:list")
         self.assertPermissionNames("article")
+
+
+class CreateUrlTest(TestCase):
+    """
+    The list code hands its templates the address of the add page, named
+    within the namespace of the page the list is on.
+    """
+
+    user_factory = SuperUserFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.article = ArticleFactory.create()
+
+    def test_admin_list(self):
+        with self.login(self.make_user()):
+            self.get_check_200("admin:news:article:edit", pk=self.article.pk)
+        self.assertContext(
+            "create",
+            self.reverse("admin:news:article:translation:add", self.article.pk),
+        )
+
+    def test_generic_list(self):
+        with self.login(self.make_user()):
+            self.get_check_200("admin:news:article:list")
+        self.assertContext("create_url", self.reverse("admin:news:article:add"))

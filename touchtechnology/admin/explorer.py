@@ -111,11 +111,7 @@ def _url(obj, name="edit"):
 
 
 def _key(obj):
-    return f"o:{obj._meta.app_label}.{obj._meta.model_name}:{obj.pk}"
-
-
-def _model_label(model):
-    return f"{model._meta.app_label}.{model._meta.model_name}"
+    return f"o:{obj._meta.label_lower}:{obj.pk}"
 
 
 def _has_admin_urls(model):
@@ -385,7 +381,7 @@ class Explorer:
         return nodes
 
     def group_node(self, obj, rel, value=None, label=None):
-        local = f"g:{_model_label(type(obj))}:{obj.pk}:{rel.name}"
+        local = f"g:{obj._meta.label_lower}:{obj.pk}:{rel.name}"
         if value is not None:
             local += f":{value}"
         if label is None:
@@ -605,7 +601,7 @@ class Explorer:
                 continue
             if self.is_flat(model, rel, rels):
                 return []
-            local = f"g:{_model_label(model)}:{parent.pk}:{rel.name}"
+            local = f"g:{model._meta.label_lower}:{parent.pk}:{rel.name}"
             steps = [self.key(local)]
             if rel.group_by:
                 value = getattr(child, f"{rel.group_by}_id", None)

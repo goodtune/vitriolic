@@ -122,7 +122,7 @@ class Application:
             parts = self.__module__.rsplit(".", depth)
             mod = parts[0]
             try:
-                ver = import_string("%s.__version__" % mod)
+                ver = import_string(f"{mod}.__version__")
             except ImportError:
                 logger.warning('"__version__" not found at "%s"', mod)
             else:
@@ -131,7 +131,7 @@ class Application:
         name = self.verbose_name
         if callable(name):
             name = name()
-        return "{name} {ver}".format(name=_(name), ver=ver)
+        return f"{_(name)} {ver}"
 
     @property
     def current_app(self):
@@ -142,9 +142,9 @@ class Application:
             args = ()
         if kwargs is None:
             kwargs = {}
-        named_url = "%s:%s" % (self.app_name, name)
+        named_url = f"{self.app_name}:{name}"
         if prefix:
-            named_url = "%s:%s" % (prefix, named_url)
+            named_url = f"{prefix}:{named_url}"
         for key in self.kwargs:
             kwargs.pop(key, None)
         return reverse_lazy(
@@ -341,7 +341,7 @@ class Application:
 
         # Determine the namespace of this Application, so we can construct
         # view names to pass to the template engine to reverse CRUD URI's.
-        create_url_name = "%s:add" % request.resolver_match.namespace
+        create_url_name = f"{request.resolver_match.namespace}:add"
         create_url_kwargs = request.resolver_match.kwargs.copy()
         create_url_kwargs.pop("admin", None)
         create_url_kwargs.pop("component", None)

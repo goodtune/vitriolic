@@ -9,9 +9,14 @@ import datetime
 from freezegun import freeze_time
 from test_plus import TestCase
 
+from touchtechnology.admin.sites import site
 from touchtechnology.admin.tests.shells import per_shell
 from touchtechnology.common.tests.factories import UserFactory
-from tournamentcontrol.competition.admin import division_setup, season_checklist
+from tournamentcontrol.competition.admin import (
+    CompetitionAdminComponent,
+    division_setup,
+    season_checklist,
+)
 from tournamentcontrol.competition.tests import factories
 
 ICON = (
@@ -139,7 +144,7 @@ class SeasonChecklistTests(TestCase):
     def test_a_division_without_teams_is_named_and_linked(self):
         step = season_checklist(self.season).steps[5]
         self.assertEqual(step.detail, "Mixed Open needs teams")
-        self.assertEqual(step.url, "%s#teams-tab" % self.division.urls["edit"])
+        self.assertEqual(step.url, f"{self.division.urls['edit']}#teams-tab")
 
     def test_the_season_page_shows_the_checklist(self):
         with self.login(self.superuser):
@@ -244,7 +249,7 @@ class DivisionPageTests(TestCase):
         self.response_302()
         self.assertEqual(
             self.last_response["Location"],
-            "%s#stages-tab" % self.division.urls["edit"],
+            f"{self.division.urls['edit']}#stages-tab",
         )
 
 
@@ -291,7 +296,7 @@ class ReturnTests(TestCase):
         self.response_302()
         self.assertEqual(
             self.last_response["Location"],
-            "%s#schedule-tab" % self.season.urls["edit"],
+            f"{self.season.urls['edit']}#schedule-tab",
         )
 
 
@@ -309,12 +314,9 @@ class ClubOfficialsTests(TestCase):
         with self.login(self.superuser):
             self.get_check_200("admin:fixja:club:edit", self.club.pk)
         self.assertResponseContains(
-            '<a class="wb-button wb-button-primary wb-button-small" href="%s">'
-            "%sAdd Official</a>"
-            % (
-                self.reverse("admin:fixja:club:clubassociation:add", self.club.pk),
-                ICON % "plus",
-            ),
+            '<a class="wb-button wb-button-primary wb-button-small" href="'
+            f'{self.reverse("admin:fixja:club:clubassociation:add", self.club.pk)}">'
+            f"{ICON % 'plus'}Add Official</a>",
         )
 
     def test_adding_an_official_belongs_to_the_club(self):
@@ -327,7 +329,7 @@ class ClubOfficialsTests(TestCase):
             )
         self.response_302()
         self.assertEqual(
-            self.last_response["Location"], "%s#staff-tab" % self.club.urls["edit"]
+            self.last_response["Location"], f"{self.club.urls['edit']}#staff-tab"
         )
         self.assertEqual(
             list(self.club.staff.values_list("person", flat=True)), [self.person.pk]
@@ -368,14 +370,29 @@ class TreeTests(TestCase):
             self.node(self.pool, "users-round", ' aria-current="page"')
         )
 
+    def test_the_trail_to_a_team_passes_its_folder(self):
+        team = factories.TeamFactory.create(division=self.division)
+        explorer = site._components[CompetitionAdminComponent].explorer()
+        self.assertEqual(
+            explorer.trail_of(team),
+            [
+                "fixja/s0",
+                f"fixja/o:competition.competition:{self.season.competition.pk}",
+                f"fixja/o:competition.season:{self.season.pk}",
+                f"fixja/o:competition.division:{self.division.pk}",
+                f"fixja/g:competition.division:{self.division.pk}:teams",
+                f"fixja/o:competition.team:{team.pk}",
+            ],
+        )
+
     def test_opening_a_season_lists_its_divisions(self):
-        key = "fixja/o:competition.season:%d" % self.season.pk
+        key = f"fixja/o:competition.season:{self.season.pk}"
         with self.login(self.superuser):
             self.get_check_200("admin:explorer", data={"node": key})
         self.assertResponseContains(self.node(self.division, "layers"))
 
     def test_the_phone_drills_into_a_division(self):
-        key = "fixja/o:competition.division:%d" % self.division.pk
+        key = f"fixja/o:competition.division:{self.division.pk}"
         with self.login(self.superuser):
             self.get_check_200("admin:explorer", data={"node": key, "mode": "drill"})
         self.assertResponseContains(
