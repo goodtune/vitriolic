@@ -29,8 +29,8 @@ class ChoiceForm(BootstrapFormControlMixin, forms.Form):
     title = forms.CharField(label="Title")
     when = forms.DateField(label="When", widget=forms.DateInput)
     starts = forms.TimeField(label="Starts", widget=forms.TimeInput)
-    few = forms.ChoiceField(choices=[(n, "Choice %d" % n) for n in range(3)])
-    many = forms.ChoiceField(choices=[(n, "Choice %d" % n) for n in range(12)])
+    few = forms.ChoiceField(choices=[(n, f"Choice {n}") for n in range(3)])
+    many = forms.ChoiceField(choices=[(n, f"Choice {n}") for n in range(12)])
     several = forms.MultipleChoiceField(choices=[("a", "A"), ("b", "B")])
     where = forms.CharField(widget=LocationWidget(height=200, zoom=12))
 

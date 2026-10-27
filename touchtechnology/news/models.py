@@ -27,7 +27,7 @@ class AdminUrlModel(AdminUrlMixin, models.Model):
         abstract = True
 
     def _get_admin_namespace(self):
-        return "admin:news:%s" % self._meta.model_name
+        return f"admin:news:{self._meta.model_name}"
 
     def _get_url_args(self):
         return (self.pk,)
@@ -115,7 +115,7 @@ class Translation(AdminUrlModel):
             return getattr(self.article, name)
 
     def _get_admin_namespace(self):
-        return "admin:news:article:%s" % self._meta.model_name
+        return f"admin:news:article:{self._meta.model_name}"
 
     def _get_url_args(self):
         return (self.article.pk, self.locale)

@@ -101,7 +101,7 @@ def admin_attrs(bound_field, widget):
         if name not in LEGACY_CLASSES
     ]
     kind = kind_of(widget)
-    kept.insert(0, "wb-%s" % kind)
+    kept.insert(0, f"wb-{kind}")
     attrs = {"class": " ".join(kept)}
 
     # A placeholder that repeats the label says nothing, and hides once the
