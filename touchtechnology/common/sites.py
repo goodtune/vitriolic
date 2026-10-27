@@ -108,29 +108,6 @@ class Application:
         return cls().app_name.title()
 
     @property
-    def version(self):
-        """
-        Identify version number of the Application. If it is defined as a
-        module we look up the import path until we find the module level
-        ``get_version`` function, to a maximum depth of 4 levels.
-        """
-        ver = ""
-        for depth in range(1, 5):
-            parts = self.__module__.rsplit(".", depth)
-            mod = parts[0]
-            try:
-                ver = import_string(f"{mod}.__version__")
-            except ImportError:
-                logger.warning('"__version__" not found at "%s"', mod)
-            else:
-                logger.debug('Identified version "%s" for "%s"', ver, mod)
-                break
-        name = self.verbose_name
-        if callable(name):
-            name = name()
-        return f"{_(name)} {ver}"
-
-    @property
     def current_app(self):
         return self.name
 

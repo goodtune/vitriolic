@@ -1,21 +1,9 @@
 from django.template import Library
 from django.templatetags.static import static
 
-import touchtechnology.admin
 from touchtechnology.admin.branding import get_brand
 
 register = Library()
-
-
-@register.simple_tag(takes_context=True)
-def version_string(context):
-    component = context.get("component")
-    if component is not None:
-        return component.version
-    node = context.get("node")
-    if node is not None and hasattr(node.object, "site"):
-        return node.object.site(node).version
-    return touchtechnology.admin.__version__
 
 
 def _app_labels_granted(request):
