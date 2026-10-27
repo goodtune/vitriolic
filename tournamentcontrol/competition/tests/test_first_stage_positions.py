@@ -3,8 +3,11 @@ A position with no stage in it (P1, G1P2) is a place on the ladder of the
 stage before. The first stage of a division has no stage before it, so such a
 position names nothing there and the admin refuses it (#473, #505). A position
 that names its stage (S1G1P1) is not refused. Stages, pools and positions
-count from one, so a zero (S0P1, G0P1) names nothing either (#508). A refused
-formula is the only error the undecided-team form shows (#506).
+count from one, so a zero (S0P1, G0P1) names nothing either (#508), on every
+path a formula is written: the undecided-team form, the draw wizard and the
+JSON division builder (#533). A formula is spelled one way: no text after it
+(P1X, #535) and no leading zero in a number (S01P1, #551). A refused formula is
+the only error the undecided-team form shows (#506).
 """
 
 import datetime
@@ -47,6 +50,15 @@ class FirstStageMixin:
         cls.final = factories.DrawFormatFactory.create(
             name="Final", teams=2, text="ROUND\n1: P1 vs P2 Final"
         )
+        cls.pool_final = factories.DrawFormatFactory.create(
+            name="Pool final", teams=2, text=cls.draw_formats["pool positions"]
+        )
+        cls.zero_final = factories.DrawFormatFactory.create(
+            name="Zero final", teams=2, text=cls.draw_formats["zero"]
+        )
+        cls.leading_zero_final = factories.DrawFormatFactory.create(
+            name="Leading zero final", teams=2, text=cls.draw_formats["leading zero"]
+        )
 
     def first_stage_error(self, formula):
         return (
@@ -57,12 +69,19 @@ class FirstStageMixin:
     def zero_error(self, formula):
         return f"{formula}: stage, pool and position numbers start at 1."
 
-    # For the JSON division builder: the same two stages, as a structure.
+    def leading_zero_error(self, formula):
+        return f"{formula}: stage, pool and position numbers have no leading zero."
+
+    # For the JSON division builder: the same two stages, as a structure. The
+    # draw formats of the wizard tests hold the same texts.
 
     draw_formats = {
         "round robin": "ROUND\n1: 1 vs 2",
         "final": "ROUND\n1: P1 vs P2 Final",
         "pool final": "ROUND\n1: S1G1P1 vs S1G1P2 Final",
+        "pool positions": "ROUND\n1: G1P1 vs G1P2 Final",
+        "zero": "ROUND\n1: G0P1 vs G0P2 Final",
+        "leading zero": "ROUND\n1: S01P1 vs G01P2 Final\n2: P01 vs P2 Playoff",
     }
 
     def structure(self, pools, finals):
@@ -104,11 +123,36 @@ class UndecidedTeamFormTests(FirstStageMixin, TestCase):
         self.assertEqual(form.is_valid(), True)
         self.assertEqual(form.cleaned_data["formula"], "S1G1P1")
 
+    def test_position_alone_is_accepted(self):
+        form = self.form(self.finals, "P1")
+        self.assertEqual(form.is_valid(), True)
+        self.assertEqual(form.cleaned_data["formula"], "P1")
+
+    def test_position_naming_a_stage_is_accepted(self):
+        form = self.form(self.finals, "S1P1")
+        self.assertEqual(form.is_valid(), True)
+        self.assertEqual(form.cleaned_data["formula"], "S1P1")
+
+    def test_trailing_text_is_refused(self):
+        """The whole formula is read, not a prefix the pattern matches."""
+        form = self.form(self.finals, "P1X")
+        self.assertEqual(
+            form.errors, {"formula": ["This is not a valid team formula."]}
+        )
+
     def test_zero_is_refused(self):
         for formula in ("S0P1", "G0P1", "P0"):
             with self.subTest(formula=formula):
                 form = self.form(self.finals, formula)
                 self.assertEqual(form.errors, {"formula": [self.zero_error(formula)]})
+
+    def test_leading_zero_is_refused(self):
+        for formula in ("S01P1", "G01P1", "P01"):
+            with self.subTest(formula=formula):
+                form = self.form(self.finals, formula)
+                self.assertEqual(
+                    form.errors, {"formula": [self.leading_zero_error(formula)]}
+                )
 
     def test_refused_formula_is_the_only_error(self):
         """A refused formula is not also asked for a label."""
@@ -216,13 +260,52 @@ class DivisionStructureJSONFormTests(FirstStageMixin, TestCase):
             [("S1G1P1", "S1G1P2")],
         )
 
+    def test_zero_is_refused_on_any_stage(self):
+        """A zero names no team on any stage, and is refused as a zero."""
+        for pools, finals in (("zero", "round robin"), ("round robin", "zero")):
+            with self.subTest(pools=pools, finals=finals):
+                form = self.form(self.structure(pools, finals))
+                self.assertEqual(
+                    form.errors,
+                    {"json_data": [self.zero_error("G0P1"), self.zero_error("G0P2")]},
+                )
+
+    def test_leading_zero_is_refused(self):
+        form = self.form(self.structure("round robin", "leading zero"))
+        self.assertEqual(
+            form.errors,
+            {
+                "json_data": [
+                    self.leading_zero_error("S01P1"),
+                    self.leading_zero_error("G01P2"),
+                    self.leading_zero_error("P01"),
+                ]
+            },
+        )
+
+    def test_pool_positions_on_a_later_stage_build(self):
+        form = self.form(self.structure("round robin", "pool positions"))
+        self.assertEqual(form.is_valid(), True)
+        division = form.save()
+        self.assertCountEqual(
+            division.stages.get(order=2).matches.values_list(
+                "home_team_eval", "away_team_eval"
+            ),
+            [("G1P1", "G1P2")],
+        )
+
 
 class DrawGenerationFormTests(FirstStageMixin, TestCase):
-    def form(self, stage):
+    def form(self, stage, format=None):
         return DrawGenerationForm(
             initial=stage,
-            data={"start_date": "2026-10-07", "format": self.final.pk},
+            data={"start_date": "2026-10-07", "format": (format or self.final).pk},
         )
+
+    def evals(self, form):
+        return [
+            (m.home_team_eval, m.away_team_eval) for m in form.cleaned_data["matches"]
+        ]
 
     def test_positions_on_the_first_stage_are_refused(self):
         form = self.form(self.pools)
@@ -235,13 +318,35 @@ class DrawGenerationFormTests(FirstStageMixin, TestCase):
     def test_positions_on_a_later_stage_are_accepted(self):
         form = self.form(self.finals)
         self.assertEqual(form.is_valid(), True)
+        self.assertEqual(self.evals(form), [("P1", "P2")])
+
+    def test_zero_is_refused_on_any_stage(self):
+        """A zero names no team on any stage, and is refused as a zero."""
+        for stage in (self.pools, self.finals):
+            with self.subTest(stage=stage.title):
+                form = self.form(stage, self.zero_final)
+                self.assertEqual(
+                    form.errors,
+                    {"format": [self.zero_error("G0P1"), self.zero_error("G0P2")]},
+                )
+
+    def test_leading_zero_is_refused(self):
+        form = self.form(self.finals, self.leading_zero_final)
         self.assertEqual(
-            [
-                (m.home_team_eval, m.away_team_eval)
-                for m in form.cleaned_data["matches"]
-            ],
-            [("P1", "P2")],
+            form.errors,
+            {
+                "format": [
+                    self.leading_zero_error("S01P1"),
+                    self.leading_zero_error("G01P2"),
+                    self.leading_zero_error("P01"),
+                ]
+            },
         )
+
+    def test_pool_positions_on_a_later_stage_are_accepted(self):
+        form = self.form(self.finals, self.pool_final)
+        self.assertEqual(form.is_valid(), True)
+        self.assertEqual(self.evals(form), [("G1P1", "G1P2")])
 
 
 class MatchFormTests(FirstStageMixin, TestCase):
@@ -331,6 +436,32 @@ class FirstStagePositionAdminTests(IconMixin, FirstStageMixin, TestCase):
                 )
                 self.assertCountEqual(self.finals.undecided_teams.all(), [])
 
+    def test_undecided_team_with_a_leading_zero_is_refused(self):
+        for formula in ("S01P1", "G01P1", "P01"):
+            with self.subTest(formula=formula):
+                self.post_undecided_team(self.finals, formula)
+                self.assert_http_200_ok()
+                self.assertResponseContains(
+                    self.field_error("formula", self.leading_zero_error(formula))
+                )
+                self.assertEqual(
+                    self.get_context("form").errors,
+                    {"formula": [self.leading_zero_error(formula)]},
+                )
+                self.assertCountEqual(self.finals.undecided_teams.all(), [])
+
+    def test_undecided_team_with_trailing_text_is_refused(self):
+        self.post_undecided_team(self.finals, "P1X")
+        self.assert_http_200_ok()
+        self.assertResponseContains(
+            self.field_error("formula", "This is not a valid team formula.")
+        )
+        self.assertEqual(
+            self.get_context("form").errors,
+            {"formula": ["This is not a valid team formula."]},
+        )
+        self.assertCountEqual(self.finals.undecided_teams.all(), [])
+
     def test_undecided_team_position_on_a_later_stage_is_saved(self):
         self.post_undecided_team(self.finals, "G1P2")
         self.assert_http_302_found(url=str(self.finals.urls["edit"]))
@@ -347,7 +478,7 @@ class FirstStagePositionAdminTests(IconMixin, FirstStageMixin, TestCase):
 
     # The draw wizard.
 
-    def post_draw_format(self, stage):
+    def post_draw_format(self, stage, format=None):
         url = stage.url_names["build"]
         self.post(
             url.url_name,
@@ -359,28 +490,14 @@ class FirstStagePositionAdminTests(IconMixin, FirstStageMixin, TestCase):
                 "0-MIN_NUM_FORMS": "0",
                 "0-MAX_NUM_FORMS": "1000",
                 "0-0-start_date": "2026-10-07",
-                "0-0-format": self.final.pk,
+                "0-0-format": (format or self.final).pk,
                 "0-0-rounds": "",
                 "0-0-offset": "",
             },
         )
 
-    def test_draw_of_positions_on_the_first_stage_is_refused(self):
-        self.post_draw_format(self.pools)
-        self.assert_http_200_ok()
-        self.assertEqual(self.get_context("wizard")["steps"].current, "0")
-        self.assertResponseContains(
-            self.field_error(
-                "0-0-format",
-                self.first_stage_error("P1"),
-                self.first_stage_error("P2"),
-            )
-        )
-
-    def test_draw_of_positions_on_a_later_stage_is_saved(self):
-        self.post_draw_format(self.finals)
-        self.assert_http_200_ok()
-        self.assertEqual(self.get_context("wizard")["steps"].current, "1")
+    def post_draw_matches(self, stage):
+        """The wizard's second step, posted as the first step filled it in."""
         formset = self.get_context("form")
         data = {
             "draw_generation_wizard-current_step": "1",
@@ -395,12 +512,66 @@ class FirstStagePositionAdminTests(IconMixin, FirstStageMixin, TestCase):
                 if isinstance(value, datetime.datetime):
                     value = value.date()
                 data[f"1-{index}-{name}"] = "" if value is None else str(value)
-        url = self.finals.url_names["build"]
+        url = stage.url_names["build"]
         self.post(url.url_name, *url.args, data=data)
+
+    def test_draw_of_positions_on_the_first_stage_is_refused(self):
+        self.post_draw_format(self.pools)
+        self.assert_http_200_ok()
+        self.assertEqual(self.get_context("wizard")["steps"].current, "0")
+        self.assertResponseContains(
+            self.field_error(
+                "0-0-format",
+                self.first_stage_error("P1"),
+                self.first_stage_error("P2"),
+            )
+        )
+
+    def test_draw_with_a_zero_is_refused(self):
+        self.post_draw_format(self.finals, self.zero_final)
+        self.assert_http_200_ok()
+        self.assertEqual(self.get_context("wizard")["steps"].current, "0")
+        self.assertResponseContains(
+            self.field_error(
+                "0-0-format", self.zero_error("G0P1"), self.zero_error("G0P2")
+            )
+        )
+        self.assertCountEqual(self.finals.matches.all(), [])
+
+    def test_draw_with_a_leading_zero_is_refused(self):
+        self.post_draw_format(self.finals, self.leading_zero_final)
+        self.assert_http_200_ok()
+        self.assertEqual(self.get_context("wizard")["steps"].current, "0")
+        self.assertResponseContains(
+            self.field_error(
+                "0-0-format",
+                self.leading_zero_error("S01P1"),
+                self.leading_zero_error("G01P2"),
+                self.leading_zero_error("P01"),
+            )
+        )
+        self.assertCountEqual(self.finals.matches.all(), [])
+
+    def test_draw_of_positions_on_a_later_stage_is_saved(self):
+        self.post_draw_format(self.finals)
+        self.assert_http_200_ok()
+        self.assertEqual(self.get_context("wizard")["steps"].current, "1")
+        self.post_draw_matches(self.finals)
         self.assert_http_302_found(url=str(self.division.urls["edit"]))
         self.assertCountEqual(
             self.finals.matches.values_list("home_team_eval", "away_team_eval"),
             [("P1", "P2")],
+        )
+
+    def test_draw_of_pool_positions_on_a_later_stage_is_saved(self):
+        self.post_draw_format(self.finals, self.pool_final)
+        self.assert_http_200_ok()
+        self.assertEqual(self.get_context("wizard")["steps"].current, "1")
+        self.post_draw_matches(self.finals)
+        self.assert_http_302_found(url=str(self.division.urls["edit"]))
+        self.assertCountEqual(
+            self.finals.matches.values_list("home_team_eval", "away_team_eval"),
+            [("G1P1", "G1P2")],
         )
 
     # The JSON division builder.
@@ -432,6 +603,31 @@ class FirstStagePositionAdminTests(IconMixin, FirstStageMixin, TestCase):
         )
         self.assertCountEqual(self.division.season.divisions.all(), [self.division])
 
+    def test_json_division_with_a_zero_is_refused(self):
+        self.post_json_builder(self.structure(pools="round robin", finals="zero"))
+        self.assert_http_200_ok()
+        self.assertResponseContains(
+            self.field_error(
+                "form-0-json_data", self.zero_error("G0P1"), self.zero_error("G0P2")
+            )
+        )
+        self.assertCountEqual(self.division.season.divisions.all(), [self.division])
+
+    def test_json_division_with_a_leading_zero_is_refused(self):
+        self.post_json_builder(
+            self.structure(pools="round robin", finals="leading zero")
+        )
+        self.assert_http_200_ok()
+        self.assertResponseContains(
+            self.field_error(
+                "form-0-json_data",
+                self.leading_zero_error("S01P1"),
+                self.leading_zero_error("G01P2"),
+                self.leading_zero_error("P01"),
+            )
+        )
+        self.assertCountEqual(self.division.season.divisions.all(), [self.division])
+
     def test_json_division_of_positions_on_a_later_stage_is_saved(self):
         self.post_json_builder(self.structure(pools="round robin", finals="final"))
         self.assert_http_302_found(url=str(self.division.season.urls["edit"]))
@@ -441,4 +637,17 @@ class FirstStagePositionAdminTests(IconMixin, FirstStageMixin, TestCase):
                 "home_team_eval", "away_team_eval"
             ),
             [("P1", "P2")],
+        )
+
+    def test_json_division_of_pool_positions_on_a_later_stage_is_saved(self):
+        self.post_json_builder(
+            self.structure(pools="round robin", finals="pool positions")
+        )
+        self.assert_http_302_found(url=str(self.division.season.urls["edit"]))
+        division = self.division.season.divisions.get(title="Juniors")
+        self.assertCountEqual(
+            division.stages.get(order=2).matches.values_list(
+                "home_team_eval", "away_team_eval"
+            ),
+            [("G1P1", "G1P2")],
         )
