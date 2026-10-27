@@ -654,35 +654,36 @@ def stage_group_position(stage, formula):
     else:
         # Stages are numbered from one, so S0 names none, as a number past
         # the last stage does.
-        if int(s) == 0:
-            logger.warning("Invalid stage %r for division %r", s, stage.division)
-            raise IndexError(f"Invalid stage {s} for division {stage.division}")
-        try:
-            s = stage.division.stages.all()[int(s) - 1]
-        except IndexError:
-            logger.exception("Invalid stage %r for division %r", s, stage.division)
-            raise
+        stages = stage.division.stages.all()
+        stage_count = stages.count()
+        if not 1 <= int(s) <= stage_count:
+            logger.warning(
+                "Invalid stage %r for division %r (division has %d stages)",
+                s,
+                stage.division,
+                stage_count,
+            )
+            raise IndexError(
+                f"Invalid stage {s} for division {stage.division} "
+                f"(division has {stage_count} stages)"
+            )
+        s = stages[int(s) - 1]
     logger.debug("stage=%r", s)
 
     if g is None:
         logger.debug("No group specified in formula %r", formula)
     else:
-        pools = s.pools.all().order_by("order")
         # Pools are numbered from one too, so G0 names none.
-        if 1 <= int(g) <= pools.count():
-            try:
-                g = pools[int(g) - 1]
-            except IndexError:
-                logger.exception("Invalid group %r for stage %r", g, stage)
-                raise
-        else:
-            pool_count = pools.count()
-            logger.exception(
+        pools = s.pools.all().order_by("order")
+        pool_count = pools.count()
+        if not 1 <= int(g) <= pool_count:
+            logger.warning(
                 "Invalid group %r for stage %r (stage has %d pools)", g, s, pool_count
             )
             raise IndexError(
                 f"Invalid group {g} for stage {s} (stage has {pool_count} pools)"
             )
+        g = pools[int(g) - 1]
     logger.debug("group=%r", g)
 
     p = int(p)

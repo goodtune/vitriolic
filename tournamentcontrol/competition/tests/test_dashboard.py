@@ -17,6 +17,7 @@ from touchtechnology.common.tests.factories import (
 )
 from tournamentcontrol.competition.admin import CompetitionAdminComponent
 from tournamentcontrol.competition.dashboard import (
+    BasicResultWidget,
     matches_progression_possible,
     matches_require_basic_results,
     matches_require_details_results,
@@ -176,6 +177,25 @@ class BasicResultTests(TestCase):
         # Its result comes from the upstream provider, so it is never awaiting entry.
         MatchFactory.create(datetime=kickoff, stage=match.stage, upstream_id="mysideline:12345")
         self.assertCountEqual(matches_require_basic_results(), [match])
+
+    @freeze_time("2019-07-15 09:00 UTC")
+    def test_widget_context(self):
+        """
+        The widget gives its template the matches and, for the links it draws,
+        each competition, season, date and time among them, and nothing more.
+        """
+        match = MatchFactory.create(
+            datetime=datetime.datetime(2019, 7, 15, 8, 30, tzinfo=ZoneInfo("UTC")),
+            stage__division__season__timezone="UTC",
+        )
+        season = match.stage.division.season
+        context = BasicResultWidget()._get_context()
+        self.assertCountEqual(context, ["matches", "dates_times"])
+        self.assertCountEqual(context["matches"], [match])
+        self.assertEqual(
+            context["dates_times"],
+            [(season.competition_id, season.pk, match.date, match.time)],
+        )
 
 
 class DetailResultTests(TestCase):
