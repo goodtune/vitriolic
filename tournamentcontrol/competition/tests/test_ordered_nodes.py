@@ -4,8 +4,8 @@ a stage's pools, a season's divisions.
 
 A row moves past its real neighbour in the list, whatever the ``order``
 values are: they are not kept dense, so a row that is deleted leaves a gap. A
-division's stages and teams may not share a value, since a formula names a
-stage by its number in the list.
+division's stages may not share a value, since a formula names a stage by its
+number in the list.
 """
 
 from django.db import IntegrityError, connection
@@ -127,21 +127,22 @@ class UniqueOrderTests(TestCase):
                 division=self.division, title="Second", slug="second", order=1
             )
 
-    def test_two_teams_of_a_division_may_not_share_an_order(self):
+    def test_two_teams_of_a_division_may_share_an_order(self):
+        # A team's neighbours are closed up when it is deleted or regraded
+        # with one update of every row below it, which the database checks
+        # row by row; a constraint on teams must wait for those to change.
         factories.TeamFactory.create(division=self.division, order=1)
-        with self.assertRaisesMessage(
-            IntegrityError, "competition_team_unique_division_order"
-        ):
-            Team.objects.create(
-                division=self.division, title="Second", slug="second", order=1
-            )
+        team = Team.objects.create(
+            division=self.division, title="Second", slug="second", order=1
+        )
+        self.assertEqual(team.order, 1)
 
 
 class MigrationTests(TransactionTestCase):
     """
-    Stages and teams of a division that share an ``order`` are renumbered in
-    the order they were listed before the constraint is added; a division
-    whose rows are already distinct is left as it is, gaps and all.
+    Stages of a division that share an ``order`` are renumbered in the order
+    they were listed before the constraint is added; a division whose stages
+    are already distinct is left as it is, gaps and all.
     """
 
     migrate_from = [("competition", "0069_list_ordering")]
@@ -155,7 +156,6 @@ class MigrationTests(TransactionTestCase):
         Season = apps.get_model("competition", "Season")
         Division = apps.get_model("competition", "Division")
         Stage = apps.get_model("competition", "Stage")
-        Team = apps.get_model("competition", "Team")
 
         competition = Competition.objects.create(title="Touch", slug="touch")
         season = Season.objects.create(
@@ -171,17 +171,12 @@ class MigrationTests(TransactionTestCase):
             Stage.objects.create(
                 division=gapped, title=title, slug=title.lower(), order=n
             )
-        for n, title in ((1, "Ants"), (1, "Bees"), (1, "Cats")):
-            Team.objects.create(
-                division=shared, title=title, slug=title.lower(), order=n
-            )
 
         executor = MigrationExecutor(connection)
         executor.loader.build_graph()
         executor.migrate(self.migrate_to)
         apps = executor.loader.project_state(self.migrate_to).apps
         Stage = apps.get_model("competition", "Stage")
-        Team = apps.get_model("competition", "Team")
 
         self.assertEqual(
             list(
@@ -198,14 +193,6 @@ class MigrationTests(TransactionTestCase):
                 .values_list("title", "order")
             ),
             [("Pool play", 1), ("Finals", 3)],
-        )
-        self.assertEqual(
-            list(
-                Team.objects.filter(division_id=shared.pk)
-                .order_by("order")
-                .values_list("title", "order")
-            ),
-            [("Ants", 1), ("Bees", 2), ("Cats", 3)],
         )
 
         # Migrate everything else forward again so later tests see the

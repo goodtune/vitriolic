@@ -1917,10 +1917,6 @@ class Team(AdminUrlMixin, UpstreamMixin, OrderedSitemapNode):
                 fields=["title", "division"],
                 name="competition_team_unique_title_division",
             ),
-            UniqueConstraint(
-                fields=["division", "order"],
-                name="competition_team_unique_division_order",
-            ),
         ]
 
     def clean(self):
