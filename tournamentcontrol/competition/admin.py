@@ -3122,7 +3122,7 @@ class CompetitionAdminComponent(AdminComponent):
 
             ladders = collections.OrderedDict()
             if follows is not None:
-                if follows.pools.count():
+                if follows.pools.exists():
                     for pool in follows.pools.all():
                         ladders.setdefault(
                             pool, pool.ladder_summary.select_related("team__club")
@@ -3854,7 +3854,7 @@ class CompetitionAdminComponent(AdminComponent):
         **kwargs,
     ):
         if stage is not None:
-            if stage.matches_needing_printing.count():
+            if stage.matches_needing_printing.exists():
                 matches = stage.matches_needing_printing.all()
             else:
                 matches = stage.matches.all()
