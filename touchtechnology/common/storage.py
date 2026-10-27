@@ -29,17 +29,6 @@ class MakeDirectoryMixin:
         os.makedirs(directory)
         return os.path.join(*parts[1:])
 
-    def mkdir(self, name, path=None):
-        directory = self.path(os.path.join(*[p for p in [path, name] if p]))
-        os.mkdir(directory)
-        if path is None:
-            return name
-        return os.path.join(path, name)
-
-    def rmdir(self, path):
-        directory = self.path(path)
-        os.rmdir(directory)
-
 
 class OverwriteMixin:
     def get_available_name(self, name):

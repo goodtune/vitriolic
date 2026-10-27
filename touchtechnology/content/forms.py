@@ -31,7 +31,7 @@ from touchtechnology.content.models import (
 
 class PlaceholderChoiceField(forms.ModelChoiceField):
     def clean(self, value):
-        return super(PlaceholderChoiceField, self).clean(value).pk
+        return super().clean(value).pk
 
     def label_from_instance(self, obj):
         try:
@@ -66,7 +66,7 @@ class ParentChildModelForm(BootstrapFormControlMixin, ModelForm):
         self.child_attr = child_attr
 
         # initialise with our newly obtained child instance
-        super(ParentChildModelForm, self).__init__(instance=instance, *args, **kwargs)
+        super().__init__(instance=instance, *args, **kwargs)
 
         # determine if there are any keyword arguments for the parent form to
         # be initialised with and establish the form instance
@@ -74,7 +74,7 @@ class ParentChildModelForm(BootstrapFormControlMixin, ModelForm):
         self.parent_form = parent_form_class(
             instance=parent,
             data=self.data if self.is_bound else None,
-            prefix="parent-%s" % self.prefix,
+            prefix=f"parent-{self.prefix}",
             **pfkw,
         )
 
@@ -82,7 +82,7 @@ class ParentChildModelForm(BootstrapFormControlMixin, ModelForm):
         """
         Ensure both the regular ModelForm and the parent_form are valid.
         """
-        result = super(ParentChildModelForm, self).is_valid()
+        result = super().is_valid()
         if self.is_bound:
             result = result and self.parent_form.is_valid()
         return result
@@ -91,7 +91,7 @@ class ParentChildModelForm(BootstrapFormControlMixin, ModelForm):
         """
         Respond with the ``parent_form`` saved instance.
         """
-        child = super(ParentChildModelForm, self).save(commit=commit)
+        child = super().save(commit=commit)
         setattr(self.parent_form.instance, self.child_attr, child)
         return self.parent_form.save(commit=commit)
 
@@ -106,7 +106,7 @@ class ParentChildModelForm(BootstrapFormControlMixin, ModelForm):
             yield self[name]
 
     def _get_media(self):
-        return super(ParentChildModelForm, self).media + self.parent_form.media
+        return super().media +self.parent_form.media
 
     media = property(_get_media)
 
@@ -144,7 +144,7 @@ class NewSitemapNodeForm(BaseSitemapNodeForm):
 
 class SitemapNodeForm(BaseSitemapNodeForm):
     def __init__(self, *args, **kwargs):
-        super(SitemapNodeForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if not SITEMAP_EDIT_PARENT and self.instance.pk:
             self.fields.pop("parent", None)
         elif self.instance.pk:
@@ -166,7 +166,7 @@ class PlaceholderSitemapNodeForm(SitemapNodeForm):
     )
 
     def __init__(self, *args, **kwargs):
-        super(PlaceholderSitemapNodeForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if not self.instance.content_type:
             self.instance.content_type = ContentType.objects.get_for_model(Placeholder)
 
@@ -186,9 +186,7 @@ class PlaceholderConfigurationBase(forms.Form):
         self.instance = instance
         initial = kwargs.pop("initial", {})
         initial.update(instance.kwargs)
-        super(PlaceholderConfigurationBase, self).__init__(
-            initial=initial, *args, **kwargs
-        )
+        super().__init__(initial=initial, *args, **kwargs)
 
     def save(self, *args, **kwargs):
         self.instance.kwargs = self.cleaned_data
@@ -227,7 +225,7 @@ class PageContentFormset(BasePageContentFormset):
         if instance is not None:
             self.node = instance
             instance = instance.object
-        super(PageContentFormset, self).__init__(instance=instance, *args, **kwargs)
+        super().__init__(instance=instance, *args, **kwargs)
 
     def total_form_count(self):
         if isinstance(PAGE_CONTENT_BLOCKS, str):
@@ -237,7 +235,7 @@ class PageContentFormset(BasePageContentFormset):
         return PAGE_CONTENT_BLOCKS
 
     def _construct_form(self, i, **kwargs):
-        return super(PageContentFormset, self)._construct_form(
+        return super()._construct_form(
             i, empty_permitted=False, initial={"sequence": i + 1}
         )
 
@@ -262,7 +260,7 @@ class RedirectEditForm(BootstrapFormControlMixin, ModelForm):
 
 class FileFormMixin(BootstrapFormControlMixin):
     def __init__(self, path, *args, **kwargs):
-        super(FileFormMixin, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.path = path
 
 
@@ -272,11 +270,9 @@ class NewFolderForm(FileFormMixin, forms.Form):
 
     def clean_name(self):
         name = self.cleaned_data.get("name")
-        if self.path is None:
-            path = name
-        else:
-            path = os.path.join(self.path, name)
-        if name and default_storage.exists(path):
+        if not name:
+            return name
+        if default_storage.exists(os.path.join(self.path or "", name)):
             raise forms.ValidationError(_("Already exists."))
         return name
 
