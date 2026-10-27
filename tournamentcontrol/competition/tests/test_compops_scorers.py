@@ -14,10 +14,13 @@ from tournamentcontrol.competition.tests import factories
 
 TZ = ZoneInfo("Australia/Brisbane")
 
+DATASTAR = {"headers": {"Datastar-Request": "true"}}
+
 
 @freeze_time("2026-10-08 00:00 +10:00")
 class ScorersFixture(TestCase):
     def setUp(self):
+        super().setUp()
         events.reset_backend()
         self.staff = factories.UserFactory.create(is_staff=True)
         self.staff.user_permissions.add(
@@ -57,6 +60,18 @@ class ScorersFixture(TestCase):
         self.url = reverse(
             "compops:match-scorers", kwargs={**self.kw, "match_pk": self.match.pk}
         )
+
+    def scorers(self, method, data=None, extra=None):
+        return getattr(self, method)(
+            "compops:match-scorers",
+            match_pk=self.match.pk,
+            data=data,
+            extra=extra or {},
+            **self.kw,
+        )
+
+    def body(self):
+        return b"".join(self.last_response.streaming_content).decode()
 
     def player(self, team, number):
         person = factories.PersonFactory.create()
@@ -110,14 +125,20 @@ class ScorersListTests(ScorersFixture):
     def test_user_without_statistics_permission_sees_no_button(self):
         with self.login(self.nostats):
             self.get("compops:scorers", **self.kw)
-        self.assertResponseNotContains("Enter scorers")
+        self.assert_http_200_ok()
+        self.assertResponseContains('<span class="score">2 – 1</span>')
+        self.assertResponseNotContains(
+            f'<a class="btn" href="{self.url}" '
+            f"data-on:click__prevent=\"@get('{self.url}')\">Enter scorers</a>"
+        )
 
 
 class ScorersModalTests(ScorersFixture):
     def test_modal_renders_both_rosters(self):
         with self.login(self.staff):
-            response = self.client.get(self.url, headers={"Datastar-Request": "true"})
-        body = b"".join(response.streaming_content).decode()
+            self.scorers("get", extra=DATASTAR)
+        self.assert_http_200_ok()
+        body = self.body()
         self.assertIn('data: elements <div id="modal-body" class="modal"', body)
         self.assertIn('name="home-TOTAL_FORMS" value="2"', body)
         self.assertIn('name="away-TOTAL_FORMS" value="1"', body)
@@ -129,12 +150,9 @@ class ScorersModalTests(ScorersFixture):
 
     def test_valid_post_saves_and_closes(self):
         with self.login(self.staff), self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(
-                self.url,
-                self.payload([1, 1], [1]),
-                headers={"Datastar-Request": "true"},
-            )
-        body = b"".join(response.streaming_content).decode()
+            self.scorers("post", self.payload([1, 1], [1]), DATASTAR)
+        self.assert_http_200_ok()
+        body = self.body()
         self.assertIn('data: signals {"modal":false}', body)
         self.assertIn('data: elements <div id="scorers"', body)
         self.assertIn('<span id="scorers-count" class="count zero">0</span>', body)
@@ -164,11 +182,7 @@ class ScorersModalTests(ScorersFixture):
             self.login(self.staff),
             self.captureOnCommitCallbacks(execute=True),
         ):
-            self.client.post(
-                self.url,
-                self.payload([1, 1], [1]),
-                headers={"Datastar-Request": "true"},
-            )
+            self.scorers("post", self.payload([1, 1], [1]), DATASTAR)
         self.assertEqual(patched.call_count, 1)
         self.assertEqual(seen, [True])
         (event,) = events.recent(self.season.pk)
@@ -176,12 +190,9 @@ class ScorersModalTests(ScorersFixture):
 
     def test_points_that_do_not_sum_re_render_the_modal(self):
         with self.login(self.staff):
-            response = self.client.post(
-                self.url,
-                self.payload([1, 0], [1]),
-                headers={"Datastar-Request": "true"},
-            )
-        body = b"".join(response.streaming_content).decode()
+            self.scorers("post", self.payload([1, 0], [1]), DATASTAR)
+        self.assert_http_200_ok()
+        body = self.body()
         self.assertIn('data: elements <div id="modal-body" class="modal"', body)
         self.assertIn("does not equal", body.lower())
         self.assertIn('data-signals="{home_total: 1, away_total: 1}"', body)
@@ -192,22 +203,18 @@ class ScorersModalTests(ScorersFixture):
 
     def test_plain_post_redirects_to_day(self):
         with self.login(self.staff):
-            response = self.client.post(self.url, self.payload([1, 1], [1]))
-        self.assertRedirects(
-            response,
-            reverse("compops:day", kwargs=self.kw),
-            fetch_redirect_response=False,
-        )
+            self.scorers("post", self.payload([1, 1], [1]))
+        self.assert_http_302_found(url=reverse("compops:day", kwargs=self.kw))
 
     def test_without_permission_is_403(self):
         with self.login(self.nostats):
-            response = self.client.post(self.url, self.payload([1, 1], [1]))
-        self.assertEqual(response.status_code, 403)
+            self.scorers("post", self.payload([1, 1], [1]))
+        self.assert_http_403_forbidden()
 
     def test_match_without_score_is_404(self):
         self.match.home_team_score = None
         self.match.away_team_score = None
         self.match.save()
         with self.login(self.staff):
-            response = self.client.get(self.url)
-        self.assertEqual(response.status_code, 404)
+            self.scorers("get")
+        self.assert_http_404_not_found()
