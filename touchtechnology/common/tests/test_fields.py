@@ -22,7 +22,7 @@ class DateTimeFieldTest(TestCase):
             "formset-MAX_NUM_FORMS": "1000",
         }
         self.post("datetime:index", data=data)
-        self.response_302()
+        self.assert_http_302_found(url=self.reverse("datetime:index"))
 
     def test_submit_date_time_blank(self):
         data = {
@@ -34,4 +34,4 @@ class DateTimeFieldTest(TestCase):
             "formset-MAX_NUM_FORMS": "1000",
         }
         self.post("datetime:index", data=data)
-        self.response_302()
+        self.assert_http_302_found(url=self.reverse("datetime:index"))

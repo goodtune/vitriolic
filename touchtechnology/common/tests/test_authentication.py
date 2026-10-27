@@ -62,9 +62,9 @@ url_re = re.compile(
 class PasswordResetTests(TestCase):
     user_factory = factories.UserFactory
 
-    def setUp(self):
-        self.staff = factories.UserFactory.create(is_staff=True, is_superuser=True)
-        self.regular = factories.UserFactory.create()
+    @classmethod
+    def setUpTestData(cls):
+        cls.regular = cls.make_user("regular")
 
     def test_login(self):
         self.assertGoodView("accounts:login")
@@ -73,7 +73,7 @@ class PasswordResetTests(TestCase):
         # In Django 5.0 the logout view was changed to not allow GET requests.
         with self.login(self.regular), self.assertNumQueriesLessThan(50):
             self.post("accounts:logout")
-        self.response_200()
+        self.assert_http_200_ok()
 
     def test_profile_logout_is_a_post_form(self):
         """
@@ -81,8 +81,7 @@ class PasswordResetTests(TestCase):
         carries the CSRF token for logout.js to post it.
         """
         with self.login(self.regular):
-            self.get("accounts:profile")
-        self.response_200()
+            self.get_check_200("accounts:profile")
         token = self.get_context("csrf_token")
         self.assertResponseContains(
             '<a class="btn btn-default" role="button" '
@@ -137,14 +136,13 @@ class PasswordResetTests(TestCase):
 
     def test_password_reset_POST(self):
         data = {
-            "email": self.staff.email,
+            "email": self.regular.email,
         }
         self.post("accounts:password_reset", data=data)
 
         # check that the form submission was successful and
         # redirection to the "done" page has occured.
-        redirect_to = self.reverse("accounts:password_reset_done")
-        self.assertRedirects(self.last_response, redirect_to)
+        self.assert_http_302_found(url=self.reverse("accounts:password_reset_done"))
 
         # check that an email has been delivered
         self.assertEqual(len(mail.outbox), 1)
