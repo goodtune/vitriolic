@@ -16,7 +16,7 @@ from tournamentcontrol.competition.forms import (
     MatchEditForm,
     TeamForm,
 )
-from tournamentcontrol.competition.models import Club, Team
+from tournamentcontrol.competition.models import Club, Match, Team
 from tournamentcontrol.competition.tests import factories
 
 
@@ -128,7 +128,7 @@ class ClubEditFormTests(TestCase):
         form = ClubEditForm(
             instance=self.club, data=self._data(primary=self.members[0].pk)
         )
-        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.errors, {})
         self.assertEqual(form.save().primary, self.members[0])
 
     def test_outsider_cannot_be_the_primary(self):
@@ -340,9 +340,9 @@ class MatchEditFormTests(TestCase):
             },
         )
 
-        self.assertTrue(form.is_valid(), f"Form errors: {form.errors}")
+        self.assertEqual(form.errors, {})
         match = form.save()
-        self.assertIsNotNone(match.pk)
+        self.assertEqual(Match.objects.filter(pk=match.pk).count(), 1)
         self.assertIsNone(match.live_stream_thumbnail_image)
 
     def test_match_edit_preserves_existing_thumbnail(self):
@@ -375,7 +375,7 @@ class MatchEditFormTests(TestCase):
             },
         )
 
-        self.assertTrue(form.is_valid(), f"Form errors: {form.errors}")
+        self.assertEqual(form.errors, {})
         form.save()
         match.refresh_from_db()
         self.assertEqual(match.live_stream_thumbnail_image, original_thumbnail)
@@ -412,7 +412,7 @@ class MatchEditFormTests(TestCase):
             },
         )
 
-        self.assertTrue(form.is_valid(), f"Form errors: {form.errors}")
+        self.assertEqual(form.errors, {})
         match = form.save()
-        self.assertIsNotNone(match.pk)
+        self.assertEqual(Match.objects.filter(pk=match.pk).count(), 1)
         self.assertIsNone(match.live_stream_thumbnail_image)
