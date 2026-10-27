@@ -41,20 +41,15 @@ COMPONENTS = {
 
 class MoreNews(NewsAdminComponent):
     """
-    One more protected component, for a test to register. It links to the
-    News component's pages: the site's addresses were settled before the test
-    runs, and only the components it was built with have any.
+    One more protected component, for a test to register. It has a name of
+    its own, as the site asks of every component, and links to the News
+    component's pages (through the ``news`` application): the site's
+    addresses were settled before the test runs, and only the components it
+    was built with have any.
     """
 
-
-class PlainContent(ContentAdminComponent):
-    """
-    The Content component with the default job (``AdminComponentMixin.tasks``,
-    which names the component's sections), for a test to register. It links
-    to the Content component's pages, as ``MoreNews`` does to News's.
-    """
-
-    tasks = AdminComponentMixin.tasks
+    def __init__(self, app, name="morenews", app_name="news"):
+        super().__init__(app, name, app_name)
 
 
 def gated_dropdowns(dropdowns, permission):
@@ -204,8 +199,13 @@ class SectionTaskTests(MenuMixin, TestCase):
 
     def setUp(self):
         super().setUp()
-        site.register(PlainContent)
-        self.addCleanup(site.unregister, PlainContent)
+        # Content's own job, with the default (``AdminComponentMixin.tasks``)
+        # that names the component's sections.
+        patcher = patch.object(
+            ContentAdminComponent, "tasks", AdminComponentMixin.tasks
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def task(self, *sections):
         url = self.reverse("admin:content:index")

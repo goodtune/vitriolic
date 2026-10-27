@@ -7,7 +7,6 @@ from django.utils import timezone
 from freezegun import freeze_time
 from test_plus import TestCase
 
-from touchtechnology.admin.sites import site
 from touchtechnology.admin.tests.shells import per_shell
 from touchtechnology.admin.tests.test_menu import COMPONENTS, MenuMixin
 from touchtechnology.common.tests.factories import (
@@ -39,17 +38,6 @@ WIDGETS = {
     "Awaiting Detailed Results": {"workbook": "chart-bar", "explorer": "chart"},
     "Awaiting MVP Points": {"workbook": "chart-bar", "explorer": "chart"},
 }
-
-
-class OpenCompetitionAdminComponent(CompetitionAdminComponent):
-    """
-    The competition's component without its protection, for a test to
-    register: the menu shows it to every member of staff. It links to the
-    competition's pages, as the site's addresses were settled before the test
-    runs.
-    """
-
-    unprotected = True
 
 
 def match_awaiting_details():
@@ -717,9 +705,8 @@ class StaffHomePageTests(HomePageMixin, TestCase):
         self.assertMenu(self.staff, "content")
         self.assertWidgetsHidden()
 
+    @patch.object(CompetitionAdminComponent, "unprotected", True)
     def test_an_unprotected_component(self):
-        site.register(OpenCompetitionAdminComponent)
-        self.addCleanup(site.unregister, OpenCompetitionAdminComponent)
         self.assertMenu(self.staff, "content", "competition")
         self.assertWidgetsShown()
 

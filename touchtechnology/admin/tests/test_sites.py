@@ -13,9 +13,24 @@ from touchtechnology.admin.sites import AdminSite, site
 from touchtechnology.news.admin import NewsAdminComponent
 
 
+class SecondNews(NewsAdminComponent):
+    """A component that takes the name of the News component, ``news``."""
+
+
 class RegisterTest(SimpleTestCase):
     def setUp(self):
         self.site = AdminSite(name="registry")
+
+    def test_register_a_second_component_with_the_same_name(self):
+        # The name roots the component's addresses and its ids in the rail.
+        self.site.register(NewsAdminComponent)
+        with self.assertRaisesMessage(
+            AlreadyRegistered,
+            "The component SecondNews has the name news of the registered "
+            "component NewsAdminComponent",
+        ):
+            self.site.register(SecondNews)
+        self.assertEqual(list(self.site._components), [NewsAdminComponent])
 
     def test_register_logs_the_component(self):
         with self.assertLogs("touchtechnology.admin.sites.admin", "DEBUG") as logs:
