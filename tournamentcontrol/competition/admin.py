@@ -1414,6 +1414,7 @@ class CompetitionAdminComponent(AdminComponent):
         context.update(
             {
                 "tasks": self.tasks(request),
+                "sections": self.sections(request),
                 "seasons": self.seasons_in_progress(),
             }
         )

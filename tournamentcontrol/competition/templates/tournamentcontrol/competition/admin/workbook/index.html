@@ -30,8 +30,8 @@
 
 	<div class="wb-section-title"><h2>{% trans "Everything else" %}</h2></div>
 	<ul class="wb-tasks">
-		{% for section in component.dropdowns %}
-			<li><a class="wb-task" href="{{ section.1 }}"><span class="wb-task-icon">{% icon "chevron-right" %}</span><span class="wb-task-title">{{ section.0 }}</span></a></li>
+		{% for section in sections %}
+			<li><a class="wb-task" href="{{ section.url }}"><span class="wb-task-icon">{% icon "chevron-right" %}</span><span class="wb-task-title">{{ section.label }}</span></a></li>
 		{% endfor %}
 	</ul>
 {% endblock %}

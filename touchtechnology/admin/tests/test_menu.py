@@ -7,16 +7,21 @@ application: over the whole application, over one of its objects, or through
 a group. A component that is not protected is shown to every member of staff.
 """
 
+from unittest.mock import patch
+
 from django.contrib.auth.models import Group
 from guardian.shortcuts import assign_perm
 from test_plus import TestCase
 
+from touchtechnology.admin.base import AdminComponentMixin
 from touchtechnology.admin.sites import site
 from touchtechnology.admin.tests.shells import IconMixin, per_shell
 from touchtechnology.common.tests.factories import StaffFactory, SuperUserFactory
+from touchtechnology.content.admin import ContentAdminComponent
 from touchtechnology.content.models import Page
 from touchtechnology.news.admin import NewsAdminComponent
 from touchtechnology.news.tests.factories import ArticleFactory
+from tournamentcontrol.competition.admin import CompetitionAdminComponent
 
 #: The demo project's components that the menu lists: the name of each one's
 #: first page, its label, and its icon in the Workbook and the Explorer.
@@ -40,6 +45,26 @@ class MoreNews(NewsAdminComponent):
     News component's pages: the site's addresses were settled before the test
     runs, and only the components it was built with have any.
     """
+
+
+class PlainContent(ContentAdminComponent):
+    """
+    The Content component with the default job (``AdminComponentMixin.tasks``,
+    which names the component's sections), for a test to register. It links
+    to the Content component's pages, as ``MoreNews`` does to News's.
+    """
+
+    tasks = AdminComponentMixin.tasks
+
+
+def gated_dropdowns(dropdowns, permission):
+    """``dropdowns`` with its last section asking for ``permission``."""
+
+    def gated(self):
+        *rest, last = dropdowns(self)
+        return (*rest, (*last[:3], permission))
+
+    return gated
 
 
 class MenuMixin(IconMixin):
@@ -160,6 +185,103 @@ class SectionMenuTests(MenuMixin, TestCase):
             self.get_check_200("admin:index")
         self.assertResponseContains(self.sitemap())
         self.assertResponseNotContains(self.media())
+
+
+@per_shell(shells=["workbook"])
+class SectionTaskTests(MenuMixin, TestCase):
+    """
+    A component's default job on the home page names its sections, and names
+    only the ones the person is shown: Content's Media section for a person
+    who holds ``content.view_file``, not for another member of staff.
+    """
+
+    user_factory = StaffFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.staff = cls.make_user("staff")
+        cls.viewer = cls.make_user("viewer", perms=["content.view_file"])
+
+    def setUp(self):
+        super().setUp()
+        site.register(PlainContent)
+        self.addCleanup(site.unregister, PlainContent)
+
+    def task(self, *sections):
+        url = self.reverse("admin:content:index")
+        note = ", ".join(sections)
+        return (
+            f'<a class="wb-task" href="{url}">'
+            f'<span class="wb-task-icon">{self.icon("file-text")}</span>'
+            '<span class="wb-task-title">Content</span>'
+            f'<span class="wb-task-note">{note}</span></a>'
+        )
+
+    def test_a_person_who_holds_the_permission_is_told_of_the_section(self):
+        with self.login(self.viewer):
+            self.get_check_200("admin:index")
+        self.assertResponseContains(
+            self.task("Sitemap", "Media", "Chunks", "Redirects", "Applications")
+        )
+
+    def test_a_person_without_the_permission_is_not_told_of_the_section(self):
+        with self.login(self.staff):
+            self.get_check_200("admin:index")
+        self.assertResponseContains(
+            self.task("Sitemap", "Chunks", "Redirects", "Applications")
+        )
+
+
+@per_shell(shells=["workbook"])
+class EverythingElseTests(MenuMixin, TestCase):
+    """
+    Tournament Control's own page lists its sections under "Everything else",
+    and only the ones the person is shown. No section of it names a permission
+    today, so the test has Reports ask for ``competition.view_match``.
+    """
+
+    user_factory = StaffFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.staff = cls.make_user("staff")
+        cls.viewer = cls.make_user("viewer", perms=["competition.view_match"])
+
+    def setUp(self):
+        super().setUp()
+        patcher = patch.object(
+            CompetitionAdminComponent,
+            "dropdowns",
+            gated_dropdowns(
+                CompetitionAdminComponent.dropdowns, "competition.view_match"
+            ),
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def section(self, url_name, label):
+        url = self.reverse(url_name)
+        return (
+            f'<a class="wb-task" href="{url}">'
+            f'<span class="wb-task-icon">{self.icon("chevron-right")}</span>'
+            f'<span class="wb-task-title">{label}</span></a>'
+        )
+
+    def test_a_person_who_holds_the_permission_is_shown_the_section(self):
+        with self.login(self.viewer):
+            self.get_check_200("admin:fixja:index")
+        self.assertResponseContains(self.section("admin:fixja:club:list", "Clubs"))
+        self.assertResponseContains(
+            self.section("admin:fixja:scorecard-report", "Reports")
+        )
+
+    def test_a_person_without_the_permission_is_not_shown_the_section(self):
+        with self.login(self.staff):
+            self.get_check_200("admin:fixja:index")
+        self.assertResponseContains(self.section("admin:fixja:club:list", "Clubs"))
+        self.assertResponseNotContains(
+            self.section("admin:fixja:scorecard-report", "Reports")
+        )
 
 
 @per_shell

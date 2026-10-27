@@ -354,7 +354,8 @@ class DrawGenerator:
         errors = set()
         keys = set()
         in_round = False
-        for line, data in enumerate(text.splitlines()):
+        # People count lines from 1 in the admin textarea and the MCP tools.
+        for line, data in enumerate(text.splitlines(), 1):
             match = cls.regex.match(data)
             if not match:
                 errors.add(line)
