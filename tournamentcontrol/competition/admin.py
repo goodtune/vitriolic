@@ -3165,8 +3165,17 @@ class CompetitionAdminComponent(AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def day_runsheet(self, request, season, date, extra_context, **kwargs):
-        matches = season.matches.filter(date=date).order_by(
-            "is_bye", "datetime", "play_at"
+        # A row of the sheet walks to its competition for its links' URLs,
+        # names its place (and under Workbook asks whether that place is a
+        # ground with a camera), and lists its referees by name: select and
+        # prefetch them so the sheet costs the same however long it is.
+        matches = (
+            season.matches.filter(date=date)
+            .select_related(
+                "stage__division__season__competition", "play_at__ground"
+            )
+            .prefetch_related("referees__person")
+            .order_by("is_bye", "datetime", "play_at")
         )
         templates = self.template_path(
             "runsheet.html", season.slug, season.competition.slug
