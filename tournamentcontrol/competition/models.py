@@ -1638,10 +1638,12 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
     @cached_property
     def _list_select_related(self):
         # Everything a row of the Matches tab draws: its teams, decided or
-        # not, where it is played, and the stage its links are built from.
+        # not, and where it is played. Not the stage: ``self.matches`` hands
+        # every match this instance, with its division and season, so naming
+        # undecided teams reads the division's stages once for the page (see
+        # ``Stage._title_comes_after``) rather than once per match.
         return {
             "matches": [
-                "stage__division__season",
                 "home_team",
                 "away_team",
                 "home_team_undecided",
@@ -1699,12 +1701,14 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
 
     @cached_property
     def _title_comes_after(self):
-        # ``None`` for the first stage of a division: ``cached_property`` does
-        # not keep an exception, so raising would query again for each team.
-        try:
-            return self.comes_after
-        except Stage.DoesNotExist:
-            return None
+        # ``comes_after``, read from the division's stages (which naming needs
+        # anyway) rather than a query of its own. ``None`` for the first stage
+        # of a division: ``cached_property`` does not keep an exception, so
+        # raising would query again for each team.
+        if self.follows_id is not None:
+            return self.follows
+        earlier = [stage for stage in self._title_stages if stage.order < self.order]
+        return earlier[-1] if earlier else None
 
     @cached_property
     def _title_stages(self):
@@ -2273,7 +2277,9 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
             return self.label
 
         try:
-            stage, group, position = stage_group_position(self.stage, self.formula)
+            stage, group, position = stage_group_position(
+                self.stage, self.formula, naming=True
+            )
 
             c = {
                 "stage": stage,

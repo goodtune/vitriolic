@@ -55,7 +55,7 @@ class StageMatchesTabQueryTests(WarmCachesMixin, TestCase):
         name = "admin:fixja:competition:season:division:stage:edit"
         with self.login(self.make_user()):
             self.warm_caches()
-            with self.assertNumQueries(self.by_shell(workbook=31, explorer=29)):
+            with self.assertNumQueries(23):
                 self.get_check_200(name, *stage._get_url_args())
 
     def test_few_matches(self):
@@ -75,3 +75,57 @@ class StageMatchesTabQueryTests(WarmCachesMixin, TestCase):
                 explorer='<td class="wide-only">Many Park</td>',
             )
         )
+
+
+@per_shell
+class LaterStageMatchesTabQueryTests(WarmCachesMixin, TestCase):
+    """
+    The Matches tab of a later stage names each team still to be decided by
+    its place on the ladder of the stage before, reading the division's
+    stages once however many matches name one.
+    """
+
+    user_factory = SuperUserFactory
+
+    @classmethod
+    def _stage(cls, title, matches):
+        division = factories.DivisionFactory.create(season=cls.season, title=title)
+        factories.StageFactory.create(division=division, order=1, title="Pool Play")
+        stage = factories.StageFactory.create(
+            division=division, order=2, title="Finals"
+        )
+        for number in range(1, matches + 1):
+            factories.MatchFactory.create(
+                stage=stage,
+                home_team=None,
+                away_team=None,
+                home_team_eval="P1",
+                away_team_eval="P2",
+                label=f"Final {number}",
+            )
+        return stage
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create()
+        cls.few = cls._stage("Few", matches=1)
+        cls.many = cls._stage("Many", matches=10)
+
+    def get_stage(self, stage):
+        name = "admin:fixja:competition:season:division:stage:edit"
+        with self.login(self.make_user()):
+            self.warm_caches()
+            with self.assertNumQueries(25):
+                self.get_check_200(name, *stage._get_url_args())
+        self.assertResponseContains(
+            self.by_shell(
+                workbook='<td data-label="Home">1st</td>',
+                explorer="<td>1st</td>",
+            )
+        )
+
+    def test_few_matches(self):
+        self.get_stage(self.few)
+
+    def test_many_matches(self):
+        self.get_stage(self.many)

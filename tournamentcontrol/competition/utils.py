@@ -628,7 +628,15 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
     return series
 
 
-def stage_group_position(stage, formula):
+def stage_group_position(stage, formula, *, naming=False):
+    """
+    The stage, pool and position ``formula`` names, relative to ``stage``.
+
+    With ``naming``, the stage before ``stage`` is read from its naming cache
+    (``Stage._title_comes_after``), so a page naming many teams of one stage
+    looks it up once. Only for naming teams; anything that changes stages
+    leaves it off.
+    """
     match = stage_group_position_re.match(formula)
     if not match:
         logger.exception("Formula %r is invalid", formula)
@@ -639,9 +647,14 @@ def stage_group_position(stage, formula):
 
     if s is None:
         logger.debug("No stage specified in formula %r", formula)
-        try:
-            s = stage.comes_after
-        except stage.DoesNotExist:
+        if naming:
+            s = stage._title_comes_after
+        else:
+            try:
+                s = stage.comes_after
+            except stage.DoesNotExist:
+                s = None
+        if s is None:
             # As for a stage number past the last stage of the division.
             logger.warning(
                 "Formula %r refers to the stage before %r, the first stage",
@@ -651,7 +664,7 @@ def stage_group_position(stage, formula):
             raise IndexError(
                 f"{formula} refers to the stage before {stage}, the first stage "
                 "of its division"
-            ) from None
+            )
     else:
         # Stages are numbered from one, so S0 names none, as a number past
         # the last stage does.
