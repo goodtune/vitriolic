@@ -82,7 +82,7 @@ class GoodViewTests(TestCase):
             season=stage.division.season.slug,
             club=club.slug,
         )
-        self.response_410()
+        self.assert_http_410_gone()
 
     def test_division(self):
         division = factories.DivisionFactory.create()
@@ -148,7 +148,7 @@ class GoodViewTests(TestCase):
                 match.stage.division.slug,
                 match.pk,
             )
-            self.response_410()
+            self.assert_http_410_gone()
 
     def test_match_video(self):
         match = factories.MatchFactory.create(videos=["https://youtu.be/jNQXAC9IVRw"])
@@ -181,7 +181,7 @@ class GoodViewTests(TestCase):
                 match.stage.division.slug,
                 match.pk,
             )
-            self.response_410()
+            self.assert_http_410_gone()
 
     def test_venue(self):
         venue = factories.VenueFactory.create()
@@ -248,24 +248,34 @@ class FrontEndTests(TestCase):
         comp_1 = factories.CompetitionFactory.create()
         comp_2 = factories.CompetitionFactory.create(enabled=False)
         self.get("competition:index")
-        self.assertResponseContains(comp_1.title, html=False)
-        self.assertResponseNotContains(comp_2.title, html=False)
+        url_1 = self.reverse("competition:competition", comp_1.slug)
+        url_2 = self.reverse("competition:competition", comp_2.slug)
+        self.assertResponseContains(f'<h2><a href="{url_1}">{comp_1.title}</a></h2>')
+        self.assertResponseNotContains(f'<h2><a href="{url_2}">{comp_2.title}</a></h2>')
 
     def test_season_list(self):
         season = factories.SeasonFactory.create()
         self.assertGoodView("competition:season", season.competition.slug, season.slug)
-        self.assertResponseContains(season.title, html=False)
+        self.assertResponseContains(
+            f"<h1>{season.competition.title} - {season.title}</h1>"
+        )
 
         season = factories.SeasonFactory.create(competition__enabled=False)
         self.get("competition:competition", season.competition.slug)
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_division_list(self):
         division = factories.DivisionFactory.create()
         self.assertGoodView(
             "competition:season", division.season.competition.slug, division.season.slug
         )
-        self.assertResponseContains(division.title, html=False)
+        url = self.reverse(
+            "competition:division",
+            division.season.competition.slug,
+            division.season.slug,
+            division.slug,
+        )
+        self.assertResponseContains(f'<a href="{url}">{division.title}</a>')
 
     def test_division_view(self):
         division = factories.DivisionFactory.create()
@@ -275,7 +285,7 @@ class FrontEndTests(TestCase):
             division.season.slug,
             division.slug,
         )
-        self.assertResponseContains(division.title, html=False)
+        self.assertResponseContains(f"<h2>{division.title}</h2>")
 
     @freeze_time("2013-11-01")
     def test_upcoming_matches(self):
@@ -288,7 +298,7 @@ class FrontEndTests(TestCase):
         self.assertGoodView(
             "competition:season", division.season.competition.slug, division.season.slug
         )
-        self.assertResponseContains("Nov. 22, 2013", html=False)
+        self.assertResponseContains("<h3>Nov. 22, 2013</h3>")
 
     def test_division_match_list(self):
         division = factories.DivisionFactory.create()
@@ -419,6 +429,7 @@ class CalendarQueryTests(TestCase):
         )
 
     def setUp(self):
+        super().setUp()
         # Archived feeds are stored in the cache, which outlives each test.
         cache.clear()
         # Fetch a feed no test looks at, so that the lookups made by
@@ -435,37 +446,37 @@ class CalendarQueryTests(TestCase):
         # Middleware redirect check (1) + slug resolution (1) + last match (1)
         # + match query (1)
         with self.assertNumQueries(4):
-            response = self.get(
+            self.get(
                 "competition:calendar",
                 competition=self.competition.slug,
                 season=self.season.slug,
                 division=self.division.slug,
                 team=self.team_a.slug,
             )
-        self.response_200(response)
+        self.assert_http_200_ok()
 
     def test_division_calendar_query_count(self):
         # Middleware redirect check (1) + slug resolution (1) + last match (1)
         # + match query (1)
         with self.assertNumQueries(4):
-            response = self.get(
+            self.get(
                 "competition:calendar",
                 competition=self.competition.slug,
                 season=self.season.slug,
                 division=self.division.slug,
             )
-        self.response_200(response)
+        self.assert_http_200_ok()
 
     def test_season_calendar_query_count(self):
         # Middleware redirect check (1) + slug resolution (1) + last match (1)
         # + match query (1)
         with self.assertNumQueries(4):
-            response = self.get(
+            self.get(
                 "competition:calendar",
                 competition=self.competition.slug,
                 season=self.season.slug,
             )
-        self.response_200(response)
+        self.assert_http_200_ok()
 
     def test_club_calendar_query_count(self):
         club = factories.ClubFactory.create()
@@ -474,15 +485,17 @@ class CalendarQueryTests(TestCase):
         # Middleware (3) + season resolution (1) + club resolution (1)
         # + last match (1) + match query (1)
         with self.assertNumQueries(7):
-            response = self.get(
+            self.get(
                 "competition:calendar",
                 competition=self.competition.slug,
                 season=self.season.slug,
                 club=club.slug,
             )
-        self.response_200(response)
+        self.assert_http_200_ok()
 
-    def _parse_events(self, response):
+    def _parse_events(self, response=None):
+        if response is None:
+            response = self.last_response
         cal = Calendar.from_ical(response.content)
         return cal, [c for c in cal.walk() if c.name == "VEVENT"]
 
@@ -498,16 +511,16 @@ class CalendarQueryTests(TestCase):
             time=match_dt.time(),
         )
 
-        response = self.get(
+        self.get(
             "competition:calendar",
             competition=self.competition.slug,
             season=self.season.slug,
             division=self.division.slug,
             team=self.team_a.slug,
         )
-        self.response_200(response)
+        self.assert_http_200_ok()
 
-        cal, events = self._parse_events(response)
+        cal, events = self._parse_events()
 
         # VCALENDAR properties
         self.assertEqual(
@@ -564,15 +577,15 @@ class CalendarQueryTests(TestCase):
             away_team=self.team_b,
             play_at=play_at,
         )
-        response = self.get(
+        self.get(
             "competition:calendar",
             competition=self.competition.slug,
             season=self.season.slug,
             division=self.division.slug,
             team=self.team_a.slug,
         )
-        self.response_200(response)
-        _, events = self._parse_events(response)
+        self.assert_http_200_ok()
+        _, events = self._parse_events()
         return next(e for e in events if e["uid"] == match.uuid.hex)
 
     def test_match_at_ground_location_names_ground_and_venue(self):
@@ -661,15 +674,15 @@ class CalendarQueryTests(TestCase):
         self.assertNotIn("geo", event)
 
     def test_division_calendar_contains_all_division_matches(self):
-        response = self.get(
+        self.get(
             "competition:calendar",
             competition=self.competition.slug,
             season=self.season.slug,
             division=self.division.slug,
         )
-        self.response_200(response)
+        self.assert_http_200_ok()
 
-        cal, events = self._parse_events(response)
+        cal, events = self._parse_events()
         self.assertEqual(len(events), 10)
 
         uids = {e["uid"] for e in events}
@@ -695,7 +708,7 @@ class CalendarQueryTests(TestCase):
             division=division.slug,
             team=team.slug,
         )
-        self.response_410()
+        self.assert_http_410_gone()
 
     def test_draft_division_excluded_for_anonymous(self):
         draft_division = factories.DivisionFactory.create(
@@ -705,14 +718,14 @@ class CalendarQueryTests(TestCase):
         factories.MatchFactory.create_batch(
             stage=draft_stage, size=3
         )
-        response = self.get(
+        self.get(
             "competition:calendar",
             competition=self.competition.slug,
             season=self.season.slug,
         )
-        self.response_200(response)
+        self.assert_http_200_ok()
 
-        cal, events = self._parse_events(response)
+        cal, events = self._parse_events()
         # Only the 10 non-draft matches, not the 3 draft matches
         self.assertEqual(len(events), 10)
 
@@ -726,20 +739,21 @@ class CalendarQueryTests(TestCase):
             stage=draft_stage, size=3
         )
         with self.login(superuser):
-            response = self.get(
+            self.get(
                 "competition:calendar",
                 competition=self.competition.slug,
                 season=self.season.slug,
             )
-        self.response_200(response)
+        self.assert_http_200_ok()
 
-        cal, events = self._parse_events(response)
+        cal, events = self._parse_events()
         # Superuser sees all matches: 10 regular + 3 draft
         self.assertEqual(len(events), 13)
 
-    def _cache_control(self, response):
+    def _cache_control(self):
         return {
-            directive.strip() for directive in response["Cache-Control"].split(",")
+            directive.strip()
+            for directive in self.last_response["Cache-Control"].split(",")
         }
 
     def _get_division_calendar(self):
@@ -770,40 +784,40 @@ class CalendarQueryTests(TestCase):
 
     def test_calendar_cacheable_for_anonymous(self):
         self._schedule_match_at(timezone.now() + timedelta(days=1))
-        response = self._get_division_calendar()
-        self.response_200(response)
+        self._get_division_calendar()
+        self.assert_http_200_ok()
         self.assertEqual(
-            self._cache_control(response),
+            self._cache_control(),
             {"public", "max-age=600", "stale-while-revalidate=600"},
         )
 
     def test_calendar_with_all_matches_past_is_cacheable_for_a_week(self):
         self._finish_all_matches()
         self._schedule_match_at(timezone.now() - timedelta(days=4))
-        response = self._get_division_calendar()
-        self.response_200(response)
+        self._get_division_calendar()
+        self.assert_http_200_ok()
         self.assertEqual(
-            self._cache_control(response),
+            self._cache_control(),
             {"public", "max-age=604800", "stale-while-revalidate=604800"},
         )
 
     def test_calendar_is_live_until_the_grace_period_has_passed(self):
         self.division.matches.update(datetime=timezone.now() - timedelta(days=30))
         self._schedule_match_at(timezone.now() - timedelta(days=2))
-        response = self._get_division_calendar()
-        self.response_200(response)
-        self.assertIn("max-age=600", self._cache_control(response))
+        self._get_division_calendar()
+        self.assert_http_200_ok()
+        self.assertIn("max-age=600", self._cache_control())
 
     def test_calendar_without_matches_is_live(self):
         division = factories.DivisionFactory.create(season=self.season)
-        response = self.get(
+        self.get(
             "competition:calendar",
             competition=self.competition.slug,
             season=self.season.slug,
             division=division.slug,
         )
-        self.response_200(response)
-        self.assertIn("max-age=600", self._cache_control(response))
+        self.assert_http_200_ok()
+        self.assertIn("max-age=600", self._cache_control())
 
     def test_archived_calendar_has_a_stable_dtstamp(self):
         last = self._schedule_match_at(timezone.now() - timedelta(days=10))
@@ -825,22 +839,22 @@ class CalendarQueryTests(TestCase):
         self._schedule_match_at(timezone.now() + timedelta(days=1))
         now = timezone.now()
         with freeze_time(now):
-            response = self._get_division_calendar()
-        cal, events = self._parse_events(response)
+            self._get_division_calendar()
+        cal, events = self._parse_events()
         for event in events:
             self.assertEqual(event["dtstamp"].dt, now.replace(microsecond=0))
 
     def test_calendar_private_for_superuser(self):
         superuser = factories.SuperUserFactory.create()
         with self.login(superuser):
-            response = self.get(
+            self.get(
                 "competition:calendar",
                 competition=self.competition.slug,
                 season=self.season.slug,
                 division=self.division.slug,
             )
-        self.response_200(response)
-        self.assertEqual(response["Cache-Control"], "private")
+        self.assert_http_200_ok()
+        self.assertResponseHeaders({"Cache-Control": "private"})
 
     @override_settings(
         CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}},
@@ -865,17 +879,17 @@ class CalendarQueryTests(TestCase):
 
         # The anonymous feed is stored by the cache middleware...
         self.get(url)
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertIn("Cookie", self.last_response["Vary"])
-        cal, events = self._parse_events(self.last_response)
+        cal, events = self._parse_events()
         self.assertEqual(len(events), 10)
 
         # ...but must not be what a superuser receives for the same URL.
         superuser = factories.SuperUserFactory.create()
         with self.login(superuser):
             self.get(url)
-        self.response_200()
-        cal, events = self._parse_events(self.last_response)
+        self.assert_http_200_ok()
+        cal, events = self._parse_events()
         self.assertEqual(len(events), 13)
 
     def test_archived_calendar_is_rendered_once(self):
@@ -887,10 +901,12 @@ class CalendarQueryTests(TestCase):
 
         # The match query is not needed once the feed has been rendered.
         self.assertEqual(len(second_queries), len(first_queries) - 1)
-        self.response_200(second)
+        self.assert_http_200_ok(second)
         self.assertEqual(first.content, second.content)
-        self.assertEqual(first["Cache-Control"], second["Cache-Control"])
-        self.assertEqual(second["Content-Type"], "text/calendar")
+        self.assertResponseHeaders(
+            {"Cache-Control": first["Cache-Control"], "Content-Type": "text/calendar"},
+            second,
+        )
 
     def test_live_calendar_is_never_rendered_from_the_cache(self):
         self._schedule_match_at(timezone.now() + timedelta(days=1))
@@ -907,11 +923,11 @@ class CalendarQueryTests(TestCase):
 
         # A match moved into the future makes the feed live again at once.
         self._schedule_match_at(timezone.now() + timedelta(days=1))
-        response = self._get_division_calendar()
+        self._get_division_calendar()
 
-        cal, events = self._parse_events(response)
+        cal, events = self._parse_events()
         self.assertEqual(len(events), 11)
-        self.assertIn("max-age=600", self._cache_control(response))
+        self.assertIn("max-age=600", self._cache_control())
 
     def test_archived_calendar_cache_is_not_shared_with_superuser(self):
         draft_division = factories.DivisionFactory.create(
@@ -929,20 +945,20 @@ class CalendarQueryTests(TestCase):
             )
 
         get_season_calendar()
-        cal, events = self._parse_events(self.last_response)
+        cal, events = self._parse_events()
         self.assertEqual(len(events), 10)
 
         superuser = factories.SuperUserFactory.create()
         with self.login(superuser):
             get_season_calendar()
-        self.response_200()
-        cal, events = self._parse_events(self.last_response)
+        self.assert_http_200_ok()
+        cal, events = self._parse_events()
         self.assertEqual(len(events), 13)
         self.assertEqual(self.last_response["Cache-Control"], "private")
 
         # Nor does the superuser's feed replace the one stored for others.
         get_season_calendar()
-        cal, events = self._parse_events(self.last_response)
+        cal, events = self._parse_events()
         self.assertEqual(len(events), 10)
 
     def test_calendar_excludes_unscheduled_matches(self):
@@ -954,16 +970,16 @@ class CalendarQueryTests(TestCase):
             date=None,
             time=None,
         )
-        response = self.get(
+        self.get(
             "competition:calendar",
             competition=self.competition.slug,
             season=self.season.slug,
             division=self.division.slug,
             team=self.team_a.slug,
         )
-        self.response_200(response)
+        self.assert_http_200_ok()
 
-        cal, events = self._parse_events(response)
+        cal, events = self._parse_events()
         # Only the 10 scheduled matches, not the unscheduled one
         self.assertEqual(len(events), 10)
         uids = {e["uid"] for e in events}
@@ -977,17 +993,17 @@ class CalendarQueryTests(TestCase):
             division=self.division.slug,
             team="nonexistent-team",
         )
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_season_calendar_contains_all_season_matches(self):
-        response = self.get(
+        self.get(
             "competition:calendar",
             competition=self.competition.slug,
             season=self.season.slug,
         )
-        self.response_200(response)
+        self.assert_http_200_ok()
 
-        cal, events = self._parse_events(response)
+        cal, events = self._parse_events()
         self.assertEqual(len(events), 10)
 
         uids = {e["uid"] for e in events}
@@ -1015,7 +1031,7 @@ class CalendarQueryTests(TestCase):
             season=self.season.slug,
         )
 
-        cal, events = self._parse_events(self.last_response)
+        cal, events = self._parse_events()
         event = next(e for e in events if e["uid"] == match.uuid.hex)
         self.assertEqual(str(event["summary"]), f"{self.team_a.title} vs Bye")
 
@@ -1031,14 +1047,14 @@ class CalendarQueryTests(TestCase):
             away_team=None,
             away_team_undecided=undecided,
         )
-        response = self.get(
+        self.get(
             "competition:calendar",
             competition=self.competition.slug,
             season=self.season.slug,
         )
-        self.response_200(response)
+        self.assert_http_200_ok()
 
-        cal, events = self._parse_events(response)
+        cal, events = self._parse_events()
         event = next(e for e in events if e["uid"] == match.uuid.hex)
         summary = str(event["summary"])
         self.assertIn(self.team_a.title, summary)
@@ -1061,14 +1077,14 @@ class CalendarQueryTests(TestCase):
             home_team_undecided=home_undecided,
             away_team_undecided=away_undecided,
         )
-        response = self.get(
+        self.get(
             "competition:calendar",
             competition=self.competition.slug,
             season=self.season.slug,
         )
-        self.response_200(response)
+        self.assert_http_200_ok()
 
-        cal, events = self._parse_events(response)
+        cal, events = self._parse_events()
         event = next(e for e in events if e["uid"] == match.uuid.hex)
         summary = str(event["summary"])
         self.assertIn("1st Pool A", summary)
@@ -1081,14 +1097,14 @@ class CalendarQueryTests(TestCase):
             home_team=None,
             away_team=None,
         )
-        response = self.get(
+        self.get(
             "competition:calendar",
             competition=self.competition.slug,
             season=self.season.slug,
         )
-        self.response_200(response)
+        self.assert_http_200_ok()
 
-        cal, events = self._parse_events(response)
+        cal, events = self._parse_events()
         event = next(e for e in events if e["uid"] == match.uuid.hex)
         self.assertEqual(str(event["summary"]), "TBD")
 
@@ -1373,7 +1389,7 @@ class FirstStageReferenceTests(WarmCachesMixin, TestCase):
             self.season.slug,
             self.few_finals.slug,
         )
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertResponseContains('<td class="team right">P1</td>')
         self.assertResponseContains('<td class="team">P2</td>')
         self.assertResponseContains('<td class="team right">G1P1</td>')
@@ -1394,7 +1410,7 @@ class FirstStageReferenceTests(WarmCachesMixin, TestCase):
             self.few_finals.slug,
             team.slug,
         )
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertResponseContains('<td class="team">P3</td>')
 
     # The division page costs the same however many finals it has.
@@ -1442,7 +1458,7 @@ class FirstStageReferenceTests(WarmCachesMixin, TestCase):
             self.season.slug,
             division.slug,
         )
-        self.response_200()
+        self.assert_http_200_ok()
         self.assertResponseContains('<td class="team right">1st</td>')
         self.assertResponseContains('<td class="team">2nd Pool 1</td>')
 
@@ -1580,7 +1596,7 @@ class CarriedPoolLadderTests(TestCase):
             division.season.slug,
             division.slug,
         )
-        self.response_200()
+        self.assert_http_200_ok()
         pool_url = self.reverse(
             "competition:pool",
             division.season.competition.slug,
@@ -1869,6 +1885,7 @@ class ClubPageTests(WarmCachesMixin, TestCase):
         cls.many = cls._club("Many", teams=6)
 
     def setUp(self):
+        super().setUp()
         cache.clear()
 
     def assertNextOrLastMatch(self, teams):
@@ -2065,6 +2082,7 @@ class VenueViewTests(TestCase):
     """
 
     def setUp(self):
+        super().setUp()
         self.season = factories.SeasonFactory.create(timezone=ZoneInfo("UTC"))
         self.venue = factories.VenueFactory.create(
             season=self.season, title="Bill Hartley Fields"
@@ -2186,13 +2204,13 @@ class VenueViewTests(TestCase):
         self._match(self.ground_2, datetime(2024, 1, 15, 15, tzinfo=ZoneInfo("UTC")))
 
         self.assertGoodView("competition:venue", *self._venue_args())
-        self.assertResponseContains('<td class="time">6 p.m.</td>', html=False)
-        self.assertResponseContains('<td class="time">3 p.m.</td>', html=False)
+        self.assertResponseContains('<td class="time">6 p.m.</td>')
+        self.assertResponseContains('<td class="time">3 p.m.</td>')
 
         self.assertGoodView(
             "competition:ground", *self._venue_args(self.ground_1.slug)
         )
-        self.assertResponseContains('<td class="time">6 p.m.</td>', html=False)
+        self.assertResponseContains('<td class="time">6 p.m.</td>')
 
     def test_season_links_to_venues(self):
         self.assertGoodView(
@@ -2208,15 +2226,15 @@ class VenueViewTests(TestCase):
     def test_day_without_matches_404(self):
         self._match(self.ground_1, datetime(2025, 3, 13, 10, tzinfo=ZoneInfo("UTC")))
         self.get("competition:venue", *self._venue_args("20250314"))
-        self.response_404()
+        self.assert_http_404_not_found()
         self.get(
             "competition:ground", *self._venue_args(self.ground_2.slug, "20250313")
         )
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_invalid_date_404(self):
         self.get("competition:venue", *self._venue_args("20251399"))
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_venue_from_another_season_404(self):
         other = factories.VenueFactory.create()
@@ -2226,12 +2244,12 @@ class VenueViewTests(TestCase):
             self.season.slug,
             other.slug,
         )
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_ground_from_another_venue_404(self):
         other = factories.GroundFactory.create(venue__season=self.season)
         self.get("competition:ground", *self._venue_args(other.slug))
-        self.response_404()
+        self.assert_http_404_not_found()
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
@@ -2260,6 +2278,7 @@ class StaffPagesRemovedTests(TestCase):
     )
 
     def setUp(self):
+        super().setUp()
         self.match = factories.MatchFactory.create(
             datetime=datetime(2026, 10, 17, 18, 0, tzinfo=ZoneInfo("UTC")),
             external_identifier="broadcast-1",
