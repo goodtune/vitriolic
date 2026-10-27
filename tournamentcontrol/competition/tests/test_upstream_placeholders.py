@@ -21,6 +21,8 @@ for the undecided teams of our own without it.
 import datetime
 from zoneinfo import ZoneInfo
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from freezegun import freeze_time
 from test_plus import TestCase
 
@@ -573,18 +575,37 @@ class UpstreamPlaceholderMatchFormTests(TestCase):
             f'<option value="{self.placeholder.pk}">{TBA_LABEL}</option>'
         )
 
-    def test_queries(self):
+    def build_form(self):
         """
-        Building the form asks whether the stage has pools, and once whether
-        it holds an undecided team of our own. The teams and undecided teams
-        each field offers are queried as the form is rendered, not here.
+        Build the edit form for the match beside our place to fill, in two
+        queries, neither of them a count: both questions are yes or no.
         """
         host = place_to_fill(self.stage, label="Host", formula="")
         match = self.stage.matches.select_related(
             "home_team_undecided", "away_team"
         ).get(home_team_undecided=host)
-        with self.assertNumQueries(2):
-            MatchEditForm(instance=match)
+        with self.assertNumQueries(2), CaptureQueriesContext(connection) as queries:
+            form = MatchEditForm(instance=match)
+        self.assertEqual(
+            [query["sql"] for query in queries if "COUNT(" in query["sql"]], []
+        )
+        return form
+
+    def test_queries(self):
+        """
+        Building the form asks whether the stage has pools, and once whether
+        it holds an undecided team of our own. The teams and undecided teams
+        each field offers are queried as the form is rendered, not here.
+        Without pools the form drops the pool field.
+        """
+        form = self.build_form()
+        self.assertNotIn("stage_group", form.fields)
+
+    def test_queries_with_pools(self):
+        """With pools the form offers them, still in the same two queries."""
+        pool = StageGroupFactory.create(stage=self.stage)
+        form = self.build_form()
+        self.assertCountEqual(form.fields["stage_group"].queryset, [pool])
 
 
 @per_shell
