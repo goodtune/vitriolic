@@ -280,10 +280,10 @@ class DivisionStructureJSONFormTests(TestCase):
         )
         self.assertEqual(form.errors, {})
         division = form.save()
-        self.assertEqual(
-            list(division.stages.annotate(count=Count("matches")).values_list(
+        self.assertCountEqual(
+            division.stages.annotate(count=Count("matches")).values_list(
                 "title", "count"
-            )),
+            ),
             [("Pools", 4), ("Finals", 1)],
         )
 
