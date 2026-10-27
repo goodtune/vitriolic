@@ -200,6 +200,7 @@ def test_my_feature(page: Page, live_server, admin_user):
 2. **Browser issues**: `tox` automatically installs Playwright browsers
 3. **Database issues**: `tox-docker` handles PostgreSQL service management
 4. **Port conflicts**: `tox-docker` uses available ports automatically
+5. **Failing `subTest` in a parallel run**: the unit tests run with `--parallel auto`. The test runner in `vitriolic/runner.py` (`TEST_RUNNER`) sends a failing `subTest` from the worker while it can still be pickled, so the parent reports the assertion and not `MaybeEncodingError`. Give `subTest(...)` plain values (strings, numbers, tuples of them), not model instances, users or responses.
 
 ### Debug Mode
 
