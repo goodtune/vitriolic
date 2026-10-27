@@ -129,18 +129,32 @@ class AdminComponentMixin(ShellTemplatesMixin):
         sprite) and ``priority`` (lower comes first; 50 when not given). By
         default, one job: the component itself, naming its sections.
         """
-        sections = list(self.dropdowns() or ())
+        sections = self.sections(request)
         if not sections:
             return ()
         return (
             {
                 "label": self.verbose_name,
-                "url": sections[0][1],
-                "note": ", ".join(str(section[0]) for section in sections),
+                "url": sections[0].url,
+                "note": ", ".join(section.label for section in sections),
                 "icon": getattr(self, "icon", None),
                 "priority": 80,
             },
         )
+
+    def sections(self, request):
+        """
+        The sections of this component's menu (``dropdowns``) that
+        ``request.user`` is shown, in order: ``Explorer.sections`` filtered by
+        ``Explorer.shown``, so that the menu, the rail, the jobs and a
+        component's own pages agree on who sees a section.
+        """
+        explorer = self.explorer()
+        return [
+            section
+            for section in explorer.sections()
+            if explorer.shown(request, section)
+        ]
 
     def dropdowns(self):
         """
