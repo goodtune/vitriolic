@@ -15,7 +15,7 @@
 		<div class="form-buttons" data-for-panel="{{ model|type|slugify }}-tab">
 			<a class="button" href="{% block cancel-url %}{{ cancel_url }}{% endblock %}">{% trans "Cancel" %}</a>
 			{% block form-actions-extra %}{% endblock %}
-			<button type="submit" form="edit-form" class="button primary">{% icon "check" %}<span>{% trans "Save" %}</span></button>
+			<button type="submit" form="edit-form" class="button primary">{% icon "check" %}<span>{% if wizard.steps.next %}{% trans "Next" %}{% else %}{% trans "Save" %}{% endif %}</span></button>
 		</div>
 	{% endblock form-actions %}
 {% endblock page_actions %}

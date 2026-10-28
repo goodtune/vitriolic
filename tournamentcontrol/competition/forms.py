@@ -1688,9 +1688,31 @@ class DrawGenerationMatchFormSet(BaseDrawGenerationMatchFormSet):
                 label=_("Skip"), required=False
             )
 
+    def clean(self):
+        """Refuse to skip a match that a match not skipped depends on."""
+        super().clean()
+        skipped = {form.instance.uuid: form.instance for form in self.deleted_forms}
+        for form in self.forms:
+            if form in self.deleted_forms:
+                continue
+            for related in (
+                form.instance.home_team_eval_related,
+                form.instance.away_team_eval_related,
+            ):
+                if related is not None and related.uuid in skipped:
+                    raise forms.ValidationError(
+                        _("%(match)s depends on %(skipped)s, which is skipped.")
+                        % {
+                            "match": form.instance.label or form.instance,
+                            "skipped": skipped[related.uuid].label or related,
+                        }
+                    )
+
     def save(self, *args, **kwargs):
         matches = []
         for form in self.forms:
+            if form in self.deleted_forms:
+                continue
             if form.instance.home_team_eval_related is not None:
                 form.instance.home_team_eval_related = Match.objects.get(
                     uuid=form.instance.home_team_eval_related.uuid
