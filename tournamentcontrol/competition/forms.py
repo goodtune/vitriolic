@@ -13,7 +13,6 @@ from django.contrib.postgres.forms import array as PGA
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Max, Q
-from django.forms import BooleanField as BooleanChoiceField
 from django.forms.formsets import (
     DELETION_FIELD_NAME,
     INITIAL_FORM_COUNT,
@@ -1684,7 +1683,7 @@ class DrawGenerationMatchFormSet(BaseDrawGenerationMatchFormSet):
         """A hook for adding extra fields on to each form instance."""
         super().add_fields(form, index)
         if self.can_delete:
-            form.fields[DELETION_FIELD_NAME] = BooleanChoiceField(
+            form.fields[DELETION_FIELD_NAME] = forms.BooleanField(
                 label=_("Skip"), required=False
             )
 
@@ -2314,12 +2313,6 @@ class DrawGenerationForm(BootstrapFormControlMixin, forms.Form):
         start_date = self.cleaned_data.get("start_date")
         return draw_generator(self.instance, format, start_date)
 
-    def clean_start_date(self):
-        start_date = self.cleaned_data.get("start_date")
-        if not start_date:
-            raise forms.ValidationError("foo")
-        return start_date
-
     def clean_rounds(self):
         format = self.cleaned_data.get("format")
         rounds = self.cleaned_data.get("rounds")
@@ -2382,9 +2375,14 @@ class DrawGenerationFormSet(BootstrapFormControlMixin, DrawGenerationFormSetBase
         """A hook for adding extra fields on to each form instance."""
         super().add_fields(form, index)
         if self.can_delete:
-            form.fields[DELETION_FIELD_NAME] = BooleanChoiceField(
+            form.fields[DELETION_FIELD_NAME] = forms.BooleanField(
                 label=_("Skip"), required=False
             )
+
+    def clean(self):
+        super().clean()
+        if self.forms and len(self.deleted_forms) == len(self.forms):
+            raise ValidationError(_("Choose at least one stage or pool to build."))
 
 
 class ImportCsvForm(forms.Form):
