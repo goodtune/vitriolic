@@ -13,8 +13,9 @@
 	  tab-panes          the panes: <section class="wb-pane wb-sheet" role="tabpanel" id="<name>-pane">
 	  form-fieldset      the fields of the form
 	  form-bar           the bar at the top of the form, kept in view, with Cancel and Save
+	                     (Next on a wizard step before the last)
 	  form-title         its title
-	  form-buttons       the Save button at the foot of the form
+	  form-buttons       the Save (or Next) button at the foot of the form
 	  cancel-url         where Cancel goes
 	  aside              a column beside the tabs at a desk
 {% endcomment %}
@@ -58,11 +59,16 @@
 									<h2 class="wb-formbar-title">{% block form-title %}{% blocktrans with type=model|type|capfirst %}{{ type }} details{% endblocktrans %}{% endblock %}</h2>
 									<div class="wb-formbar-actions">
 										<a class="wb-button wb-button-quiet" href="{% block cancel-url %}{{ cancel_url }}{% endblock %}">{% trans "Cancel" %}</a>
-										<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
+										<button type="submit" class="wb-button wb-button-primary">{% if wizard.steps.next %}{% trans "Next" %}{% else %}{% trans "Save" %}{% endif %}</button>
 									</div>
 								</div>
 							{% endblock form-bar %}
-							{% include "touchtechnology/admin/workbook/_problems.html" %}
+							{% if wizard %}
+								{# A wizard's step is a formset, not a form. #}
+								{% include "touchtechnology/admin/workbook/_problems.html" with form=None formset=wizard.form %}
+							{% else %}
+								{% include "touchtechnology/admin/workbook/_problems.html" %}
+							{% endif %}
 							{% block form-fieldset %}
 								<div class="wb-fields">
 									{% for f in form %}
@@ -73,7 +79,7 @@
 							{% block form-buttons %}
 								<div class="wb-formfoot">
 									<div class="wb-actions">
-										<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
+										<button type="submit" class="wb-button wb-button-primary">{% if wizard.steps.next %}{% trans "Next" %}{% else %}{% trans "Save" %}{% endif %}</button>
 										{% if not object|is_saved and form and not formset and not wizard %}
 											<button type="submit" name="_addanother" value="1" class="wb-button">{% icon "copy-plus" %}{% blocktrans with type=model|type %}Save and add another {{ type }}{% endblocktrans %}</button>
 										{% endif %}
