@@ -49,31 +49,45 @@ class DrawGenerationWizardTests(IconMixin, TestCase):
         cls.replayed_format = factories.DrawFormatFactory.create(
             name="Finals and a replay", teams=6, text=REPLAYED
         )
+        cls.playoffs = factories.StageFactory.create(
+            division=cls.division, title="Playoffs", order=3
+        )
+        factories.StageGroupFactory.create(stage=cls.playoffs, title="Pool A", order=1)
+        factories.StageGroupFactory.create(stage=cls.playoffs, title="Pool B", order=2)
 
     def setUp(self):
         super().setUp()
         self.login(self.make_user("superuser"))
 
-    def post_draw_format(self, format):
-        url = self.finals.url_names["build"]
-        self.post(
-            url.url_name,
-            *url.args,
-            data={
-                "draw_generation_wizard-current_step": "0",
-                "0-TOTAL_FORMS": "1",
-                "0-INITIAL_FORMS": "1",
-                "0-MIN_NUM_FORMS": "0",
-                "0-MAX_NUM_FORMS": "1000",
-                "0-0-start_date": "2026-10-31",
-                "0-0-format": format.pk,
-                "0-0-rounds": "",
-                "0-0-offset": "",
-            },
-        )
+    def post_draw_formats(self, stage, *forms):
+        """The first step: one ``(format, skipped)`` per stage or pool."""
+        data = {
+            "draw_generation_wizard-current_step": "0",
+            "0-TOTAL_FORMS": str(len(forms)),
+            "0-INITIAL_FORMS": str(len(forms)),
+            "0-MIN_NUM_FORMS": "0",
+            "0-MAX_NUM_FORMS": "1000",
+        }
+        for index, (format, skipped) in enumerate(forms):
+            data.update(
+                {
+                    f"0-{index}-start_date": "2026-10-31",
+                    f"0-{index}-format": format.pk,
+                    f"0-{index}-rounds": "",
+                    f"0-{index}-offset": "",
+                }
+            )
+            if skipped:
+                data[f"0-{index}-DELETE"] = "on"
+        url = stage.url_names["build"]
+        self.post(url.url_name, *url.args, data=data)
 
-    def post_draw_matches(self, *skipped):
+    def post_draw_format(self, format):
+        self.post_draw_formats(self.finals, (format, False))
+
+    def post_draw_matches(self, *skipped, stage=None):
         """The last step as the first filled it in, with ``skipped`` labels skipped."""
+        stage = stage or self.finals
         formset = self.get_context("form")
         data = {
             "draw_generation_wizard-current_step": "1",
@@ -93,7 +107,7 @@ class DrawGenerationWizardTests(IconMixin, TestCase):
                 data[f"1-{index}-DELETE"] = "on"
             else:
                 del data[f"1-{index}-DELETE"]
-        url = self.finals.url_names["build"]
+        url = stage.url_names["build"]
         self.post(url.url_name, *url.args, data=data)
 
     def labels(self):
@@ -166,6 +180,71 @@ class DrawGenerationWizardTests(IconMixin, TestCase):
         self.assert_http_302_found(url=str(self.division.urls["edit"]))
         self.assertCountEqual(
             self.labels(), ["Semi 1", "Semi 2", "3rd/4th Playoff", "Final"]
+        )
+
+    # Skip on the first step (#633).
+
+    def test_skipped_pool_is_not_offered_or_created(self):
+        self.post_draw_formats(
+            self.playoffs, (self.finals_format, True), (self.finals_format, False)
+        )
+        self.assertEqual(self.get_context("wizard")["steps"].current, "1")
+        self.assertCountEqual(
+            [form.instance.stage_group.title for form in self.get_context("form")],
+            ["Pool B"] * 5,
+        )
+        self.post_draw_matches(stage=self.playoffs)
+        self.assert_http_302_found(url=str(self.division.urls["edit"]))
+        self.assertCountEqual(
+            self.playoffs.matches.values_list("stage_group__title", "label"),
+            [
+                ("Pool B", "Semi 1"),
+                ("Pool B", "Semi 2"),
+                ("Pool B", "5th/6th Playoff"),
+                ("Pool B", "3rd/4th Playoff"),
+                ("Pool B", "Final"),
+            ],
+        )
+
+    def test_skipping_every_pool_is_refused(self):
+        self.post_draw_formats(
+            self.playoffs, (self.finals_format, True), (self.finals_format, True)
+        )
+        self.assert_http_200_ok()
+        self.assertEqual(self.get_context("wizard")["steps"].current, "0")
+        error = _("Choose at least one stage or pool to build.")
+        self.assertEqual(self.get_context("form").non_form_errors(), [error])
+        self.assertResponseContains(self.problems(error))
+        self.assertCountEqual(self.playoffs.matches.all(), [])
+
+    def test_skipping_the_only_stage_is_refused(self):
+        self.post_draw_formats(self.finals, (self.finals_format, True))
+        self.assert_http_200_ok()
+        error = _("Choose at least one stage or pool to build.")
+        self.assertEqual(self.get_context("form").non_form_errors(), [error])
+        self.assertCountEqual(self.labels(), [])
+
+    # Start date (#634).
+
+    def test_start_date_is_required(self):
+        url = self.finals.url_names["build"]
+        self.post(
+            url.url_name,
+            *url.args,
+            data={
+                "draw_generation_wizard-current_step": "0",
+                "0-TOTAL_FORMS": "1",
+                "0-INITIAL_FORMS": "1",
+                "0-MIN_NUM_FORMS": "0",
+                "0-MAX_NUM_FORMS": "1000",
+                "0-0-start_date": "",
+                "0-0-format": self.finals_format.pk,
+            },
+        )
+        self.assert_http_200_ok()
+        self.assertEqual(
+            self.get_context("form").errors,
+            [{"start_date": [_("This field is required.")]}],
         )
 
     # Next, then Save (#631).

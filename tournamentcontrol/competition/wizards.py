@@ -5,6 +5,7 @@ from operator import add, or_
 from dateutil.parser import parse
 from django import forms
 from django.db.models import Q
+from django.forms.formsets import DELETION_FIELD_NAME
 from django.http import HttpResponse, HttpResponseRedirect
 from django.utils.translation import gettext_lazy as _
 from first import first
@@ -14,6 +15,7 @@ from touchtechnology.common.forms.fields import (
     ModelChoiceField,
     ModelMultipleChoiceField,
 )
+from tournamentcontrol.competition.draw.generators import MatchCollection
 from tournamentcontrol.competition.models import Season
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.utils import generate_scorecards
@@ -242,8 +244,13 @@ class DrawGenerationWizard(SessionWizardView):
 
     def get_form_kwargs(self, step):
         if step == "1":
+            # A stage or pool marked Skip offers no matches.
             data = self.get_cleaned_data_for_step("0")
-            matches = functools.reduce(add, [d["matches"] for d in data])
+            matches = functools.reduce(
+                add,
+                (d["matches"] for d in data if not d.get(DELETION_FIELD_NAME)),
+                MatchCollection(),
+            )
             return {"queryset": matches}
         return {}
 
