@@ -15,7 +15,6 @@ from tournamentcontrol.competition.tests.factories import (
     SeasonFactory,
 )
 from tournamentcontrol.competition.utils import (
-    ThumbnailPreview,
     create_thumbnail_preview,
 )
 

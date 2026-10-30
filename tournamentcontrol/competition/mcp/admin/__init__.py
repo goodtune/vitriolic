@@ -56,8 +56,12 @@ from django.utils import timezone
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from mcp.server.mcpserver.exceptions import ToolError
-from pydantic import BaseModel, ConfigDict, Field
-from pydantic import ValidationError as PydanticValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError as PydanticValidationError,
+)
 
 from tournamentcontrol.competition.admin import (
     YOUTUBE_AUTH_EXPIRED_MESSAGE,
@@ -113,8 +117,6 @@ from tournamentcontrol.competition.mcp.admin.forms import (
 )
 from tournamentcontrol.competition.mcp.admin.scheduling import (
     ScheduleValidator,
-)
-from tournamentcontrol.competition.mcp.admin.scheduling import (
     validation_message as _validation_message,
 )
 from tournamentcontrol.competition.models import (

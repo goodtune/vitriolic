@@ -4,8 +4,6 @@ import logging
 from django.conf import settings
 from django.contrib.admin.sites import (
     AdminSite as DjangoAdminSite,
-)
-from django.contrib.admin.sites import (
     AlreadyRegistered,
     NotRegistered,
 )

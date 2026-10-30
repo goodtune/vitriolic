@@ -17,8 +17,8 @@ from googleapiclient.errors import HttpError
 from test_plus import TestCase
 
 from tournamentcontrol.competition.tasks import (
-    _ShortTitle,
     _is_title_too_long,
+    _ShortTitle,
     build_live_stream_body,
     sync_live_stream,
 )

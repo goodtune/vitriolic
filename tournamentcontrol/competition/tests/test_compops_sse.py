@@ -8,8 +8,10 @@ from asgiref.sync import sync_to_async
 from asgiref.testing import ApplicationCommunicator
 from django.contrib.auth.models import Permission
 from django.core.asgi import get_asgi_application
-from django.test import TransactionTestCase as DjangoTransactionTestCase
-from django.test import override_settings
+from django.test import (
+    TransactionTestCase as DjangoTransactionTestCase,
+    override_settings,
+)
 from django.urls import reverse
 from django.utils import timezone
 from freezegun import freeze_time

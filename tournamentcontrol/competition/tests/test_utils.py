@@ -3,9 +3,9 @@ import textwrap
 
 from test_plus import TestCase
 
+from touchtechnology.admin.tests.shells import IconMixin, per_shell
 from tournamentcontrol.competition import utils
 from tournamentcontrol.competition.models import Match
-from touchtechnology.admin.tests.shells import IconMixin, per_shell
 from tournamentcontrol.competition.tests.factories import (
     DivisionFactory,
     MatchFactory,
@@ -310,7 +310,7 @@ class StageGroupPositionTests(TestCase):
         """
         # Create a division with multiple stages so we can reference one
         division = DivisionFactory.create()
-        stage1 = StageFactory.create(division=division, order=1)
+        StageFactory.create(division=division, order=1)
         stage2 = StageFactory.create(division=division, order=2)
 
         # Stage1 has no pools, but we try to access group 1 from stage1
@@ -455,7 +455,7 @@ class StageGroupPositionTests(TestCase):
         that access UndecidedTeam.title or UndecidedTeam.choices properties.
         """
         # Create a superuser for admin access using SuperUserFactory
-        superuser = SuperUserFactory.create()
+        SuperUserFactory.create()
 
         # Create a division with multiple stages
         division = DivisionFactory.create()
@@ -476,7 +476,7 @@ class StageGroupPositionTests(TestCase):
         )
 
         # Build the edit_stage URL using the same pattern as other admin tests
-        edit_stage_url = stage2.urls["edit"]
+        stage2.urls["edit"]
 
         # After the fix, accessing these properties should NOT raise IndexError
         # Instead they should gracefully handle the error

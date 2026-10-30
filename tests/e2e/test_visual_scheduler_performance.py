@@ -1,17 +1,18 @@
 """Performance tests for Visual Scheduler with large datasets."""
 
-import pytest
 from datetime import date, time
+
+import pytest
 from playwright.sync_api import Page, expect
 
-from tournamentcontrol.competition.tests.factories import (
-    SeasonFactory,
-    VenueFactory,
-    GroundFactory,
-    SeasonMatchTimeFactory,
-)
-from tournamentcontrol.competition.draw.schemas import DivisionStructure, StageFixture
 from tournamentcontrol.competition.draw.builders import build
+from tournamentcontrol.competition.draw.schemas import DivisionStructure, StageFixture
+from tournamentcontrol.competition.tests.factories import (
+    GroundFactory,
+    SeasonFactory,
+    SeasonMatchTimeFactory,
+    VenueFactory,
+)
 from tournamentcontrol.competition.utils import round_robin_format
 
 

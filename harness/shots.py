@@ -34,9 +34,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
-from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import Locator, Page, sync_playwright
-from playwright.sync_api import TimeoutError as PlaywrightTimeout
+from playwright.sync_api import (
+    Error as PlaywrightError,
+    Locator,
+    Page,
+    TimeoutError as PlaywrightTimeout,
+    sync_playwright,
+)
 
 from harness import flow
 from harness.manifest import Manifest, PageResult

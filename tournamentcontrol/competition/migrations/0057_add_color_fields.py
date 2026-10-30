@@ -2,6 +2,7 @@
 
 from django.core import validators
 from django.db import migrations, models
+
 import tournamentcontrol.competition.models
 
 

@@ -11,7 +11,6 @@ that AI models should be able to generate. Each fixture includes:
 - Validation criteria
 """
 
-import itertools
 import textwrap
 
 from test_plus import TestCase

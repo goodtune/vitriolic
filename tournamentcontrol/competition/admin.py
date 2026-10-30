@@ -27,8 +27,7 @@ from django.urls import include, path, re_path, reverse
 from django.utils import formats, timezone
 from django.utils.formats import date_format
 from django.utils.text import slugify
-from django.utils.translation import gettext_lazy as _
-from django.utils.translation import ngettext
+from django.utils.translation import gettext_lazy as _, ngettext
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from guardian.utils import get_40x_or_None

@@ -20,7 +20,6 @@ from harness.unflow import STAMP, main, school_year, unflow
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.content.models import Page, PageContent
 from touchtechnology.content.tests.factories import RedirectFactory
-from touchtechnology.news.models import Article, Category, Translation
 from touchtechnology.news.tests.factories import (
     ArticleFactory,
     CategoryFactory,

@@ -15,7 +15,6 @@ from functools import lru_cache
 from django.apps import apps
 from django.db.models import ForeignKey, Model
 from django.urls import Resolver404, resolve
-from django.utils.encoding import smart_str
 from django.utils.text import capfirst
 from django.utils.translation import gettext_lazy as _
 

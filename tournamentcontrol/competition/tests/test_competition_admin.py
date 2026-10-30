@@ -23,7 +23,12 @@ from test_plus import TestCase as BaseTestCase
 
 from touchtechnology.admin.branding import get_brand
 from touchtechnology.admin.sites import site
-from touchtechnology.admin.tests.shells import ArrowMixin, IconMixin, by_shell, per_shell
+from touchtechnology.admin.tests.shells import (
+    ArrowMixin,
+    IconMixin,
+    by_shell,
+    per_shell,
+)
 from touchtechnology.common.tests.caches import WarmCachesMixin
 from touchtechnology.common.tests.factories import (
     StaffFactory,
@@ -51,6 +56,7 @@ from tournamentcontrol.competition.models import (
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin, round_robin_format
+
 
 #: The home page's budget, with the caches warm (see ``WarmCachesMixin``): the
 #: widgets' queries, and two for its jobs (the latest day with results to enter

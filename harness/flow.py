@@ -42,9 +42,12 @@ from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 from django.conf import global_settings
-from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import Locator, Page
-from playwright.sync_api import TimeoutError as PlaywrightTimeout
+from playwright.sync_api import (
+    Error as PlaywrightError,
+    Locator,
+    Page,
+    TimeoutError as PlaywrightTimeout,
+)
 
 from harness.images import photo
 from harness.manifest import Manifest, StepResult

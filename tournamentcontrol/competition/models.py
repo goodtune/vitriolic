@@ -7,7 +7,6 @@ import warnings
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
-import requests
 from cloudinary.models import CloudinaryField
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
@@ -18,7 +17,6 @@ from django.contrib.postgres import fields as PG
 from django.core import validators
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
-from django.http import Http404, HttpResponse
 from django.db.models import (
     CheckConstraint,
     Count,
@@ -32,6 +30,7 @@ from django.db.models import (
     UniqueConstraint,
 )
 from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
+from django.http import HttpResponse
 from django.template import Template
 from django.template.loader import get_template
 from django.utils import timezone
@@ -45,7 +44,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaInMemoryUpload, MediaUpload
+from googleapiclient.http import MediaUpload
 from timezone_field.fields import TimeZoneField
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
@@ -104,7 +103,6 @@ from tournamentcontrol.competition.upstream.backends.revolutionise import (
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
     combine_and_localize,
-    create_thumbnail_preview,
     create_thumbnail_response,
     stage_group_position,
     stage_group_position_re,

@@ -13,9 +13,8 @@ from freezegun import freeze_time
 from test_plus import TestCase
 
 from touchtechnology.admin.tests.tenancy import schema_context
-from tournamentcontrol.competition.compops import events
+from tournamentcontrol.competition.compops import events, sites
 from tournamentcontrol.competition.compops.fragments import render_counts
-from tournamentcontrol.competition.compops import sites
 from tournamentcontrol.competition.compops.sites import CompOpsSite
 from tournamentcontrol.competition.tests import factories
 

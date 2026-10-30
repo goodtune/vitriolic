@@ -9,8 +9,8 @@ from googleapiclient.errors import HttpError
 from test_plus import TestCase
 
 from tournamentcontrol.competition.exceptions import (
-    LiveStreamIdentifierMissing,
     InvalidLiveStreamTransition,
+    LiveStreamIdentifierMissing,
     LiveStreamTransitionWarning,
 )
 from tournamentcontrol.competition.tests import factories

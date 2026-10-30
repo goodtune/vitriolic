@@ -53,9 +53,9 @@ import requests
 from bs4 import BeautifulSoup
 
 from tournamentcontrol.competition.upstream.base import (
+    BaseUpstreamBackend,
     HttpClient,
     UpstreamError,
-    BaseUpstreamBackend,
     UpstreamResponseError,
     UpstreamURLError,
 )

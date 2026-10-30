@@ -1,19 +1,19 @@
 """E2E tests for Visual Scheduler color functionality."""
 
-import pytest
 from datetime import date, time
-from pathlib import Path
+
+import pytest
 from playwright.sync_api import Page, expect
 
 from tournamentcontrol.competition.tests.factories import (
-    SeasonFactory,
-    VenueFactory,
-    GroundFactory,
-    SeasonMatchTimeFactory,
     DivisionFactory,
+    GroundFactory,
+    MatchFactory,
+    SeasonFactory,
+    SeasonMatchTimeFactory,
     StageFactory,
     TeamFactory,
-    MatchFactory,
+    VenueFactory,
 )
 
 
@@ -27,7 +27,7 @@ class TestVisualSchedulerColors:
         venue = VenueFactory.create(season=season)
         ground = GroundFactory.create(venue=venue)
 
-        timeslot = SeasonMatchTimeFactory.create(
+        SeasonMatchTimeFactory.create(
             season=season,
             start=time(10, 0),
             interval=60,

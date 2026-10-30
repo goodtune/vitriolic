@@ -12,8 +12,9 @@ The original URLs could be remote addresses on foreign servers that we cannot re
 """
 
 import logging
-from django.db import migrations
+
 import requests
+from django.db import migrations
 
 logger = logging.getLogger(__name__)
 

@@ -8,9 +8,9 @@ from unittest import mock
 from django.contrib.auth import get_user_model
 from test_plus import TestCase
 
+from touchtechnology.common.tests.factories import UserFactory
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.tests.factories import SuperUserFactory
-from touchtechnology.common.tests.factories import UserFactory
 
 User = get_user_model()
 

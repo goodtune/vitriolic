@@ -126,7 +126,6 @@ class MatchDescriptor:
     def generate(self, generator, stage, round, date):
         from tournamentcontrol.competition.models import (
             Match,
-            Stage,
             StageGroup,
             Team,
             UndecidedTeam,

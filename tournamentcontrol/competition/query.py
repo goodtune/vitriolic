@@ -1,11 +1,9 @@
 from django.apps import apps
-from django.conf import settings
 from django.db.models import (
     BooleanField,
     Case,
     Count,
     Exists,
-    ExpressionWrapper,
     F,
     FloatField,
     Func,

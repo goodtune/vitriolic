@@ -7,9 +7,11 @@ import logging
 from contextlib import aclosing
 
 from asgiref.sync import sync_to_async
-from datastar_py.django import DatastarResponse
-from datastar_py.django import ServerSentEventGenerator as SSE
-from datastar_py.django import read_signals
+from datastar_py.django import (
+    DatastarResponse,
+    ServerSentEventGenerator as SSE,
+    read_signals,
+)
 from django.contrib.auth.views import redirect_to_login
 from django.db import close_old_connections
 from django.http import Http404, HttpResponseForbidden
