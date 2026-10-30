@@ -85,7 +85,6 @@ from tournamentcontrol.competition.forms import (
     RescheduleDateFormSet,
     SeasonAssociationFormSet,
     SeasonForm,
-    SeasonMatchTimeFormSet,
     StageForm,
     StageGroupForm,
     TeamAssociationForm,
@@ -1932,20 +1931,6 @@ class CompetitionAdminComponent(AdminComponent):
             pk=pk,
             permission_required=True,
             post_delete_redirect=post_delete_redirect,
-        )
-
-    @competition_by_pk_m
-    @staff_login_required_m
-    def timeslots(self, request, competition, season, extra_context, **kwargs):
-        return self.generic_edit_multiple(
-            request,
-            SeasonMatchTime,
-            formset_class=SeasonMatchTimeFormSet,
-            formset_kwargs={"instance": season},
-            post_save_redirect_args=(competition.pk, season.pk),
-            post_save_redirect="competition:season:edit",
-            templates=self.template_path("timeslots.html", "season"),
-            extra_context=extra_context,
         )
 
     @competition_by_pk_m
