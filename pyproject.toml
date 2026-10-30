@@ -42,7 +42,6 @@ dynamic = ["version"]
 [dependency-groups]
 dev = [
     "black>=25.1.0",
-    "isort>=6.0.1",
     "ruff>=0.12.8",
 ]
 test = [
@@ -119,12 +118,6 @@ include = ["touchtechnology*", "tournamentcontrol*"]
 
 [tool.setuptools_scm]
 
-[tool.isort]
-combine_as_imports = true
-default_section = "THIRDPARTY"
-include_trailing_comma = true
-multi_line_output = 5
-
 [tool.black]
 line-length = 88
 target-version = ["py311", "py312", "py313", "py314"]
@@ -132,6 +125,18 @@ target-version = ["py311", "py312", "py313", "py314"]
 [tool.ruff]
 line-length = 88
 target-version = "py311"
+
+[tool.ruff.lint]
+# Ruff's default rule set plus import sorting (replaces flake8 and isort).
+# Line length is black's job, so E501 stays off.
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# Generated migrations were never linted by flake8; only sort their imports.
+"**/migrations/*.py" = ["E", "F"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
 
 [tool.uv]
 prerelease = "if-necessary-or-explicit"

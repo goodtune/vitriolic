@@ -28,5 +28,5 @@ jobs:
         run: |
           uv sync
           uv tool install black
-          uv tool install isort
+          uv tool install ruff
           uv tool install tox --with tox-docker,tox-uv

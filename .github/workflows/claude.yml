@@ -53,7 +53,6 @@ jobs:
           allowed_tools: >-
             Bash(uv sync),
             Bash(uv run *),
-            Bash(isort *),
             Bash(black *),
             Bash(ruff check *),
             Bash(ruff check --fix *),
