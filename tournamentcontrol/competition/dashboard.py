@@ -381,12 +381,3 @@ class ScoresheetWidget(DashboardWidget):
         )
         context = {"stages": stages}
         return context
-
-
-class ReportWidget(DashboardWidget):
-    verbose_name = _("Reports")
-    template = "tournamentcontrol/competition/admin/widgets/reports.html"
-
-    def _get_context(self):
-        context = {}
-        return context

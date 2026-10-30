@@ -32,7 +32,7 @@ from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from guardian.utils import get_40x_or_None
 
-from touchtechnology.admin.base import AdminComponent, DashboardWidget
+from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.explorer import Explorer, Folder, Node, Rel
 from touchtechnology.admin.setup import Setup, Step
 from touchtechnology.admin.trail import tab_of
@@ -84,7 +84,6 @@ from tournamentcontrol.competition.forms import (
     RescheduleDateFormSet,
     SeasonAssociationFormSet,
     SeasonForm,
-    SeasonMatchTimeFormSet,
     StageForm,
     StageGroupForm,
     TeamAssociationForm,
@@ -428,25 +427,6 @@ def division_setup(division):
         ),
     ]
     return Setup(_("Division set-up"), steps)
-
-
-class SeasonProgressWidget(DashboardWidget):
-    """The seasons in progress on the home page, each with its checklist."""
-
-    verbose_name = _("Seasons in progress")
-    template = "tournamentcontrol/competition/admin/widgets/seasons.html"
-    half = False
-
-    def _get_context(self):
-        seasons = (
-            Season.objects.filter(complete=False, competition__enabled=True)
-            .select_related("competition")
-            .order_by("-start_date")
-        )
-        return {
-            "widget": self,
-            "seasons": [(season, season_checklist(season)) for season in seasons[:4]],
-        }
 
 
 def bulk_create_count(request, default=5):
@@ -1950,20 +1930,6 @@ class CompetitionAdminComponent(AdminComponent):
             pk=pk,
             permission_required=True,
             post_delete_redirect=post_delete_redirect,
-        )
-
-    @competition_by_pk_m
-    @staff_login_required_m
-    def timeslots(self, request, competition, season, extra_context, **kwargs):
-        return self.generic_edit_multiple(
-            request,
-            SeasonMatchTime,
-            formset_class=SeasonMatchTimeFormSet,
-            formset_kwargs={"instance": season},
-            post_save_redirect_args=(competition.pk, season.pk),
-            post_save_redirect="competition:season:edit",
-            templates=self.template_path("timeslots.html", "season"),
-            extra_context=extra_context,
         )
 
     @competition_by_pk_m
