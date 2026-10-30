@@ -33,7 +33,7 @@ from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from guardian.utils import get_40x_or_None
 
-from touchtechnology.admin.base import AdminComponent, DashboardWidget
+from touchtechnology.admin.base import AdminComponent
 from touchtechnology.admin.explorer import Explorer, Folder, Node, Rel
 from touchtechnology.admin.setup import Setup, Step
 from touchtechnology.admin.trail import tab_of
@@ -429,25 +429,6 @@ def division_setup(division):
         ),
     ]
     return Setup(_("Division set-up"), steps)
-
-
-class SeasonProgressWidget(DashboardWidget):
-    """The seasons in progress on the home page, each with its checklist."""
-
-    verbose_name = _("Seasons in progress")
-    template = "tournamentcontrol/competition/admin/widgets/seasons.html"
-    half = False
-
-    def _get_context(self):
-        seasons = (
-            Season.objects.filter(complete=False, competition__enabled=True)
-            .select_related("competition")
-            .order_by("-start_date")
-        )
-        return {
-            "widget": self,
-            "seasons": [(season, season_checklist(season)) for season in seasons[:4]],
-        }
 
 
 def bulk_create_count(request, default=5):
