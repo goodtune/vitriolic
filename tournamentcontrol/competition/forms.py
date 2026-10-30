@@ -2777,9 +2777,7 @@ class DivisionStructureJSONForm(forms.Form):
             )
 
         # The formats must parse before their positions can be read.
-        errors = self._draw_format_errors(structure) or self._position_errors(
-            structure
-        )
+        errors = self._draw_format_errors(structure) or self._position_errors(structure)
         if errors:
             raise forms.ValidationError(errors)
 

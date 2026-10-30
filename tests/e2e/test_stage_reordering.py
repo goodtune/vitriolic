@@ -16,33 +16,24 @@ class TestStageReordering:
     def division_with_stages(self, db):
         """
         Create a division with multiple stages for reordering tests.
-        
+
         Returns:
             Division: A division with three stages in order
         """
         # Create a complete hierarchy: Competition -> Season -> Division
         division = factories.DivisionFactory.create(title="Under 12")
-        
+
         # Create three stages in order
         stage1 = factories.StageFactory.create(
-            division=division,
-            title="Preliminary",
-            short_title="Prelim",
-            order=1
+            division=division, title="Preliminary", short_title="Prelim", order=1
         )
         stage2 = factories.StageFactory.create(
-            division=division,
-            title="Semi-Finals",
-            short_title="Semi",
-            order=2
+            division=division, title="Semi-Finals", short_title="Semi", order=2
         )
         stage3 = factories.StageFactory.create(
-            division=division,
-            title="Finals",
-            short_title="Final",
-            order=3
+            division=division, title="Finals", short_title="Final", order=3
         )
-        
+
         # Store stage IDs for verification
         division.test_stages = [stage1, stage2, stage3]
         return division

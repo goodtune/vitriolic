@@ -442,7 +442,9 @@ class NonFileSystemStorageMediaAddTests(NonFileSystemStorageMixin, IconMixin, Te
 
 
 @per_shell
-class NonFileSystemStorageMediaDeleteTests(NonFileSystemStorageMixin, IconMixin, TestCase):
+class NonFileSystemStorageMediaDeleteTests(
+    NonFileSystemStorageMixin, IconMixin, TestCase
+):
     """
     A storage that is not a file system has no folder the site can remove.
     Deleting one of its folders says so, instead of answering that the page is
@@ -941,7 +943,10 @@ class SitemapListTests(ArrowMixin, TestCase):
         news, _ = Placeholder.objects.get_or_create(path=NEWS_SITE, namespace="news")
         press = SitemapNode.objects.create(title="Press", slug="press")
         SitemapNode.objects.create(
-            title="Releases", slug="releases", parent=press, object=Page.objects.create()
+            title="Releases",
+            slug="releases",
+            parent=press,
+            object=Page.objects.create(),
         )
         archive = SitemapNode.objects.create(title="Archive", slug="archive")
         about = SitemapNode.objects.create(

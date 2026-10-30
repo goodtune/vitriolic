@@ -166,8 +166,6 @@ def migrate_thumbnails_forward(apps, schema_editor):
     logger.info("Thumbnail migration completed")
 
 
-
-
 class Migration(migrations.Migration):
 
     dependencies = [

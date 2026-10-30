@@ -253,9 +253,7 @@ def competition_by_slug(f, *a, **kw):
                         stage__division__season__competition__in=allowed,
                     )
                     stage = pool.stage
-                    stage.pool_count = StageGroup.objects.filter(
-                        stage=stage
-                    ).count()
+                    stage.pool_count = StageGroup.objects.filter(stage=stage).count()
                     division = stage.division
                     season = division.season
                     competition = season.competition
@@ -264,9 +262,7 @@ def competition_by_slug(f, *a, **kw):
 
                 elif stage_slug:
                     stage = get_object_or_404(
-                        Stage.objects.select_related(
-                            "division__season__competition"
-                        )
+                        Stage.objects.select_related("division__season__competition")
                         .defer("division__season__live_stream_thumbnail_image")
                         .annotate(pool_count=Count("pools")),
                         slug=stage_slug,

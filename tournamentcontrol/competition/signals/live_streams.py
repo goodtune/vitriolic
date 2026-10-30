@@ -28,9 +28,7 @@ def cleanup_youtube_broadcast(sender, instance, **kwargs):
         return
     external_identifier = instance.external_identifier
     transaction.on_commit(
-        lambda: delete_youtube_broadcast.s(
-            season.pk, external_identifier
-        ).apply_async()
+        lambda: delete_youtube_broadcast.s(season.pk, external_identifier).apply_async()
     )
 
 

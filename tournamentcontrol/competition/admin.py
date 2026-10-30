@@ -3167,9 +3167,7 @@ class CompetitionAdminComponent(AdminComponent):
         # prefetch them so the sheet costs the same however long it is.
         matches = (
             season.matches.filter(date=date)
-            .select_related(
-                "stage__division__season__competition", "play_at__ground"
-            )
+            .select_related("stage__division__season__competition", "play_at__ground")
             .prefetch_related("referees__person")
             .order_by("is_bye", "datetime", "play_at")
         )

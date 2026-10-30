@@ -20,7 +20,7 @@ class SecondNews(NewsAdminComponent):
 class RegisterTest(SimpleTestCase):
     def setUp(self):
         super().setUp()
-        self.site =AdminSite(name="registry")
+        self.site = AdminSite(name="registry")
 
     def test_register_a_second_component_with_the_same_name(self):
         # The name roots the component's addresses and its ids in the rail.

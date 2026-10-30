@@ -33,8 +33,7 @@ class UtilTests(TestCase):
 
     def test_round_robin_format_even(self):
         self.assertEqual(
-            textwrap.dedent(
-                """
+            textwrap.dedent("""
                 ROUND
                 1: 1 vs 4
                 2: 2 vs 3
@@ -44,16 +43,14 @@ class UtilTests(TestCase):
                 ROUND
                 5: 1 vs 2
                 6: 3 vs 4
-                """
-            ).strip(),
+                """).strip(),
             utils.round_robin_format(range(1, 5)),
         )
 
     def test_round_robin_format_integer_input(self):
         """Test that integer input works correctly."""
         result = utils.round_robin_format(4)
-        expected = textwrap.dedent(
-            """
+        expected = textwrap.dedent("""
             ROUND
             1: 1 vs 4
             2: 2 vs 3
@@ -63,8 +60,7 @@ class UtilTests(TestCase):
             ROUND
             5: 1 vs 2
             6: 3 vs 4
-            """
-        ).strip()
+            """).strip()
         self.assertEqual(expected, result)
 
     def test_round_robin_format_integer_equals_range(self):

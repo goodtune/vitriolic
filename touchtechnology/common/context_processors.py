@@ -27,4 +27,6 @@ def tz(request):
 
 
 def htmx_admin_tabs(request):
-    return {"htmx_admin_tabs": getattr(settings, "TOUCHTECHNOLOGY_HTMX_ADMIN_TABS", False)}
+    return {
+        "htmx_admin_tabs": getattr(settings, "TOUCHTECHNOLOGY_HTMX_ADMIN_TABS", False)
+    }

@@ -112,12 +112,12 @@ class TestVisualSchedulerPerformance:
         cpu_time = sum(node.get("hitCount", 0) for node in profile["profile"]["nodes"])
         cpu_utilization = (cpu_time / (drag_time * 1000)) * 100 if drag_time > 0 else 0
 
-        assert drag_time < 1000, (
-            f"Drag to unscheduled took {drag_time}ms, expected < 1000ms"
-        )
-        assert cpu_utilization < 10, (
-            f"CPU utilization {cpu_utilization:.1f}% exceeded 10%"
-        )
+        assert (
+            drag_time < 1000
+        ), f"Drag to unscheduled took {drag_time}ms, expected < 1000ms"
+        assert (
+            cpu_utilization < 10
+        ), f"CPU utilization {cpu_utilization:.1f}% exceeded 10%"
 
         # Drag another match to vacant grid cell
         second_match = page.locator(".match-item.scheduled").first
@@ -133,9 +133,9 @@ class TestVisualSchedulerPerformance:
         cpu_time = sum(node.get("hitCount", 0) for node in profile["profile"]["nodes"])
         cpu_utilization = (cpu_time / (drag_time * 1000)) * 100 if drag_time > 0 else 0
 
-        assert drag_time < 1000, (
-            f"Drag to vacant cell took {drag_time}ms, expected < 1000ms"
-        )
-        assert cpu_utilization < 10, (
-            f"CPU utilization {cpu_utilization:.1f}% exceeded 10%"
-        )
+        assert (
+            drag_time < 1000
+        ), f"Drag to vacant cell took {drag_time}ms, expected < 1000ms"
+        assert (
+            cpu_utilization < 10
+        ), f"CPU utilization {cpu_utilization:.1f}% exceeded 10%"

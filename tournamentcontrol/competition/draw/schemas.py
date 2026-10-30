@@ -103,9 +103,7 @@ class RoundDescriptor:
         return [m.generate(generator, stage, self, date) for m in self.matches]
 
     def __str__(self):
-        return "\n".join(
-            [f"ROUND {self.round_label}"] + [str(m) for m in self.matches]
-        )
+        return "\n".join([f"ROUND {self.round_label}"] + [str(m) for m in self.matches])
 
 
 class MatchDescriptor:

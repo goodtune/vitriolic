@@ -73,6 +73,7 @@ class DashboardQueriesMixin(WarmCachesMixin):
             with self.assertNumQueries(queries):
                 self.get_check_200("admin:index")
 
+
 #: An icon of the admin's sprite, as the pages draw it.
 ICON = (
     '<svg class="wb-icon" aria-hidden="true" focusable="false">'
@@ -151,9 +152,7 @@ class TestCase(BaseTestCase):
         self.assertGoodEditView(
             f"{namespace}:edit", *args, saved_url=saved_url, **kwargs
         )
-        self.assertGoodDeleteView(
-            f"{namespace}:delete", *args, deleted_url=deleted_url
-        )
+        self.assertGoodDeleteView(f"{namespace}:delete", *args, deleted_url=deleted_url)
 
 
 class TemplateTests(TestCase):
@@ -759,9 +758,7 @@ class GoodViewTests(TestCase):
         self.assertLoginRequired("admin:fixja:format:list")
         with self.login(self.superuser):
             self.assertGoodView("admin:fixja:format:list")
-        self.assertGoodNamespace(
-            draw_format, self.reverse("admin:fixja:format:list")
-        )
+        self.assertGoodNamespace(draw_format, self.reverse("admin:fixja:format:list"))
 
     @unittest.skip("Not refactored as a namespace yet")
     def test_list_drawformat(self):
@@ -1568,9 +1565,7 @@ class RegistrationFormTests(TestCase):
                 "pdf",
             )
             # The calls are cleared when the mock is stopped.
-            self.assertEqual(
-                pdf_service.calls[0].request.body[:15], b"<!DOCTYPE html>"
-            )
+            self.assertEqual(pdf_service.calls[0].request.body[:15], b"<!DOCTYPE html>")
         self.assert_http_200_ok()
         self.assertResponseHeaders({"Content-Type": "application/pdf"})
         self.assertEqual(self.last_response.content, b"%PDF-1.4 fake")
@@ -2642,7 +2637,13 @@ class BackendTests(MessagesTestMixin, TestCase):
         formset = self.get_context("formset")
         self.assertEqual(
             formset.errors,
-            [{"json_data": ["Invalid JSON: Expecting value: line 1 column 13 (char 12)"]}],
+            [
+                {
+                    "json_data": [
+                        "Invalid JSON: Expecting value: line 1 column 13 (char 12)"
+                    ]
+                }
+            ],
         )
 
     def test_json_division_builder_post_empty_json(self):
@@ -2683,9 +2684,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         structure = DivisionStructure(
             title="Test Division",
             teams=["Team A", "Team B", "Team C", "Team D"],
-            draw_formats={
-                "round-robin-4": round_robin_format(4)
-            },
+            draw_formats={"round-robin-4": round_robin_format(4)},
             stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
         )
         valid_json = structure.model_dump_json()
@@ -2726,9 +2725,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         structure = DivisionStructure(
             title="Existing Division",  # Same name as existing division
             teams=["Team A", "Team B", "Team C", "Team D"],
-            draw_formats={
-                "round-robin-4": round_robin_format(4)
-            },
+            draw_formats={"round-robin-4": round_robin_format(4)},
             stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
         )
         conflicting_json = structure.model_dump_json()
@@ -2770,17 +2767,13 @@ class BackendTests(MessagesTestMixin, TestCase):
         structure1 = DivisionStructure(
             title="Duplicate Name",
             teams=["Team A", "Team B", "Team C", "Team D"],
-            draw_formats={
-                "round-robin-4": round_robin_format(4)
-            },
+            draw_formats={"round-robin-4": round_robin_format(4)},
             stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
         )
         structure2 = DivisionStructure(
             title="Duplicate Name",  # Same name as first structure
             teams=["Team E", "Team F", "Team G", "Team H"],
-            draw_formats={
-                "round-robin-4": round_robin_format(4)
-            },
+            draw_formats={"round-robin-4": round_robin_format(4)},
             stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
         )
 
@@ -3397,8 +3390,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.assertResponseContains(
             by_shell(
                 workbook=(
-                    f'<a href="{resync_link}">'
-                    f'{ICON % "refresh-cw"}Resync</a>'
+                    f'<a href="{resync_link}">' f'{ICON % "refresh-cw"}Resync</a>'
                 ),
                 explorer=f'<a href="{resync_link}">Resync</a>',
             )
@@ -3892,9 +3884,7 @@ class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
         assign_perm("competition.add_division", staff)
         with self.login(staff):
             self.post(self.viewname, *self.args, data=data)
-            self.assert_http_302_found(
-                url=f"{self.season.urls['edit']}#divisions-tab"
-            )
+            self.assert_http_302_found(url=f"{self.season.urls['edit']}#divisions-tab")
         self.assertEqual(self.season.divisions.get().title, "Men's Open")
 
 
@@ -4506,9 +4496,7 @@ class MatchDetailNotReadyTests(MatchRowMixin, TestCase):
         # The scores are in, so only the team still to be decided stops it.
         match = self.match(
             home_team=None,
-            home_team_undecided=factories.UndecidedTeamFactory.create(
-                stage=self.stage
-            ),
+            home_team_undecided=factories.UndecidedTeamFactory.create(stage=self.stage),
             home_team_score=2,
             away_team_score=1,
         )
@@ -4720,7 +4708,9 @@ class MatchDetailPermissionTests(MatchRowMixin, TestCase):
                 *self.stage._get_url_args(),
             )
         self.assertResponseContains(
-            self.actions_cell(first, "Leopards vs Marlins", statistics=True, delete=False)
+            self.actions_cell(
+                first, "Leopards vs Marlins", statistics=True, delete=False
+            )
         )
         self.assertResponseContains(
             self.actions_cell(second, "Sharks vs Eagles", statistics=True, delete=False)
@@ -4775,6 +4765,7 @@ class MatchDetailPermissionTests(MatchRowMixin, TestCase):
             ),
             count=4,
         )
+
     def test_run_sheet_offers_statistics_for_change_match_on_every_match(self):
         first = self.match(home_team__title="Leopards")
         second = self.match(home_team__title="Sharks")

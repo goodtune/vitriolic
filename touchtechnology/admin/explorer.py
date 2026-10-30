@@ -194,9 +194,7 @@ class Explorer:
         Whether ``request.user`` is shown ``section``: everyone is, unless it
         names a permission (``content.view_file``) they do not hold.
         """
-        return section.permission is None or request.user.has_perm(
-            section.permission
-        )
+        return section.permission is None or request.user.has_perm(section.permission)
 
     def section_model(self, url):
         """

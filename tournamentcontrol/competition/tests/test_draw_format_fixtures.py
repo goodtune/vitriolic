@@ -44,18 +44,14 @@ class DrawFormatFixturesTestCase(TestCase):
         fixture = DivisionStructure(
             title="It's a Knockout!",
             teams=["NSW", "QLD", "WA", "VIC"],
-            draw_formats={
-                "Knockout": textwrap.dedent(
-                    """\
+            draw_formats={"Knockout": textwrap.dedent("""\
                         ROUND
                         1: 1 vs 2 Semi 1
                         2: 3 vs 4 Semi 2
                         ROUND
                         3: L1 vs L2 Bronze
                         ROUND
-                        4: W1 vs W2 Final"""
-                )
-            },
+                        4: W1 vs W2 Final""")},
             stages=[
                 StageFixture(
                     title="Knockout Finals",

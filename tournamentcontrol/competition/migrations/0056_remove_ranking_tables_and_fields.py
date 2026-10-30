@@ -12,7 +12,6 @@ class Migration(migrations.Migration):
 
     operations = [
         # Remove ranking-related fields from existing tables
-        
         # Remove rank_importance fields
         migrations.RemoveField(
             model_name="competition",
@@ -38,7 +37,6 @@ class Migration(migrations.Migration):
             model_name="match",
             name="rank_importance",
         ),
-        
         # Remove rank_division fields
         migrations.RemoveField(
             model_name="division",
@@ -48,7 +46,6 @@ class Migration(migrations.Migration):
             model_name="team",
             name="rank_division",
         ),
-        
         # Drop ranking-related tables
         # Note: Foreign key constraints were already removed in migration 0055
         migrations.DeleteModel(

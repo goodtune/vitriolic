@@ -206,6 +206,7 @@ class TeamFormTests(TestCase):
             ],
         )
 
+
 class DivisionStructureJSONFormTests(TestCase):
     """
     The JSON division builder validates every draw format a stage or pool
@@ -225,8 +226,12 @@ class DivisionStructureJSONFormTests(TestCase):
                 StageFixture(
                     title="Pools",
                     pools=[
-                        PoolFixture(title="Pool 1", teams=[0, 1], draw_format_ref="pool"),
-                        PoolFixture(title="Pool 2", teams=[2, 3], draw_format_ref="pool"),
+                        PoolFixture(
+                            title="Pool 1", teams=[0, 1], draw_format_ref="pool"
+                        ),
+                        PoolFixture(
+                            title="Pool 2", teams=[2, 3], draw_format_ref="pool"
+                        ),
                     ],
                 ),
                 StageFixture(title="Finals", draw_format_ref="final"),

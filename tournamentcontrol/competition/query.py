@@ -78,17 +78,14 @@ class StageQuerySet(QuerySet):
         LadderSummary = apps.get_model("competition", "LadderSummary")
         StageGroup = apps.get_model("competition", "StageGroup")
         ladder_summary_qs = LadderSummary.objects.select_related("team__club")
-        return (
-            self.annotate(pool_count=Count("pools"))
-            .prefetch_related(
-                Prefetch("ladder_summary", queryset=ladder_summary_qs),
-                Prefetch(
-                    "pools",
-                    queryset=StageGroup.objects.prefetch_related(
-                        Prefetch("ladder_summary", queryset=ladder_summary_qs),
-                    ),
+        return self.annotate(pool_count=Count("pools")).prefetch_related(
+            Prefetch("ladder_summary", queryset=ladder_summary_qs),
+            Prefetch(
+                "pools",
+                queryset=StageGroup.objects.prefetch_related(
+                    Prefetch("ladder_summary", queryset=ladder_summary_qs),
                 ),
-            )
+            ),
         )
 
 

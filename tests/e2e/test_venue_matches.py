@@ -119,9 +119,7 @@ class TestVenueMatches:
         Screenshots of each page are saved as evidence.
         """
         season = venue_dataset
-        base = (
-            f"{live_server.url}/competitions/{season.competition.slug}/{season.slug}"
-        )
+        base = f"{live_server.url}/competitions/{season.competition.slug}/{season.slug}"
 
         # Season: the venues are listed and linked.
         page.goto(f"{base}/")
@@ -196,9 +194,7 @@ class TestVenueMatches:
         - /venue/<venue>/<day>/ for a malformed day returns 404
         """
         season = venue_dataset
-        base = (
-            f"{live_server.url}/competitions/{season.competition.slug}/{season.slug}"
-        )
+        base = f"{live_server.url}/competitions/{season.competition.slug}/{season.slug}"
         response = page.goto(f"{base}/venue/bill-hartley-fields/20240617/")
         assert response.status == 404
         response = page.goto(f"{base}/venue/bill-hartley-fields/20241399/")

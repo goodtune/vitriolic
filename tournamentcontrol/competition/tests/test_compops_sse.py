@@ -480,7 +480,6 @@ class HeldStreamsEventsTests(SseFixture, TestCase):
             external_identifier=identifier,
         )
 
-
     async def test_the_snapshot_marks_every_block(self):
         reader, snapshot = await self.connect()
         try:

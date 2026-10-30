@@ -163,7 +163,9 @@ class BasicResultTests(TestCase):
             datetime=kickoff, stage__division__season__timezone="UTC"
         )
         # Its result comes from the upstream provider, so it is never awaiting entry.
-        MatchFactory.create(datetime=kickoff, stage=match.stage, upstream_id="mysideline:12345")
+        MatchFactory.create(
+            datetime=kickoff, stage=match.stage, upstream_id="mysideline:12345"
+        )
         self.assertCountEqual(matches_require_basic_results(), [match])
 
     @freeze_time("2019-07-15 09:00 UTC")

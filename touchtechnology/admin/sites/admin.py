@@ -202,9 +202,7 @@ class AdminSite(DjangoAdminSite):
         widgets = ()
         for __, __, __, component, __ in allowed(self.get_components(), request):
             widgets += tuple(
-                widget
-                for widget in getattr(component, "widgets", ())
-                if widget.show()
+                widget for widget in getattr(component, "widgets", ()) if widget.show()
             )
         return widgets
 
