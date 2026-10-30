@@ -81,7 +81,6 @@ from tournamentcontrol.competition.models import (
     Season,
     SeasonAssociation,
     SeasonExclusionDate,
-    SeasonMatchTime,
     SimpleScoreMatchStatistic,
     Stage,
     StageGroup,
@@ -2624,22 +2623,6 @@ class MatchStatisticFormset(BaseMatchStatisticFormset):
             match = self.forms[0].instance.match
             statistics_updated.send_robust(sender=self, match=match)
         return stats
-
-
-SeasonMatchTimeFormSet = inlineformset_factory(
-    Season,
-    SeasonMatchTime,
-    fk_name="season",
-    fields=(
-        "start_date",
-        "end_date",
-        "start",
-        "interval",
-        "count",
-    ),
-    extra=0,
-    can_delete=True,
-)
 
 
 class TournamentScheduleForm(BootstrapFormControlMixin, forms.Form):
