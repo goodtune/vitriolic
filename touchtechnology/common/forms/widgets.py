@@ -18,9 +18,7 @@ class HTMLWidget(forms.Textarea):
 
     class Media:
         css = {
-            "all": (
-                "touchtechnology/common/css/jodit.min.css",
-            ),
+            "all": ("touchtechnology/common/css/jodit.min.css",),
         }
         js = (
             "touchtechnology/common/js/jodit.min.js",
