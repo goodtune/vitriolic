@@ -61,9 +61,7 @@ class SuperUserSlugMixin(UserMixin):
         else:
             self.fields["slug"].required = False
             self.fields["slug"].help_text = _(
-                "If left blank, this will "
-                "be automatically set based "
-                "on the title."
+                "If left blank, this will be automatically set based on the title."
             )
 
 

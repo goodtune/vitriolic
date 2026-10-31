@@ -2,11 +2,11 @@
 
 from django.core import validators
 from django.db import migrations, models
+
 import tournamentcontrol.competition.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0056_remove_ranking_tables_and_fields"),
     ]
@@ -23,8 +23,8 @@ class Migration(migrations.Migration):
                 verbose_name="Color",
                 validators=[
                     validators.RegexValidator(
-                        regex=r'^#[0-9a-fA-F]{6}$',
-                        message='Enter a valid hex color code (e.g., #ff5733)',
+                        regex=r"^#[0-9a-fA-F]{6}$",
+                        message="Enter a valid hex color code (e.g., #ff5733)",
                     )
                 ],
             ),
@@ -40,8 +40,8 @@ class Migration(migrations.Migration):
                 verbose_name="Background Color",
                 validators=[
                     validators.RegexValidator(
-                        regex=r'^#[0-9a-fA-F]{6}$',
-                        message='Enter a valid hex color code (e.g., #ff5733)',
+                        regex=r"^#[0-9a-fA-F]{6}$",
+                        message="Enter a valid hex color code (e.g., #ff5733)",
                     )
                 ],
             ),
@@ -50,15 +50,15 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="division",
             constraint=models.CheckConstraint(
-                condition=models.Q(color__regex=r'^#[0-9a-fA-F]{6}$'),
-                name='division_color_valid_hex',
+                condition=models.Q(color__regex=r"^#[0-9a-fA-F]{6}$"),
+                name="division_color_valid_hex",
             ),
         ),
         migrations.AddConstraint(
             model_name="stage",
             constraint=models.CheckConstraint(
-                condition=models.Q(color__regex=r'^#[0-9a-fA-F]{6}$'),
-                name='stage_color_valid_hex',
+                condition=models.Q(color__regex=r"^#[0-9a-fA-F]{6}$"),
+                name="stage_color_valid_hex",
             ),
         ),
     ]

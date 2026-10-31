@@ -9,7 +9,6 @@ def set_draft_false(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0002_division_draft"),
     ]

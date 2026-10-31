@@ -3,7 +3,6 @@ import functools
 import logging
 from decimal import Decimal
 
-from dateutil.rrule import DAILY, WEEKLY, rrule, rruleset
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from first import first

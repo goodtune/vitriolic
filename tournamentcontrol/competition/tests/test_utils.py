@@ -3,9 +3,9 @@ import textwrap
 
 from test_plus import TestCase
 
+from touchtechnology.admin.tests.shells import IconMixin, per_shell
 from tournamentcontrol.competition import utils
 from tournamentcontrol.competition.models import Match
-from touchtechnology.admin.tests.shells import IconMixin, per_shell
 from tournamentcontrol.competition.tests.factories import (
     DivisionFactory,
     MatchFactory,
@@ -33,8 +33,7 @@ class UtilTests(TestCase):
 
     def test_round_robin_format_even(self):
         self.assertEqual(
-            textwrap.dedent(
-                """
+            textwrap.dedent("""
                 ROUND
                 1: 1 vs 4
                 2: 2 vs 3
@@ -44,16 +43,14 @@ class UtilTests(TestCase):
                 ROUND
                 5: 1 vs 2
                 6: 3 vs 4
-                """
-            ).strip(),
+                """).strip(),
             utils.round_robin_format(range(1, 5)),
         )
 
     def test_round_robin_format_integer_input(self):
         """Test that integer input works correctly."""
         result = utils.round_robin_format(4)
-        expected = textwrap.dedent(
-            """
+        expected = textwrap.dedent("""
             ROUND
             1: 1 vs 4
             2: 2 vs 3
@@ -63,8 +60,7 @@ class UtilTests(TestCase):
             ROUND
             5: 1 vs 2
             6: 3 vs 4
-            """
-        ).strip()
+            """).strip()
         self.assertEqual(expected, result)
 
     def test_round_robin_format_integer_equals_range(self):
@@ -310,7 +306,7 @@ class StageGroupPositionTests(TestCase):
         """
         # Create a division with multiple stages so we can reference one
         division = DivisionFactory.create()
-        stage1 = StageFactory.create(division=division, order=1)
+        StageFactory.create(division=division, order=1)
         stage2 = StageFactory.create(division=division, order=2)
 
         # Stage1 has no pools, but we try to access group 1 from stage1
@@ -455,7 +451,7 @@ class StageGroupPositionTests(TestCase):
         that access UndecidedTeam.title or UndecidedTeam.choices properties.
         """
         # Create a superuser for admin access using SuperUserFactory
-        superuser = SuperUserFactory.create()
+        SuperUserFactory.create()
 
         # Create a division with multiple stages
         division = DivisionFactory.create()
@@ -476,7 +472,7 @@ class StageGroupPositionTests(TestCase):
         )
 
         # Build the edit_stage URL using the same pattern as other admin tests
-        edit_stage_url = stage2.urls["edit"]
+        stage2.urls["edit"]
 
         # After the fix, accessing these properties should NOT raise IndexError
         # Instead they should gracefully handle the error

@@ -545,9 +545,7 @@ class CalendarQueryTests(TestCase):
             [self.division.title, self.stage.title],
         )
         self.assertEqual(event["dtstart"].dt, match_dt)
-        self.assertEqual(
-            event["dtend"].dt, match_dt + timedelta(minutes=45)
-        )
+        self.assertEqual(event["dtend"].dt, match_dt + timedelta(minutes=45))
         self.assertEqual(
             event["dtstamp"].dt,
             datetime(2025, 6, 1, 10, 0, 0, tzinfo=ZoneInfo("UTC")),
@@ -613,9 +611,7 @@ class CalendarQueryTests(TestCase):
         prop = event["x-apple-structured-location"]
         self.assertEqual(str(prop), "geo:-33.8471,151.0685")
         self.assertEqual(prop.params["VALUE"], "URI")
-        self.assertEqual(
-            prop.params["X-TITLE"], "Field 3, Sydney Olympic Park"
-        )
+        self.assertEqual(prop.params["X-TITLE"], "Field 3, Sydney Olympic Park")
 
     def test_match_at_venue_location_names_venue(self):
         venue = factories.VenueFactory.create(
@@ -686,21 +682,15 @@ class CalendarQueryTests(TestCase):
         self.assertEqual(len(events), 10)
 
         uids = {e["uid"] for e in events}
-        expected_uids = set(
-            self.division.matches.values_list("uuid", flat=True)
-        )
-        self.assertCountEqual(
-            uids, {u.hex for u in expected_uids}
-        )
+        expected_uids = set(self.division.matches.values_list("uuid", flat=True))
+        self.assertCountEqual(uids, {u.hex for u in expected_uids})
 
     def test_disabled_calendar_returns_410(self):
         season = factories.SeasonFactory.create(disable_calendar=True)
         division = factories.DivisionFactory.create(season=season)
         team = factories.TeamFactory.create(division=division)
         stage = factories.StageFactory.create(division=division)
-        factories.MatchFactory.create_batch(
-            stage=stage, home_team=team, size=3
-        )
+        factories.MatchFactory.create_batch(stage=stage, home_team=team, size=3)
         self.get(
             "competition:calendar",
             competition=season.competition.slug,
@@ -715,9 +705,7 @@ class CalendarQueryTests(TestCase):
             season=self.season, draft=True
         )
         draft_stage = factories.StageFactory.create(division=draft_division)
-        factories.MatchFactory.create_batch(
-            stage=draft_stage, size=3
-        )
+        factories.MatchFactory.create_batch(stage=draft_stage, size=3)
         self.get(
             "competition:calendar",
             competition=self.competition.slug,
@@ -735,9 +723,7 @@ class CalendarQueryTests(TestCase):
             season=self.season, draft=True
         )
         draft_stage = factories.StageFactory.create(division=draft_division)
-        factories.MatchFactory.create_batch(
-            stage=draft_stage, size=3
-        )
+        factories.MatchFactory.create_batch(stage=draft_stage, size=3)
         with self.login(superuser):
             self.get(
                 "competition:calendar",
@@ -857,7 +843,9 @@ class CalendarQueryTests(TestCase):
         self.assertResponseHeaders({"Cache-Control": "private"})
 
     @override_settings(
-        CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}},
+        CACHES={
+            "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
+        },
         CACHE_MIDDLEWARE_SECONDS=0,
         MIDDLEWARE=[
             "django.middleware.cache.UpdateCacheMiddleware",
@@ -1007,12 +995,8 @@ class CalendarQueryTests(TestCase):
         self.assertEqual(len(events), 10)
 
         uids = {e["uid"] for e in events}
-        expected_uids = set(
-            self.season.matches.values_list("uuid", flat=True)
-        )
-        self.assertCountEqual(
-            uids, {u.hex for u in expected_uids}
-        )
+        expected_uids = set(self.season.matches.values_list("uuid", flat=True))
+        self.assertCountEqual(uids, {u.hex for u in expected_uids})
 
     def test_calendar_with_bye_match(self):
         """
@@ -1161,9 +1145,7 @@ class DivisionViewQueryTests(WarmCachesMixin, TestCase):
                 teams=["Alpha", "Beta", "Gamma", "Delta"],
                 draw_formats={"rr4": round_robin_format(4)},
                 stages=[
-                    schemas.StageFixture(
-                        title="Round Robin", draw_format_ref="rr4"
-                    ),
+                    schemas.StageFixture(title="Round Robin", draw_format_ref="rr4"),
                 ],
             )
         )
@@ -1177,9 +1159,7 @@ class DivisionViewQueryTests(WarmCachesMixin, TestCase):
                 teams=[f"Team {i}" for i in range(1, 9)],
                 draw_formats={"rr8": round_robin_format(8)},
                 stages=[
-                    schemas.StageFixture(
-                        title=f"Stage {i}", draw_format_ref="rr8"
-                    )
+                    schemas.StageFixture(title=f"Stage {i}", draw_format_ref="rr8")
                     for i in range(1, 4)
                 ],
             )
@@ -1648,16 +1628,12 @@ class SeasonThumbnailTests(TestCase):
         cls.stage = factories.StageFactory.create(division=cls.division)
         cls.pool = factories.StageGroupFactory.create(stage=cls.stage)
         cls.team = factories.TeamFactory.create(division=cls.division)
-        cls.match = factories.MatchFactory.create(
-            stage=cls.stage, home_team=cls.team
-        )
+        cls.match = factories.MatchFactory.create(stage=cls.stage, home_team=cls.team)
 
     def assertThumbnailNotRead(self, *args):
         with CaptureQueriesContext(connection) as queries:
             self.assertGoodView(*args)
-        self.assertEqual(
-            [q["sql"] for q in queries if self.THUMBNAIL in q["sql"]], []
-        )
+        self.assertEqual([q["sql"] for q in queries if self.THUMBNAIL in q["sql"]], [])
 
     def test_navigation(self):
         with CaptureQueriesContext(connection) as queries:
@@ -1669,9 +1645,7 @@ class SeasonThumbnailTests(TestCase):
         self.assertEqual(len(seasons), 2)
         # competitions, then their seasons
         self.assertEqual(len(queries), 2)
-        self.assertEqual(
-            [q["sql"] for q in queries if self.THUMBNAIL in q["sql"]], []
-        )
+        self.assertEqual([q["sql"] for q in queries if self.THUMBNAIL in q["sql"]], [])
 
     def test_navigation_carries_what_a_menu_needs(self):
         """
@@ -2119,9 +2093,7 @@ class VenueViewTests(TestCase):
             list(self.context["matches_by_date"].items()),
             [(date(2025, 3, 13), [m1]), (date(2025, 3, 14), [m2, m3])],
         )
-        self.assertEqual(
-            self.context["dates"], [date(2025, 3, 13), date(2025, 3, 14)]
-        )
+        self.assertEqual(self.context["dates"], [date(2025, 3, 13), date(2025, 3, 14)])
         self.assertIsNone(self.context["selected_date"])
 
         # grounds and days are linked from the venue page
@@ -2153,9 +2125,7 @@ class VenueViewTests(TestCase):
             [(date(2025, 3, 13), [m1])],
         )
         # the day navigation still offers every day at the venue
-        self.assertEqual(
-            self.context["dates"], [date(2025, 3, 13), date(2025, 3, 14)]
-        )
+        self.assertEqual(self.context["dates"], [date(2025, 3, 13), date(2025, 3, 14)])
         self.assertEqual(self.context["selected_date"], date(2025, 3, 13))
 
     def test_ground_lists_only_its_own_matches(self):
@@ -2163,9 +2133,7 @@ class VenueViewTests(TestCase):
         m1 = self._match(self.ground_1, when)
         self._match(self.ground_2, when)
         self._match(self.venue, when)
-        self.assertGoodView(
-            "competition:ground", *self._venue_args(self.ground_1.slug)
-        )
+        self.assertGoodView("competition:ground", *self._venue_args(self.ground_1.slug))
         self.assertEqual(
             list(self.context["matches_by_date"].items()),
             [(date(2025, 3, 13), [m1])],
@@ -2207,9 +2175,7 @@ class VenueViewTests(TestCase):
         self.assertResponseContains('<td class="time">6 p.m.</td>')
         self.assertResponseContains('<td class="time">3 p.m.</td>')
 
-        self.assertGoodView(
-            "competition:ground", *self._venue_args(self.ground_1.slug)
-        )
+        self.assertGoodView("competition:ground", *self._venue_args(self.ground_1.slug))
         self.assertResponseContains('<td class="time">6 p.m.</td>')
 
     def test_season_links_to_venues(self):

@@ -22,7 +22,6 @@ def link_person_model(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0020_competition__add__person_uuid"),
     ]

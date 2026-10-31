@@ -468,8 +468,8 @@ class ClientTests(TestCase):
 
     def test_malformed_graphql_payloads(self):
         for text in ("<html>", "[]", '{"data": {"teams": {}}}'):
-            self.session.handlers[GRAPHQL_ENDPOINT] = (
-                lambda m, u, k, t=text: FakeResponse(text=t)
+            self.session.handlers[GRAPHQL_ENDPOINT] = lambda m, u, k, t=text: (
+                FakeResponse(text=t)
             )
             with self.assertRaises(UpstreamResponseError):
                 self.client.get_competition(1, "x", 2026, "TFA")
@@ -1717,10 +1717,8 @@ class InvocationTests(SyncTestCase):
             competition=self.season.competition, upstream_url=None
         )
         factories.SeasonFactory.create(upstream_url=SEASON_URL)
-        self.session.handlers[other.competition.upstream_url] = (
-            lambda m, u, k: FakeResponse(
-                status_code=404, text="", content_type="text/html"
-            )
+        self.session.handlers[other.competition.upstream_url] = lambda m, u, k: (
+            FakeResponse(status_code=404, text="", content_type="text/html")
         )
 
         results = synchronise_all({"mysideline": self.mysideline})

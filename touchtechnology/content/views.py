@@ -44,7 +44,7 @@ def dispatch(request, page_id=None, node=None, url=None):
             if_modified_since = parse_http_date_safe(if_modified_since)
             res_last_modified = timegm(page.last_modified.utctimetuple())
             logger.debug(
-                'page="%d", if-last-modified="%s", ' 'last-modified="%s"',
+                'page="%d", if-last-modified="%s", last-modified="%s"',
                 page_id,
                 http_date(if_modified_since),
                 http_date(res_last_modified),

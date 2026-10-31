@@ -343,8 +343,9 @@ class DrawGenerator:
     @staticmethod
     def _swap_home_away(match):
         for field in ("team", "team_undecided", "team_eval"):
-            home, away = getattr(match, f"home_{field}"), getattr(
-                match, f"away_{field}"
+            home, away = (
+                getattr(match, f"home_{field}"),
+                getattr(match, f"away_{field}"),
             )
             setattr(match, f"home_{field}", away)
             setattr(match, f"away_{field}", home)

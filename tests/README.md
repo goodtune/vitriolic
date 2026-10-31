@@ -150,6 +150,7 @@ from django.contrib.auth import get_user_model
 from test_plus import TestCase
 from touchtechnology.common.tests.factories import UserFactory
 
+
 class MyFeatureTestCase(TestCase):
     user_factory = UserFactory
 
@@ -179,6 +180,7 @@ class MyFeatureTestCase(TestCase):
 
 ```python
 from playwright.sync_api import Page, expect
+
 
 def test_my_feature(page: Page, live_server, admin_user):
     # Login first, if required

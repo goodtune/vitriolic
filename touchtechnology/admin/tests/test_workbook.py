@@ -193,7 +193,7 @@ class TrailTests(TestCase):
             '<li><a href="/admin/news/"><span>News</span></a></li>'
             '<li><a href="/admin/news/article/"><span>Articles</span></a></li>'
             f'<li class="wb-trail-parent"><a href="/admin/news/article/{article.pk}/#translations-tab">'
-            f'{ICON % "arrow-left"}<span>Flow Cup begins</span></a></li></ol></nav>',
+            f"{ICON % 'arrow-left'}<span>Flow Cup begins</span></a></li></ol></nav>",
         )
 
 
@@ -230,7 +230,7 @@ class AddAnotherTests(TestCase):
             self.get_check_200("admin:content:redirect:add")
         self.assertResponseContains(
             '<button type="submit" name="_addanother" value="1" class="wb-button">'
-            f'{ICON % "copy-plus"}Save and add another redirect</button>',
+            f"{ICON % 'copy-plus'}Save and add another redirect</button>",
         )
 
     def test_save_and_add_another_returns_to_the_add_form(self):
@@ -255,7 +255,7 @@ class AddAnotherTests(TestCase):
             self.get_check_200("admin:content:redirect:edit", redirect.pk)
         self.assertResponseNotContains(
             '<button type="submit" name="_addanother" value="1" class="wb-button">'
-            f'{ICON % "copy-plus"}Save and add another redirect</button>',
+            f"{ICON % 'copy-plus'}Save and add another redirect</button>",
         )
 
 
@@ -277,10 +277,10 @@ def checklist_html(kind, open_, optional):
         f'{ICON % "x"}<span aria-hidden="true">Hide</span>'
         '<span class="wb-sr">Hide the set-up checklists</span></button>'
         f'<details class="wb-sheet wb-checklist" data-wb-checklist="{kind}"'
-        f'{" open" if open_ else ""}>'
+        f"{' open' if open_ else ''}>"
         '<summary><h2 class="wb-checklist-title">Season set-up</h2>'
         '<span class="wb-checklist-toggle" aria-hidden="true">'
-        f'{ICON % "chevron-down"}</span>'
+        f"{ICON % 'chevron-down'}</span>"
         f'<span class="wb-checklist-score">{score}</span>{nxt}'
         '<span class="wb-progress" role="progressbar" aria-label="Season set-up" '
         f'aria-valuemin="0" aria-valuemax="{total}" aria-valuenow="1">'

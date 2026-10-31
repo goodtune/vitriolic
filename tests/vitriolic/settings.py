@@ -9,7 +9,6 @@ import django
 import environ
 from django.core.exceptions import ImproperlyConfigured
 from django.urls import reverse_lazy
-
 from vitriolic.brands import BRANDS
 
 env = environ.Env()

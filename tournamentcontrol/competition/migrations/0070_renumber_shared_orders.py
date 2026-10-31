@@ -30,7 +30,6 @@ def forwards(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0069_list_ordering"),
     ]

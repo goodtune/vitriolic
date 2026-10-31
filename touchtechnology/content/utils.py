@@ -46,7 +46,7 @@ def install_placeholder(app):
                 )
             else:
                 logger.debug(
-                    'Application "%s" (pk=%d) already ' "exists, skipping.",
+                    'Application "%s" (pk=%d) already exists, skipping.',
                     placeholder.path,
                     placeholder.pk,
                 )

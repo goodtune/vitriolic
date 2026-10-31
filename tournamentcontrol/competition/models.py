@@ -7,7 +7,6 @@ import warnings
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
-import requests
 from cloudinary.models import CloudinaryField
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
@@ -18,7 +17,6 @@ from django.contrib.postgres import fields as PG
 from django.core import validators
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
-from django.http import Http404, HttpResponse
 from django.db.models import (
     CheckConstraint,
     Count,
@@ -32,6 +30,7 @@ from django.db.models import (
     UniqueConstraint,
 )
 from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
+from django.http import HttpResponse
 from django.template import Template
 from django.template.loader import get_template
 from django.utils import timezone
@@ -45,7 +44,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaInMemoryUpload, MediaUpload
+from googleapiclient.http import MediaUpload
 from timezone_field.fields import TimeZoneField
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
@@ -104,7 +103,6 @@ from tournamentcontrol.competition.upstream.backends.revolutionise import (
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
     combine_and_localize,
-    create_thumbnail_preview,
     create_thumbnail_response,
     stage_group_position,
     stage_group_position_re,
@@ -253,9 +251,7 @@ class OrderedSitemapNode(SitemapNodeBase):
             return
         with transaction.atomic():
             below.update(order=F("order") + offset)
-            self.siblings.filter(order__gt=offset).update(
-                order=F("order") - offset - 1
-            )
+            self.siblings.filter(order__gt=offset).update(order=F("order") - offset - 1)
 
     close_gap.alters_data = True
 
@@ -367,8 +363,7 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         Supercedes _list_annotate due to GROUP BY exceptions. Take full control
         of the query. See the history for the earlier implementation.
         """
-        query = (
-            """
+        query = """
             SELECT
                 "competition_person"."uuid",
                 "competition_person"."first_name",
@@ -414,11 +409,7 @@ class Club(AdminUrlMixin, SitemapNodeBase):
             ORDER BY
                 "competition_person"."last_name" ASC,
                 "competition_person"."first_name" ASC
-        """
-            % {  # noqa: E501
-                "user": get_user_model()._meta.db_table
-            }
-        )
+        """ % {"user": get_user_model()._meta.db_table}  # noqa: E501
         params = {
             "club": self.pk,
         }
@@ -1206,9 +1197,7 @@ class Division(
         expects.
         """
         stages = (
-            self.stages.exclude(keep_ladder=False)
-            .with_ladder_data()
-            .order_by("order")
+            self.stages.exclude(keep_ladder=False).with_ladder_data().order_by("order")
         )
         res = collections.OrderedDict()
         for stage in stages:
@@ -1260,9 +1249,7 @@ class Division(
                 videos_count=Count("videos"),
                 referee_count=Count("referees"),
             )
-            .order_by(
-                "stage__order", "datetime", "date", "time", "round"
-            )
+            .order_by("stage__order", "datetime", "date", "time", "round")
         )
         res = collections.OrderedDict()
         stages = {}
@@ -1270,9 +1257,9 @@ class Division(
             # One ``Stage`` for every match of a stage, so naming undecided
             # teams looks each stage's neighbours up once.
             match.stage = stages.setdefault(match.stage_id, match.stage)
-            res.setdefault(
-                match.stage, collections.OrderedDict()
-            ).setdefault(match.get_date(tzinfo), []).append(match)
+            res.setdefault(match.stage, collections.OrderedDict()).setdefault(
+                match.get_date(tzinfo), []
+            ).append(match)
         return res
 
     def to_division_structure(self):
@@ -1683,9 +1670,7 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
         if self.follows:
             return self.follows
         after = (
-            self.division.stages.filter(order__lt=self.order)
-            .order_by("-order")
-            .first()
+            self.division.stages.filter(order__lt=self.order).order_by("-order").first()
         )
         if after is not None:
             return after
@@ -3407,9 +3392,7 @@ class LiveStreamKey(AdminUrlMixin, models.Model):
     match streaming.
     """
 
-    season = ForeignKey(
-        Season, related_name="live_stream_keys", on_delete=CASCADE
-    )
+    season = ForeignKey(Season, related_name="live_stream_keys", on_delete=CASCADE)
 
     title = models.CharField(
         max_length=100,
@@ -3458,9 +3441,7 @@ class LiveStreamEvent(LiveStreamTransitionMixin, AdminUrlMixin, models.Model):
     desk between fixtures.
     """
 
-    season = ForeignKey(
-        Season, related_name="live_stream_events", on_delete=CASCADE
-    )
+    season = ForeignKey(Season, related_name="live_stream_events", on_delete=CASCADE)
 
     title = models.CharField(
         max_length=100,
@@ -3592,8 +3573,7 @@ class LiveStreamEvent(LiveStreamTransitionMixin, AdminUrlMixin, models.Model):
             Http404: If no thumbnail is available or processing fails
         """
         return create_thumbnail_response(
-            self.live_stream_thumbnail_image
-            or self.season.live_stream_thumbnail_image,
+            self.live_stream_thumbnail_image or self.season.live_stream_thumbnail_image,
             width,
             height,
         )

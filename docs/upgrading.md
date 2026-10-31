@@ -337,9 +337,9 @@ never worked. Write the Django decorator at the call site instead:
 from django.contrib.auth.decorators import permission_required
 from django.utils.decorators import method_decorator
 
+
 @method_decorator(permission_required("app.change_thing"))
-def thing(self, request, *args, **kwargs):
-    ...
+def thing(self, request, *args, **kwargs): ...
 ```
 
 The decorators that take no arguments stay: `csrf_exempt_m`,

@@ -20,8 +20,10 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 from touchtechnology.admin.explorer import build_tree
-from touchtechnology.admin.helpers import admin_media as _admin_media
-from touchtechnology.admin.helpers import initials as _initials
+from touchtechnology.admin.helpers import (
+    admin_media as _admin_media,
+    initials as _initials,
+)
 from touchtechnology.admin.templatetags.admin import allowed
 from touchtechnology.admin.trail import build_trail
 from touchtechnology.admin.widgets import kind_of, render_field

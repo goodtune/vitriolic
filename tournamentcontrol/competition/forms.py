@@ -31,8 +31,7 @@ from django.forms.models import (
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.safestring import mark_safe
-from django.utils.translation import gettext_lazy as _
-from django.utils.translation import ngettext
+from django.utils.translation import gettext_lazy as _, ngettext
 from modelforms.forms import ModelForm
 from pyparsing import ParseException
 
@@ -1446,9 +1445,9 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
 
         # restrict the list of referees to those registered this season
         if "referees" in self.fields:
-            self.fields["referees"].queryset = (
-                self.instance.stage.division.season.referees.all()
-            )
+            self.fields[
+                "referees"
+            ].queryset = self.instance.stage.division.season.referees.all()
 
         # remove `stage_group` field if the `division` has no children
         if not self.instance.stage.pools.exists():
@@ -2443,9 +2442,9 @@ class TeamAssociationForm(UserMixin, ModelForm):
     def __init__(self, team, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["person"].queryset = team.club.members.all()
-        self.fields["roles"].queryset = (
-            team.division.season.competition.team_roles.all()
-        )
+        self.fields[
+            "roles"
+        ].queryset = team.division.season.competition.team_roles.all()
 
     class Meta:
         model = TeamAssociation
@@ -2761,9 +2760,7 @@ class DivisionStructureJSONForm(forms.Form):
             )
 
         # The formats must parse before their positions can be read.
-        errors = self._draw_format_errors(structure) or self._position_errors(
-            structure
-        )
+        errors = self._draw_format_errors(structure) or self._position_errors(structure)
         if errors:
             raise forms.ValidationError(errors)
 

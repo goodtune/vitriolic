@@ -10,8 +10,7 @@ class RelatedFilterTest(TestCase):
     def setUp(self):
         super().setUp()
         RelativeFactory.reset_sequence()
-        self.template = Template(
-            """
+        self.template = Template("""
         {% load common admin_lists %}
         {% spaceless %}
             <dl>
@@ -21,8 +20,7 @@ class RelatedFilterTest(TestCase):
                 {% endfor %}
             </dl>
         {% endspaceless %}
-        """
-        )
+        """)
 
     def _get_context(self, obj, rel=None):
         if rel is None:
@@ -50,7 +48,7 @@ class RelatedFilterTest(TestCase):
         )
         output = self.template.render(context).strip()
         self.assertEqual(
-            output, "<dl>" "<dt>relative_set</dt>" "<dd>RelatedManager (1)</dd>" "</dl>"
+            output, "<dl><dt>relative_set</dt><dd>RelatedManager (1)</dd></dl>"
         )
 
 

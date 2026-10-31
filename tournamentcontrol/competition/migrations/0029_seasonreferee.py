@@ -8,7 +8,6 @@ import tournamentcontrol.competition.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0028_drop_matchvideo"),
     ]

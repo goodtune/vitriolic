@@ -56,5 +56,5 @@ class GroupEditForm(UserMixin, ModelForm):
             "permissions",
         )
         help_texts = {
-            "permissions": _("Members of this group will have " "these permissions."),
+            "permissions": _("Members of this group will have these permissions."),
         }

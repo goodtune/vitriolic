@@ -53,8 +53,7 @@ jobs:
           allowed_tools: >-
             Bash(uv sync),
             Bash(uv run *),
-            Bash(isort *),
-            Bash(black *),
+            Bash(ruff format *),
             Bash(ruff check *),
             Bash(ruff check --fix *),
             Bash(uvx tox *),

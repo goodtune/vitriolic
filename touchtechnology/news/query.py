@@ -3,7 +3,6 @@ from django.utils import timezone
 
 
 class ArticleQuerySet(QuerySet):
-
     def active(self):
         return self.filter(is_active=True)
 
@@ -12,6 +11,5 @@ class ArticleQuerySet(QuerySet):
 
 
 class CategoryQuerySet(QuerySet):
-
     def live(self):
         return self.filter(is_active=True)

@@ -384,11 +384,11 @@ class NonFileSystemStorageMixin:
             self.by_shell(
                 workbook=(
                     '<p class="wb-message wb-message-error">'
-                    f'{self.icon("circle-alert")}<span>{text}</span></p>'
+                    f"{self.icon('circle-alert')}<span>{text}</span></p>"
                 ),
                 explorer=(
                     '<div class="message message-error">'
-                    f'{self.icon("alert")}<p>{text}</p>'
+                    f"{self.icon('alert')}<p>{text}</p>"
                     '<button type="button" class="message-close">'
                     f'{self.icon("x")}<span class="visually-hidden">Dismiss</span>'
                     "</button></div>"
@@ -423,8 +423,7 @@ class NonFileSystemStorageMediaAddTests(NonFileSystemStorageMixin, IconMixin, Te
             )
             self.get_check_200("admin:content:media:edit", "reports/")
         self.assertStorageMessage(
-            "The folder “2027” was not made: "
-            "this site's storage cannot make folders."
+            "The folder “2027” was not made: this site's storage cannot make folders."
         )
         self.assertEqual(default_storage.listdir("reports"), ([], []))
 
@@ -442,7 +441,9 @@ class NonFileSystemStorageMediaAddTests(NonFileSystemStorageMixin, IconMixin, Te
 
 
 @per_shell
-class NonFileSystemStorageMediaDeleteTests(NonFileSystemStorageMixin, IconMixin, TestCase):
+class NonFileSystemStorageMediaDeleteTests(
+    NonFileSystemStorageMixin, IconMixin, TestCase
+):
     """
     A storage that is not a file system has no folder the site can remove.
     Deleting one of its folders says so, instead of answering that the page is
@@ -518,14 +519,14 @@ class MediaDeleteConfirmationTests(MediaStorageMixin, IconMixin, TestCase):
                 workbook=(
                     f'<form action="" method="post">{csrf}<div class="wb-actions">'
                     '<button type="submit" class="wb-button wb-button-danger">'
-                    f'{self.icon("trash-2")}Delete</button>'
+                    f"{self.icon('trash-2')}Delete</button>"
                     f'<a href="{cancel}" class="wb-button wb-button-quiet">Cancel</a>'
                     "</div></form>"
                 ),
                 explorer=(
                     f'<form action="" method="post" class="button-row">{csrf}'
                     '<button type="submit" class="button destructive">'
-                    f'{self.icon("trash")}<span>Delete</span></button>'
+                    f"{self.icon('trash')}<span>Delete</span></button>"
                     f'<a href="{cancel}" class="button">Cancel</a></form>'
                 ),
             )
@@ -598,13 +599,13 @@ class DeleteFormMixin(IconMixin):
                 f'data-wb-confirm-title="Delete {name}?" '
                 f'data-wb-confirm-label="Delete {kind}">'
                 f'{csrf}<button type="submit" class="wb-danger-item">'
-                f'{self.icon("trash-2")}Delete</button></form>'
+                f"{self.icon('trash-2')}Delete</button></form>"
             ),
             explorer=(
                 f'<form method="post" action="{action}" {explorer} '
                 'data-confirm-label="Delete">'
                 f'{csrf}<button type="submit" class="destructive-item">'
-                f'{self.icon("trash")}Delete</button></form>'
+                f"{self.icon('trash')}Delete</button></form>"
             ),
         )
 
@@ -664,11 +665,10 @@ class MediaPermissionTests(MediaStorageMixin, DeleteFormMixin, TestCase):
         return self.by_shell(
             workbook=(
                 f'<div class="wb-menu" popover id="wbm-file-{row}"><ul>'
-                f'{"".join(f"<li>{item}</li>" for item in items)}</ul></div>'
+                f"{''.join(f'<li>{item}</li>' for item in items)}</ul></div>"
             ),
             explorer=(
-                f'<div class="menu-panel" id="file-menu-{row}">'
-                f'{"".join(items)}</div>'
+                f'<div class="menu-panel" id="file-menu-{row}">{"".join(items)}</div>'
             ),
         )
 
@@ -941,7 +941,10 @@ class SitemapListTests(ArrowMixin, TestCase):
         news, _ = Placeholder.objects.get_or_create(path=NEWS_SITE, namespace="news")
         press = SitemapNode.objects.create(title="Press", slug="press")
         SitemapNode.objects.create(
-            title="Releases", slug="releases", parent=press, object=Page.objects.create()
+            title="Releases",
+            slug="releases",
+            parent=press,
+            object=Page.objects.create(),
         )
         archive = SitemapNode.objects.create(title="Archive", slug="archive")
         about = SitemapNode.objects.create(
@@ -1102,7 +1105,7 @@ class ApplicationListMixin(IconMixin):
                         workbook=f'<td class="wb-num" data-label="Pages">{pages}</td>',
                         explorer=(
                             f'<td class="title-cell"><a href="{edit}">'
-                            f'{self.icon("puzzle")}<span>News</span></a>{tag}</td>'
+                            f"{self.icon('puzzle')}<span>News</span></a>{tag}</td>"
                         ),
                     )
                 )
@@ -1277,11 +1280,11 @@ class MountedApplicationDeleteTests(IconMixin, TestCase):
             self.by_shell(
                 workbook=(
                     '<p class="wb-message wb-message-error">'
-                    f'{self.icon("circle-alert")}<span>{text}</span></p>'
+                    f"{self.icon('circle-alert')}<span>{text}</span></p>"
                 ),
                 explorer=(
                     '<div class="message message-error">'
-                    f'{self.icon("alert")}<p>{text}</p>'
+                    f"{self.icon('alert')}<p>{text}</p>"
                     '<button type="button" class="message-close">'
                     f'{self.icon("x")}<span class="visually-hidden">Dismiss</span>'
                     "</button></div>"

@@ -7,7 +7,6 @@ import touchtechnology.common.db.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0017_ranking_feature"),
     ]
@@ -128,7 +127,7 @@ class Migration(migrations.Migration):
                 null=True,
                 blank=True,
                 on_delete=django.db.models.deletion.PROTECT,
-                help_text="Appears on the front-end with other club " "information.",
+                help_text="Appears on the front-end with other club information.",
             ),
         ),
         migrations.AlterField(

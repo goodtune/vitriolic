@@ -161,6 +161,7 @@ Grant a commentator pair one object permission on the season:
 
 ```python
 from guardian.shortcuts import assign_perm
+
 assign_perm("competition.stream_season", user, season)
 ```
 

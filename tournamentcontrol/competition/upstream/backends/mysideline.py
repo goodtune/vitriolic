@@ -36,8 +36,8 @@ import requests
 from pydantic import BaseModel, ConfigDict, Field
 
 from tournamentcontrol.competition.upstream.base import (
-    HttpClient,
     BaseUpstreamBackend,
+    HttpClient,
     UpstreamResponseError,
     UpstreamURLError,
 )

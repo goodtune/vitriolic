@@ -16,7 +16,6 @@ from test_plus import TestCase
 
 
 class MigrationDriftTests(TestCase):
-
     # A failure shows the whole migration that would be written.
     maxDiff = None
 

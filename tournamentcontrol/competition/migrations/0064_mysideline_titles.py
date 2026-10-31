@@ -20,7 +20,6 @@ def adopt_remote_titles(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0063_mysideline"),
     ]

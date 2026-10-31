@@ -17,8 +17,8 @@ from googleapiclient.errors import HttpError
 from test_plus import TestCase
 
 from tournamentcontrol.competition.tasks import (
-    _ShortTitle,
     _is_title_too_long,
+    _ShortTitle,
     build_live_stream_body,
     sync_live_stream,
 )
@@ -144,22 +144,16 @@ class BuildLiveStreamBodyShortTitleTests(TestCase):
 
     def test_base_url_renders_absolute_match_url_in_description(self):
         """``base_url`` should be combined with the reversed match-video URL."""
-        body = build_live_stream_body(
-            self.match, base_url="https://example.com/"
-        )
+        body = build_live_stream_body(self.match, base_url="https://example.com/")
         description = body["snippet"]["description"]
         self.assertIn("https://example.com/", description)
         self.assertIn(f"match:{self.match.pk}/video/", description)
 
     @mock.patch("tournamentcontrol.competition.tasks.reverse")
-    def test_no_reverse_match_renders_description_without_match_url(
-        self, mock_reverse
-    ):
+    def test_no_reverse_match_renders_description_without_match_url(self, mock_reverse):
         """A NoReverseMatch should leave ``match_url`` empty, not crash."""
         mock_reverse.side_effect = NoReverseMatch("no match")
-        body = build_live_stream_body(
-            self.match, base_url="https://example.com/"
-        )
+        body = build_live_stream_body(self.match, base_url="https://example.com/")
         description = body["snippet"]["description"]
         # No absolute URL leaks through, and the literal "None" never lands in
         # the description because ``match_url`` defaults to "".
@@ -246,9 +240,7 @@ class SyncLiveStreamTaskTests(TestCase):
         self.assertEqual(["https://youtu.be/yt-broadcast-new"], self.match.videos)
         mock_youtube.liveBroadcasts.return_value.insert.assert_called_once()
         mock_thumbnail.s.assert_called_once_with(self.match.pk)
-        mock_thumbnail.s.return_value.apply_async.assert_called_once_with(
-            countdown=10
-        )
+        mock_thumbnail.s.return_value.apply_async.assert_called_once_with(countdown=10)
 
     @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
     @mock.patch(
@@ -396,13 +388,9 @@ class SyncLiveStreamTaskTests(TestCase):
         self.assertIn("Mens Premier Open Division Top Tier Premier", first_title)
         self.assertIn("MPO", retry_title)
         self.assertIn("LS25", retry_title)
-        self.assertNotIn(
-            "Mens Premier Open Division Top Tier Premier", retry_title
-        )
+        self.assertNotIn("Mens Premier Open Division Top Tier Premier", retry_title)
         mock_thumbnail.s.assert_called_once_with(self.match.pk)
-        mock_thumbnail.s.return_value.apply_async.assert_called_once_with(
-            countdown=10
-        )
+        mock_thumbnail.s.return_value.apply_async.assert_called_once_with(countdown=10)
 
     @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
     @mock.patch(
@@ -414,8 +402,8 @@ class SyncLiveStreamTaskTests(TestCase):
     ):
         mock_youtube = mock.MagicMock()
         mock_youtube_prop.return_value = mock_youtube
-        mock_youtube.liveBroadcasts.return_value.insert.return_value.execute.side_effect = (
-            _http_error(403, "quotaExceeded")
+        mock_youtube.liveBroadcasts.return_value.insert.return_value.execute.side_effect = _http_error(
+            403, "quotaExceeded"
         )
 
         with self.assertRaises(HttpError):
@@ -579,17 +567,11 @@ class SyncLiveStreamTaskTests(TestCase):
         sync_live_stream(self.match.pk)
 
         update_call = mock_youtube.liveBroadcasts.return_value.update.call_args
-        self.assertEqual(
-            "snippet,status,contentDetails", update_call.kwargs["part"]
-        )
-        self.assertEqual(
-            "yt-existing-update", update_call.kwargs["body"]["id"]
-        )
+        self.assertEqual("snippet,status,contentDetails", update_call.kwargs["part"])
+        self.assertEqual("yt-existing-update", update_call.kwargs["body"]["id"])
         mock_youtube.liveBroadcasts.return_value.insert.assert_not_called()
         mock_thumbnail.s.assert_called_once_with(self.match.pk)
-        mock_thumbnail.s.return_value.apply_async.assert_called_once_with(
-            countdown=10
-        )
+        mock_thumbnail.s.return_value.apply_async.assert_called_once_with(countdown=10)
 
     @mock.patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
     @mock.patch(
@@ -695,7 +677,9 @@ class SyncLiveStreamTitleFormsTests(TestCase):
         self.addCleanup(youtube.stop)
 
     def _titles(self, method):
-        return [call.kwargs["body"]["snippet"]["title"] for call in method.call_args_list]
+        return [
+            call.kwargs["body"]["snippet"]["title"] for call in method.call_args_list
+        ]
 
     def test_forms_of_the_title(self):
         """The four forms, the first of them over YouTube's 100 characters."""
@@ -724,9 +708,7 @@ class SyncLiveStreamTitleFormsTests(TestCase):
 
         self.assertEqual("created", sync_live_stream(self.match.pk))
 
-        self.assertEqual(
-            [self.FULL, self.SHORT], self._titles(self.broadcasts.insert)
-        )
+        self.assertEqual([self.FULL, self.SHORT], self._titles(self.broadcasts.insert))
         self.match.refresh_from_db()
         self.assertEqual("yt-short", self.match.external_identifier)
 
@@ -827,9 +809,7 @@ class SyncLiveStreamTitleFormsTests(TestCase):
             sync_live_stream(self.match.pk)
 
         self.assertEqual(403, raised.exception.status_code)
-        self.assertEqual(
-            [self.FULL, self.SHORT], self._titles(self.broadcasts.insert)
-        )
+        self.assertEqual([self.FULL, self.SHORT], self._titles(self.broadcasts.insert))
 
     def test_resync_restores_the_teams_once_they_are_known(self):
         """

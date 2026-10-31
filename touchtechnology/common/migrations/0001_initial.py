@@ -7,7 +7,6 @@ import touchtechnology.common.mixins
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("auth", "0001_initial"),
         ("contenttypes", "0001_initial"),

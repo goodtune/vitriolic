@@ -507,7 +507,7 @@ class ContentAdminComponent(AdminComponent):
             try:
                 site = instance.object.site(instance)
             except ValueError:
-                logger.exception("Application is unavailable, " "no custom form class.")
+                logger.exception("Application is unavailable, no custom form class.")
             else:
                 kwargs_form_class = site.kwargs_form_class or kwargs_form_class
 

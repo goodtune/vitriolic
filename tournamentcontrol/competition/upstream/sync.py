@@ -66,8 +66,8 @@ from tournamentcontrol.competition.models import (
     Venue,
 )
 from tournamentcontrol.competition.upstream.base import (
-    HttpClient,
     BaseUpstreamBackend,
+    HttpClient,
 )
 from tournamentcontrol.competition.upstream.types import (
     STATUS_FINAL,

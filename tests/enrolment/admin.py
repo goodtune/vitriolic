@@ -4,8 +4,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import include, path
 from django.utils import formats
 from django.utils.text import slugify
-from django.utils.translation import gettext_lazy as _
-from django.utils.translation import ngettext
+from django.utils.translation import gettext_lazy as _, ngettext
 from enrolment.forms import (
     AssessmentForm,
     AttendanceRecordForm,

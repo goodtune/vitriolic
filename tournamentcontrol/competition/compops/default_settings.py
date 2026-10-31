@@ -8,14 +8,14 @@ __all__ = (
 )
 
 
-def O(n, d):
+def S(n, d):
     return lazy_setting("COMPOPS_" + n, d)
 
 
-EVENTS_BACKEND = O(
+EVENTS_BACKEND = S(
     "EVENTS_BACKEND",
     "tournamentcontrol.competition.compops.events.memory.MemoryBackend",
 )
-EVENTS_OPTIONS = O("EVENTS_OPTIONS", {})
-EVENTS_KEEPALIVE = O("EVENTS_KEEPALIVE", 20)
-ACTIVITY_LENGTH = O("ACTIVITY_LENGTH", 50)
+EVENTS_OPTIONS = S("EVENTS_OPTIONS", {})
+EVENTS_KEEPALIVE = S("EVENTS_KEEPALIVE", 20)
+ACTIVITY_LENGTH = S("ACTIVITY_LENGTH", 50)

@@ -5,7 +5,6 @@ from touchtechnology.content.models import Redirect
 
 
 class RedirectFactory(DjangoModelFactory):
-
     class Meta:
         model = Redirect
 

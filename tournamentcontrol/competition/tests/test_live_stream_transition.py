@@ -51,8 +51,8 @@ class MatchTransitionTests(TestCase):
 
     def test_failed_transition_leaves_status_untouched(self):
         service = youtube_mock("testing")
-        service.liveBroadcasts.return_value.transition.return_value.execute.side_effect = (
-            RuntimeError("boom")
+        service.liveBroadcasts.return_value.transition.return_value.execute.side_effect = RuntimeError(
+            "boom"
         )
         with self.assertRaises(RuntimeError):
             self.match.transition_live_stream("live", service)
@@ -73,9 +73,7 @@ class MatchTransitionTests(TestCase):
 
         match.refresh_from_db()
         self.assertEqual(match.live_stream_status, "live")
-        self.assertEqual(
-            set(match.ladder_entries.values_list("pk", flat=True)), before
-        )
+        self.assertEqual(set(match.ladder_entries.values_list("pk", flat=True)), before)
 
 
 class LiveStreamEventTransitionTests(TestCase):

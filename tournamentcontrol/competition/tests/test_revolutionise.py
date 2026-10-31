@@ -382,8 +382,8 @@ class ClientTests(TestCase):
         )
         with self.assertRaises(UpstreamResponseError):
             self.client.get_index(self.url)
-        self.session.handlers[self.url.round_url(25527, 3741, 1)] = (
-            lambda m, u, k: FakeResponse(
+        self.session.handlers[self.url.round_url(25527, 3741, 1)] = lambda m, u, k: (
+            FakeResponse(
                 text="<html><body><main><div class='box-shadow-lg'>"
                 "<div class='card card-hover'>no links</div></div></main></body></html>",
                 content_type="text/html",

@@ -18,7 +18,7 @@ def at(hour, minute=0):
 class DayFixture(TestCase):
     def setUp(self):
         super().setUp()
-        self.season =factories.SeasonFactory.create(timezone="Australia/Brisbane")
+        self.season = factories.SeasonFactory.create(timezone="Australia/Brisbane")
         self.venue = factories.VenueFactory.create(season=self.season)
         self.field1 = factories.GroundFactory.create(
             venue=self.venue, title="Field 1", live_stream=True

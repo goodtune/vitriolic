@@ -74,9 +74,7 @@ def test_deleting_a_translation_from_the_translations_tab(
     dialog = page.get_by_role("dialog")
     expect(dialog).to_be_visible()
     expect(dialog.get_by_role("heading")).to_have_text(
-        by_shell(
-            workbook=f"Delete {translation}?", explorer="Delete this translation?"
-        )
+        by_shell(workbook=f"Delete {translation}?", explorer="Delete this translation?")
     )
     dialog.get_by_role(
         "button", name=by_shell(workbook="Delete translation", explorer="Delete")

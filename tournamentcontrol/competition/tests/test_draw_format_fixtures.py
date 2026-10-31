@@ -11,7 +11,6 @@ that AI models should be able to generate. Each fixture includes:
 - Validation criteria
 """
 
-import itertools
 import textwrap
 
 from test_plus import TestCase
@@ -46,16 +45,14 @@ class DrawFormatFixturesTestCase(TestCase):
             title="It's a Knockout!",
             teams=["NSW", "QLD", "WA", "VIC"],
             draw_formats={
-                "Knockout": textwrap.dedent(
-                    """\
+                "Knockout": textwrap.dedent("""\
                         ROUND
                         1: 1 vs 2 Semi 1
                         2: 3 vs 4 Semi 2
                         ROUND
                         3: L1 vs L2 Bronze
                         ROUND
-                        4: W1 vs W2 Final"""
-                )
+                        4: W1 vs W2 Final""")
             },
             stages=[
                 StageFixture(

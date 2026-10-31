@@ -383,7 +383,6 @@ class TwittifyTest(TestCase):
 
 @override_settings(ROOT_URLCONF="example_app.urls")
 class QueryStringTest(TestCase):
-
     fixtures = ["query_string"]
 
     query = {"year": 2013}

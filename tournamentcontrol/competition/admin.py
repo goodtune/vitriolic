@@ -27,8 +27,7 @@ from django.urls import include, path, re_path, reverse
 from django.utils import formats, timezone
 from django.utils.formats import date_format
 from django.utils.text import slugify
-from django.utils.translation import gettext_lazy as _
-from django.utils.translation import ngettext
+from django.utils.translation import gettext_lazy as _, ngettext
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from guardian.utils import get_40x_or_None
@@ -613,7 +612,9 @@ def season_setup(season, here=True):
                     "%(n)d matches to allocate",
                 )
                 if unscheduled
-                else _("All allocated") if matches else _("Once the draw is built")
+                else _("All allocated")
+                if matches
+                else _("Once the draw is built")
             ),
             (
                 reverse(
@@ -3134,9 +3135,7 @@ class CompetitionAdminComponent(AdminComponent):
         # prefetch them so the sheet costs the same however long it is.
         matches = (
             season.matches.filter(date=date)
-            .select_related(
-                "stage__division__season__competition", "play_at__ground"
-            )
+            .select_related("stage__division__season__competition", "play_at__ground")
             .prefetch_related("referees__person")
             .order_by("is_bye", "datetime", "play_at")
         )
@@ -3587,7 +3586,8 @@ class CompetitionAdminComponent(AdminComponent):
                 "away_team_eval_related",
                 "play_at",
                 "stage__division",
-            ).defer(
+            )
+            .defer(
                 "live_stream_thumbnail_image",
                 "home_team_eval_related__live_stream_thumbnail_image",
                 "away_team_eval_related__live_stream_thumbnail_image",

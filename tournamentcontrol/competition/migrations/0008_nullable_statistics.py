@@ -20,7 +20,6 @@ def set_none_to_zero(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0007_match_videos"),
     ]

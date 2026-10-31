@@ -14,10 +14,9 @@ from touchtechnology.common.storage import (
 
 
 class StorageTests(TestCase):
-
     def setUp(self):
         super().setUp()
-        location =tempfile.mkdtemp()
+        location = tempfile.mkdtemp()
         self.storage = FileSystemStorage(location=location)
 
     def test_bases_are_the_two_mixins_and_the_django_storage(self):
@@ -64,7 +63,7 @@ class StorageSettingsTests(TestCase):
 
     def setUp(self):
         super().setUp()
-        self.root =self.enterContext(tempfile.TemporaryDirectory())
+        self.root = self.enterContext(tempfile.TemporaryDirectory())
 
     def test_without_the_settings_the_storage_is_the_media_root(self):
         with override_settings(MEDIA_ROOT=self.root, MEDIA_URL="/media/"):

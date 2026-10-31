@@ -211,15 +211,15 @@ Transitions the live stream status of a specific match.
 All URLs use consistent namespacing:
 ```python
 # News API
-reverse('v1:news:category-list')      # /api/v1/news/categories/
-reverse('v1:news:article-detail', kwargs={'slug': 'my-article'})
+reverse("v1:news:category-list")  # /api/v1/news/categories/
+reverse("v1:news:article-detail", kwargs={"slug": "my-article"})
 
-# Competition API  
-reverse('v1:competition:club-list')   # /api/v1/clubs/
-reverse('v1:competition:livestream-list', kwargs={
-    'competition_slug': 'championship',
-    'season_slug': '2023'
-})  # /api/v1/competitions/championship/seasons/2023/livestreams/
+# Competition API
+reverse("v1:competition:club-list")  # /api/v1/clubs/
+reverse(
+    "v1:competition:livestream-list",
+    kwargs={"competition_slug": "championship", "season_slug": "2023"},
+)  # /api/v1/competitions/championship/seasons/2023/livestreams/
 ```
 
 ### Testing
@@ -244,10 +244,10 @@ tox -e dj52-py313 -- tournamentcontrol.competition.tests.test_livestream_api
 ### Update Your Code
 ```python
 # Old pattern
-reverse('v1:category-list')  
+reverse("v1:category-list")
 
-# New pattern  
-reverse('v1:news:category-list')
+# New pattern
+reverse("v1:news:category-list")
 ```
 
 The unified API maintains backward compatibility for response formats while providing a more consistent and discoverable URL structure.

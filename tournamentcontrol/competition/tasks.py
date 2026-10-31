@@ -25,8 +25,6 @@ from tournamentcontrol.competition.models import (
 )
 from tournamentcontrol.competition.upstream.sync import (
     synchronise_all as _upstream_synchronise_all,
-)
-from tournamentcontrol.competition.upstream.sync import (
     synchronise_season as _upstream_synchronise_season,
 )
 from tournamentcontrol.competition.utils import (
@@ -769,7 +767,6 @@ def set_youtube_thumbnail(match_pk):
     MediaMemoryUpload class, with fallback logic handled by the model.
     """
     obj = Match.objects.get(pk=match_pk)
-    season = obj.stage.division.season
 
     # Get thumbnail media upload (with built-in fallback logic)
     media_body = obj.get_thumbnail_media_upload()

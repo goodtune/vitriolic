@@ -220,7 +220,6 @@ class APITests(TestCase):
             },
         )
 
-
     def test_stage_list(self):
         """Test stage-list endpoint"""
         self.get(

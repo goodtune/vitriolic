@@ -56,8 +56,12 @@ from django.utils import timezone
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from mcp.server.mcpserver.exceptions import ToolError
-from pydantic import BaseModel, ConfigDict, Field
-from pydantic import ValidationError as PydanticValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError as PydanticValidationError,
+)
 
 from tournamentcontrol.competition.admin import (
     YOUTUBE_AUTH_EXPIRED_MESSAGE,
@@ -113,8 +117,6 @@ from tournamentcontrol.competition.mcp.admin.forms import (
 )
 from tournamentcontrol.competition.mcp.admin.scheduling import (
     ScheduleValidator,
-)
-from tournamentcontrol.competition.mcp.admin.scheduling import (
     validation_message as _validation_message,
 )
 from tournamentcontrol.competition.models import (
@@ -257,8 +259,7 @@ class BuildSpec(BaseModel):
     )
     start_date: datetime.date | None = Field(
         None,
-        description="The date of the first round; defaults to the season's "
-        "start date.",
+        description="The date of the first round; defaults to the season's start date.",
     )
     rounds: int | None = Field(
         None,
@@ -759,8 +760,7 @@ class AdminToolset(CompetitionToolset):
             or not user.is_staff
         ):
             raise ToolError(
-                "The competition administration tools require a signed-in "
-                "staff user."
+                "The competition administration tools require a signed-in staff user."
             )
         return user
 
@@ -2502,8 +2502,7 @@ class AdminToolset(CompetitionToolset):
             )
         if bool(home_team) == bool(away_team):
             raise ToolError(
-                "A bye is one team with no opponent: exactly one side must "
-                "have a team."
+                "A bye is one team with no opponent: exactly one side must have a team."
             )
 
     def _bye_changes(self, match, changes, is_bye):
