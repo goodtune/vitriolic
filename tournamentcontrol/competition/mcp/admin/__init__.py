@@ -843,7 +843,7 @@ class AdminToolset(CompetitionToolset):
             pk,
         )
 
-    def _event(self, season, pk):
+    def _stream_event(self, season, pk):
         """An ad-hoc live stream event of the season."""
         return self._get(
             season.live_stream_events.select_related("season", "stream_key"), pk
@@ -4345,7 +4345,7 @@ class AdminToolset(CompetitionToolset):
         return {
             "saved": True,
             "live_stream_sync_queued": synced,
-            "event": _stream_event_summary(self._event(event.season, event.pk)),
+            "event": _stream_event_summary(self._stream_event(event.season, event.pk)),
         }
 
     @tool_annotations(open_world=True)
@@ -4422,14 +4422,14 @@ class AdminToolset(CompetitionToolset):
         right away.
         """
         season = self._season(season_id)
-        event = self._event(season, event_id)
+        event = self._stream_event(season, event_id)
         self._require("change", LiveStreamEvent, event)
         with transaction.atomic():
             # Hold the event's row and re-read it, so the save cannot race a
             # concurrent delete (which would resurrect the record under the
             # same primary key) or a synchronisation of the event.
             self._lock_event(event)
-            event = self._event(season, event.pk)
+            event = self._stream_event(season, event.pk)
             event = self._save(
                 LiveStreamEventForm,
                 event,
@@ -4454,7 +4454,7 @@ class AdminToolset(CompetitionToolset):
         from YouTube first; one already gone counts as removed.
         """
         season = self._season(season_id)
-        event = self._event(season, event_id)
+        event = self._stream_event(season, event_id)
         self._require("delete", LiveStreamEvent, event)
         youtube = self._youtube(season)
         with transaction.atomic():
@@ -4496,7 +4496,7 @@ class AdminToolset(CompetitionToolset):
         event must be deleted and created again.
         """
         season = self._season(season_id)
-        event = self._event(season, event_id)
+        event = self._stream_event(season, event_id)
         self._require("change", LiveStreamEvent, event)
         self._youtube(season)
         action = self._run_sync(sync_live_stream_event, event.pk)
@@ -4505,7 +4505,7 @@ class AdminToolset(CompetitionToolset):
                 "The YouTube broadcast of this live stream event no longer exists "
                 "and cannot be reinstated; delete the event and create it again."
             )
-        event = self._event(season, event.pk)
+        event = self._stream_event(season, event.pk)
         return {
             "saved": True,
             "action": action,
