@@ -1463,7 +1463,12 @@ def build_server(name=None, instructions=None, toolset_class=CompetitionToolset)
     combined = INSTRUCTIONS
     if instructions:
         combined = instructions.strip() + "\n\n" + INSTRUCTIONS
-    server = MCPServer(name=name or "tournamentcontrol", instructions=combined)
+    # subscriptions=False: the views answer each request as one buffered
+    # response, so they cannot serve the `subscriptions/listen` stream, and
+    # without it `server/discover` offers no list changes or subscriptions.
+    server = MCPServer(
+        name=name or "tournamentcontrol", instructions=combined, subscriptions=False
+    )
     # The arguments of each tool that ``redact_arguments`` hides; read by
     # ``views.MCPView`` before it reports a request.
     server.sensitive_arguments = {}
