@@ -48,7 +48,7 @@ class RelatedFilterTest(TestCase):
         )
         output = self.template.render(context).strip()
         self.assertEqual(
-            output, "<dl>" "<dt>relative_set</dt>" "<dd>RelatedManager (1)</dd>" "</dl>"
+            output, "<dl><dt>relative_set</dt><dd>RelatedManager (1)</dd></dl>"
         )
 
 

@@ -29,7 +29,7 @@ class OrderedSitemapNodeFactory(SitemapNodeBaseFactory):
     that they are appropriately "ordered".
     """
 
-    order = factory.Sequence(lambda n: (n + 1))
+    order = factory.Sequence(lambda n: n + 1)
 
 
 class ClubFactory(SitemapNodeBaseFactory):

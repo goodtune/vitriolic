@@ -116,8 +116,7 @@ class BrandTests(TestCase):
     def test_misspelt_dotted_path_is_improperly_configured(self):
         with self.assertRaisesMessage(
             ImproperlyConfigured,
-            "TOUCHTECHNOLOGY_ADMIN_BRAND cannot import "
-            "'touchtechnology.admin.nowhere'",
+            "TOUCHTECHNOLOGY_ADMIN_BRAND cannot import 'touchtechnology.admin.nowhere'",
         ):
             get_brand(RequestFactory().get("/"))
 

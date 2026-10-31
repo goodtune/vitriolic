@@ -259,8 +259,7 @@ class BuildSpec(BaseModel):
     )
     start_date: datetime.date | None = Field(
         None,
-        description="The date of the first round; defaults to the season's "
-        "start date.",
+        description="The date of the first round; defaults to the season's start date.",
     )
     rounds: int | None = Field(
         None,
@@ -761,8 +760,7 @@ class AdminToolset(CompetitionToolset):
             or not user.is_staff
         ):
             raise ToolError(
-                "The competition administration tools require a signed-in "
-                "staff user."
+                "The competition administration tools require a signed-in staff user."
             )
         return user
 
@@ -2504,8 +2502,7 @@ class AdminToolset(CompetitionToolset):
             )
         if bool(home_team) == bool(away_team):
             raise ToolError(
-                "A bye is one team with no opponent: exactly one side must "
-                "have a team."
+                "A bye is one team with no opponent: exactly one side must have a team."
             )
 
     def _bye_changes(self, match, changes, is_bye):

@@ -455,9 +455,7 @@ class SyncLiveStreamTaskTests(TestCase):
     ):
         mock_youtube = mock.MagicMock()
         mock_youtube_prop.return_value = mock_youtube
-        mock_youtube.liveBroadcasts.return_value.delete.return_value.execute.return_value = (
-            {}
-        )
+        mock_youtube.liveBroadcasts.return_value.delete.return_value.execute.return_value = {}
 
         self.match.external_identifier = "yt-existing"
         self.match.live_stream = False
@@ -504,9 +502,7 @@ class SyncLiveStreamTaskTests(TestCase):
         """Disabling live_stream still deletes even if the schedule was cleared."""
         mock_youtube = mock.MagicMock()
         mock_youtube_prop.return_value = mock_youtube
-        mock_youtube.liveBroadcasts.return_value.delete.return_value.execute.return_value = (
-            {}
-        )
+        mock_youtube.liveBroadcasts.return_value.delete.return_value.execute.return_value = {}
 
         self.match.external_identifier = "yt-orphan"
         self.match.live_stream = False

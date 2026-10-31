@@ -123,12 +123,11 @@ class SeasonChecklistTests(TestCase):
             )
         self.assertEqual(self.last_response.context["setup"].folded, True)
         self.assertResponseContains(
-            '<span class="wb-checklist-score">'
-            f'{ICON % "circle-check"} All done</span>',
+            f'<span class="wb-checklist-score">{ICON % "circle-check"} All done</span>',
         )
         self.assertResponseContains(
             '<button type="button" class="wb-button wb-checklist-show" '
-            f'data-wb-checklist-show>{ICON % "clipboard-list"}'
+            f"data-wb-checklist-show>{ICON % 'clipboard-list'}"
             "Show set-up checklist</button>",
         )
         # Results are not a set-up step, but the page still offers them.
@@ -140,7 +139,7 @@ class SeasonChecklistTests(TestCase):
         )
         self.assertResponseContains(
             f'<a class="wb-button wb-button-primary" href="{url}">'
-            f'{ICON % "list-checks"}Enter results</a>',
+            f"{ICON % 'list-checks'}Enter results</a>",
         )
 
     def test_a_division_without_teams_is_named_and_linked(self):
@@ -202,7 +201,7 @@ class DivisionPageTests(TestCase):
         self.assertEqual(self.last_response.context["division_setup"].folded, False)
         self.assertResponseContains(
             '<button type="button" class="wb-button wb-checklist-show" '
-            f'data-wb-checklist-show>{ICON % "clipboard-list"}'
+            f"data-wb-checklist-show>{ICON % 'clipboard-list'}"
             "Show set-up checklist</button>",
         )
 

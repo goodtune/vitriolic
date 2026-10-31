@@ -6,7 +6,6 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("news", "0010_migrate_unique_together_to_constraints"),
     ]

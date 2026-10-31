@@ -7,7 +7,6 @@ import touchtechnology.common.db.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0013_statistic_played_field"),
     ]

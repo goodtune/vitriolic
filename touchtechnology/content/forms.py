@@ -265,7 +265,6 @@ class FileFormMixin(BootstrapFormControlMixin):
 
 
 class NewFolderForm(FileFormMixin, forms.Form):
-
     name = forms.SlugField(max_length=30, required=False, label=_("New folder name"))
 
     def clean_name(self):
@@ -294,7 +293,6 @@ class NewFolderForm(FileFormMixin, forms.Form):
 
 
 class FileUploadForm(FileFormMixin, forms.Form):
-
     file = forms.FileField(label=_("File to upload"), required=False)
 
     def save(self, *args, **kwargs):

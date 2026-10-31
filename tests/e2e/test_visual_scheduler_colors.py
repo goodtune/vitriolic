@@ -139,9 +139,9 @@ class TestVisualSchedulerColors:
             "el => window.getComputedStyle(el).backgroundColor"
         )
         # Should be rgb(255, 0, 0) for #ff0000
-        assert (
-            red_bg_color == "rgb(255, 0, 0)"
-        ), f"Expected red background, got {red_bg_color}"
+        assert red_bg_color == "rgb(255, 0, 0)", (
+            f"Expected red background, got {red_bg_color}"
+        )
 
         # Check Blue Division header has blue background
         blue_division_header = page.locator(".division-header").filter(
@@ -152,9 +152,9 @@ class TestVisualSchedulerColors:
             "el => window.getComputedStyle(el).backgroundColor"
         )
         # Should be rgb(0, 0, 255) for #0000ff
-        assert (
-            blue_bg_color == "rgb(0, 0, 255)"
-        ), f"Expected blue background, got {blue_bg_color}"
+        assert blue_bg_color == "rgb(0, 0, 255)", (
+            f"Expected blue background, got {blue_bg_color}"
+        )
 
     def test_match_card_division_border_colors(
         self, authenticated_page: Page, live_server, color_dataset, screenshot_dir
@@ -207,9 +207,9 @@ class TestVisualSchedulerColors:
         blue_border = scheduled_blue_match.evaluate(
             "el => window.getComputedStyle(el).borderLeftColor"
         )
-        assert (
-            blue_border == "rgb(0, 0, 255)"
-        ), f"Expected blue border, got {blue_border}"
+        assert blue_border == "rgb(0, 0, 255)", (
+            f"Expected blue border, got {blue_border}"
+        )
 
     def test_match_card_stage_background_colors(
         self, authenticated_page: Page, live_server, color_dataset, screenshot_dir
@@ -253,9 +253,9 @@ class TestVisualSchedulerColors:
             "el => window.getComputedStyle(el).backgroundColor"
         )
         # Should be rgb(255, 255, 153) for #ffff99
-        assert (
-            yellow_bg == "rgb(255, 255, 153)"
-        ), f"Expected light yellow background, got {yellow_bg}"
+        assert yellow_bg == "rgb(255, 255, 153)", (
+            f"Expected light yellow background, got {yellow_bg}"
+        )
 
         # Check match from Light Green stage has light green background
         green_match = page.locator(".match-item.scheduled").filter(
@@ -266,9 +266,9 @@ class TestVisualSchedulerColors:
             "el => window.getComputedStyle(el).backgroundColor"
         )
         # Should be rgb(153, 255, 153) for #99ff99
-        assert (
-            green_bg == "rgb(153, 255, 153)"
-        ), f"Expected light green background, got {green_bg}"
+        assert green_bg == "rgb(153, 255, 153)", (
+            f"Expected light green background, got {green_bg}"
+        )
 
     # Note: test_unscheduled_match_colors removed due to test data setup complexity.
     # The unscheduled match colors are tested indirectly through the CSS selectors

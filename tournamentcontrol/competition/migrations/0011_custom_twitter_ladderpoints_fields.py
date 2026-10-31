@@ -6,7 +6,6 @@ import tournamentcontrol.competition.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0010_remove_match_video_approved_by"),
     ]

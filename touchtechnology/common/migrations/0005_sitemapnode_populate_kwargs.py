@@ -21,7 +21,6 @@ def noop(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("common", "0004_sitemapnode_kwargs"),
     ]

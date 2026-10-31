@@ -200,7 +200,6 @@ def changed_stream(event):
 
 
 class CompOpsSite(Application):
-
     def __init__(self, name="compops", app_name="compops", **kwargs):
         super().__init__(name=name, app_name=app_name, **kwargs)
         if DATASTAR_MIDDLEWARE not in settings.MIDDLEWARE:

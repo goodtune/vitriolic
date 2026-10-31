@@ -77,8 +77,7 @@ class Page(models.Model):
         blank=True,
         verbose_name=_("Description"),
         help_text=_(
-            "Search Engines may use this when determining the "
-            "relevance of your page."
+            "Search Engines may use this when determining the relevance of your page."
         ),
     )
 

@@ -14,7 +14,6 @@ from touchtechnology.common.storage import (
 
 
 class StorageTests(TestCase):
-
     def setUp(self):
         super().setUp()
         location = tempfile.mkdtemp()

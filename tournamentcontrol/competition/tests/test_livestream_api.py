@@ -206,9 +206,7 @@ class LiveStreamAPITests(TestCase):
         # Mock YouTube service
         mock_youtube = mock.Mock()
         mock_response = {"id": "youtube_id_1", "status": {"lifeCycleStatus": "live"}}
-        mock_youtube.liveBroadcasts.return_value.transition.return_value.execute.return_value = (
-            mock_response
-        )
+        mock_youtube.liveBroadcasts.return_value.transition.return_value.execute.return_value = mock_response
         mock_build.return_value = mock_youtube
 
         self.login(self.user)
@@ -234,14 +232,10 @@ class LiveStreamAPITests(TestCase):
         # Mock YouTube service to return current status that would trigger warning
         mock_youtube = mock.Mock()
         mock_list_response = {"items": [{"status": {"lifeCycleStatus": "live"}}]}
-        mock_youtube.liveBroadcasts.return_value.list.return_value.execute.return_value = (
-            mock_list_response
-        )
+        mock_youtube.liveBroadcasts.return_value.list.return_value.execute.return_value = mock_list_response
 
         mock_transition_response = {"status": "testing"}
-        mock_youtube.liveBroadcasts.return_value.transition.return_value.execute.return_value = (
-            mock_transition_response
-        )
+        mock_youtube.liveBroadcasts.return_value.transition.return_value.execute.return_value = mock_transition_response
         mock_build.return_value = mock_youtube
 
         self.login(self.user)

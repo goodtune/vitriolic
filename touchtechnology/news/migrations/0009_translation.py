@@ -6,7 +6,6 @@ import touchtechnology.common.db.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("news", "0008_delete_articlecontent"),
     ]

@@ -275,7 +275,7 @@ class HomePageTests(AwaitingResultsMixin, TestCase):
             self.get_check_200("admin:index")
         self.assertResponseContains(
             '<li class="wb-muted">'
-            f'{ICON % "circle-check"} No matches awaiting result entry.</li>',
+            f"{ICON % 'circle-check'} No matches awaiting result entry.</li>",
         )
         self.assertResponseNotContains(
             '<span class="wb-task-title">Enter results</span>'

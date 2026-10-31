@@ -612,7 +612,9 @@ def season_setup(season, here=True):
                     "%(n)d matches to allocate",
                 )
                 if unscheduled
-                else _("All allocated") if matches else _("Once the draw is built")
+                else _("All allocated")
+                if matches
+                else _("Once the draw is built")
             ),
             (
                 reverse(
@@ -3584,7 +3586,8 @@ class CompetitionAdminComponent(AdminComponent):
                 "away_team_eval_related",
                 "play_at",
                 "stage__division",
-            ).defer(
+            )
+            .defer(
                 "live_stream_thumbnail_image",
                 "home_team_eval_related__live_stream_thumbnail_image",
                 "away_team_eval_related__live_stream_thumbnail_image",

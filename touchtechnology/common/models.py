@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 
 class SitemapNodeBase(models.Model):
-
     title = models.CharField(max_length=255, verbose_name=_("Title"))
 
     short_title = models.CharField(

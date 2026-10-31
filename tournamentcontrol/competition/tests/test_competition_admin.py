@@ -98,7 +98,7 @@ def bulk_dialog(url, name, title):
         f'<form method="get" action="{url}" class="wb-inline-form">'
         f'<button type="submit" class="wb-button wb-button-small" '
         f'data-wb-dialog="bulk-{name}" aria-label="{title}">'
-        f'{ICON % "copy-plus"}Add several</button>'
+        f"{ICON % 'copy-plus'}Add several</button>"
         f'<dialog class="wb-dialog" id="bulk-{name}" '
         f'aria-labelledby="bulk-{name}-title"><div class="wb-dialog-body">'
         f'<h2 class="wb-dialog-title" id="bulk-{name}-title">{title}</h2>'
@@ -3389,9 +3389,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         resync_link = f"{streaming_resync_url}?next={runsheet_url}"
         self.assertResponseContains(
             by_shell(
-                workbook=(
-                    f'<a href="{resync_link}">' f'{ICON % "refresh-cw"}Resync</a>'
-                ),
+                workbook=(f'<a href="{resync_link}">{ICON % "refresh-cw"}Resync</a>'),
                 explorer=f'<a href="{resync_link}">Resync</a>',
             )
         )
@@ -4321,12 +4319,12 @@ class MatchRowMixin(WarmCachesMixin, IconMixin):
                 f'data-wb-confirm-title="Delete {name}?" '
                 'data-wb-confirm-label="Delete match">'
                 f'{csrf}<button type="submit" class="wb-danger-item">'
-                f'{self.icon("trash-2")}Delete</button></form></li>',
+                f"{self.icon('trash-2')}Delete</button></form></li>",
                 f'<form method="post" action="{delete_url}" '
                 f'data-confirm="The match “{name}” will be removed for good." '
                 'data-confirm-title="Delete this match?" data-confirm-label="Delete">'
                 f'{csrf}<button type="submit" class="destructive-item">'
-                f'{self.icon("trash")}Delete</button></form>',
+                f"{self.icon('trash')}Delete</button></form>",
             )
             if delete
             else ("", "")

@@ -4,7 +4,6 @@ import touchtechnology.common.db.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0037_alter_match_evaluated"),
     ]

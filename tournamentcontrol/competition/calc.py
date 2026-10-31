@@ -49,7 +49,6 @@ Comparison = (
 
 
 class Calculator:
-
     def __init__(self, instance, *args, **kwargs):
         Expression = Forward()
         Atom = (

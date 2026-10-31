@@ -58,9 +58,7 @@ class RegistrationForm(forms.Form):
         password2 = self.cleaned_data.get("password2")
         if password1 and password2:
             if password1 != password2:
-                raise forms.ValidationError(
-                    _("The two password fields " "didn't match.")
-                )
+                raise forms.ValidationError(_("The two password fields didn't match."))
         return password2
 
 

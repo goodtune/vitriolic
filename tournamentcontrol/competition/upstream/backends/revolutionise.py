@@ -531,9 +531,11 @@ class RevolutioniseClient(HttpClient):
         soup = self.get_html(url.game_url(game_id))
         address = None
         label = soup.find(
-            lambda tag: tag.name == "div"
-            and _text(tag) == "Venue"
-            and "text-muted" in (tag.get("class") or [])
+            lambda tag: (
+                tag.name == "div"
+                and _text(tag) == "Venue"
+                and "text-muted" in (tag.get("class") or [])
+            )
         )
         if label is not None and label.parent is not None:
             detail = label.parent.find("div", class_="font-size-sm", recursive=False)
@@ -685,7 +687,8 @@ def infer_ladder_template(
             sum(points * row.counts.get(name, 0) for points, name in zip(combo, active))
             # A "Bonus" column, where the ladder has one, is added as it
             # stands (it can be negative: a penalty).
-            + row.counts.get("bonus", 0) == row.points
+            + row.counts.get("bonus", 0)
+            == row.points
             for row in rows
         ):
             solutions.append(combo)

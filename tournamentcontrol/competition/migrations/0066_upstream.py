@@ -68,7 +68,6 @@ def backwards(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0065_compops_live_stream_status"),
     ]

@@ -167,7 +167,6 @@ def migrate_thumbnails_forward(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0053_add_thumbnail_image_fields"),
     ]

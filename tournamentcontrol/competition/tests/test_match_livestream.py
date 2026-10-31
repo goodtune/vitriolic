@@ -66,9 +66,7 @@ class MatchLiveStreamTests(TestCase):
         # Mock YouTube service
         mock_youtube = mock.Mock()
         mock_response = {"id": "yt_broadcast_123", "status": "live"}
-        mock_youtube.liveBroadcasts.return_value.transition.return_value.execute.return_value = (
-            mock_response
-        )
+        mock_youtube.liveBroadcasts.return_value.transition.return_value.execute.return_value = mock_response
         mock_build.return_value = mock_youtube
 
         # Make transition
@@ -88,9 +86,7 @@ class MatchLiveStreamTests(TestCase):
         # Create custom mock service
         custom_youtube = mock.Mock()
         custom_response = {"custom": "response"}
-        custom_youtube.liveBroadcasts.return_value.transition.return_value.execute.return_value = (
-            custom_response
-        )
+        custom_youtube.liveBroadcasts.return_value.transition.return_value.execute.return_value = custom_response
 
         # The build mock should not be called when providing custom service
         result = self.match_with_stream.transition_live_stream(
@@ -110,9 +106,7 @@ class MatchLiveStreamTests(TestCase):
         # Mock YouTube service to return 'complete' status
         mock_youtube = mock.Mock()
         mock_list_response = {"items": [{"status": {"lifeCycleStatus": "complete"}}]}
-        mock_youtube.liveBroadcasts.return_value.list.return_value.execute.return_value = (
-            mock_list_response
-        )
+        mock_youtube.liveBroadcasts.return_value.list.return_value.execute.return_value = mock_list_response
         mock_build.return_value = mock_youtube
 
         with self.assertRaises(InvalidLiveStreamTransition) as cm:
@@ -128,15 +122,11 @@ class MatchLiveStreamTests(TestCase):
         # Mock YouTube service to return 'live' status
         mock_youtube = mock.Mock()
         mock_list_response = {"items": [{"status": {"lifeCycleStatus": "live"}}]}
-        mock_youtube.liveBroadcasts.return_value.list.return_value.execute.return_value = (
-            mock_list_response
-        )
+        mock_youtube.liveBroadcasts.return_value.list.return_value.execute.return_value = mock_list_response
 
         # Mock successful transition response
         mock_transition_response = {"status": "testing"}
-        mock_youtube.liveBroadcasts.return_value.transition.return_value.execute.return_value = (
-            mock_transition_response
-        )
+        mock_youtube.liveBroadcasts.return_value.transition.return_value.execute.return_value = mock_transition_response
         mock_build.return_value = mock_youtube
 
         # Capture warnings

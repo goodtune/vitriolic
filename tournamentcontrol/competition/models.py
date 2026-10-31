@@ -1840,7 +1840,8 @@ class StageGroup(AdminUrlMixin, OrderedSitemapNode):
                 "live_stream_thumbnail_image",
                 "home_team_eval_related__live_stream_thumbnail_image",
                 "away_team_eval_related__live_stream_thumbnail_image",
-            ).order_by(
+            )
+            .order_by(
                 "date",
                 "stage",
                 "round",
@@ -2155,7 +2156,8 @@ class Team(AdminUrlMixin, UpstreamMixin, OrderedSitemapNode):
                 "live_stream_thumbnail_image",
                 "home_team_eval_related__live_stream_thumbnail_image",
                 "away_team_eval_related__live_stream_thumbnail_image",
-            ).order_by(
+            )
+            .order_by(
                 "date",
                 "stage",
                 "round",

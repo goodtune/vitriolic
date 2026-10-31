@@ -122,7 +122,7 @@ class DrawGenerationWizardTests(IconMixin, TestCase):
             ),
             explorer=(
                 '<button type="submit" form="edit-form" class="button primary">'
-                f'{self.icon("check")}<span>{label}</span></button>'
+                f"{self.icon('check')}<span>{label}</span></button>"
             ),
         )
 
@@ -131,12 +131,12 @@ class DrawGenerationWizardTests(IconMixin, TestCase):
         return self.by_shell(
             workbook=(
                 '<div class="wb-problems" role="alert" tabindex="-1">'
-                f'<h2>{_("Please check the form")}</h2>'
+                f"<h2>{_('Please check the form')}</h2>"
                 f"<ul><li>{error}</li></ul></div>"
             ),
             explorer=(
                 '<div class="form-errors" role="alert">'
-                f'{self.icon("alert")}<ul><li>{error}</li></ul></div>'
+                f"{self.icon('alert')}<ul><li>{error}</li></ul></div>"
             ),
         )
 

@@ -118,9 +118,11 @@ installed with the `competition` extra.
         path("o/", include("oauth2_provider.urls", namespace="oauth2_provider")),
         path(
             "",
-            include((metadata_urlpatterns, "oauth2_provider"), namespace="oauth2_discovery"),
+            include(
+                (metadata_urlpatterns, "oauth2_provider"), namespace="oauth2_discovery"
+            ),
         ),
-        ...
+        ...,
     ]
     ```
 

@@ -5,7 +5,6 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0055_remove_ranking_fkey_constraints"),
     ]

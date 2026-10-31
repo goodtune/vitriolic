@@ -35,7 +35,6 @@ def populate_division_colors(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0057_add_color_fields"),
     ]

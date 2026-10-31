@@ -29,9 +29,7 @@ def youtube_mock(current_status=None):
     service.liveBroadcasts.return_value.list.return_value.execute.return_value = {
         "items": items
     }
-    service.liveBroadcasts.return_value.transition.return_value.execute.return_value = (
-        {}
-    )
+    service.liveBroadcasts.return_value.transition.return_value.execute.return_value = {}
     return service
 
 

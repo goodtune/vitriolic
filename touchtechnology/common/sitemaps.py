@@ -6,7 +6,6 @@ from touchtechnology.common.utils import create_exclude_filter
 
 
 class NodeSitemap(Sitemap):
-
     def items(self):
         nodes = SitemapNode._tree_manager.select_related("content_type")
 

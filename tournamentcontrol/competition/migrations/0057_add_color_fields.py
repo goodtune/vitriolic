@@ -7,7 +7,6 @@ import tournamentcontrol.competition.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0056_remove_ranking_tables_and_fields"),
     ]

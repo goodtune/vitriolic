@@ -681,8 +681,7 @@ class BulkCreateTests(AdminFixtureMixin, TestCase):
     def test_create_teams_permission(self):
         items = [{"division_id": self.womens.pk, "title": "France"}]
         self.assertToolError(
-            "Permission denied: add team requires the "
-            "competition.add_team permission.",
+            "Permission denied: add team requires the competition.add_team permission.",
             self.admin(self.staff).create_teams,
             items,
         )

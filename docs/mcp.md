@@ -177,8 +177,7 @@ from tournamentcontrol.competition.mcp.signals import mcp_request_handled
 @receiver(mcp_request_handled)
 def log_mcp_request(
     sender, request, method, tool, arguments, duration, error, status_code, **kwargs
-):
-    ...
+): ...
 ```
 
 Arguments that may carry personal details or secrets have their value
@@ -195,8 +194,7 @@ from tournamentcontrol.competition.mcp import sensitive_arguments
 
 class MyToolset(CompetitionToolset):
     @sensitive_arguments("email")
-    def find_registration(self, email: str) -> dict:
-        ...
+    def find_registration(self, email: str) -> dict: ...
 ```
 
 `build_server` refuses a name that is not one of the method's arguments.

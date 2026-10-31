@@ -479,7 +479,7 @@ class Application:
         post_save_callback=lambda o: None,
         post_save_redirect=None,
         templates=None,
-        changed_messages=((messages.SUCCESS, _("Your {model} has been " "saved.")),),
+        changed_messages=((messages.SUCCESS, _("Your {model} has been saved.")),),
         unchanged_messages=((messages.INFO, _("Your {model} was not changed.")),),
         permission_required=False,
         perms=None,
@@ -518,7 +518,6 @@ class Application:
         # an HTTP 403 (using django-guardian configuration) when the user is
         # not entitled to edit the instance.
         if permission_required:
-
             # If no perms are specified, build sensible default using built in
             # permission types that come batteries included with Django.
             if perms is None:
@@ -1087,7 +1086,6 @@ class Application:
         # an HTTP 403 (using django-guardian configuration) when the user is
         # not entitled to edit the instance.
         if permission_required:
-
             # If no perms are specified, build sensible default using built in
             # permission types that come batteries included with Django.
             if perms is None:

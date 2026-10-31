@@ -20,7 +20,6 @@ def noop(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [("competition", "0031_model_definition_sync")]
 
     operations = [migrations.RunPython(resave_all_matches, noop)]

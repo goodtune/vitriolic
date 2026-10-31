@@ -10,7 +10,6 @@ from touchtechnology.common.tests.factories import UserFactory
 
 @per_shell
 class AuthenticationTest(TestCase):
-
     @override_settings(LOGIN_URL="admin:login")
     def test_admin_login(self):
         self.assertLoginRequired("admin:index")

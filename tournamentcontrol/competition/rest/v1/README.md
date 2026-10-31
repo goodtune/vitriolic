@@ -246,17 +246,19 @@ All endpoints use consistent Django URL naming:
 from django.urls import reverse
 
 # List matches with live streaming
-reverse('v1:competition:livestream-list')
+reverse("v1:competition:livestream-list")
 
-# Get specific match details  
-reverse('v1:competition:livestream-detail', kwargs={
-    'uuid': '123e4567-e89b-12d3-a456-426614174000'
-})
+# Get specific match details
+reverse(
+    "v1:competition:livestream-detail",
+    kwargs={"uuid": "123e4567-e89b-12d3-a456-426614174000"},
+)
 
 # Transition stream status
-reverse('v1:competition:livestream-transition', kwargs={
-    'uuid': '123e4567-e89b-12d3-a456-426614174000'
-})
+reverse(
+    "v1:competition:livestream-transition",
+    kwargs={"uuid": "123e4567-e89b-12d3-a456-426614174000"},
+)
 ```
 
 ## Technical Implementation
@@ -305,15 +307,15 @@ tox -e dj52-py313 -- tournamentcontrol.competition.tests.test_livestream_api
 ```python
 # Required for live streaming functionality
 INSTALLED_APPS = [
-    'tournamentcontrol.competition',
-    'rest_framework',
+    "tournamentcontrol.competition",
+    "rest_framework",
     # ... other apps
 ]
 
 # YouTube API credentials (environment variables recommended)
-YOUTUBE_API_KEY = 'your_youtube_api_key'
-YOUTUBE_CLIENT_ID = 'your_oauth_client_id.apps.googleusercontent.com'
-YOUTUBE_CLIENT_SECRET = 'your_oauth_client_secret'
+YOUTUBE_API_KEY = "your_youtube_api_key"
+YOUTUBE_CLIENT_ID = "your_oauth_client_id.apps.googleusercontent.com"
+YOUTUBE_CLIENT_SECRET = "your_oauth_client_secret"
 ```
 
 ### Match Model Requirements

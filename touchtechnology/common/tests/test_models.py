@@ -6,7 +6,6 @@ from touchtechnology.common.tests import factories
 
 
 class SitemapNodeTests(TestCase):
-
     def setUp(self):
         super().setUp()
         self.object = factories.SitemapNodeFactory.create()

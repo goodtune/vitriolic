@@ -393,11 +393,11 @@ class FirstStagePositionAdminTests(IconMixin, FirstStageMixin, TestCase):
         return self.by_shell(
             workbook=(
                 f'<p class="wb-error" id="id_{name}_error">'
-                f'{self.icon("circle-alert")}<span>{" ".join(errors)}</span></p>'
+                f"{self.icon('circle-alert')}<span>{' '.join(errors)}</span></p>"
             ),
             explorer=(
                 f'<ul class="field-errors" id="id_{name}-errors">'
-                f'{"".join(f"<li>{error}</li>" for error in errors)}</ul>'
+                f"{''.join(f'<li>{error}</li>' for error in errors)}</ul>"
             ),
         )
 

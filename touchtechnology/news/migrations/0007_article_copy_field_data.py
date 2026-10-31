@@ -15,7 +15,6 @@ def article_content_to_copy(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("news", "0006_article_copy_field"),
     ]
