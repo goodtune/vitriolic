@@ -168,6 +168,32 @@ class AdminFixtureMixin(MCPFixtureMixin):
 
 
 @freeze_time(NOW)
+class NarrowingToolTests(AdminFixtureMixin, TestCase):
+    """The read-only narrowing tools also work on the admin server (#638)."""
+
+    def test_upcoming_events(self):
+        res = self.admin().upcoming_events()
+        self.assertEqual(
+            [(e["title"], e["status"]) for e in res["events"]],
+            # The admin server also sees the disabled competition.
+            [
+                ("European Championships 2026", "in_progress"),
+                ("Old Series 2026", "upcoming"),
+            ],
+        )
+
+    def test_recent_events(self):
+        res = self.admin().recent_events()
+        self.assertEqual(
+            [(e["title"], e["status"], e["last_match_date"]) for e in res["events"]],
+            [
+                ("European Championships 2026", "in_progress", "2026-07-19"),
+                ("Nationals 2026", "finished", "2026-06-20"),
+            ],
+        )
+
+
+@freeze_time(NOW)
 class PermissionTests(AdminFixtureMixin, TestCase):
     def test_anonymous_and_non_staff_are_refused(self):
         message = "The competition administration tools require a signed-in staff user."
