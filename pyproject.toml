@@ -33,7 +33,7 @@ dependencies = [
     "django-timezone-field",
     "django>=5.2",
     "first",
-    "mcp>=2,<3",
+    "mcp>=2.3,<3",
     "namedentities",
     "psycopg",
 ]
