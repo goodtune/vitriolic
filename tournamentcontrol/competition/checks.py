@@ -104,7 +104,9 @@ def template_partials_problems():
 def check_site_requirements(app_configs, **kwargs):
     """
     Report the apps and template settings that a mounted site needs, where
-    leaving them out would fail at render time with a ``TemplateSyntaxError``.
+    leaving them out would fail at render time with a ``TemplateSyntaxError``,
+    and the ``MIDDLEWARE`` it cannot work with: Django's GZipMiddleware stops
+    the ops site's live updates.
 
     A site is mounted when its app name is one of the URLconf's, which is what
     Django's own URL resolver keeps. So a project that does not mount a site
