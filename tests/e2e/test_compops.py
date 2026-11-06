@@ -628,6 +628,45 @@ def test_an_open_edit_stays_open_when_the_snapshot_lands_after_it(
     expect(row.locator(".score")).to_have_text("2 – 0")
 
 
+def centre_x(locator):
+    """The x-centre of the box ``locator`` matches, in CSS pixels."""
+    box = locator.bounding_box()
+    return box["x"] + box["width"] / 2
+
+
+def score_inputs_centre_x(row):
+    """The x-centre of the pair of score inputs in ``row``."""
+    home = row.locator('input[name="home_team_score"]').bounding_box()
+    away = row.locator('input[name="away_team_score"]').bounding_box()
+    return (home["x"] + away["x"] + away["width"]) / 2
+
+
+def test_the_score_sits_in_the_same_column_in_every_row_state(
+    compops_page, asgi_live_server, tournament, screenshot_dir
+):
+    """
+    The score is at the same place in a read-only row (Edit), an empty row
+    (Forfeit… and Save) and a row open for editing (Save and ✕), so the
+    scores read down one column whatever the actions beside them.
+    """
+    match, scored = tournament["match"], tournament["scored"]
+    compops_page.set_viewport_size({"width": 1600, "height": 900})
+    compops_page.goto(asgi_live_server.url + tournament["day_path"])
+    wait_for_snapshot(compops_page, tournament["season"])
+    # A slot whose results are all in is folded.
+    compops_page.locator(f"#slot-{scored.time:%H%M}-h").click()
+    readonly = compops_page.locator(f"#match-{scored.pk}")
+    expected = centre_x(readonly.locator(".score"))
+    empty = compops_page.locator(f"#match-{match.pk}")
+    assert score_inputs_centre_x(empty) == pytest.approx(expected, abs=1)
+    readonly.locator("a", has_text="Edit").click()
+    expect(readonly.locator("a", has_text="✕")).to_be_visible()
+    compops_page.screenshot(
+        path=str(screenshot_dir / "compops_score_column.png"), full_page=True
+    )
+    assert score_inputs_centre_x(readonly) == pytest.approx(expected, abs=1)
+
+
 def test_a_reconnect_brings_the_page_up_to_date_around_the_rows_being_worked_on(
     compops_page, asgi_live_server, tournament, screenshot_dir
 ):
