@@ -5,6 +5,8 @@ from django.core.checks import Error, Tags, Warning, register
 from django.urls import get_resolver
 
 HTMX_MIDDLEWARE = "django_htmx.middleware.HtmxMiddleware"
+DJANGO_GZIP = "django.middleware.gzip.GZipMiddleware"
+VITRIOLIC_GZIP = "touchtechnology.common.middleware.GZipMiddleware"
 
 # The app name each site is mounted under, unless the project gives it another.
 OPS_APP_NAME = "compops"
@@ -102,7 +104,9 @@ def template_partials_problems():
 def check_site_requirements(app_configs, **kwargs):
     """
     Report the apps and template settings that a mounted site needs, where
-    leaving them out would fail at render time with a ``TemplateSyntaxError``.
+    leaving them out would fail at render time with a ``TemplateSyntaxError``,
+    and the ``MIDDLEWARE`` it cannot work with: Django's GZipMiddleware stops
+    the ops site's live updates.
 
     A site is mounted when its app name is one of the URLconf's, which is what
     Django's own URL resolver keeps. So a project that does not mount a site
@@ -119,6 +123,19 @@ def check_site_requirements(app_configs, **kwargs):
 
     if OPS_APP_NAME in mounted:
         problems.extend(template_partials_problems())
+
+    if OPS_APP_NAME in mounted and DJANGO_GZIP in settings.MIDDLEWARE:
+        problems.append(
+            Error(
+                f'CompOpsSite is mounted, but "{DJANGO_GZIP}" is in MIDDLEWARE. '
+                "It compresses each chunk of an async stream as a gzip member "
+                "of its own, and browsers decode only the first, so live "
+                "updates never arrive.",
+                hint=f'Replace it with "{VITRIOLIC_GZIP}", which leaves '
+                "text/event-stream responses uncompressed. See docs/compops.md.",
+                id="tournamentcontrol.competition.E005",
+            )
+        )
 
     if CALCULATOR_APP_NAME in mounted and not apps.is_installed("mathfilters"):
         problems.append(
