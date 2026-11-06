@@ -1,9 +1,14 @@
+import gzip
+
 from asgiref.sync import iscoroutinefunction
-from django.http import HttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
 from django.test import RequestFactory
 from test_plus import TestCase
 
-from touchtechnology.common.middleware import DatastarMiddleware
+from touchtechnology.common.middleware import DatastarMiddleware, GZipMiddleware
+
+EVENTS = [b"data: one\n\n", b"data: two\n\n"]
+PAGE = b"<p>" + b"ladder " * 100 + b"</p>"
 
 
 class DatastarMiddlewareTests(TestCase):
@@ -59,3 +64,58 @@ class DatastarMiddlewareTests(TestCase):
             (DatastarMiddleware.sync_capable, DatastarMiddleware.async_capable),
             (True, True),
         )
+
+
+class GZipMiddlewareTests(TestCase):
+    """
+    Django's GZipMiddleware compresses each chunk of an async stream as a gzip
+    member of its own, and browsers decode only the first. An event stream
+    goes out uncompressed; everything else is compressed as before.
+    """
+
+    def through_gzip(self, response):
+        request = RequestFactory().get("/", headers={"Accept-Encoding": "gzip"})
+        return GZipMiddleware(lambda request: response)(request)
+
+    def test_async_event_stream_is_not_compressed(self):
+        async def events():
+            for event in EVENTS:
+                yield event
+
+        response = self.through_gzip(
+            StreamingHttpResponse(
+                events(), content_type="text/event-stream; charset=utf-8"
+            )
+        )
+        self.assertEqual(response.get("Content-Encoding"), None)
+        self.assertEqual(response.is_async, True)
+
+    def test_sync_event_stream_is_not_compressed(self):
+        response = self.through_gzip(
+            StreamingHttpResponse(iter(EVENTS), content_type="text/event-stream")
+        )
+        self.assertEqual(response.get("Content-Encoding"), None)
+        self.assertEqual(list(response.streaming_content), EVENTS)
+
+    def test_another_stream_is_still_compressed(self):
+        response = self.through_gzip(
+            StreamingHttpResponse(iter(EVENTS), content_type="text/plain")
+        )
+        self.assertEqual(response["Content-Encoding"], "gzip")
+
+    def test_page_is_still_compressed(self):
+        response = self.through_gzip(HttpResponse(PAGE))
+        self.assertEqual(response["Content-Encoding"], "gzip")
+        self.assertEqual(gzip.decompress(response.content), PAGE)
+
+    def test_subclass_extends_the_excluded_types(self):
+        class Middleware(GZipMiddleware):
+            excluded_content_types = (
+                *GZipMiddleware.excluded_content_types,
+                "text/html",
+            )
+
+        request = RequestFactory().get("/", headers={"Accept-Encoding": "gzip"})
+        response = Middleware(lambda request: HttpResponse(PAGE))(request)
+        self.assertEqual(response.get("Content-Encoding"), None)
+        self.assertEqual(response.content, PAGE)

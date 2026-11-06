@@ -67,6 +67,19 @@ E004 = checks.Error(
     id="tournamentcontrol.competition.E004",
 )
 
+DJANGO_GZIP = "django.middleware.gzip.GZipMiddleware"
+VITRIOLIC_GZIP = "touchtechnology.common.middleware.GZipMiddleware"
+
+E005 = checks.Error(
+    'CompOpsSite is mounted, but "django.middleware.gzip.GZipMiddleware" is in '
+    "MIDDLEWARE. It compresses each chunk of an async stream as a gzip member "
+    "of its own, and browsers decode only the first, so live updates never "
+    "arrive.",
+    hint='Replace it with "touchtechnology.common.middleware.GZipMiddleware", '
+    "which leaves text/event-stream responses uncompressed. See docs/compops.md.",
+    id="tournamentcontrol.competition.E005",
+)
+
 W001 = checks.Warning(
     "CompetitionSite is mounted, but 'embed_video' is not in INSTALLED_APPS, so "
     "its match video page cannot render.",
@@ -302,6 +315,23 @@ class EmbedVideoTests(TestCase):
     @modify_settings(INSTALLED_APPS={"remove": ["embed_video", "mathfilters"]})
     def test_both_missing(self):
         self.assertEqual(problems(), [E004, W001])
+
+
+class GZipMiddlewareTests(TestCase):
+    """Django's GZipMiddleware breaks the ops site's event streams."""
+
+    @modify_settings(MIDDLEWARE={"append": DJANGO_GZIP})
+    def test_django_gzip_middleware(self):
+        self.assertEqual(problems("config"), [E005])
+
+    @modify_settings(MIDDLEWARE={"append": VITRIOLIC_GZIP})
+    def test_vitriolic_gzip_middleware(self):
+        self.assertEqual(problems("config"), [])
+
+    @override_settings(ROOT_URLCONF=COMPETITION_URLS)
+    @modify_settings(MIDDLEWARE={"append": DJANGO_GZIP})
+    def test_ops_site_not_mounted(self):
+        self.assertEqual(problems("config"), [])
 
 
 class NothingMountedTests(TestCase):

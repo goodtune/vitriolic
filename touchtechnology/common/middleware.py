@@ -4,6 +4,7 @@ import sys
 
 import django
 from asgiref.sync import iscoroutinefunction, markcoroutinefunction
+from django.middleware import gzip
 from django.utils import timezone
 from django.utils.decorators import sync_and_async_middleware
 from django.utils.deprecation import MiddlewareMixin
@@ -48,6 +49,25 @@ class DatastarMiddleware:
     @staticmethod
     def is_datastar(request):
         return request.headers.get("Datastar-Request") == "true"
+
+
+class GZipMiddleware(gzip.GZipMiddleware):
+    """
+    Django's GZipMiddleware, leaving ``excluded_content_types`` uncompressed.
+
+    Django compresses each chunk of an async streaming response as a gzip
+    member of its own, and browsers decode only the first. A Server-Sent
+    Events page then gets the first event and none after it. Extend the
+    tuple in a subclass to leave out other types.
+    """
+
+    excluded_content_types = ("text/event-stream",)
+
+    def process_response(self, request, response):
+        content_type = response.get("Content-Type", "").partition(";")[0].strip()
+        if content_type in self.excluded_content_types:
+            return response
+        return super().process_response(request, response)
 
 
 def served_by_middleware(get_response):

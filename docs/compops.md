@@ -22,6 +22,15 @@ Add `"touchtechnology.common.middleware.DatastarMiddleware"` to
 `MIDDLEWARE`; it sets `request.datastar`, and `CompOpsSite()` raises
 `ImproperlyConfigured` without it.
 
+Do not use `"django.middleware.gzip.GZipMiddleware"`. It compresses each
+chunk of an async stream as a separate gzip member, and browsers decode only
+the first. The page gets its opening snapshot and no live update after it.
+Use `"touchtechnology.common.middleware.GZipMiddleware"` in its place. It
+leaves `text/event-stream` responses uncompressed and compresses everything
+else as Django's does. To leave out more types, subclass it and extend
+`excluded_content_types`. The system check
+`tournamentcontrol.competition.E005` fails while Django's is in `MIDDLEWARE`.
+
 The templates use template partials (`{% partialdef %}` and `{% partial %}`)
 without `{% load %}`, and the views render a partial by name, for example
 `day.html#results`. Django 6.0 and later have partials built in and need no
