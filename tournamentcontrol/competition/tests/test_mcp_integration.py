@@ -7,8 +7,11 @@ the Streamable HTTP endpoint using JSON-RPC, which is how an MCP client
 talks to the server.
 """
 
+import asyncio
 import datetime
 import json
+import signal
+from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest import mock
 from zoneinfo import ZoneInfo
@@ -25,7 +28,7 @@ from test_plus import TestCase
 from tournamentcontrol.competition import mcp
 from tournamentcontrol.competition.mcp.admin import get_admin_server
 from tournamentcontrol.competition.mcp.signals import mcp_request_handled
-from tournamentcontrol.competition.mcp.views import MCPView
+from tournamentcontrol.competition.mcp.views import AdminMCPView, MCPView, asgi_receive
 from tournamentcontrol.competition.tests import factories
 
 TZ = ZoneInfo("Europe/Amsterdam")
@@ -1506,3 +1509,120 @@ class SensitiveArgumentsTests(TestCase):
             ImproperlyConfigured, "search marks qeury as sensitive"
         ):
             mcp.build_server(toolset_class=Toolset)
+
+
+#: The protocol version whose clients send ``subscriptions/listen``.
+MODERN = "2026-07-28"
+
+
+@contextmanager
+def deadline(seconds):
+    """
+    Raise ``TimeoutError`` in the test thread after ``seconds``.
+
+    A coroutine that never yields cannot be cancelled by the event loop, so
+    the limit is a signal, which interrupts it wherever it is.
+    """
+
+    def expired(signum, frame):
+        raise TimeoutError(f"no answer after {seconds} seconds")
+
+    previous = signal.signal(signal.SIGALRM, expired)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+
+
+@override_settings(ROOT_URLCONF="vitriolic.urls")
+class MCPStreamTests(TestCase):
+    """
+    The views buffer a whole response before they return it, so they cannot
+    serve a stream that lasts until the client goes away (issue #637).
+    """
+
+    def answer(self, view_class, url_name, method, params=None):
+        """What ``view_class`` answers to ``method`` from a 2026-07-28 client."""
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": method,
+            "params": {
+                "_meta": {
+                    "io.modelcontextprotocol/protocolVersion": MODERN,
+                    "io.modelcontextprotocol/clientInfo": {
+                        "name": "test",
+                        "version": "1",
+                    },
+                    "io.modelcontextprotocol/clientCapabilities": {},
+                },
+                **(params or {}),
+            },
+        }
+        request = RequestFactory().post(
+            self.reverse(url_name),
+            data=json.dumps(payload),
+            content_type="application/json",
+            headers={
+                "Accept": "application/json, text/event-stream",
+                "MCP-Protocol-Version": MODERN,
+                "Mcp-Method": method,
+            },
+        )
+        view = view_class()
+        view.setup(request)
+        # Not asyncio.run, which would wait for a task that never ends.
+        loop = asyncio.new_event_loop()
+        try:
+            with deadline(5):
+                response = loop.run_until_complete(view.handle(request, request.body))
+        finally:
+            loop.close()
+        return json.loads(response.content)
+
+    def test_listen_is_refused(self):
+        for view_class, url_name in ((MCPView, "mcp"), (AdminMCPView, "mcp-admin")):
+            with self.subTest(view=view_class.__name__):
+                answer = self.answer(
+                    view_class,
+                    url_name,
+                    "subscriptions/listen",
+                    {"notifications": {"toolsListChanged": True}},
+                )
+                self.assertEqual(answer["id"], 7)
+                self.assertEqual(answer["error"]["code"], -32601)
+
+    def test_discover_does_not_offer_listen(self):
+        for view_class, url_name in ((MCPView, "mcp"), (AdminMCPView, "mcp-admin")):
+            with self.subTest(view=view_class.__name__):
+                answer = self.answer(view_class, url_name, "server/discover")
+                capabilities = answer["result"]["capabilities"]
+                self.assertEqual(capabilities["tools"], {"listChanged": False})
+
+    def test_receive_waits_for_the_response_then_disconnects(self):
+        async def exchange():
+            finished = asyncio.Event()
+            receive = asgi_receive(b"{}", finished)
+            first = await receive()
+            second = asyncio.ensure_future(receive())
+            await asyncio.sleep(0)
+            waiting = not second.done()
+            finished.set()
+            return first, waiting, await second
+
+        loop = asyncio.new_event_loop()
+        try:
+            with deadline(5):
+                result = loop.run_until_complete(exchange())
+        finally:
+            loop.close()
+        self.assertEqual(
+            result,
+            (
+                {"type": "http.request", "body": b"{}", "more_body": False},
+                True,
+                {"type": "http.disconnect"},
+            ),
+        )

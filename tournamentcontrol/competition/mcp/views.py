@@ -24,6 +24,7 @@ with the ``401`` challenge that lets an MCP client discover how to obtain a
 token (RFC 9728).
 """
 
+import asyncio
 import json
 import logging
 
@@ -34,6 +35,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from mcp.server.transport_security import TransportSecuritySettings
+from mcp.types import METHOD_NOT_FOUND, ErrorData, JSONRPCError
 
 from tournamentcontrol.competition.mcp import (
     ToolCall,
@@ -53,6 +55,9 @@ LOG = logging.getLogger(__name__)
 #: reported as a status code, but not as an error of the server.
 CALLER_ERROR_CODES = frozenset({-32700, -32600, -32601, -32602, -32002})
 
+#: The MCP 2026-07-28 method that opens a stream of change notifications.
+LISTEN = "subscriptions/listen"
+
 
 def _json(content):
     """``content`` decoded as JSON, or ``None`` if it is not JSON."""
@@ -60,6 +65,29 @@ def _json(content):
         return json.loads(content)
     except ValueError:
         return None
+
+
+def asgi_receive(body, finished):
+    """
+    An ASGI ``receive`` for a request whose ``body`` has been read already.
+
+    The first call delivers the body. Later calls wait until the response
+    has ``finished`` (an ``asyncio.Event``) and then report the client gone,
+    as a server does once the exchange is over. A ``receive`` that returned
+    the body every time would never suspend, so a response that waits for a
+    disconnect would spin in its loop and starve every other task.
+    """
+    delivered = False
+
+    async def receive():
+        nonlocal delivered
+        if not delivered:
+            delivered = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        await finished.wait()
+        return {"type": "http.disconnect"}
+
+    return receive
 
 
 def bearer_token(request):
@@ -184,6 +212,25 @@ class MCPView(View):
                 )
 
     async def handle(self, request, body):
+        message = _json(body)
+        if isinstance(message, dict) and message.get("method") == LISTEN:
+            # The SDK answers a listen request with a stream that lasts until
+            # the client goes away, even to say the method is not served. This
+            # view buffers its whole response, so it refuses before the SDK
+            # sees the request.
+            refusal = JSONRPCError(
+                jsonrpc="2.0",
+                id=message.get("id"),
+                error=ErrorData(
+                    code=METHOD_NOT_FOUND,
+                    message="This server cannot be listened to; refetch instead.",
+                ),
+            )
+            return HttpResponse(
+                refusal.model_dump_json(by_alias=True, exclude_none=True),
+                content_type="application/json",
+            )
+
         scope = {
             "type": "http",
             "asgi": {"version": "3.0"},
@@ -203,8 +250,8 @@ class MCPView(View):
             "server": (request.get_host(), request.get_port()),
         }
 
-        async def receive():
-            return {"type": "http.request", "body": body, "more_body": False}
+        finished = asyncio.Event()
+        receive = asgi_receive(body, finished)
 
         status = 500
         headers = []
@@ -217,6 +264,8 @@ class MCPView(View):
                 headers = message.get("headers", [])
             elif message["type"] == "http.response.body":
                 chunks.append(message.get("body", b""))
+                if not message.get("more_body", False):
+                    finished.set()
 
         # The SDK's session manager can only be started once, so in
         # stateless mode a fresh one is built for every request. Building
