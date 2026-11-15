@@ -5,8 +5,9 @@ Alongside the public, read-only [MCP tools](mcp.md) at `/mcp/`,
 [Model Context Protocol](https://modelcontextprotocol.io/) server for
 *competition administrators*, intended to be mounted at `/admin/mcp/`. It
 does the work an administrator does in the admin site: building a
-competition up from scratch, scheduling, result entry, referee appointments
-and live streaming. The read-only tools are available on it too, with
+competition up from scratch, clubs, people and team squads, scheduling,
+result entry, referee appointments and live streaming. The read-only tools
+are available on it too, with
 administrator visibility (disabled competitions and draft divisions
 included).
 
@@ -160,9 +161,13 @@ record through django-guardian, exactly as `generic_edit` and
 | Tools | Permission |
 | --- | --- |
 | `create_*` | `competition.add_<model>` |
+| `link_competition_clubs`, `unlink_competition_clubs` | `competition.change_competition` (globally or on the competition) |
+| `set_team_squad` | `competition.add_teamassociation` for a person new to the team, `competition.change_teamassociation` for one already in it and `competition.delete_teamassociation` for one removed by `replace` (globally or on the record); `competition.add_person` for a new person; for a team without a club, what giving it one by hand takes (see [Teams without a club](#teams-without-a-club)) |
+| `remove_team_member` | `competition.delete_teamassociation` (globally or on the record) |
 | `update_*`, `reschedule_match`, `swap_match_allocations`, `set_match_referees`, `record_match_result`, `enable_*_live_stream`, `disable_*_live_stream`, `resync_match_live_stream`, `resync_season_stream_event` | `competition.change_<model>` (globally or on the record) |
 | `delete_*` | `competition.delete_<model>` (globally or on the record) |
 | `list_season_stream_keys`, `list_streamed_grounds` (they reveal stream keys) | `competition.change_season` for the season |
+| `list_people` (it reveals contact details) | `competition.change_person`, or `competition.change_club` for the club when `club_id` is given |
 | other `list_*` tools and the inherited read tools | a staff user |
 
 A superuser has every permission. Anyone else needs the permissions granted
@@ -192,6 +197,9 @@ from the form, or a rule such as "the stream key is in use").
 | `create_pool(stage_id, title)`, `update_pool(pool_id, team_ids, …)`, `delete_pool` | `StageGroupForm`; membership can only change while the pool has no matches. |
 | `create_match(stage_id, home_team_id, away_team_id, date, time, place_id, …)`, `update_match`, `delete_match` | `AgentMatchEditForm` (or `AgentMatchStreamForm` in a live streamed season), then the scheduling rules below for the date, time and place. A side can instead be an eval (`home_team_eval` "P1", "G2P3", "S1G1P2", or "W"/"L" with `home_team_eval_related_id`), validated as described under [Draws](#draws). `create_match(is_bye=true)` creates a bye (one team, no time or place); `update_match(is_bye=true, clear_away_team=true)` converts an unplayed match into a bye, releasing its time, ground and referees, and `update_match(is_bye=false, away_team_id=…)` turns an unprocessed bye back into an unscheduled match. |
 
+`get_team` on this server also lists the team's squad (see
+[Clubs, people and squads](#clubs-people-and-squads)).
+
 Only the arguments given to an `update_*` tool are changed: the form is
 bound to the record's current values with the changes laid over them, so
 the validation and side effects of a form submission from the admin site
@@ -209,6 +217,7 @@ Records of the same kind are best added in one call:
 | `create_teams(teams=[{division_id, title or club_id, …}, …])` | Several teams, each with the arguments of `create_team`; one call can enter a club's team in every division. |
 | `create_stages(stages=[{division_id, title, …}, …])` | Several stages, each with the arguments of `create_stage`; one call can add the same stages to every division. |
 | `create_pools(pools=[{stage_id, title, …}, …])` | Several pools, each with the arguments of `create_pool`. |
+| `create_people(people=[{club_id, first_name, last_name, gender, …}, …])` | Several people, each in the club it names (see [Clubs, people and squads](#clubs-people-and-squads)). |
 
 A bulk tool takes up to 50 items, each with the arguments of the
 single-record tool including its parent, so one call can fill several
@@ -223,6 +232,84 @@ escaped when rendered, so "Hit & Run" is stored as typed (slug `hit-run`).
 The server never escapes them; some MCP clients HTML-escape the arguments
 they relay, so entities in these fields ("Hit &amp; Run") are decoded
 before saving.
+
+### Clubs, people and squads
+
+A person belongs to a club (`Person.club`), a team's squad is drawn from the
+people of its club, and a team's club is one of its competition's clubs.
+These tools go through the forms the admin site and the club registration
+pages use, so the three agree on every rule.
+
+| Tool | Does |
+| --- | --- |
+| `list_clubs(query, competition_id, limit, offset)` | The clubs, with the competitions each is linked to. |
+| `create_club(title, short_title, abbreviation, email, website, twitter, facebook, youtube, competition_ids)`, `update_club(club_id, …, status, primary_person_uuid, primary_position)` | `ClubEditForm`. `competition_ids` links the new club to competitions in the same call. The primary contact is one of the club's own people. A club cannot take the address (slug) of another: the public site finds a club by its slug alone. |
+| `link_competition_clubs(competition_id, club_ids)`, `unlink_competition_clubs(competition_id, club_ids)` | Add clubs to, or remove them from, a competition's clubs through `CompetitionForm`, leaving the others as they are (`update_competition(club_ids=…)` replaces the full list). The response says which were `linked` and which `already_linked` (or `unlinked` and `not_linked`). Unlinking keeps the club, its people and the teams it entered. |
+| `list_team_roles(competition_id)`, `create_team_role(competition_id, name)` | The roles a competition's teams give their people (Captain, Coach, Manager; `TeamRoleForm`). |
+| `list_people(club_id, team_id, query, limit, offset)` | People by club, by team and/or by name, with their contact details; at least one filter is required. `uuid` identifies a person to the other tools. Seeing them takes the permission the admin site asks for (see [Authorization](#authorization)); `get_team` lists a squad by name for any administrator. |
+| `create_people(people=[…])`, `update_person(person_uuid, …)` | `PersonEditForm`: names, gender (`M`, `F` or `X`), date of birth, email and phone numbers. A person's club is changed from the admin site (a transfer). |
+| `delete_person(person_uuid)` | Refused for a person with statistics recorded or in a team of a season that has started (`Person.objects.deletable()`, the rule of the admin's delete view), and while other records still name them. |
+| `get_team(team_id)` | As the read tool, with `people`: the squad as `[{id, person: {uuid, name}, number, is_player, roles: [{id, name}]}]`, in the order of `TeamAssociation.Meta.ordering` (players first, by number). |
+| `set_team_squad(team_id, members, replace)` | Adds people to a team, or changes those already in it, through `TeamAssociationFormSet` (up to 100, all or none). A member is `{person_uuid, number, is_player, role_ids}`; `{first_name, last_name, gender, date_of_birth, email, mobile_phone}` in place of `person_uuid` creates the person in the team's club first. Only what is given changes for a person already in the team; `clear_number` takes their number away and an empty `role_ids` their roles. `replace=true` makes the squad exactly the members given. The response lists `people_created`, `added`, `updated`, `removed`, `club_created` and the squad as saved. |
+| `remove_team_member(team_id, person_uuid)` | Takes one person out of a team; the person is kept. |
+
+`update_team(club_id=…)` and `create_team(club_id=…)` are refused for a club
+that is not linked to the team's competition, with a message naming the
+`link_competition_clubs` call that fixes it.
+
+#### Rules shared with the admin site
+
+These live in the models and forms, so the admin site, the club registration
+pages and the tools apply the same ones:
+
+- **People come from the team's club.** `TeamAssociationForm` only offers
+  `team.club.members`; the tool names the person's own club when it refuses
+  one.
+- **A number is worn once in a team.** `TeamAssociationForm` checks a number
+  against the rest of the team, and `TeamAssociationFormSet` compares the
+  people saved together, so two people can exchange numbers in one
+  submission. Only a number that was changed is checked: a team that already
+  has a number twice can still be saved as it stands.
+- **A person with statistics for a team stays in it**
+  (`TeamAssociationQuerySet.removable()`). `set_team_squad(replace=true)`,
+  `remove_team_member`, the registration formset and the admin's delete view
+  all refuse to take them out.
+- **Roles belong to the competition** (`competition.team_roles`).
+
+#### Teams without a club
+
+A competition without clubs is valid (a social competition, where the team
+is all there is), but a person cannot exist without a club. A team without a
+club is therefore given one before it has people, by `Team.ensure_club()`:
+
+1. the team takes the club of its competition that has its name (or the
+   address a club of its name would have), if there is one; otherwise
+2. a club named after the team is created, added to the competition's clubs
+   and given to the team.
+
+A club is not created when a club outside the competition already has the
+name: the same people may have entered another competition, but that is not
+assumed. The error names that club and says to add it to the competition's
+clubs and give it to the team (`link_competition_clubs`, `update_team`), or
+to create a club of another name (`create_club`).
+
+`set_team_squad` does this in the same transaction as the squad, so
+"add these players to this team" is one call and nothing is kept if the
+squad is refused. In the admin site, adding a person to a team without a
+club leads to a page that offers to give the team its club; before, that
+page raised an error. Both ask `Team.ensure_club_permissions()` what it
+takes, which is what doing it by hand takes: `competition.change_team` on
+the team and, when a club has to be created, `competition.add_club` and
+`competition.change_competition`.
+
+Once a competition has a club it is a competition with clubs: the team form
+offers a club for every team in it (the name of a team is then optional and
+defaults to its club's), and the public site lists the club with the
+season's clubs.
+
+This is a stopgap for the data model, in which a person has exactly one
+club; [#649](https://github.com/goodtune/vitriolic/issues/649) proposes
+people in teams without a club and membership of several clubs.
 
 ### Draws
 
@@ -345,6 +432,16 @@ as its identifiers and scheduling fields only:
 
 ## Changelog
 
+- **Clubs, people and squads.** `list_clubs`, `create_club`, `update_club`,
+  `link_competition_clubs`, `unlink_competition_clubs`, `list_team_roles`,
+  `create_team_role`, `list_people`, `create_people`, `update_person`,
+  `delete_person`, `set_team_squad` and `remove_team_member`; `get_team`
+  lists the squad. A team without a club is given one when it gets a squad,
+  from the tools and from the admin site. Three rules are now applied by the
+  admin site as well as the tools: a number is worn once in a team, a person
+  with statistics for a team is not taken out of it, and a club cannot take
+  the address of another (see
+  [Clubs, people and squads](#clubs-people-and-squads)).
 - **Byes awaiting results.** `list_matches_awaiting_results`, the admin
   dashboard's Awaiting Scores, the home page's "Enter results" task and the
   season's set-up checklist share one definition of a match waiting for a
@@ -397,7 +494,7 @@ a tool.
 ## Testing
 
 ```bash
-uvx tox -e dj52-py313 -- tournamentcontrol.competition.tests.test_mcp_admin tournamentcontrol.competition.tests.test_mcp_admin_draw
+uvx tox -e dj52-py313 -- tournamentcontrol.competition.tests.test_mcp_admin tournamentcontrol.competition.tests.test_mcp_admin_draw tournamentcontrol.competition.tests.test_mcp_admin_people
 ```
 
 The tests call the toolset directly with a fake request, drive the tools

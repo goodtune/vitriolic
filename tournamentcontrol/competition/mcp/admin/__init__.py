@@ -6,14 +6,15 @@ Where ``tournamentcontrol.competition.mcp`` answers the questions people ask
 about a competition, this toolset does the work a competition administrator
 does in the admin site: building a competition up from scratch
 (competitions, seasons, venues and grounds, divisions, teams, stages and
-pools, matches), scheduling, result entry, referee appointments and live
-streaming.
+pools, matches), clubs, people and team squads, scheduling, result entry,
+referee appointments and live streaming.
 
 Reuse of business rules
 -----------------------
 Every change goes through the same ``ModelForm`` the admin site uses for
 that record (``CompetitionForm``, ``SeasonForm``, ``MatchEditForm``,
-``MatchResultForm`` and so on), so the validation and side effects those
+``MatchResultForm``, ``PersonEditForm``, ``TeamAssociationFormSet`` and so
+on), so the validation and side effects those
 forms carry apply here too; the YouTube side effects the admin views add
 around the forms are mirrored for the live stream tools. A form is bound to
 the record's current values with the requested changes laid over them, so
@@ -51,8 +52,10 @@ from django.contrib.postgres.forms import SplitArrayWidget
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import F, ProtectedError, Q
+from django.forms.formsets import DELETION_FIELD_NAME
 from django.forms.widgets import MultiWidget
 from django.utils import timezone
+from django.utils.text import slugify
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from mcp.server.mcpserver.exceptions import ToolError
@@ -79,6 +82,7 @@ from tournamentcontrol.competition.draw.services import (
     suitable_draw_formats,
 )
 from tournamentcontrol.competition.forms import (
+    ClubEditForm,
     CompetitionForm,
     DivisionForm,
     DrawFormatForm,
@@ -89,11 +93,15 @@ from tournamentcontrol.competition.forms import (
     MatchResultForm,
     MatchScheduleForm,
     MatchStreamForm,
+    PersonEditForm,
     SeasonForm,
     StageForm,
     StageGroupForm,
+    TeamAssociationFormSet,
     TeamForm,
+    TeamRoleForm,
     VenueForm,
+    has_statistics_error,
 )
 from tournamentcontrol.competition.mcp import (
     MAX_LIMIT,
@@ -105,6 +113,7 @@ from tournamentcontrol.competition.mcp import (
     _ref,
     _team_ref,
     _tzname,
+    _words_query,
     build_server,
     sensitive_arguments,
     tool_annotations,
@@ -120,6 +129,7 @@ from tournamentcontrol.competition.mcp.admin.scheduling import (
     validation_message as _validation_message,
 )
 from tournamentcontrol.competition.models import (
+    Club,
     Competition,
     Division,
     DivisionExclusionDate,
@@ -128,6 +138,7 @@ from tournamentcontrol.competition.models import (
     LiveStreamEvent,
     LiveStreamKey,
     Match,
+    Person,
     Place,
     Season,
     SeasonExclusionDate,
@@ -135,6 +146,8 @@ from tournamentcontrol.competition.models import (
     Stage,
     StageGroup,
     Team,
+    TeamAssociation,
+    TeamRole,
     Venue,
 )
 from tournamentcontrol.competition.tasks import (
@@ -151,6 +164,8 @@ MAX_BUILDS = 50
 MAX_SCHEDULE_ITEMS = 500
 #: The most records a bulk create tool (``create_divisions``, ...) takes at once.
 MAX_BULK_CREATE = 50
+#: The most people ``set_team_squad`` takes at once.
+MAX_SQUAD = 100
 
 #: Text inputs that agents (or the clients relaying them) sometimes send
 #: HTML-escaped; they are stored as plain text and escaped when rendered.
@@ -159,6 +174,8 @@ PLAIN_TEXT_FIELDS = {"title", "short_title", "label", "name"}
 SeasonMode = Literal["season", "tournament"]
 SEASON_MODES = {"season": WEEKLY, "tournament": DAILY}
 LiveStreamPrivacyName = Literal["public", "private", "unlisted"]
+Gender = Literal["M", "F", "X"]
+ClubStatusName = Literal["active", "inactive", "hidden"]
 
 ADMIN_INSTRUCTIONS = """
 Competition administration tools
@@ -175,7 +192,8 @@ administrator you also see disabled competitions and draft divisions.
 
 When there are several records of the same kind to add, add them in one call
 with the bulk tool rather than one at a time: `create_grounds`,
-`create_divisions`, `create_teams`, `create_stages` and `create_pools`. Each
+`create_divisions`, `create_teams`, `create_stages`, `create_pools` and
+`create_people`. Each
 takes a list of the same arguments as its single-record tool (each naming its
 parent, so one call can fill several parents, such as the same stages in
 every division) and saves all of them or, if any is refused, none, reporting
@@ -200,6 +218,21 @@ the draw:
 evals (`home_team_eval`, `home_team_eval_related_id`, ...) as a draw format,
 and `is_bye` for a single bye. `update_match` converts a match to a bye
 (`is_bye=true` with `clear_home_team` / `clear_away_team`) and back.
+
+Clubs, people and squads: a person belongs to a club, and a team's squad is
+drawn from the people of its club. `set_team_squad` adds people to a team and
+sets their numbers, roles (`list_team_roles`, `create_team_role`) and whether
+they play, all in one call; give a new person's `first_name`, `last_name` and
+`gender` in place of a `person_uuid` to create them in the team's club at the
+same time. A team that has no club (a social competition, where the team is
+all there is) is given a club named after it by `set_team_squad`, so "add
+these players to this team" is always one call. `get_team` lists the squad
+and `remove_team_member` takes one person out. `create_people`,
+`list_people`, `update_person` and `delete_person` manage a club's people
+directly. In a competition with clubs, `create_club` and `list_clubs` manage
+them; a team can only be given a club linked to its competition, so use
+`link_competition_clubs` (or `create_club(competition_ids=…)`) before
+`update_team(club_id=…)`; `unlink_competition_clubs` withdraws a club.
 
 Withdrawals: `withdraw_team` takes a team out of its division part way
 through a season, turning its unplayed matches into byes for the opponents
@@ -362,6 +395,64 @@ class PoolSpec(BulkSpec):
     short_title: str | None = None
     carry_ladder: bool = False
     slug: str | None = None
+
+
+class PersonSpec(BulkSpec):
+    """One person to add to a club (see ``create_people``)."""
+
+    club_id: int
+    first_name: str
+    last_name: str
+    gender: Gender = Field(description="M (male), F (female) or X (unspecified).")
+    date_of_birth: datetime.date | None = None
+    email: str | None = None
+    home_phone: str | None = None
+    work_phone: str | None = None
+    mobile_phone: str | None = None
+
+    @property
+    def title(self):
+        return f"{self.first_name} {self.last_name}"
+
+
+class SquadMember(BulkSpec):
+    """One person of a team's squad (see ``set_team_squad``)."""
+
+    person_uuid: str | None = Field(
+        None, description="A person of the team's club (see list_people)."
+    )
+    first_name: str | None = Field(
+        None,
+        description="With last_name and gender, in place of person_uuid: a "
+        "new person, created in the team's club.",
+    )
+    last_name: str | None = None
+    gender: Gender | None = None
+    date_of_birth: datetime.date | None = None
+    email: str | None = None
+    mobile_phone: str | None = None
+    number: int | None = Field(
+        None, description="The number they wear; nobody else in the team has it."
+    )
+    clear_number: bool = Field(
+        False, description="Take the number away from a person already in the team."
+    )
+    is_player: bool | None = Field(
+        None, description="False for staff who do not play. Defaults to true."
+    )
+    role_ids: list[int] | None = Field(
+        None, description="Their roles in the team (see list_team_roles)."
+    )
+
+    @property
+    def is_new(self):
+        return self.person_uuid is None
+
+    @property
+    def title(self):
+        if self.is_new:
+            return f"{self.first_name or ''} {self.last_name or ''}".strip() or "new"
+        return self.person_uuid
 
 
 def _coerce(model, value, what):
@@ -639,6 +730,63 @@ def _team_summary(team):
     return res
 
 
+def _club_summary(club):
+    return {
+        "id": club.pk,
+        "title": club.title,
+        "short_title": club.short_title or None,
+        "slug": club.slug,
+        "abbreviation": club.abbreviation or None,
+        "status": club.status,
+        "email": club.email or None,
+        "website": club.website or None,
+        "twitter": club.twitter or None,
+        "facebook": club.facebook or None,
+        "youtube": club.youtube or None,
+        "primary": _person_ref(club.primary),
+        "primary_position": club.primary_position or None,
+        "competitions": [_ref(c) for c in club.competitions.all()],
+    }
+
+
+def _person_ref(person):
+    if person is None:
+        return None
+    return {"uuid": str(person.pk), "name": person.get_full_name}
+
+
+def _person_summary(person):
+    res = _person_ref(person)
+    res.update(
+        {
+            "first_name": person.first_name,
+            "last_name": person.last_name,
+            "gender": person.gender,
+            "date_of_birth": _iso(person.date_of_birth),
+            "email": person.email or None,
+            "home_phone": person.home_phone or None,
+            "work_phone": person.work_phone or None,
+            "mobile_phone": person.mobile_phone or None,
+            "club": _ref(person.club),
+        }
+    )
+    return res
+
+
+def _role_summary(role):
+    return {"id": role.pk, "name": role.name}
+
+
+def _squad_member(association):
+    return {
+        "id": association.pk,
+        "person": _person_ref(association.person),
+        "number": association.number,
+        "is_player": association.is_player,
+        "roles": [_role_summary(role) for role in association.roles.all()],
+    }
+
+
 def _stage_summary(stage):
     return {
         "id": stage.pk,
@@ -799,6 +947,12 @@ class AdminToolset(CompetitionToolset):
 
     def _competition(self, pk):
         return self._get(Competition.objects.all(), pk)
+
+    def _club(self, pk):
+        return self._get(Club.objects.all(), pk)
+
+    def _person(self, pk):
+        return self._get(Person.objects.select_related("club"), pk)
 
     def _season(self, pk):
         return self._get(Season.objects.select_related("competition"), pk)
@@ -1072,11 +1226,12 @@ class AdminToolset(CompetitionToolset):
         given, so each is ordered after those before it.
         """
         what = _label(model)
+        plural = model._meta.verbose_name_plural
         self._require("add", model)
         if not items:
-            raise ToolError(f"Give one or more {what}s.")
+            raise ToolError(f"Give one or more {plural}.")
         if len(items) > MAX_BULK_CREATE:
-            raise ToolError(f"Give at most {MAX_BULK_CREATE} {what}s at once.")
+            raise ToolError(f"Give at most {MAX_BULK_CREATE} {plural} at once.")
         specs = [
             _coerce(spec_class, item, f"{what} {index}")
             for index, item in enumerate(items)
@@ -1193,6 +1348,386 @@ class AdminToolset(CompetitionToolset):
         competition = self._competition(competition_id)
         self._require("delete", Competition, competition)
         return self._delete(f"competition {competition.title}", competition)
+
+    # ======================================================================
+    # Clubs
+    # ======================================================================
+
+    def list_clubs(
+        self,
+        query: str | None = None,
+        competition_id: int | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """
+        The clubs, narrowed by a name ``query`` (every word must appear in
+        the title) and/or to those of a competition, with the competitions
+        each is linked to. A team's club is one of its competition's clubs,
+        and a person belongs to a club.
+        """
+        self._staff()
+        limit = _clamp(limit, 100, MAX_LIMIT)
+        offset = max(offset, 0)
+        clubs = Club.objects.select_related("primary").prefetch_related("competitions")
+        if competition_id is not None:
+            clubs = clubs.filter(competitions=self._competition(competition_id))
+        if query:
+            clubs = clubs.filter(_words_query(query, ["title"]))
+        return {
+            "total": clubs.count(),
+            "offset": offset,
+            "clubs": [_club_summary(c) for c in clubs[offset : offset + limit]],
+        }
+
+    @tool_annotations()
+    def create_club(
+        self,
+        title: str,
+        short_title: str | None = None,
+        abbreviation: str | None = None,
+        email: str | None = None,
+        website: str | None = None,
+        twitter: str | None = None,
+        facebook: str | None = None,
+        youtube: str | None = None,
+        competition_ids: list[int] | None = None,
+        slug_locked: bool = False,
+        slug: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Create a club. ``abbreviation`` is up to 3 letters, for scoreboards.
+        ``competition_ids`` links the new club to competitions in the same
+        call (as ``link_competition_clubs`` does), so it can be given to
+        their teams straight away with ``update_team``. The club's address
+        (slug) is derived from its title unless ``slug_locked`` with a
+        ``slug``; two clubs cannot share one.
+        """
+        self._require("add", Club)
+        competitions = [self._competition(pk) for pk in competition_ids or []]
+        for competition in competitions:
+            self._require("change", Competition, competition)
+        with transaction.atomic():
+            club = self._save(
+                ClubEditForm,
+                Club(),
+                {
+                    "title": title,
+                    "short_title": short_title,
+                    "abbreviation": abbreviation,
+                    "email": email,
+                    "website": website,
+                    "twitter": twitter,
+                    "facebook": facebook,
+                    "youtube": youtube,
+                    # The form asks for a slug; the model replaces it with
+                    # the title's unless it is locked.
+                    "slug": slug or slugify(html.unescape(title)),
+                    "slug_locked": slug_locked,
+                },
+            )
+            for competition in competitions:
+                self._set_competition_clubs(competition, add=[club])
+        return {"saved": True, "club": _club_summary(club)}
+
+    @tool_annotations(idempotent=True)
+    def update_club(
+        self,
+        club_id: int,
+        title: str | None = None,
+        short_title: str | None = None,
+        abbreviation: str | None = None,
+        email: str | None = None,
+        website: str | None = None,
+        twitter: str | None = None,
+        facebook: str | None = None,
+        youtube: str | None = None,
+        status: ClubStatusName | None = None,
+        primary_person_uuid: str | None = None,
+        primary_position: str | None = None,
+        slug: str | None = None,
+        slug_locked: bool | None = None,
+    ) -> dict[str, Any]:
+        """
+        Change a club. Only the arguments given are changed. The primary
+        contact (``primary_person_uuid``) is one of the club's own people.
+        Use ``link_competition_clubs`` / ``unlink_competition_clubs`` to
+        change which competitions the club is in.
+        """
+        club = self._club(club_id)
+        self._require("change", Club, club)
+        club = self._save(
+            ClubEditForm,
+            club,
+            {
+                "title": title,
+                "short_title": short_title,
+                "abbreviation": abbreviation,
+                "email": email,
+                "website": website,
+                "twitter": twitter,
+                "facebook": facebook,
+                "youtube": youtube,
+                "status": status,
+                "primary": primary_person_uuid,
+                "primary_position": primary_position,
+                "slug": slug,
+                "slug_locked": slug_locked,
+            },
+        )
+        return {"saved": True, "club": _club_summary(club)}
+
+    def _set_competition_clubs(self, competition, add=(), remove=()):
+        """
+        Add clubs to and remove clubs from a competition through
+        ``CompetitionForm``, leaving its other clubs as they are.
+        """
+        clubs = [club for club in competition.clubs.all() if club not in remove]
+        clubs += [club for club in add if club not in clubs]
+        return self._save(
+            CompetitionForm,
+            competition,
+            {"clubs": [club.pk for club in clubs]},
+            user=self._user(),
+        )
+
+    @tool_annotations(idempotent=True)
+    def link_competition_clubs(
+        self, competition_id: int, club_ids: list[int]
+    ) -> dict[str, Any]:
+        """
+        Add clubs to a competition's clubs, leaving those already linked as
+        they are (``update_competition(club_ids=…)`` replaces the full
+        list). A team can only be given a club that is linked to its
+        competition, so link the club before ``update_team(club_id=…)``.
+        """
+        competition = self._competition(competition_id)
+        self._require("change", Competition, competition)
+        clubs = [self._club(pk) for pk in club_ids]
+        if not clubs:
+            raise ToolError("Give one or more clubs to link.")
+        linked = set(competition.clubs.all())
+        competition = self._set_competition_clubs(competition, add=clubs)
+        return {
+            "saved": True,
+            "linked": [_ref(club) for club in clubs if club not in linked],
+            "already_linked": [_ref(club) for club in clubs if club in linked],
+            "competition": _competition_summary(competition, seasons=False),
+        }
+
+    @tool_annotations(destructive=True, idempotent=True)
+    def unlink_competition_clubs(
+        self, competition_id: int, club_ids: list[int]
+    ) -> dict[str, Any]:
+        """
+        Remove clubs from a competition's clubs, leaving the others linked.
+        The clubs, their people and the teams they have entered are kept;
+        the clubs are only no longer offered to the competition's teams.
+        """
+        competition = self._competition(competition_id)
+        self._require("change", Competition, competition)
+        clubs = [self._club(pk) for pk in club_ids]
+        if not clubs:
+            raise ToolError("Give one or more clubs to unlink.")
+        linked = set(competition.clubs.all())
+        competition = self._set_competition_clubs(competition, remove=clubs)
+        return {
+            "saved": True,
+            "unlinked": [_ref(club) for club in clubs if club in linked],
+            "not_linked": [_ref(club) for club in clubs if club not in linked],
+            "competition": _competition_summary(competition, seasons=False),
+        }
+
+    def _check_team_club(self, division, club_id):
+        """
+        A team's club is one of its competition's clubs (``TeamForm`` only
+        offers those); say how to make it one rather than leave the caller
+        with "select a valid choice".
+        """
+        if club_id is None:
+            return
+        competition = division.season.competition
+        if competition.clubs.filter(pk=club_id).exists():
+            return
+        club = self._club(club_id)
+        raise ToolError(
+            f"{club.title} is not one of the clubs of {competition.title}. Link "
+            f"it first: link_competition_clubs(competition_id={competition.pk}, "
+            f"club_ids=[{club.pk}])."
+        )
+
+    # ======================================================================
+    # Team roles
+    # ======================================================================
+
+    def list_team_roles(self, competition_id: int) -> dict[str, Any]:
+        """
+        The roles a competition's teams can give their people (Captain,
+        Coach, Manager, ...), with the identifiers ``set_team_squad`` takes
+        as ``role_ids``.
+        """
+        self._staff()
+        competition = self._competition(competition_id)
+        return {
+            "competition": _ref(competition),
+            "team_roles": [_role_summary(r) for r in competition.team_roles.all()],
+        }
+
+    @tool_annotations()
+    def create_team_role(self, competition_id: int, name: str) -> dict[str, Any]:
+        """
+        Add a role to those a competition's teams can give their people, for
+        example "Captain", "Coach" or "Manager".
+        """
+        competition = self._competition(competition_id)
+        self._require("add", TeamRole)
+        role = self._save(
+            TeamRoleForm, TeamRole(competition=competition), {"name": name}
+        )
+        return {"saved": True, "team_role": _role_summary(role)}
+
+    # ======================================================================
+    # People
+    # ======================================================================
+
+    @sensitive_arguments("query")
+    def list_people(
+        self,
+        club_id: int | None = None,
+        team_id: int | None = None,
+        query: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """
+        The people of a club (``club_id``), of a team's squad (``team_id``)
+        and/or matching a name ``query`` (every word must appear in the
+        first or last name), in last name order. At least one filter is
+        required. ``uuid`` identifies a person to ``update_person``,
+        ``delete_person`` and ``set_team_squad``.
+
+        People's contact details are personal: as on the admin site, seeing
+        them takes ``competition.change_person``, or ``change_club`` for the
+        club when ``club_id`` is given. ``get_team`` lists a squad by name
+        for any administrator.
+        """
+        user = self._staff()
+        if club_id is None and team_id is None and not query:
+            raise ToolError("Provide at least one of club_id, team_id or query.")
+        limit = _clamp(limit, 50, MAX_LIMIT)
+        offset = max(offset, 0)
+        people = Person.objects.select_related("club")
+        club = None if club_id is None else self._club(club_id)
+        if club is None:
+            self._require("change", Person)
+        elif not user.has_perm(_perm(Person, "change")):
+            # The club's own page lists its people.
+            self._require("change", Club, club)
+        if club is not None:
+            people = people.filter(club=club)
+        if team_id is not None:
+            people = people.filter(teamassociation__team=self._team(team_id))
+        if query:
+            people = people.filter(_words_query(query, ["first_name", "last_name"]))
+        return {
+            "total": people.count(),
+            "offset": offset,
+            "people": [_person_summary(p) for p in people[offset : offset + limit]],
+        }
+
+    @tool_annotations()
+    @sensitive_arguments("people")
+    def create_people(self, people: list[PersonSpec]) -> dict[str, Any]:
+        """
+        Add several people in one call (up to 50), each to the club named by
+        its ``club_id``. Each item takes ``first_name``, ``last_name`` and
+        ``gender`` ("M", "F" or "X"), and optionally ``date_of_birth``,
+        ``email``, ``home_phone``, ``work_phone`` and ``mobile_phone``. All
+        of them are saved or, if any is refused, none; the error then names
+        every item that failed and why.
+
+        A person belongs to one club, and only the people of a team's club
+        can be in its squad. To add new people straight to a team, give
+        them to ``set_team_squad`` instead.
+
+        Example: ``people=[{"club_id": 3, "first_name": "Alice", "last_name":
+        "Walker", "gender": "F"}, {"club_id": 3, "first_name": "Ben",
+        "last_name": "Young", "gender": "M", "date_of_birth": "1994-02-11"}]``.
+        """
+        created = self._bulk_create(
+            Person,
+            people,
+            PersonSpec,
+            lambda spec: self._create_person(**spec.model_dump()),
+        )
+        return {"saved": True, "people": [_person_summary(p) for p in created]}
+
+    def _create_person(self, club_id, **changes):
+        club = self._club(club_id)
+        self._require("add", Person)
+        return self._save(PersonEditForm, Person(club=club), changes)
+
+    @tool_annotations(idempotent=True)
+    @sensitive_arguments(
+        "first_name",
+        "last_name",
+        "date_of_birth",
+        "email",
+        "home_phone",
+        "work_phone",
+        "mobile_phone",
+    )
+    def update_person(
+        self,
+        person_uuid: str,
+        first_name: str | None = None,
+        last_name: str | None = None,
+        gender: Gender | None = None,
+        date_of_birth: datetime.date | None = None,
+        email: str | None = None,
+        home_phone: str | None = None,
+        work_phone: str | None = None,
+        mobile_phone: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Change a person. Only the arguments given are changed. Their club is
+        changed from the admin site (a transfer), and their number and roles
+        in a team with ``set_team_squad``.
+        """
+        person = self._person(person_uuid)
+        self._require("change", Person, person)
+        person = self._save(
+            PersonEditForm,
+            person,
+            {
+                "first_name": first_name,
+                "last_name": last_name,
+                "gender": gender,
+                "date_of_birth": date_of_birth,
+                "email": email,
+                "home_phone": home_phone,
+                "work_phone": work_phone,
+                "mobile_phone": mobile_phone,
+            },
+        )
+        return {"saved": True, "person": _person_summary(person)}
+
+    @tool_annotations(destructive=True)
+    def delete_person(self, person_uuid: str) -> dict[str, Any]:
+        """
+        Delete a person. Refused, as the admin site refuses it, for a person
+        who has statistics recorded or is in a team of a season that has
+        started, and while they are still in a team, an official of a club
+        or a referee (``remove_team_member`` takes them out of a team).
+        """
+        person = self._person(person_uuid)
+        self._require("delete", Person, person)
+        if not person.can_delete:
+            raise ToolError(
+                f"{person.get_full_name} cannot be deleted: they have statistics "
+                "recorded, or are in a team of a season that has started."
+            )
+        return self._delete(f"person {person.get_full_name}", person)
 
     # ======================================================================
     # Seasons
@@ -1757,8 +2292,9 @@ class AdminToolset(CompetitionToolset):
     ) -> dict[str, Any]:
         """
         Enter a team in a division. In a competition with clubs the team
-        belongs to ``club_id`` (one of the competition's clubs) and its title
-        defaults to the club's; otherwise ``title`` is required. The title
+        belongs to ``club_id`` (one of the competition's clubs, see
+        ``link_competition_clubs``) and its title defaults to the club's;
+        otherwise ``title`` is required. The title
         is stored as plain text ("Hit & Run"). ``timeslots_after`` /
         ``timeslots_before`` (weekly seasons only) record when the team can
         play and ``team_clash_ids`` the teams in other divisions that must
@@ -1811,6 +2347,7 @@ class AdminToolset(CompetitionToolset):
     def _create_team(self, division_id, club_id, team_clash_ids, **changes):
         division = self._division(division_id)
         self._require("add", Team)
+        self._check_team_club(division, club_id)
         team = next_related_factory(Team, division)
         changes.update(club=club_id, team_clashes=team_clash_ids)
         return self._save(TeamForm, team, changes, division, user=self._user())
@@ -1832,10 +2369,13 @@ class AdminToolset(CompetitionToolset):
     ) -> dict[str, Any]:
         """
         Change a team. Only the arguments given are changed; ``team_clash_ids``
-        replaces the full list. Pool membership is set with ``update_pool``.
+        replaces the full list. ``club_id`` is one of the competition's clubs
+        (``link_competition_clubs`` adds a club to them). Pool membership is
+        set with ``update_pool`` and the squad with ``set_team_squad``.
         """
         team = self._team(team_id)
         self._require("change", Team, team)
+        self._check_team_club(team.division, club_id)
         team = self._save(
             TeamForm,
             team,
@@ -2055,6 +2595,246 @@ class AdminToolset(CompetitionToolset):
             or getattr(match, f"{side}_team_undecided_id")
             or (getattr(match, f"{side}_team_eval") or "").strip()
         )
+
+    # -- squads ----------------------------------------------------------
+
+    def get_team(self, team_id: int) -> dict[str, Any]:
+        """
+        Describe one team: its club, division, season and competition, its
+        next match and last match (byes excluded), its position on each
+        ladder it appears on, and its squad.
+
+        ``people`` lists the squad, players first and in number order, each
+        with their number, whether they play and their roles; change it with
+        ``set_team_squad`` and ``remove_team_member``.
+        """
+        self._staff()
+        res = super().get_team(team_id)
+        if "error" not in res:
+            res["people"] = self._squad(self._get_team(team_id))
+        return res
+
+    @staticmethod
+    def _squad(team):
+        return [
+            _squad_member(association)
+            for association in team.people.select_related("person").prefetch_related(
+                "roles"
+            )
+        ]
+
+    @tool_annotations()
+    @sensitive_arguments("members")
+    def set_team_squad(
+        self, team_id: int, members: list[SquadMember], replace: bool = False
+    ) -> dict[str, Any]:
+        """
+        Add people to a team's squad, or change those already in it, in one
+        call (up to 100). Each member is a person of the team's club, by
+        ``person_uuid`` (see ``list_people``), or a new person, by
+        ``first_name``, ``last_name`` and ``gender`` ("M", "F" or "X";
+        optionally ``date_of_birth``, ``email`` and ``mobile_phone``), who is
+        created in the team's club. Each can be given a ``number`` (nobody
+        else in the team may wear it), ``is_player`` (false for staff who do
+        not play) and ``role_ids`` (see ``list_team_roles``); for a person
+        already in the team only what is given changes (``clear_number``
+        takes their number away, an empty ``role_ids`` their roles). All of
+        it is saved or, if anything is refused, none of it.
+
+        ``replace=true`` makes the squad exactly the members given, taking
+        everybody else out of the team; a person with statistics for the
+        team cannot be taken out.
+
+        A team that has no club (a social competition, where the team is all
+        there is) is given one first: the club of its competition that has
+        its name or, when there is none, a new club named after the team,
+        which is added to the competition's clubs. That is refused when the
+        name already belongs to a club outside the competition: link that
+        club with ``link_competition_clubs`` and give it to the team with
+        ``update_team``, or ``create_club`` one of another name.
+
+        Example: ``members=[{"first_name": "Alice", "last_name": "Walker",
+        "gender": "F", "number": 1}, {"person_uuid":
+        "0b0c6a2e-6a5e-4c8e-9a39-0b6a1c3c9d0e", "number": 2, "role_ids": [4]}]``.
+        """
+        team = self._team(team_id)
+        if len(members) > MAX_SQUAD:
+            raise ToolError(f"Give at most {MAX_SQUAD} members at once.")
+        specs = [
+            _coerce(SquadMember, member, f"member {index}")
+            for index, member in enumerate(members)
+        ]
+        if not specs and not replace:
+            raise ToolError(
+                "Give one or more members, or replace=true to empty the squad."
+            )
+        with transaction.atomic():
+            club_created = None
+            if specs and team.club is None:
+                club_created = self._give_team_a_club(team)
+            people, errors = [], []
+            for index, spec in enumerate(specs):
+                try:
+                    with transaction.atomic():
+                        people.append(self._squad_person(team, spec, people))
+                except ToolError as exc:
+                    errors.append(f"member {index} ({spec.title}): {exc}")
+            if errors:
+                raise ToolError("Nothing was saved. " + " ".join(errors))
+            formset = self._squad_formset(team, people, specs, replace)
+            formset.save()
+        return {
+            "saved": True,
+            "team": _team_ref(team),
+            "club_created": _ref(club_created),
+            "people_created": [
+                _person_ref(person)
+                for person, spec in zip(people, specs)
+                if spec.is_new
+            ],
+            "added": [_person_ref(a.person) for a in formset.new_objects],
+            "updated": [_person_ref(a.person) for a, _ in formset.changed_objects],
+            "removed": [_person_ref(a.person) for a in formset.deleted_objects],
+            "people": self._squad(team),
+        }
+
+    def _give_team_a_club(self, team):
+        """
+        Give a team without a club one of its own (``Team.ensure_club``),
+        with the permissions the model says it takes. Returns the club when
+        it had to be created.
+        """
+        for action, model, obj in team.ensure_club_permissions():
+            self._require(action, model, obj)
+        creating = team.matching_club() is None
+        try:
+            club = team.ensure_club()
+        except ValidationError as exc:
+            raise ToolError(f"{team.title} has no club. {' '.join(exc.messages)}")
+        return club if creating else None
+
+    def _squad_person(self, team, spec, people):
+        """The person a squad member names, created when they are new."""
+        named = [spec.first_name, spec.last_name, spec.gender]
+        if spec.number is not None and spec.clear_number:
+            raise ToolError("Give a number or clear_number, not both.")
+        if spec.is_new:
+            if not all(named):
+                raise ToolError(
+                    "Give person_uuid, or first_name, last_name and gender for "
+                    "a new person."
+                )
+            return self._create_person(
+                team.club_id,
+                first_name=spec.first_name,
+                last_name=spec.last_name,
+                gender=spec.gender,
+                date_of_birth=spec.date_of_birth,
+                email=spec.email,
+                mobile_phone=spec.mobile_phone,
+            )
+        if any(named):
+            raise ToolError(
+                "Give person_uuid or the names of a new person, not both; "
+                "update_person changes a person's details."
+            )
+        person = self._person(spec.person_uuid)
+        if person in people:
+            raise ToolError(f"{person.get_full_name} is listed more than once.")
+        if person.club_id != team.club_id:
+            raise ToolError(
+                f"{person.get_full_name} belongs to {person.club.title}, not to "
+                f"{team.club.title}, the club of {team.title}."
+            )
+        return person
+
+    def _squad_formset(self, team, people, specs, replace):
+        """
+        The admin site's formset of a team's people (``TeamAssociationFormSet``),
+        bound as a submission of it would be: a form for each person given,
+        holding their current values with the changes laid over them, and,
+        with ``replace``, a form removing each of the others. Validated, with
+        the permission to make each change checked.
+        """
+        changes = {
+            person.pk: {
+                "person": person,
+                # An empty value clears the field; ``None`` leaves it alone.
+                "number": "" if spec.clear_number else spec.number,
+                "is_player": spec.is_player,
+                "roles": spec.role_ids,
+            }
+            for person, spec in zip(people, specs)
+        }
+        staying, removing = [], []
+        for association in team.people.select_related("person"):
+            if association.person_id in changes:
+                staying.append(association)
+            elif replace:
+                removing.append(association)
+        if len(staying) < len(changes):
+            self._require("add", TeamAssociation)
+        for association in staying:
+            self._require("change", TeamAssociation, association)
+        for association in removing:
+            self._require("delete", TeamAssociation, association)
+
+        # Only the people this call touches are submitted, so somebody else
+        # in the team who would not pass the form today does not stand in
+        # the way; the form still checks numbers against the whole team.
+        kwargs = {
+            "instance": team,
+            "user": self._user(),
+            "queryset": team.people.filter(
+                pk__in=[association.pk for association in staying + removing]
+            ),
+        }
+        unbound = TeamAssociationFormSet(**kwargs)
+        rows = [
+            (form, changes.pop(form.instance.person_id, {DELETION_FIELD_NAME: True}))
+            for form in unbound.forms
+        ]
+        rows += [(unbound.empty_form, new) for new in changes.values()]
+        data = {
+            f"{unbound.prefix}-TOTAL_FORMS": len(rows),
+            f"{unbound.prefix}-INITIAL_FORMS": len(unbound.forms),
+        }
+        for index, (form, values) in enumerate(rows):
+            for name, field in form.fields.items():
+                value = values.get(name)
+                if value is None:
+                    value = form.get_initial_for_field(field, name)
+                self._put(data, f"{unbound.prefix}-{index}-{name}", field, value)
+
+        formset = TeamAssociationFormSet(data=data, **kwargs)
+        if not formset.is_valid():
+            problems = [
+                f"{form.cleaned_data.get('person') or f'member {index}'}: "
+                f"{_validation_message(form.errors)}"
+                for index, form in enumerate(formset.forms)
+                # A form that removes somebody is not validated.
+                if form.errors and not form.cleaned_data.get(DELETION_FIELD_NAME)
+            ]
+            problems += [str(error) for error in formset.non_form_errors()]
+            raise ToolError("Validation failed: " + "; ".join(problems))
+        return formset
+
+    @tool_annotations(destructive=True)
+    def remove_team_member(self, team_id: int, person_uuid: str) -> dict[str, Any]:
+        """
+        Take a person out of a team's squad. The person is kept, with their
+        club. Refused, as ``set_team_squad(replace=true)`` and the admin site
+        refuse it, for a person with statistics for the team.
+        """
+        team = self._team(team_id)
+        person = self._person(person_uuid)
+        association = team.people.filter(person=person).first()
+        if association is None:
+            raise ToolError(f"{person.get_full_name} is not in {team.title}.")
+        self._require("delete", TeamAssociation, association)
+        if not team.people.removable().filter(pk=association.pk).exists():
+            raise ToolError(" ".join(has_statistics_error(association).messages))
+        return self._delete(f"{person.get_full_name} from {team.title}", association)
 
     # ======================================================================
     # Stages and pools

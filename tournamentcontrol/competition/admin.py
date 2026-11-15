@@ -10,7 +10,7 @@ from celery import states
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
-from django.core.exceptions import FieldDoesNotExist
+from django.core.exceptions import FieldDoesNotExist, ValidationError
 from django.db import models
 from django.db.models import Case, Count, F, Prefetch, Q, Sum, When
 from django.forms.models import _get_foreign_key
@@ -1036,6 +1036,7 @@ class CompetitionAdminComponent(AdminComponent):
                 path("<int:team_id>/", self.edit_team, name="edit"),
                 path("<int:team_id>/delete/", self.delete_team, name="delete"),
                 path("<int:team_id>/permissions/", self.perms_team, name="perms"),
+                path("<int:team_id>/club/", self.team_club, name="club"),
                 path("<int:team_id>/match/", include(match_urls, namespace="match")),
                 path(
                     "<int:team_id>/association/",
@@ -2357,7 +2358,58 @@ class CompetitionAdminComponent(AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
+    def team_club(self, request, competition, team, extra_context, **kwargs):
+        """
+        Give a team that has no club one of its own (``Team.ensure_club``),
+        so that it can have people.
+        """
+        if team.club is not None:
+            return self.redirect(f"{team.urls['edit']}#people-tab")
+
+        for action, model, obj in team.ensure_club_permissions():
+            has_permission = get_40x_or_None(
+                request,
+                get_perms_for_model(model, **{action: True}),
+                obj=obj,
+                return_403=True,
+                accept_global_perms=True,
+            )
+            if has_permission is not None:
+                return has_permission
+
+        club = team.matching_club()
+        if request.method == "POST":
+            try:
+                club = team.ensure_club()
+            except ValidationError as exc:
+                messages.error(request, " ".join(exc.messages))
+            else:
+                messages.success(
+                    request,
+                    _(
+                        "%(team)s is now in the club %(club)s. Add its people "
+                        "to the club, then link them to the team."
+                    )
+                    % {"team": team.title, "club": club.title},
+                )
+                return self.redirect(club.urls["edit"])
+
+        context = dict(
+            extra_context,
+            team=team,
+            club=club,
+            cancel_url=f"{team.urls['edit']}#people-tab",
+        )
+        return self.render(request, self.template_path("team/club.html"), context)
+
+    @competition_by_pk_m
+    @staff_login_required_m
     def edit_teamassociation(self, request, team, extra_context, pk=None, **kwargs):
+        if team.club is None:
+            # A team's people come from its club, so there is nobody to
+            # choose until the team has one.
+            return self.redirect(team.urls["club"])
+
         if pk is None:
             instance = TeamAssociation(team=team)
         else:
@@ -2382,7 +2434,8 @@ class CompetitionAdminComponent(AdminComponent):
         post_delete_redirect = self.redirect(f"{team.urls['edit']}#people-tab")
         return self.generic_delete(
             request,
-            team.people,
+            # A person with statistics for the team stays in it.
+            team.people.removable(),
             pk=pk,
             permission_required=True,
             post_delete_redirect=post_delete_redirect,
@@ -4060,19 +4113,10 @@ class CompetitionAdminComponent(AdminComponent):
     @registration
     @staff_login_required_m
     def delete_person(self, request, club, person, extra_context, **kwargs):
-        now = timezone.now().replace(second=0, microsecond=0)
-        queryset = Person.objects.filter(club=club)
-
-        # Ensure the person does not have any statistical data recorded and
-        # that we're not attempting to delete someone mid-season.
-        queryset = queryset.exclude(statistics__isnull=False)
-        queryset = queryset.exclude(
-            teamassociation__team__division__season__start_date__lt=now
-        )
-
         return self.generic_delete(
             request,
-            queryset,
+            # Nobody with statistics recorded, or part way through a season.
+            club.members.deletable(),
             pk=person.pk,
             post_delete_redirect=self.redirect(club.urls["edit"]),
             permission_required=True,
