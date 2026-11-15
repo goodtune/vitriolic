@@ -38,3 +38,7 @@ jobs:
         run: uvx tox
         env:
           TOXENV: dj${{ matrix.django }}-py${{ matrix.python }}
+          # The runner's Docker no longer reports a container's gateway, which
+          # tox-docker reads to find the host its services are published on
+          # (KeyError: 'Gateway'). Their ports are published on the runner.
+          TOX_DOCKER_GATEWAY: 127.0.0.1
