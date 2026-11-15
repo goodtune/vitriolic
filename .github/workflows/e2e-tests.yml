@@ -44,6 +44,10 @@ jobs:
     - name: Run E2E tests via tox
       env:
         ADMIN_SHELL: ${{ matrix.shell }}
+        # The runner's Docker no longer reports a container's gateway, which
+        # tox-docker reads to find the host its services are published on
+        # (KeyError: 'Gateway'). Their ports are published on the runner.
+        TOX_DOCKER_GATEWAY: 127.0.0.1
         # Absolute: tox runs pytest from tests/, so a relative path would land
         # under tests/tests/.
         SCREENSHOTS_DIR: ${{ github.workspace }}/tests/screenshots/${{ matrix.shell }}
